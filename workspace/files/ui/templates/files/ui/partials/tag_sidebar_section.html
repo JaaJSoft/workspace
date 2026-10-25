@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Tags sidebar section
 ====================
@@ -35,15 +36,15 @@ Parameters:
       >
         <span class="flex items-center gap-2">
           <i data-lucide="tag" class="w-3 h-3"></i>
-          Tags
+          {% translate "Tags" %}
         </span>
       </h3>
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         @click="openTagManager()"
-        title="Manage tags"
-        aria-label="Manage tags"
+        title="{% translate 'Manage tags' %}"
+        aria-label="{% translate 'Manage tags' %}"
       >
         <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
       </button>
@@ -51,7 +52,7 @@ Parameters:
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         @click="showTagModal()"
-        title="New tag"
+        title="{% translate 'New tag' %}"
       >
         <i data-lucide="plus" class="w-3.5 h-3.5"></i>
       </button>
@@ -87,7 +88,7 @@ Parameters:
       >
         <span class="flex items-center gap-2 justify-center">
           <i data-lucide="star-off" class="w-4 h-4"></i>
-          No favorite tags
+          {% translate "No favorite tags" %}
         </span>
       </li>
       {# The header carries the manager button; the rail hides the header, so it keeps one. #}
@@ -96,8 +97,8 @@ Parameters:
           type="button"
           @click="openTagManager()"
           class="flex items-center justify-center w-10 h-10 p-0 hover:bg-base-300/50 rounded-lg transition-colors text-base-content/70"
-          title="Manage tags"
-          aria-label="Manage tags"
+          title="{% translate 'Manage tags' %}"
+          aria-label="{% translate 'Manage tags' %}"
         >
           <i data-lucide="settings-2" class="w-5 h-5 flex-shrink-0"></i>
         </button>

@@ -18,6 +18,7 @@ from django.db.models import (
     Window,
 )
 from django.db.models.functions import Coalesce, Concat, RowNumber
+from django.utils.translation import gettext, gettext_lazy
 
 from workspace.common.text import fold_text
 
@@ -37,35 +38,59 @@ CATEGORY_SLICES = 6
 # of ``filetype`` on purpose - there, four groups share the same muted grey,
 # which would make adjacent slices indistinguishable.
 CATEGORY_META = {
-    "image": {"label": "Images", "icon": "image", "css_class": "text-success"},
-    "video": {"label": "Videos", "icon": "video", "css_class": "text-error"},
-    "audio": {"label": "Audio", "icon": "music", "css_class": "text-secondary"},
+    "image": {
+        "label": gettext_lazy("Images"),
+        "icon": "image",
+        "css_class": "text-success",
+    },
+    "video": {
+        "label": gettext_lazy("Videos"),
+        "icon": "video",
+        "css_class": "text-error",
+    },
+    "audio": {
+        "label": gettext_lazy("Audio"),
+        "icon": "music",
+        "css_class": "text-secondary",
+    },
     "document": {
-        "label": "Documents",
+        "label": gettext_lazy("Documents"),
         "icon": "file-text",
         "css_class": "text-primary",
     },
     "archive": {
-        "label": "Archives",
+        "label": gettext_lazy("Archives"),
         "icon": "file-archive",
         "css_class": "text-warning",
     },
-    "code": {"label": "Code", "icon": "file-code", "css_class": "text-info"},
-    "text": {"label": "Text", "icon": "file-type", "css_class": "text-accent"},
-    "font": {"label": "Fonts", "icon": "type", "css_class": "text-neutral"},
+    "code": {
+        "label": gettext_lazy("Code"),
+        "icon": "file-code",
+        "css_class": "text-info",
+    },
+    "text": {
+        "label": gettext_lazy("Text"),
+        "icon": "file-type",
+        "css_class": "text-accent",
+    },
+    "font": {
+        "label": gettext_lazy("Fonts"),
+        "icon": "type",
+        "css_class": "text-neutral",
+    },
     "executable": {
-        "label": "Executables",
+        "label": gettext_lazy("Executables"),
         "icon": "binary",
         "css_class": "text-neutral",
     },
     "application": {
-        "label": "Applications",
+        "label": gettext_lazy("Applications"),
         "icon": "file",
         "css_class": "text-neutral",
     },
 }
 OTHER_META = {
-    "label": "Other",
+    "label": gettext_lazy("Other"),
     "icon": "file-question",
     "css_class": "text-base-content/40",
 }
@@ -221,7 +246,7 @@ def subfolder_breakdown(scope):
         entries.append(
             {
                 "uuid": None,
-                "name": "Files in this folder",
+                "name": gettext("Files in this folder"),
                 "icon": "file",
                 "color": "text-base-content/60",
                 "size": loose["size"],

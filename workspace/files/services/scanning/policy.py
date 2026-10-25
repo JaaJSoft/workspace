@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db.models import F, Q
+from django.utils.translation import gettext
 
 from ...models import FileScan
 
@@ -117,5 +118,5 @@ def blocked_reason(file_obj):
         return None
     scan = file_obj.scan
     if scan.status == FileScan.Status.INFECTED:
-        return scan.signature or "Malware detected"
-    return "File could not be scanned"
+        return scan.signature or gettext("Malware detected")
+    return gettext("File could not be scanned")

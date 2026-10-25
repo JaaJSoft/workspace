@@ -198,9 +198,11 @@ window.fileBrowser = function fileBrowser() {
     async confirmDelete(uuid, name, nodeType, isGroupFolder) {
       if (window.getFilePrefs().confirmBeforeDelete) {
         const confirmed = await AppDialog.confirm({
-          title: `Delete ${nodeType}?`,
-          message: `Move "${name}" to trash?${nodeType === 'folder' ? ' This will also move all contents.' : ''}`,
-          okLabel: 'Move to trash',
+          title: nodeType === 'folder' ? gettext('Delete folder?') : gettext('Delete file?'),
+          message: nodeType === 'folder'
+            ? interpolate(gettext('Move "%(name)s" to trash? This will also move all contents.'), { name }, true)
+            : interpolate(gettext('Move "%(name)s" to trash?'), { name }, true),
+          okLabel: gettext('Move to trash'),
           okClass: 'btn-error',
           icon: 'trash-2',
           iconClass: 'bg-error/10 text-error'
@@ -218,7 +220,7 @@ window.fileBrowser = function fileBrowser() {
         await window.fileActions.createFolder(name, this.currentFolder || null);
         this.refreshFolderBrowser();
       } catch (error) {
-        window.AppAlert.error(error.message || 'Failed to create folder');
+        window.AppAlert.error(error.message || gettext('Failed to create folder'));
       }
     },
 
@@ -226,7 +228,7 @@ window.fileBrowser = function fileBrowser() {
     async createFile(name, fileType, customExt) {
       const trimmedName = (name || '').trim();
       if (!trimmedName) {
-        window.AppAlert.error('File name is required');
+        window.AppAlert.error(gettext('File name is required'));
         return;
       }
 
@@ -242,7 +244,7 @@ window.fileBrowser = function fileBrowser() {
       if (fileType === 'custom') {
         extension = (customExt || '').trim().replace(/^\./, '');
         if (!extension) {
-          window.AppAlert.error('Custom extension is required');
+          window.AppAlert.error(gettext('Custom extension is required'));
           return;
         }
         mimeType = 'application/octet-stream';
@@ -294,10 +296,10 @@ window.fileBrowser = function fileBrowser() {
           } catch (error) {
             data = {};
           }
-          window.AppAlert.error(data.detail || 'Failed to create file');
+          window.AppAlert.error(data.detail || gettext('Failed to create file'));
         }
       } catch (error) {
-        window.AppAlert.error('Failed to create file');
+        window.AppAlert.error(gettext('Failed to create file'));
       }
     },
 
@@ -335,7 +337,7 @@ window.fileBrowser = function fileBrowser() {
     // ('replace' | 'rename' | 'skip' | undefined = let the server reject).
     // Only the "ask" and "skip" preferences need to know about a collision
     // before the bytes go up; the other two are decided server-side.
-    async _decideNameCollisions(files, { replaceLabel = 'Replace the existing file', targetFolderId } = {}) {
+    async _decideNameCollisions(files, { replaceLabel = gettext('Replace the existing file'), targetFolderId } = {}) {
       const mode = window.getFilePrefs().nameCollision || 'ask';
       const decisions = new Map();
       if (mode === 'replace' || mode === 'keep_both') {
@@ -354,18 +356,32 @@ window.fileBrowser = function fileBrowser() {
         }
         const remaining = colliding.length - index - 1;
         const answer = await AppDialog.select({
-          title: 'File already exists',
-          message: `A file named "${file.name}" already exists in this folder. What should happen to the new one?`,
+          title: gettext('File already exists'),
+          message: interpolate(
+            gettext('A file named "%(name)s" already exists in this folder. What should happen to the new one?'),
+            { name: file.name },
+            true
+          ),
           options: [
-            { value: 'rename', label: 'Keep both (rename the new file)' },
+            { value: 'rename', label: gettext('Keep both (rename the new file)') },
             { value: 'replace', label: replaceLabel },
-            { value: 'skip', label: 'Skip this file' },
+            { value: 'skip', label: gettext('Skip this file') },
           ],
           value: 'rename',
-          okLabel: 'Continue',
+          okLabel: gettext('Continue'),
           icon: 'files',
           iconClass: 'bg-module/15 text-module',
-          checkbox: remaining ? `Do the same for the ${remaining} other conflict${remaining > 1 ? 's' : ''}` : '',
+          checkbox: remaining
+            ? interpolate(
+              ngettext(
+                'Do the same for the %(count)s other conflict',
+                'Do the same for the %(count)s other conflicts',
+                remaining
+              ),
+              { count: remaining },
+              true
+            )
+            : '',
         });
         const { value, checked } = remaining ? answer : { value: answer, checked: false };
         // Closing the dialog is the safe choice: the existing file stays.
@@ -389,14 +405,27 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
-    _pasteSummary(verb, { done, replaced, renamed, skipped, failed }) {
+    _pasteSummary(isCopy, { done, replaced, renamed, skipped, failed }) {
       const parts = [];
-      const items = (n) => `${n} item${n > 1 ? 's' : ''}`;
-      if (done) parts.push(`${verb} ${items(done)}`);
-      if (replaced) parts.push(`replaced ${replaced}`);
-      if (renamed) parts.push(`kept ${renamed} under a new name`);
-      if (skipped) parts.push(`skipped ${skipped}`);
-      if (failed) parts.push(`${failed} failed`);
+      if (done) {
+        parts.push(interpolate(
+          isCopy
+            ? ngettext('Copied %(count)s item', 'Copied %(count)s items', done)
+            : ngettext('Moved %(count)s item', 'Moved %(count)s items', done),
+          { count: done },
+          true
+        ));
+      }
+      if (replaced) parts.push(interpolate(ngettext('replaced %(count)s', 'replaced %(count)s', replaced), { count: replaced }, true));
+      if (renamed) {
+        parts.push(interpolate(
+          ngettext('kept %(count)s under a new name', 'kept %(count)s under a new name', renamed),
+          { count: renamed },
+          true
+        ));
+      }
+      if (skipped) parts.push(interpolate(ngettext('skipped %(count)s', 'skipped %(count)s', skipped), { count: skipped }, true));
+      if (failed) parts.push(interpolate(ngettext('%(count)s failed', '%(count)s failed', failed), { count: failed }, true));
       if (!parts.length) return '';
       const text = parts.join(', ');
       return text.charAt(0).toUpperCase() + text.slice(1);
@@ -447,7 +476,7 @@ window.fileBrowser = function fileBrowser() {
         window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
         this.refreshFolderBrowser();
       } catch (error) {
-        window.AppAlert.error(error.message || 'Failed to rename');
+        window.AppAlert.error(error.message || gettext('Failed to rename'));
       } finally {
         this._stopLoading(uuid);
       }
@@ -466,10 +495,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          window.AppAlert.error('Failed to delete');
+          window.AppAlert.error(gettext('Failed to delete'));
         }
       } catch (error) {
-        window.AppAlert.error('Failed to delete');
+        window.AppAlert.error(gettext('Failed to delete'));
       } finally {
         this._stopLoading(uuid);
       }
@@ -477,9 +506,9 @@ window.fileBrowser = function fileBrowser() {
 
     async confirmRestore(uuid, name, nodeType) {
       const confirmed = await AppDialog.confirm({
-        title: `Restore ${nodeType}?`,
-        message: `Restore "${name}" from trash?`,
-        okLabel: 'Restore',
+        title: nodeType === 'folder' ? gettext('Restore folder?') : gettext('Restore file?'),
+        message: interpolate(gettext('Restore "%(name)s" from trash?'), { name }, true),
+        okLabel: gettext('Restore'),
         okClass: 'btn-module',
         icon: 'rotate-ccw',
         iconClass: 'bg-module/15 text-module'
@@ -502,10 +531,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          window.AppAlert.error('Failed to restore');
+          window.AppAlert.error(gettext('Failed to restore'));
         }
       } catch (error) {
-        window.AppAlert.error('Failed to restore');
+        window.AppAlert.error(gettext('Failed to restore'));
       } finally {
         this._stopLoading(uuid);
       }
@@ -513,9 +542,9 @@ window.fileBrowser = function fileBrowser() {
 
     async confirmPurge(uuid, name, nodeType) {
       const confirmed = await AppDialog.confirm({
-        title: `Delete ${nodeType} permanently?`,
-        message: `This will permanently delete "${name}" and cannot be undone.`,
-        okLabel: 'Delete permanently',
+        title: nodeType === 'folder' ? gettext('Delete folder permanently?') : gettext('Delete file permanently?'),
+        message: interpolate(gettext('This will permanently delete "%(name)s" and cannot be undone.'), { name }, true),
+        okLabel: gettext('Delete permanently'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error'
@@ -538,10 +567,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          window.AppAlert.error('Failed to delete permanently');
+          window.AppAlert.error(gettext('Failed to delete permanently'));
         }
       } catch (error) {
-        window.AppAlert.error('Failed to delete permanently');
+        window.AppAlert.error(gettext('Failed to delete permanently'));
       } finally {
         this._stopLoading(uuid);
       }
@@ -549,9 +578,9 @@ window.fileBrowser = function fileBrowser() {
 
     async confirmCleanTrash() {
       const confirmed = await AppDialog.confirm({
-        title: 'Empty trash?',
-        message: 'This will permanently delete all items in trash and cannot be undone.',
-        okLabel: 'Empty trash',
+        title: gettext('Empty trash?'),
+        message: gettext('This will permanently delete all items in trash and cannot be undone.'),
+        okLabel: gettext('Empty trash'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error'
@@ -575,10 +604,10 @@ window.fileBrowser = function fileBrowser() {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
-          window.AppAlert.error('Failed to clean trash');
+          window.AppAlert.error(gettext('Failed to clean trash'));
         }
       } catch (error) {
-        window.AppAlert.error('Failed to clean trash');
+        window.AppAlert.error(gettext('Failed to clean trash'));
       } finally {
         this.cleaningTrash = false;
       }
@@ -604,9 +633,9 @@ window.fileBrowser = function fileBrowser() {
         } catch (error) {
           data = {};
         }
-        window.AppAlert.error(data.detail || 'Failed to update favorites');
+        window.AppAlert.error(data.detail || gettext('Failed to update favorites'));
       } catch (error) {
-        window.AppAlert.error('Failed to update favorites');
+        window.AppAlert.error(gettext('Failed to update favorites'));
       } finally {
         this._stopLoading(uuid);
       }
@@ -636,9 +665,9 @@ window.fileBrowser = function fileBrowser() {
         } catch (error) {
           data = {};
         }
-        window.AppAlert.error(data.detail || 'Failed to update the files');
+        window.AppAlert.error(data.detail || gettext('Failed to update the files'));
       } catch (error) {
-        window.AppAlert.error('Failed to update the files');
+        window.AppAlert.error(gettext('Failed to update the files'));
       } finally {
         uuids.forEach(uuid => this._stopLoading(uuid));
       }
@@ -665,9 +694,9 @@ window.fileBrowser = function fileBrowser() {
         } catch (error) {
           data = {};
         }
-        window.AppAlert.error(data.detail || 'Failed to update pin');
+        window.AppAlert.error(data.detail || gettext('Failed to update pin'));
       } catch (error) {
-        window.AppAlert.error('Failed to update pin');
+        window.AppAlert.error(gettext('Failed to update pin'));
       } finally {
         this._stopLoading(uuid);
       }
@@ -680,9 +709,17 @@ window.fileBrowser = function fileBrowser() {
       if (window.getFilePrefs().confirmBeforeDelete) {
         const count = uuids.length;
         const confirmed = await AppDialog.confirm({
-          title: `Delete ${count} item${count > 1 ? 's' : ''}?`,
-          message: `Move ${count} item${count > 1 ? 's' : ''} to trash? Folders will also move all their contents.`,
-          okLabel: 'Move to trash',
+          title: interpolate(ngettext('Delete %(count)s item?', 'Delete %(count)s items?', count), { count }, true),
+          message: interpolate(
+            ngettext(
+              'Move %(count)s item to trash? Folders will also move all their contents.',
+              'Move %(count)s items to trash? Folders will also move all their contents.',
+              count
+            ),
+            { count },
+            true
+          ),
+          okLabel: gettext('Move to trash'),
           okClass: 'btn-error',
           icon: 'trash-2',
           iconClass: 'bg-error/10 text-error'
@@ -711,9 +748,17 @@ window.fileBrowser = function fileBrowser() {
       }
 
       if (errorCount > 0) {
-        window.AppAlert.warning(`Deleted ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(interpolate(
+          gettext('Deleted %(success)s items, %(failed)s failed'),
+          { success: successCount, failed: errorCount },
+          true
+        ));
       } else {
-        window.AppAlert.success(`Deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(interpolate(
+          ngettext('Deleted %(count)s item', 'Deleted %(count)s items', successCount),
+          { count: successCount },
+          true
+        ));
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -745,11 +790,23 @@ window.fileBrowser = function fileBrowser() {
         }
       }
 
-      const action = add ? 'Added to' : 'Removed from';
+      const counts = { success: successCount, failed: errorCount, count: successCount };
       if (errorCount > 0) {
-        window.AppAlert.warning(`${action} favorites: ${successCount} succeeded, ${errorCount} failed`);
+        window.AppAlert.warning(interpolate(
+          add
+            ? gettext('Added to favorites: %(success)s succeeded, %(failed)s failed')
+            : gettext('Removed from favorites: %(success)s succeeded, %(failed)s failed'),
+          counts,
+          true
+        ));
       } else {
-        window.AppAlert.success(`${action} favorites: ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(interpolate(
+          add
+            ? ngettext('Added to favorites: %(count)s item', 'Added to favorites: %(count)s items', successCount)
+            : ngettext('Removed from favorites: %(count)s item', 'Removed from favorites: %(count)s items', successCount),
+          counts,
+          true
+        ));
       }
 
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
@@ -762,9 +819,9 @@ window.fileBrowser = function fileBrowser() {
 
       const count = uuids.length;
       const confirmed = await AppDialog.confirm({
-        title: 'Restore items?',
-        message: `Restore ${count} item${count > 1 ? 's' : ''} from trash?`,
-        okLabel: 'Restore',
+        title: gettext('Restore items?'),
+        message: interpolate(ngettext('Restore %(count)s item from trash?', 'Restore %(count)s items from trash?', count), { count }, true),
+        okLabel: gettext('Restore'),
         okClass: 'btn-module',
         icon: 'rotate-ccw',
         iconClass: 'bg-module/15 text-module'
@@ -792,9 +849,17 @@ window.fileBrowser = function fileBrowser() {
       }
 
       if (errorCount > 0) {
-        window.AppAlert.warning(`Restored ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(interpolate(
+          gettext('Restored %(success)s items, %(failed)s failed'),
+          { success: successCount, failed: errorCount },
+          true
+        ));
       } else {
-        window.AppAlert.success(`Restored ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(interpolate(
+          ngettext('Restored %(count)s item', 'Restored %(count)s items', successCount),
+          { count: successCount },
+          true
+        ));
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -808,9 +873,17 @@ window.fileBrowser = function fileBrowser() {
 
       const count = uuids.length;
       const confirmed = await AppDialog.confirm({
-        title: 'Delete permanently?',
-        message: `This will permanently delete ${count} item${count > 1 ? 's' : ''} and cannot be undone.`,
-        okLabel: 'Delete permanently',
+        title: gettext('Delete permanently?'),
+        message: interpolate(
+          ngettext(
+            'This will permanently delete %(count)s item and cannot be undone.',
+            'This will permanently delete %(count)s items and cannot be undone.',
+            count
+          ),
+          { count },
+          true
+        ),
+        okLabel: gettext('Delete permanently'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error'
@@ -838,9 +911,17 @@ window.fileBrowser = function fileBrowser() {
       }
 
       if (errorCount > 0) {
-        window.AppAlert.warning(`Permanently deleted ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(interpolate(
+          gettext('Permanently deleted %(success)s items, %(failed)s failed'),
+          { success: successCount, failed: errorCount },
+          true
+        ));
       } else {
-        window.AppAlert.success(`Permanently deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(interpolate(
+          ngettext('Permanently deleted %(count)s item', 'Permanently deleted %(count)s items', successCount),
+          { count: successCount },
+          true
+        ));
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -876,11 +957,23 @@ window.fileBrowser = function fileBrowser() {
         }
       }
 
-      const action = add ? 'Pinned' : 'Unpinned';
+      const counts = { success: successCount, failed: errorCount, count: successCount };
       if (errorCount > 0) {
-        window.AppAlert.warning(`${action} ${successCount} items, ${errorCount} failed`);
+        window.AppAlert.warning(interpolate(
+          add
+            ? gettext('Pinned %(success)s items, %(failed)s failed')
+            : gettext('Unpinned %(success)s items, %(failed)s failed'),
+          counts,
+          true
+        ));
       } else {
-        window.AppAlert.success(`${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
+        window.AppAlert.success(interpolate(
+          add
+            ? ngettext('Pinned %(count)s item', 'Pinned %(count)s items', successCount)
+            : ngettext('Unpinned %(count)s item', 'Unpinned %(count)s items', successCount),
+          counts,
+          true
+        ));
       }
 
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -894,14 +987,22 @@ window.fileBrowser = function fileBrowser() {
       if (!items || items.length === 0) return;
       window.fileClipboard.cut(this._tagSourceFolder(items));
       const count = items.length;
-      window.AppAlert.info(`${count} item${count > 1 ? 's' : ''} cut to clipboard`);
+      window.AppAlert.info(interpolate(
+        ngettext('%(count)s item cut to clipboard', '%(count)s items cut to clipboard', count),
+        { count },
+        true
+      ));
     },
 
     copyToClipboard(items) {
       if (!items || items.length === 0) return;
       window.fileClipboard.copy(this._tagSourceFolder(items));
       const count = items.length;
-      window.AppAlert.info(`${count} item${count > 1 ? 's' : ''} copied to clipboard`);
+      window.AppAlert.info(interpolate(
+        ngettext('%(count)s item copied to clipboard', '%(count)s items copied to clipboard', count),
+        { count },
+        true
+      ));
     },
 
     bulkCutToClipboard(uuids) {
@@ -940,7 +1041,7 @@ window.fileBrowser = function fileBrowser() {
     async pasteFromClipboard() {
       const items = window.fileClipboard.getItems();
       if (!items || items.length === 0) {
-        window.AppAlert.warning('Clipboard is empty');
+        window.AppAlert.warning(gettext('Clipboard is empty'));
         return;
       }
 
@@ -976,8 +1077,8 @@ window.fileBrowser = function fileBrowser() {
       );
       const decisions = await this._decideNameCollisions(collidable, {
         replaceLabel: isCopy
-          ? 'Replace the existing file'
-          : 'Replace the existing file (the moved one goes to the trash)',
+          ? gettext('Replace the existing file')
+          : gettext('Replace the existing file (the moved one goes to the trash)'),
         targetFolderId,
       });
 
@@ -1028,7 +1129,7 @@ window.fileBrowser = function fileBrowser() {
         }
       }
 
-      const summary = this._pasteSummary(isCopy ? 'Copied' : 'Moved', outcome);
+      const summary = this._pasteSummary(isCopy, outcome);
       if (outcome.failed > 0) {
         window.AppAlert.warning(firstError ? `${summary} - ${firstError}` : summary);
       } else if (summary) {
@@ -1042,9 +1143,9 @@ window.fileBrowser = function fileBrowser() {
 
     async extractArchive(uuid, name) {
       const folder = await AppDialog.folderPicker({
-        title: 'Extract archive',
-        message: `Choose where to extract "${name}".`,
-        okLabel: 'Extract',
+        title: gettext('Extract archive'),
+        message: interpolate(gettext('Choose where to extract "%(name)s".'), { name }, true),
+        okLabel: gettext('Extract'),
         okClass: 'btn-module',
         icon: 'archive-restore',
         iconClass: 'bg-module/15 text-module',
@@ -1062,11 +1163,15 @@ window.fileBrowser = function fileBrowser() {
         });
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({}));
-          window.AppAlert.error(body.detail || 'Extraction failed');
+          window.AppAlert.error(body.detail || gettext('Extraction failed'));
           return;
         }
         const data = await resp.json();
-        window.AppAlert.success(`Extracted ${data.files_created} item(s)`);
+        window.AppAlert.success(interpolate(
+          ngettext('Extracted %(count)s item', 'Extracted %(count)s items', data.files_created),
+          { count: data.files_created },
+          true
+        ));
 
         // If the user is currently viewing the destination folder, refresh.
         // Normalise both sides to null so root (uuid=null) compares against
@@ -1077,7 +1182,7 @@ window.fileBrowser = function fileBrowser() {
           this.refreshFolderBrowser();
         }
       } catch (e) {
-        window.AppAlert.error('Extraction failed');
+        window.AppAlert.error(gettext('Extraction failed'));
       }
     },
 
@@ -1102,9 +1207,9 @@ window.fileBrowser = function fileBrowser() {
         } catch (error) {
           data = {};
         }
-        window.AppAlert.error(data.detail || 'Failed to pin folder');
+        window.AppAlert.error(data.detail || gettext('Failed to pin folder'));
       } catch (error) {
-        window.AppAlert.error('Failed to pin folder');
+        window.AppAlert.error(gettext('Failed to pin folder'));
       } finally {
         this._stopLoading(uuid);
       }
@@ -1164,7 +1269,7 @@ window.fileBrowser = function fileBrowser() {
       if (!this.selectedFile || this.selectedFile.uuid !== uuid) {
         const resp = await fetch(`/api/v1/files/${uuid}`);
         if (!resp.ok) {
-          window.AppAlert.error('Failed to load tags');
+          window.AppAlert.error(gettext('Failed to load tags'));
           return;
         }
         const data = await resp.json();
@@ -1224,7 +1329,7 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('create-group-folder', (e) => {
         window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
           .then(() => window.dispatchEvent(new CustomEvent('group-folders-changed')))
-          .catch((err) => window.AppAlert.error(err.message || 'Failed to create group folder'));
+          .catch((err) => window.AppAlert.error(err.message || gettext('Failed to create group folder')));
       });
 
       // The sidebar's Tags section lives outside this component and asks

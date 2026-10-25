@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- PDF Viewer (native browser) -->
 <div class="flex flex-col h-full" x-data="pdfViewerData()">
   <!-- Toolbar -->
@@ -8,10 +9,10 @@
       href="{{ content_url }}"
       target="_blank"
       class="btn btn-sm btn-ghost"
-      title="Open in new tab"
+      title="{% translate 'Open in new tab' %}"
     >
       <i data-lucide="external-link" class="w-4 h-4"></i>
-      <span class="hidden sm:inline">New tab</span>
+      <span class="hidden sm:inline">{% translate "New tab" %}</span>
     </a>
   </div>
 

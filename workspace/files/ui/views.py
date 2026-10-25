@@ -8,6 +8,7 @@ from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.html import escape, format_html
+from django.utils.translation import gettext as _
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.charts import donut_chart
@@ -77,9 +78,9 @@ def build_breadcrumbs(folder, user=None):
     breadcrumbs.append(_crumb(folder))
 
     if folder.group_id and FileService.reads_full_path(permission):
-        breadcrumbs.insert(0, {"label": "Groups", "icon": "users"})
+        breadcrumbs.insert(0, {"label": _("Groups"), "icon": "users"})
     else:
-        label = user.get_full_name() or user.username if user else "My Files"
+        label = user.get_full_name() or user.username if user else _("My Files")
         breadcrumbs.insert(0, _root_crumb(label))
     return breadcrumbs
 
@@ -127,10 +128,10 @@ def _build_context(request, folder=None, is_trash_view=False):
     breadcrumbs = [files_root]
 
     SPECIAL_VIEWS = {
-        "shared": {"label": "Shared with me", "icon": "share-2"},
-        "trash": {"label": "Trash", "icon": "trash-2"},
-        "favorites": {"label": "Favorites", "icon": "star"},
-        "recent": {"label": "Recent", "icon": "clock"},
+        "shared": {"label": _("Shared with me"), "icon": "share-2"},
+        "trash": {"label": _("Trash"), "icon": "trash-2"},
+        "favorites": {"label": _("Favorites"), "icon": "star"},
+        "recent": {"label": _("Recent"), "icon": "clock"},
     }
     active_special = (
         "shared"
@@ -268,35 +269,35 @@ def _build_context(request, folder=None, is_trash_view=False):
 
     VIEW_META = {
         "shared": (
-            "Shared with me",
+            _("Shared with me"),
             "/files?shared=1",
-            "Nothing shared with you",
-            "Files others share with you will appear here.",
+            _("Nothing shared with you"),
+            _("Files others share with you will appear here."),
         ),
         "trash": (
-            "Trash",
+            _("Trash"),
             "/files/trash",
-            "Trash is empty",
-            "Items you delete stay here for a while.",
+            _("Trash is empty"),
+            _("Items you delete stay here for a while."),
         ),
         "favorites": (
-            "Favorites",
+            _("Favorites"),
             "/files?favorites=1",
-            "No favorites yet",
-            "Star files or folders to see them here.",
+            _("No favorites yet"),
+            _("Star files or folders to see them here."),
         ),
         "recent": (
-            "Recent",
+            _("Recent"),
             "/files?recent=1",
-            "No recent files",
-            "Files you create or edit will show up here.",
+            _("No recent files"),
+            _("Files you create or edit will show up here."),
         ),
     }
     if is_tag_view:
         page_title = active_tag.name
         current_view_url = f"/files?tag={active_tag.uuid}"
-        empty_title = "No files with this tag"
-        empty_message = "Tag a file from its properties panel to see it here."
+        empty_title = _("No files with this tag")
+        empty_message = _("Tag a file from its properties panel to see it here.")
     elif active_special:
         page_title, current_view_url, empty_title, empty_message = VIEW_META[
             active_special
@@ -307,7 +308,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         empty_title = None
         empty_message = None
     else:
-        page_title = "My Files"
+        page_title = _("My Files")
         current_view_url = "/files"
         empty_title = None
         empty_message = None
@@ -515,9 +516,9 @@ def properties(request, uuid):
         ]
 
     PERMISSION_LABELS = {
-        FilePermission.VIEW: ("Read only", False),
-        FilePermission.WRITE: ("Read & write", True),
-        FilePermission.EDIT: ("Full access", True),
+        FilePermission.VIEW: (_("Read only"), False),
+        FilePermission.WRITE: (_("Read & write"), True),
+        FilePermission.EDIT: (_("Full access"), True),
     }
     perm_label, perm_is_write = PERMISSION_LABELS.get(perm, (None, False))
 
@@ -566,7 +567,7 @@ def storage(request, uuid=None):
         ]
     )
     if folder is None:
-        title = "My Files"
+        title = _("My Files")
         parent_url = None
     elif folder.group_id and folder.parent_id is None:
         title = folder.name
@@ -751,10 +752,15 @@ def view_file(request, uuid):
     if reason is not None:
         return HttpResponse(
             render_viewer_panel(
-                '<div data-viewer-blocked="1" hidden></div>'
-                '<inline-alert type="error" title="Quarantined" '
-                'message="The malware scanner flagged this file, so its '
-                'contents cannot be shown."></inline-alert>'
+                format_html(
+                    '<div data-viewer-blocked="1" hidden></div>'
+                    '<inline-alert type="error" title="{}" message="{}"></inline-alert>',
+                    _("Quarantined"),
+                    _(
+                        "The malware scanner flagged this file, so its "
+                        "contents cannot be shown."
+                    ),
+                )
             ),
             status=403,
         )
@@ -831,12 +837,12 @@ def _viewer_location_marker(user, file_obj, permission):
     ancestors = FileService.visible_ancestors(user, file_obj, permission)
     names = [folder.name for folder in ancestors]
     if not FileService.reads_full_path(permission):
-        space, labels, url = "shared", ["Shared with me", *names], ""
+        space, labels, url = "shared", [_("Shared with me"), *names], ""
     elif file_obj.group_id:
         space, labels = "group", names
         url = f"/files/{ancestors[-1].uuid}?open={file_obj.uuid}" if ancestors else ""
     else:
-        space, labels = "personal", ["My Files", *names]
+        space, labels = "personal", [_("My Files"), *names]
         folder = f"/{ancestors[-1].uuid}" if ancestors else ""
         url = f"/files{folder}?open={file_obj.uuid}"
     return format_html(

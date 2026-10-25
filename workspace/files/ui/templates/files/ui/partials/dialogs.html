@@ -1,3 +1,4 @@
+{% load i18n %}
 {% include "files/ui/partials/folder_dialog.html" %}
 
 <!-- Create File Dialog -->
@@ -9,41 +10,41 @@
       >
         <i data-lucide="file-plus" class="w-5 h-5"></i>
       </div>
-      Create New File
+      {% translate "Create New File" %}
     </h3>
     <form
       @submit.prevent="$dispatch('create-file', { name: $refs.fileName.value, fileType, customExt: $refs.customExt ? $refs.customExt.value : '' })"
     >
       <div class="form-control mb-3">
         <label class="label">
-          <span class="label-text">File name</span>
+          <span class="label-text">{% translate "File name" %}</span>
         </label>
         <input
           x-ref="fileName"
           type="text"
-          placeholder="notes"
+          placeholder="{% translate 'notes' %}"
           class="input input-bordered w-full"
           required
         />
         <label class="label">
-          <span class="label-text-alt">Extension added if missing</span>
+          <span class="label-text-alt">{% translate "Extension added if missing" %}</span>
         </label>
       </div>
       <div class="form-control">
         <label class="label">
-          <span class="label-text">Type</span>
+          <span class="label-text">{% translate "Type" %}</span>
         </label>
         <select x-model="fileType" class="select select-bordered w-full">
-          <option value="txt">Text (.txt)</option>
+          <option value="txt">{% translate "Text (.txt)" %}</option>
           <option value="md">Markdown (.md)</option>
           <option value="json">JSON (.json)</option>
           <option value="csv">CSV (.csv)</option>
-          <option value="custom">Custom extension</option>
+          <option value="custom">{% translate "Custom extension" %}</option>
         </select>
       </div>
       <div class="form-control mt-3" x-show="fileType === 'custom'" x-cloak>
         <label class="label">
-          <span class="label-text">Extension</span>
+          <span class="label-text">{% translate "Extension" %}</span>
         </label>
         <input
           x-ref="customExt"
@@ -58,160 +59,230 @@
           class="btn btn-sm"
           onclick="document.getElementById('create-file-dialog').close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
-        <button type="submit" class="btn btn-module btn-sm">Create</button>
+        <button type="submit" class="btn btn-module btn-sm">{% translate "Create" %}</button>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>
 
 {% load ui_tags %}
 {% help_items as help_items %}
-  keyboard | Keyboard Shortcuts | checked
-  <h4 class="font-semibold mt-0 mb-2">Navigation</h4>
+  keyboard | {% translate "Keyboard Shortcuts" %} | checked
+  <h4 class="font-semibold mt-0 mb-2">{% translate "Navigation" %}</h4>
   <table class="table table-sm">
     <tbody>
       <tr>
         <td><kbd class="kbd kbd-sm">Alt</kbd> + <kbd class="kbd kbd-sm">&larr;</kbd></td>
-        <td>Go back</td>
+        <td>{% translate "Go back" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Alt</kbd> + <kbd class="kbd kbd-sm">&rarr;</kbd></td>
-        <td>Go forward</td>
+        <td>{% translate "Go forward" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Alt</kbd> + <kbd class="kbd kbd-sm">&uarr;</kbd></td>
-        <td>Go to parent folder</td>
+        <td>{% translate "Go to parent folder" %}</td>
       </tr>
     </tbody>
   </table>
-  <h4 class="font-semibold mt-3 mb-2">Selection shortcuts</h4>
-  <p class="text-xs opacity-70 mt-0 mb-2">Select one or more items using checkboxes, then press a shortcut.</p>
+  <h4 class="font-semibold mt-3 mb-2">{% translate "Selection shortcuts" %}</h4>
+  <p
+    class="text-xs opacity-70 mt-0 mb-2"
+  >{% translate "Select one or more items using checkboxes, then press a shortcut." %}</p>
   <table class="table table-sm">
     <tbody>
       <tr>
         <td><kbd class="kbd kbd-sm">Enter</kbd> / <kbd class="kbd kbd-sm">Space</kbd></td>
-        <td>Open folder / View file</td>
-        <td class="text-xs opacity-60">single</td>
+        <td>{% translate "Open folder / View file" %}</td>
+        <td class="text-xs opacity-60">{% translate "single" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">F2</kbd></td>
-        <td>Rename</td>
-        <td class="text-xs opacity-60">single</td>
+        <td>{% translate "Rename" %}</td>
+        <td class="text-xs opacity-60">{% translate "single" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Del</kbd></td>
-        <td>Delete</td>
-        <td class="text-xs opacity-60">single / multi</td>
+        <td>{% translate "Delete" %}</td>
+        <td class="text-xs opacity-60">{% translate "single / multi" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">F</kbd></td>
-        <td>Toggle favorite</td>
-        <td class="text-xs opacity-60">single / multi</td>
+        <td>{% translate "Toggle favorite" %}</td>
+        <td class="text-xs opacity-60">{% translate "single / multi" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">P</kbd></td>
-        <td>Pin / unpin from sidebar</td>
-        <td class="text-xs opacity-60">single folder</td>
+        <td>{% translate "Pin / unpin from sidebar" %}</td>
+        <td class="text-xs opacity-60">{% translate "single folder" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">X</kbd></td>
-        <td>Cut</td>
-        <td class="text-xs opacity-60">single / multi</td>
+        <td>{% translate "Cut" %}</td>
+        <td class="text-xs opacity-60">{% translate "single / multi" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">C</kbd></td>
-        <td>Copy</td>
-        <td class="text-xs opacity-60">single / multi</td>
+        <td>{% translate "Copy" %}</td>
+        <td class="text-xs opacity-60">{% translate "single / multi" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">V</kbd></td>
-        <td>Paste</td>
-        <td class="text-xs opacity-60">no selection needed</td>
+        <td>{% translate "Paste" %}</td>
+        <td class="text-xs opacity-60">{% translate "no selection needed" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">I</kbd></td>
-        <td>Properties</td>
-        <td class="text-xs opacity-60">single</td>
+        <td>{% translate "Properties" %}</td>
+        <td class="text-xs opacity-60">{% translate "single" %}</td>
       </tr>
     </tbody>
   </table>
-  <h4 class="font-semibold mt-3 mb-2">File Editor</h4>
+  <h4 class="font-semibold mt-3 mb-2">{% translate "File Editor" %}</h4>
   <table class="table table-sm">
     <tbody>
       <tr>
         <td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">S</kbd></td>
-        <td>Save</td>
+        <td>{% translate "Save" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Esc</kbd></td>
-        <td>Cancel editing</td>
+        <td>{% translate "Cancel editing" %}</td>
       </tr>
     </tbody>
   </table>
   ---
-  hard-drive | WebDAV Access
-  <p>Mount your files as a network drive using WebDAV. Your WebDAV URL is:</p>
-  <code class="block bg-base-300 px-3 py-2 rounded text-sm mb-3">https://&lt;your-domain&gt;/dav/</code>
-  <p class="mb-3">Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.</p>
+  hard-drive | {% translate "WebDAV Access" %}
+  <p>{% translate "Mount your files as a network drive using WebDAV. Your WebDAV URL is:" %}</p>
+  <code
+    class="block bg-base-300 px-3 py-2 rounded text-sm mb-3"
+  >https://&lt;{% translate "your-domain" %}&gt;/dav/</code>
+  <p class="mb-3">
+    {% blocktranslate trimmed %}
+      Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.
+    {% endblocktranslate %}
+  </p>
   <h4 class="font-semibold mt-3 mb-1">Windows</h4>
   <ol>
-    <li>Open File Explorer and click <strong>Map network drive</strong>.</li>
-    <li>Enter the WebDAV URL as the folder path.</li>
-    <li>Check <em>Connect using different credentials</em> and enter your username and password.</li>
     <li>
-      If connecting over HTTP, add a registry key to allow Basic auth:
+      {% blocktranslate trimmed %}
+        Open File Explorer and click <strong>Map network drive</strong>.
+      {% endblocktranslate %}
+    </li>
+    <li>{% translate "Enter the WebDAV URL as the folder path." %}</li>
+    <li>
+      {% blocktranslate trimmed %}
+        Check <em>Connect using different credentials</em> and enter your username and password.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% translate "If connecting over HTTP, add a registry key to allow Basic auth:" %}
       <code class="block bg-base-300 px-3 py-2 rounded text-xs mt-1">
         HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\BasicAuthLevel = 2
       </code>
-      then restart the <em>WebClient</em> service.
+      {% blocktranslate trimmed %}
+        then restart the <em>WebClient</em> service.
+      {% endblocktranslate %}
     </li>
   </ol>
   <h4 class="font-semibold mt-3 mb-1">macOS</h4>
   <ol>
-    <li>In Finder, press <kbd class="kbd kbd-sm">Cmd</kbd> + <kbd class="kbd kbd-sm">K</kbd>.</li>
-    <li>Enter the WebDAV URL and click <strong>Connect</strong>.</li>
-    <li>Enter your credentials when prompted.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        In Finder, press <kbd class="kbd kbd-sm">Cmd</kbd> + <kbd class="kbd kbd-sm">K</kbd>.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        Enter the WebDAV URL and click <strong>Connect</strong>.
+      {% endblocktranslate %}
+    </li>
+    <li>{% translate "Enter your credentials when prompted." %}</li>
   </ol>
   <h4 class="font-semibold mt-3 mb-1">Linux</h4>
   <ol>
-    <li>Install <code>davfs2</code>: <code>sudo apt install davfs2</code></li>
-    <li>Mount via command line or add to <code>/etc/fstab</code>.</li>
-    <li>Alternatively, use <strong>GNOME Files</strong> &gt; Other Locations &gt; Connect to Server.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        Install <code>davfs2</code>: <code>sudo apt install davfs2</code>
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        Mount via command line or add to <code>/etc/fstab</code>.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        Alternatively, use <strong>GNOME Files</strong> &gt; Other Locations &gt; Connect to Server.
+      {% endblocktranslate %}
+    </li>
   </ol>
   <h4 class="font-semibold mt-3 mb-1">iOS / Android</h4>
-  <p>Use a WebDAV-compatible app such as <strong>FE File Explorer</strong>, <strong>Solid Explorer</strong>, or <strong>Documents by Readdle</strong>.</p>
+  <p>
+    {% blocktranslate trimmed %}
+      Use a WebDAV-compatible app such as <strong>FE File Explorer</strong>, <strong>Solid Explorer</strong>, or <strong>Documents by Readdle</strong>.
+    {% endblocktranslate %}
+  </p>
   ---
-  folder-open | File Management
+  folder-open | {% translate "File Management" %}
   <ul>
-    <li><strong>Drag and drop</strong> &mdash; Drop files anywhere on the page to upload them to the current folder.</li>
-    <li><strong>Pinned folders</strong> &mdash; Drag a folder onto the sidebar "Pinned" area to pin it for quick access.</li>
-    <li><strong>Favorites</strong> &mdash; Right-click a file or folder and select <em>Add to favorites</em> to bookmark it.</li>
-    <li><strong>Trash</strong> &mdash; Deleted items are moved to the Trash and can be restored or permanently removed.</li>
-    <li><strong>Right-click menu</strong> &mdash; Right-click any item for options like rename, move, download, and more.</li>
-  </ul>
-  ---
-  file-type | Supported File Types
-  <p>The following file types can be previewed directly in the browser:</p>
-  <ul>
-    <li><strong>Images</strong> &mdash; JPEG, PNG, GIF, SVG, WebP, BMP, ICO</li>
-    <li><strong>Documents</strong> &mdash; PDF, Markdown (rendered)</li>
-    <li><strong>Text &amp; Code</strong> &mdash; Plain text, JSON, XML, YAML, HTML, CSS, JavaScript, Python, and many more (with syntax highlighting)</li>
-    <li><strong>Media</strong> &mdash; Audio (MP3, WAV, OGG) and Video (MP4, WebM)</li>
-  </ul>
-  <p>All other file types can be downloaded.</p>
-  ---
-  code | API Access
-  <p>A REST API is available for programmatic access to your files.</p>
-  <ul>
-    <li><strong>Base URL:</strong> <code>/api/v1/files</code></li>
-    <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
     <li>
-      <strong>Documentation:</strong> Full API docs are available at
+      {% blocktranslate trimmed %}
+        <strong>Drag and drop</strong> &mdash; Drop files anywhere on the page to upload them to the current folder.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Pinned folders</strong> &mdash; Drag a folder onto the sidebar "Pinned" area to pin it for quick access.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Favorites</strong> &mdash; Right-click a file or folder and select <em>Add to favorites</em> to bookmark it.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Trash</strong> &mdash; Deleted items are moved to the Trash and can be restored or permanently removed.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Right-click menu</strong> &mdash; Right-click any item for options like rename, move, download, and more.
+      {% endblocktranslate %}
+    </li>
+  </ul>
+  ---
+  file-type | {% translate "Supported File Types" %}
+  <p>{% translate "The following file types can be previewed directly in the browser:" %}</p>
+  <ul>
+    <li><strong>{% translate "Images" %}</strong> &mdash; JPEG, PNG, GIF, SVG, WebP, BMP, ICO</li>
+    <li><strong>{% translate "Documents" %}</strong> &mdash; {% translate "PDF, Markdown (rendered)" %}</li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Text &amp; Code</strong> &mdash; Plain text, JSON, XML, YAML, HTML, CSS, JavaScript, Python, and many more (with syntax highlighting)
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Media</strong> &mdash; Audio (MP3, WAV, OGG) and Video (MP4, WebM)
+      {% endblocktranslate %}
+    </li>
+  </ul>
+  <p>{% translate "All other file types can be downloaded." %}</p>
+  ---
+  code | {% translate "API Access" %}
+  <p>{% translate "A REST API is available for programmatic access to your files." %}</p>
+  <ul>
+    <li><strong>{% translate "Base URL:" %}</strong> <code>/api/v1/files</code></li>
+    <li><strong>{% translate "Authentication:" %}</strong> {% translate "Use your session cookie or API token." %}</li>
+    <li>
+      <strong>{% translate "Documentation:" %}</strong> {% translate "Full API docs are available at" %}
       <a href="/schema/swagger-ui/" class="link link-module">/schema/swagger-ui/</a>.
     </li>
   </ul>

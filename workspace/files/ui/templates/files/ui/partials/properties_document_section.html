@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 The Document section of the Files properties panel (registered in
 FilesConfig.ready(), rendered by files.properties_sections).
@@ -47,7 +48,13 @@ Context: document, the file's current files.models.DocumentInfo.
       data-document-detail="pages"
     >
       <i data-lucide="files" class="w-3.5 h-3.5 flex-shrink-0"></i>
-      <span>{{ document.page_count }} page{{ document.page_count|pluralize }}</span>
+      <span>
+        {% blocktranslate trimmed count counter=document.page_count %}
+          {{ counter }} page
+        {% plural %}
+          {{ counter }} pages
+        {% endblocktranslate %}
+      </span>
     </div>
   {% endif %}
   {% if document.created %}
@@ -56,7 +63,11 @@ Context: document, the file's current files.models.DocumentInfo.
       data-document-detail="written"
     >
       <i data-lucide="file-pen-line" class="w-3.5 h-3.5 flex-shrink-0"></i>
-      <span>Written {{ document.created|date:"N j, Y" }}</span>
+      <span>
+        {% blocktranslate trimmed with date=document.created|date:"DATE_FORMAT" %}
+          Written {{ date }}
+        {% endblocktranslate %}
+      </span>
     </div>
   {% endif %}
   {% if document.modified %}
@@ -65,7 +76,11 @@ Context: document, the file's current files.models.DocumentInfo.
       data-document-detail="saved"
     >
       <i data-lucide="save" class="w-3.5 h-3.5 flex-shrink-0"></i>
-      <span>Last saved {{ document.modified|date:"N j, Y" }}</span>
+      <span>
+        {% blocktranslate trimmed with date=document.modified|date:"DATE_FORMAT" %}
+          Last saved {{ date }}
+        {% endblocktranslate %}
+      </span>
     </div>
   {% endif %}
 </div>

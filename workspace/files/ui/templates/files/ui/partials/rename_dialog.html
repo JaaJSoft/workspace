@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- Rename Dialog -->
 <dialog id="rename-dialog" class="modal">
   <div
@@ -11,14 +12,14 @@
       >
         <i data-lucide="pencil" class="w-5 h-5"></i>
       </div>
-      Rename
+      {% translate "Rename" %}
     </h3>
     <form
       @submit.prevent="window.dispatchEvent(new CustomEvent('rename-item', { detail: { uuid: uuid, name: name } }))"
     >
       <div class="form-control">
         <label class="label">
-          <span class="label-text">New name</span>
+          <span class="label-text">{% translate "New name" %}</span>
         </label>
         <input
           x-model="name"
@@ -33,13 +34,13 @@
           class="btn btn-sm"
           onclick="document.getElementById('rename-dialog').close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
-        <button type="submit" class="btn btn-module btn-sm">Rename</button>
+        <button type="submit" class="btn btn-module btn-sm">{% translate "Rename" %}</button>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

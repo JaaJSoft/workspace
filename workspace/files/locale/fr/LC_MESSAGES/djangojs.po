@@ -1,0 +1,785 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-25 17:27+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Delete folder?"
+msgstr "Supprimer le dossier ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Delete file?"
+msgstr "Supprimer le fichier ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Move \"%(name)s\" to trash? This will also move all contents."
+msgstr ""
+"Déplacer « %(name)s » dans la corbeille ? Tout son contenu sera également "
+"déplacé."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Move \"%(name)s\" to trash?"
+msgstr "Déplacer « %(name)s » dans la corbeille ?"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
+msgid "Move to trash"
+msgstr "Mettre à la corbeille"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_actions.js
+msgid "Failed to create folder"
+msgstr "Impossible de créer le dossier"
+
+#: ui/static/files/ui/js/browser.js
+msgid "File name is required"
+msgstr "Le nom du fichier est obligatoire"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Custom extension is required"
+msgstr "L’extension personnalisée est obligatoire"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to create file"
+msgstr "Impossible de créer le fichier"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Replace the existing file"
+msgstr "Remplacer le fichier existant"
+
+#: ui/static/files/ui/js/browser.js
+msgid "File already exists"
+msgstr "Le fichier existe déjà"
+
+#: ui/static/files/ui/js/browser.js
+msgid ""
+"A file named \"%(name)s\" already exists in this folder. What should happen "
+"to the new one?"
+msgstr ""
+"Un fichier nommé « %(name)s » existe déjà dans ce dossier. Que faire du "
+"nouveau ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Keep both (rename the new file)"
+msgstr "Conserver les deux (renommer le nouveau fichier)"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Skip this file"
+msgstr "Ignorer ce fichier"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Continue"
+msgstr "Continuer"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Do the same for the %(count)s other conflict"
+msgid_plural "Do the same for the %(count)s other conflicts"
+msgstr[0] "Faire de même pour %(count)s autre conflit"
+msgstr[1] "Faire de même pour les %(count)s de conflits restants"
+msgstr[2] "Faire de même pour les %(count)s autres conflits"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Copied %(count)s item"
+msgid_plural "Copied %(count)s items"
+msgstr[0] "%(count)s élément copié"
+msgstr[1] "%(count)s d’éléments copiés"
+msgstr[2] "%(count)s éléments copiés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Moved %(count)s item"
+msgid_plural "Moved %(count)s items"
+msgstr[0] "%(count)s élément déplacé"
+msgstr[1] "%(count)s d’éléments déplacés"
+msgstr[2] "%(count)s éléments déplacés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "replaced %(count)s"
+msgid_plural "replaced %(count)s"
+msgstr[0] "%(count)s remplacé"
+msgstr[1] "%(count)s remplacés"
+msgstr[2] "%(count)s remplacés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "kept %(count)s under a new name"
+msgid_plural "kept %(count)s under a new name"
+msgstr[0] "%(count)s conservé sous un nouveau nom"
+msgstr[1] "%(count)s conservés sous un nouveau nom"
+msgstr[2] "%(count)s conservés sous un nouveau nom"
+
+#: ui/static/files/ui/js/browser.js
+msgid "skipped %(count)s"
+msgid_plural "skipped %(count)s"
+msgstr[0] "%(count)s ignoré"
+msgstr[1] "%(count)s ignorés"
+msgstr[2] "%(count)s ignorés"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/upload_queue.js
+msgid "%(count)s failed"
+msgid_plural "%(count)s failed"
+msgstr[0] "%(count)s en échec"
+msgstr[1] "%(count)s en échec"
+msgstr[2] "%(count)s en échec"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_actions.js
+msgid "Failed to rename"
+msgstr "Impossible de renommer"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to delete"
+msgstr "Impossible de supprimer"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restore folder?"
+msgstr "Restaurer le dossier ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restore file?"
+msgstr "Restaurer le fichier ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restore \"%(name)s\" from trash?"
+msgstr "Restaurer « %(name)s » depuis la corbeille ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restore"
+msgstr "Restaurer"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to restore"
+msgstr "Impossible de restaurer"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Delete folder permanently?"
+msgstr "Supprimer définitivement le dossier ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Delete file permanently?"
+msgstr "Supprimer définitivement le fichier ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "This will permanently delete \"%(name)s\" and cannot be undone."
+msgstr ""
+"« %(name)s » sera supprimé définitivement. Cette action est irréversible."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Delete permanently"
+msgstr "Supprimer définitivement"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to delete permanently"
+msgstr "Impossible de supprimer définitivement"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
+msgid "Empty trash?"
+msgstr "Vider la corbeille ?"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
+msgid "This will permanently delete all items in trash and cannot be undone."
+msgstr ""
+"Tous les éléments de la corbeille seront supprimés définitivement. Cette "
+"action est irréversible."
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
+msgid "Empty trash"
+msgstr "Vider la corbeille"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to clean trash"
+msgstr "Impossible de vider la corbeille"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_viewer.js
+msgid "Failed to update favorites"
+msgstr "Impossible de mettre à jour les favoris"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to update the files"
+msgstr "Impossible de mettre à jour les fichiers"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to update pin"
+msgstr "Impossible de mettre à jour l’épinglage"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Delete %(count)s item?"
+msgid_plural "Delete %(count)s items?"
+msgstr[0] "Supprimer %(count)s élément ?"
+msgstr[1] "Supprimer %(count)s d’éléments ?"
+msgstr[2] "Supprimer %(count)s éléments ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid ""
+"Move %(count)s item to trash? Folders will also move all their contents."
+msgid_plural ""
+"Move %(count)s items to trash? Folders will also move all their contents."
+msgstr[0] ""
+"Mettre %(count)s élément à la corbeille ? Les dossiers y seront déplacés "
+"avec tout leur contenu."
+msgstr[1] ""
+"Mettre %(count)s d’éléments à la corbeille ? Les dossiers y seront déplacés "
+"avec tout leur contenu."
+msgstr[2] ""
+"Mettre %(count)s éléments à la corbeille ? Les dossiers y seront déplacés "
+"avec tout leur contenu."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Deleted %(success)s items, %(failed)s failed"
+msgstr "%(success)s éléments supprimés, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Deleted %(count)s item"
+msgid_plural "Deleted %(count)s items"
+msgstr[0] "%(count)s élément supprimé"
+msgstr[1] "%(count)s d’éléments supprimés"
+msgstr[2] "%(count)s éléments supprimés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Added to favorites: %(success)s succeeded, %(failed)s failed"
+msgstr "Ajoutés aux favoris : %(success)s réussis, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Removed from favorites: %(success)s succeeded, %(failed)s failed"
+msgstr "Retirés des favoris : %(success)s réussis, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Added to favorites: %(count)s item"
+msgid_plural "Added to favorites: %(count)s items"
+msgstr[0] "Ajouté aux favoris : %(count)s élément"
+msgstr[1] "Ajoutés aux favoris : %(count)s d’éléments"
+msgstr[2] "Ajoutés aux favoris : %(count)s éléments"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Removed from favorites: %(count)s item"
+msgid_plural "Removed from favorites: %(count)s items"
+msgstr[0] "Retiré des favoris : %(count)s élément"
+msgstr[1] "Retirés des favoris : %(count)s d’éléments"
+msgstr[2] "Retirés des favoris : %(count)s éléments"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restore items?"
+msgstr "Restaurer les éléments ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restore %(count)s item from trash?"
+msgid_plural "Restore %(count)s items from trash?"
+msgstr[0] "Restaurer %(count)s élément depuis la corbeille ?"
+msgstr[1] "Restaurer %(count)s d’éléments depuis la corbeille ?"
+msgstr[2] "Restaurer %(count)s éléments depuis la corbeille ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restored %(success)s items, %(failed)s failed"
+msgstr "%(success)s éléments restaurés, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Restored %(count)s item"
+msgid_plural "Restored %(count)s items"
+msgstr[0] "%(count)s élément restauré"
+msgstr[1] "%(count)s d’éléments restaurés"
+msgstr[2] "%(count)s éléments restaurés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Delete permanently?"
+msgstr "Supprimer définitivement ?"
+
+#: ui/static/files/ui/js/browser.js
+msgid "This will permanently delete %(count)s item and cannot be undone."
+msgid_plural ""
+"This will permanently delete %(count)s items and cannot be undone."
+msgstr[0] ""
+"%(count)s élément sera supprimé définitivement. Cette action est "
+"irréversible."
+msgstr[1] ""
+"%(count)s d’éléments seront supprimés définitivement. Cette action est "
+"irréversible."
+msgstr[2] ""
+"%(count)s éléments seront supprimés définitivement. Cette action est "
+"irréversible."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Permanently deleted %(success)s items, %(failed)s failed"
+msgstr "%(success)s éléments supprimés définitivement, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Permanently deleted %(count)s item"
+msgid_plural "Permanently deleted %(count)s items"
+msgstr[0] "%(count)s élément supprimé définitivement"
+msgstr[1] "%(count)s d’éléments supprimés définitivement"
+msgstr[2] "%(count)s éléments supprimés définitivement"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Pinned %(success)s items, %(failed)s failed"
+msgstr "%(success)s éléments épinglés, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Unpinned %(success)s items, %(failed)s failed"
+msgstr "%(success)s éléments désépinglés, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Pinned %(count)s item"
+msgid_plural "Pinned %(count)s items"
+msgstr[0] "%(count)s élément épinglé"
+msgstr[1] "%(count)s d’éléments épinglés"
+msgstr[2] "%(count)s éléments épinglés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Unpinned %(count)s item"
+msgid_plural "Unpinned %(count)s items"
+msgstr[0] "%(count)s élément désépinglé"
+msgstr[1] "%(count)s d’éléments désépinglés"
+msgstr[2] "%(count)s éléments désépinglés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "%(count)s item cut to clipboard"
+msgid_plural "%(count)s items cut to clipboard"
+msgstr[0] "%(count)s élément coupé dans le presse-papiers"
+msgstr[1] "%(count)s d’éléments coupés dans le presse-papiers"
+msgstr[2] "%(count)s éléments coupés dans le presse-papiers"
+
+#: ui/static/files/ui/js/browser.js
+msgid "%(count)s item copied to clipboard"
+msgid_plural "%(count)s items copied to clipboard"
+msgstr[0] "%(count)s élément copié dans le presse-papiers"
+msgstr[1] "%(count)s d’éléments copiés dans le presse-papiers"
+msgstr[2] "%(count)s éléments copiés dans le presse-papiers"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Clipboard is empty"
+msgstr "Le presse-papiers est vide"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Replace the existing file (the moved one goes to the trash)"
+msgstr ""
+"Remplacer le fichier existant (le fichier déplacé va dans la corbeille)"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Extract archive"
+msgstr "Extraire l’archive"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Choose where to extract \"%(name)s\"."
+msgstr "Choisissez où extraire « %(name)s »."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Extract"
+msgstr "Extraire"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Extraction failed"
+msgstr "Échec de l’extraction"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Extracted %(count)s item"
+msgid_plural "Extracted %(count)s items"
+msgstr[0] "%(count)s élément extrait"
+msgstr[1] "%(count)s d’éléments extraits"
+msgstr[2] "%(count)s éléments extraits"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/pinned.js
+msgid "Failed to pin folder"
+msgstr "Impossible d’épingler le dossier"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to load tags"
+msgstr "Impossible de charger les étiquettes"
+
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_actions.js
+msgid "Failed to create group folder"
+msgstr "Impossible de créer le dossier de groupe"
+
+#: ui/static/files/ui/js/context_menu.js ui/static/files/ui/js/share_modal.js
+msgid "Link copied to clipboard"
+msgstr "Lien copié dans le presse-papiers"
+
+#: ui/static/files/ui/js/context_menu.js
+msgid "Failed to copy link"
+msgstr "Impossible de copier le lien"
+
+#: ui/static/files/ui/js/drag_move.js ui/static/files/ui/js/table.js
+msgid "%(count)s item"
+msgid_plural "%(count)s items"
+msgstr[0] "%(count)s élément"
+msgstr[1] "%(count)s d’éléments"
+msgstr[2] "%(count)s éléments"
+
+#: ui/static/files/ui/js/file_actions.js
+msgid "Unknown error"
+msgstr "Erreur inconnue"
+
+#: ui/static/files/ui/js/file_actions.js
+msgid "Preparing an archive of %(count)s item..."
+msgid_plural "Preparing an archive of %(count)s items..."
+msgstr[0] "Préparation d’une archive de %(count)s élément..."
+msgstr[1] "Préparation d’une archive de %(count)s d’éléments..."
+msgstr[2] "Préparation d’une archive de %(count)s éléments..."
+
+#: ui/static/files/ui/js/file_actions.js
+msgid "Failed to download selected files"
+msgstr "Impossible de télécharger les fichiers sélectionnés"
+
+#: ui/static/files/ui/js/file_lock.js
+msgid "Another user"
+msgstr "Un autre utilisateur"
+
+#: ui/static/files/ui/js/file_lock.js
+msgid "Failed to acquire lock"
+msgstr "Impossible d’obtenir le verrou"
+
+#: ui/static/files/ui/js/file_lock.js
+msgid "Force unlock failed"
+msgstr "Échec du déverrouillage forcé"
+
+#: ui/static/files/ui/js/file_viewer.js
+msgid "File"
+msgstr "Fichier"
+
+#: ui/static/files/ui/js/file_viewer.js
+msgid "Show in Files: %(path)s"
+msgstr "Afficher dans Fichiers : %(path)s"
+
+#: ui/static/files/ui/js/preferences.js
+msgid "Could not save the preference"
+msgstr "Impossible d’enregistrer la préférence"
+
+#: ui/static/files/ui/js/properties_panel.js
+msgid "Failed to load properties"
+msgstr "Impossible de charger les propriétés"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Project"
+msgstr "Projet"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Group"
+msgstr "Groupe"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Some changes failed (%(count)s error)"
+msgid_plural "Some changes failed (%(count)s errors)"
+msgstr[0] "Certaines modifications ont échoué (%(count)s erreur)"
+msgstr[1] "Certaines modifications ont échoué (%(count)s d’erreurs)"
+msgstr[2] "Certaines modifications ont échoué (%(count)s erreurs)"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Sharing updated"
+msgstr "Partage mis à jour"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "That password could not be copied."
+msgstr "Impossible de copier ce mot de passe."
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Read only"
+msgstr "Lecture seule"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Upload only"
+msgstr "Téléversement seul"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Read and upload"
+msgstr "Lecture et téléversement"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "Permanent"
+msgstr "Permanent"
+
+#: ui/static/files/ui/js/shared_dropzone.js
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Waiting"
+msgstr "En attente"
+
+#: ui/static/files/ui/js/shared_dropzone.js
+msgid "Sending"
+msgstr "Envoi"
+
+#: ui/static/files/ui/js/shared_dropzone.js
+msgid "Too large"
+msgstr "Trop volumineux"
+
+#: ui/static/files/ui/js/shared_dropzone.js
+msgid "Failed"
+msgstr "Échec"
+
+#: ui/static/files/ui/js/shared_dropzone.js
+msgid "Sent"
+msgstr "Envoyé"
+
+#: ui/static/files/ui/js/storage.js
+msgid "My files"
+msgstr "Mes fichiers"
+
+#: ui/static/files/ui/js/storage.js
+msgid "Move to trash?"
+msgstr "Mettre à la corbeille ?"
+
+#: ui/static/files/ui/js/storage.js
+msgid "\"%(name)s\" will be moved to the trash."
+msgstr "« %(name)s » sera déplacé dans la corbeille."
+
+#: ui/static/files/ui/js/storage.js
+msgid "Failed to move the file to trash"
+msgstr "Impossible de mettre le fichier à la corbeille"
+
+#: ui/static/files/ui/js/storage.js
+msgid "Failed to empty trash"
+msgstr "Impossible de vider la corbeille"
+
+#: ui/static/files/ui/js/table.js
+msgid "Default"
+msgstr "Par défaut"
+
+#: ui/static/files/ui/js/table.js
+msgid "Name"
+msgstr "Nom"
+
+#: ui/static/files/ui/js/table.js
+msgid "Size"
+msgstr "Taille"
+
+#: ui/static/files/ui/js/table.js
+msgid "Created"
+msgstr "Créé"
+
+#: ui/static/files/ui/js/table.js
+msgid "Modified"
+msgstr "Modifié"
+
+#: ui/static/files/ui/js/table.js
+msgid "Favorite"
+msgstr "Favori"
+
+#: ui/static/files/ui/js/table.js
+msgid "Type"
+msgstr "Type"
+
+#: ui/static/files/ui/js/table.js
+msgid "Files"
+msgstr "Fichiers"
+
+#: ui/static/files/ui/js/table.js
+msgid "Folders"
+msgstr "Dossiers"
+
+#: ui/static/files/ui/js/table.js
+msgid "Favorites"
+msgstr "Favoris"
+
+#: ui/static/files/ui/js/table.js
+msgid "Select"
+msgstr "Sélection"
+
+#: ui/static/files/ui/js/table.js
+msgid "Fav"
+msgstr "Fav."
+
+#: ui/static/files/ui/js/table.js
+msgid "Tags"
+msgstr "Étiquettes"
+
+#: ui/static/files/ui/js/table.js
+msgid "Actions"
+msgstr "Actions"
+
+#: ui/static/files/ui/js/table.js
+msgid "%(visible)s of %(count)s item"
+msgid_plural "%(visible)s of %(count)s items"
+msgstr[0] "%(visible)s sur %(count)s élément"
+msgstr[1] "%(visible)s sur %(count)s d’éléments"
+msgstr[2] "%(visible)s sur %(count)s éléments"
+
+#: ui/static/files/ui/js/table.js
+msgid "%(count)s selected"
+msgid_plural "%(count)s selected"
+msgstr[0] "%(count)s sélectionné"
+msgstr[1] "%(count)s de sélectionnés"
+msgstr[2] "%(count)s sélectionnés"
+
+#: ui/static/files/ui/js/table.js
+msgid "Sort"
+msgstr "Trier"
+
+#: ui/static/files/ui/js/table.js
+msgid "No matching items"
+msgstr "Aucun élément correspondant"
+
+#: ui/static/files/ui/js/table.js
+msgid "Could not switch the view"
+msgstr "Impossible de changer de vue"
+
+#: ui/static/files/ui/js/tags.js
+msgid "Failed to update the tag."
+msgstr "Impossible de mettre à jour l’étiquette."
+
+#: ui/static/files/ui/js/tags.js
+msgid "Delete tag \"%(name)s\"?"
+msgstr "Supprimer l’étiquette « %(name)s » ?"
+
+#: ui/static/files/ui/js/tags.js
+msgid "Failed to delete the tag."
+msgstr "Impossible de supprimer l’étiquette."
+
+#: ui/static/files/ui/js/tags.js
+msgid "Failed to merge the tags."
+msgstr "Impossible de fusionner les étiquettes."
+
+#: ui/static/files/ui/js/tags.js
+msgid "Delete %(count)s unused tag?"
+msgid_plural "Delete %(count)s unused tags?"
+msgstr[0] "Supprimer %(count)s étiquette inutilisée ?"
+msgstr[1] "Supprimer %(count)s d’étiquettes inutilisées ?"
+msgstr[2] "Supprimer %(count)s étiquettes inutilisées ?"
+
+#: ui/static/files/ui/js/tags.js
+msgid "Failed to delete the unused tags."
+msgstr "Impossible de supprimer les étiquettes inutilisées."
+
+#: ui/static/files/ui/js/tags.js
+msgid "Failed to save tag."
+msgstr "Impossible d’enregistrer l’étiquette."
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Pausing after the %(count)s file in flight"
+msgid_plural "Pausing after the %(count)s files in flight"
+msgstr[0] "Pause après %(count)s fichier en cours"
+msgstr[1] "Pause après les %(count)s de fichiers en cours"
+msgstr[2] "Pause après les %(count)s fichiers en cours"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Pausing after the current file"
+msgstr "Pause après le fichier en cours"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Paused - %(count)s file left"
+msgid_plural "Paused - %(count)s files left"
+msgstr[0] "En pause – %(count)s fichier restant"
+msgstr[1] "En pause – %(count)s de fichiers restants"
+msgstr[2] "En pause – %(count)s fichiers restants"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Uploading %(count)s file"
+msgid_plural "Uploading %(count)s files"
+msgstr[0] "Téléversement de %(count)s fichier"
+msgstr[1] "Téléversement de %(count)s de fichiers"
+msgstr[2] "Téléversement de %(count)s fichiers"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "%(count)s uploaded"
+msgid_plural "%(count)s uploaded"
+msgstr[0] "%(count)s téléversé"
+msgstr[1] "%(count)s téléversés"
+msgstr[2] "%(count)s téléversés"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "%(count)s skipped"
+msgid_plural "%(count)s skipped"
+msgstr[0] "%(count)s ignoré"
+msgstr[1] "%(count)s ignorés"
+msgstr[2] "%(count)s ignorés"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "%(count)s cancelled"
+msgid_plural "%(count)s cancelled"
+msgstr[0] "%(count)s annulé"
+msgstr[1] "%(count)s annulés"
+msgstr[2] "%(count)s annulés"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "A file with this name already exists"
+msgstr "Un fichier portant ce nom existe déjà"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Paused"
+msgstr "En pause"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Connection lost, retrying - %(loaded)s of %(total)s"
+msgstr "Connexion perdue, nouvelle tentative – %(loaded)s sur %(total)s"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Finishing up"
+msgstr "Finalisation"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "%(loaded)s of %(total)s"
+msgstr "%(loaded)s sur %(total)s"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Same content as %(path)s"
+msgstr "Même contenu que %(path)s"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Same content as %(path)s and %(count)s more"
+msgid_plural "Same content as %(path)s and %(count)s more"
+msgstr[0] "Même contenu que %(path)s et %(count)s autre"
+msgstr[1] "Même contenu que %(path)s et %(count)s autres"
+msgstr[2] "Même contenu que %(path)s et %(count)s autres"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Replaced the existing file"
+msgstr "Fichier existant remplacé"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Saved as %(name)s"
+msgstr "Enregistré sous %(name)s"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Discarded"
+msgstr "Abandonné"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Cancelled"
+msgstr "Annulé"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Cancel uploads?"
+msgstr "Annuler les téléversements ?"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "%(count)s file has not finished uploading."
+msgid_plural "%(count)s files have not finished uploading."
+msgstr[0] "%(count)s fichier n’a pas fini d’être téléversé."
+msgstr[1] "%(count)s de fichiers n’ont pas fini d’être téléversés."
+msgstr[2] "%(count)s fichiers n’ont pas fini d’être téléversés."
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Cancel uploads"
+msgstr "Annuler les téléversements"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Keep uploading"
+msgstr "Continuer le téléversement"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Upload failed"
+msgstr "Échec du téléversement"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Network error"
+msgstr "Erreur réseau"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "%(name)s was moved to trash but could not be permanently discarded"
+msgstr ""
+"%(name)s a été mis à la corbeille mais n’a pas pu être supprimé "
+"définitivement"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Failed to discard %(name)s"
+msgstr "Impossible d’abandonner %(name)s"
+
+#: ui/static/files/ui/js/viewer_panel.js
+msgid "Failed to load viewer"
+msgstr "Impossible de charger la visionneuse"
+
+#: ui/static/files/ui/js/wikilink_autocomplete.js
+msgid "No notes found"
+msgstr "Aucune note trouvée"
+
+#: ui/static/files/ui/js/wikilink_autocomplete.js
+msgid "Couldn't load notes"
+msgstr "Impossible de charger les notes"

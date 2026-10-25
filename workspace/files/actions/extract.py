@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from workspace.files.services import FilePermission
 from workspace.files.services.extract import ZIP_LABELS
 
@@ -8,7 +10,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class ExtractAction(BaseFileAction):
     id = "extract"
-    label = "Extract archive"
+    label = _("Extract archive")
     icon = "archive-restore"
     category = ActionCategory.EDIT
     node_types = ("file",)

@@ -80,21 +80,33 @@ window.createUploadQueue = function createUploadQueue({
 
     get title() {
       const pending = this.pendingCount;
-      const plural = (n) => `${n} file${n > 1 ? 's' : ''}`;
       if (pending && this.paused) {
         const uploading = this.items.filter((item) => item.status === 'uploading').length;
-        if (uploading > 1) return `Pausing after the ${uploading} files in flight`;
-        if (uploading) return 'Pausing after the current file';
-        return `Paused - ${plural(pending)} left`;
+        if (uploading > 1) {
+          return interpolate(
+            ngettext('Pausing after the %(count)s file in flight', 'Pausing after the %(count)s files in flight', uploading),
+            { count: uploading },
+            true
+          );
+        }
+        if (uploading) return gettext('Pausing after the current file');
+        return interpolate(ngettext('Paused - %(count)s file left', 'Paused - %(count)s files left', pending), { count: pending }, true);
       }
-      if (pending) return `Uploading ${plural(pending)}`;
+      if (pending) {
+        return interpolate(ngettext('Uploading %(count)s file', 'Uploading %(count)s files', pending), { count: pending }, true);
+      }
       const count = (status) => this.items.filter((item) => item.status === status).length;
       const parts = [];
       const uploaded = count('done') + count('discarded');
-      if (uploaded) parts.push(`${uploaded} uploaded`);
-      if (count('failed')) parts.push(`${count('failed')} failed`);
-      if (count('skipped')) parts.push(`${count('skipped')} skipped`);
-      if (count('cancelled')) parts.push(`${count('cancelled')} cancelled`);
+      const failed = count('failed');
+      const skipped = count('skipped');
+      const cancelled = count('cancelled');
+      if (uploaded) parts.push(interpolate(ngettext('%(count)s uploaded', '%(count)s uploaded', uploaded), { count: uploaded }, true));
+      if (failed) parts.push(interpolate(ngettext('%(count)s failed', '%(count)s failed', failed), { count: failed }, true));
+      if (skipped) parts.push(interpolate(ngettext('%(count)s skipped', '%(count)s skipped', skipped), { count: skipped }, true));
+      if (cancelled) {
+        parts.push(interpolate(ngettext('%(count)s cancelled', '%(count)s cancelled', cancelled), { count: cancelled }, true));
+      }
       const text = parts.join(', ');
       return text.charAt(0).toUpperCase() + text.slice(1);
     },
@@ -114,7 +126,7 @@ window.createUploadQueue = function createUploadQueue({
           onConflict: skipped ? null : onConflict || null,
           status: skipped ? 'skipped' : 'queued',
           loaded: 0,
-          error: skipped ? 'A file with this name already exists' : '',
+          error: skipped ? gettext('A file with this name already exists') : '',
           retrying: false,
           outcome: '',
           savedName: '',
@@ -129,22 +141,33 @@ window.createUploadQueue = function createUploadQueue({
     statusText(item) {
       const size = window.formatFileSize;
       switch (item.status) {
-        case 'queued': return this.paused ? 'Paused' : 'Waiting';
+        case 'queued': return this.paused ? gettext('Paused') : gettext('Waiting');
         case 'uploading':
-          if (item.retrying) return `Connection lost, retrying - ${size(item.loaded)} of ${size(item.size)}`;
+          if (item.retrying) {
+            return interpolate(
+              gettext('Connection lost, retrying - %(loaded)s of %(total)s'),
+              { loaded: size(item.loaded), total: size(item.size) },
+              true
+            );
+          }
           // Every byte is sent: the server is still storing the file.
-          if (item.size && item.loaded >= item.size) return 'Finishing up';
-          return `${size(item.loaded)} of ${size(item.size)}`;
+          if (item.size && item.loaded >= item.size) return gettext('Finishing up');
+          return interpolate(gettext('%(loaded)s of %(total)s'), { loaded: size(item.loaded), total: size(item.size) }, true);
         case 'done':
           if (item.duplicates.length) {
             const [first, ...rest] = item.duplicates;
-            return `Same content as ${first.path}${rest.length ? ` and ${rest.length} more` : ''}`;
+            if (!rest.length) return interpolate(gettext('Same content as %(path)s'), { path: first.path }, true);
+            return interpolate(
+              ngettext('Same content as %(path)s and %(count)s more', 'Same content as %(path)s and %(count)s more', rest.length),
+              { path: first.path, count: rest.length },
+              true
+            );
           }
-          if (item.outcome === 'replaced') return 'Replaced the existing file';
-          if (item.outcome === 'renamed') return `Saved as ${item.savedName}`;
+          if (item.outcome === 'replaced') return gettext('Replaced the existing file');
+          if (item.outcome === 'renamed') return interpolate(gettext('Saved as %(name)s'), { name: item.savedName }, true);
           return size(item.size);
-        case 'discarded': return 'Discarded';
-        case 'cancelled': return 'Cancelled';
+        case 'discarded': return gettext('Discarded');
+        case 'cancelled': return gettext('Cancelled');
         default: return item.error;
       }
     },
@@ -220,10 +243,14 @@ window.createUploadQueue = function createUploadQueue({
       const pending = this.pendingCount;
       if (pending) {
         const confirmed = await confirm({
-          title: 'Cancel uploads?',
-          message: `${pending} file${pending > 1 ? 's have' : ' has'} not finished uploading.`,
-          okLabel: 'Cancel uploads',
-          cancelLabel: 'Keep uploading',
+          title: gettext('Cancel uploads?'),
+          message: interpolate(
+            ngettext('%(count)s file has not finished uploading.', '%(count)s files have not finished uploading.', pending),
+            { count: pending },
+            true
+          ),
+          okLabel: gettext('Cancel uploads'),
+          cancelLabel: gettext('Keep uploading'),
           okClass: 'btn-error',
           icon: 'cloud-upload',
           iconClass: 'bg-error/10 text-error',
@@ -351,10 +378,10 @@ window.createUploadQueue = function createUploadQueue({
             // server keeps the existing file, which is what "skip" means.
             files.delete(item.id);
             item.status = 'skipped';
-            item.error = 'A file with this name already exists';
+            item.error = gettext('A file with this name already exists');
           } else {
             item.status = 'failed';
-            item.error = error.message || 'Upload failed';
+            item.error = error.message || gettext('Upload failed');
           }
           this._pump();
         },
@@ -394,8 +421,8 @@ window.sendFileUpload = function sendFileUpload(file, options, onProgress, onRet
       error.nameCollision = xhr.status === 400 && Array.isArray(body.name);
       reject(error);
     };
-    xhr.onerror = () => reject(new Error('Network error'));
-    xhr.onabort = () => reject(new Error('Cancelled'));
+    xhr.onerror = () => reject(new Error(gettext('Network error')));
+    xhr.onabort = () => reject(new Error(gettext('Cancelled')));
 
     xhr.open('POST', '/api/v1/files');
     xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
@@ -446,7 +473,7 @@ window.sendResumableUpload = function sendResumableUpload(
   let cancelWait = null;
   let aborted = false;
 
-  const cancelled = () => Object.assign(new Error('Cancelled'), { cancelled: true });
+  const cancelled = () => Object.assign(new Error(gettext('Cancelled')), { cancelled: true });
 
   const request = (method, url, { body = null, headers = {}, onSent } = {}) => new Promise((resolve, reject) => {
     if (aborted) {
@@ -465,7 +492,7 @@ window.sendResumableUpload = function sendResumableUpload(
       } catch (_) {}
       resolve({ status: xhr.status, body: data });
     };
-    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.onerror = () => reject(new Error(gettext('Network error')));
     xhr.onabort = () => reject(cancelled());
     xhr.send(body);
   });
@@ -578,7 +605,7 @@ window.sendResumableUpload = function sendResumableUpload(
           onProgress(offset);
           continue;
         }
-        if (status >= 500 || status === 409) throw new Error('Network error');
+        if (status >= 500 || status === 409) throw new Error(gettext('Network error'));
         throw fail(status, body);
       }
 
@@ -594,7 +621,7 @@ window.sendResumableUpload = function sendResumableUpload(
         offset = body.offset;
         continue;
       }
-      if (status >= 500 || status === 409) throw new Error('Network error');
+      if (status >= 500 || status === 409) throw new Error(gettext('Network error'));
       throw fail(status, body);
     }
   })();
@@ -618,11 +645,15 @@ window.discardFileUpload = async function discardFileUpload(uuid, name) {
     if (!trashed.ok) throw new Error();
     const purged = await fetch(`/api/v1/files/${uuid}/purge`, { method: 'DELETE', headers });
     if (!purged.ok) {
-      window.AppAlert.warning(`${name} was moved to trash but could not be permanently discarded`);
+      window.AppAlert.warning(interpolate(
+        gettext('%(name)s was moved to trash but could not be permanently discarded'),
+        { name },
+        true
+      ));
     }
     return true;
   } catch (_) {
-    window.AppAlert.error(`Failed to discard ${name}`);
+    window.AppAlert.error(interpolate(gettext('Failed to discard %(name)s'), { name }, true));
     return false;
   }
 };

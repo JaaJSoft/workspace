@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Group Folders Sidebar Section
 =============================
@@ -34,14 +35,14 @@ Context variables:
       >
         <span class="flex items-center gap-2">
           <i data-lucide="users" class="w-3 h-3"></i>
-          Groups
+          {% translate "Groups" %}
         </span>
       </h3>
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         @click="document.getElementById('create-group-folder-dialog').showModal()"
-        title="Create group folder"
+        title="{% translate 'Create group folder' %}"
       >
         <i data-lucide="plus" class="w-3.5 h-3.5"></i>
       </button>
@@ -69,7 +70,7 @@ Context variables:
         >
           <span class="flex items-center gap-2 justify-center">
             <i data-lucide="users" class="w-4 h-4"></i>
-            No group folders
+            {% translate "No group folders" %}
           </span>
         </li>
       {% endif %}

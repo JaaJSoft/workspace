@@ -113,11 +113,11 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootNa
 
     stateLabel(state) {
       const labels = {
-        pending: 'Waiting',
-        sending: 'Sending',
-        'too-large': 'Too large',
-        failed: 'Failed',
-        done: 'Sent',
+        pending: gettext('Waiting'),
+        sending: gettext('Sending'),
+        'too-large': gettext('Too large'),
+        failed: gettext('Failed'),
+        done: gettext('Sent'),
       };
       return labels[state] || state;
     },

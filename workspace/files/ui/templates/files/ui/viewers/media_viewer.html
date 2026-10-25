@@ -1,5 +1,5 @@
 <!-- Media Viewer (Video / Audio) -->
-{% load file_filters %}
+{% load i18n file_filters %}
 <div class="flex flex-col h-full bg-base-200">
 
   {% if is_video %}
@@ -23,7 +23,7 @@
         @error="unplayable = true"
         @loadedmetadata="if (!$el.videoWidth) { $el.pause(); unplayable = true }"
       >
-        Your browser does not support the video element.
+        {% translate "Your browser does not support the video element." %}
       </video>
       <div
         x-show="unplayable"
@@ -34,16 +34,18 @@
         <div class="rounded-full bg-base-300 p-5">
           <i data-lucide="video-off" class="w-10 h-10 text-base-content/50"></i>
         </div>
-        <p class="font-medium">This browser can't play this video</p>
+        <p class="font-medium">{% translate "This browser can't play this video" %}</p>
         <p class="text-sm text-base-content/60 max-w-sm">
           {% with codec=file.media_info.video_codec %}
             {% if codec %}
-              It is encoded in {{ codec|codec_name }}, which only some browsers can decode.
+              {% blocktranslate trimmed with codec_label=codec|codec_name %}
+                It is encoded in {{ codec_label }}, which only some browsers can decode.
+              {% endblocktranslate %}
             {% else %}
-              It is probably recorded in a format only some browsers can decode.
+              {% translate "It is probably recorded in a format only some browsers can decode." %}
             {% endif %}
           {% endwith %}
-          Download it to watch it in a video player.
+          {% translate "Download it to watch it in a video player." %}
         </p>
         <a
           href="{{ content_url }}"
@@ -51,7 +53,7 @@
           class="btn btn-primary btn-sm gap-2"
         >
           <i data-lucide="download" class="w-4 h-4"></i>
-          Download
+          {% translate "Download" %}
         </a>
       </div>
     </div>
@@ -74,7 +76,7 @@
             src="{{ content_url }}"
             preload="metadata"
           >
-            Your browser does not support the audio element.
+            {% translate "Your browser does not support the audio element." %}
           </audio>
         </div>
       </div>

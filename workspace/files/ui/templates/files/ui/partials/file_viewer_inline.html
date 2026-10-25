@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   The Files viewer, in place of the listing. Include it inside the positioned
   element that holds the listing, with covers= the id of the listing it
@@ -12,6 +13,12 @@
   loads before file_viewer.js). While it plays, the header floats over the
   file and fades out with the arrows once the pointer rests.
 {% endcomment %}
+{% translate "Remove from favorites" as remove_favorite_label %}
+{% translate "Add to favorites" as add_favorite_label %}
+{% translate "Stop slideshow (Space)" as stop_slideshow_title %}
+{% translate "Slideshow (Space)" as slideshow_title %}
+{% translate "Stop slideshow" as stop_slideshow_label %}
+{% translate "Slideshow" as slideshow_label %}
 <div
   x-data="fileViewerInline({ covers: '{{ covers|escapejs }}', properties: {{ properties|yesno:'true,false' }}, slideshow: {{ slideshow|yesno:'true,false' }} })"
   x-ref="frame"
@@ -22,7 +29,7 @@
   x-cloak
   class="absolute inset-0 z-[15] flex flex-col bg-base-100 outline-none"
   role="region"
-  aria-label="File viewer"
+  aria-label="{% translate 'File viewer' %}"
   data-file-viewer-inline
   @ajax:missing="_viewerMissing($event)"
   @viewer-editing="panelEditing = $event.detail"
@@ -58,8 +65,8 @@
         class="select select-ghost select-sm w-auto"
         x-show="slideshowPlaying"
         x-cloak
-        aria-label="Time per photo"
-        title="Time per photo"
+        aria-label="{% translate 'Time per photo' %}"
+        title="{% translate 'Time per photo' %}"
         @change="setSlideshowInterval(Number($event.target.value))"
         data-slideshow-interval
       >
@@ -77,8 +84,8 @@
         x-show="slideshowPlaying || canSlideshow()"
         x-cloak
         @click="toggleSlideshow()"
-        :title="slideshowPlaying ? 'Stop slideshow (Space)' : 'Slideshow (Space)'"
-        :aria-label="slideshowPlaying ? 'Stop slideshow' : 'Slideshow'"
+        :title="slideshowPlaying ? '{{ stop_slideshow_title|escapejs }}' : '{{ slideshow_title|escapejs }}'"
+        :aria-label="slideshowPlaying ? '{{ stop_slideshow_label|escapejs }}' : '{{ slideshow_label|escapejs }}'"
         :aria-pressed="slideshowPlaying ? 'true' : 'false'"
         data-viewer-slideshow-toggle
       >
@@ -92,8 +99,8 @@
       :class="{ 'text-warning [&_svg]:fill-current': isFavorite }"
       @click="toggleFavorite()"
       :disabled="!canFavorite"
-      :title="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
-      :aria-label="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+      :title="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
+      :aria-label="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
       :aria-pressed="isFavorite ? 'true' : 'false'"
       data-viewer-favorite
     >
@@ -104,7 +111,7 @@
       :href="downloadOverride || downloadUrl"
       download
       class="btn btn-ghost btn-sm btn-square"
-      title="Download file"
+      title="{% translate 'Download file' %}"
       x-show="fileUuid && downloadUrl && !viewerBlocked"
     >
       <i data-lucide="download" class="w-4 h-4"></i>
@@ -116,8 +123,8 @@
         :class="{ 'btn-active': showPropertiesPanel && propertiesUuid === fileUuid }"
         @click="toggleProperties()"
         :disabled="!canShowProperties"
-        title="Properties (Ctrl+I)"
-        aria-label="Properties"
+        title="{% translate 'Properties (Ctrl+I)' %}"
+        aria-label="{% translate 'Properties' %}"
         data-viewer-properties
       >
         <i data-lucide="info" class="w-4 h-4"></i>
@@ -127,8 +134,8 @@
       type="button"
       class="btn btn-ghost btn-sm btn-square"
       @click="close()"
-      title="Close (ESC)"
-      aria-label="Close"
+      title="{% translate 'Close (ESC)' %}"
+      aria-label="{% translate 'Close' %}"
     >
       <i data-lucide="x" class="w-4 h-4"></i>
     </button>
@@ -162,7 +169,7 @@
   >
     <div class="text-center">
       <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
-      <p class="text-lg font-medium mb-2">Failed to load file</p>
+      <p class="text-lg font-medium mb-2">{% translate "Failed to load file" %}</p>
       <p class="text-sm text-base-content/60" x-text="viewerError"></p>
     </div>
   </div>
@@ -172,7 +179,7 @@
     type="button"
     class="btn btn-circle absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
-    title="Previous file"
+    title="{% translate 'Previous file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() > 0"
     x-cloak
     @click="navigatePrev()"
@@ -183,7 +190,7 @@
     type="button"
     class="btn btn-circle absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
-    title="Next file"
+    title="{% translate 'Next file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() >= 0 && _currentIndex() < _totalViewable() - 1"
     x-cloak
     @click="navigateNext()"

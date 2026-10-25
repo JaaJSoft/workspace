@@ -1,6 +1,7 @@
 """Comment-related actions for FileViewSet."""
 
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -101,7 +102,7 @@ class CommentsMixin:
             200: OpenApiResponse(response=FileCommentSerializer),
             204: OpenApiResponse(description="Comment deleted."),
             403: OpenApiResponse(description="Not the comment author."),
-            404: OpenApiResponse(description="Comment not found."),
+            404: OpenApiResponse(description=_("Comment not found.")),
         },
     )
     @action(
@@ -124,12 +125,12 @@ class CommentsMixin:
         )
         if not comment:
             return Response(
-                {"detail": "Comment not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": _("Comment not found.")}, status=status.HTTP_404_NOT_FOUND
             )
 
         if comment.author_id != request.user.pk:
             return Response(
-                {"detail": "You can only modify your own comments."},
+                {"detail": _("You can only modify your own comments.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

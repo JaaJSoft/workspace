@@ -11,7 +11,7 @@ window.storageAnalysis = function storageAnalysis() {
     init() {
       window.addEventListener('open-storage-analysis', (e) => {
         const detail = e.detail || {};
-        this.open(detail.uuid || null, detail.name || 'My files');
+        this.open(detail.uuid || null, detail.name || gettext('My files'));
       });
       // ?storage=root|<uuid>[&storage_category=x][&storage_q=y] survives a
       // reload: reopen the dialog on the same scope the user was looking at.
@@ -125,9 +125,9 @@ window.storageAnalysis = function storageAnalysis() {
 
     async trashFile(uuid, name) {
       const confirmed = await AppDialog.confirm({
-        title: 'Move to trash?',
-        message: `"${name}" will be moved to the trash.`,
-        okLabel: 'Move to trash',
+        title: gettext('Move to trash?'),
+        message: interpolate(gettext('"%(name)s" will be moved to the trash.'), { name }, true),
+        okLabel: gettext('Move to trash'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -142,7 +142,7 @@ window.storageAnalysis = function storageAnalysis() {
         if (!resp.ok) throw new Error('delete failed');
         this.afterMutation();
       } catch (err) {
-        AppAlert.error('Failed to move the file to trash');
+        AppAlert.error(gettext('Failed to move the file to trash'));
       } finally {
         this.busy = false;
       }
@@ -150,9 +150,9 @@ window.storageAnalysis = function storageAnalysis() {
 
     async emptyTrash() {
       const confirmed = await AppDialog.confirm({
-        title: 'Empty trash?',
-        message: 'This will permanently delete all items in trash and cannot be undone.',
-        okLabel: 'Empty trash',
+        title: gettext('Empty trash?'),
+        message: gettext('This will permanently delete all items in trash and cannot be undone.'),
+        okLabel: gettext('Empty trash'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -167,7 +167,7 @@ window.storageAnalysis = function storageAnalysis() {
         if (!resp.ok) throw new Error('clean failed');
         this.afterMutation();
       } catch (err) {
-        AppAlert.error('Failed to empty trash');
+        AppAlert.error(gettext('Failed to empty trash'));
       } finally {
         this.busy = false;
       }

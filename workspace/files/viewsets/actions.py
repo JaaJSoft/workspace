@@ -6,6 +6,7 @@ import logging
 from django.conf import settings
 from django.db.models import Exists, OuterRef
 from django.http import Http404
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -256,7 +257,7 @@ class ActionsMixin:
                     source_data = fh.read()
             except Exception:
                 return Response(
-                    {"error": "could not read file content"},
+                    {"error": _("could not read file content")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -266,13 +267,13 @@ class ActionsMixin:
             image_data = ai_edit_image(source_data, prompt, size)
         except ValueError:
             return Response(
-                {"error": "invalid request (check prompt and AI configuration)"},
+                {"error": _("invalid request (check prompt and AI configuration)")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except RuntimeError:
             logger.exception("AI image edit failed")
             return Response(
-                {"error": "image editing failed"}, status=status.HTTP_502_BAD_GATEWAY
+                {"error": _("image editing failed")}, status=status.HTTP_502_BAD_GATEWAY
             )
 
         return Response({"image": base64.b64encode(image_data).decode()})

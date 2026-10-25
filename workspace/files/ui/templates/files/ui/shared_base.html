@@ -1,15 +1,16 @@
-{% load static file_filters %}
+{% load i18n static file_filters %}
+{% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
 {# A visitor has no preference to change the blur: sensitive previews are blurred as by default. #}
 <html
-  lang="en"
+  lang="{{ LANGUAGE_CODE }}"
   data-theme="light"
   data-blur-sensitive="{% default_blur_from %}"
 >
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{% block title %}Shared - Workspace{% endblock %}</title>
+    <title>{% block title %}{% translate "Shared" %} - Workspace{% endblock %}</title>
     <link href="{% static 'css/app.css' %}" rel="stylesheet" />
     {% comment %}
       The Milkdown Crepe theme, loaded for every visitor rather than only for a
@@ -28,6 +29,10 @@
       href="{% static 'files/ui/css/milkdown-overrides.css' %}"
       rel="stylesheet"
     />
+    {# Ahead of every script that calls gettext(), at load time or later. #}
+    <script
+      src="{% url 'javascript-catalog' LANGUAGE_CODE %}?v={{ APP_VERSION|urlencode }}"
+    ></script>
     <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
     <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
     <script src="{% static 'ui/js/lucide.js' %}"></script>
@@ -58,8 +63,8 @@
             >
               <i data-lucide="clock" class="w-7 h-7 text-warning"></i>
             </div>
-            <h2 class="text-lg font-bold">Link expired</h2>
-            <p class="text-sm text-base-content/50">This share link is no longer available.</p>
+            <h2 class="text-lg font-bold">{% translate "Link expired" %}</h2>
+            <p class="text-sm text-base-content/50">{% translate "This share link is no longer available." %}</p>
           </div>
         </div>
 
@@ -87,8 +92,8 @@
               ></i>
             </div>
 
-            <h2 class="text-lg font-bold">Protected link</h2>
-            <p class="text-sm text-base-content/50 mb-5">Enter the password to continue</p>
+            <h2 class="text-lg font-bold">{% translate "Protected link" %}</h2>
+            <p class="text-sm text-base-content/50 mb-5">{% translate "Enter the password to continue" %}</p>
 
             <!-- Input with integrated button -->
             <div class="w-full relative">
@@ -98,7 +103,7 @@
                 :class="error ? 'input-error' : ''"
                 x-model="password"
                 @keydown.enter="verify()"
-                placeholder="Password"
+                placeholder="{% translate 'Password' %}"
                 autofocus
               />
               <button
@@ -118,6 +123,8 @@
           </div>
         </div>
 
+        {% translate "Invalid password" as invalid_password_message %}
+        {% translate "An error occurred" as generic_error_message %}
         <script>
           function sharedFilePassword(token, verifyUrl, pageUrl) {
             return {
@@ -149,10 +156,10 @@
                     window.location.href = pageUrl + '?access_token=' + encodeURIComponent(data.access_token);
                     return;
                   } else {
-                    this.error = 'Invalid password';
+                    this.error = '{{ invalid_password_message|escapejs }}';
                   }
                 } catch (e) {
-                  this.error = 'An error occurred';
+                  this.error = '{{ generic_error_message|escapejs }}';
                 }
                 this.verifying = false;
               }
@@ -174,7 +181,7 @@
           >
             <i data-lucide="share-2" class="w-3.5 h-3.5 text-white"></i>
           </div>
-          <span>Shared with</span>
+          <span>{% translate "Shared with" %}</span>
           <a
             href="/"
             class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"

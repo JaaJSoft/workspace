@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from django.db import models
 from django.db.models import IntegerField, Value
+from django.utils.translation import gettext_lazy as _
 
 from workspace.core.setting_keys import MODULE as CORE_MODULE
 from workspace.core.setting_keys import SENSITIVE_BLUR
@@ -27,11 +28,11 @@ from .models import File
 class BlurPreference(models.TextChoices):
     """How much of what is sensitive a viewer blurs, strictest first."""
 
-    STRICT = "strict", "Strict"
-    HIGH = "high", "High"
-    STANDARD = "standard", "Standard"
-    LOW = "low", "Low"
-    OFF = "off", "Off"
+    STRICT = "strict", _("Strict")
+    HIGH = "high", _("High")
+    STANDARD = "standard", _("Standard")
+    LOW = "low", _("Low")
+    OFF = "off", _("Off")
 
 
 DEFAULT_BLUR = BlurPreference.STANDARD

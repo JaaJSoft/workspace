@@ -163,12 +163,12 @@ window.contextMenu = function contextMenu() {
           url.searchParams.set('open', nd.uuid);
           navigator.clipboard.writeText(url.toString()).then(() => {
             if (window.AppAlert) {
-              window.AppAlert.success('Link copied to clipboard', { duration: 2000 });
+              window.AppAlert.success(gettext('Link copied to clipboard'), { duration: 2000 });
             }
           }).catch(err => {
             console.error('Failed to copy link:', err);
             if (window.AppAlert) {
-              window.AppAlert.error('Failed to copy link');
+              window.AppAlert.error(gettext('Failed to copy link'));
             }
           });
           break;

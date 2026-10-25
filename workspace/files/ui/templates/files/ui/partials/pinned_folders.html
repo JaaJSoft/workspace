@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Pinned Folders Partial
 ======================
@@ -39,7 +40,7 @@ Context variables:
     >
       <span class="flex items-center gap-2 justify-center">
         <i data-lucide="pin-off" class="w-4 h-4"></i>
-        No pinned folders
+        {% translate "No pinned folders" %}
       </span>
     </li>
   {% endfor %}

@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
-{% load file_filters properties_section_assets static %}
+{% load file_filters i18n properties_section_assets static %}
 
-{% block title %}Files - Workspace{% endblock %}
+{% block title %}{% translate "Files" %} - Workspace{% endblock %}
 
 {% block extra_head %}
   <!-- Milkdown Crepe editor styles (ProseMirror, KaTeX, crepe common theme) - vendored, built by scripts/frontend -->
@@ -31,7 +31,11 @@
     class="drawer-side z-40 h-full !overflow-visible"
     x-data="sidebarCollapse()"
   >
-    <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    <label
+      for="files-drawer"
+      aria-label="{% translate 'close sidebar' %}"
+      class="drawer-overlay"
+    ></label>
 
     <!-- Sidebar -->
     {% comment %}
@@ -71,15 +75,15 @@
         >
           <span class="flex items-center gap-2">
             <i data-lucide="zap" class="w-3 h-3"></i>
-            Quick Access
+            {% translate "Quick Access" %}
           </span>
         </h3>
         <ul class="space-y-0.5">
-          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="module" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True extra_attrs='data-drop-folder=""' %}
-          {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label="Shared with me" color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label=_("My Files") color="module" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True extra_attrs='data-drop-folder=""' %}
+          {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label=_("Favorites") color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label=_("Recent") color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label=_("Trash") color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label=_("Shared with me") color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
 
         <!-- Pinned Folders -->
@@ -97,7 +101,7 @@
           >
             <span class="flex items-center gap-2 mb-1">
               <i data-lucide="pin" class="w-3 h-3"></i>
-              Pinned
+              {% translate "Pinned" %}
             </span>
           </h3>
           <!-- Collapsed: thin separator -->
@@ -122,7 +126,7 @@
             >
               <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
               <br />
-              Drop to pin folder
+              {% translate "Drop to pin folder" %}
             </div>
           </div>
         </div>
@@ -139,18 +143,27 @@
       <!-- Storage & Help -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="module" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'My files' } }))" tooltip="Storage" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% translate "My files" as my_files_label %}
+          {% with my_files_js=my_files_label|escapejs %}
+            {% include "ui/partials/drawer_item.html" with icon="chart-pie" label=_("Storage") color="module" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: '"|add:my_files_js|add:"' } }))" tooltip=_("Storage") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% endwith %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('help-dialog').showModal()" tooltip=_("Help") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
+        {% translate "Expand sidebar" as expand_sidebar_label %}
+        {% translate "Collapse sidebar" as collapse_sidebar_label %}
         <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
+          {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+            {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
+            {% endwith %}
+          {% endwith %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip="Preferences" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip=_("Preferences") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
     </aside>
@@ -158,10 +171,11 @@
 {% endblock %}
 
 {% block content %}
+  {% translate "Failed to refresh items" as refresh_failed_message %}
   <div
     x-data="fileBrowser()"
     class="h-full flex flex-col"
-    @ajax:error="AppAlert.error('Failed to refresh items')"
+    @ajax:error="AppAlert.error('{{ refresh_failed_message|escapejs }}')"
   >
     <!-- Persistent nav links for Alpine AJAX navigation (outside #folder-browser so they survive replacements) -->
     <a id="folder-nav-push" class="hidden" x-target.push="folder-browser"></a>
@@ -199,7 +213,7 @@
                       type="button"
                       class="btn btn-ghost btn-sm btn-square join-item max-sm:hidden disabled:bg-transparent disabled:border-transparent transition-colors"
                       :class="canGoBack ? 'text-base-content' : 'text-base-content/20'"
-                      title="Back (Alt+Left)"
+                      title="{% translate 'Back (Alt+Left)' %}"
                       :disabled="!canGoBack"
                       @click="window.folderNav.back()"
                     >
@@ -209,7 +223,7 @@
                       type="button"
                       class="btn btn-ghost btn-sm btn-square join-item max-sm:hidden disabled:bg-transparent disabled:border-transparent transition-colors"
                       :class="canGoForward ? 'text-base-content' : 'text-base-content/20'"
-                      title="Forward (Alt+Right)"
+                      title="{% translate 'Forward (Alt+Right)' %}"
                       :disabled="!canGoForward"
                       @click="window.folderNav.forward()"
                     >
@@ -219,7 +233,7 @@
                       type="button"
                       class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
                       :class="parentUrl ? 'text-base-content' : 'text-base-content/20'"
-                      title="Up (Alt+Up)"
+                      title="{% translate 'Up (Alt+Up)' %}"
                       :disabled="!parentUrl"
                       @click="navigateUp()"
                     >
@@ -228,8 +242,8 @@
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm btn-square join-item"
-                      title="Sync & refresh"
-                      aria-label="Sync and refresh folder"
+                      title="{% translate 'Sync & refresh' %}"
+                      aria-label="{% translate 'Sync and refresh folder' %}"
                       @click="syncAndRefreshFolderBrowser()"
                     >
                       <i data-lucide="rotate-cw" class="w-4 h-4"></i>
@@ -254,14 +268,14 @@
                       >
                         <span x-show="cleaningTrash" class="loading loading-spinner loading-xs"></span>
                         <i x-show="!cleaningTrash" data-lucide="trash-2" class="w-4 h-4"></i>
-                        <span>Empty trash</span>
+                        <span>{% translate "Empty trash" %}</span>
                       </button>
                     </div>
                   {% elif not is_shared_view and not is_recent_view %}
                     <div class="dropdown dropdown-end shrink-0">
                       <button type="button" tabindex="0" class="btn btn-module btn-sm gap-2">
                         <i data-lucide="plus" class="w-4 h-4"></i>
-                        <span>New</span>
+                        <span>{% translate "New" %}</span>
                         <i data-lucide="chevron-down" class="w-3 h-3 opacity-70"></i>
                       </button>
                       {% include "files/ui/partials/new_menu.html" %}
@@ -287,8 +301,10 @@
                 >
                   <div class="text-center">
                     <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 text-module"></i>
-                    <p class="text-lg font-semibold text-module">Drop files to upload</p>
-                    <p class="text-sm text-base-content/60">Files will be added to the current folder</p>
+                    <p class="text-lg font-semibold text-module">{% translate "Drop files to upload" %}</p>
+                    <p
+                      class="text-sm text-base-content/60"
+                    >{% translate "Files will be added to the current folder" %}</p>
                   </div>
                 </div>
                 {% include "files/ui/partials/folder_content.html" with nodes=nodes folder_stats=folder_stats empty_title=empty_title empty_message=empty_message %}
@@ -325,7 +341,7 @@
           <span class="inline-flex text-module animate-spin">
             <i data-lucide="loader-circle" class="w-8 h-8"></i>
           </span>
-          <span class="sr-only">Loading folder…</span>
+          <span class="sr-only">{% translate "Loading folder…" %}</span>
         </div>
       </div>
 
@@ -369,17 +385,17 @@
     <div class="modal-box">
       <h3 class="font-bold text-lg flex items-center gap-2">
         <i data-lucide="sliders-horizontal" class="w-5 h-5 text-module"></i>
-        Preferences
+        {% translate "Preferences" %}
       </h3>
       <div class="mt-4">{% include "files/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
-          <button type="submit" class="btn btn-sm">Close</button>
+          <button type="submit" class="btn btn-sm">{% translate "Close" %}</button>
         </form>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 {% endblock %}

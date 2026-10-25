@@ -1,3 +1,4 @@
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from .models import Tag
@@ -30,7 +31,7 @@ class TagSerializer(serializers.ModelSerializer):
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise serializers.ValidationError("A tag with this name already exists.")
+            raise serializers.ValidationError(_("A tag with this name already exists."))
         return value
 
     def create(self, validated_data):

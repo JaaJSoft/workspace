@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   The anonymous drop zone on shared_page.html, shown page-wide whenever the
   link accepts uploads (drop or both mode). Lives outside the shared-content
@@ -6,6 +7,7 @@
   data-drop-folder attributes on #shared-content, re-read on every swap. Needs
   share_token, access_token, max_file_bytes, drop_folder and link in context.
 {% endcomment %}
+{% translate "Sending %(current)s of %(total)s" as sending_progress_label %}
 <div
   data-testid="drop-zone"
   data-share-token="{{ share_token }}"
@@ -19,7 +21,11 @@
   <div class="card-body">
     <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
       <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-      <span>Send files to <span x-text="targetName">{{ drop_folder.name }}</span></span>
+      <span>
+        {% blocktranslate trimmed with folder_name=drop_folder.name %}
+          Send files to <span x-text="targetName">{{ folder_name }}</span>
+        {% endblocktranslate %}
+      </span>
     </h2>
 
     <label
@@ -28,7 +34,7 @@
       @drop.prevent="drop($event)"
     >
       <i data-lucide="upload" class="w-10 h-10 text-base-content/40"></i>
-      <span class="text-base-content/60 text-sm">Drag files here or click to browse</span>
+      <span class="text-base-content/60 text-sm">{% translate "Drag files here or click to browse" %}</span>
       <input type="file" multiple class="hidden" @change="pick($event)" />
     </label>
 
@@ -36,7 +42,7 @@
       <p
         x-show="sendingCount() > 0"
         class="text-xs text-base-content/60 mb-2"
-        x-text="'Sending ' + (doneCount() + 1) + ' of ' + queue.length"
+        x-text="interpolate('{{ sending_progress_label|escapejs }}', { current: doneCount() + 1, total: queue.length }, true)"
       ></p>
       <ul class="space-y-2">
         <template x-for="(item, index) in queue" :key="index">
@@ -73,7 +79,7 @@
     </div>
 
     <div data-testid="drop-done" x-show="doneCount() > 0" x-cloak class="mt-4">
-      <inline-alert type="success" message="Files uploaded successfully."></inline-alert>
+      <inline-alert type="success" message="{% translate 'Files uploaded successfully.' %}"></inline-alert>
     </div>
   </div>
 </div>

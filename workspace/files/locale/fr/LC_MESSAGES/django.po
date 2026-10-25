@@ -1,0 +1,2882 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-25 17:22+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: actions/danger.py ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/tag_dialog.html
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Delete"
+msgstr "Supprimer"
+
+#: actions/edit.py ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/rename_dialog.html
+msgid "Rename"
+msgstr "Renommer"
+
+#: actions/edit.py ui/templates/files/ui/partials/dialogs.html
+msgid "Cut"
+msgstr "Couper"
+
+#: actions/edit.py ui/templates/files/ui/partials/dialogs.html
+msgid "Copy"
+msgstr "Copier"
+
+#: actions/edit.py
+msgid "Paste here"
+msgstr "Coller ici"
+
+#: actions/edit.py
+msgid "Crop & rotate"
+msgstr "Recadrer et pivoter"
+
+#: actions/extract.py
+msgid "Extract archive"
+msgstr "Extraire l’archive"
+
+#: actions/info.py ui/templates/files/ui/partials/properties_content.html
+msgid "Analyze storage"
+msgstr "Analyser le stockage"
+
+#: actions/info.py ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/properties_panel.html
+msgid "Properties"
+msgstr "Propriétés"
+
+#: actions/open.py ui/templates/files/ui/partials/file_card.html
+msgid "Open"
+msgstr "Ouvrir"
+
+#: actions/open.py ui/templates/files/ui/viewers/pdf_viewer.html
+msgid "Open in new tab"
+msgstr "Ouvrir dans un nouvel onglet"
+
+#: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Add to favorites"
+msgstr "Ajouter aux favoris"
+
+#: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Remove from favorites"
+msgstr "Retirer des favoris"
+
+#: actions/organize.py
+msgid "Pin to sidebar"
+msgstr "Épingler dans la barre latérale"
+
+#: actions/organize.py
+msgid "Unpin from sidebar"
+msgstr "Désépingler de la barre latérale"
+
+#: actions/organize.py
+msgid "Mark as sensitive"
+msgstr "Marquer comme sensible"
+
+#: actions/organize.py
+msgid "Unmark as sensitive"
+msgstr "Retirer la marque sensible"
+
+#: actions/organize.py ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/properties_content.html
+#: ui/templates/files/ui/partials/tag_dropdown.html
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#: ui/templates/files/ui/partials/tag_picker_dialog.html
+#: ui/templates/files/ui/partials/tag_sidebar_section.html
+msgid "Tags"
+msgstr "Étiquettes"
+
+#: actions/organize.py ui/templates/files/ui/partials/share_modal.html
+msgid "Share"
+msgstr "Partager"
+
+#: actions/transfer.py ui/templates/files/ui/partials/file_viewer_modal.html
+#: ui/templates/files/ui/partials/shared_listing.html
+#: ui/templates/files/ui/shared_page.html
+#: ui/templates/files/ui/viewers/media_viewer.html
+#: ui/templates/files/ui/viewers/office_viewer_unavailable.html
+msgid "Download"
+msgstr "Télécharger"
+
+#: actions/transfer.py
+msgid "Download as ZIP"
+msgstr "Télécharger en ZIP"
+
+#: actions/transfer.py ui/templates/files/ui/partials/properties_content.html
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Copy link"
+msgstr "Copier le lien"
+
+#: actions/trash.py
+msgid "Restore"
+msgstr "Restaurer"
+
+#: actions/trash.py
+msgid "Delete permanently"
+msgstr "Supprimer définitivement"
+
+#: models.py ui/templates/files/ui/partials/share_modal.html ui/views.py
+msgid "Read only"
+msgstr "Lecture seule"
+
+#: models.py
+msgid "Upload only"
+msgstr "Téléversement uniquement"
+
+#: models.py
+msgid "Read and upload"
+msgstr "Lecture et téléversement"
+
+#: models.py ui/templates/files/ui/partials/_preferences_content.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Created"
+msgstr "Créé"
+
+#: models.py
+msgid "Renamed"
+msgstr "Renommé"
+
+#: models.py
+msgid "Moved"
+msgstr "Déplacé"
+
+#: models.py
+msgid "Updated"
+msgstr "Mis à jour"
+
+#: models.py
+msgid "Trashed"
+msgstr "Mis à la corbeille"
+
+#: models.py
+msgid "Restored"
+msgstr "Restauré"
+
+#: models.py ui/templates/files/ui/shared_base.html
+msgid "Shared"
+msgstr "Partagé"
+
+#: models.py
+msgid "Permission changed"
+msgstr "Autorisation modifiée"
+
+#: models.py
+msgid "Unshared"
+msgstr "Partage retiré"
+
+#: models.py
+msgid "Link created"
+msgstr "Lien créé"
+
+#: models.py
+msgid "Link revoked"
+msgstr "Lien révoqué"
+
+#: models.py
+msgid "Uploaded via link"
+msgstr "Téléversé via un lien"
+
+#: models.py
+msgid "Lifecycle"
+msgstr "Cycle de vie"
+
+#: models.py
+msgid "Edits"
+msgstr "Modifications"
+
+#: models.py ui/templates/files/ui/partials/properties_content.html
+msgid "Sharing"
+msgstr "Partage"
+
+#: search.py ui/templates/files/ui/index.html ui/views.py
+msgid "Shared with me"
+msgstr "Partagés avec moi"
+
+#: sensitivity.py
+msgid "Strict"
+msgstr "Strict"
+
+#: sensitivity.py
+msgid "High"
+msgstr "Élevé"
+
+#: sensitivity.py
+msgid "Standard"
+msgstr "Standard"
+
+#: sensitivity.py
+msgid "Low"
+msgstr "Faible"
+
+#: sensitivity.py
+msgid "Off"
+msgstr "Désactivé"
+
+#: serializers.py
+msgid "File is locked by another user."
+msgstr "Le fichier est verrouillé par un autre utilisateur."
+
+#: serializers.py views/files.py
+msgid "The file changed since it was loaded."
+msgstr "Le fichier a changé depuis son chargement."
+
+#: serializers.py views/share_links.py viewsets/content.py viewsets/copy.py
+#: viewsets/extract.py
+msgid "File is quarantined."
+msgstr "Le fichier est en quarantaine."
+
+#: serializers.py
+msgid "You cannot replace the existing file."
+msgstr "Vous ne pouvez pas remplacer le fichier existant."
+
+#: serializers.py
+msgid "File and folder names must not contain '/'."
+msgstr "Les noms de fichiers et de dossiers ne doivent pas contenir « / »."
+
+#: serializers.py
+msgid "File and folder names must not contain a backslash."
+msgstr ""
+"Les noms de fichiers et de dossiers ne doivent pas contenir de barre oblique "
+"inverse."
+
+#: serializers.py
+msgid "File and folder names must not be '.' or '..'."
+msgstr ""
+"Les noms de fichiers et de dossiers ne doivent pas être « . » ou « .. »."
+
+#: serializers.py
+msgid "Content is required to replace the existing file."
+msgstr "Un contenu est requis pour remplacer le fichier existant."
+
+#: serializers.py viewsets/copy.py
+msgid "This file has no content to replace the existing one with."
+msgstr "Ce fichier n’a aucun contenu pour remplacer le fichier existant."
+
+#: serializers.py services/_names.py viewsets/copy.py
+msgid "A file with the same name already exists in this folder."
+msgstr "Un fichier portant le même nom existe déjà dans ce dossier."
+
+#: serializers_tags.py
+msgid "A tag with this name already exists."
+msgstr "Une étiquette portant ce nom existe déjà."
+
+#: services/_names.py
+msgid "A folder with the same name already exists in this folder."
+msgstr "Un dossier portant le même nom existe déjà dans ce dossier."
+
+#: services/_names.py
+msgid "Cannot move a folder into itself."
+msgstr "Impossible de déplacer un dossier dans lui-même."
+
+#: services/_names.py
+msgid "Cannot move a folder into one of its descendants."
+msgstr "Impossible de déplacer un dossier dans l’un de ses sous-dossiers."
+
+#: services/comments.py
+#, python-format
+msgid "%(actor)s mentioned you in a comment on \"%(name)s\""
+msgstr "%(actor)s vous a mentionné dans un commentaire sur « %(name)s »"
+
+#: services/comments.py
+#, python-format
+msgid "%(actor)s commented on \"%(name)s\""
+msgstr "%(actor)s a commenté « %(name)s »"
+
+#: services/files.py
+msgid "A group's root folder cannot be moved."
+msgstr "Le dossier racine d’un groupe ne peut pas être déplacé."
+
+#: services/files.py
+msgid "A group's root folder cannot be renamed."
+msgstr "Le dossier racine d’un groupe ne peut pas être renommé."
+
+#: services/files.py views/files.py
+msgid "A group's root folder cannot be deleted."
+msgstr "Le dossier racine d’un groupe ne peut pas être supprimé."
+
+#: services/files.py views/files.py
+msgid "You are not a member of this group."
+msgstr "Vous n’êtes pas membre de ce groupe."
+
+#: services/files.py
+msgid "You cannot move items into this folder."
+msgstr "Vous ne pouvez pas déplacer d’éléments dans ce dossier."
+
+#: services/quota.py
+msgid "Storage quota exceeded."
+msgstr "Quota de stockage dépassé."
+
+#: services/quota.py
+#, python-format
+msgid ""
+"Your personal storage is full (%(used)s of %(limit)s used) and this write "
+"needs %(needed)s. Free up space or empty the trash."
+msgstr ""
+"Votre stockage personnel est plein (%(used)s utilisés sur %(limit)s) et "
+"cette écriture nécessite %(needed)s. Libérez de l’espace ou videz la "
+"corbeille."
+
+#: services/quota.py
+#, python-format
+msgid ""
+"The group folder \"%(name)s\" is full (%(used)s of %(limit)s used) and this "
+"write needs %(needed)s. Free up space or ask an administrator to raise the "
+"limit."
+msgstr ""
+"Le dossier de groupe « %(name)s » est plein (%(used)s utilisés sur "
+"%(limit)s) et cette écriture nécessite %(needed)s. Libérez de l’espace ou "
+"demandez à un administrateur d’augmenter la limite."
+
+#: services/scanning/policy.py
+msgid "Malware detected"
+msgstr "Logiciel malveillant détecté"
+
+#: services/scanning/policy.py
+msgid "File could not be scanned"
+msgstr "Le fichier n’a pas pu être analysé"
+
+#: services/sharing.py
+msgid "Invalid share link parameters."
+msgstr "Paramètres de lien de partage non valides."
+
+#: services/sharing.py
+msgid "A cap must be a positive number."
+msgstr "Une limite doit être un nombre positif."
+
+#: services/sharing.py
+msgid "A cap is larger than this server can store."
+msgstr "Une limite dépasse ce que ce serveur peut stocker."
+
+#: services/storage_analysis.py ui/templates/files/ui/partials/dialogs.html
+msgid "Images"
+msgstr "Images"
+
+#: services/storage_analysis.py
+msgid "Videos"
+msgstr "Vidéos"
+
+#: services/storage_analysis.py
+msgid "Audio"
+msgstr "Audio"
+
+#: services/storage_analysis.py ui/templates/files/ui/partials/dialogs.html
+msgid "Documents"
+msgstr "Documents"
+
+#: services/storage_analysis.py
+msgid "Archives"
+msgstr "Archives"
+
+#: services/storage_analysis.py
+msgid "Code"
+msgstr "Code"
+
+#: services/storage_analysis.py
+msgid "Text"
+msgstr "Texte"
+
+#: services/storage_analysis.py
+msgid "Fonts"
+msgstr "Polices"
+
+#: services/storage_analysis.py
+msgid "Executables"
+msgstr "Exécutables"
+
+#: services/storage_analysis.py
+msgid "Applications"
+msgstr "Applications"
+
+#: services/storage_analysis.py
+msgid "Other"
+msgstr "Autres"
+
+#: services/storage_analysis.py
+msgid "Files in this folder"
+msgstr "Fichiers de ce dossier"
+
+#: signals.py
+#, python-format
+msgid "\"%(name)s\" is no longer shared with you"
+msgstr "« %(name)s » n’est plus partagé avec vous"
+
+#: tasks.py
+#, python-format
+msgid "%(count)s file was added to \"%(name)s\""
+msgid_plural "%(count)s files were added to \"%(name)s\""
+msgstr[0] "%(count)s fichier a été ajouté à « %(name)s »"
+msgstr[1] "%(count)s de fichiers ont été ajoutés à « %(name)s »"
+msgstr[2] "%(count)s fichiers ont été ajoutés à « %(name)s »"
+
+#: tasks.py
+msgid "Uploaded through your share link."
+msgstr "Téléversé via votre lien de partage."
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Files"
+msgstr "Fichiers"
+
+#: ui/templates/files/ui/index.html
+msgid "close sidebar"
+msgstr "fermer la barre latérale"
+
+#: ui/templates/files/ui/index.html
+msgid "Quick Access"
+msgstr "Accès rapide"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/file_picker.html ui/views.py
+msgid "My Files"
+msgstr "Mes fichiers"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/folder_content.html ui/views.py
+msgid "Favorites"
+msgstr "Favoris"
+
+#: ui/templates/files/ui/index.html ui/views.py
+msgid "Recent"
+msgstr "Récents"
+
+#: ui/templates/files/ui/index.html ui/views.py
+msgid "Trash"
+msgstr "Corbeille"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Pinned"
+msgstr "Épinglés"
+
+#: ui/templates/files/ui/index.html
+msgid "Drop to pin folder"
+msgstr "Déposer pour épingler le dossier"
+
+#: ui/templates/files/ui/index.html
+msgid "My files"
+msgstr "Mes fichiers"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/storage_dialog.html
+msgid "Storage"
+msgstr "Stockage"
+
+#: ui/templates/files/ui/index.html
+msgid "Help"
+msgstr "Aide"
+
+#: ui/templates/files/ui/index.html
+msgid "Expand sidebar"
+msgstr "Déplier la barre latérale"
+
+#: ui/templates/files/ui/index.html
+msgid "Collapse sidebar"
+msgstr "Replier la barre latérale"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Collapse"
+msgstr "Replier"
+
+#: ui/templates/files/ui/index.html
+msgid "Preferences"
+msgstr "Préférences"
+
+#: ui/templates/files/ui/index.html
+msgid "Failed to refresh items"
+msgstr "Échec de l’actualisation des éléments"
+
+#: ui/templates/files/ui/index.html
+msgid "Back (Alt+Left)"
+msgstr "Précédent (Alt+Gauche)"
+
+#: ui/templates/files/ui/index.html
+msgid "Forward (Alt+Right)"
+msgstr "Suivant (Alt+Droite)"
+
+#: ui/templates/files/ui/index.html
+msgid "Up (Alt+Up)"
+msgstr "Dossier parent (Alt+Haut)"
+
+#: ui/templates/files/ui/index.html
+msgid "Sync & refresh"
+msgstr "Synchroniser et actualiser"
+
+#: ui/templates/files/ui/index.html
+msgid "Sync and refresh folder"
+msgstr "Synchroniser et actualiser le dossier"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Empty trash"
+msgstr "Vider la corbeille"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "New"
+msgstr "Nouveau"
+
+#: ui/templates/files/ui/index.html
+msgid "Drop files to upload"
+msgstr "Déposez des fichiers pour les téléverser"
+
+#: ui/templates/files/ui/index.html
+msgid "Files will be added to the current folder"
+msgstr "Les fichiers seront ajoutés au dossier actuel"
+
+#: ui/templates/files/ui/index.html
+msgid "Loading folder…"
+msgstr "Chargement du dossier…"
+
+#: ui/templates/files/ui/index.html
+#: ui/templates/files/ui/partials/_toolbar_sheet_header.html
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+#: ui/templates/files/ui/partials/storage_dialog.html
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Close"
+msgstr "Fermer"
+
+#: ui/templates/files/ui/index.html ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/file_picker.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+#: ui/templates/files/ui/partials/folder_dialog.html
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+#: ui/templates/files/ui/partials/rename_dialog.html
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/partials/storage_dialog.html
+#: ui/templates/files/ui/partials/tag_dialog.html
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#: ui/templates/files/ui/partials/tag_picker_dialog.html
+msgid "close"
+msgstr "fermer"
+
+#: ui/templates/files/ui/partials/_events_list.html
+msgid "System"
+msgstr "Système"
+
+#: ui/templates/files/ui/partials/_events_list.html
+msgid "a user"
+msgstr "un utilisateur"
+
+#: ui/templates/files/ui/partials/_events_list.html
+msgid "another file"
+msgstr "un autre fichier"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Activity"
+msgstr "Activité"
+
+#: ui/templates/files/ui/partials/_events_list.html
+msgid "Filter activity by action"
+msgstr "Filtrer l’activité par action"
+
+#: ui/templates/files/ui/partials/_events_list.html
+msgid "All actions"
+msgstr "Toutes les actions"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> renamed <span class=\"text-base-"
+"content/60\">%(old_name)s</span> → <span class=\"text-base-"
+"content/60\">%(new_name)s</span>"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a renommé <span class=\"text-"
+"base-content/60\">%(old_name)s</span> → <span class=\"text-base-"
+"content/60\">%(new_name)s</span>"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid "<span class=\"font-medium\">%(actor)s</span> moved this"
+msgstr "<span class=\"font-medium\">%(actor)s</span> a déplacé cet élément"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid "<span class=\"font-medium\">%(actor)s</span> updated the file"
+msgstr "<span class=\"font-medium\">%(actor)s</span> a mis à jour le fichier"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> copied from <span class=\"text-"
+"base-content/60\">%(source)s</span>"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a copié depuis <span "
+"class=\"text-base-content/60\">%(source)s</span>"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid "<span class=\"font-medium\">%(actor)s</span> created this"
+msgstr "<span class=\"font-medium\">%(actor)s</span> a créé cet élément"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid "<span class=\"font-medium\">%(actor)s</span> moved this to the trash"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a mis cet élément à la corbeille"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> restored this from the trash"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a restauré cet élément depuis "
+"la corbeille"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> shared with the project <span "
+"class=\"text-base-content/60\">%(target)s</span>"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a partagé avec le projet <span "
+"class=\"text-base-content/60\">%(target)s</span>"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> shared with the group <span "
+"class=\"text-base-content/60\">%(target)s</span>"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a partagé avec le groupe <span "
+"class=\"text-base-content/60\">%(target)s</span>"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> shared with <span class=\"text-"
+"base-content/60\">%(target)s</span>"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a partagé avec <span "
+"class=\"text-base-content/60\">%(target)s</span>"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> changed <span class=\"text-base-"
+"content/60\">%(target)s</span>'s permission"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a modifié l’autorisation de "
+"<span class=\"text-base-content/60\">%(target)s</span>"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"<span class=\"font-medium\">%(actor)s</span> revoked <span class=\"text-base-"
+"content/60\">%(target)s</span>'s access"
+msgstr ""
+"<span class=\"font-medium\">%(actor)s</span> a révoqué l’accès de <span "
+"class=\"text-base-content/60\">%(target)s</span>"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid "<span class=\"font-medium\">%(actor)s</span> created a public link"
+msgstr "<span class=\"font-medium\">%(actor)s</span> a créé un lien public"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid "<span class=\"font-medium\">%(actor)s</span> revoked a public link"
+msgstr "<span class=\"font-medium\">%(actor)s</span> a révoqué un lien public"
+
+#: ui/templates/files/ui/partials/_events_list.html
+msgid "Load more"
+msgstr "Charger plus"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid "(%(events_limit)s of %(total_event_count)s)"
+msgstr "(%(events_limit)s sur %(total_event_count)s)"
+
+#: ui/templates/files/ui/partials/_events_list.html
+#, python-format
+msgid ""
+"Showing the %(max_events_limit)s most recent of %(total_event_count)s "
+"events. Older entries aren't displayed."
+msgstr ""
+"Affichage des %(max_events_limit)s événements les plus récents sur "
+"%(total_event_count)s. Les entrées plus anciennes ne sont pas affichées."
+
+#: ui/templates/files/ui/partials/_events_list.html
+msgid "No events match this filter."
+msgstr "Aucun événement ne correspond à ce filtre."
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Show hidden files"
+msgstr "Afficher les fichiers cachés"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Confirm before delete"
+msgstr "Confirmer avant de supprimer"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Compact file list"
+msgstr "Liste de fichiers compacte"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Sidebar sections"
+msgstr "Sections de la barre latérale"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Show pinned folders"
+msgstr "Afficher les dossiers épinglés"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Show group folders"
+msgstr "Afficher les dossiers de groupe"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Show tags"
+msgstr "Afficher les étiquettes"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Default sort"
+msgstr "Tri par défaut"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Default"
+msgstr "Par défaut"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/tag_dialog.html
+msgid "Name"
+msgstr "Nom"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Modified"
+msgstr "Modifié"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Size"
+msgstr "Taille"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+#: ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Type"
+msgstr "Type"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Same-name files"
+msgstr "Fichiers de même nom"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Ask me"
+msgstr "Me demander"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Keep both"
+msgstr "Conserver les deux"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Replace"
+msgstr "Remplacer"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Skip"
+msgstr "Ignorer"
+
+#: ui/templates/files/ui/partials/_preferences_content.html
+msgid "Breadcrumb collapse after"
+msgstr "Replier le fil d’Ariane après"
+
+#: ui/templates/files/ui/partials/context_menu.html
+#: ui/templates/files/ui/partials/file_picker.html
+#: ui/templates/files/ui/partials/folder_dialog.html
+msgid "New folder"
+msgstr "Nouveau dossier"
+
+#: ui/templates/files/ui/partials/context_menu.html
+msgid "New file"
+msgstr "Nouveau fichier"
+
+#: ui/templates/files/ui/partials/context_menu.html
+msgid "Upload files"
+msgstr "Téléverser des fichiers"
+
+#: ui/templates/files/ui/partials/context_menu.html
+#: ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Paste"
+msgstr "Coller"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Create New File"
+msgstr "Créer un fichier"
+
+#: ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "File name"
+msgstr "Nom du fichier"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "notes"
+msgstr "notes"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Extension added if missing"
+msgstr "Extension ajoutée si absente"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Text (.txt)"
+msgstr "Texte (.txt)"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Custom extension"
+msgstr "Extension personnalisée"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Extension"
+msgstr "Extension"
+
+#: ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/file_picker.html
+#: ui/templates/files/ui/partials/folder_dialog.html
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+#: ui/templates/files/ui/partials/rename_dialog.html
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/partials/tag_dialog.html
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#: ui/templates/files/ui/partials/upload_panel.html
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Cancel"
+msgstr "Annuler"
+
+#: ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/file_picker.html
+#: ui/templates/files/ui/partials/folder_dialog.html
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/partials/tag_dialog.html
+msgid "Create"
+msgstr "Créer"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Keyboard Shortcuts"
+msgstr "Raccourcis clavier"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Navigation"
+msgstr "Navigation"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Go back"
+msgstr "Revenir en arrière"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Go forward"
+msgstr "Aller en avant"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Go to parent folder"
+msgstr "Aller au dossier parent"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Selection shortcuts"
+msgstr "Raccourcis de sélection"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Select one or more items using checkboxes, then press a shortcut."
+msgstr ""
+"Sélectionnez un ou plusieurs éléments à l’aide des cases à cocher, puis "
+"appuyez sur un raccourci."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Open folder / View file"
+msgstr "Ouvrir le dossier / Afficher le fichier"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "single"
+msgstr "unique"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "single / multi"
+msgstr "unique / multiple"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Toggle favorite"
+msgstr "Basculer le favori"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Pin / unpin from sidebar"
+msgstr "Épingler / désépingler de la barre latérale"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "single folder"
+msgstr "dossier unique"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "no selection needed"
+msgstr "aucune sélection requise"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "File Editor"
+msgstr "Éditeur de fichier"
+
+#: ui/templates/files/ui/partials/dialogs.html
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/partials/tag_dialog.html
+#: ui/templates/files/ui/viewers/image_viewer.html
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Save"
+msgstr "Enregistrer"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Cancel editing"
+msgstr "Annuler la modification"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "WebDAV Access"
+msgstr "Accès WebDAV"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Mount your files as a network drive using WebDAV. Your WebDAV URL is:"
+msgstr ""
+"Montez vos fichiers comme un lecteur réseau via WebDAV. Votre URL WebDAV "
+"est :"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "your-domain"
+msgstr "votre-domaine"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"Sign in with your username and password. If your account uses single sign-"
+"on, create an API token in <strong>Settings &gt; API Tokens</strong> and "
+"enter it as the password."
+msgstr ""
+"Connectez-vous avec votre nom d’utilisateur et votre mot de passe. Si votre "
+"compte utilise l’authentification unique, créez un jeton d’API dans "
+"<strong>Paramètres &gt; Jetons d’API</strong> et saisissez-le comme mot de "
+"passe."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Open File Explorer and click <strong>Map network drive</strong>."
+msgstr ""
+"Ouvrez l’Explorateur de fichiers et cliquez sur <strong>Connecter un lecteur "
+"réseau</strong>."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Enter the WebDAV URL as the folder path."
+msgstr "Saisissez l’URL WebDAV comme chemin du dossier."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"Check <em>Connect using different credentials</em> and enter your username "
+"and password."
+msgstr ""
+"Cochez <em>Se connecter à l’aide d’informations d’identification "
+"différentes</em> et saisissez votre nom d’utilisateur et votre mot de passe."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "If connecting over HTTP, add a registry key to allow Basic auth:"
+msgstr ""
+"En cas de connexion via HTTP, ajoutez une clé de registre pour autoriser "
+"l’authentification Basic :"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "then restart the <em>WebClient</em> service."
+msgstr "puis redémarrez le service <em>WebClient</em>."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"In Finder, press <kbd class=\"kbd kbd-sm\">Cmd</kbd> + <kbd class=\"kbd kbd-"
+"sm\">K</kbd>."
+msgstr ""
+"Dans le Finder, appuyez sur <kbd class=\"kbd kbd-sm\">Cmd</kbd> + <kbd "
+"class=\"kbd kbd-sm\">K</kbd>."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Enter the WebDAV URL and click <strong>Connect</strong>."
+msgstr "Saisissez l’URL WebDAV et cliquez sur <strong>Se connecter</strong>."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Enter your credentials when prompted."
+msgstr "Saisissez vos identifiants lorsqu’ils vous sont demandés."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Install <code>davfs2</code>: <code>sudo apt install davfs2</code>"
+msgstr "Installez <code>davfs2</code> : <code>sudo apt install davfs2</code>"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Mount via command line or add to <code>/etc/fstab</code>."
+msgstr ""
+"Montez-le en ligne de commande ou ajoutez-le à <code>/etc/fstab</code>."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"Alternatively, use <strong>GNOME Files</strong> &gt; Other Locations &gt; "
+"Connect to Server."
+msgstr ""
+"Vous pouvez aussi utiliser <strong>Fichiers de GNOME</strong> &gt; Autres "
+"emplacements &gt; Connexion à un serveur."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"Use a WebDAV-compatible app such as <strong>FE File Explorer</strong>, "
+"<strong>Solid Explorer</strong>, or <strong>Documents by Readdle</strong>."
+msgstr ""
+"Utilisez une application compatible WebDAV comme <strong>FE File Explorer</"
+"strong>, <strong>Solid Explorer</strong> ou <strong>Documents by Readdle</"
+"strong>."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "File Management"
+msgstr "Gestion des fichiers"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"<strong>Drag and drop</strong> &mdash; Drop files anywhere on the page to "
+"upload them to the current folder."
+msgstr ""
+"<strong>Glisser-déposer</strong> &mdash; Déposez des fichiers n’importe où "
+"sur la page pour les téléverser dans le dossier actuel."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"<strong>Pinned folders</strong> &mdash; Drag a folder onto the sidebar "
+"\"Pinned\" area to pin it for quick access."
+msgstr ""
+"<strong>Dossiers épinglés</strong> &mdash; Faites glisser un dossier vers la "
+"zone « Épinglés » de la barre latérale pour l’épingler et y accéder "
+"rapidement."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"<strong>Favorites</strong> &mdash; Right-click a file or folder and select "
+"<em>Add to favorites</em> to bookmark it."
+msgstr ""
+"<strong>Favoris</strong> &mdash; Faites un clic droit sur un fichier ou un "
+"dossier et sélectionnez <em>Ajouter aux favoris</em> pour le marquer."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"<strong>Trash</strong> &mdash; Deleted items are moved to the Trash and can "
+"be restored or permanently removed."
+msgstr ""
+"<strong>Corbeille</strong> &mdash; Les éléments supprimés sont placés dans "
+"la corbeille, d’où ils peuvent être restaurés ou supprimés définitivement."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"<strong>Right-click menu</strong> &mdash; Right-click any item for options "
+"like rename, move, download, and more."
+msgstr ""
+"<strong>Menu contextuel</strong> &mdash; Faites un clic droit sur un élément "
+"pour accéder à des options comme renommer, déplacer, télécharger, etc."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Supported File Types"
+msgstr "Types de fichiers pris en charge"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "The following file types can be previewed directly in the browser:"
+msgstr ""
+"Les types de fichiers suivants peuvent être prévisualisés directement dans "
+"le navigateur :"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "PDF, Markdown (rendered)"
+msgstr "PDF, Markdown (rendu)"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"<strong>Text &amp; Code</strong> &mdash; Plain text, JSON, XML, YAML, HTML, "
+"CSS, JavaScript, Python, and many more (with syntax highlighting)"
+msgstr ""
+"<strong>Texte et code</strong> &mdash; Texte brut, JSON, XML, YAML, HTML, "
+"CSS, JavaScript, Python et bien d’autres (avec coloration syntaxique)"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid ""
+"<strong>Media</strong> &mdash; Audio (MP3, WAV, OGG) and Video (MP4, WebM)"
+msgstr ""
+"<strong>Médias</strong> &mdash; Audio (MP3, WAV, OGG) et vidéo (MP4, WebM)"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "All other file types can be downloaded."
+msgstr "Tous les autres types de fichiers peuvent être téléchargés."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "API Access"
+msgstr "Accès à l’API"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "A REST API is available for programmatic access to your files."
+msgstr ""
+"Une API REST est disponible pour accéder à vos fichiers par programmation."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Base URL:"
+msgstr "URL de base :"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Authentication:"
+msgstr "Authentification :"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Use your session cookie or API token."
+msgstr "Utilisez votre cookie de session ou un jeton d’API."
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Documentation:"
+msgstr "Documentation :"
+
+#: ui/templates/files/ui/partials/dialogs.html
+msgid "Full API docs are available at"
+msgstr "La documentation complète de l’API est disponible à l’adresse"
+
+#: ui/templates/files/ui/partials/duration_badge.html
+msgid "Opens at"
+msgstr "S’ouvre à"
+
+#: ui/templates/files/ui/partials/duration_badge.html
+msgid "Playable media"
+msgstr "Média lisible"
+
+#: ui/templates/files/ui/partials/empty_folder.html
+msgid "This folder is empty"
+msgstr "Ce dossier est vide"
+
+#: ui/templates/files/ui/partials/empty_folder.html
+msgid "Create a folder or upload files to get started."
+msgstr "Créez un dossier ou téléversez des fichiers pour commencer."
+
+#: ui/templates/files/ui/partials/file_card.html
+#, python-format
+msgid "Show files tagged %(tag_name)s"
+msgstr "Afficher les fichiers étiquetés %(tag_name)s"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Choose File"
+msgstr "Choisir un fichier"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Choose Folder"
+msgstr "Choisir un dossier"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Select a file from your workspace."
+msgstr "Sélectionnez un fichier de votre espace de travail."
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Select a destination folder."
+msgstr "Sélectionnez un dossier de destination."
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Failed to create folder"
+msgstr "Échec de la création du dossier"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "No files found"
+msgstr "Aucun fichier trouvé"
+
+#: ui/templates/files/ui/partials/file_picker.html
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Empty folder"
+msgstr "Dossier vide"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "No subfolders"
+msgstr "Aucun sous-dossier"
+
+#: ui/templates/files/ui/partials/file_picker.html
+#, python-format
+msgid "%%(count)s file selected"
+msgstr "%%(count)s fichier sélectionné"
+
+#: ui/templates/files/ui/partials/file_picker.html
+#, python-format
+msgid "%%(count)s files selected"
+msgstr "%%(count)s fichiers sélectionnés"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Select"
+msgstr "Sélectionner"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Location"
+msgstr "Emplacement"
+
+#: ui/templates/files/ui/partials/file_picker.html
+#: ui/templates/files/ui/partials/group_folders_section.html ui/views.py
+msgid "Groups"
+msgstr "Groupes"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Search files..."
+msgstr "Rechercher des fichiers..."
+
+#: ui/templates/files/ui/partials/file_picker.html
+#: ui/templates/files/ui/partials/folder_dialog.html
+msgid "Folder name"
+msgstr "Nom du dossier"
+
+#: ui/templates/files/ui/partials/file_picker.html
+#, python-format
+msgid "Saving to: %(location)s"
+msgstr "Enregistrement dans : %(location)s"
+
+#: ui/templates/files/ui/partials/file_picker.html
+msgid "Click a file to select it"
+msgstr "Cliquez sur un fichier pour le sélectionner"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+msgid "Stop slideshow (Space)"
+msgstr "Arrêter le diaporama (Espace)"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+msgid "Slideshow (Space)"
+msgstr "Diaporama (Espace)"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+msgid "Stop slideshow"
+msgstr "Arrêter le diaporama"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+msgid "Slideshow"
+msgstr "Diaporama"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+msgid "File viewer"
+msgstr "Visionneuse de fichiers"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+msgid "Time per photo"
+msgstr "Durée par photo"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/shared_viewer.html
+msgid "Download file"
+msgstr "Télécharger le fichier"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+msgid "Properties (Ctrl+I)"
+msgstr "Propriétés (Ctrl+I)"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+msgid "Close (ESC)"
+msgstr "Fermer (ESC)"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+msgid "Failed to load file"
+msgstr "Échec du chargement du fichier"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+#: ui/templates/files/ui/partials/shared_viewer.html
+msgid "Previous file"
+msgstr "Fichier précédent"
+
+#: ui/templates/files/ui/partials/file_viewer_inline.html
+#: ui/templates/files/ui/partials/file_viewer_modal.html
+#: ui/templates/files/ui/partials/shared_viewer.html
+msgid "Next file"
+msgstr "Fichier suivant"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#, python-format
+msgid "Move %%(column)s up"
+msgstr "Monter %%(column)s"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#, python-format
+msgid "Move %%(column)s down"
+msgstr "Descendre %%(column)s"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#, python-format
+msgid "%%(count)s item selected"
+msgstr "%%(count)s élément sélectionné"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#, python-format
+msgid "%%(count)s items selected"
+msgstr "%%(count)s éléments sélectionnés"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Filter by name"
+msgstr "Filtrer par nom"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Filters"
+msgstr "Filtres"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/sensitive_viewer.html
+msgid "Show"
+msgstr "Afficher"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "All"
+msgstr "Tout"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Folders"
+msgstr "Dossiers"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Clear filters"
+msgstr "Effacer les filtres"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Sort"
+msgstr "Trier"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Sort by"
+msgstr "Trier par"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Ascending"
+msgstr "Croissant"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Descending"
+msgstr "Décroissant"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Paste items here"
+msgstr "Coller les éléments ici"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Tile size"
+msgstr "Taille des vignettes"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Columns"
+msgstr "Colonnes"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "View options"
+msgstr "Options d’affichage"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Layout"
+msgstr "Disposition"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "List"
+msgstr "Liste"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Mosaic"
+msgstr "Mosaïque"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Required"
+msgstr "Requise"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Order"
+msgstr "Ordre"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Reset columns"
+msgstr "Réinitialiser les colonnes"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/shared_page.html
+msgid "List view"
+msgstr "Vue liste"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Mosaic view"
+msgstr "Vue mosaïque"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Clear all"
+msgstr "Tout effacer"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Clear selection"
+msgstr "Effacer la sélection"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Fav"
+msgstr "Fav."
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Deleted"
+msgstr "Supprimé"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Actions"
+msgstr "Actions"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/node_name.html
+msgid ""
+"Quarantined: the malware scanner flagged this file, so it cannot be opened "
+"or downloaded."
+msgstr ""
+"En quarantaine : l’analyseur antivirus a signalé ce fichier, il ne peut donc "
+"être ni ouvert ni téléchargé."
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/node_name.html
+msgid "Processing: the file is being scanned and its preview prepared."
+msgstr ""
+"Traitement en cours : le fichier est en cours d’analyse et son aperçu en "
+"préparation."
+
+#: ui/templates/files/ui/partials/folder_content.html
+#, python-format
+msgid "Show files tagged %(name)s"
+msgstr "Afficher les fichiers étiquetés %(name)s"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "More actions"
+msgstr "Plus d’actions"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/properties_content.html
+#: ui/templates/files/ui/partials/shared_listing.html
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Folder"
+msgstr "Dossier"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/properties_content.html
+#, python-format
+msgid "%(counter)s item"
+msgid_plural "%(counter)s items"
+msgstr[0] "%(counter)s élément"
+msgstr[1] "%(counter)s d’éléments"
+msgstr[2] "%(counter)s éléments"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "%(counter)s folder"
+msgid_plural "%(counter)s folders"
+msgstr[0] "%(counter)s dossier"
+msgstr[1] "%(counter)s de dossiers"
+msgstr[2] "%(counter)s dossiers"
+
+#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "%(counter)s file"
+msgid_plural "%(counter)s files"
+msgstr[0] "%(counter)s fichier"
+msgstr[1] "%(counter)s de fichiers"
+msgstr[2] "%(counter)s fichiers"
+
+#: ui/templates/files/ui/partials/folder_content.html
+msgid "Folder properties"
+msgstr "Propriétés du dossier"
+
+#: ui/templates/files/ui/partials/folder_dialog.html
+msgid "Create New Folder"
+msgstr "Créer un dossier"
+
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+msgid "Create Group Folder"
+msgstr "Créer un dossier de groupe"
+
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+msgid "Group"
+msgstr "Groupe"
+
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+msgid "Select a group"
+msgstr "Sélectionnez un groupe"
+
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+msgid "The folder will be named after the group"
+msgstr "Le dossier portera le nom du groupe"
+
+#: ui/templates/files/ui/partials/group_folder_dialog.html
+msgid "All your groups already have a folder."
+msgstr "Tous vos groupes ont déjà un dossier."
+
+#: ui/templates/files/ui/partials/group_folders_section.html
+msgid "Create group folder"
+msgstr "Créer un dossier de groupe"
+
+#: ui/templates/files/ui/partials/group_folders_section.html
+msgid "No group folders"
+msgstr "Aucun dossier de groupe"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "New Folder"
+msgstr "Nouveau dossier"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "Create a new folder"
+msgstr "Créer un nouveau dossier"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "New File"
+msgstr "Nouveau fichier"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "Create a blank file"
+msgstr "Créer un fichier vide"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "Upload Files"
+msgstr "Téléverser des fichiers"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "Select files from your computer"
+msgstr "Sélectionner des fichiers sur votre ordinateur"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "Upload Folder"
+msgstr "Téléverser un dossier"
+
+#: ui/templates/files/ui/partials/new_menu.html
+msgid "Upload entire folder"
+msgstr "Téléverser un dossier entier"
+
+#: ui/templates/files/ui/partials/pinned_folders.html
+msgid "No pinned folders"
+msgstr "Aucun dossier épinglé"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Link copied to clipboard"
+msgstr "Lien copié dans le presse-papiers"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "File"
+msgstr "Fichier"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Favorite"
+msgstr "Favori"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "In Trash"
+msgstr "Dans la corbeille"
+
+#: ui/templates/files/ui/partials/properties_content.html
+#, python-format
+msgid "Created %(date)s"
+msgstr "Créé le %(date)s"
+
+#: ui/templates/files/ui/partials/properties_content.html
+#, python-format
+msgid "Modified %(date)s"
+msgstr "Modifié le %(date)s"
+
+#: ui/templates/files/ui/partials/properties_content.html ui/views.py
+msgid "Quarantined"
+msgstr "En quarantaine"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid ""
+"The malware scanner flagged this file. It cannot be opened or downloaded."
+msgstr ""
+"L’analyseur antivirus a signalé ce fichier. Il ne peut être ni ouvert ni "
+"téléchargé."
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Processing"
+msgstr "Traitement en cours"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid ""
+"This file is being scanned and its preview and details prepared. They appear "
+"once processing finishes."
+msgstr ""
+"Ce fichier est en cours d’analyse et son aperçu et ses détails sont en "
+"préparation. Ils apparaîtront une fois le traitement terminé."
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Added automatically from what the photo shows"
+msgstr "Ajoutées automatiquement d’après le contenu de la photo"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "No tags"
+msgstr "Aucune étiquette"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Customize Icon"
+msgstr "Personnaliser l’icône"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Not shared with anyone"
+msgstr "Partagé avec personne"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Manage sharing"
+msgstr "Gérer le partage"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Your access"
+msgstr "Votre accès"
+
+#: ui/templates/files/ui/partials/properties_content.html
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Public links"
+msgstr "Liens publics"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Password protected"
+msgstr "Protégé par mot de passe"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Views"
+msgstr "Vues"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Last access"
+msgstr "Dernier accès"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Never"
+msgstr "Jamais"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Expires"
+msgstr "Expire"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Permanent"
+msgstr "Permanent"
+
+#: ui/templates/files/ui/partials/properties_content.html
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "No public links"
+msgstr "Aucun lien public"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Manage links"
+msgstr "Gérer les liens"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Comments"
+msgstr "Commentaires"
+
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Advanced"
+msgstr "Avancé"
+
+#: ui/templates/files/ui/partials/properties_document_section.html
+#, python-format
+msgid "%(counter)s page"
+msgid_plural "%(counter)s pages"
+msgstr[0] "%(counter)s page"
+msgstr[1] "%(counter)s de pages"
+msgstr[2] "%(counter)s pages"
+
+#: ui/templates/files/ui/partials/properties_document_section.html
+#, python-format
+msgid "Written %(date)s"
+msgstr "Écrit le %(date)s"
+
+#: ui/templates/files/ui/partials/properties_document_section.html
+#, python-format
+msgid "Last saved %(date)s"
+msgstr "Dernier enregistrement le %(date)s"
+
+#: ui/templates/files/ui/partials/rename_dialog.html
+msgid "New name"
+msgstr "Nouveau nom"
+
+#: ui/templates/files/ui/partials/sensitive_viewer.html
+msgid "Sensitive content"
+msgstr "Contenu sensible"
+
+#: ui/templates/files/ui/partials/sensitive_viewer.html
+msgid ""
+"This file is marked as sensitive. Show it only if no one else can see your "
+"screen."
+msgstr ""
+"Ce fichier est marqué comme sensible. Affichez-le uniquement si personne "
+"d’autre ne peut voir votre écran."
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Hide password"
+msgstr "Masquer le mot de passe"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Show password"
+msgstr "Afficher le mot de passe"
+
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+msgid "Saving..."
+msgstr "Enregistrement..."
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Add people"
+msgstr "Ajouter des personnes"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Search by username or name..."
+msgstr "Rechercher par identifiant ou nom..."
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Add a group"
+msgstr "Ajouter un groupe"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Search groups..."
+msgstr "Rechercher des groupes..."
+
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/shared_base.html
+msgid "Shared with"
+msgstr "Partagé avec"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Not shared with anyone yet"
+msgstr "Pas encore partagé"
+
+#: ui/templates/files/ui/partials/share_modal.html ui/views.py
+msgid "Read & write"
+msgstr "Lecture et écriture"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Undo removal"
+msgstr "Annuler la suppression"
+
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Undo"
+msgstr "Annuler"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Remove access"
+msgstr "Retirer l’accès"
+
+#: ui/templates/files/ui/partials/share_modal.html
+#: ui/templates/files/ui/shared_base.html
+msgid "Password"
+msgstr "Mot de passe"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Revoke"
+msgstr "Révoquer"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Access"
+msgstr "Accès"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Max file size (bytes)"
+msgstr "Taille max. de fichier (octets)"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "No limit"
+msgstr "Aucune limite"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Max uploads"
+msgstr "Téléversements max."
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Expiration (optional)"
+msgstr "Expiration (facultatif)"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Password (optional)"
+msgstr "Mot de passe (facultatif)"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Leave empty for no password"
+msgstr "Laisser vide pour aucun mot de passe"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Generate a password"
+msgstr "Générer un mot de passe"
+
+#: ui/templates/files/ui/partials/share_modal.html
+msgid "Create link"
+msgstr "Créer le lien"
+
+#: ui/templates/files/ui/partials/shared_dropzone.html
+#, python-format
+msgid "Sending %%(current)s of %%(total)s"
+msgstr "Envoi %%(current)s sur %%(total)s"
+
+#: ui/templates/files/ui/partials/shared_dropzone.html
+#, python-format
+msgid "Send files to <span x-text=\"targetName\">%(folder_name)s</span>"
+msgstr ""
+"Envoyer des fichiers dans <span x-text=\"targetName\">%(folder_name)s</span>"
+
+#: ui/templates/files/ui/partials/shared_dropzone.html
+msgid "Drag files here or click to browse"
+msgstr "Glissez des fichiers ici ou cliquez pour parcourir"
+
+#: ui/templates/files/ui/partials/shared_dropzone.html
+msgid "Files uploaded successfully."
+msgstr "Fichiers téléversés avec succès."
+
+#: ui/templates/files/ui/partials/shared_listing.html
+msgid "Send files below to fill it."
+msgstr "Envoyez des fichiers ci-dessous pour le remplir."
+
+#: ui/templates/files/ui/partials/shared_listing.html
+msgid "Nothing has been shared here yet."
+msgstr "Rien n’a encore été partagé ici."
+
+#: ui/templates/files/ui/partials/shared_listing.html
+#, python-format
+msgid "Only the first %(counter)s entry is shown."
+msgid_plural "Only the first %(counter)s entries are shown."
+msgstr[0] "Seul le premier élément (%(counter)s) est affiché."
+msgstr[1] "Seuls les %(counter)s premiers éléments sont affichés."
+msgstr[2] "Seuls les %(counter)s premiers éléments sont affichés."
+
+#: ui/templates/files/ui/partials/shared_viewer.html
+msgid "File quarantined"
+msgstr "Fichier en quarantaine"
+
+#: ui/templates/files/ui/partials/shared_viewer.html
+msgid ""
+"The malware scanner flagged this file, so it can be neither previewed nor "
+"downloaded."
+msgstr ""
+"L’analyseur antivirus a signalé ce fichier : il ne peut être ni prévisualisé "
+"ni téléchargé."
+
+#: ui/templates/files/ui/partials/shared_viewer.html
+msgid "Preview not available for this file type"
+msgstr "Aperçu non disponible pour ce type de fichier"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Up one level"
+msgstr "Remonter d’un niveau"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Analyze the parent folder"
+msgstr "Analyser le dossier parent"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Live files"
+msgstr "Fichiers actifs"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "%(used)s of %(quota)s used, trash included (%(percent)s%%)"
+msgstr "%(used)s sur %(quota)s utilisés, corbeille comprise (%(percent)s %%)"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "In trash"
+msgstr "Dans la corbeille"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Duplicates"
+msgstr "Doublons"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "group of identical files"
+msgid_plural "groups of identical files"
+msgstr[0] "groupe de fichiers identiques"
+msgstr[1] "groupes de fichiers identiques"
+msgstr[2] "groupes de fichiers identiques"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "no identical files"
+msgstr "aucun fichier identique"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Nothing to analyze"
+msgstr "Rien à analyser"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "This location holds no files yet."
+msgstr "Cet emplacement ne contient encore aucun fichier."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "By category"
+msgstr "Par catégorie"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Share of the used space per file category"
+msgstr "Part de l’espace utilisé par catégorie de fichiers"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "used"
+msgstr "utilisé"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "Show the largest %(category)s"
+msgstr "Afficher les plus gros fichiers : %(category)s"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "By folder"
+msgstr "Par dossier"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "Analyze %(name)s"
+msgstr "Analyser %(name)s"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "No sub-folders."
+msgstr "Aucun sous-dossier."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Largest files"
+msgstr "Plus gros fichiers"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Show every category"
+msgstr "Afficher toutes les catégories"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Clear"
+msgstr "Effacer"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "Paths containing “%(query)s”"
+msgstr "Chemins contenant « %(query)s »"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "%(counter)s match"
+msgid_plural "%(counter)s matches"
+msgstr[0] "%(counter)s correspondance"
+msgstr[1] "%(counter)s de correspondances"
+msgstr[2] "%(counter)s correspondances"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "Open %(name)s"
+msgstr "Ouvrir %(name)s"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "Move to trash"
+msgstr "Mettre à la corbeille"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "No files in this category matching “%(query)s”."
+msgstr "Aucun fichier de cette catégorie ne correspond à « %(query)s »."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "No files in this category."
+msgstr "Aucun fichier dans cette catégorie."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "No files matching “%(query)s”."
+msgstr "Aucun fichier ne correspond à « %(query)s »."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "No files."
+msgstr "Aucun fichier."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid ""
+"Files with identical content, largest waste first. Keep one copy and trash "
+"the others to reclaim the space."
+msgstr ""
+"Fichiers au contenu identique, du plus gros gaspillage au plus petit. Gardez "
+"une copie et mettez les autres à la corbeille pour récupérer l’espace."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid ""
+"Showing groups with a copy matching “%(query)s”; every copy of those groups "
+"is listed."
+msgstr ""
+"Groupes ayant une copie qui correspond à « %(query)s » ; toutes les copies "
+"de ces groupes sont listées."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "%(counter)s copy"
+msgid_plural "%(counter)s copies"
+msgstr[0] "%(counter)s copie"
+msgstr[1] "%(counter)s de copies"
+msgstr[2] "%(counter)s copies"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "%(size)s each"
+msgstr "%(size)s chacun"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "%(size)s wasted"
+msgstr "%(size)s gaspillés"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "and %(counter)s more copy"
+msgid_plural "and %(counter)s more copies"
+msgstr[0] "et %(counter)s copie supplémentaire"
+msgstr[1] "et %(counter)s de copies supplémentaires"
+msgstr[2] "et %(counter)s copies supplémentaires"
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+#, python-format
+msgid "No identical files found matching “%(query)s”."
+msgstr "Aucun fichier identique trouvé correspondant à « %(query)s »."
+
+#: ui/templates/files/ui/partials/storage_analysis.html
+msgid "No identical files found."
+msgstr "Aucun fichier identique trouvé."
+
+#: ui/templates/files/ui/partials/storage_dialog.html
+msgid "Failed to analyze storage"
+msgstr "Échec de l’analyse du stockage"
+
+#: ui/templates/files/ui/partials/storage_dialog.html
+msgid "Filter the largest files and duplicates by path"
+msgstr "Filtrer les plus gros fichiers et les doublons par chemin"
+
+#: ui/templates/files/ui/partials/storage_dialog.html
+msgid "Filter by name or path…"
+msgstr "Filtrer par nom ou chemin…"
+
+#: ui/templates/files/ui/partials/storage_dialog.html
+msgid "Clear the filter"
+msgstr "Effacer le filtre"
+
+#: ui/templates/files/ui/partials/storage_dialog.html
+msgid "Measuring what takes up space…"
+msgstr "Mesure de l’espace occupé…"
+
+#: ui/templates/files/ui/partials/tag_dialog.html
+msgid "Edit Tag"
+msgstr "Modifier l’étiquette"
+
+#: ui/templates/files/ui/partials/tag_dialog.html
+msgid "New Tag"
+msgstr "Nouvelle étiquette"
+
+#: ui/templates/files/ui/partials/tag_dialog.html
+msgid "Tag name"
+msgstr "Nom de l’étiquette"
+
+#: ui/templates/files/ui/partials/tag_dropdown.html
+msgid "Edit tag"
+msgstr "Modifier l’étiquette"
+
+#: ui/templates/files/ui/partials/tag_dropdown.html
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#: ui/templates/files/ui/partials/tag_picker_dialog.html
+msgid "No tags yet"
+msgstr "Aucune étiquette pour l’instant"
+
+#: ui/templates/files/ui/partials/tag_dropdown.html
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#: ui/templates/files/ui/partials/tag_picker_dialog.html
+#: ui/templates/files/ui/partials/tag_sidebar_section.html
+msgid "New tag"
+msgstr "Nouvelle étiquette"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#, python-format
+msgid "%%(count)s tag"
+msgstr "%%(count)s étiquette"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#, python-format
+msgid "%%(count)s tags"
+msgstr "%%(count)s étiquettes"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#, python-format
+msgid "%%(count)s file"
+msgstr "%%(count)s fichier"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#, python-format
+msgid "%%(count)s files"
+msgstr "%%(count)s fichiers"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Remove from sidebar"
+msgstr "Retirer de la barre latérale"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Show in sidebar"
+msgstr "Afficher dans la barre latérale"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#, python-format
+msgid "Show files tagged %%(name)s"
+msgstr "Afficher les fichiers étiquetés %%(name)s"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#, python-format
+msgid "Delete %%(count)s unused"
+msgstr "Supprimer %%(count)s inutilisées"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Search tags"
+msgstr "Rechercher des étiquettes"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Edit"
+msgstr "Modifier"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Merge into another tag"
+msgstr "Fusionner dans une autre étiquette"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "No tag matches"
+msgstr "Aucune étiquette ne correspond"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Merge tag"
+msgstr "Fusionner l’étiquette"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid ""
+"Every file tagged <strong x-text=\"tagManager.mergeSource ? tagManager."
+"mergeSource.name : ''\"></strong> gets the tag you pick instead, and the "
+"original is deleted."
+msgstr ""
+"Chaque fichier étiqueté <strong x-text=\"tagManager.mergeSource ? tagManager."
+"mergeSource.name : ''\"></strong> reçoit à la place l’étiquette choisie, et "
+"l’originale est supprimée."
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Merge into"
+msgstr "Fusionner dans"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Choose a tag"
+msgstr "Choisir une étiquette"
+
+#: ui/templates/files/ui/partials/tag_manager_dialog.html
+msgid "Merge"
+msgstr "Fusionner"
+
+#: ui/templates/files/ui/partials/tag_picker_dialog.html
+msgid "Done"
+msgstr "Terminé"
+
+#: ui/templates/files/ui/partials/tag_sidebar_section.html
+msgid "Manage tags"
+msgstr "Gérer les étiquettes"
+
+#: ui/templates/files/ui/partials/tag_sidebar_section.html
+msgid "No favorite tags"
+msgstr "Aucune étiquette favorite"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+#, python-format
+msgid "%%(loaded)s of %%(total)s - %%(percent)s"
+msgstr "%%(loaded)s sur %%(total)s - %%(percent)s"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Expand"
+msgstr "Développer"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+#, python-format
+msgid "%%(count)s uploads failed"
+msgstr "%%(count)s téléversements ont échoué"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+#, python-format
+msgid "%%(count)s uploads match existing files"
+msgstr "%%(count)s téléversements correspondent à des fichiers existants"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+#, python-format
+msgid "Cancel %%(name)s"
+msgstr "Annuler %%(name)s"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+#, python-format
+msgid "Retry %%(name)s"
+msgstr "Réessayer %%(name)s"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Uploads"
+msgstr "Téléversements"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Pause"
+msgstr "Pause"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Pause uploads"
+msgstr "Mettre en pause les téléversements"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Resume"
+msgstr "Reprendre"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Resume uploads"
+msgstr "Reprendre les téléversements"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Close uploads"
+msgstr "Fermer les téléversements"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Retry all"
+msgstr "Tout réessayer"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Discard all"
+msgstr "Tout abandonner"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Keep all"
+msgstr "Tout conserver"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+msgid "Discard upload"
+msgstr "Abandonner le téléversement"
+
+#: ui/templates/files/ui/partials/upload_panel.html
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+msgid "Retry"
+msgstr "Réessayer"
+
+#: ui/templates/files/ui/shared_base.html
+msgid "Link expired"
+msgstr "Lien expiré"
+
+#: ui/templates/files/ui/shared_base.html
+msgid "This share link is no longer available."
+msgstr "Ce lien de partage n’est plus disponible."
+
+#: ui/templates/files/ui/shared_base.html
+msgid "Protected link"
+msgstr "Lien protégé"
+
+#: ui/templates/files/ui/shared_base.html
+msgid "Enter the password to continue"
+msgstr "Saisissez le mot de passe pour continuer"
+
+#: ui/templates/files/ui/shared_base.html
+msgid "Invalid password"
+msgstr "Mot de passe incorrect"
+
+#: ui/templates/files/ui/shared_base.html
+msgid "An error occurred"
+msgstr "Une erreur est survenue"
+
+#: ui/templates/files/ui/shared_page.html
+#, python-format
+msgid "Send files to %(name)s"
+msgstr "Envoyer des fichiers à %(name)s"
+
+#: ui/templates/files/ui/shared_page.html
+#, python-format
+msgid "Shared folder from %(name)s"
+msgstr "Dossier partagé par %(name)s"
+
+#: ui/templates/files/ui/shared_page.html
+msgid "unknown"
+msgstr "inconnu"
+
+#: ui/templates/files/ui/shared_page.html
+#, python-format
+msgid "%(type)s - %(size)s - shared by %(name)s"
+msgstr "%(type)s - %(size)s - partagé par %(name)s"
+
+#: ui/templates/files/ui/shared_page.html
+msgid "Back"
+msgstr "Précédent"
+
+#: ui/templates/files/ui/shared_page.html
+msgid "Forward"
+msgstr "Suivant"
+
+#: ui/templates/files/ui/shared_page.html
+msgid "Up"
+msgstr "Remonter"
+
+#: ui/templates/files/ui/shared_page.html
+msgid "Refresh"
+msgstr "Actualiser"
+
+#: ui/templates/files/ui/shared_page.html
+msgid "Grid view"
+msgstr "Vue en grille"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+#, python-format
+msgid "Edit %%(current)s of %%(total)s"
+msgstr "Retouche %%(current)s sur %%(total)s"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Someone else is editing this file."
+msgstr "Quelqu’un d’autre modifie ce fichier."
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "The edit could not be saved."
+msgstr "La retouche n’a pas pu être enregistrée."
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+#, python-format
+msgid "Edit failed (HTTP %%(status)s)"
+msgstr "Échec de la retouche (HTTP %%(status)s)"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+msgid "Save failed"
+msgstr "Échec de l’enregistrement"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "e.g. \"remove the background\", \"make it brighter\""
+msgstr "p. ex. « supprimer l’arrière-plan », « rendre plus lumineux »"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Zoom out (-)"
+msgstr "Zoom arrière (-)"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Zoom in (+)"
+msgstr "Zoom avant (+)"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Rotate (R)"
+msgstr "Pivoter (R)"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Reset (0)"
+msgstr "Réinitialiser (0)"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Rotate and crop"
+msgstr "Pivoter et recadrer"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "AI Edit"
+msgstr "Retouche IA"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Rotate left"
+msgstr "Pivoter à gauche"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Rotate right"
+msgstr "Pivoter à droite"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Back to the image as it was uploaded"
+msgstr "Revenir à l’image telle qu’elle a été téléversée"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Original"
+msgstr "Original"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "AI Image Edit"
+msgstr "Retouche d’image par IA"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Describe the edit"
+msgstr "Décrivez la retouche"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Output size"
+msgstr "Taille de sortie"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "1792 x 1024 (landscape)"
+msgstr "1792 x 1024 (paysage)"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "1024 x 1792 (portrait)"
+msgstr "1024 x 1792 (portrait)"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Generate"
+msgstr "Générer"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Generating..."
+msgstr "Génération..."
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Save as copy"
+msgstr "Enregistrer une copie"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Root"
+msgstr "Racine"
+
+#: ui/templates/files/ui/viewers/image_viewer.html
+msgid "Discard edits"
+msgstr "Abandonner les retouches"
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+msgid "Saved"
+msgstr "Enregistré"
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Save (Ctrl+S)"
+msgstr "Enregistrer (Ctrl+S)"
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+#: ui/templates/files/ui/viewers/text_viewer.html
+#, python-format
+msgid "%(owner)s is editing this file"
+msgstr "%(owner)s modifie ce fichier"
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Force unlock"
+msgstr "Forcer le déverrouillage"
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+msgid ""
+"Someone else saved this note while you were away, so your changes were not "
+"saved. Copy anything you need, then reload."
+msgstr ""
+"Quelqu’un d’autre a enregistré cette note pendant votre absence, vos "
+"modifications n’ont donc pas été enregistrées. Copiez ce dont vous avez "
+"besoin, puis rechargez."
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Reload"
+msgstr "Recharger"
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+msgid "Failed to load editor"
+msgstr "Échec du chargement de l’éditeur"
+
+#: ui/templates/files/ui/viewers/markdown_viewer.html
+msgid "Unsaved changes could not be saved — another user locked the file."
+msgstr ""
+"Les modifications non enregistrées n’ont pas pu être enregistrées — un autre "
+"utilisateur a verrouillé le fichier."
+
+#: ui/templates/files/ui/viewers/media_viewer.html
+msgid "Your browser does not support the video element."
+msgstr "Votre navigateur ne prend pas en charge l’élément vidéo."
+
+#: ui/templates/files/ui/viewers/media_viewer.html
+msgid "This browser can't play this video"
+msgstr "Ce navigateur ne peut pas lire cette vidéo"
+
+#: ui/templates/files/ui/viewers/media_viewer.html
+#, python-format
+msgid "It is encoded in %(codec_label)s, which only some browsers can decode."
+msgstr ""
+"Elle est encodée en %(codec_label)s, que seuls certains navigateurs savent "
+"décoder."
+
+#: ui/templates/files/ui/viewers/media_viewer.html
+msgid "It is probably recorded in a format only some browsers can decode."
+msgstr ""
+"Elle est probablement enregistrée dans un format que seuls certains "
+"navigateurs savent décoder."
+
+#: ui/templates/files/ui/viewers/media_viewer.html
+msgid "Download it to watch it in a video player."
+msgstr "Téléchargez-la pour la regarder dans un lecteur vidéo."
+
+#: ui/templates/files/ui/viewers/media_viewer.html
+msgid "Your browser does not support the audio element."
+msgstr "Votre navigateur ne prend pas en charge l’élément audio."
+
+#: ui/templates/files/ui/viewers/office_viewer_unavailable.html
+msgid "Preview unavailable"
+msgstr "Aperçu indisponible"
+
+#: ui/templates/files/ui/viewers/office_viewer_unavailable.html
+msgid ""
+"The document editor is not reachable or does not support this format. You "
+"can still download the file."
+msgstr ""
+"L’éditeur de documents est injoignable ou ne prend pas en charge ce format. "
+"Vous pouvez toujours télécharger le fichier."
+
+#: ui/templates/files/ui/viewers/pdf_viewer.html
+msgid "New tab"
+msgstr "Nouvel onglet"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Undo (Ctrl+Z)"
+msgstr "Annuler (Ctrl+Z)"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Redo (Ctrl+Y)"
+msgstr "Rétablir (Ctrl+Y)"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Find (Ctrl+F)"
+msgstr "Rechercher (Ctrl+F)"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Replace (Ctrl+H)"
+msgstr "Remplacer (Ctrl+H)"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Decrease font size"
+msgstr "Réduire la taille de police"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Increase font size"
+msgstr "Augmenter la taille de police"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Tab size (click to cycle)"
+msgstr "Taille de tabulation (cliquer pour changer)"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Toggle whitespace characters"
+msgstr "Afficher/masquer les espaces"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Toggle line numbers"
+msgstr "Afficher/masquer les numéros de ligne"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Toggle word wrap"
+msgstr "Activer/désactiver le retour à la ligne"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Toggle minimap"
+msgstr "Afficher/masquer la minicarte"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "AI"
+msgstr "IA"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Improve"
+msgstr "Améliorer"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Explain"
+msgstr "Expliquer"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Summarize"
+msgstr "Résumer"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Custom prompt..."
+msgstr "Prompt personnalisé..."
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid ""
+"Someone else saved this file while you were away, so your changes were not "
+"saved. Copy anything you need, then reload."
+msgstr ""
+"Quelqu’un d’autre a enregistré ce fichier pendant votre absence, vos "
+"modifications n’ont donc pas été enregistrées. Copiez ce dont vous avez "
+"besoin, puis rechargez."
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Failed to save"
+msgstr "Échec de l’enregistrement"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "File saved successfully"
+msgstr "Fichier enregistré"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+#, python-format
+msgid "Failed to save: %%(error)s"
+msgstr "Échec de l’enregistrement : %%(error)s"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Custom AI Prompt"
+msgstr "Prompt IA personnalisé"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "What would you like AI to do with the selected content?"
+msgstr "Que voulez-vous que l’IA fasse du contenu sélectionné ?"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "e.g. Translate to French, Add comments, Refactor..."
+msgstr "p. ex. Traduire en anglais, Ajouter des commentaires, Refactoriser..."
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Run"
+msgstr "Exécuter"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "No content to process"
+msgstr "Aucun contenu à traiter"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Failed to start AI task"
+msgstr "Échec du lancement de la tâche IA"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+#, python-format
+msgid "AI error: %%(error)s"
+msgstr "Erreur IA : %%(error)s"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Failed to poll task"
+msgstr "Échec du suivi de la tâche"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+#, python-format
+msgid "AI failed: %%(error)s"
+msgstr "Échec de l’IA : %%(error)s"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Unknown error"
+msgstr "Erreur inconnue"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Explanation"
+msgstr "Explication"
+
+#: ui/templates/files/ui/viewers/text_viewer.html
+msgid "Summary"
+msgstr "Résumé"
+
+#: ui/templates/files/ui/viewers/text_viewer_too_large.html
+msgid "Too large to preview"
+msgstr "Trop volumineux pour l’aperçu"
+
+#: ui/templates/files/ui/viewers/text_viewer_too_large.html
+#, python-format
+msgid ""
+"%(name)s is larger than %(max_size)s, the most the editor opens. You can "
+"still read it as plain text in a new tab."
+msgstr ""
+"%(name)s dépasse %(max_size)s, la taille maximale que l’éditeur peut ouvrir. "
+"Vous pouvez toujours le lire en texte brut dans un nouvel onglet."
+
+#: ui/templates/files/ui/viewers/text_viewer_too_large.html
+msgid "Open as plain text"
+msgstr "Ouvrir en texte brut"
+
+#: ui/views.py
+msgid "Nothing shared with you"
+msgstr "Rien n’est partagé avec vous"
+
+#: ui/views.py
+msgid "Files others share with you will appear here."
+msgstr ""
+"Les fichiers que d’autres personnes partagent avec vous apparaîtront ici."
+
+#: ui/views.py
+msgid "Trash is empty"
+msgstr "La corbeille est vide"
+
+#: ui/views.py
+msgid "Items you delete stay here for a while."
+msgstr "Les éléments que vous supprimez restent ici pendant un certain temps."
+
+#: ui/views.py
+msgid "No favorites yet"
+msgstr "Aucun favori pour l’instant"
+
+#: ui/views.py
+msgid "Star files or folders to see them here."
+msgstr "Ajoutez des fichiers ou dossiers aux favoris pour les voir ici."
+
+#: ui/views.py
+msgid "No recent files"
+msgstr "Aucun fichier récent"
+
+#: ui/views.py
+msgid "Files you create or edit will show up here."
+msgstr "Les fichiers que vous créez ou modifiez apparaîtront ici."
+
+#: ui/views.py
+msgid "No files with this tag"
+msgstr "Aucun fichier avec cette étiquette"
+
+#: ui/views.py
+msgid "Tag a file from its properties panel to see it here."
+msgstr ""
+"Étiquetez un fichier depuis son panneau de propriétés pour le voir ici."
+
+#: ui/views.py
+msgid "Full access"
+msgstr "Accès complet"
+
+#: ui/views.py
+msgid "The malware scanner flagged this file, so its contents cannot be shown."
+msgstr ""
+"L’analyseur antivirus a signalé ce fichier : son contenu ne peut pas être "
+"affiché."
+
+#: views/files.py
+#, python-format
+msgid "%(actor)s edited \"%(name)s\""
+msgstr "%(actor)s a modifié « %(name)s »"
+
+#: views/files.py
+msgid "Renaming this file is not allowed."
+msgstr "Le renommage de ce fichier n’est pas autorisé."
+
+#: views/files.py
+msgid "Shared write access only allows updating file content."
+msgstr ""
+"L’accès en écriture partagé permet uniquement de mettre à jour le contenu du "
+"fichier."
+
+#: views/files.py
+#, python-format
+msgid "%(actor)s deleted \"%(name)s\""
+msgstr "%(actor)s a supprimé « %(name)s »"
+
+#: views/share_links.py
+msgid "This share link has expired."
+msgstr "Ce lien de partage a expiré."
+
+#: views/share_links.py
+msgid "Password required."
+msgstr "Mot de passe requis."
+
+#: views/share_links.py
+msgid "Invalid or expired access token."
+msgstr "Jeton d’accès invalide ou expiré."
+
+#: views/share_links.py
+msgid "Invalid password."
+msgstr "Mot de passe incorrect."
+
+#: views/share_links.py
+msgid "File has no content."
+msgstr "Le fichier n’a pas de contenu."
+
+#: views/share_links.py
+msgid "This file is too large for this link."
+msgstr "Ce fichier est trop volumineux pour ce lien."
+
+#: views/share_links.py
+msgid "This link is no longer accepting files."
+msgstr "Ce lien n’accepte plus de fichiers."
+
+#: views/tags.py
+msgid "Tag already assigned."
+msgstr "Étiquette déjà attribuée."
+
+#: views/uploads.py
+msgid "The folder this upload goes to no longer exists."
+msgstr "Le dossier de destination de ce téléversement n’existe plus."
+
+#: views/uploads.py
+msgid "Folder not found."
+msgstr "Dossier introuvable."
+
+#: views/uploads.py
+msgid "The uploaded file no longer exists."
+msgstr "Le fichier téléversé n’existe plus."
+
+#: viewsets/actions.py
+msgid "could not read file content"
+msgstr "impossible de lire le contenu du fichier"
+
+#: viewsets/actions.py
+msgid "invalid request (check prompt and AI configuration)"
+msgstr "requête invalide (vérifiez le prompt et la configuration de l’IA)"
+
+#: viewsets/actions.py
+msgid "image editing failed"
+msgstr "échec de la retouche d’image"
+
+#: viewsets/comments.py
+msgid "Comment not found."
+msgstr "Commentaire introuvable."
+
+#: viewsets/comments.py
+msgid "You can only modify your own comments."
+msgstr "Vous ne pouvez modifier que vos propres commentaires."
+
+#: viewsets/copy.py
+msgid "Copying this item is not allowed."
+msgstr "La copie de cet élément n’est pas autorisée."
+
+#: viewsets/copy.py
+msgid "Parent folder not found."
+msgstr "Dossier parent introuvable."
+
+#: viewsets/copy.py
+msgid "Cannot copy folder into itself or its descendants."
+msgstr ""
+"Impossible de copier un dossier dans lui-même ou dans ses sous-dossiers."
+
+#: viewsets/extract.py
+msgid "Destination folder not found."
+msgstr "Dossier de destination introuvable."
+
+#: viewsets/extract.py
+msgid "Archive too large."
+msgstr "Archive trop volumineuse."
+
+#: viewsets/extract.py
+msgid "Too many entries in archive."
+msgstr "Trop d’entrées dans l’archive."
+
+#: viewsets/extract.py
+msgid "Invalid request."
+msgstr "Requête invalide."
+
+#: viewsets/share.py
+msgid "Only files can be shared."
+msgstr "Seuls les fichiers peuvent être partagés."
+
+#: viewsets/share.py
+msgid "Project not found."
+msgstr "Projet introuvable."
+
+#: viewsets/share.py
+msgid "Cannot share with yourself."
+msgstr "Vous ne pouvez pas partager avec vous-même."
+
+#: viewsets/share.py
+msgid "User not found."
+msgstr "Utilisateur introuvable."
+
+#: viewsets/share.py
+msgid "Group not found."
+msgstr "Groupe introuvable."
+
+#: viewsets/share.py
+#, python-format
+msgid "%(actor)s shared \"%(name)s\" with you"
+msgstr "%(actor)s a partagé « %(name)s » avec vous"
+
+#: viewsets/share.py
+#, python-format
+msgid "Permission updated to read & write on \"%(name)s\""
+msgstr "Autorisation passée en lecture et écriture sur « %(name)s »"
+
+#: viewsets/share.py
+#, python-format
+msgid "Permission updated to read only on \"%(name)s\""
+msgstr "Autorisation passée en lecture seule sur « %(name)s »"
+
+#: viewsets/share.py
+msgid "Share not found."
+msgstr "Partage introuvable."
+
+#: viewsets/share.py
+#, python-format
+msgid "%(actor)s revoked your access to \"%(name)s\""
+msgstr "%(actor)s a révoqué votre accès à « %(name)s »"
+
+#: viewsets/share.py
+msgid "Must be a whole number."
+msgstr "Doit être un nombre entier."

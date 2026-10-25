@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- Create Group Folder Dialog -->
 <dialog id="create-group-folder-dialog" class="modal">
   <div class="modal-box" x-data="{ selectedGroup: '' }">
@@ -7,7 +8,7 @@
       >
         <i data-lucide="users" class="w-5 h-5"></i>
       </div>
-      Create Group Folder
+      {% translate "Create Group Folder" %}
     </h3>
     {% if available_groups %}
       <form
@@ -15,7 +16,7 @@
       >
         <div class="form-control">
           <label class="label">
-            <span class="label-text">Group</span>
+            <span class="label-text">{% translate "Group" %}</span>
           </label>
           <select
             x-model="selectedGroup"
@@ -23,13 +24,13 @@
             class="select select-bordered w-full"
             required
           >
-            <option value="" disabled selected>Select a group</option>
+            <option value="" disabled selected>{% translate "Select a group" %}</option>
             {% for g in available_groups %}
               <option value="{{ g.id }}">{{ g.name }}</option>
             {% endfor %}
           </select>
           <label class="label">
-            <span class="label-text-alt">The folder will be named after the group</span>
+            <span class="label-text-alt">{% translate "The folder will be named after the group" %}</span>
           </label>
         </div>
         <div class="modal-action">
@@ -38,31 +39,31 @@
             class="btn btn-sm"
             onclick="document.getElementById('create-group-folder-dialog').close()"
           >
-            Cancel
+            {% translate "Cancel" %}
           </button>
           <button
             type="submit"
             class="btn btn-module btn-sm"
             :disabled="!selectedGroup"
           >
-            Create
+            {% translate "Create" %}
           </button>
         </div>
       </form>
     {% else %}
-      <p class="text-base-content/60 text-sm">All your groups already have a folder.</p>
+      <p class="text-base-content/60 text-sm">{% translate "All your groups already have a folder." %}</p>
       <div class="modal-action">
         <button
           type="button"
           class="btn btn-sm"
           onclick="document.getElementById('create-group-folder-dialog').close()"
         >
-          Close
+          {% translate "Close" %}
         </button>
       </div>
     {% endif %}
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

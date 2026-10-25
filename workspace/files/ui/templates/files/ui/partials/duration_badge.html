@@ -1,4 +1,4 @@
-{% load file_filters %}
+{% load i18n file_filters %}
 {% comment %}
   The play badge of an audio or video preview, in its bottom left corner:
   the corner the grid cards leave free (the star sits top right, the menu
@@ -16,11 +16,11 @@
 >
   <i data-lucide="play" class="w-3 h-3 fill-current" aria-hidden="true"></i>
   {% if position %}
-    <span class="sr-only">Opens at</span>
+    <span class="sr-only">{% translate "Opens at" %}</span>
     <span>{{ position|media_duration }}{% if duration %} / {{ duration|media_duration }}{% endif %}</span>
   {% elif duration %}
     <span>{{ duration|media_duration }}</span>
   {% else %}
-    <span class="sr-only">Playable media</span>
+    <span class="sr-only">{% translate "Playable media" %}</span>
   {% endif %}
 </span>

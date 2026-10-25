@@ -2,19 +2,19 @@
 const ACTIONS_BATCH_SIZE = 200;
 
 const SORT_OPTIONS = [
-  { id: 'default', label: 'Default' },
-  { id: 'name', label: 'Name' },
-  { id: 'size', label: 'Size' },
-  { id: 'created', label: 'Created' },
-  { id: 'modified', label: 'Modified' },
-  { id: 'favorite', label: 'Favorite' },
-  { id: 'type', label: 'Type' },
+  { id: 'default', label: gettext('Default') },
+  { id: 'name', label: gettext('Name') },
+  { id: 'size', label: gettext('Size') },
+  { id: 'created', label: gettext('Created') },
+  { id: 'modified', label: gettext('Modified') },
+  { id: 'favorite', label: gettext('Favorite') },
+  { id: 'type', label: gettext('Type') },
 ];
 
 const TYPE_FILTERS = {
-  files: { label: 'Files', icon: 'file' },
-  folders: { label: 'Folders', icon: 'folder' },
-  favorites: { label: 'Favorites', icon: 'star' },
+  files: { label: gettext('Files'), icon: 'file' },
+  folders: { label: gettext('Folders'), icon: 'folder' },
+  favorites: { label: gettext('Favorites'), icon: 'star' },
 };
 
 window.fileTableControls = function fileTableControls() {
@@ -26,15 +26,15 @@ window.fileTableControls = function fileTableControls() {
     sortField: window._filePrefsCache.defaultSort || 'default',
     sortDir: window._filePrefsCache.defaultSortDir || 'asc',
     columns: [
-      { id: 'select', label: 'Select', required: false },
-      { id: 'icon', label: 'Type', required: true },
-      { id: 'name', label: 'Name', required: true },
-      { id: 'favorite', label: 'Fav', required: false },
-      { id: 'tags', label: 'Tags', required: false },
-      { id: 'size', label: 'Size', required: false },
-      { id: 'created', label: 'Created', required: false },
-      { id: 'modified', label: 'Modified', required: false },
-      { id: 'actions', label: 'Actions', required: false }
+      { id: 'select', label: gettext('Select'), required: false },
+      { id: 'icon', label: gettext('Type'), required: true },
+      { id: 'name', label: gettext('Name'), required: true },
+      { id: 'favorite', label: gettext('Fav'), required: false },
+      { id: 'tags', label: gettext('Tags'), required: false },
+      { id: 'size', label: gettext('Size'), required: false },
+      { id: 'created', label: gettext('Created'), required: false },
+      { id: 'modified', label: gettext('Modified'), required: false },
+      { id: 'actions', label: gettext('Actions'), required: false }
     ],
     defaultColumnOrder: ['select', 'icon', 'name', 'favorite', 'tags', 'size', 'created', 'modified', 'actions'],
     defaultColumnVisibility: {
@@ -536,9 +536,13 @@ window.fileTableControls = function fileTableControls() {
       const total = this.totalCount();
       const visible = this.visibleCount();
       if (visible === total) {
-        return `${total} item${total === 1 ? '' : 's'}`;
+        return interpolate(ngettext('%(count)s item', '%(count)s items', total), { count: total }, true);
       }
-      return `${visible} of ${total} item${total === 1 ? '' : 's'}`;
+      return interpolate(
+        ngettext('%(visible)s of %(count)s item', '%(visible)s of %(count)s items', total),
+        { visible, count: total },
+        true,
+      );
     },
 
     selectedSize() {
@@ -553,7 +557,7 @@ window.fileTableControls = function fileTableControls() {
 
     selectionSummaryText() {
       const count = this.selectedUuids.size;
-      let text = `${count} selected`;
+      let text = interpolate(ngettext('%(count)s selected', '%(count)s selected', count), { count }, true);
       const size = this.selectedSize();
       if (size > 0) {
         // formatFileSize is the shared global from common/static/ui/js/filesize.js
@@ -1146,8 +1150,8 @@ window.fileTableControls = function fileTableControls() {
     },
 
     sortButtonLabel() {
-      if (this.sortField === 'default') return 'Sort';
-      return SORT_OPTIONS.find((option) => option.id === this.sortField)?.label || 'Sort';
+      if (this.sortField === 'default') return gettext('Sort');
+      return SORT_OPTIONS.find((option) => option.id === this.sortField)?.label || gettext('Sort');
     },
 
     pickSort(field) {
@@ -1305,7 +1309,7 @@ window.fileTableControls = function fileTableControls() {
           emptyRow.dataset.emptyRow = 'true';
           const cell = document.createElement('td');
           cell.className = 'py-6 text-center text-base-content/60';
-          cell.textContent = 'No matching items';
+          cell.textContent = gettext('No matching items');
           cell.setAttribute('colspan', String(this.getColumnCount()));
           emptyRow.appendChild(cell);
         }
@@ -1392,7 +1396,7 @@ window.viewToggle = function viewToggle() {
       }
       this.viewMode = previous;
       window._filePrefsCache.defaultViewMode = previous;
-      window.AppAlert?.error('Could not switch the view');
+      window.AppAlert?.error(gettext('Could not switch the view'));
     },
 
     setMosaicTileSize(size) {

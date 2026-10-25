@@ -64,7 +64,7 @@ window.filePreferences = function filePreferences() {
           }
           this.prefs[key] = previous;
           this._broadcast();
-          window.AppAlert?.error('Could not save the preference');
+          window.AppAlert?.error(gettext('Could not save the preference'));
         });
         return;
       }

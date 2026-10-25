@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- Create Folder Dialog -->
 <dialog id="create-folder-dialog" class="modal">
   <div class="modal-box" x-data="{ folderName: '' }">
@@ -7,19 +8,19 @@
       >
         <i data-lucide="folder-plus" class="w-5 h-5"></i>
       </div>
-      Create New Folder
+      {% translate "Create New Folder" %}
     </h3>
     <form
       @submit.prevent="window.dispatchEvent(new CustomEvent('create-folder', { detail: { name: folderName } }))"
     >
       <div class="form-control">
         <label class="label">
-          <span class="label-text">Folder name</span>
+          <span class="label-text">{% translate "Folder name" %}</span>
         </label>
         <input
           x-model="folderName"
           type="text"
-          placeholder="New folder"
+          placeholder="{% translate 'New folder' %}"
           class="input input-bordered w-full"
           required
         />
@@ -30,13 +31,13 @@
           class="btn btn-sm"
           onclick="document.getElementById('create-folder-dialog').close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
-        <button type="submit" class="btn btn-module btn-sm">Create</button>
+        <button type="submit" class="btn btn-module btn-sm">{% translate "Create" %}</button>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

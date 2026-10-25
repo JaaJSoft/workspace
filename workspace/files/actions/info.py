@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from . import ActionRegistry
 from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
@@ -5,7 +7,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class AnalyzeStorageAction(BaseFileAction):
     id = "analyze_storage"
-    label = "Analyze storage"
+    label = _("Analyze storage")
     icon = "chart-pie"
     category = ActionCategory.INFO
     node_types = ("folder",)
@@ -19,7 +21,7 @@ class AnalyzeStorageAction(BaseFileAction):
 @ActionRegistry.register
 class PropertiesAction(BaseFileAction):
     id = "properties"
-    label = "Properties"
+    label = _("Properties")
     icon = "info"
     category = ActionCategory.INFO
     node_types = ("file", "folder")

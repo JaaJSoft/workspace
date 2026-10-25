@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Empty-folder state shared by the authenticated browser and the public
   share listing: centred in whatever box includes it.
@@ -11,7 +12,9 @@
 >
   <div class="text-center">
     <i data-lucide="folder-open" class="w-12 h-12 mb-4 opacity-40 mx-auto"></i>
-    <p class="text-lg font-medium mb-1">{{ title|default:"This folder is empty" }}</p>
-    <p class="text-sm">{{ message|default:"Create a folder or upload files to get started." }}</p>
+    <p
+      class="text-lg font-medium mb-1"
+    >{% if title %}{{ title }}{% else %}{% translate "This folder is empty" %}{% endif %}</p>
+    <p class="text-sm">{% if message %}{{ message }}{% else %}{% translate "Create a folder or upload files to get started." %}{% endif %}</p>
   </div>
 </div>

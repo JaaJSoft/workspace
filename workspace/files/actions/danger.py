@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from workspace.files.services import FilePermission, FileService
 
 from . import ActionRegistry
@@ -7,7 +9,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class DeleteAction(BaseFileAction):
     id = "delete"
-    label = "Delete"
+    label = _("Delete")
     icon = "trash-2"
     category = ActionCategory.DANGER
     node_types = ("file", "folder")

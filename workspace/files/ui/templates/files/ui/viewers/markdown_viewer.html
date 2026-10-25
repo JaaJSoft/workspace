@@ -1,4 +1,4 @@
-{% load static %}
+{% load i18n static %}
 <!-- Markdown WYSIWYG Editor with Milkdown Crepe -->
 <style>
   .wikilink-menu {
@@ -64,7 +64,7 @@
           class="flex items-center gap-1 text-warning text-xs whitespace-nowrap"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
-          Modified
+          {% translate "Modified" %}
         </span>
         <!-- Saving -->
         <span
@@ -73,7 +73,7 @@
           class="flex items-center gap-1 text-base-content/60 text-xs whitespace-nowrap"
         >
           <span class="loading loading-spinner loading-xs"></span>
-          Saving...
+          {% translate "Saving..." %}
         </span>
         <!-- Saved -->
         <span
@@ -85,7 +85,7 @@
           x-transition:leave-end="opacity-0"
         >
           <i data-lucide="check" class="w-3.5 h-3.5"></i>
-          Saved
+          {% translate "Saved" %}
         </span>
         <!-- Error -->
         <span
@@ -94,7 +94,7 @@
           class="flex items-center gap-1 text-error text-xs whitespace-nowrap"
         >
           <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-          Save failed
+          {% translate "Save failed" %}
         </span>
       {% endif %}
     </div>
@@ -109,7 +109,7 @@
           @click="save()"
         >
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          Retry
+          {% translate "Retry" %}
         </button>
         <!-- Save -->
         <button
@@ -117,7 +117,7 @@
           class="btn btn-ghost btn-xs"
           :disabled="!isDirty || saveStatus === 'saving' || staleConflict"
           @click="save()"
-          title="Save (Ctrl+S)"
+          title="{% translate 'Save (Ctrl+S)' %}"
         >
           <i data-lucide="save" class="w-3.5 h-3.5"></i>
         </button>
@@ -132,8 +132,12 @@
     class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-base-content text-sm"
   >
     <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
-    <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
-    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
+    <span class="flex-1">
+      {% blocktranslate trimmed with owner='<strong x-text="lockOwner"></strong>' %}
+        {{ owner }} is editing this file
+      {% endblocktranslate %}
+    </span>
+    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">{% translate "Force unlock" %}</button>
   </div>
 
   <!-- Stale buffer banner -->
@@ -144,15 +148,17 @@
   >
     <i data-lucide="alert-triangle" class="w-4 h-4 text-error shrink-0"></i>
     <span class="flex-1">
-      Someone else saved this note while you were away, so your changes were not
-      saved. Copy anything you need, then reload.
+      {% blocktranslate trimmed %}
+        Someone else saved this note while you were away, so your changes were not
+        saved. Copy anything you need, then reload.
+      {% endblocktranslate %}
     </span>
     <button
       type="button"
       class="btn btn-error btn-xs"
       @click="window.location.reload()"
     >
-      Reload
+      {% translate "Reload" %}
     </button>
   </div>
 
@@ -173,7 +179,7 @@
   >
     <div class="text-center">
       <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
-      <p class="text-lg font-medium mb-2">Failed to load editor</p>
+      <p class="text-lg font-medium mb-2">{% translate "Failed to load editor" %}</p>
       <p class="text-sm text-base-content/60" x-text="error"></p>
     </div>
   </div>
@@ -187,6 +193,8 @@
   ></div>
 </div>
 
+{% translate "Unsaved changes could not be saved — another user locked the file." as locked_unsaved_message %}
+{% translate "Failed to load editor" as editor_load_failed_message %}
 <script>
   window.markdownViewerCrepe = function() {
     // Keep complex objects OUT of Alpine's reactive scope
@@ -400,7 +408,7 @@
                     }).then(function() {
                       if (_crepe) _crepe.setReadonly(true);
                       if (self.saveStatus === 'error' && window.AppAlert) {
-                        window.AppAlert.warning('Unsaved changes could not be saved — another user locked the file.');
+                        window.AppAlert.warning('{{ locked_unsaved_message|escapejs }}');
                       }
                     });
                   } else {
@@ -418,7 +426,7 @@
           }
         } catch (err) {
           console.error('Failed to load Milkdown:', err);
-          self.error = err.message || 'Failed to load editor';
+          self.error = err.message || '{{ editor_load_failed_message|escapejs }}';
           self.loading = false;
         }
       },

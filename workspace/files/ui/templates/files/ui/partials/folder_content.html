@@ -1,4 +1,4 @@
-{% load file_filters ui_filters %}
+{% load file_filters i18n ui_filters %}
 {% comment %}
   Folder content component - displays files and folders in a table
 
@@ -11,6 +11,10 @@
     - empty_message: str - custom empty state message
     - is_trash_view: bool - render trash-specific actions
 {% endcomment %}
+{% translate "Move %(column)s up" as move_column_up_label %}
+{% translate "Move %(column)s down" as move_column_down_label %}
+{% translate "%(count)s item selected" as one_item_selected_label %}
+{% translate "%(count)s items selected" as many_items_selected_label %}
 
 <div
   class="border-base-300 flex flex-col flex-1 min-h-0"
@@ -41,8 +45,8 @@
             <input
               type="search"
               class="grow min-w-0 w-full"
-              placeholder="Filter by name"
-              aria-label="Filter by name"
+              placeholder="{% translate 'Filter by name' %}"
+              aria-label="{% translate 'Filter by name' %}"
               x-model.debounce.200ms="searchQuery"
             />
           </label>
@@ -60,10 +64,10 @@
               @click="open = !open"
               :aria-expanded="open.toString()"
               aria-haspopup="dialog"
-              title="Filters"
+              title="{% translate 'Filters' %}"
             >
               <i data-lucide="list-filter" class="w-4 h-4"></i>
-              <span class="hidden @xl:inline">Filters</span>
+              <span class="hidden @xl:inline">{% translate "Filters" %}</span>
               <span
                 class="badge badge-sm border-0 bg-module text-module-content"
                 x-show="activeFilterCount() > 0"
@@ -85,20 +89,20 @@
               x-transition
               x-trap="open && popoverIsSheet()"
               role="dialog"
-              aria-label="Filters"
+              aria-label="{% translate 'Filters' %}"
             >
-              {% include "files/ui/partials/_toolbar_sheet_header.html" with title="Filters" %}
+              {% include "files/ui/partials/_toolbar_sheet_header.html" with title=_("Filters") %}
               <div
                 class="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/60"
               >
-                Show
+                {% translate "Show" %}
               </div>
               <div class="flex flex-wrap gap-1.5 px-1">
-                {% include "files/ui/partials/_type_filter_pill.html" with value="all" label="All" icon="layers" %}
-                {% include "files/ui/partials/_type_filter_pill.html" with value="files" label="Files" icon="file" %}
-                {% include "files/ui/partials/_type_filter_pill.html" with value="folders" label="Folders" icon="folder" %}
+                {% include "files/ui/partials/_type_filter_pill.html" with value="all" label=_("All") icon="layers" %}
+                {% include "files/ui/partials/_type_filter_pill.html" with value="files" label=_("Files") icon="file" %}
+                {% include "files/ui/partials/_type_filter_pill.html" with value="folders" label=_("Folders") icon="folder" %}
                 {% if not is_trash_view %}
-                  {% include "files/ui/partials/_type_filter_pill.html" with value="favorites" label="Favorites" icon="star" %}
+                  {% include "files/ui/partials/_type_filter_pill.html" with value="favorites" label=_("Favorites") icon="star" %}
                 {% endif %}
               </div>
 
@@ -107,7 +111,7 @@
                 <div
                   class="px-1 pb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60"
                 >
-                  Tags
+                  {% translate "Tags" %}
                 </div>
                 <div class="max-h-56 overflow-y-auto thin-scrollbar space-y-0.5">
                   {% for tag in listing_tags %}
@@ -138,7 +142,7 @@
                 :disabled="!hasActiveFilters()"
                 @click="clearFilters()"
               >
-                Clear filters
+                {% translate "Clear filters" %}
               </button>
             </div>
           </div>
@@ -155,10 +159,10 @@
               @click="open = !open"
               :aria-expanded="open.toString()"
               aria-haspopup="dialog"
-              title="Sort"
+              title="{% translate 'Sort' %}"
             >
               <i data-lucide="arrow-down-up" class="w-4 h-4"></i>
-              <span class="hidden @2xl:inline" x-text="sortButtonLabel()">Sort</span>
+              <span class="hidden @2xl:inline" x-text="sortButtonLabel()">{% translate "Sort" %}</span>
               <i
                 data-lucide="arrow-up"
                 class="w-3.5 h-3.5 opacity-70 hidden @2xl:inline"
@@ -186,9 +190,9 @@
               x-transition
               x-trap="open && popoverIsSheet()"
               role="dialog"
-              aria-label="Sort"
+              aria-label="{% translate 'Sort' %}"
             >
-              {% include "files/ui/partials/_toolbar_sheet_header.html" with title="Sort by" %}
+              {% include "files/ui/partials/_toolbar_sheet_header.html" with title=_("Sort by") %}
               {% comment %}
                 Picking the field already in use flips the direction, the way a
                 column header does; the two buttons below say it outright.
@@ -196,7 +200,7 @@
               <ul
                 class="menu menu-sm w-full p-0"
                 role="radiogroup"
-                aria-label="Sort by"
+                aria-label="{% translate 'Sort by' %}"
               >
                 <template
                   x-for="option in sortOptions({{ is_trash_view|yesno:'true,false' }})"
@@ -232,7 +236,7 @@
                   @click="sortDir = 'asc'"
                 >
                   <i data-lucide="arrow-up" class="w-4 h-4"></i>
-                  Ascending
+                  {% translate "Ascending" %}
                 </button>
                 <button
                   type="button"
@@ -243,7 +247,7 @@
                   @click="sortDir = 'desc'"
                 >
                   <i data-lucide="arrow-down" class="w-4 h-4"></i>
-                  Descending
+                  {% translate "Descending" %}
                 </button>
               </div>
             </div>
@@ -255,11 +259,11 @@
             type="button"
             class="btn btn-sm btn-module gap-1 px-2.5 shrink-0"
             @click="bulkPaste()"
-            title="Paste items here"
-            aria-label="Paste items here"
+            title="{% translate 'Paste items here' %}"
+            aria-label="{% translate 'Paste items here' %}"
           >
             <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
-            <span class="hidden @3xl:inline">Paste</span>
+            <span class="hidden @3xl:inline">{% translate "Paste" %}</span>
           </button>
 
           <div class="ml-auto flex items-center gap-2 shrink-0">
@@ -281,14 +285,14 @@
                 @click="open = !open"
                 :aria-expanded="open.toString()"
                 aria-haspopup="dialog"
-                {% if view_mode == "mosaic" %}title="Tile size"{% else %}title="Columns"{% endif %}
+                {% if view_mode == "mosaic" %}title="{% translate 'Tile size' %}"{% else %}title="{% translate 'Columns' %}"{% endif %}
               >
                 {% if view_mode == "mosaic" %}
                   <i data-lucide="scaling" class="w-4 h-4"></i>
-                  <span class="hidden @3xl:inline">Tile size</span>
+                  <span class="hidden @3xl:inline">{% translate "Tile size" %}</span>
                 {% else %}
                   <i data-lucide="columns-2" class="w-4 h-4"></i>
-                  <span class="hidden @3xl:inline">Columns</span>
+                  <span class="hidden @3xl:inline">{% translate "Columns" %}</span>
                 {% endif %}
               </button>
               <div
@@ -305,15 +309,15 @@
                 x-transition
                 x-trap="open && popoverIsSheet()"
                 role="dialog"
-                aria-label="View options"
+                aria-label="{% translate 'View options' %}"
               >
-                {% include "files/ui/partials/_toolbar_sheet_header.html" with title="View options" %}
+                {% include "files/ui/partials/_toolbar_sheet_header.html" with title=_("View options") %}
                 {# The layout switch moves in here once the bar is too narrow to show it. #}
                 <div class="@md:hidden mb-2">
                   <div
                     class="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/60"
                   >
-                    Layout
+                    {% translate "Layout" %}
                   </div>
                   <div class="join grid grid-cols-2 w-full">
                     <button
@@ -323,7 +327,7 @@
                       @click="setViewMode('list')"
                     >
                       <i data-lucide="list" class="w-4 h-4"></i>
-                      List
+                      {% translate "List" %}
                     </button>
                     <button
                       type="button"
@@ -332,7 +336,7 @@
                       @click="setViewMode('mosaic')"
                     >
                       <i data-lucide="grid-2x2" class="w-4 h-4"></i>
-                      Mosaic
+                      {% translate "Mosaic" %}
                     </button>
                   </div>
                   <div class="divider my-1.5"></div>
@@ -342,7 +346,7 @@
                   <div
                     class="px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/60"
                   >
-                    Tile size
+                    {% translate "Tile size" %}
                   </div>
                   <div class="px-1 pb-1">
                     {% include "ui/partials/size_slider.html" with model="mosaicTileSize" change="setMosaicTileSize(mosaicTileSize)" full_width=True %}
@@ -351,7 +355,7 @@
                   <div
                     class="px-1 pb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60"
                   >
-                    Columns
+                    {% translate "Columns" %}
                   </div>
                   <div class="space-y-0.5">
                     <template x-for="col in columns" :key="col.id">
@@ -364,7 +368,10 @@
                           @change="setColumnVisible(col.id, $event.target.checked)"
                         />
                         <span class="text-sm" x-text="col.label"></span>
-                        <span class="ml-auto text-xs text-base-content/40" x-show="col.required">Required</span>
+                        <span
+                          class="ml-auto text-xs text-base-content/40"
+                          x-show="col.required"
+                        >{% translate "Required" %}</span>
                       </label>
                     </template>
                   </div>
@@ -372,7 +379,7 @@
                   <div
                     class="px-1 pb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60"
                   >
-                    Order
+                    {% translate "Order" %}
                   </div>
                   <div class="space-y-0.5">
                     <template x-for="(col, index) in orderedColumns()" :key="col.id">
@@ -382,7 +389,7 @@
                           <button
                             type="button"
                             class="btn btn-ghost btn-xs btn-square"
-                            :aria-label="'Move ' + col.label + ' up'"
+                            :aria-label="interpolate('{{ move_column_up_label|escapejs }}', { column: col.label }, true)"
                             @click="moveColumn(col.id, -1)"
                             :disabled="index === 0"
                           >
@@ -391,7 +398,7 @@
                           <button
                             type="button"
                             class="btn btn-ghost btn-xs btn-square"
-                            :aria-label="'Move ' + col.label + ' down'"
+                            :aria-label="interpolate('{{ move_column_down_label|escapejs }}', { column: col.label }, true)"
                             @click="moveColumn(col.id, 1)"
                             :disabled="index === orderedColumns().length - 1"
                           >
@@ -402,7 +409,7 @@
                     </template>
                   </div>
                   <div class="mt-2 flex justify-end">
-                    <button type="button" class="btn btn-xs btn-ghost" @click="resetColumns()">Reset columns</button>
+                    <button type="button" class="btn btn-xs btn-ghost" @click="resetColumns()">{% translate "Reset columns" %}</button>
                   </div>
                 {% endif %}
               </div>
@@ -414,8 +421,8 @@
                 class="btn btn-sm btn-outline join-item px-2.5"
                 :class="{ 'bg-module/15 text-module': viewMode === 'list' }"
                 @click="setViewMode('list')"
-                title="List view"
-                aria-label="List view"
+                title="{% translate 'List view' %}"
+                aria-label="{% translate 'List view' %}"
               >
                 <i data-lucide="list" class="w-4 h-4"></i>
               </button>
@@ -424,8 +431,8 @@
                 class="btn btn-sm btn-outline join-item px-2.5"
                 :class="{ 'bg-module/15 text-module': viewMode === 'mosaic' }"
                 @click="setViewMode('mosaic')"
-                title="Mosaic view"
-                aria-label="Mosaic view"
+                title="{% translate 'Mosaic view' %}"
+                aria-label="{% translate 'Mosaic view' %}"
               >
                 <i data-lucide="grid-2x2" class="w-4 h-4"></i>
               </button>
@@ -452,7 +459,7 @@
             class="btn btn-ghost btn-xs shrink-0"
             @click="clearFilters()"
           >
-            Clear all
+            {% translate "Clear all" %}
           </button>
         </div>
 
@@ -465,14 +472,14 @@
             type="button"
             @click="clearSelection()"
             class="btn btn-sm btn-ghost btn-square shrink-0"
-            title="Clear selection"
-            aria-label="Clear selection"
+            title="{% translate 'Clear selection' %}"
+            aria-label="{% translate 'Clear selection' %}"
           >
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
           <span
             class="text-sm font-medium whitespace-nowrap mr-2"
-            x-text="selectedUuids.size + ' item' + (selectedUuids.size > 1 ? 's' : '') + ' selected'"
+            x-text="interpolate(selectedUuids.size === 1 ? '{{ one_item_selected_label|escapejs }}' : '{{ many_items_selected_label|escapejs }}', { count: selectedUuids.size }, true)"
           ></span>
           <div
             class="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto no-scrollbar scroll-fade-end"
@@ -530,19 +537,23 @@
                     x-effect="$el.indeterminate = selectAllState() === 'partial'"
                   />
                 </th>
-                <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>
-                <th data-col="name">Name</th>
+                <th class="w-12" data-col="icon"><span class="sr-only">{% translate "Type" %}</span></th>
+                <th data-col="name">{% translate "Name" %}</th>
                 {% if not is_trash_view %}
-                  <th class="w-10 text-center" data-col="favorite">Fav</th>
+                  <th class="w-10 text-center" data-col="favorite">{% translate "Fav" %}</th>
                 {% endif %}
-                <th class="hidden lg:table-cell w-48" data-col="tags">Tags</th>
-                <th class="hidden sm:table-cell w-24" data-col="size">Size</th>
-                <th class="hidden md:table-cell w-36" data-col="created">Created</th>
+                <th class="hidden lg:table-cell w-48" data-col="tags">{% translate "Tags" %}</th>
+                <th class="hidden sm:table-cell w-24" data-col="size">{% translate "Size" %}</th>
+                <th class="hidden md:table-cell w-36" data-col="created">{% translate "Created" %}</th>
                 <th class="hidden md:table-cell w-36" data-col="modified">
-                  {% if is_trash_view %}Deleted{% else %}Modified{% endif %}
+                  {% if is_trash_view %}
+                    {% translate "Deleted" %}
+                  {% else %}
+                    {% translate "Modified" %}
+                  {% endif %}
                 </th>
                 {% if show_actions != False %}
-                  <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
+                  <th class="w-16" data-col="actions"><span class="sr-only">{% translate "Actions" %}</span></th>
                 {% endif %}
               </tr>
             </thead>
@@ -627,13 +638,13 @@
                         <i
                           data-lucide="shield-alert"
                           class="w-4 h-4 flex-shrink-0 text-error"
-                          title="Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded."
+                          title="{% translate 'Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded.' %}"
                         ></i>
                       {% elif node.is_processing %}
                         <i
                           data-lucide="loader-circle"
                           class="w-4 h-4 flex-shrink-0 text-base-content/40 animate-spin"
-                          title="Processing: the file is being scanned and its preview prepared."
+                          title="{% translate 'Processing: the file is being scanned and its preview prepared.' %}"
                         ></i>
                       {% endif %}
                     </div>
@@ -651,7 +662,7 @@
                         <button
                           type="button"
                           class="btn btn-ghost btn-xs btn-square group-data-[busy]:hidden"
-                          aria-label="Remove from favorites"
+                          aria-label="{% translate 'Remove from favorites' %}"
                           data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
@@ -660,7 +671,7 @@
                         <button
                           type="button"
                           class="btn btn-ghost btn-xs btn-square group-data-[busy]:hidden"
-                          aria-label="Add to favorites"
+                          aria-label="{% translate 'Add to favorites' %}"
                           data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
@@ -678,7 +689,7 @@
                             x-target.push="folder-browser"
                             @click.stop
                             class="shrink-0"
-                            title="Show files tagged {{ ft.tag.name }}"
+                            title="{% blocktranslate trimmed with name=ft.tag.name %}Show files tagged {{ name }}{% endblocktranslate %}"
                           >
                             <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm" {% if row_tags|length > 2 %}compact{% endif %}></tag-chip>
                           </a>
@@ -720,7 +731,7 @@
                       <button
                         type="button"
                         class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity group-data-[busy]:hidden"
-                        aria-label="More actions"
+                        aria-label="{% translate 'More actions' %}"
                         data-item-control="menu"
                       >
                         <i data-lucide="more-vertical" class="w-4 h-4"></i>
@@ -779,7 +790,7 @@
                         <button
                           type="button"
                           class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm group-data-[busy]:hidden"
-                          aria-label="Remove from favorites"
+                          aria-label="{% translate 'Remove from favorites' %}"
                           data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
@@ -788,7 +799,7 @@
                         <button
                           type="button"
                           class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-data-[busy]:hidden"
-                          aria-label="Add to favorites"
+                          aria-label="{% translate 'Add to favorites' %}"
                           data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
@@ -820,7 +831,7 @@
                           {% if node.node_type == "file" %}
                             {{ node.size|filesizeformat }}
                           {% else %}
-                            Folder
+                            {% translate "Folder" %}
                           {% endif %}
                         </p>
                         {% if node.file_tags.all %}
@@ -837,7 +848,7 @@
                                   @click.stop
                                   @dblclick.stop
                                   class="shrink-0"
-                                  title="Show files tagged {{ ft.tag.name }}"
+                                  title="{% blocktranslate trimmed with name=ft.tag.name %}Show files tagged {{ name }}{% endblocktranslate %}"
                                 >
                                   <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm" {% if row_tags|length > 2 %}compact{% endif %}></tag-chip>
                                 </a>
@@ -850,7 +861,7 @@
                         <button
                           type="button"
                           class="btn btn-ghost btn-xs btn-square flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          aria-label="More actions"
+                          aria-label="{% translate 'More actions' %}"
                           data-item-control="menu"
                         >
                           <i data-lucide="more-vertical" class="w-4 h-4"></i>
@@ -893,7 +904,13 @@
               <!-- Total / filtered items -->
               <span class="flex items-center gap-1">
                 <i data-lucide="layers" class="w-3 h-3"></i>
-                <span x-text="footerCountText()">{{ nodes|length }} item{{ nodes|length|pluralize }}</span>
+                <span x-text="footerCountText()">
+                  {% blocktranslate trimmed count counter=nodes|length %}
+                    {{ counter }} item
+                  {% plural %}
+                    {{ counter }} items
+                  {% endblocktranslate %}
+                </span>
               </span>
 
               <!-- Folders count (hidden while a filter is active) -->
@@ -903,7 +920,13 @@
                   x-show="visibleCount() === totalCount()"
                 >
                   <i data-lucide="folder" class="w-3 h-3"></i>
-                  <span>{{ folder_stats.folder_count }} folder{{ folder_stats.folder_count|pluralize }}</span>
+                  <span>
+                    {% blocktranslate trimmed count counter=folder_stats.folder_count %}
+                      {{ counter }} folder
+                    {% plural %}
+                      {{ counter }} folders
+                    {% endblocktranslate %}
+                  </span>
                 </span>
               {% endif %}
 
@@ -914,14 +937,20 @@
                   x-show="visibleCount() === totalCount()"
                 >
                   <i data-lucide="file" class="w-3 h-3"></i>
-                  <span>{{ folder_stats.file_count }} file{{ folder_stats.file_count|pluralize }}</span>
+                  <span>
+                    {% blocktranslate trimmed count counter=folder_stats.file_count %}
+                      {{ counter }} file
+                    {% plural %}
+                      {{ counter }} files
+                    {% endblocktranslate %}
+                  </span>
                 </span>
               {% endif %}
             </span>
           {% else %}
             <span class="flex items-center gap-1">
               <i data-lucide="folder-open" class="w-3 h-3"></i>
-              <span>Empty folder</span>
+              <span>{% translate "Empty folder" %}</span>
             </span>
           {% endif %}
         </div>
@@ -940,7 +969,7 @@
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square -my-1 -mr-2"
-              title="Folder properties"
+              title="{% translate 'Folder properties' %}"
               @click="window.dispatchEvent(new CustomEvent('open-properties', { detail: { uuid: '{{ current_folder.uuid|escapejs }}', nodeType: 'folder' } }))"
             >
               <i data-lucide="info" class="w-3.5 h-3.5"></i>

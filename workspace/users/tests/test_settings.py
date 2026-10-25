@@ -9,6 +9,7 @@ from workspace.users.services.settings import (
     get_module_settings,
     get_setting,
     get_user_language,
+    get_user_languages,
     get_user_timezone,
     set_setting,
 )
@@ -556,3 +557,28 @@ class LanguageSettingTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 400)
+
+
+class GetUserLanguagesTests(TestCase):
+    def setUp(self):
+        self.users = [
+            User.objects.create_user(username=f"lang{i}", password="pass")
+            for i in range(3)
+        ]
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_reads_every_language_in_one_query(self):
+        set_setting(self.users[0], "core", "language", "fr")
+        set_setting(self.users[1], "core", "language", "xx")
+        with self.assertNumQueries(1):
+            languages = get_user_languages([u.pk for u in self.users])
+        self.assertEqual(
+            languages,
+            {self.users[0].pk: "fr", self.users[1].pk: "en", self.users[2].pk: "en"},
+        )
+
+    def test_no_user_costs_no_query(self):
+        with self.assertNumQueries(0):
+            self.assertEqual(get_user_languages([]), {})

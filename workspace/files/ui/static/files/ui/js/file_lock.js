@@ -46,7 +46,7 @@ window.fileLock = function(fileUuid, getCSRFToken) {
       _fetch('POST').then(function(resp) {
         if (resp.status === 409) {
           resp.json().then(function(data) {
-            self.lockOwner = data.locked_by ? data.locked_by.username : 'Another user';
+            self.lockOwner = data.locked_by ? data.locked_by.username : gettext('Another user');
             if (onConflict) onConflict();
           });
         }
@@ -95,7 +95,7 @@ window.fileLock = function(fileUuid, getCSRFToken) {
         } else if (resp.status === 409) {
           _hasLock = false;
           resp.json().then(function(data) {
-            self.lockOwner = data.locked_by ? data.locked_by.username : 'Another user';
+            self.lockOwner = data.locked_by ? data.locked_by.username : gettext('Another user');
             if (callbacks && callbacks.onLocked) callbacks.onLocked();
           });
         }
@@ -123,12 +123,12 @@ window.fileLock = function(fileUuid, getCSRFToken) {
           startHeartbeat(self, callbacks && callbacks.onLocked);
         } else {
           if (callbacks && callbacks.onFailed) callbacks.onFailed();
-          if (window.AppAlert) window.AppAlert.error('Failed to acquire lock');
+          if (window.AppAlert) window.AppAlert.error(gettext('Failed to acquire lock'));
         }
       }).catch(function(e) {
         console.error('Force unlock failed:', e);
         if (callbacks && callbacks.onFailed) callbacks.onFailed();
-        if (window.AppAlert) window.AppAlert.error('Force unlock failed');
+        if (window.AppAlert) window.AppAlert.error(gettext('Force unlock failed'));
       });
     },
 

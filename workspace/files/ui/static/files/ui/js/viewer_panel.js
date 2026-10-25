@@ -91,11 +91,11 @@ window.viewerPanelMixin = function viewerPanelMixin() {
         merged = (render || []).some(Boolean);
         if (!merged) {
           // The guarded ajax:missing path above: nothing merged, panel kept.
-          this.viewerError = 'Failed to load viewer';
+          this.viewerError = gettext('Failed to load viewer');
         }
       } catch (err) {
         if (seq !== this._viewerStateSeq) return false;
-        this.viewerError = err.message || 'Failed to load viewer';
+        this.viewerError = err.message || gettext('Failed to load viewer');
       }
       this.viewerLoading = false;
       return merged;

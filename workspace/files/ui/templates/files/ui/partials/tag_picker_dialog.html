@@ -1,3 +1,5 @@
+{% load i18n %}
+{% translate "Tags" as tags_title %}
 <!-- Tag picker — assign/unassign tags on one file, opened by the "Tags"
      context-menu action. Requires tagsMixin() + fileBrowser() bindings. -->
 <dialog
@@ -9,7 +11,10 @@
   <div class="modal-box max-w-sm">
     <h3 class="font-bold text-lg flex items-center gap-2 mb-3">
       <i data-lucide="tag" class="w-5 h-5 text-module flex-shrink-0"></i>
-      <span class="truncate" x-text="tagPickerName || 'Tags'"></span>
+      <span
+        class="truncate"
+        x-text="tagPickerName || '{{ tags_title|escapejs }}'"
+      ></span>
     </h3>
     <div class="max-h-72 overflow-y-auto space-y-0.5">
       <template x-for="tag in allTags" :key="tag.uuid">
@@ -35,7 +40,7 @@
         x-show="allTags.length === 0"
         class="px-2 py-6 text-center text-sm text-base-content/40"
       >
-        No tags yet
+        {% translate "No tags yet" %}
       </div>
     </div>
     <div class="modal-action">
@@ -45,12 +50,12 @@
         @click="showTagModal()"
       >
         <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-        New tag
+        {% translate "New tag" %}
       </button>
-      <button type="button" class="btn btn-sm" @click="closeTagPicker()">Done</button>
+      <button type="button" class="btn btn-sm" @click="closeTagPicker()">{% translate "Done" %}</button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit" @click="onTagPickerClosed()">close</button>
+    <button type="submit" @click="onTagPickerClosed()">{% translate "close" %}</button>
   </form>
 </dialog>

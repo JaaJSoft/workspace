@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- Properties Sidebar Panel -->
 <!-- Header -->
 <div
@@ -8,7 +9,7 @@
       :data-lucide="propertiesNodeType === 'folder' ? 'folder' : 'file'"
       class="w-4 h-4"
     ></i>
-    Properties
+    {% translate "Properties" %}
   </h4>
   <button
     type="button"

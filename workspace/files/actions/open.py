@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
@@ -7,7 +9,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class ViewAction(BaseFileAction):
     id = "view"
-    label = "Open"
+    label = _("Open")
     icon = "eye"
     category = ActionCategory.OPEN
     node_types = ("file",)
@@ -26,7 +28,7 @@ class ViewAction(BaseFileAction):
 @ActionRegistry.register
 class OpenFolderAction(BaseFileAction):
     id = "open"
-    label = "Open"
+    label = _("Open")
     icon = "folder-open"
     category = ActionCategory.OPEN
     node_types = ("folder",)
@@ -41,7 +43,7 @@ class OpenFolderAction(BaseFileAction):
 @ActionRegistry.register
 class OpenNewTabAction(BaseFileAction):
     id = "open_new_tab"
-    label = "Open in new tab"
+    label = _("Open in new tab")
     icon = "external-link"
     category = ActionCategory.OPEN
     node_types = ("file",)

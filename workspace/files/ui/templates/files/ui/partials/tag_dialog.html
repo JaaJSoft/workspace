@@ -1,3 +1,8 @@
+{% load i18n %}
+{% translate "Edit Tag" as edit_tag_title %}
+{% translate "New Tag" as new_tag_title %}
+{% translate "Save" as save_label %}
+{% translate "Create" as create_label %}
 <!-- Tag create/edit dialog — requires tagsMixin() in the Alpine component -->
 <dialog id="tag-dialog" class="modal">
   <div class="modal-box max-w-md">
@@ -8,16 +13,18 @@
       >
         <i :data-lucide="tagModal.icon || 'tag'" class="w-5 h-5"></i>
       </span>
-      <span x-text="tagModal.uuid ? 'Edit Tag' : 'New Tag'"></span>
+      <span
+        x-text="tagModal.uuid ? '{{ edit_tag_title|escapejs }}' : '{{ new_tag_title|escapejs }}'"
+      ></span>
     </h3>
     <form @submit.prevent="saveTagModal()">
       <label class="form-control w-full mb-3">
-        <div class="label"><span class="label-text">Name</span></div>
+        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
         <input
           type="text"
           class="input input-bordered w-full input-sm"
           x-model="tagModal.name"
-          placeholder="Tag name"
+          placeholder="{% translate 'Tag name' %}"
           required
           @keydown.escape="closeTagModal()"
         />
@@ -52,21 +59,24 @@
           @click="deleteTagConfirm()"
         >
           <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          Delete
+          {% translate "Delete" %}
         </button>
-        <button type="button" class="btn btn-ghost btn-sm" @click="closeTagModal()">Cancel</button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="closeTagModal()">{% translate "Cancel" %}</button>
         <button
           type="submit"
           class="btn btn-success btn-sm"
           :disabled="tagModal.saving || !tagModal.name.trim()"
         >
-          <span x-show="!tagModal.saving" x-text="tagModal.uuid ? 'Save' : 'Create'"></span>
+          <span
+            x-show="!tagModal.saving"
+            x-text="tagModal.uuid ? '{{ save_label|escapejs }}' : '{{ create_label|escapejs }}'"
+          ></span>
           <span x-show="tagModal.saving" class="loading loading-spinner loading-xs"></span>
         </button>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

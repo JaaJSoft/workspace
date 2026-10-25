@@ -50,6 +50,28 @@ def get_user_language(user) -> str:
     return settings.LANGUAGE_CODE
 
 
+def get_user_languages(user_ids) -> dict[int, str]:
+    """Interface language of each of *user_ids*, in one query.
+
+    For fan-outs (a notification to every member of a group), where calling
+    :func:`get_user_language` per recipient would cost one query each on a
+    cold cache. Reads the rows directly: a stale cache entry could only lag a
+    write by its TTL, and the rows are what the cache is built from.
+    """
+    offered = dict(settings.LANGUAGES)
+    stored = dict(
+        UserSetting.objects.filter(
+            user_id__in=user_ids, module="core", key="language"
+        ).values_list("user_id", "value")
+    )
+    return {
+        user_id: stored[user_id]
+        if stored.get(user_id) in offered
+        else settings.LANGUAGE_CODE
+        for user_id in user_ids
+    }
+
+
 def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:
     """Return the value of a single setting, or *default* if it does not exist.
 

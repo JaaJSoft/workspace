@@ -29,6 +29,10 @@ RASTER_LABELS = _BUILTIN_LABELS | frozenset(_PLUGINS)
 
 
 def register_decoders():
-    """Register every plugin opener with Pillow; safe to call more than once."""
-    for register in set(_PLUGINS.values()):
+    """Register every plugin opener with Pillow; safe to call more than once.
+
+    In _PLUGINS order: the RAW opener tries whatever no plugin registered
+    before it claims, so it comes last.
+    """
+    for register in dict.fromkeys(_PLUGINS.values()):
         register()

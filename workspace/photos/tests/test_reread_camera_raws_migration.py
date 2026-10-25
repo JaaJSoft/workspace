@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File
-from workspace.files.tests.rasters import tiff_raw_bytes
+from workspace.files.tests.rasters import dng_bytes
 from workspace.photos.models import FaceAnalysis, MediaItem
 
 from .images import upload
@@ -46,14 +46,14 @@ class ForgetThumbnailReadingsTests(TestCase):
         )
 
     def test_rows_of_a_raw_are_dropped(self):
-        nef = upload(self.user, "DSC_0001.NEF", tiff_raw_bytes())
-        self.assertEqual(File.objects.get(pk=nef.pk).type, "nef")
-        self._read(nef)
+        dng = upload(self.user, "IMG_0001.DNG", dng_bytes())
+        self.assertEqual(File.objects.get(pk=dng.pk).type, "dng")
+        self._read(dng)
 
         migration.forget_thumbnail_readings(apps, schema_editor_stub())
 
-        self.assertFalse(MediaItem.objects.filter(file=nef).exists())
-        self.assertFalse(FaceAnalysis.objects.filter(file=nef).exists())
+        self.assertFalse(MediaItem.objects.filter(file=dng).exists())
+        self.assertFalse(FaceAnalysis.objects.filter(file=dng).exists())
 
     def test_rows_of_other_photos_are_kept(self):
         jpeg = upload(self.user, "a.jpg")

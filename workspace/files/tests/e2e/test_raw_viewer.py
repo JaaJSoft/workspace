@@ -1,8 +1,8 @@
 """E2E: a camera RAW opens in the image viewer, as the JPEG preview it embeds.
 
-No browser decodes a RAW: the viewer extracts the preview in the page and
-turns it by the RAW's own orientation. If the extraction script is not loaded,
-or the orientation is lost, the photo shows blank or on its side.
+No browser decodes a RAW: the viewer loads the vendored LibRaw build and shows
+the preview it extracts, turned by the RAW's orientation. If the decoder fails
+to load, or the orientation is lost, the photo shows blank or on its side.
 
 Skipped unless E2E=1 is set.
 """
@@ -13,16 +13,14 @@ from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.services import FileService
-from workspace.files.tests.rasters import tiff_raw_bytes
+from workspace.files.tests.rasters import dng_bytes
 
 
 class RawViewerTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="raw")
-        data = tiff_raw_bytes(
-            make="Apple", dng=True, orientation=6, preview_size=(96, 64)
-        )
+        data = dng_bytes(orientation=6, preview_size=(96, 64))
         self.file = FileService.create_file(
             owner=self.user,
             name="IMG_0001.DNG",

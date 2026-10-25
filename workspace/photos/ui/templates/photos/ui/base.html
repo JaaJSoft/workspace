@@ -85,6 +85,7 @@
 {% block content %}
   {{ tile|json_script:"photo-tile-data" }}
   {{ import_folder|json_script:"photos-import-folder-data" }}
+  {{ raw_extensions|json_script:"photos-raw-extensions-data" }}
   {{ photos_prefs|json_script:"photos-prefs-data" }}
   {{ sensitive_blur_choices|json_script:"photos-sensitive-blur-choices" }}
   {{ hidden_folders|json_script:"photos-hidden-folders-data" }}
@@ -93,7 +94,7 @@
     type="file"
     class="hidden"
     multiple
-    accept="image/*,video/*,.heic,.heif,.dng,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.orf,.rw2,.pef,.raf"
+    accept="image/*,video/*,.heic,.heif{% for extension in raw_extensions %},.{{ extension }}{% endfor %}"
     @change="onImportInput($event)"
   />
   {% comment %}

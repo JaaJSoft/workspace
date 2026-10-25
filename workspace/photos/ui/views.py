@@ -22,6 +22,7 @@ from workspace.files.sensitivity import (
 )
 from workspace.files.services.filetype import get_viewer_by_slug
 from workspace.files.services.image_edits import versioned_thumbnail_url
+from workspace.files.services.raw_images import RAW_EXTENSIONS
 from workspace.files.ui.viewers import (
     ViewerRegistry,
     render_viewer_panel,
@@ -602,6 +603,7 @@ def _render_page(request, template, context):
         context["photos_shell"] = "photos/ui/swap.html"
     else:
         context["import_folder"] = import_folder_data(import_folder(request.user))
+        context["raw_extensions"] = RAW_EXTENSIONS
         context["photos_prefs"] = display_preferences(request.user)
         context["sensitive_blur_choices"] = sensitive_blur_choices()
         context["hidden_folders"] = [

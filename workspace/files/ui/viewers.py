@@ -242,6 +242,7 @@ class ImageViewer(BaseViewer):
         from django.conf import settings
 
         from workspace.common.booleans import is_truthy
+        from workspace.files.services.raw_images import RAW_LABELS
 
         context = super().get_context(request)
         parent_id = getattr(self.file, "parent_id", None)
@@ -252,6 +253,7 @@ class ImageViewer(BaseViewer):
         context["file_parent"] = str(parent_id) if parent_id else ""
         context["file_name"] = self.file.name
         context["image_edit"] = getattr(self.file, "image_edit", None)
+        context["raw_photo"] = self.file.type in RAW_LABELS
         context["image_edit_available"] = self._image_edit_available(request)
         context["start_editing"] = context["image_edit_available"] and is_truthy(
             request.GET.get("edit")

@@ -715,11 +715,11 @@ class ConcurrentWriteTests(APITestCase):
         real = detection.detect_from_stream
         fired = []
 
-        def inject(stream):
+        def inject(stream, filename=""):
             if not fired:
                 fired.append(True)
                 competitor()
-            return real(stream)
+            return real(stream, filename)
 
         return patch(
             "workspace.files.services.detection.detect_from_stream", inject

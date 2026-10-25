@@ -424,8 +424,9 @@
     const contentUrl = '{{ content_url|escapejs }}';
     const fileType = '{{ file.type|escapejs }}';
     const heicDecoderUrl = '{% static "files/ui/js/vendor/heic-to/heic-to.js" %}';
+    const rawDecoderUrl = '{% static "files/ui/js/vendor/libraw-wasm/index.js" %}';
     // No browser decodes a camera RAW: its embedded preview is shown from the start.
-    const rawPhoto = window.rawPreview.LABELS.includes(fileType);
+    const rawPhoto = {{ raw_photo|yesno:"true,false" }};
     const imageEditAvailable = {{ image_edit_available|yesno:"true,false" }};
     const openInEditMode = {{ start_editing|yesno:"true,false" }};
     const editedDownloadUrl = '{{ edited_download_url|escapejs }}';
@@ -451,6 +452,37 @@
         });
       }
       return window.heicDecoder;
+    }
+
+    // LibRaw is ~600 KB gzipped, run in a worker: imported on the first RAW,
+    // then shared by every viewer the page opens.
+    function loadRawDecoder() {
+      if (!window.rawDecoder) {
+        window.rawDecoder = import(rawDecoderUrl).then(function(module) {
+          return module.default;
+        }, function(err) {
+          window.rawDecoder = null;
+          throw err;
+        });
+      }
+      return window.rawDecoder;
+    }
+
+    // The JPEG the camera embedded in the RAW in *blob*, with the EXIF block
+    // LibRaw writes (orientation included), or null when it has none.
+    async function rawPreview(blob) {
+      const LibRaw = await loadRawDecoder();
+      const raw = new LibRaw();
+      try {
+        await raw.open(new Uint8Array(await blob.arrayBuffer()));
+        const thumb = await raw.thumbnailData();
+        if (!thumb || thumb.format !== 'jpeg') return null;
+        return new Blob([thumb.data], {
+          type: 'image/jpeg'
+        });
+      } finally {
+        raw.dispose();
+      }
     }
 
     function getCSRFToken() {
@@ -774,11 +806,8 @@
           const blob = await resp.blob();
           let jpeg;
           if (rawPhoto) {
-            const preview = window.rawPreview.extract(await blob.arrayBuffer());
-            if (!preview) return;
-            jpeg = new Blob([preview], {
-              type: 'image/jpeg'
-            });
+            jpeg = await rawPreview(blob);
+            if (!jpeg) return;
           } else {
             const heicTo = await loadHeicDecoder();
             jpeg = await heicTo({

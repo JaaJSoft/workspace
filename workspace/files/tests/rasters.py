@@ -2,8 +2,9 @@
 that share their container with video, shared by the files and photos tests."""
 
 import io
+import struct
 
-from PIL import ExifTags, Image
+from PIL import Image
 
 
 def heic_bytes(*, size=(64, 48), color=(200, 60, 40), exif=None):
@@ -30,87 +31,107 @@ def ftyp_box(major, *compatible):
     return (8 + len(body)).to_bytes(4, "big") + b"ftyp" + body
 
 
-def jpeg_bytes(*, size=(64, 48), color=(200, 60, 40), exif=None):
-    buf = io.BytesIO()
-    params = {"exif": exif.tobytes()} if exif is not None else {}
-    Image.new("RGB", size, color).save(buf, format="JPEG", **params)
-    return buf.getvalue()
+_BYTE, _ASCII, _SHORT, _LONG, _SRATIONAL = 1, 2, 3, 4, 10
+_FORMATS = {_BYTE: "B", _SHORT: "H", _LONG: "I"}
 
 
-def _raw_ifd0(make, model, orientation, taken_at, extra):
-    exif = Image.Exif()
-    exif[ExifTags.Base.Make] = make
-    exif[ExifTags.Base.Model] = model
-    exif[ExifTags.Base.Orientation] = orientation
-    exif[ExifTags.IFD.Exif] = {ExifTags.Base.DateTimeOriginal: taken_at}
-    for tag, value in extra.items():
-        exif[tag] = value
-    return exif
+def _ifd(entries, offset):
+    """A little-endian TIFF directory at *offset*, its out-of-line values
+    right after it. *entries* are ``(tag, type, value)``."""
+    head_size = 2 + 12 * len(entries) + 4
+    head = struct.pack("<H", len(entries))
+    values = b""
+    for tag, kind, value in sorted(entries):
+        if kind == _ASCII:
+            raw, count = value.encode() + b"\0", len(value) + 1
+        elif kind == _SRATIONAL:
+            raw, count = (
+                b"".join(struct.pack("<ii", *pair) for pair in value),
+                len(value),
+            )
+        else:
+            raw, count = (
+                struct.pack("<" + _FORMATS[kind] * len(value), *value),
+                len(value),
+            )
+        if len(raw) <= 4:
+            head += struct.pack("<HHI", tag, kind, count) + raw.ljust(4, b"\0")
+        else:
+            head += struct.pack(
+                "<HHII", tag, kind, count, offset + head_size + len(values)
+            )
+            values += raw + b"\0" * (len(raw) % 2)
+    return head + struct.pack("<I", 0) + values
 
 
-def tiff_raw_bytes(
-    *,
-    make="NIKON CORPORATION",
-    model="NIKON D3200",
-    orientation=1,
-    taken_at="2016:11:30 13:10:53",
-    preview_size=(96, 64),
-    sub_ifds=True,
-    dng=False,
-    magic=None,
-    extra=None,
-):
-    """A TIFF-based camera RAW the way a NEF is laid out: IFD0 names the
-    camera and points at sub-IFDs, and the file carries a small thumbnail and
-    a larger JPEG preview. No sensor data: nothing reads it.
-
-    *magic* replaces the TIFF magic number (b"IIRO" for an ORF); *extra* adds
-    IFD0 tags.
-    """
-    tags = dict(extra or {})
-    if sub_ifds:
-        tags[ExifTags.Base.SubIFDs] = 8
-    if dng:
-        tags[ExifTags.Base.DNGVersion] = b"\x01\x04\x00\x00"
-    ifd0 = _raw_ifd0(make, model, orientation, taken_at, tags)
-    # The byte order follows the magic, as in the vendor TIFFs it stands for.
-    ifd0.endian = "<" if (magic or b"II")[:2] == b"II" else ">"
-    tiff = ifd0.tobytes()[6:]
-    if magic is not None:
-        tiff = magic + tiff[4:]
-    thumbnail = jpeg_bytes(size=(16, 12), color=(0, 0, 255))
-    return tiff + thumbnail + jpeg_bytes(size=preview_size)
-
-
-def _box(kind, payload):
-    return (8 + len(payload)).to_bytes(4, "big") + kind + payload
-
-
-def cr3_bytes(
+def dng_bytes(
     *,
     make="Canon",
-    model="Canon EOS R6",
-    taken_at="2021:05:12 12:21:21",
+    model="EOS R6",
     orientation=1,
+    taken_at="2021:05:12 12:21:21",
     preview_size=(96, 64),
+    color=(200, 60, 40),
 ):
-    """A CR3 header: the crx brand, the CMT boxes holding IFD0 and the Exif
-    IFD as TIFFs of their own, then the preview."""
-    ifd0 = Image.Exif()
-    ifd0[ExifTags.Base.Make] = make
-    ifd0[ExifTags.Base.Model] = model
-    ifd0[ExifTags.Base.Orientation] = orientation
-    exif_ifd = Image.Exif()
-    exif_ifd[ExifTags.Base.DateTimeOriginal] = taken_at
-    return (
-        ftyp_box(b"crx ", b"crx ", b"isom")
-        + _box(b"CMT1", ifd0.tobytes()[6:])
-        + _box(b"CMT2", exif_ifd.tobytes()[6:])
-        + jpeg_bytes(size=preview_size)
+    """The smallest DNG LibRaw opens: a 64x64 blank sensor mosaic in a
+    sub-IFD, and a JPEG preview of *preview_size* in IFD0 naming the camera.
+    Real RAWs weigh megabytes; this one a few kilobytes."""
+    buffer = io.BytesIO()
+    Image.new("RGB", preview_size, color).save(buffer, format="JPEG")
+    preview = buffer.getvalue() + b"\0" * (len(buffer.getvalue()) % 2)
+    mosaic = bytes(64 * 64 * 2)
+
+    out = bytearray(b"II*\0\0\0\0\0")
+    preview_at = len(out)
+    out += preview
+    mosaic_at = len(out)
+    out += mosaic
+    sensor_at = len(out)
+    out += _ifd(
+        [
+            (254, _LONG, [0]),  # NewSubfileType: the full-size image
+            (256, _LONG, [64]),
+            (257, _LONG, [64]),
+            (258, _SHORT, [16]),
+            (259, _SHORT, [1]),
+            (262, _SHORT, [32803]),  # PhotometricInterpretation: CFA
+            (273, _LONG, [mosaic_at]),
+            (277, _SHORT, [1]),
+            (278, _LONG, [64]),
+            (279, _LONG, [len(mosaic)]),
+            (33421, _SHORT, [2, 2]),  # CFARepeatPatternDim
+            (33422, _BYTE, [0, 1, 1, 2]),  # CFAPattern: RGGB
+        ],
+        sensor_at,
     )
-
-
-def raf_bytes(*, preview_size=(96, 64), exif=None):
-    """A RAF: its own header, then a preview JPEG carrying the full EXIF."""
-    header = b"FUJIFILMCCD-RAW 0201FF189504X-T50".ljust(148, b"\x00")
-    return header + jpeg_bytes(size=preview_size, exif=exif)
+    exif_at = len(out)
+    out += _ifd([(36867, _ASCII, taken_at)], exif_at)  # DateTimeOriginal
+    ifd0_at = len(out)
+    identity = [(1, 1), (0, 1), (0, 1), (0, 1), (1, 1), (0, 1), (0, 1), (0, 1), (1, 1)]
+    out += _ifd(
+        [
+            (254, _LONG, [1]),  # NewSubfileType: a reduced-size preview
+            (256, _LONG, [preview_size[0]]),
+            (257, _LONG, [preview_size[1]]),
+            (258, _SHORT, [8, 8, 8]),
+            (259, _SHORT, [7]),  # Compression: JPEG
+            (262, _SHORT, [6]),  # PhotometricInterpretation: YCbCr
+            (271, _ASCII, make),
+            (272, _ASCII, model),
+            (273, _LONG, [preview_at]),
+            (274, _SHORT, [orientation]),
+            (277, _SHORT, [3]),
+            (278, _LONG, [preview_size[1]]),
+            (279, _LONG, [len(preview)]),
+            (306, _ASCII, taken_at),
+            (330, _LONG, [sensor_at]),  # SubIFDs
+            (34665, _LONG, [exif_at]),  # ExifIFD
+            (50706, _BYTE, [1, 4, 0, 0]),  # DNGVersion
+            (50708, _ASCII, f"{make} {model}"),  # UniqueCameraModel
+            (50721, _SRATIONAL, identity),  # ColorMatrix1
+            (50778, _SHORT, [21]),  # CalibrationIlluminant1: D65
+        ],
+        ifd0_at,
+    )
+    struct.pack_into("<I", out, 4, ifd0_at)
+    return bytes(out)

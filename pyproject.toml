@@ -27,6 +27,8 @@ dependencies = [
     "pillow>=13.0.0",
     # HEIF/HEIC decoding (photos straight off an iPhone), as a Pillow plugin
     "pillow-heif>=1.8.1",
+    # Camera RAW photos (LibRaw): their embedded preview and its EXIF
+    "rawpy>=0.27.1",
     "cairosvg>=2.9.1",
     # mail
     "cryptography>=50.0.2",

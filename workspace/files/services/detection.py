@@ -7,7 +7,7 @@ import threading
 from dataclasses import dataclass
 from importlib.util import find_spec
 
-from .raw_images import RAW_FORMATS, SNIFF_SIZE, raw_label
+from .raw_images import RAW_FORMATS, is_camera_raw, label_for_name
 
 # Located without importing magika: the package pulls in onnxruntime and
 # numpy, which every process importing the name helpers below would carry.
@@ -49,8 +49,7 @@ _KB = _load_kb()
 # Magika files AVIF, a still image, under "video" next to the MP4 container
 # it shares.
 _KB["avif"]["group"] = "image"
-# Magika knows no camera RAW: it files most of them under tiff, the container
-# they share, and a few under unknown.
+# Magika knows no camera RAW (see _camera_raw).
 for _label, (_mime_type, _extensions) in RAW_FORMATS.items():
     _KB[_label] = {
         "mime_type": _mime_type,
@@ -77,7 +76,7 @@ _IMAGE_BRANDS = {
 }
 # Generic HEIF brands: the codec is in the compatible brands that follow.
 _GENERIC_IMAGE_BRANDS = frozenset({b"mif1", b"msf1"})
-_HEAD_SIZE = SNIFF_SIZE
+_HEAD_SIZE = 64
 
 
 @dataclass(frozen=True)
@@ -105,10 +104,7 @@ def _image_label_from_ftyp(head):
 def _result(magika_result, head):
     label = magika_result.output.label
     mime_type = magika_result.output.mime_type
-    if camera_label := raw_label(head):
-        label = camera_label
-        mime_type = _KB[label]["mime_type"]
-    elif label in _ISOBMFF_LABELS:
+    if label in _ISOBMFF_LABELS:
         image_label = _image_label_from_ftyp(head)
         if image_label and image_label != label:
             label = image_label
@@ -139,7 +135,25 @@ def _buffered_stream(stream):
     return stream if isinstance(stream, io.BufferedIOBase) else None
 
 
-def detect_from_stream(stream) -> DetectionResult:
+def _camera_raw(result, stream, filename):
+    """*result*, or the RAW *filename* names when LibRaw opens *stream*.
+
+    Magika knows no camera RAW and reads most of them as TIFF, the container
+    they share; no content signature tells them all apart, LibRaw does.
+    """
+    label = label_for_name(filename)
+    if label is None or not is_camera_raw(stream):
+        return result
+    return DetectionResult(
+        label=label,
+        mime_type=_KB[label]["mime_type"],
+        group="image",
+        score=result.score,
+    )
+
+
+def detect_from_stream(stream, filename: str = "") -> DetectionResult:
+    """The content type of *stream*; *filename* lets a camera RAW be told."""
     # identify_stream samples the head and tail of the file; identify_bytes
     # needs the whole of it in memory, so it is the last resort.
     raw = _buffered_stream(stream)
@@ -159,7 +173,7 @@ def detect_from_stream(stream) -> DetectionResult:
         if not head:
             head = stream.read(_HEAD_SIZE)
             stream.seek(pos)
-    return _result(result, head)
+    return _camera_raw(_result(result, head), stream, filename)
 
 
 def label_from_name(filename: str) -> str:

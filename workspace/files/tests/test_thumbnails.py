@@ -20,7 +20,7 @@ from workspace.files.services.thumbnails.generation import (
     generate_thumbnail,
     get_thumbnail_path,
 )
-from workspace.files.tests.rasters import avif_bytes, heic_bytes, tiff_raw_bytes
+from workspace.files.tests.rasters import avif_bytes, dng_bytes, heic_bytes
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -137,12 +137,11 @@ class GenerateThumbnailOutputTests(TestCase):
         self.assertEqual(self._open_thumb(f.uuid).size, (512, 256))
 
     def test_raw_upload_gets_a_thumbnail_of_its_preview(self):
-        # Detected as a TIFF, a NEF got the 160x120 thumbnail of its IFD0.
-        name = "DSC_0001.NEF"
+        name = "IMG_0001.DNG"
         f = FileService.create_file(
             owner=self.user,
             name=name,
-            content=ContentFile(tiff_raw_bytes(preview_size=(1000, 500)), name=name),
+            content=ContentFile(dng_bytes(preview_size=(1000, 500)), name=name),
         )
         self.addCleanup(self._cleanup_thumb, f.uuid)
 

@@ -195,7 +195,7 @@ class MessageListView(CacheControlMixin, APIView):
         from workspace.files.services.detection import detect_from_stream
         from workspace.files.services.filetype import pin_viewer_for_upload
 
-        detections = [detect_from_stream(f) for f in files]
+        detections = [detect_from_stream(f, f.name) for f in files]
         pinned_viewers = [
             pin_viewer_for_upload(d.label, f.content_type)
             for d, f in zip(detections, files, strict=True)

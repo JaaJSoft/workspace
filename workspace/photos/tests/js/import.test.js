@@ -18,8 +18,10 @@ function load({ folder = null, fetchResponse = null, sortOk = () => true } = {})
   };
   const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/import.js', {
     document: {
-      getElementById: (id) =>
-        id === 'photos-import-folder-data' ? { textContent: JSON.stringify(folder) } : null,
+      getElementById: (id) => ({
+        'photos-import-folder-data': { textContent: JSON.stringify(folder) },
+        'photos-raw-extensions-data': { textContent: JSON.stringify(['dng', 'nef', 'cr3']) },
+      })[id] || null,
     },
     location: { origin: 'https://cloud.example.org' },
     getCSRFToken: () => 'token',

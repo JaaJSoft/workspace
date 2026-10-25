@@ -3,13 +3,18 @@
 {% get_available_languages as LANGUAGES %}
 <!-- Language & region Tab -->
 <div x-show="tab === 'region'" x-cloak class="space-y-6">
-  <div class="card bg-base-100 border border-base-300 shadow-sm" x-data="languagePickerForm()">
+  <div
+    class="card bg-base-100 border border-base-300 shadow-sm"
+    x-data="languagePickerForm()"
+  >
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
         <i data-lucide="languages" class="w-5 h-5"></i>
         {% translate "Language" %}
       </h2>
-      <p class="text-sm text-base-content/60 mt-1">{% translate "The language of the interface. The page reloads to apply it." %}</p>
+      <p
+        class="text-sm text-base-content/60 mt-1"
+      >{% translate "The language of the interface. The page reloads to apply it." %}</p>
       <div class="mt-4">
         <select
           class="select select-bordered w-full max-w-xs"
@@ -19,20 +24,29 @@
           aria-label="{% translate 'Language' %}"
         >
           {% for code, name in LANGUAGES %}
-            <option value="{{ code }}" lang="{{ code }}"{% if code == LANGUAGE_CODE %} selected{% endif %}>{{ name }}</option>
+            <option
+              value="{{ code }}"
+              lang="{{ code }}"
+              {% if code == LANGUAGE_CODE %} selected{% endif %}
+            >{{ name }}</option>
           {% endfor %}
         </select>
       </div>
     </div>
   </div>
 
-  <div class="card bg-base-100 border border-base-300 shadow-sm" x-data="timezonePickerForm()">
+  <div
+    class="card bg-base-100 border border-base-300 shadow-sm"
+    x-data="timezonePickerForm()"
+  >
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
         <i data-lucide="globe" class="w-5 h-5"></i>
         {% translate "Timezone" %}
       </h2>
-      <p class="text-sm text-base-content/60 mt-1">{% translate "Dates and times across the app are shown in this timezone." %}</p>
+      <p
+        class="text-sm text-base-content/60 mt-1"
+      >{% translate "Dates and times across the app are shown in this timezone." %}</p>
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <select
           class="select select-bordered w-full max-w-xs"

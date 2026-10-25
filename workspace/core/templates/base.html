@@ -1,4 +1,5 @@
-{% load i18n static %}{% get_current_language as LANGUAGE_CODE %}
+{% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
 <html
   lang="{{ LANGUAGE_CODE }}"
@@ -32,7 +33,9 @@
     <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
     <script src="{% static 'ui/js/lucide.js' %}"></script>
     {# Ahead of every script that calls gettext(), at load time or later. #}
-    <script src="{% url 'javascript-catalog' LANGUAGE_CODE %}?v={{ APP_VERSION|urlencode }}"></script>
+    <script
+      src="{% url 'javascript-catalog' LANGUAGE_CODE %}?v={{ APP_VERSION|urlencode }}"
+    ></script>
     <script src="{% static 'ui/js/csrf.js' %}"></script>
     {# Before Alpine: its popstate listener must run ahead of alpine-ajax's. #}
     <script src="{% static 'ui/js/nav_history.js' %}"></script>

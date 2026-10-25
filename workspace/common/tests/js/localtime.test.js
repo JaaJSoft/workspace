@@ -4,9 +4,10 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('./loader');
 
-function docStub(tzAttr) {
+function docStub(tzAttr, lang = '') {
   return {
     documentElement: {
+      lang,
       getAttribute: (n) => (n === 'data-timezone' ? tzAttr : null),
     },
     body: {},
@@ -161,4 +162,44 @@ test('wall-clock round-trip is stable across the fall-back day', () => {
   const ctx = load('Europe/Paris');
   const iso = ctx.wallClockToIso('2026-10-25T05:30', 'Europe/Paris');
   assert.equal(ctx.isoToWallClock(iso, 'Europe/Paris'), '2026-10-25T05:30');
+});
+
+function loadLocalized(lang, extraGlobals = {}) {
+  return loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/localtime.js'], {
+    document: docStub('Europe/Paris', lang),
+    MutationObserver: ObserverStub,
+    ...extraGlobals,
+  });
+}
+
+test('getUserLocale is the interface language', () => {
+  assert.equal(loadLocalized('fr').getUserLocale(), 'fr');
+});
+
+test('getUserLocale narrows the language to the browser regional variant', () => {
+  const ctx = loadLocalized('fr', { navigator: { languages: ['en-GB', 'fr-CA', 'fr'] } });
+  assert.equal(ctx.getUserLocale(), 'fr-CA');
+});
+
+test('getUserLocale ignores browser languages of another language', () => {
+  const ctx = loadLocalized('en', { navigator: { languages: ['fr-FR'] } });
+  assert.equal(ctx.getUserLocale(), 'en');
+});
+
+test('getUserLocale falls back to the browser default without a lang attribute', () => {
+  assert.equal(loadLocalized('').getUserLocale(), undefined);
+});
+
+test('dates are formatted in the interface language', () => {
+  const ctx = loadLocalized('fr');
+  assert.match(convert(ctx, mkEl('2025-02-01T12:00:00Z', 'date')), /^1 févr/);
+});
+
+test('Today and Yesterday go through the translation catalog', () => {
+  const catalog = { Today: 'Aujourd’hui', Yesterday: 'Hier' };
+  const ctx = loadLocalized('fr', { gettext: (msgid) => catalog[msgid] || msgid });
+  const now = new Date();
+  assert.equal(convert(ctx, mkEl(now.toISOString(), 'date')), 'Aujourd’hui');
+  const yesterday = new Date(now.getTime() - 86400000);
+  assert.equal(convert(ctx, mkEl(yesterday.toISOString(), 'date')), 'Hier');
 });

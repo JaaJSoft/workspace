@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}Settings · Workspace{% endblock %}
+{% block title %}{% translate "Settings" %} · Workspace{% endblock %}
 
 {% block body_class %}bg-base-100 min-h-screen{% endblock %}
 {% block drawer_wrapper_class %}{% endblock %}
@@ -20,8 +20,8 @@
   <div class="py-6" x-data="settingsPage()">
     <!-- Page header -->
     <div class="mb-6">
-      <h1 class="text-2xl font-bold">Settings</h1>
-      <p class="text-base-content/60 text-sm mt-1">Manage your profile, preferences and security settings.</p>
+      <h1 class="text-2xl font-bold">{% translate "Settings" %}</h1>
+      <p class="text-base-content/60 text-sm mt-1">{% translate "Manage your profile, preferences and security settings." %}</p>
     </div>
 
     <div class="flex flex-col md:flex-row gap-6">
@@ -37,7 +37,7 @@
             : 'hover:bg-base-200 text-base-content'"
           >
             <i data-lucide="user-circle" class="w-4 h-4"></i>
-            Profile
+            {% translate "Profile" %}
           </button>
           <button
             type="button"
@@ -48,18 +48,18 @@
             : 'hover:bg-base-200 text-base-content'"
           >
             <i data-lucide="palette" class="w-4 h-4"></i>
-            Appearance
+            {% translate "Appearance" %}
           </button>
           <button
             type="button"
-            @click="tab = 'timezone'; updateHash()"
+            @click="tab = 'region'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
-            :class="tab === 'timezone'
+            :class="tab === 'region'
             ? 'bg-primary/10 text-primary font-semibold'
             : 'hover:bg-base-200 text-base-content'"
           >
             <i data-lucide="globe" class="w-4 h-4"></i>
-            Timezone
+            {% translate "Language & region" %}
           </button>
           <button
             type="button"
@@ -70,7 +70,7 @@
             : 'hover:bg-base-200 text-base-content'"
           >
             <i data-lucide="shield" class="w-4 h-4"></i>
-            Security
+            {% translate "Security" %}
           </button>
           <button
             type="button"
@@ -81,7 +81,7 @@
             : 'hover:bg-base-200 text-base-content'"
           >
             <i data-lucide="key-round" class="w-4 h-4"></i>
-            API Tokens
+            {% translate "API Tokens" %}
           </button>
           <button
             type="button"
@@ -92,7 +92,7 @@
             : 'hover:bg-base-200 text-base-content'"
           >
             <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
-            Usage
+            {% translate "Usage" %}
           </button>
         </div>
       </nav>
@@ -101,7 +101,7 @@
       <div class="flex-1 min-w-0">
         {% include "users/ui/partials/settings_profile.html" %}
         {% include "users/ui/partials/settings_appearance.html" %}
-        {% include "users/ui/partials/settings_timezone.html" %}
+        {% include "users/ui/partials/settings_region.html" %}
         {% include "users/ui/partials/settings_security.html" %}
         {% include "users/ui/partials/settings_tokens.html" %}
         {% include "users/ui/partials/settings_usage.html" %}
@@ -115,7 +115,7 @@
   <script src="{% static 'ui/js/password_strength.js' %}"></script>
   <script>
     function settingsPage() {
-      const validTabs = ['profile', 'appearance', 'timezone', 'security', 'tokens', 'usage'];
+      const validTabs = ['profile', 'appearance', 'region', 'security', 'tokens', 'usage'];
       return {
         tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
         async init() {

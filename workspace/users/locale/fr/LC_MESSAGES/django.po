@@ -1,0 +1,76 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-25 16:07+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Language"
+msgstr "Langue"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "The language of the interface. The page reloads to apply it."
+msgstr "La langue de l’interface. La page se recharge pour l’appliquer."
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Timezone"
+msgstr "Fuseau horaire"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Dates and times across the app are shown in this timezone."
+msgstr ""
+"Les dates et heures de l’application sont affichées dans ce fuseau horaire."
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Detect automatically"
+msgstr "Détecter automatiquement"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Browser:"
+msgstr "Navigateur :"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Failed to save language"
+msgstr "Impossible d’enregistrer la langue"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Failed to save timezone"
+msgstr "Impossible d’enregistrer le fuseau horaire"
+
+#: ui/templates/users/ui/settings.html
+msgid "Settings"
+msgstr "Paramètres"
+
+#: ui/templates/users/ui/settings.html
+msgid "Manage your profile, preferences and security settings."
+msgstr "Gérez votre profil, vos préférences et vos paramètres de sécurité."
+
+#: ui/templates/users/ui/settings.html
+msgid "Profile"
+msgstr "Profil"
+
+#: ui/templates/users/ui/settings.html
+msgid "Appearance"
+msgstr "Apparence"
+
+#: ui/templates/users/ui/settings.html
+msgid "Language & region"
+msgstr "Langue et région"
+
+#: ui/templates/users/ui/settings.html
+msgid "Security"
+msgstr "Sécurité"
+
+#: ui/templates/users/ui/settings.html
+msgid "API Tokens"
+msgstr "Jetons d’API"
+
+#: ui/templates/users/ui/settings.html
+msgid "Usage"
+msgstr "Utilisation"

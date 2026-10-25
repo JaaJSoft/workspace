@@ -28,6 +28,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 
 - [Migrating from SQLite to PostgreSQL](guides/sqlite-to-postgres.md)
 - [Monitoring with Prometheus](guides/monitoring.md) - `/metrics` credentials, scrape config, exposed series
+- [Translations](guides/translations.md) - choosing the language, per-module catalogs, `manage.py translations`, marking strings
 
 ## API reference
 

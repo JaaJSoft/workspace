@@ -1,12 +1,25 @@
 // Local timezone formatting for <time data-localtime> elements.
 // The zone comes from <html data-timezone> (the user's stored setting);
-// without it, formatting falls back to the browser timezone.
+// without it, formatting falls back to the browser timezone. Month names and
+// field order follow the interface language (<html lang>).
 // Registers window.convertLocaltimes(root), window.getUserTimeZone(),
-// window.userTzDayKey(date) and a MutationObserver that formats any
-// <time data-localtime> nodes added to the DOM later.
+// window.getUserLocale(), window.userTzDayKey(date) and a MutationObserver
+// that formats any <time data-localtime> nodes added to the DOM later.
 (function () {
   function getUserTimeZone() {
     return document.documentElement.getAttribute('data-timezone') || undefined;
+  }
+
+  // The interface language, narrowed to the browser's regional variant of it
+  // when it lists one: a French interface in a fr-CA browser formats dates
+  // the Canadian way, an English one in an en-GB browser puts the day first.
+  // Without a lang attribute, the browser default.
+  function getUserLocale() {
+    const lang = (document.documentElement.lang || '').toLowerCase();
+    if (!lang) return undefined;
+    const browserLanguages = typeof navigator === 'undefined' ? [] : (navigator.languages || []);
+    const regional = browserLanguages.find((tag) => tag.toLowerCase().split('-')[0] === lang);
+    return regional || lang;
   }
 
   // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
@@ -22,9 +35,9 @@
   function _dateLabelLocal(d, tz) {
     const now = new Date();
     const target = _dayKey(d, tz);
-    if (target === _dayKey(now, tz)) return 'Today';
-    if (target === _dayKey(new Date(now.getTime() - 86400000), tz)) return 'Yesterday';
-    return d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric' });
+    if (target === _dayKey(now, tz)) return gettext('Today');
+    if (target === _dayKey(new Date(now.getTime() - 86400000), tz)) return gettext('Yesterday');
+    return d.toLocaleDateString(getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric' });
   }
 
   function _formatLocaltime(el) {
@@ -36,13 +49,13 @@
     const fmt = el.dataset.localtime || 'time';
     switch (fmt) {
       case 'time':
-        el.textContent = d.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleTimeString(getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
         break;
       case 'date':
         el.textContent = _dateLabelLocal(d, tz);
         break;
       case 'datetime':
-        el.textContent = d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleDateString(getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         break;
       case 'relative':
         el.textContent = window.formatTimeAgo(d);
@@ -50,12 +63,12 @@
       case 'smart': {
         const isToday = _dayKey(d, tz) === _dayKey(new Date(), tz);
         el.textContent = isToday
-          ? d.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' })
-          : d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          ? d.toLocaleTimeString(getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' })
+          : d.toLocaleDateString(getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         break;
       }
       case 'full':
-        el.textContent = d.toLocaleDateString(undefined, { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleDateString(getUserLocale(), { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
         break;
     }
   }
@@ -106,6 +119,7 @@
   }
 
   window.getUserTimeZone = getUserTimeZone;
+  window.getUserLocale = getUserLocale;
   window.userTzDayKey = userTzDayKey;
   window.wallClockToIso = wallClockToIso;
   window.isoToWallClock = isoToWallClock;

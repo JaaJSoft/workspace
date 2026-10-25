@@ -59,7 +59,17 @@ PREVIEW_VISIBILITY = os.getenv("PREVIEW_VISIBILITY", "staff")
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+# The fallback for anonymous pages and for users who never picked a language.
+# The interface is written in English and translated through gettext catalogs
+# kept in each app's own locale/ directory (docs/guides/translations.md).
+LANGUAGE_CODE = "en"
+
+# Each language is named in itself: a picker that showed "French" to a reader
+# who cannot read English would hide the very option they are looking for.
+LANGUAGES = [
+    ("en", "English"),
+    ("fr", "Français"),
+]
 
 TIME_ZONE = "UTC"
 

@@ -21,6 +21,7 @@ are the owner's own files, nothing here guards against a crafted one beyond
 never reading out of bounds.
 """
 
+import bisect
 import re
 import struct
 import zlib
@@ -64,10 +65,8 @@ _XMP_ATTRIBUTE_RE = re.compile(
 _XMP_ELEMENT_RE = re.compile(
     rb"<([A-Za-z][\w.-]*:[Gg][Pp][Ss][\w.-]*)(?:\s[^<>]*)?(?<!/)>"
 )
+_XMP_CLOSE_RE = re.compile(rb"</([A-Za-z][\w.-]*:[Gg][Pp][Ss][\w.-]*)\s*>")
 _XMP_TAG_RE = re.compile(rb"<[^<>]*>")
-# A GPS element is a few dozen bytes and a packet has about twenty of them.
-_MAX_XMP_VALUE = 4096
-_MAX_XMP_ELEMENTS = 256
 
 _ISOBMFF_TOP = {b"ftyp", b"moov", b"mdat", b"free", b"skip", b"wide", b"pnot"}
 _APPLE_LOCATION_KEY = b"com.apple.quicktime.location"
@@ -241,20 +240,23 @@ def _xmp(packet, base):
         start, end = match.span(group)
         if end > start:
             patches.append((base + start, b" " * (end - start)))
+    # Every closing tag found in one pass, so pairing an opener with its
+    # close is a lookup: searching forward from each opener would rescan the
+    # packet once per opener of a crafted file.
+    closes = {}
+    for match in _XMP_CLOSE_RE.finditer(packet):
+        closes.setdefault(match.group(1), []).append(match.start())
     covered = 0
-    for count, match in enumerate(_XMP_ELEMENT_RE.finditer(packet)):
-        if count >= _MAX_XMP_ELEMENTS:
-            break
+    for match in _XMP_ELEMENT_RE.finditer(packet):
         if match.start() < covered:
             continue
-        # A bounded search: a crafted packet of unclosed openers would
-        # otherwise rescan the rest of the packet once per opener.
-        close = packet.find(
-            b"</" + match.group(1), match.end(), match.end() + _MAX_XMP_VALUE
-        )
-        if close < 0:
+        positions = closes.get(match.group(1), [])
+        index = bisect.bisect_left(positions, match.end())
+        # Unclosed, the element is not well-formed XML: no reader gets a
+        # value out of it.
+        if index == len(positions):
             continue
-        covered = close
+        close = covered = positions[index]
         # Every text node up to the closing tag, nested rdf:Alt / rdf:li
         # values included; the tags stay, so the XML still parses.
         position = match.end()

@@ -113,6 +113,26 @@ class ImageContainerTests(SimpleTestCase):
 
         self.assertLess(time.monotonic() - started, 2)
 
+    def test_xmp_without_any_size_limit(self):
+        elements = b"".join(
+            b"<exif:GPSDest%d>9%dN</exif:GPSDest%d>" % (n, n, n) for n in range(400)
+        )
+        xmp = (
+            b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF '
+            b'xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+            b'<rdf:Description xmlns:exif="http://ns.adobe.com/exif/1.0/">'
+            + elements
+            + b"<exif:GPSLatitude>"
+            + b" " * 5000
+            + b"48,51.504N</exif:GPSLatitude>"
+            b"</rdf:Description></rdf:RDF></x:xmpmeta>"
+        )
+
+        served = _redacted(_encode("WEBP", xmp=xmp, lossless=True))
+
+        self.assertNotIn(b"51.504", served)
+        self.assertNotIn(b"9399N", served)
+
     def test_png_keeps_a_valid_chunk_crc(self):
         served = self.assert_redacted(_encode("PNG"))
 

@@ -7,10 +7,12 @@ the coordinates and a link, nothing is fetched from the tile server.
 """
 
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
+from django.urls import reverse
 
+from ..queries import ALL
 from .preferences import show_map
 
 # Street level: close enough to read the streets around the pin.
@@ -28,6 +30,9 @@ class LocationMap:
     latitude: float | None = None
     longitude: float | None = None
     zoom: int = MAP_ZOOM
+    # The Map page around the photo, over every photo the user can open:
+    # whichever library holds this one, it is there.
+    library_url: str = ""
 
 
 def map_available():
@@ -60,4 +65,11 @@ def location_map(user, item):
         attribution=settings.PHOTOS_MAP_TILE_ATTRIBUTION,
         latitude=item.latitude,
         longitude=item.longitude,
+        library_url=library_map_url(item.latitude, item.longitude),
     )
+
+
+def library_map_url(latitude, longitude):
+    """The Map page centered on a place, at street level."""
+    query = urlencode({"scope": ALL, "lat": latitude, "lng": longitude, "z": MAP_ZOOM})
+    return f"{reverse('photos_ui:map')}?{query}"

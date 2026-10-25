@@ -4,7 +4,7 @@
  * A copy, not a bundle: identical bytes are what let a *_bundle.test.js check
  * an artifact against the digest the published build carries. Libraries that
  * ship a self-contained global build (FullCalendar, luxon, Cropper, Lucide, heic-to,
- * Leaflet) and plain data files go through here; everything else is an esbuild entry.
+ * Leaflet, Supercluster) and plain data files go through here; everything else is an esbuild entry.
  *
  * The one edit is a trailing sourceMappingURL comment. collectstatic's
  * manifest storage resolves that reference at deploy time and fails the whole
@@ -71,6 +71,14 @@ const SETS = {
       `node_modules/leaflet/dist/images/${image}`,
       `${WORKSPACE}/photos/ui/static/photos/ui/css/vendor/leaflet/images/${image}`,
     ]),
+  ],
+  // Groups the photos of the library map (photos/ui/js/library_map.js) by
+  // what lands close together on screen, at each zoom.
+  supercluster: [
+    [
+      'node_modules/supercluster/dist/supercluster.min.js',
+      `${WORKSPACE}/photos/ui/static/photos/ui/js/vendor/supercluster/supercluster.js`,
+    ],
   ],
   'emoji-data': [
     [

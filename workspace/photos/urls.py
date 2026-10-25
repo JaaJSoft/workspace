@@ -12,6 +12,7 @@ from .views import (
     faces,
     hidden,
     import_folder,
+    library_map,
     video_frames,
 )
 
@@ -22,6 +23,11 @@ router.register(
 router.register(r"api/v1/photos/faces", faces.FaceViewSet, basename="photos-face")
 
 urlpatterns = [
+    path(
+        "api/v1/photos/map",
+        library_map.LibraryMapView.as_view(),
+        name="photo-library-map",
+    ),
     path(
         "api/v1/photos/albums",
         albums.AlbumListView.as_view(),

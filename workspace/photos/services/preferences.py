@@ -52,6 +52,17 @@ def is_scope_token(value):
     return f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdecimal()
 
 
+def resolve_scope(user, token):
+    """The library *token* names, or None when it names none *user* has: a
+    scope constant, or one of their groups."""
+    if token in SCOPE_CHOICES:
+        return token
+    prefix, _, group_id = token.partition(":")
+    if f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdecimal():
+        return user.groups.filter(pk=int(group_id)).first()
+    return None
+
+
 def _prefs(user):
     return get_module_settings(user, MODULE)
 
@@ -96,9 +107,10 @@ def auto_tags(user):
 
 
 def show_map(user):
-    """Whether a photo's properties show its location on a map (see
-    services/location_map.py). Off by default: the tile server learns where
-    every photo whose panel is opened was taken."""
+    """Whether a photo's properties show its location on a map, and the Map
+    page the whole library (services/location_map.py, library_map.py). Off
+    by default: the tile server learns where every photo whose panel is
+    opened was taken, and the areas the user browses."""
     return _flag(user, SHOW_MAP, False)
 
 

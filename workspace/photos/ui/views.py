@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from urllib.parse import urlencode
 from uuid import UUID
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import BadRequest
 from django.db.models import F, Q
@@ -80,6 +81,14 @@ from workspace.photos.services.face_review import (
 )
 from workspace.photos.services.hidden import hidden_folder_data
 from workspace.photos.services.import_folder import import_folder, import_folder_data
+from workspace.photos.services.library_map import (
+    in_area,
+    in_period,
+    located,
+    month_token,
+    parse_area,
+    parse_month,
+)
 from workspace.photos.services.location_map import map_available, tile_server
 from workspace.photos.services.photo_embeddings import (
     MAX_QUERY_LENGTH,
@@ -92,8 +101,10 @@ from workspace.photos.services.preferences import (
     default_media_type,
     default_scope_token,
     display_preferences,
+    resolve_scope,
     sensitive_blur_choices,
     show_hidden,
+    show_map,
 )
 from workspace.photos.services.silhouettes import silhouette_groups
 from workspace.photos.services.similarity import (
@@ -151,16 +162,6 @@ def _defaults(user):
     return _Defaults(default_scope_token(user), default_media_type(user))
 
 
-def _resolve_scope(user, token):
-    """The library *token* names, or None when it names none the user has."""
-    if token in (MINE, SHARED, ALL):
-        return token
-    prefix, _, group_id = token.partition(":")
-    if f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdecimal():
-        return user.groups.filter(pk=int(group_id)).first()
-    return None
-
-
 def _scope(request, defaults):
     """The library ``?scope=`` asks for, else the user's default one.
 
@@ -169,8 +170,8 @@ def _scope(request, defaults):
     """
     raw = request.GET.get("scope", "")
     if not raw:
-        return _resolve_scope(request.user, defaults.scope) or MINE
-    scope = _resolve_scope(request.user, raw)
+        return resolve_scope(request.user, defaults.scope) or MINE
+    scope = resolve_scope(request.user, raw)
     if scope is None:
         raise Http404
     return scope
@@ -197,6 +198,22 @@ def _scope_params(scope, defaults):
     return {} if token == defaults.scope else {"scope": token}
 
 
+def _media_type(request, defaults):
+    """The media type ``?type=`` asks for: None for both kinds.
+
+    No ``?type=`` is the user's default media type, ``?type=all`` both kinds.
+    400 on a ``?type=`` that is none of ``all``, ``photo`` and ``video``.
+    """
+    raw_type = request.GET.get("type", "")
+    if not raw_type:
+        return defaults.media_type
+    if raw_type == ALL_TYPES:
+        return None
+    if raw_type in MediaItem.MediaType.values:
+        return MediaItem.MediaType(raw_type)
+    raise BadRequest("Invalid media type.")
+
+
 def _filters(request, defaults):
     """The active filters as ``(favorites, media_type, tag)``.
 
@@ -205,15 +222,7 @@ def _filters(request, defaults):
     ``all``, ``photo`` and ``video``.
     """
     favorites = is_truthy(request.GET.get("favorites"))
-    raw_type = request.GET.get("type", "")
-    if not raw_type:
-        media_type = defaults.media_type
-    elif raw_type == ALL_TYPES:
-        media_type = None
-    elif raw_type in MediaItem.MediaType.values:
-        media_type = MediaItem.MediaType(raw_type)
-    else:
-        raise BadRequest("Invalid media type.")
+    media_type = _media_type(request, defaults)
     tag = None
     if request.GET.get("tag"):
         tag_uuid = parse_uuid_or_none(request.GET["tag"])
@@ -319,7 +328,7 @@ def _type_params(media_type, defaults):
     return {"type": media_type.value if media_type is not None else ALL_TYPES}
 
 
-def _type_tabs(counts, media_type, params, defaults):
+def _type_tabs(counts, media_type, params, defaults, page="photos_ui:index"):
     """The media type switcher: All, Photos, Videos.
 
     Hidden (empty) while the view holds a single kind, as there is nothing to
@@ -337,14 +346,14 @@ def _type_tabs(counts, media_type, params, defaults):
             "label": label,
             "title": title,
             "icon": icon,
-            "url": _url_with(params | _type_params(choice, defaults)),
+            "url": _url_with(params | _type_params(choice, defaults), page),
             "active": choice == media_type,
         }
         for choice, label, title, icon in choices
     ]
 
 
-def _scope_tabs(user, scope, filter_params, defaults):
+def _scope_tabs(user, scope, filter_params, defaults, page="photos_ui:index"):
     """The library switcher: Mine, All, Shared with me, then one tab per group.
 
     Shared with me and the groups only get a tab when they hold a photo. The
@@ -365,7 +374,7 @@ def _scope_tabs(user, scope, filter_params, defaults):
         {
             "label": label,
             "icon": icon,
-            "url": _url_with(_scope_params(choice, defaults) | filter_params),
+            "url": _url_with(_scope_params(choice, defaults) | filter_params, page),
             "active": choice == scope,
         }
         for choice, label, icon in choices
@@ -482,8 +491,8 @@ def _display_context(user):
     }
 
 
-def _url_with(params):
-    base = reverse("photos_ui:index")
+def _url_with(params, page="photos_ui:index"):
+    base = reverse(page)
     return f"{base}?{urlencode(params)}" if params else base
 
 
@@ -598,6 +607,9 @@ def _render_page(request, template, context):
     swap = bool(request.headers.get("X-Alpine-Request"))
     # Every page's photo menus offer Similar photos where it can work.
     context.setdefault("embedded_media", embedded_media_types())
+    # The sidebar's Map entry, swapped with every page.
+    context["map_available"] = map_available()
+    context.setdefault("map_url", reverse("photos_ui:map"))
     if swap:
         context["photos_shell"] = "photos/ui/swap.html"
     else:
@@ -608,7 +620,6 @@ def _render_page(request, template, context):
             hidden_folder_data(folder) for folder in hidden_folders(request.user)
         ]
         context["scope_choices"] = _scope_choices(request.user)
-        context["map_available"] = map_available()
         context["map_server"] = tile_server()
     response = render(request, template, context)
     patch_vary_headers(response, ["X-Alpine-Request"])
@@ -889,6 +900,7 @@ def index(request):
         ],
         "timeline_url": _url_with(scope_params | type_params),
         "favorites_url": _url_with(scope_params | {"favorites": "1"} | type_params),
+        "map_url": _url_with(scope_params | type_params, "photos_ui:map"),
         "search_scope": scope_params.get("scope", ""),
         **_sidebar_albums(request.user),
         **_hidden_nav_context(request.user, active=hidden),
@@ -926,6 +938,164 @@ def timeline(request):
         | _type_params(media_type, defaults),
     )
     return render(request, "photos/ui/partials/timeline_page.html", context)
+
+
+# Leaflet's deepest zoom on the usual tile servers: street level and a bit.
+MAP_MAX_ZOOM = 19
+
+
+def _map_view(request):
+    """The center and zoom ``?lat=&lng=&z=`` open the Map page on, or None
+    for none or a malformed one: the page then fits the whole library."""
+    try:
+        latitude = float(request.GET["lat"])
+        longitude = float(request.GET["lng"])
+        zoom = float(request.GET["z"])
+    except KeyError, ValueError:
+        return None
+    if not (
+        -90 <= latitude <= 90 and -180 <= longitude <= 180 and 0 <= zoom <= MAP_MAX_ZOOM
+    ):
+        return None
+    return {"lat": latitude, "lng": longitude, "zoom": zoom}
+
+
+def _map_period(request):
+    """The months ``?from=&to=`` (``YYYY-MM``, both included) narrow the Map
+    page to, as month indexes (services/library_map.py), or None for none.
+
+    ValueError on a malformed month, a missing end, or one before the start.
+    """
+    raw_from = request.GET.get("from", "")
+    raw_to = request.GET.get("to", "")
+    if not raw_from and not raw_to:
+        return None
+    first, last = parse_month(raw_from), parse_month(raw_to)
+    if first > last:
+        raise ValueError("A period ends after it starts.")
+    return first, last
+
+
+def _map_query(scope, media_type, period=None):
+    """The parameters naming what the map shows, spelled out whatever the
+    defaults: the page hands them to its points and grid requests."""
+    query = {
+        "scope": _scope_token(scope),
+        "type": media_type.value if media_type is not None else ALL_TYPES,
+    }
+    if period is not None:
+        query |= {"from": month_token(period[0]), "to": month_token(period[1])}
+    return query
+
+
+@login_required
+@ensure_csrf_cookie
+def library_map(request):
+    """The Map page: the located photos of the library on a map, grouped
+    while they crowd, and beside it the grid of those in the area on screen.
+
+    ``?lat=&lng=&z=`` open it on a view, ``?from=&to=`` on a period; the
+    page keeps both in its URL as they change. Malformed ones are dropped:
+    they only say where the map was left. The map waits for the user to
+    turn the ``show_map`` setting on, as the photo's own does.
+    """
+    if not map_available():
+        raise Http404
+    defaults = _defaults(request.user)
+    scope = _scope(request, defaults)
+    media_type = _media_type(request, defaults)
+    try:
+        period = _map_period(request)
+    except ValueError:
+        period = None
+    counts = media_type_counts(located(library_files(request.user, scope)))
+    scope_params = _scope_params(scope, defaults)
+    type_params = _type_params(media_type, defaults)
+    query = urlencode(_map_query(scope, media_type))
+    enabled = show_map(request.user)
+    context = {
+        "active_view": "map",
+        "is_map_view": True,
+        "title": "Map",
+        "count_label": _count_label(counts, media_type),
+        "view_empty": not (counts["photos"] or counts["videos"]),
+        "map_enabled": enabled,
+        "map_offer_server": tile_server(),
+        "map_config": {
+            "tileUrl": settings.PHOTOS_MAP_TILE_URL,
+            "tileUrlDark": settings.PHOTOS_MAP_TILE_URL_DARK,
+            "attribution": settings.PHOTOS_MAP_TILE_ATTRIBUTION,
+            "maxZoom": MAP_MAX_ZOOM,
+            "pointsUrl": f"{reverse('photo-library-map')}?{query}",
+            "photosUrl": f"{reverse('photos_ui:map_photos')}?{query}",
+            "view": _map_view(request),
+            "period": (
+                {"from": month_token(period[0]), "to": month_token(period[1])}
+                if period is not None
+                else None
+            ),
+        }
+        if enabled
+        else None,
+        "scope_tabs": _scope_tabs(
+            request.user, scope, type_params, defaults, "photos_ui:map"
+        ),
+        "type_tabs": _type_tabs(
+            counts, media_type, scope_params, defaults, "photos_ui:map"
+        ),
+        "tags": [
+            {
+                "tag": t,
+                "url": _url_with(scope_params | {"tag": str(t.uuid)} | type_params),
+                "active": False,
+            }
+            for t in library_tags(request.user, scope)
+        ],
+        "timeline_url": _url_with(scope_params | type_params),
+        "favorites_url": _url_with(scope_params | {"favorites": "1"} | type_params),
+        "map_url": _url_with(scope_params | type_params, "photos_ui:map"),
+        **_sidebar_albums(request.user),
+        **_hidden_nav_context(request.user),
+        **_faces_context(request.user),
+        **_display_context(request.user),
+    }
+    return _render_page(request, "photos/ui/map.html", context)
+
+
+@login_required
+def library_map_photos(request):
+    """The grid beside the map: the photos of the area ``?bbox=``
+    (west,south,east,north) newest first, within ``?from=&to=`` when set.
+
+    The first page comes in its panel, with how many photos the area holds;
+    ``?cursor=`` asks for the page after it, appended by alpine-ajax as the
+    timeline's are. 400 on a malformed area, period or cursor.
+    """
+    if not map_available():
+        raise Http404
+    defaults = _defaults(request.user)
+    scope = _scope(request, defaults)
+    media_type = _media_type(request, defaults)
+    raw_cursor = request.GET.get("cursor", "")
+    try:
+        area = parse_area(request.GET.get("bbox", ""))
+        period = _map_period(request)
+        position = parse_cursor(raw_cursor) if raw_cursor else START
+    except ValueError:
+        return HttpResponseBadRequest("Invalid area, period or cursor.")
+    tz = get_user_timezone(request.user)
+    files = in_area(_of_type(library_files(request.user, scope), media_type), area)
+    if period is not None:
+        files = in_period(files, *period, tz)
+    view_params = _map_query(scope, media_type, period) | {
+        "bbox": f"{area.west},{area.south},{area.east},{area.north}"
+    }
+    page = timeline_page(with_timeline_fields(files, request.user), position, tz)
+    context = _page_context(request, page, reverse("photos_ui:map_photos"), view_params)
+    if raw_cursor:
+        return render(request, "photos/ui/partials/timeline_page.html", context)
+    context["count_label"] = _count_label(media_type_counts(files), media_type)
+    return render(request, "photos/ui/partials/map_photos.html", context)
 
 
 # Members a shared album's header shows by their avatar; the rest are a count.

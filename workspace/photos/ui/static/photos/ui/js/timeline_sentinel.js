@@ -14,13 +14,16 @@ window.timelineSentinel = function timelineSentinel(url) {
       if (!('IntersectionObserver' in window)) return;
       // Observed against the scroll container, not the viewport: the margin
       // only reaches ahead of the fold relative to the root, and the
-      // viewport never scrolls on the Photos pages. A page without one (a
-      // public album link) scrolls the viewport, the root null stands for.
+      // viewport never scrolls on the Photos pages. That is #photos-content,
+      // or a panel of the page scrolling on its own (data-scroll-root, the
+      // Map page's grid). A page without one (a public album link) scrolls
+      // the viewport, the root null stands for.
+      const root = this.$el.closest('[data-scroll-root]') || this.$el.closest('#photos-content');
       this._observer = new IntersectionObserver(
         (entries) => {
           if (entries.some((entry) => entry.isIntersecting)) this.load();
         },
-        { root: this.$el.closest('#photos-content'), rootMargin: '0px 0px 800px 0px' },
+        { root, rootMargin: '0px 0px 800px 0px' },
       );
       this._observer.observe(this.$el);
     },

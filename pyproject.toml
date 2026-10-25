@@ -138,6 +138,9 @@ dev = [
     # A third-party CalDAV client, driven against a live server by the calendar
     # E2E suite: the server is tested with somebody else's reading of the RFCs.
     "caldav>=3.6.0",
+    # Reads the .po catalogs in core.tests.test_translation_catalogs, which
+    # checks the committed .mo files were compiled from them.
+    "polib>=1.2.0",
 ]
 
 [tool.uv]

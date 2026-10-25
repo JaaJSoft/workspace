@@ -24,6 +24,12 @@ uv run python scripts/face_bench.py --compare before.json
 uv run python scripts/embedding_bench.py --json before.json
 uv run python scripts/embedding_bench.py --compare before.json
 
+# Translations - extract a module's strings into its locale/fr/*.po, then
+# compile (needs GNU gettext; commit the .po and .mo together;
+# see docs/guides/translations.md)
+uv run python manage.py translations <module>
+uv run python manage.py translations <module> --compile-only
+
 # Async stack
 uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info
@@ -1014,6 +1020,16 @@ The symptom is a component permanently stuck on its initial values while sibling
 - `x-show` stays correct for a component whose constructor arguments are static, and it is cheaper - it does not tear down and rebuild the subtree.
 - Never put both on the same element. `x-if` already controls presence; a leftover `x-show` is dead weight that hides the intent.
 - `x-if` teardown runs the component's `destroy()`, so anything registered in `init()` must be released there or it accumulates across cycles.
+
+### Translations - every new user-facing string is marked
+
+The interface is translated one module at a time (docs/guides/translations.md). In a module that has a `locale/` directory, every new or changed user-facing string is marked and its French `msgstr` filled in the same PR; in the others, marking is welcome and never required.
+
+- Templates: `{% load i18n %}`, `{% translate %}`, `{% blocktranslate trimmed count %}` for anything with a number. A translated string that lands in JavaScript goes through `{% translate "..." as var %}` and `'{{ var|escapejs }}'`.
+- Python: `gettext` at request time, `gettext_lazy` at import time (`verbose_name`, `choices`, action labels), named placeholders.
+- `.js` files: `gettext('literal')`, `ngettext`, `interpolate(..., true)` - only literals, which is all extraction can see. Dates and numbers take `window.getUserLocale()`, never `undefined`.
+- Work outside a request (tasks, push, mail) wraps its text in `translation.override(get_user_language(recipient))`.
+- Never commit a `.po` without its recompiled `.mo`: `core.tests.test_translation_catalogs` fails on the drift.
 
 ### Embedding view data into JS - use `|json_script`, never `orjson.dumps + |safe`
 

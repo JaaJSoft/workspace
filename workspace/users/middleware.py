@@ -1,9 +1,9 @@
 from django.conf import settings
 from django.http import HttpResponse
-from django.utils import timezone
+from django.utils import timezone, translation
 
 from workspace.users.services import presence as presence_service
-from workspace.users.services.settings import get_user_timezone
+from workspace.users.services.settings import get_user_language, get_user_timezone
 
 
 class AjaxLoginRedirectMiddleware:
@@ -61,6 +61,34 @@ class TimezoneMiddleware:
             return self.get_response(request)
         finally:
             timezone.deactivate()
+
+
+class LanguageMiddleware:
+    """Activate the user's interface language for the duration of the request.
+
+    The language is the user's stored choice, never the browser's
+    Accept-Language: the language picker in Settings is the only way in, so a
+    French browser does not get Django's own French strings (dates, form and
+    API errors) in the middle of a page whose text is still English. Anonymous
+    pages render in LANGUAGE_CODE. Deactivated in the finally for the same
+    reason as TimezoneMiddleware, and streaming bodies run in LANGUAGE_CODE.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if hasattr(request, "user") and request.user.is_authenticated:
+            translation.activate(get_user_language(request.user))
+        else:
+            translation.activate(settings.LANGUAGE_CODE)
+        request.LANGUAGE_CODE = translation.get_language()
+        try:
+            response = self.get_response(request)
+        finally:
+            translation.deactivate()
+        response.headers.setdefault("Content-Language", request.LANGUAGE_CODE)
+        return response
 
 
 class PresenceMiddleware:

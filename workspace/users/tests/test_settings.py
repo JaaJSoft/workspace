@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.users.models import UserSetting
 from workspace.users.services.settings import (
@@ -8,6 +8,7 @@ from workspace.users.services.settings import (
     get_all_settings,
     get_module_settings,
     get_setting,
+    get_user_language,
     get_user_timezone,
     set_setting,
 )
@@ -505,3 +506,53 @@ class GetUserTimezonePathValueTests(TestCase):
         # keys; a value planted via shell/fixture must not 500 every request.
         set_setting(self.user, "core", "timezone", "../etc")
         self.assertEqual(str(get_user_timezone(self.user)), "UTC")
+
+
+class LanguageSettingTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="langval", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_user_language_defaults_to_language_code(self):
+        self.assertEqual(get_user_language(self.user), "en")
+
+    def test_user_language_returns_stored_choice(self):
+        set_setting(self.user, "core", "language", "fr")
+        self.assertEqual(get_user_language(self.user), "fr")
+
+    @override_settings(LANGUAGES=[("en", "English")])
+    def test_user_language_drops_a_language_no_longer_offered(self):
+        set_setting(self.user, "core", "language", "fr")
+        self.assertEqual(get_user_language(self.user), "en")
+
+    def test_put_accepts_an_offered_language(self):
+        resp = self.client.put(
+            "/api/v1/settings/core/language",
+            data={"value": "fr"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_setting(self.user, "core", "language"), "fr")
+
+    def test_put_rejects_a_language_not_offered(self):
+        resp = self.client.put(
+            "/api/v1/settings/core/language",
+            data={"value": "de"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn("language", get_module_settings(self.user, "core"))
+
+    def test_put_rejects_a_regional_variant(self):
+        # get_user_language only honours the codes LANGUAGES lists: a stored
+        # variant would be accepted here and then silently read as English.
+        resp = self.client.put(
+            "/api/v1/settings/core/language",
+            data={"value": "fr-CA"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)

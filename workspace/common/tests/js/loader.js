@@ -8,6 +8,20 @@ const vm = require('node:vm');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
 /**
+ * The globals Django's JavaScript catalog defines, for a language with no
+ * catalog: each returns its English msgid, with English plural rules.
+ */
+const I18N_STUBS = {
+  gettext: (msgid) => msgid,
+  ngettext: (singular, plural, count) => (count === 1 ? singular : plural),
+  pgettext: (context, msgid) => msgid,
+  npgettext: (context, singular, plural, count) => (count === 1 ? singular : plural),
+  interpolate: (fmt, obj, named) => (named
+    ? fmt.replace(/%\(\w+\)s/g, (match) => String(obj[match.slice(2, -2)]))
+    : fmt.replace(/%s/g, () => String(obj.shift()))),
+};
+
+/**
  * Execute a production frontend script in an isolated vm context and return
  * that context so tests can call the globals the script defined.
  *
@@ -25,6 +39,9 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
  *   and `var` declarations are. Test the public surface, not internals.
  * - Scripts that touch browser APIs at load time (document, fetch, ...)
  *   get them via `extraGlobals`: loadScript(path, { document: stub }).
+ * - The gettext() family the page gets from the JavaScript catalog is
+ *   always there, untranslated (I18N_STUBS): a script under test reads in
+ *   English, its source language. `extraGlobals` may override them.
  *
  * @param {string} repoRelativePath - script path from the repo root, e.g.
  *   'workspace/common/static/ui/js/uuid.js'
@@ -50,7 +67,7 @@ function loadScript(repoRelativePath, extraGlobals = {}, existingContext = null)
 function loadScripts(repoRelativePaths, extraGlobals = {}, existingContext = null) {
   let sandbox = existingContext;
   if (!sandbox) {
-    sandbox = { console, ...extraGlobals };
+    sandbox = { console, ...I18N_STUBS, ...extraGlobals };
     sandbox.window = sandbox;
     vm.createContext(sandbox);
   }

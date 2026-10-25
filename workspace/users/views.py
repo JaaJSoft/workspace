@@ -574,6 +574,10 @@ def _validate_setting_value(module, key, value):
             ZoneInfo(str(value))
         except ZoneInfoNotFoundError, ValueError:
             return "Invalid timezone."
+    if module == "core" and key == "language" and value is not None:
+        languages = dict(django_settings.LANGUAGES)
+        if value not in languages:
+            return f"language must be one of: {', '.join(languages)}."
     if module == "core" and key in _CORE_FLAGS and value is not None:
         if not isinstance(value, bool):
             return f"{key} must be a boolean."

@@ -89,6 +89,10 @@ share/python-wheels/
 pip-log.txt
 pip-delete-this-directory.txt
 *.mo
+# Compiled catalogs ship with the code, so neither a checkout nor the image
+# needs GNU gettext to run translated; core.tests.test_translation_catalogs
+# fails when one no longer matches its .po.
+!workspace/*/locale/*/LC_MESSAGES/*.mo
 *.pot
 __pypackages__/
 *.manifest

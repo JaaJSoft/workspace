@@ -13,6 +13,8 @@ from __future__ import annotations
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from django.conf import settings
+
 from workspace.common.cache import cached, invalidate_tags
 from workspace.users.models import UserSetting
 
@@ -34,6 +36,18 @@ def get_user_timezone(user) -> ZoneInfo:
         return ZoneInfo(tz_name)
     except ZoneInfoNotFoundError, KeyError, ValueError:
         return UTC
+
+
+def get_user_language(user) -> str:
+    """Return the user's interface language, or LANGUAGE_CODE if unset/unsupported.
+
+    A stored code the deployment no longer offers (a language dropped from
+    LANGUAGES) falls back like an unset one rather than reaching gettext.
+    """
+    code = get_setting(user, "core", "language")
+    if code in dict(settings.LANGUAGES):
+        return code
+    return settings.LANGUAGE_CODE
 
 
 def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:

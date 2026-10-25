@@ -7,6 +7,7 @@ from workspace.core.views.activity import (
 )
 from workspace.core.views.changelog import changelog_partial
 from workspace.core.views.csp_report import CspReportView
+from workspace.core.views.i18n import WorkspaceJavaScriptCatalog
 from workspace.core.views.modules import ModulesView
 from workspace.core.views.search import UnifiedSearchView
 from workspace.core.views.sse import global_stream
@@ -26,4 +27,9 @@ urlpatterns = [
     path("api/v1/activity/stats", ActivityStatsView.as_view(), name="activity-stats"),
     path("api/v1/csp-report", CspReportView.as_view(), name="csp-report"),
     path("changelog", changelog_partial, name="changelog-partial"),
+    path(
+        "i18n/<str:language>",
+        WorkspaceJavaScriptCatalog.as_view(),
+        name="javascript-catalog",
+    ),
 ]

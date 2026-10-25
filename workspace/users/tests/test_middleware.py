@@ -6,9 +6,11 @@ from django.core.cache import cache
 from django.http import HttpResponse, HttpResponseRedirect
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone as dj_timezone
+from django.utils import translation
 
 from workspace.users.middleware import (
     AjaxLoginRedirectMiddleware,
+    LanguageMiddleware,
     PresenceMiddleware,
     TimezoneMiddleware,
 )
@@ -177,3 +179,74 @@ class TimezoneMiddlewareTests(TestCase):
         self.assertIn(
             "workspace.users.middleware.TimezoneMiddleware", dj_settings.MIDDLEWARE
         )
+
+
+# ── LanguageMiddleware ──────────────────────────────────────────
+
+
+class LanguageMiddlewareTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = User.objects.create_user(username="languser", password="pass")
+
+    def tearDown(self):
+        cache.clear()
+        translation.deactivate()
+
+    def _run(self, request):
+        seen = {}
+
+        def view(_request):
+            seen["language"] = translation.get_language()
+            seen["settings_title"] = translation.gettext("Settings")
+            return HttpResponse("ok")
+
+        response = LanguageMiddleware(view)(request)
+        return seen, response
+
+    def test_activates_stored_language(self):
+        set_setting(self.user, "core", "language", "fr")
+        request = self.factory.get("/")
+        request.user = self.user
+        seen, response = self._run(request)
+        self.assertEqual(seen["language"], "fr")
+        self.assertEqual(seen["settings_title"], "Paramètres")
+        self.assertEqual(request.LANGUAGE_CODE, "fr")
+        self.assertEqual(response["Content-Language"], "fr")
+
+    def test_user_without_a_choice_gets_the_default_language(self):
+        request = self.factory.get("/", HTTP_ACCEPT_LANGUAGE="fr-FR,fr;q=0.9")
+        request.user = self.user
+        seen, response = self._run(request)
+        self.assertEqual(seen["language"], "en")
+        self.assertEqual(response["Content-Language"], "en")
+
+    def test_anonymous_request_ignores_accept_language(self):
+        request = self.factory.get("/", HTTP_ACCEPT_LANGUAGE="fr-FR,fr;q=0.9")
+        request.user = AnonymousUser()
+        seen, _response = self._run(request)
+        self.assertEqual(seen["language"], "en")
+        self.assertEqual(seen["settings_title"], "Settings")
+
+    def test_unsupported_stored_language_falls_back_to_default(self):
+        set_setting(self.user, "core", "language", "xx")
+        request = self.factory.get("/")
+        request.user = self.user
+        seen, _response = self._run(request)
+        self.assertEqual(seen["language"], "en")
+
+    def test_deactivates_after_response(self):
+        set_setting(self.user, "core", "language", "fr")
+        request = self.factory.get("/")
+        request.user = self.user
+        self._run(request)
+        self.assertEqual(translation.get_language(), "en")
+
+    def test_stored_language_renders_the_settings_page_in_it(self):
+        set_setting(self.user, "core", "language", "fr")
+        self.client.force_login(self.user)
+        response = self.client.get("/users/settings")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<html\n  lang="fr"')
+        self.assertContains(response, "Langue et région")
+        self.assertContains(response, 'src="/i18n/fr?v=')

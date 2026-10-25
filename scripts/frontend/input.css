@@ -411,10 +411,11 @@ html:has(> body.overflow-hidden.h-dvh) {
   display: none !important;
 }
 
-/* The photo location map (photos/ui/js/photo_map.js): Leaflet's chrome in the
-   theme's colours, so its controls do not glare white in a dark theme. Scoped
-   under [data-photo-map] to outrank leaflet.css, which loads after this file. */
-[data-photo-map] .leaflet-container {
+/* The photo location map (photos/ui/js/photo_map.js) and the library map
+   (photos/ui/js/library_map.js): Leaflet's chrome in the theme's colours, so
+   its controls do not glare white in a dark theme. Scoped under the map's
+   attribute to outrank leaflet.css, which loads after this file. */
+:is([data-photo-map], [data-library-map]) .leaflet-container {
   background: oklch(var(--b2));
   font: inherit;
 }
@@ -434,12 +435,189 @@ html:has(> body.overflow-hidden.h-dvh) {
   background-color: oklch(var(--b1));
   color: oklch(var(--bc) / 0.3);
 }
-[data-photo-map] .leaflet-control-attribution {
+:is([data-photo-map], [data-library-map]) .leaflet-control-attribution {
   background: oklch(var(--b1) / 0.85);
   color: oklch(var(--bc) / 0.7);
   font-size: 10px;
 }
-[data-photo-map] .leaflet-control-attribution a {
+:is([data-photo-map], [data-library-map]) .leaflet-control-attribution a {
   color: inherit;
   text-decoration: underline;
+}
+
+/* A marker of the library map: the photo standing for its place, framed as
+   a print, with a second print peeking out behind it for a group. Leaflet
+   positions the icon with a transform, so what scales is the marker inside. */
+.library-map-marker {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 150ms ease-out;
+}
+.leaflet-marker-icon:is(:hover, :focus-visible) .library-map-marker {
+  transform: scale(1.08);
+}
+.leaflet-marker-icon:focus-visible {
+  outline: none;
+}
+.leaflet-marker-icon:focus-visible .library-map-frame {
+  outline: 3px solid rgb(var(--module));
+  outline-offset: 2px;
+}
+.library-map-frame {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 3px solid #fff;
+  border-radius: 0.75rem;
+  background: oklch(var(--b2));
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+}
+.library-map-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.library-map-frame.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: oklch(var(--bc) / 0.4);
+}
+.library-map-marker.is-group::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+  transform: rotate(7deg) translate(3px, -2px);
+}
+.library-map-count {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.375rem;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: rgb(var(--module));
+  color: rgb(var(--module-content));
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+}
+.library-map-play {
+  position: absolute;
+  bottom: 0.3rem;
+  left: 0.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  padding-left: 1px;
+  border-radius: 9999px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+}
+
+/* A marker appearing: grows in place. A group splitting or merging: its
+   photos travel, for as long as library-map-moving is on the map. */
+@keyframes library-map-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.library-map-icon.is-entering .library-map-marker {
+  animation: library-map-enter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.library-map-moving .library-map-icon {
+  transition:
+    transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 320ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .library-map-icon.is-entering .library-map-marker {
+    animation: none;
+  }
+  .library-map-moving .library-map-icon {
+    transition: none;
+  }
+}
+
+/* The period slider: two ranges over one track, each handling its own thumb
+   only, so the other stays reachable where they overlap. */
+.library-map-period::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 7px;
+  left: 0;
+  height: 2px;
+  border-radius: 9999px;
+  background: oklch(var(--bc) / 0.15);
+}
+.library-map-range {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1rem;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.library-map-range:focus {
+  outline: none;
+}
+.library-map-range::-webkit-slider-runnable-track {
+  height: 1rem;
+  background: transparent;
+}
+.library-map-range::-moz-range-track {
+  background: transparent;
+}
+.library-map-range::-webkit-slider-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid oklch(var(--b1));
+  border-radius: 9999px;
+  background: rgb(var(--module));
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  cursor: grab;
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.library-map-range::-moz-range-thumb {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid oklch(var(--b1));
+  border-radius: 9999px;
+  background: rgb(var(--module));
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  cursor: grab;
+  pointer-events: auto;
+}
+.library-map-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid rgb(var(--module));
+  outline-offset: 2px;
+}
+.library-map-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid rgb(var(--module));
+  outline-offset: 2px;
 }

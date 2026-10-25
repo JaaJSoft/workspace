@@ -7,7 +7,7 @@ const PHOTOS_MOBILE_QUERY = '(max-width: 1023px)';
 // the session expired) must leave the live element alone: alpine-ajax's
 // default is to remove it, which would empty the timeline.
 const PHOTOS_SWAP_TARGETS = [
-  'photos-nav', 'photos-content', 'photos-header', 'timeline-grid', 'timeline-more',
+  'photos-nav', 'photos-content', 'photos-header', 'timeline-grid', 'timeline-more', 'map-photos',
 ];
 
 // The file actions a photo's context menu offers, out of everything the files
@@ -430,8 +430,12 @@ window.photosApp = function photosApp() {
           // ?type= shows and every link of the page, which leave out
           // whatever equals the default.
           if (PHOTO_PREF_REFRESH[key]) this._refresh(PHOTO_PREF_REFRESH[key]);
-          // The open panel's Photo section renders the map, or the offer.
-          if (key === 'show_map') this.reloadPropertiesPanel();
+          // The open panel's Photo section renders the map, or the offer,
+          // and so does the Map page.
+          if (key === 'show_map') {
+            this.reloadPropertiesPanel();
+            if (document.getElementById('library-map-page')) this._refresh(['photos-nav', 'photos-content']);
+          }
         })
         .catch(() => {
           if (this._prefVersions[key] !== version) return;

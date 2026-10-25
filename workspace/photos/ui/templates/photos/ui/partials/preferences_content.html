@@ -117,7 +117,7 @@
     <div data-testid="photos-pref-show-map">
       {% include "ui/partials/pref_toggle.html" with label="Show locations on a map" state="photoPrefs.show_map" change="savePhotoPref('show_map', $event.target.checked)" accent="toggle-module" %}
       <p class="text-xs text-base-content/50 mt-1">
-        In a photo's properties. The map is loaded from {{ map_server }}, which then receives the location of each photo you open.
+        In a photo's properties and on the Map page. The map is loaded from {{ map_server }}, which then receives the location of each photo you open and the areas you browse.
       </p>
     </div>
   {% endif %}

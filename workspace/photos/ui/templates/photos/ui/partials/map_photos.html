@@ -1,0 +1,25 @@
+{% comment %}
+  The grid beside the map: the photos of the area on screen, newest first,
+  as the timeline lays them out. The map swaps it whole each time it
+  settles somewhere else; its pages after the first are appended as the
+  timeline's are.
+{% endcomment %}
+<div id="map-photos">
+  <div
+    class="sticky top-0 z-20 flex items-center gap-2 px-4 py-2 text-sm border-b border-base-300 bg-base-100/90 backdrop-blur"
+  >
+    <i data-lucide="scan" class="w-4 h-4 text-module shrink-0"></i>
+    <span class="font-medium" data-testid="map-photos-count">{{ count_label }}</span>
+    <span class="text-base-content/60">in this area</span>
+  </div>
+  {% if entries %}
+    <div class="p-2">{% include "photos/ui/partials/timeline_page.html" %}</div>
+  {% else %}
+    <div class="flex flex-col items-center text-center gap-2 px-6 py-12">
+      <i data-lucide="map-pin" class="w-8 h-8 text-base-content/30"></i>
+      <p class="text-sm text-base-content/60 max-w-xs">
+        Nothing was taken in this area. Move the map or zoom out to see more.
+      </p>
+    </div>
+  {% endif %}
+</div>

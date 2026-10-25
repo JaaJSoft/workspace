@@ -223,5 +223,8 @@
   <script src="{% static 'photos/ui/js/capture_details.js' %}"></script>
   <script src="{% static 'photos/ui/js/album_share.js' %}"></script>
   <script src="{% static 'photos/ui/js/timeline_sentinel.js' %}"></script>
+  {# The Map page's; any page can swap it in. Leaflet comes with the properties panel's Photo section. #}
+  <script src="{% static 'photos/ui/js/vendor/supercluster/supercluster.js' %}"></script>
+  <script src="{% static 'photos/ui/js/library_map.js' %}"></script>
   <script src="{% static 'photos/ui/js/photos.js' %}"></script>
 {% endblock %}

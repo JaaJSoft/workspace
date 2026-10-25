@@ -47,7 +47,7 @@
             ></p>
             <span
               class="text-xs text-base-content/40 shrink-0 whitespace-nowrap"
-              x-show="_totalViewable() > 1"
+              x-show="_totalViewable() > 1 && _currentIndex() >= 0"
               x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
             ></span>
           </div>

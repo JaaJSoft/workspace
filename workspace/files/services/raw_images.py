@@ -30,6 +30,9 @@ RAW_LABELS = frozenset(RAW_FORMATS)
 RAW_EXTENSIONS = tuple(
     extension for _, extensions in RAW_FORMATS.values() for extension in extensions
 )
+# LibRaw reads a RAW from memory: past this, it is not read at all. Medium
+# format backs write about 200 MB.
+MAX_RAW_SIZE = 512 * 1024 * 1024
 _LABEL_BY_EXTENSION = {
     extension: label
     for label, (_, extensions) in RAW_FORMATS.items()
@@ -51,12 +54,21 @@ def _rawpy():
     return rawpy
 
 
+def _read_capped(stream):
+    """The bytes of *stream*, or None past MAX_RAW_SIZE."""
+    data = stream.read(MAX_RAW_SIZE + 1)
+    return None if len(data) > MAX_RAW_SIZE else data
+
+
 def is_camera_raw(stream):
     """Whether LibRaw opens the file in *stream*; its position is kept."""
     rawpy = _rawpy()
     position = stream.tell()
     try:
-        with rawpy.imread(io.BytesIO(stream.read())):
+        data = _read_capped(stream)
+        if data is None:
+            return False
+        with rawpy.imread(io.BytesIO(data)):
             return True
     except rawpy.LibRawError, OSError:
         return False
@@ -71,7 +83,12 @@ def _preview_jpeg(data):
         thumb = raw.extract_thumb()
     if thumb.format == rawpy.ThumbFormat.JPEG:
         return thumb.data
-    # A few older bodies embed an uncompressed bitmap instead.
+    # A few older bodies embed an uncompressed bitmap instead. Pillow checks
+    # the pixel count of what it opens, but only once it is built.
+    height, width = thumb.data.shape[:2]
+    if Image.MAX_IMAGE_PIXELS and width * height > Image.MAX_IMAGE_PIXELS:
+        msg = "camera RAW preview too large"
+        raise Image.DecompressionBombError(msg)
     buffer = io.BytesIO()
     Image.fromarray(thumb.data).save(buffer, format="JPEG", quality=95)
     return buffer.getvalue()
@@ -88,8 +105,12 @@ class RawImageFile(JpegImagePlugin.JpegImageFile):
     format_description = "Camera RAW (embedded preview)"
 
     def _open(self):
+        data = _read_capped(self.fp)
+        if data is None:
+            msg = "camera RAW too large to open"
+            raise SyntaxError(msg)
         try:
-            preview = _preview_jpeg(self.fp.read())
+            preview = _preview_jpeg(data)
         except (_rawpy().LibRawError, OSError) as exc:
             raise SyntaxError(str(exc)) from exc
         # The decoder reads the preview; the RAW's stream is kept for close().

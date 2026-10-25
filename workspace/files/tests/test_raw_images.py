@@ -2,6 +2,7 @@
 
 import io
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -9,7 +10,7 @@ from django.core.files.uploadedfile import TemporaryUploadedFile
 from django.test import TestCase
 from PIL import ExifTags, Image, ImageOps, UnidentifiedImageError
 
-from workspace.files.services import FileService
+from workspace.files.services import FileService, raw_images
 from workspace.files.services.detection import detect_from_name, detect_from_stream
 from workspace.files.services.image_edits import render_edited
 from workspace.files.tests.rasters import dng_bytes
@@ -110,3 +111,23 @@ class RawDecodingTests(TestCase):
         with Image.open(io.BytesIO(content)) as img:
             self.assertEqual(img.size, (64, 96))
             self.assertEqual(img.getexif()[ExifTags.Base.Make], "Canon")
+
+
+class RawSizeCapTests(TestCase):
+    """LibRaw reads from memory: a file past the cap is never read whole."""
+
+    def setUp(self):
+        self.data = dng_bytes()
+        patcher = patch.object(raw_images, "MAX_RAW_SIZE", len(self.data) - 1)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_it_is_not_detected_as_a_raw(self):
+        result = detect_from_stream(io.BytesIO(self.data), "IMG_0001.DNG")
+
+        self.assertNotEqual(result.label, "dng")
+
+    def test_libraw_does_not_open_it(self):
+        # Pillow's TIFF plugin, next in line, opens the DNG's first directory.
+        with Image.open(io.BytesIO(self.data)) as img:
+            self.assertNotEqual(img.format, "RAW")

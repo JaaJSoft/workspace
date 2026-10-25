@@ -30,6 +30,7 @@ from ..services.conversations import (
     get_conversation_role,
     get_or_create_dm,
     get_unread_counts,
+    lock_conversation,
     set_member_role,
     user_conversation_ids,
 )
@@ -472,7 +473,8 @@ class ConversationMembersView(APIView):
                 if existing.left_at is not None:
                     existing.left_at = None
                     existing.unread_count = 0
-                    existing.save(update_fields=["left_at", "unread_count"])
+                    existing.role = ConversationMember.Role.MEMBER
+                    existing.save(update_fields=["left_at", "unread_count", "role"])
                     rejoined_ids.append(u.id)
                     added.append(u.id)
                 # Already active member - skip silently
@@ -536,7 +538,12 @@ class MemberRoleSerializer(serializers.Serializer):
 
 
 def _group_admin_refusal(user, conversation_id):
-    """The response refusing *user* a group-management action, or None."""
+    """The response refusing *user* a group-management action, or None.
+
+    Re-checks the role under ``lock_conversation`` once the cheap checks pass,
+    so an admin demoted or removed meanwhile cannot act; the caller must be
+    inside a transaction for the lock to hold.
+    """
     role = get_conversation_role(user, conversation_id)
     if role is None:
         return Response({"detail": NOT_A_MEMBER}, status=status.HTTP_403_FORBIDDEN)
@@ -548,6 +555,9 @@ def _group_admin_refusal(user, conversation_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
     if role != ConversationMember.Role.ADMIN:
+        return Response({"detail": GROUP_ADMINS_ONLY}, status=status.HTTP_403_FORBIDDEN)
+    lock_conversation(conversation_id)
+    if get_conversation_role(user, conversation_id) != ConversationMember.Role.ADMIN:
         return Response({"detail": GROUP_ADMINS_ONLY}, status=status.HTTP_403_FORBIDDEN)
     return None
 
@@ -568,6 +578,7 @@ class ConversationMemberDetailView(APIView):
         summary="Make a group member an admin or a member (admins only)",
         request=MemberRoleSerializer,
     )
+    @transaction.atomic
     def patch(self, request, conversation_id, user_id):
         refusal = _group_admin_refusal(request.user, conversation_id)
         if refusal:
@@ -604,6 +615,7 @@ class ConversationMemberDetailView(APIView):
         )
 
     @extend_schema(summary="Remove a member from a group conversation (admins only)")
+    @transaction.atomic
     def delete(self, request, conversation_id, user_id):
         refusal = _group_admin_refusal(request.user, conversation_id)
         if refusal:

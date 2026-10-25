@@ -232,9 +232,11 @@ def set_member_role(membership, role):
         ).exclude(pk=membership.pk)
         if not other_admins.exists():
             return False
-    if membership.role != role:
-        membership.role = role
-        membership.save(update_fields=["role"])
+    # Conditional: a member who left since *membership* was read keeps no role.
+    ConversationMember.objects.filter(pk=membership.pk, left_at__isnull=True).update(
+        role=role
+    )
+    membership.role = role
     return True
 
 

@@ -309,3 +309,40 @@ class ConversationMemberRoleMigrationTests(TestCase):
         self.assertFalse(
             ConversationMember.objects.filter(conversation=group, role=ADMIN).exists()
         )
+
+
+class StaleRowTests(ChatTestMixin, APITestCase):
+    def test_set_member_role_does_not_promote_a_member_who_left_meanwhile(self):
+        from workspace.chat.services.conversations import set_member_role
+
+        stale = ConversationMember.objects.get(
+            conversation=self.group, user=self.member
+        )
+        ConversationMember.objects.filter(pk=stale.pk).update(left_at=timezone.now())
+        set_member_role(stale, ADMIN)
+        self.assertEqual(_role(self.group, self.member), MEMBER)
+
+    def test_re_adding_a_left_row_that_still_says_admin_resets_it(self):
+        ConversationMember.objects.create(
+            conversation=self.group,
+            user=self.extra_user,
+            role=ADMIN,
+            left_at=timezone.now(),
+        )
+        self.client.force_authenticate(self.creator)
+        self.client.post(
+            f"/api/v1/chat/conversations/{self.group.uuid}/members",
+            {"user_ids": [self.extra_user.id]},
+            format="json",
+        )
+        self.assertEqual(get_conversation_role(self.extra_user, self.group), MEMBER)
+
+    def test_group_sync_re_adding_a_left_row_that_still_says_admin_resets_it(self):
+        team = Group.objects.create(name="Team")
+        self.creator.groups.add(team)
+        linked = create_group_conversation(self.creator, [team])
+        ConversationMember.objects.create(
+            conversation=linked, user=self.member, role=ADMIN, left_at=timezone.now()
+        )
+        self.member.groups.add(team)
+        self.assertEqual(get_conversation_role(self.member, linked), MEMBER)

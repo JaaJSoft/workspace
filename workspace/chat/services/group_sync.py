@@ -52,9 +52,10 @@ def resync_conversation_members(conversation):
     for m in to_reactivate:
         m.left_at = None
         m.unread_count = 0
+        m.role = ConversationMember.Role.MEMBER
     if to_reactivate:
         ConversationMember.objects.bulk_update(
-            to_reactivate, ["left_at", "unread_count"]
+            to_reactivate, ["left_at", "unread_count", "role"]
         )
         # The badge restarts at zero, so the thread counters it used to
         # contain must restart with it.

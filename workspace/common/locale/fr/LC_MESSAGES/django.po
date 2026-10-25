@@ -1,8 +1,9 @@
+#
 msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 17:39+0000\n"
+"POT-Creation-Date: 2026-10-25 18:40+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -10,53 +11,371 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
 
+#: dates.py
+msgid "just now"
+msgstr "à l’instant"
+
+#: dates.py
+#, python-format
+msgid "%(count)sm ago"
+msgstr "il y a %(count)s min"
+
+#: dates.py
+#, python-format
+msgid "%(count)sh ago"
+msgstr "il y a %(count)s h"
+
+#: dates.py
+#, python-format
+msgid "%(count)sd ago"
+msgstr "il y a %(count)s j"
+
+#: templates/ui/partials/attachment_menu.html
+msgid "Attach files"
+msgstr "Joindre des fichiers"
+
+#: templates/ui/partials/attachment_menu.html
+msgid "Upload file"
+msgstr "Téléverser un fichier"
+
+#: templates/ui/partials/attachment_menu.html
+msgid "From Workspace"
+msgstr "Depuis Workspace"
+
+#: templates/ui/partials/comments.html
+msgid "No comments yet."
+msgstr "Aucun commentaire pour l’instant."
+
+#: templates/ui/partials/comments.html
+msgid "(edited)"
+msgstr "(modifié)"
+
+#: templates/ui/partials/comments.html vocabulary.py
+msgid "Edit"
+msgstr "Modifier"
+
+#: templates/ui/partials/comments.html vocabulary.py
+msgid "Delete"
+msgstr "Supprimer"
+
+#: templates/ui/partials/comments.html vocabulary.py
+msgid "Save"
+msgstr "Enregistrer"
+
+#: templates/ui/partials/comments.html templates/ui/partials/dialogs.html
+#: vocabulary.py
+msgid "Cancel"
+msgstr "Annuler"
+
+#: templates/ui/partials/comments.html
+msgid "Add a comment..."
+msgstr "Ajouter un commentaire..."
+
+#: templates/ui/partials/comments.html
+msgid "Send"
+msgstr "Envoyer"
+
+#: templates/ui/partials/dialogs.html vocabulary.py
+msgid "Confirm"
+msgstr "Confirmer"
+
+#: templates/ui/partials/dialogs.html
+msgid "Are you sure?"
+msgstr "Êtes-vous sûr ?"
+
+#: templates/ui/partials/dialogs.html
+msgid "OK"
+msgstr "OK"
+
+#: templates/ui/partials/dialogs.html templates/ui/partials/help_dialog.html
+#: vocabulary.py
+msgid "Close"
+msgstr "Fermer"
+
+#: templates/ui/partials/dialogs.html
+msgid "Input"
+msgstr "Saisie"
+
+#: templates/ui/partials/dialogs.html
+msgid "Select"
+msgstr "Sélectionner"
+
+#: templates/ui/partials/dialogs.html
+msgid "Message"
+msgstr "Message"
+
+#: templates/ui/partials/dialogs.html
+msgid "Done."
+msgstr "Terminé."
+
+#: templates/ui/partials/drawer_toggle.html
+msgid "Open menu"
+msgstr "Ouvrir le menu"
+
+#: templates/ui/partials/group_selector.html
+msgid "Search groups..."
+msgstr "Rechercher des groupes..."
+
+#: templates/ui/partials/group_selector.html
+msgid "No groups found"
+msgstr "Aucun groupe trouvé"
+
+#: templates/ui/partials/help_dialog.html vocabulary.py
+msgid "Help"
+msgstr "Aide"
+
+#: templates/ui/partials/icon_picker.html
+msgid "Icon"
+msgstr "Icône"
+
+#: templates/ui/partials/icon_picker.html
+msgid "Color"
+msgstr "Couleur"
+
+#: templates/ui/partials/icon_picker.html vocabulary.py
+msgid "Saving..."
+msgstr "Enregistrement..."
+
+#: templates/ui/partials/icon_picker.html vocabulary.py
+msgid "Saved"
+msgstr "Enregistré"
+
+#: templates/ui/partials/password_generator.html vocabulary.py
+msgid "Password"
+msgstr "Mot de passe"
+
+#: templates/ui/partials/password_generator.html
+msgid "Passphrase"
+msgstr "Phrase de passe"
+
+#: templates/ui/partials/password_generator.html
+msgid "Length"
+msgstr "Longueur"
+
+#: templates/ui/partials/password_generator.html
+msgid "Avoid look-alike characters (l 1 I O 0)"
+msgstr "Éviter les caractères ambigus (l 1 I O 0)"
+
+#: templates/ui/partials/password_generator.html
+msgid "Words"
+msgstr "Mots"
+
+#: templates/ui/partials/password_generator.html
+msgid "Separator"
+msgstr "Séparateur"
+
+#: templates/ui/partials/password_generator.html
+msgid "Capitalise each word"
+msgstr "Majuscule à chaque mot"
+
+#: templates/ui/partials/password_generator.html
+msgid "Regenerate"
+msgstr "Régénérer"
+
+#: templates/ui/partials/password_generator.html vocabulary.py
+msgid "Copy"
+msgstr "Copier"
+
+#: templates/ui/partials/password_generator.html
+msgid "Use"
+msgstr "Utiliser"
+
+#: templates/ui/partials/password_strength.html
+msgid "Password strength"
+msgstr "Robustesse du mot de passe"
+
+#: templates/ui/partials/preferences_popover.html vocabulary.py
+msgid "Preferences"
+msgstr "Préférences"
+
+#: templates/ui/partials/refresh_button.html vocabulary.py
+msgid "Refresh"
+msgstr "Actualiser"
+
+#: templates/ui/partials/size_slider.html
+msgid "Tile size"
+msgstr "Taille des vignettes"
+
+#: templates/ui/partials/user_chip.html
+#, python-format
+msgid "Remove %%(name)s"
+msgstr "Retirer %%(name)s"
+
+#: vocabulary.py
+msgid "Actions"
+msgstr "Actions"
+
+#: vocabulary.py
+msgid "Activity"
+msgstr "Activité"
+
 #: vocabulary.py
 msgid "Back"
 msgstr "Retour"
 
 #: vocabulary.py
-msgid "Cancel"
-msgstr "Annuler"
+msgid "Clear"
+msgstr "Effacer"
 
 #: vocabulary.py
-msgid "Close"
-msgstr "Fermer"
+msgid "Clear all"
+msgstr "Tout effacer"
 
 #: vocabulary.py
-msgid "Confirm"
-msgstr "Confirmer"
+msgid "Clear filters"
+msgstr "Effacer les filtres"
 
 #: vocabulary.py
-msgid "Copy"
-msgstr "Copier"
+msgid "Clear selection"
+msgstr "Effacer la sélection"
 
 #: vocabulary.py
-msgid "Delete"
-msgstr "Supprimer"
+msgid "Collapse"
+msgstr "Replier"
+
+#: vocabulary.py
+msgid "Collapse sidebar"
+msgstr "Replier la barre latérale"
+
+#: vocabulary.py
+msgid "Columns"
+msgstr "Colonnes"
+
+#: vocabulary.py
+msgid "Comments"
+msgstr "Commentaires"
+
+#: vocabulary.py
+msgid "Continue"
+msgstr "Continuer"
+
+#: vocabulary.py
+msgid "Copy link"
+msgstr "Copier le lien"
+
+#: vocabulary.py
+msgid "Create"
+msgstr "Créer"
+
+#: vocabulary.py
+msgid "Default"
+msgstr "Par défaut"
+
+#: vocabulary.py
+msgid "Delete permanently"
+msgstr "Supprimer définitivement"
+
+#: vocabulary.py
+msgid "Done"
+msgstr "Terminé"
 
 #: vocabulary.py
 msgid "Download"
 msgstr "Télécharger"
 
 #: vocabulary.py
-msgid "Edit"
-msgstr "Modifier"
+msgid "Expand sidebar"
+msgstr "Déplier la barre latérale"
+
+#: vocabulary.py
+msgid "Favorites"
+msgstr "Favoris"
+
+#: vocabulary.py
+msgid "Files"
+msgstr "Fichiers"
+
+#: vocabulary.py
+msgid "Filters"
+msgstr "Filtres"
+
+#: vocabulary.py
+msgid "Folder"
+msgstr "Dossier"
+
+#: vocabulary.py
+msgid "Folder name"
+msgstr "Nom du dossier"
+
+#: vocabulary.py
+msgid "Folders"
+msgstr "Dossiers"
+
+#: vocabulary.py
+msgid "Generate"
+msgstr "Générer"
+
+#: vocabulary.py
+msgid "Groups"
+msgstr "Groupes"
+
+#: vocabulary.py
+msgid "Hide password"
+msgstr "Masquer le mot de passe"
+
+#: vocabulary.py
+msgid "List view"
+msgstr "Vue liste"
+
+#: vocabulary.py
+msgid "Load more"
+msgstr "Charger plus"
 
 #: vocabulary.py
 msgid "Loading…"
 msgstr "Chargement…"
 
 #: vocabulary.py
+msgid "Location"
+msgstr "Emplacement"
+
+#: vocabulary.py
+msgid "Merge"
+msgstr "Fusionner"
+
+#: vocabulary.py
+msgid "More actions"
+msgstr "Plus d’actions"
+
+#: vocabulary.py
+msgid "Name"
+msgstr "Nom"
+
+#: vocabulary.py
+msgid "Navigation"
+msgstr "Navigation"
+
+#: vocabulary.py
+msgid "Never"
+msgstr "Jamais"
+
+#: vocabulary.py
+msgid "New folder"
+msgstr "Nouveau dossier"
+
+#: vocabulary.py
+msgid "New tag"
+msgstr "Nouvelle étiquette"
+
+#: vocabulary.py
 msgid "Next"
 msgstr "Suivant"
+
+#: vocabulary.py
+msgid "Open"
+msgstr "Ouvrir"
+
+#: vocabulary.py
+msgid "Pause"
+msgstr "Pause"
 
 #: vocabulary.py
 msgid "Previous"
 msgstr "Précédent"
 
 #: vocabulary.py
-msgid "Refresh"
-msgstr "Actualiser"
+msgid "Properties"
+msgstr "Propriétés"
 
 #: vocabulary.py
 msgid "Reload"
@@ -67,13 +386,73 @@ msgid "Rename"
 msgstr "Renommer"
 
 #: vocabulary.py
+msgid "Replace"
+msgstr "Remplacer"
+
+#: vocabulary.py
+msgid "Restore"
+msgstr "Restaurer"
+
+#: vocabulary.py
+msgid "Resume"
+msgstr "Reprendre"
+
+#: vocabulary.py
 msgid "Retry"
 msgstr "Réessayer"
 
 #: vocabulary.py
-msgid "Save"
-msgstr "Enregistrer"
+msgid "Revoke"
+msgstr "Révoquer"
+
+#: vocabulary.py
+msgid "Save failed"
+msgstr "Échec de l’enregistrement"
 
 #: vocabulary.py
 msgid "Search"
 msgstr "Rechercher"
+
+#: vocabulary.py
+msgid "Share"
+msgstr "Partager"
+
+#: vocabulary.py
+msgid "Show"
+msgstr "Afficher"
+
+#: vocabulary.py
+msgid "Show password"
+msgstr "Afficher le mot de passe"
+
+#: vocabulary.py
+msgid "Sort by"
+msgstr "Trier par"
+
+#: vocabulary.py
+msgid "Summary"
+msgstr "Résumé"
+
+#: vocabulary.py
+msgid "Tag name"
+msgstr "Nom de l’étiquette"
+
+#: vocabulary.py
+msgid "Tags"
+msgstr "Étiquettes"
+
+#: vocabulary.py
+msgid "Trash"
+msgstr "Corbeille"
+
+#: vocabulary.py
+msgid "Type"
+msgstr "Type"
+
+#: vocabulary.py
+msgid "Undo"
+msgstr "Annuler"
+
+#: vocabulary.py
+msgid "Unknown error"
+msgstr "Erreur inconnue"

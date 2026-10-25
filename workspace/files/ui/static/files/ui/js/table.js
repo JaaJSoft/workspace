@@ -26,7 +26,7 @@ window.fileTableControls = function fileTableControls() {
     sortField: window._filePrefsCache.defaultSort || 'default',
     sortDir: window._filePrefsCache.defaultSortDir || 'asc',
     columns: [
-      { id: 'select', label: gettext('Select'), required: false },
+      { id: 'select', label: pgettext('table column', 'Select'), required: false },
       { id: 'icon', label: gettext('Type'), required: true },
       { id: 'name', label: gettext('Name'), required: true },
       { id: 'favorite', label: gettext('Fav'), required: false },

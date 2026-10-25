@@ -14,7 +14,8 @@
 
   The dispatched event contains { detail: { group: { id, name } } }
 {% endcomment %}
-
+{% load i18n %}
+{% translate "Search groups..." as default_placeholder %}
 <div
   x-data="groupSelector('{{ on_select_event|escapejs }}', () => ({{ local_source }}))"
   class="relative"
@@ -24,7 +25,7 @@
     <input
       type="text"
       class="grow"
-      placeholder="{{ placeholder|default:'Search groups...' }}"
+      placeholder="{{ placeholder|default:default_placeholder }}"
       x-model="query"
       @input.debounce.150ms="search()"
       @focus="search()"
@@ -65,6 +66,6 @@
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
   >
-    No groups found
+    {% translate "No groups found" %}
   </div>
 </div>

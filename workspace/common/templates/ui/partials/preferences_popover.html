@@ -33,16 +33,17 @@ Optional context:
   twice - the trigger points at it through aria-controls, so the two must not
   collide.
 {% endcomment %}
+{% load i18n %}
 {% firstof panel_id "preferences-panel" as pid %}
 <div x-data="{ {% if component %}...{{ component }}, {% endif %}prefsOpen: false }" @keydown.escape.window="if (prefsOpen) { prefsOpen = false; $refs.prefsTrigger.focus(); }" {% if close_on_event %}@{{ close_on_event }}.window="prefsOpen = false"{% endif %} {% if show_expr %}x-show="{{ show_expr }}" x-transition class="{% if collapsed_initial %}hidden{% elif mobile_rail %}max-lg:hidden{% endif %}" :class="{ hidden: !({{ show_expr }}) }"{% endif %}>
   <button
     type="button"
     x-ref="prefsTrigger"
     class="btn btn-ghost btn-sm btn-square {{ button_class }}"
-    aria-label="Preferences"
+    aria-label="{% translate 'Preferences' %}"
     :aria-expanded="prefsOpen"
     aria-controls="{{ pid }}"
-    title="Preferences"
+    title="{% translate 'Preferences' %}"
     @click="prefsOpen = !prefsOpen"
   >
     <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
@@ -62,7 +63,7 @@ Optional context:
       class="font-semibold text-sm mb-3 flex items-center gap-2"
     >
       <i data-lucide="sliders-horizontal" class="w-4 h-4 {{ accent }}"></i>
-      Preferences
+      {% translate "Preferences" %}
     </h4>
     {% include content %}
   </div>

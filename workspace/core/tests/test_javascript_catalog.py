@@ -27,6 +27,11 @@ class JavaScriptCatalogTests(TestCase):
         self.assertEqual(response["Content-Language"], "en")
         self.assertNotContains(response, "Aujourd")
 
+    def test_serves_the_shared_server_side_catalog_too(self):
+        # One translation of the words every module uses, for scripts too.
+        response = self.client.get("/i18n/fr")
+        self.assertContains(response, '"Cancel": "Annuler"')
+
     def test_unknown_language_is_not_found(self):
         self.assertEqual(self.client.get("/i18n/xx").status_code, 404)
 

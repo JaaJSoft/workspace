@@ -13,11 +13,11 @@
 
 // The score bands zxcvbn defines, 0 to 4.
 const PASSWORD_STRENGTH_VERDICTS = [
-  { label: 'Very weak', css: 'progress-error', text: 'text-error' },
-  { label: 'Weak', css: 'progress-error', text: 'text-error' },
-  { label: 'Fair', css: 'progress-warning', text: 'text-warning' },
-  { label: 'Strong', css: 'progress-success', text: 'text-success' },
-  { label: 'Very strong', css: 'progress-success', text: 'text-success' },
+  { label: gettext('Very weak'), css: 'progress-error', text: 'text-error' },
+  { label: gettext('Weak'), css: 'progress-error', text: 'text-error' },
+  { label: gettext('Fair'), css: 'progress-warning', text: 'text-warning' },
+  { label: gettext('Strong'), css: 'progress-success', text: 'text-success' },
+  { label: gettext('Very strong'), css: 'progress-success', text: 'text-success' },
 ];
 
 // How long a pause counts as "done typing". zxcvbn takes a few milliseconds
@@ -145,8 +145,8 @@ window.passwordStrengthMeter = function passwordStrengthMeter(bundleUrl) {
         return { ...PASSWORD_STRENGTH_VERDICTS[this.score], value: this.score + 1 };
       }
       let label = '';
-      if (this.status === 'checking') label = 'Checking\u2026';
-      if (this.status === 'unavailable') label = 'Strength could not be checked on this device';
+      if (this.status === 'checking') label = gettext('Checking\u2026');
+      if (this.status === 'unavailable') label = gettext('Strength could not be checked on this device');
       return { label, css: '', text: 'text-base-content/60', value: 0 };
     },
 

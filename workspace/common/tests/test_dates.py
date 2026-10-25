@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from django.test import TestCase
 from django.utils import timezone as dj_timezone
+from django.utils import translation
 
 from workspace.common.dates import time_ago
 
@@ -70,3 +71,17 @@ class TimeAgoTests(TestCase):
         self.assertEqual(
             time_ago(datetime(2025, 12, 31, 23, 30, tzinfo=UTC), now=self.NOW), "Jan 01"
         )
+
+
+class TimeAgoFrenchTests(TestCase):
+    NOW = datetime(2026, 8, 15, 12, 0, tzinfo=UTC)
+
+    def _ago(self, **delta):
+        with translation.override("fr"):
+            return time_ago(self.NOW - timedelta(**delta), now=self.NOW)
+
+    def test_relative_labels_follow_the_active_language(self):
+        self.assertEqual(self._ago(seconds=5), "à l’instant")
+        self.assertEqual(self._ago(minutes=5), "il y a 5 min")
+        self.assertEqual(self._ago(hours=2), "il y a 2 h")
+        self.assertEqual(self._ago(days=3), "il y a 3 j")

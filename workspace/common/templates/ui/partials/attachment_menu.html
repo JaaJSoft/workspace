@@ -9,12 +9,13 @@ Params:
 - icon_class: paperclip icon size classes (default "w-4 h-4")
 - label: optional text rendered next to the paperclip (icon-only otherwise)
 {% endcomment %}
+{% load i18n %}
 <div class="dropdown {{ menu_class|default:'dropdown-top' }}">
   <button
     type="button"
     tabindex="0"
     class="{{ button_class|default:'btn btn-ghost btn-sm btn-square' }}"
-    title="Attach files"
+    title="{% translate 'Attach files' %}"
   >
     <i data-lucide="paperclip" class="{{ icon_class|default:'w-4 h-4' }}"></i>
     {% if label %}<span>{{ label }}</span>{% endif %}
@@ -25,12 +26,12 @@ Params:
   >
     <li>
       <a @click="document.activeElement.blur(); openFileDialog()">
-        <i data-lucide="upload" class="w-4 h-4"></i> Upload file
+        <i data-lucide="upload" class="w-4 h-4"></i> {% translate "Upload file" %}
       </a>
     </li>
     <li>
       <a @click="document.activeElement.blur(); attachFromWorkspace()">
-        <i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace
+        <i data-lucide="hard-drive" class="w-4 h-4"></i> {% translate "From Workspace" %}
       </a>
     </li>
   </ul>

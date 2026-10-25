@@ -22,10 +22,10 @@
     if (isNaN(d)) return '';
     const now = nowMs === undefined ? Date.now() : nowMs;
     const sec = Math.floor((now - d.getTime()) / 1000);
-    if (sec < 60) return 'just now';
-    if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
-    if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
-    if (sec < 604800) return Math.floor(sec / 86400) + 'd ago';
+    if (sec < 60) return gettext('just now');
+    if (sec < 3600) return interpolate(gettext('%(count)sm ago'), { count: Math.floor(sec / 60) }, true);
+    if (sec < 86400) return interpolate(gettext('%(count)sh ago'), { count: Math.floor(sec / 3600) }, true);
+    if (sec < 604800) return interpolate(gettext('%(count)sd ago'), { count: Math.floor(sec / 86400) }, true);
     const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     const then = _dateParts(d, tz);
     const label = then.month + ' ' + then.day;

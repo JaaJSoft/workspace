@@ -10,6 +10,7 @@ Params:
 - can_comment:     boolean; when False the composer and edit/delete
                    actions are hidden (server enforces it regardless)
 {% endcomment %}
+{% load i18n %}
 <div
   class="space-y-3"
   x-data="commentsComponent('{{ list_url|escapejs }}', {{ current_user_id }}, {{ can_comment|yesno:"true,false" }})"
@@ -20,7 +21,7 @@ Params:
 
   <div x-show="!loading" class="space-y-3">
     <template x-if="comments.length === 0 && !loading">
-      <p class="text-sm text-base-content/40">No comments yet.</p>
+      <p class="text-sm text-base-content/40">{% translate "No comments yet." %}</p>
     </template>
 
     <template x-for="comment in comments" :key="comment.uuid">
@@ -34,7 +35,7 @@ Params:
               x-text="window.formatTimeAgo(comment.created_at)"
             ></span>
             <template x-if="comment.edited_at">
-              <span class="text-base-content/40 italic">(edited)</span>
+              <span class="text-base-content/40 italic">{% translate "(edited)" %}</span>
             </template>
           </div>
 
@@ -52,7 +53,7 @@ Params:
                     @click="startEdit(comment)"
                   >
                     <i data-lucide="pencil" class="w-3 h-3"></i>
-                    Edit
+                    {% translate "Edit" %}
                   </button>
                   <button
                     type="button"
@@ -60,7 +61,7 @@ Params:
                     @click="deleteComment(comment.uuid)"
                   >
                     <i data-lucide="trash-2" class="w-3 h-3"></i>
-                    Delete
+                    {% translate "Delete" %}
                   </button>
                 </div>
               </template>
@@ -90,9 +91,9 @@ Params:
                   class="btn btn-primary btn-xs"
                   @click="saveEdit(comment.uuid)"
                 >
-                  Save
+                  {% translate "Save" %}
                 </button>
-                <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
+                <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">{% translate "Cancel" %}</button>
               </div>
             </div>
           </template>
@@ -111,7 +112,7 @@ Params:
           class="textarea textarea-bordered textarea-sm w-full leading-snug transition-[min-height] duration-150"
           :class="composerFocused || newBody.trim() ? 'min-h-20' : 'min-h-0'"
           rows="1"
-          placeholder="Add a comment..."
+          placeholder="{% translate 'Add a comment...' %}"
           x-ref="composer"
           x-model="newBody"
           @focus="composerFocused = true"
@@ -132,7 +133,7 @@ Params:
         >
           <i data-lucide="send" class="w-3 h-3" x-show="!sending"></i>
           <span class="loading loading-spinner loading-xs" x-show="sending"></span>
-          Send
+          {% translate "Send" %}
         </button>
       </div>
     </div>

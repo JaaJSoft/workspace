@@ -13,7 +13,7 @@ import polib
 from django.conf import settings
 from django.test import SimpleTestCase
 
-from workspace.core.management.commands.translations import SHARED_MODULE
+from workspace.core.services.translations import shared_catalogs
 
 WORKSPACE_DIR = Path(settings.BASE_DIR) / "workspace"
 
@@ -106,25 +106,18 @@ class TranslationCatalogTests(SimpleTestCase):
                 ]
                 self.assertEqual(incomplete, [])
 
-    def test_no_module_repeats_a_shared_msgid(self):
+    def test_no_catalog_repeats_a_shared_msgid(self):
         # The shared module translates the words every module uses once; a
-        # module catalog that carries one too lets the two translations drift.
+        # catalog that carries one too lets the two translations drift.
         for po_path in po_files():
-            module = po_path.relative_to(WORKSPACE_DIR).parts[0]
-            if module == SHARED_MODULE:
-                continue
-            shared_path = (
-                WORKSPACE_DIR
-                / SHARED_MODULE
-                / po_path.relative_to(WORKSPACE_DIR / module)
-            )
-            if not shared_path.exists():
-                continue
+            module_dir = WORKSPACE_DIR / po_path.relative_to(WORKSPACE_DIR).parts[0]
+            shared = {
+                (entry.msgctxt, entry.msgid)
+                for catalog in shared_catalogs(module_dir, po_path.stem)
+                if catalog.parent.parent == po_path.parent.parent
+                for entry in polib.pofile(str(catalog))
+            }
             with self.subTest(po=str(po_path.relative_to(settings.BASE_DIR))):
-                shared = {
-                    (entry.msgctxt, entry.msgid)
-                    for entry in polib.pofile(str(shared_path))
-                }
                 repeated = [
                     entry.msgid
                     for entry in polib.pofile(str(po_path))

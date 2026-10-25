@@ -1,6 +1,7 @@
 """Datetime presentation helpers shared across modules."""
 
 from django.utils import timezone
+from django.utils.translation import gettext
 
 
 def time_ago(value, now=None):
@@ -20,13 +21,13 @@ def time_ago(value, now=None):
         now = timezone.now()
     diff = (now - value).total_seconds()
     if diff < 60:
-        return "just now"
+        return gettext("just now")
     if diff < 3600:
-        return f"{int(diff // 60)}m ago"
+        return gettext("%(count)sm ago") % {"count": int(diff // 60)}
     if diff < 86400:
-        return f"{int(diff // 3600)}h ago"
+        return gettext("%(count)sh ago") % {"count": int(diff // 3600)}
     if diff < 604800:
-        return f"{int(diff // 86400)}d ago"
+        return gettext("%(count)sd ago") % {"count": int(diff // 86400)}
     local = timezone.localtime(value)
     if local.year == timezone.localtime(now).year:
         return local.strftime("%b %d")

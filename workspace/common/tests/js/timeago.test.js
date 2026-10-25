@@ -123,3 +123,22 @@ test('without a configured zone the formatter is rebuilt every time', () => {
   unzoned.formatTimeAgo('2026-01-15T12:00:00Z', NOW);
   assert.equal(counter.built, afterFirst * 2);
 });
+
+test('relative labels go through the catalog, count interpolated', () => {
+  // The server's time_ago reads the same msgids, so both sides translate alike.
+  const french = {
+    'just now': 'à l’instant',
+    '%(count)sm ago': 'il y a %(count)s min',
+    '%(count)sh ago': 'il y a %(count)s h',
+    '%(count)sd ago': 'il y a %(count)s j',
+  };
+  const fr = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/timeago.js'], {
+    getUserTimeZone: () => 'Europe/Paris',
+    gettext: (msgid) => french[msgid] || msgid,
+  });
+  const frAgo = (sec) => fr.formatTimeAgo(new Date(NOW - sec * 1000).toISOString(), NOW);
+  assert.equal(frAgo(5), 'à l’instant');
+  assert.equal(frAgo(5 * 60), 'il y a 5 min');
+  assert.equal(frAgo(2 * 3600), 'il y a 2 h');
+  assert.equal(frAgo(3 * 86400), 'il y a 3 j');
+});

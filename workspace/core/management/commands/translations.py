@@ -10,15 +10,13 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.core.management.commands import makemessages
 
+from workspace.core.services.translations import shared_catalogs
+
 # Paths no catalog reads strings from: test fixtures, migrations (copies of
 # the model strings), and vendored bundles, whose own gettext calls would
 # land in our djangojs catalog.
 _DJANGO_IGNORE = ["tests", "migrations", "static", "locale"]
 _DJANGOJS_IGNORE = ["tests", "vendor", "locale"]
-
-# The module whose catalog holds the strings every module shares ("Cancel",
-# "Close"). The others leave those msgids out of their own catalogs.
-SHARED_MODULE = "common"
 
 # msgmerge stamps the extraction time in every catalog it touches, even when
 # no message changed.
@@ -58,14 +56,6 @@ def tidy_new_header(text, language):
     )
     header = header.replace('"Language: \\n"', f'"Language: {language}\\n"')
     return header + sep + messages
-
-
-def shared_catalogs(module_dir, domain):
-    """The shared module's catalogs of *domain*, unless *module_dir* is that module."""
-    if module_dir.name == SHARED_MODULE:
-        return []
-    shared_dir = module_dir.parent / SHARED_MODULE
-    return sorted(shared_dir.glob(f"locale/*/LC_MESSAGES/{domain}.po"))
 
 
 class _MakeMessages(makemessages.Command):

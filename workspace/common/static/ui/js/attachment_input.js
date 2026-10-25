@@ -9,7 +9,7 @@
 // flush staged files to the server as soon as they land; composers leave it
 // as the no-op and submit the staged lists with the message.
 window.attachmentInputMixin = function attachmentInputMixin(opts = {}) {
-  const pickerMessage = opts.pickerMessage || 'Select files to attach.';
+  const pickerMessage = opts.pickerMessage || gettext('Select files to attach.');
 
   return {
     pendingFiles: [],
@@ -61,9 +61,9 @@ window.attachmentInputMixin = function attachmentInputMixin(opts = {}) {
 
     async attachFromWorkspace() {
       const files = await AppDialog.filePicker({
-        title: 'Attach from Workspace',
+        title: gettext('Attach from Workspace'),
         message: pickerMessage,
-        okLabel: 'Attach',
+        okLabel: gettext('Attach'),
         okClass: 'btn-info',
         icon: 'hard-drive',
         iconClass: 'bg-info/10 text-info',
@@ -146,9 +146,9 @@ window.attachmentInputMixin = function attachmentInputMixin(opts = {}) {
     // destination folder, then POST {folder_id} to the module's endpoint.
     async promptSaveAttachmentToFiles(url) {
       const folder = await AppDialog.folderPicker({
-        title: 'Save to Files',
-        message: 'Choose a destination folder.',
-        okLabel: 'Save',
+        title: gettext('Save to Files'),
+        message: gettext('Choose a destination folder.'),
+        okLabel: gettext('Save'),
         okClass: 'btn-warning',
         icon: 'folder-down',
         iconClass: 'bg-warning/10 text-warning',
@@ -169,17 +169,17 @@ window.attachmentInputMixin = function attachmentInputMixin(opts = {}) {
         });
         if (resp.ok) {
           AppDialog.message({
-            title: 'Saved',
-            message: 'Attachment saved to Files.',
+            title: gettext('Saved'),
+            message: gettext('Attachment saved to Files.'),
             icon: 'check-circle',
             iconClass: 'bg-success/10 text-success',
           });
         } else {
           const data = await resp.json().catch(() => ({}));
-          AppDialog.error({ message: data.detail || 'Failed to save attachment.' });
+          AppDialog.error({ message: data.detail || gettext('Failed to save attachment.') });
         }
       } catch (e) {
-        AppDialog.error({ message: 'Failed to save attachment.' });
+        AppDialog.error({ message: gettext('Failed to save attachment.') });
       }
     },
   };

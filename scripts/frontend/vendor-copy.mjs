@@ -4,7 +4,7 @@
  * A copy, not a bundle: identical bytes are what let a *_bundle.test.js check
  * an artifact against the digest the published build carries. Libraries that
  * ship a self-contained global build (FullCalendar, luxon, Cropper, Lucide, heic-to,
- * Leaflet, Supercluster) and plain data files go through here; everything else is an esbuild entry.
+ * Leaflet, Supercluster), libraw-wasm's module and worker, and plain data files go through here; everything else is an esbuild entry.
  *
  * The one edit is a trailing sourceMappingURL comment. collectstatic's
  * manifest storage resolves that reference at deploy time and fails the whole
@@ -55,6 +55,13 @@ const SETS = {
       `${WORKSPACE}/files/ui/static/files/ui/js/vendor/heic-to/heic-to.js`,
     ],
   ],
+  // RAW decoder (LibRaw in WASM) for the camera RAW photos no browser shows.
+  // An ES module that starts its worker from its own URL: the four files stay
+  // side by side.
+  libraw: ['index.js', 'worker.js', 'libraw.js', 'libraw.wasm'].map((file) => [
+    `node_modules/libraw-wasm/dist/${file}`,
+    `${WORKSPACE}/files/ui/static/files/ui/js/vendor/libraw-wasm/${file}`,
+  ]),
   // The map of a photo's location in the properties panel. leaflet.css points
   // at its images by relative url(), which collectstatic resolves: they must
   // sit next to it.
@@ -89,7 +96,7 @@ const SETS = {
 };
 
 // Copied as bytes: reading them as text would mangle them.
-const BINARY_EXTENSIONS = new Set(['.png']);
+const BINARY_EXTENSIONS = new Set(['.png', '.wasm']);
 
 // `//# sourceMappingURL=x.map` in JS, `/*# sourceMappingURL=x.map */` in CSS.
 const SOURCE_MAP_COMMENT = /\r?\n(?:\/\/# sourceMappingURL=\S*|\/\*# sourceMappingURL=\S* \*\/)\r?\n?$/;

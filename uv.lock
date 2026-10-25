@@ -3046,6 +3046,22 @@ wheels = [
 ]
 
 [[package]]
+name = "rawpy"
+version = "0.27.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f3/ae/c1c7816ed3f3cbf7ca284a37371243500f4eb39b6a32f7368b585c4ef5c4/rawpy-0.27.1.tar.gz", hash = "sha256:3194d64ff690ac945e1a43237edae8a18f1f493751924de1ae2bcef473c0fb79", size = 561347, upload-time = "2026-08-30T04:54:07.956Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/25/346068101a852fd63c394f7f5a8981898a7f1eedfd15fddc78e6beeaa47f/rawpy-0.27.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:ba5c89653ea7eaef26a0d410f2804e6ae0632e102ed521e9c61c86a556c8b840", size = 2057737, upload-time = "2026-08-30T04:53:52.565Z" },
+    { url = "https://files.pythonhosted.org/packages/82/78/5173ce68a659e5555cb0d6590e37b1ab4cc72fbf95d723b302e2631dc256/rawpy-0.27.1-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:685ad1d25d708efaa356ef3046d1c7c566a1f5a984b32cfc2032b084c15e5b85", size = 2956453, upload-time = "2026-08-30T04:53:54.329Z" },
+    { url = "https://files.pythonhosted.org/packages/22/62/8907bf728e8eafaaa6fda6c94166923bb98b24f9ef9e21009b953fb75cbb/rawpy-0.27.1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:12d31766d5baffc6c50778ccf2e75e0256073c0b237506e448db85686513af93", size = 2952890, upload-time = "2026-08-30T04:53:56.032Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/3c/db96d86964fb7318c082b855dc7eaa94c31f3e16a85aee2146a4ed4ae947/rawpy-0.27.1-cp314-cp314-win_amd64.whl", hash = "sha256:b188bbc23dc4497efea94a610ac278aaba81930e090dcb019f20d8c752f6063e", size = 949401, upload-time = "2026-08-30T04:53:57.807Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/81/85ea96221ba48aefd1ff0039c59247830d4b8ae1ca075131634dd4a54890/rawpy-0.27.1-cp314-cp314-win_arm64.whl", hash = "sha256:738372937081fe1ab52e78b009528e7605712ce138dc1207059c3c77d00b9863", size = 922286, upload-time = "2026-08-30T04:53:59.701Z" },
+]
+
+[[package]]
 name = "recurring-ical-events"
 version = "3.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3611,6 +3627,7 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "python-dotenv" },
     { name = "pywebpush" },
+    { name = "rawpy" },
     { name = "redis" },
     { name = "segno" },
     { name = "sqlite-vec" },
@@ -3685,6 +3702,7 @@ requires-dist = [
     { name = "python-dateutil", specifier = ">=2.9" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "pywebpush", specifier = ">=2.5.0" },
+    { name = "rawpy", specifier = ">=0.27.1" },
     { name = "redis", specifier = ">=8.1.0" },
     { name = "segno", specifier = ">=1.6.6" },
     { name = "sqlite-vec", specifier = ">=0.1.6" },

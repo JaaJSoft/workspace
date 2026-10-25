@@ -28,7 +28,7 @@ def create_attachments(user, task, uploads, workspace_files):
     """
     created = []
     for f in uploads:
-        detection = detect_from_stream(f)
+        detection = detect_from_stream(f, f.name)
         created.append(
             TaskAttachment.objects.create(
                 task=task,

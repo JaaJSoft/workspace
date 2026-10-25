@@ -356,7 +356,7 @@ class FileService:
             )
 
         if content is not None:
-            detection = detect_from_stream(content)
+            detection = detect_from_stream(content, name)
             content_hash = upload_hash(content)
         else:
             detection = detect_from_name(name)
@@ -684,7 +684,7 @@ class FileService:
                 additional_bytes=content.size - (file_obj.size or 0),
             )
 
-        detection = detect_from_stream(content)
+        detection = detect_from_stream(content, name or file_obj.name)
         # Honour the extension when Magika's content label is generic (a sparse
         # ".md" reads as txt) so an edited note keeps type=markdown.
         file_type = refine_with_name(detection.label, name or file_obj.name)

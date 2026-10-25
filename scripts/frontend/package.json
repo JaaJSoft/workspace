@@ -1,10 +1,10 @@
 {
   "name": "workspace-frontend",
   "version": "1.0.0",
-  "description": "Build of every vendored frontend asset for the workspace Django project: the Alpine.js bundle and the Lucide icon library loaded by base.html, the Milkdown Crepe editor bundle and its theme CSS, the chat composer's formatted-text editor (a bare Milkdown build), the Monaco editor bundle with its workers and stylesheet, the emoji picker and its emoji data, the force-graph module behind the notes graph, the FullCalendar, Cropper, heic-to, Leaflet and Supercluster global builds, the vault client cryptography bundles, the password strength estimator, and the Tailwind + DaisyUI stylesheet. Everything is committed to statics and served via whitenoise so no page depends on a CDN at runtime. Rebuild with `npm run build` after bumping any pinned version.",
+  "description": "Build of every vendored frontend asset for the workspace Django project: the Alpine.js bundle and the Lucide icon library loaded by base.html, the Milkdown Crepe editor bundle and its theme CSS, the chat composer's formatted-text editor (a bare Milkdown build), the Monaco editor bundle with its workers and stylesheet, the emoji picker and its emoji data, the force-graph module behind the notes graph, the FullCalendar, Cropper, heic-to, Leaflet and Supercluster global builds, the libraw-wasm RAW decoder, the vault client cryptography bundles, the password strength estimator, and the Tailwind + DaisyUI stylesheet. Everything is committed to statics and served via whitenoise so no page depends on a CDN at runtime. Rebuild with `npm run build` after bumping any pinned version.",
   "private": true,
   "scripts": {
-    "build": "npm run build:alpine && npm run build:lucide && npm run build:editor && npm run build:editor-css && npm run build:chat-composer && npm run build:monaco && npm run build:monaco-workers && npm run build:monaco-css && npm run build:emoji-picker && npm run build:emoji-data && npm run build:force-graph && npm run build:calendar && npm run build:cropper && npm run build:heic && npm run build:leaflet && npm run build:supercluster && npm run build:vault && npm run build:vault-test && npm run build:vault-onboarding && npm run build:password-strength && npm run build:css",
+    "build": "npm run build:alpine && npm run build:lucide && npm run build:editor && npm run build:editor-css && npm run build:chat-composer && npm run build:monaco && npm run build:monaco-workers && npm run build:monaco-css && npm run build:emoji-picker && npm run build:emoji-data && npm run build:force-graph && npm run build:calendar && npm run build:cropper && npm run build:heic && npm run build:libraw && npm run build:leaflet && npm run build:supercluster && npm run build:vault && npm run build:vault-test && npm run build:vault-onboarding && npm run build:password-strength && npm run build:css",
     "build:alpine": "esbuild alpine-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/common/static/ui/js/vendor/alpine/alpine.js",
     "build:lucide": "node vendor-copy.mjs lucide",
     "build:editor": "esbuild milkdown-editor.js --bundle --format=esm --splitting --minify --target=es2022 --outdir=../../workspace/files/ui/static/files/ui/js/vendor/milkdown --chunk-names=chunk-[hash]",
@@ -19,6 +19,7 @@
     "build:calendar": "node vendor-copy.mjs calendar",
     "build:cropper": "node vendor-copy.mjs cropper",
     "build:heic": "node vendor-copy.mjs heic",
+    "build:libraw": "node vendor-copy.mjs libraw",
     "build:leaflet": "node vendor-copy.mjs leaflet",
     "build:supercluster": "node vendor-copy.mjs supercluster",
     "build:vault-onboarding": "esbuild vault-onboarding-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/vault/ui/static/vault/ui/js/vendor/vault-onboarding.js",
@@ -53,6 +54,7 @@
     "heic-to": "1.5.2",
     "jspdf": "4.2.1",
     "leaflet": "1.9.4",
+    "libraw-wasm": "1.6.0",
     "lucide": "1.43.0",
     "luxon": "3.5.0",
     "monaco-editor": "0.45.0",

@@ -225,14 +225,14 @@ class PutFileTests(WopiViewTestBase):
     def test_put_is_refused_by_a_lock_taken_while_it_saved(self):
         """The app lock is asked again inside the write, not only before it."""
 
-        def take_the_lock(stream):
+        def take_the_lock(stream, filename=""):
             now = timezone.now()
             File.objects.filter(pk=self.file.pk).update(
                 locked_by=self.other,
                 locked_at=now,
                 lock_expires_at=now + timedelta(minutes=5),
             )
-            return real(stream)
+            return real(stream, filename)
 
         from workspace.files.services import detection
 

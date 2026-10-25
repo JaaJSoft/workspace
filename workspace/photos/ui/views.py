@@ -60,6 +60,7 @@ from workspace.photos.services.album_cards import (
     shared_album_cards,
 )
 from workspace.photos.services.album_links import find_link, has_access, record_view
+from workspace.photos.services.analysis import library_extensions
 from workspace.photos.services.appearance_review import (
     outfit_suggestions,
     person_silhouettes,
@@ -614,6 +615,7 @@ def _render_page(request, template, context):
         context["photos_shell"] = "photos/ui/swap.html"
     else:
         context["import_folder"] = import_folder_data(import_folder(request.user))
+        context["library_extensions"] = library_extensions()
         context["photos_prefs"] = display_preferences(request.user)
         context["sensitive_blur_choices"] = sensitive_blur_choices()
         context["hidden_folders"] = [

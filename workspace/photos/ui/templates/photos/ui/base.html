@@ -85,17 +85,11 @@
 {% block content %}
   {{ tile|json_script:"photo-tile-data" }}
   {{ import_folder|json_script:"photos-import-folder-data" }}
+  {{ library_extensions|json_script:"photos-library-extensions-data" }}
   {{ photos_prefs|json_script:"photos-prefs-data" }}
   {{ sensitive_blur_choices|json_script:"photos-sensitive-blur-choices" }}
   {{ hidden_folders|json_script:"photos-hidden-folders-data" }}
-  <input
-    id="photos-import-input"
-    type="file"
-    class="hidden"
-    multiple
-    accept="image/*,video/*,.heic,.heif"
-    @change="onImportInput($event)"
-  />
+  <input id="photos-import-input" type="file" class="hidden" multiple accept="{% for extension in library_extensions %}.{{ extension }}{% if not forloop.last %},{% endif %}{% endfor %}" @change="onImportInput($event)" />
   {% comment %}
     The scroll container is the swap target itself: a sidebar navigation
     replaces it whole, so the new listing starts at the top instead of

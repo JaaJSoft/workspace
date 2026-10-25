@@ -728,6 +728,50 @@ with source.content.open('rb') as f:
 - `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
 - Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views/attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views/attachments.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
 
+### Static lists - one definition, everything else derives from it
+
+A list of file formats, extensions, MIME types, labels or any other static values is written down **once**. Every other place that needs it - another module, a template, a JS file - gets it from that definition: Python imports or computes from it, templates and JS receive it from the view through `|json_script`. A copy in a JS constant, a second one in a template attribute and a third in a Python module drift apart the first time one of them is edited, and nothing fails when they do.
+
+```python
+# ✅ photos/services/analysis.py - derived from what the library reads
+def library_extensions():
+    return sorted({
+        extension
+        for label in MEDIA_LABELS
+        for extension in get_label_info(label).get("extensions", [])
+    })
+```
+
+```django
+{# ✅ the picker and the drop filter read the same list #}
+{{ library_extensions|json_script:"photos-library-extensions-data" }}
+<input type="file" accept="{% for extension in library_extensions %}.{{ extension }}{% if not forloop.last %},{% endif %}{% endfor %}">
+```
+
+```js
+// ❌ a second copy of what the server already knows
+const PHOTOS_UNTYPED_MEDIA = /\.(heic|heif|avif|jxl)$/i;
+```
+
+**Rules:**
+
+- Before writing a literal list, look for the definition it should derive from: a registry, a label set (`RASTER_LABELS`, `MEDIA_LABELS`, `RAW_FORMATS`), the type table behind `detection.get_label_info`. When none exists, create it server-side, in the module that owns the concept, and pass it down.
+- A frontend that needs a server-side list reads it from the page (`|json_script`) or from an endpoint, never from a constant of its own. A frontend that needs one fact about the current object (is this file a RAW?) gets the answer from the view, not the list to work it out.
+- The one exception is a data migration: it copies what it needs, because a migration is a historical record that must not change meaning when live code does (see *Data migrations* above). Say so in its docstring.
+
+### File formats and protocols - a maintained library, never a hand-written parser
+
+Reading a binary format (image and video containers, EXIF, TIFF directories, JPEG markers, ISO boxes, archives, office documents) or speaking a protocol is a library's job. A parser written for the occasion handles the three sample files it was written against, carries its own denial-of-service holes (an unbounded scan, a whole file read into memory), and has to be written a second time in JS the day the browser needs the same answer. We shipped exactly that for camera RAW photos - TIFF directory walking, CR3 box lookup and JPEG marker scanning, server side and again in the viewer - and replaced all of it with LibRaw (`rawpy` on the server, the vendored `libraw-wasm` in the viewer).
+
+**Rules:**
+
+- Search before writing: PyPI and npm, for a maintained library with wheels for our Python version (3.14) on Linux, macOS and Windows, or a browser build that runs without a CDN. Prefer the established native library's bindings (LibRaw, libheif, ffmpeg, exiv2) over a pure-Python or pure-JS reimplementation.
+- Check the candidate on real files before adopting it, not on synthetic bytes: a content-sniffing library that files a NEF under TIFF and a CR3 under audio is not an answer, however clean its API.
+- Server-side decoding plugs in where the rest of the code already looks: a Pillow plugin registered in `files/services/raster_formats.py` (`pillow-heif`, `rawpy`), so thumbnails, EXIF and faces need no new branch. A format the browser cannot show gets the vendored library on the image viewer's `<img>` error path, the way `heic-to` and `libraw-wasm` do, never a server-side rendition route.
+- When a library covers most of the need, take its output and adapt the last mile (the RAW plugin copies LibRaw's `DateTime` into `DateTimeOriginal`), rather than parsing the file a second time to fill the gap.
+- When no library fits, stop and ask before writing a parser. If one is agreed, it caps what it reads (size, iterations), is tested against real files, and exists once - a JS twin of a Python parser is the same mistake twice.
+- A test fixture may build a format by hand (a minimal DNG in `files/tests/rasters.py`), provided the real library accepts it: that is the check that the fixture is the format and not an imitation of it.
+
 ### Prefer the standard library over hand-rolled collection plumbing
 
 We target Python 3.14, so reach for a stdlib primitive before writing manual loops over lists/sets: `itertools.batched` (chunking), `itertools.pairwise` (adjacent pairs), `itertools.chain.from_iterable` (flattening), `collections.Counter` (counting), `collections.defaultdict` (grouping), `dict.fromkeys` (order-preserving dedup), plus `math.prod` / `itertools.accumulate` / `statistics`.

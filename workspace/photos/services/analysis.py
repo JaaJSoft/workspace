@@ -10,6 +10,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import ffmpeg
+from workspace.files.services.detection import get_label_info
 from workspace.files.services.raster_formats import RASTER_LABELS
 from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
 from workspace.files.services.thumbnails.generation import VIDEO_LABELS
@@ -26,6 +27,20 @@ logger = logging.getLogger(__name__)
 # The content labels the library reads. SVG is left out on purpose: a vector
 # drawing has no capture date and no fixed size.
 MEDIA_LABELS = RASTER_LABELS | VIDEO_LABELS
+
+
+def library_extensions():
+    """The file extensions of every format the library reads, which the
+    import picker and drop filter go by: browsers give no MIME type to a
+    HEIC or a camera RAW."""
+    return sorted(
+        {
+            extension
+            for label in MEDIA_LABELS
+            for extension in get_label_info(label).get("extensions", [])
+        }
+    )
+
 
 # The version of the reader each kind of row is written by. Raise a kind's
 # number when its reader starts filling a new field: rows written by an older

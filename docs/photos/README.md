@@ -114,15 +114,16 @@ A phone writes where a photo was taken into the file itself, often down to a
 few metres. **Keep locations private**, in the Photos
 preferences and on by default, keeps it from anyone but the owner: someone a
 file, a folder or an album is shared with, and a visitor through a public
-link, get the photo or the video without its position, and its properties
-panel shows neither the coordinates nor the map. Members of a group get the
+link, get the photo or the video without its position, its properties
+panel shows neither the coordinates nor the map, and it stays off their
+**Map** page. Members of a group get the
 photos of its folder as they are: the group is a space they share on purpose.
 
 The stored file is never changed, and the owner keeps the position in their
 own library. What is served is the original with the position overwritten
 where it sits: the GPS block of the EXIF (JPEG and the extra images some
-phones store after it, PNG, WebP, HEIC, AVIF), the GPS properties of the XMP,
-and the location tags of an MP4 or a MOV. Nothing is re-encoded, so the
+phones store after it, PNG, WebP, HEIC, AVIF, TIFF and the camera RAWs), the
+GPS properties of the XMP, and the location tags of an MP4 or a MOV. Nothing is re-encoded, so the
 quality, the other tags and the size stay the same, and a video still seeks.
 A position stored in a video's timed metadata track (some action cameras and
 drones) is not reached; a public album link that does not allow downloads

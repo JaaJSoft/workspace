@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import ExifTags, Image
 
@@ -258,6 +258,46 @@ class PropertiesPanelTests(SharedLocationTestCase):
         self.share_with_bob()
 
         self.assertIn("48.85840, 2.29450", self.panel(self.bob))
+
+
+@override_settings(
+    PHOTOS_MAP_TILE_URL="https://tiles.example.test/{z}/{x}/{y}.png",
+    PHOTOS_MAP_TILE_ATTRIBUTION="Example",
+)
+class LibraryMapTests(SharedLocationTestCase):
+    def setUp(self):
+        super().setUp()
+        self.share_with_bob()
+        self.client.force_login(self.bob)
+
+    def points(self):
+        response = self.client.get("/api/v1/photos/map?scope=shared")
+        self.assertEqual(response.status_code, 200)
+        return [point[0] for point in response.json()["points"]]
+
+    def area(self):
+        return self.client.get(
+            "/photos/map/photos?scope=shared&bbox=2,48,3,49"
+        ).content.decode()
+
+    def test_a_shared_photo_stays_off_the_map(self):
+        self.assertEqual(self.points(), [])
+        self.assertNotIn(str(self.photo.uuid), self.area())
+
+    def test_unless_the_owner_keeps_its_location(self):
+        self.keep_location()
+
+        self.assertEqual(self.points(), [str(self.photo.uuid)])
+        self.assertIn(str(self.photo.uuid), self.area())
+
+    def test_the_owner_sees_it_on_their_map(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get("/api/v1/photos/map?scope=mine")
+
+        self.assertEqual(
+            [point[0] for point in response.json()["points"]], [str(self.photo.uuid)]
+        )
 
 
 class ThumbnailTests(SharedLocationTestCase):

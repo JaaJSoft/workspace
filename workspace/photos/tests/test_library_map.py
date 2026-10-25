@@ -126,7 +126,7 @@ class LibraryMapQueryTests(TestCase):
         return set(files.values_list("name", flat=True))
 
     def test_points_are_the_located_photos_newest_first_undated_last(self):
-        points = map_points(library_files(self.user), UTC)
+        points = map_points(library_files(self.user), UTC, self.user)
 
         self.assertEqual(
             [p[0] for p in points],
@@ -138,7 +138,7 @@ class LibraryMapQueryTests(TestCase):
         self.assertIsNone(points[2][3])
 
     def test_point_months_follow_the_timezone(self):
-        points = map_points(library_files(self.user), PARIS)
+        points = map_points(library_files(self.user), PARIS, self.user)
 
         self.assertEqual(month_token(points[0][3]), "2024-08")
 
@@ -152,7 +152,7 @@ class LibraryMapQueryTests(TestCase):
         )
         MediaItem.objects.filter(file=video).update(sensitive_level=3)
 
-        point = map_points(library_files(self.user), UTC)[0]
+        point = map_points(library_files(self.user), UTC, self.user)[0]
 
         self.assertEqual(point[0], str(video.uuid))
         self.assertEqual((point[4], point[5]), (1, 3))
@@ -164,7 +164,9 @@ class LibraryMapQueryTests(TestCase):
             has_thumbnail=True, image_edit={"rotation": 90}
         )
 
-        thumbnails = {p[0]: p[6] for p in map_points(library_files(self.user), UTC)}
+        thumbnails = {
+            p[0]: p[6] for p in map_points(library_files(self.user), UTC, self.user)
+        }
 
         self.assertIsNone(thumbnails[str(self.paris.uuid)])
         self.assertEqual(thumbnails[str(self.fiji.uuid)], "")
@@ -174,14 +176,15 @@ class LibraryMapQueryTests(TestCase):
         area = parse_area("2,48,3,49")
 
         self.assertEqual(
-            self._names(in_area(library_files(self.user), area)), {"paris.jpg"}
+            self._names(in_area(library_files(self.user), area, self.user)),
+            {"paris.jpg"},
         )
 
     def test_in_area_across_the_antimeridian(self):
         area = parse_area("170,-20,190,-10")
 
         self.assertEqual(
-            self._names(in_area(library_files(self.user), area)),
+            self._names(in_area(library_files(self.user), area, self.user)),
             {"fiji.jpg", "samoa.jpg"},
         )
 

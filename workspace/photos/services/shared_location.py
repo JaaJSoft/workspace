@@ -16,9 +16,12 @@ the map the same way (``details.section_context``).
 """
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
+
+from workspace.users.models import UserSetting
 
 from .gps_redaction import PatchedFile, location_patches
-from .preferences import strip_location_on_share
+from .preferences import MODULE, STRIP_LOCATION_ON_SHARE, strip_location_on_share
 
 
 def withholds_location(file_obj, reader):
@@ -32,6 +35,17 @@ def withholds_location(file_obj, reader):
     # The preference is read by the owner's id: a zip of a hundred photos
     # costs one cached read, not a hundred owner rows.
     return strip_location_on_share(get_user_model()(pk=file_obj.owner_id))
+
+
+def location_shown_q(viewer):
+    """A filter over File rows: the files whose position *viewer* may learn,
+    :func:`withholds_location` for a whole queryset."""
+    # Read straight from the table: the per-user settings cache would cost
+    # one lookup per owner of the queryset.
+    keepers = UserSetting.objects.filter(
+        module=MODULE, key=STRIP_LOCATION_ON_SHARE, value=False
+    ).values("user_id")
+    return Q(owner=viewer) | Q(group__in=viewer.groups.all()) | Q(owner_id__in=keepers)
 
 
 def strip_location(file_obj, reader, handle):

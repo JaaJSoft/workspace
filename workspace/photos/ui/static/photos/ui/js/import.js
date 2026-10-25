@@ -8,7 +8,7 @@ const PHOTOS_IMPORT_BY_DATE_API = '/api/v1/photos/import-folder/by-date';
 // The most uuids the by-date endpoint takes in one report.
 const PHOTOS_IMPORT_BY_DATE_BATCH = 500;
 // Browsers leave `type` empty for the formats they cannot decode themselves.
-const PHOTOS_UNTYPED_MEDIA = /\.(heic|heif|avif|jxl)$/i;
+const PHOTOS_UNTYPED_MEDIA = /\.(heic|heif|avif|jxl|dng|cr2|cr3|nef|nrw|arw|srf|sr2|orf|rw2|pef|raf)$/i;
 const PHOTOS_ANALYSIS_POLL_MS = 4000;
 const PHOTOS_ANALYSIS_MAX_POLLS = 75;
 

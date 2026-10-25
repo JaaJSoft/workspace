@@ -42,6 +42,9 @@ test('only photos and videos are importable', () => {
   assert.equal(ctx.photosImportable(file('a.jpg', 'image/jpeg')), true);
   assert.equal(ctx.photosImportable(file('a.mov', 'video/quicktime')), true);
   assert.equal(ctx.photosImportable(file('IMG_0001.HEIC', '')), true);
+  assert.equal(ctx.photosImportable(file('DSC_0059.NEF', '')), true);
+  assert.equal(ctx.photosImportable(file('IMG_1361.dng', '')), true);
+  assert.equal(ctx.photosImportable(file('_MG_2587.CR3', '')), true);
   assert.equal(ctx.photosImportable(file('logo.svg', 'image/svg+xml')), false);
   assert.equal(ctx.photosImportable(file('notes.pdf', 'application/pdf')), false);
   assert.equal(ctx.photosImportable(file('archive', '')), false);

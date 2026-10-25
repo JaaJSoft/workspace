@@ -34,8 +34,9 @@
     {# Before Alpine: its popstate listener must run ahead of alpine-ajax's. #}
     <script src="{% static 'ui/js/nav_history.js' %}"></script>
     <script src="{% static 'files/ui/js/folder_nav.js' %}"></script>
-    {# The image viewer's rotation and crop geometry: any page may open the viewer. #}
+    {# The image viewer's rotation and crop geometry and RAW previews: any page may open the viewer. #}
     <script src="{% static 'files/ui/js/image_edit.js' %}"></script>
+    <script src="{% static 'files/ui/js/raw_preview.js' %}"></script>
     {% comment %}
       This page does not extend base.html, so nothing base.html loads globally
       is present. Anything a child page needs, including <inline-alert>, is

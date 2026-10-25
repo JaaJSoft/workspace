@@ -7,6 +7,8 @@ import threading
 from dataclasses import dataclass
 from importlib.util import find_spec
 
+from .raw_images import RAW_FORMATS, SNIFF_SIZE, raw_label
+
 # Located without importing magika: the package pulls in onnxruntime and
 # numpy, which every process importing the name helpers below would carry.
 _KB_PATH = os.path.join(
@@ -47,6 +49,16 @@ _KB = _load_kb()
 # Magika files AVIF, a still image, under "video" next to the MP4 container
 # it shares.
 _KB["avif"]["group"] = "image"
+# Magika knows no camera RAW: it files most of them under tiff, the container
+# they share, and a few under unknown.
+for _label, (_mime_type, _extensions) in RAW_FORMATS.items():
+    _KB[_label] = {
+        "mime_type": _mime_type,
+        "group": "image",
+        "description": "Camera RAW image",
+        "extensions": _extensions,
+        "is_text": False,
+    }
 _EXT_TO_LABEL = _build_extension_map(_KB)
 
 # MP4, QuickTime, HEIF and AVIF share the ISO base media container, and Magika
@@ -65,7 +77,7 @@ _IMAGE_BRANDS = {
 }
 # Generic HEIF brands: the codec is in the compatible brands that follow.
 _GENERIC_IMAGE_BRANDS = frozenset({b"mif1", b"msf1"})
-_HEAD_SIZE = 64
+_HEAD_SIZE = SNIFF_SIZE
 
 
 @dataclass(frozen=True)
@@ -93,7 +105,10 @@ def _image_label_from_ftyp(head):
 def _result(magika_result, head):
     label = magika_result.output.label
     mime_type = magika_result.output.mime_type
-    if label in _ISOBMFF_LABELS:
+    if camera_label := raw_label(head):
+        label = camera_label
+        mime_type = _KB[label]["mime_type"]
+    elif label in _ISOBMFF_LABELS:
         image_label = _image_label_from_ftyp(head)
         if image_label and image_label != label:
             label = image_label

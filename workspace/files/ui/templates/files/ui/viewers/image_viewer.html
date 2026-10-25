@@ -169,7 +169,7 @@
         x-show="!converting"
       >
         <img
-          :src="editPreview || convertedSrc || '{{ content_url|escapejs }}'"
+          :src="editPreview || convertedSrc || (rawPhoto ? null : '{{ content_url|escapejs }}')"
           alt="{{ file.name }}"
           class="max-w-full max-h-full object-contain"
           :class="{ 'absolute max-w-none max-h-none': !!natural }"
@@ -424,6 +424,8 @@
     const contentUrl = '{{ content_url|escapejs }}';
     const fileType = '{{ file.type|escapejs }}';
     const heicDecoderUrl = '{% static "files/ui/js/vendor/heic-to/heic-to.js" %}';
+    // No browser decodes a camera RAW: its embedded preview is shown from the start.
+    const rawPhoto = window.rawPreview.LABELS.includes(fileType);
     const imageEditAvailable = {{ image_edit_available|yesno:"true,false" }};
     const openInEditMode = {{ start_editing|yesno:"true,false" }};
     const editedDownloadUrl = '{{ edited_download_url|escapejs }}';
@@ -511,6 +513,7 @@
 
       convertedSrc: null,
       converting: false,
+      rawPhoto: rawPhoto,
 
       // The rotation and crop the file shows with (null: the original), and
       // the one edit mode is drawing, every field present.
@@ -525,6 +528,7 @@
 
       init() {
         const self = this;
+        if (rawPhoto) this.convertUnsupported();
         const editData = this.$root.querySelector('#image-viewer-edit-data');
         this.edit = editData ? JSON.parse(editData.textContent) : null;
         this._resizeObserver = new ResizeObserver(function() {
@@ -757,10 +761,10 @@
       },
 
       // Only formats the browser cannot decode get here: a HEIC anywhere but
-      // Safari. Once browsers read HEIC natively this never runs, and the
-      // vendored decoder can go.
+      // Safari, and a camera RAW everywhere. Once browsers read HEIC natively
+      // the HEIC path never runs, and the vendored decoder can go.
       async convertUnsupported() {
-        if (fileType !== 'heif' || this.convertedSrc || this.converting) return;
+        if ((fileType !== 'heif' && !rawPhoto) || this.convertedSrc || this.converting) return;
         this.converting = true;
         try {
           const resp = await fetch(contentUrl, {
@@ -768,12 +772,21 @@
           });
           if (!resp.ok) return;
           const blob = await resp.blob();
-          const heicTo = await loadHeicDecoder();
-          const jpeg = await heicTo({
-            blob: blob,
-            type: 'image/jpeg',
-            quality: 0.92
-          });
+          let jpeg;
+          if (rawPhoto) {
+            const preview = window.rawPreview.extract(await blob.arrayBuffer());
+            if (!preview) return;
+            jpeg = new Blob([preview], {
+              type: 'image/jpeg'
+            });
+          } else {
+            const heicTo = await loadHeicDecoder();
+            jpeg = await heicTo({
+              blob: blob,
+              type: 'image/jpeg',
+              quality: 0.92
+            });
+          }
           this.convertedSrc = URL.createObjectURL(jpeg);
         } catch (err) {
           console.warn('Could not convert the image for display', err);

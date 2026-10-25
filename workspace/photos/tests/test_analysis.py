@@ -11,7 +11,7 @@ from PIL.TiffImagePlugin import IFDRational
 
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
-from workspace.files.tests.rasters import heic_bytes
+from workspace.files.tests.rasters import heic_bytes, tiff_raw_bytes
 from workspace.files.tests.videos import clip_bytes, requires_ffmpeg
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import (
@@ -101,6 +101,17 @@ class AnalyzePhotoTests(TestCase):
         self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 16, 32, 5, tzinfo=UTC))
         self.assertEqual((photo.width, photo.height), (48, 64))
         self.assertEqual(photo.camera_make, "Apple")
+
+    def test_reads_a_camera_raw(self):
+        f = upload(self.user, "DSC_0001.NEF", tiff_raw_bytes(orientation=8))
+
+        photo = analyze_media(f)
+
+        self.assertEqual(f.type, "nef")
+        self.assertEqual(photo.media_type, MediaItem.MediaType.PHOTO)
+        self.assertEqual(photo.taken_at, datetime(2016, 11, 30, 13, 10, 53, tzinfo=UTC))
+        self.assertEqual((photo.width, photo.height), (64, 96))
+        self.assertEqual(photo.camera_model, "NIKON D3200")
 
     def test_writes_lens_exposure_settings_and_position(self):
         f = upload(self.user, "shot.jpg", _shot_jpeg())

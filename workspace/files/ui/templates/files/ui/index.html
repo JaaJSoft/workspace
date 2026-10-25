@@ -296,7 +296,7 @@
             </div>
           {% endpartialdef %}
         </div>
-        {% include "files/ui/partials/file_viewer_inline.html" with covers="files-main" properties=True %}
+        {% include "files/ui/partials/file_viewer_inline.html" with covers="files-main" properties=True slideshow=True %}
         {% comment %}
         Sits outside #folder-browser so it survives the swap. The spinner
         rotates through a CSS transform, which the compositor keeps
@@ -398,6 +398,7 @@
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/upload_queue.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/viewer_slideshow.js' %}"></script>
   <script src="{% static 'files/ui/js/file_viewer.js' %}"></script>
   <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
   {% properties_section_scripts %}

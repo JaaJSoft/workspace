@@ -119,7 +119,7 @@
         </div>
       {% endblock %}
     </div>
-    {% include "files/ui/partials/file_viewer_inline.html" with covers="photos-main" properties=True %}
+    {% include "files/ui/partials/file_viewer_inline.html" with covers="photos-main" properties=True slideshow=True %}
     {% comment %}
       Outside #photos-content so it survives the swap. The fade-in waits
       200 ms as a CSS transition-delay, so a view that answers at once never
@@ -206,6 +206,7 @@
 {% block extra_scripts %}
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/viewer_slideshow.js' %}"></script>
   <script src="{% static 'files/ui/js/file_viewer.js' %}"></script>
   <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
   {% properties_section_scripts %}

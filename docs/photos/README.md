@@ -111,7 +111,7 @@ cost no request but the grid's, once the map rests.
 ## Location of shared photos
 
 A phone writes where a photo was taken into the file itself, often down to a
-few metres. **Remove the location from shared photos**, in the Photos
+few metres. **Keep locations private**, in the Photos
 preferences and on by default, keeps it from anyone but the owner: someone a
 file, a folder or an album is shared with, and a visitor through a public
 link, get the photo or the video without its position, and its properties

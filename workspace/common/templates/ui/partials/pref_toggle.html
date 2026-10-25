@@ -20,13 +20,42 @@ Optional context:
   "prefs." (e.g. "ai.classify").
 - change: full @change expression, for handlers that don't take the
   (key, value) signature. Overrides `handler`.
+- hint: an explanation kept folded behind an info button next to the label,
+  so the panel stays short.
 {% endcomment %}
-<label class="flex items-center justify-between gap-2 cursor-pointer">
-  <span class="text-sm">{{ label }}</span>
-  <input
-    type="checkbox"
-    class="toggle toggle-sm {{ accent }}"
-    :checked="{% if state %}{{ state }}{% else %}prefs.{{ key }}{% endif %}"
-    @change="{% if change %}{{ change }}{% else %}{% firstof handler 'update' %}('{{ key|escapejs }}', $event.target.checked){% endif %}"
-  />
-</label>
+{% if hint %}
+  <div x-data="{ hintOpen: false }">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-0.5 min-w-0">
+        <label for="pref-{{ label|slugify }}" class="text-sm cursor-pointer">{{ label }}</label>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-circle text-base-content/50"
+          aria-label="About this setting"
+          :aria-expanded="hintOpen"
+          @click="hintOpen = !hintOpen"
+        >
+          <i data-lucide="info" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+      <input
+        id="pref-{{ label|slugify }}"
+        type="checkbox"
+        class="toggle toggle-sm {{ accent }}"
+        :checked="{% if state %}{{ state }}{% else %}prefs.{{ key }}{% endif %}"
+        @change="{% if change %}{{ change }}{% else %}{% firstof handler 'update' %}('{{ key|escapejs }}', $event.target.checked){% endif %}"
+      />
+    </div>
+    <p class="text-xs text-base-content/50 mt-1" x-show="hintOpen" x-cloak>{{ hint }}</p>
+  </div>
+{% else %}
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">{{ label }}</span>
+    <input
+      type="checkbox"
+      class="toggle toggle-sm {{ accent }}"
+      :checked="{% if state %}{{ state }}{% else %}prefs.{{ key }}{% endif %}"
+      @change="{% if change %}{{ change }}{% else %}{% firstof handler 'update' %}('{{ key|escapejs }}', $event.target.checked){% endif %}"
+    />
+  </label>
+{% endif %}

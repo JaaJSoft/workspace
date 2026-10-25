@@ -218,6 +218,10 @@ SPECTACULAR_SETTINGS = {
             "description": "The folder photos imported from the Photos page are saved to.",
         },
         {
+            "name": "Photos - Map",
+            "description": "Where the photos and videos of your library were taken, for the map.",
+        },
+        {
             "name": "Photos - Search",
             "description": "The moments of videos found by similar photos and search by description.",
         },

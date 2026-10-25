@@ -13,7 +13,7 @@ def resync_conversation_members(conversation):
 
     Idempotent: creates missing rows, reactivates previously-left covered users
     (history preserved, unread reset), soft-deactivates rows no longer covered
-    by any attached group, and promotes an admin if those took the last one.
+    by any attached group, and promotes an admin if the group is left without one.
     """
     from ..models import ConversationMember
 
@@ -72,7 +72,10 @@ def resync_conversation_members(conversation):
         m.role = ConversationMember.Role.MEMBER
     if to_deactivate:
         ConversationMember.objects.bulk_update(to_deactivate, ["left_at", "role"])
-        ensure_group_admin(conversation.pk)
+
+    # Unconditional: a conversation everyone left had nobody to promote, so the
+    # first member back must become its admin.
+    ensure_group_admin(conversation.pk)
 
 
 def is_group_linked(conversation_id):

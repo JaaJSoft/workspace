@@ -248,6 +248,13 @@ class GroupSyncAdminTests(TestCase):
         self.alice.groups.add(self.team)
         self.assertEqual(get_conversation_role(self.alice, self.conversation), MEMBER)
 
+    def test_a_member_rejoining_an_emptied_linked_conversation_becomes_admin(self):
+        """Everyone left, so nobody was promoted; whoever comes back first must be."""
+        self.alice.groups.remove(self.team)
+        self.bob.groups.remove(self.team)
+        self.bob.groups.add(self.team)
+        self.assertEqual(get_conversation_role(self.bob, self.conversation), ADMIN)
+
 
 migration = importlib.import_module(
     "workspace.chat.migrations.0032_conversationmember_role"

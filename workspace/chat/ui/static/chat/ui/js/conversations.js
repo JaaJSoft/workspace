@@ -630,7 +630,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       const conv = this.conversations.find(c => c.uuid === uuid);
       this.ctxMenu.isPinned = isPinned || conv?.is_pinned || false;
       this.ctxMenu.isBot = conv?.is_bot_conversation || false;
-      this.ctxMenu.isAdmin = this.isGroupAdmin(conv);
+      // `?? null`: undefined would fall back to the open conversation's role.
+      this.ctxMenu.isAdmin = this.isGroupAdmin(conv ?? null);
       this.ctxMenu.isGroupLinked = Boolean(conv?.groups?.length);
       this.ctxMenu.open = true;
 

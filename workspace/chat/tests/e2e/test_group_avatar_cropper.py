@@ -28,7 +28,9 @@ class GroupAvatarCropperTests(PlaywrightTestCase):
         conv = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, title="Team", created_by=user
         )
-        ConversationMember.objects.create(conversation=conv, user=user)
+        ConversationMember.objects.create(
+            conversation=conv, user=user, role=ConversationMember.Role.ADMIN
+        )
         self.login_as(user)
         self.page.goto(f"{self.live_server_url}/chat/{conv.uuid}")
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")

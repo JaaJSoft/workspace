@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 const CONV_UUID = 'conv-1';
 
@@ -69,4 +69,23 @@ test('setMemberRole sends nothing for a member', async () => {
   await app.setMemberRole(2, 'admin');
 
   assert.equal(requests.length, 0);
+});
+
+test('the context menu of a row missing from the list never borrows the open conversation role', () => {
+  const ctx = loadScripts(
+    [
+      'workspace/chat/ui/static/chat/ui/js/members.js',
+      'workspace/chat/ui/static/chat/ui/js/conversations.js',
+    ],
+    { document: { getElementById: () => ({ getBoundingClientRect: () => ({ width: 0, height: 0 }) }) } },
+  );
+  const app = Object.assign(ctx.chatConversationsMixin(), ctx.chatMembersMixin(), {
+    activeConversation: { uuid: 'open', kind: 'group', my_role: 'admin', members: [] },
+    conversations: [],
+    $nextTick() {},
+  });
+
+  app.openConvContextMenu({ preventDefault() {}, clientX: 0, clientY: 0 }, 'stale-row', 'group');
+
+  assert.equal(app.ctxMenu.isAdmin, false);
 });

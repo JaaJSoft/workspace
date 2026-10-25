@@ -169,7 +169,7 @@
         x-show="!converting"
       >
         <img
-          :src="editPreview || convertedSrc || (rawPhoto ? null : '{{ content_url|escapejs }}')"
+          :src="editPreview || convertedSrc || '{{ content_url|escapejs }}'"
           alt="{{ file.name }}"
           class="max-w-full max-h-full object-contain"
           :class="{ 'absolute max-w-none max-h-none': !!natural }"
@@ -425,7 +425,6 @@
     const fileType = '{{ file.type|escapejs }}';
     const heicDecoderUrl = '{% static "files/ui/js/vendor/heic-to/heic-to.js" %}';
     const rawDecoderUrl = '{% static "files/ui/js/vendor/libraw-wasm/index.js" %}';
-    // No browser decodes a camera RAW: its embedded preview is shown from the start.
     const rawPhoto = {{ raw_photo|yesno:"true,false" }};
     const imageEditAvailable = {{ image_edit_available|yesno:"true,false" }};
     const openInEditMode = {{ start_editing|yesno:"true,false" }};
@@ -545,7 +544,6 @@
 
       convertedSrc: null,
       converting: false,
-      rawPhoto: rawPhoto,
 
       // The rotation and crop the file shows with (null: the original), and
       // the one edit mode is drawing, every field present.
@@ -560,7 +558,6 @@
 
       init() {
         const self = this;
-        if (rawPhoto) this.convertUnsupported();
         const editData = this.$root.querySelector('#image-viewer-edit-data');
         this.edit = editData ? JSON.parse(editData.textContent) : null;
         this._resizeObserver = new ResizeObserver(function() {

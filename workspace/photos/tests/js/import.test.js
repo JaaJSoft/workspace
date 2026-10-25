@@ -20,7 +20,9 @@ function load({ folder = null, fetchResponse = null, sortOk = () => true } = {})
     document: {
       getElementById: (id) => ({
         'photos-import-folder-data': { textContent: JSON.stringify(folder) },
-        'photos-raw-extensions-data': { textContent: JSON.stringify(['dng', 'nef', 'cr3']) },
+        'photos-library-extensions-data': {
+          textContent: JSON.stringify(['cr3', 'dng', 'heic', 'jpg', 'mov', 'nef']),
+        },
       })[id] || null,
     },
     location: { origin: 'https://cloud.example.org' },

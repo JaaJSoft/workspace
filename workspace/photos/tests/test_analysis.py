@@ -18,6 +18,7 @@ from workspace.photos.services.analysis import (
     ANALYSIS_VERSIONS,
     analyze_media,
     is_media_candidate,
+    library_extensions,
     pending_media_qs,
 )
 from workspace.photos.services.exif import PhotoMetadata
@@ -513,3 +514,15 @@ class AnalyzeVideoTests(TestCase):
 
     def _pending(self):
         return set(pending_media_qs().values_list("pk", flat=True))
+
+
+class LibraryExtensionsTests(TestCase):
+    def test_every_format_the_library_reads_and_nothing_else(self):
+        extensions = library_extensions()
+
+        for extension in ("jpg", "heic", "avif", "nef", "dng", "cr3", "mov", "mp4"):
+            with self.subTest(extension):
+                self.assertIn(extension, extensions)
+        # A vector drawing has no capture date; JPEG XL no decoder here.
+        self.assertNotIn("svg", extensions)
+        self.assertNotIn("jxl", extensions)

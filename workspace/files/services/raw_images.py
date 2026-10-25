@@ -27,9 +27,6 @@ RAW_FORMATS = {
     "raf": ("image/x-fuji-raf", ["raf"]),
 }
 RAW_LABELS = frozenset(RAW_FORMATS)
-RAW_EXTENSIONS = tuple(
-    extension for _, extensions in RAW_FORMATS.values() for extension in extensions
-)
 # LibRaw reads a RAW from memory: past this, it is not read at all. Medium
 # format backs write about 200 MB.
 MAX_RAW_SIZE = 512 * 1024 * 1024

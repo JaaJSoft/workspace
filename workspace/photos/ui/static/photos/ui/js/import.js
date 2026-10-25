@@ -7,23 +7,20 @@ const PHOTOS_IMPORT_API = '/api/v1/photos/import-folder';
 const PHOTOS_IMPORT_BY_DATE_API = '/api/v1/photos/import-folder/by-date';
 // The most uuids the by-date endpoint takes in one report.
 const PHOTOS_IMPORT_BY_DATE_BATCH = 500;
-// Browsers leave `type` empty for the formats they cannot decode themselves:
-// these, and the camera RAW extensions the page lists.
-const PHOTOS_UNTYPED_MEDIA = ['heic', 'heif', 'avif', 'jxl'];
 const PHOTOS_ANALYSIS_POLL_MS = 4000;
 const PHOTOS_ANALYSIS_MAX_POLLS = 75;
 
+// A file is imported when its name carries an extension of a format the
+// library reads, as the page lists them: the MIME type a browser guesses is
+// empty for a HEIC or a camera RAW.
 function photosImportable(file) {
-  if (file.type === 'image/svg+xml') return false;
-  if (/^(image|video)\//.test(file.type)) return true;
-  if (file.type) return false;
   const dot = file.name.lastIndexOf('.');
   const extension = dot > 0 ? file.name.slice(dot + 1).toLowerCase() : '';
-  return PHOTOS_UNTYPED_MEDIA.includes(extension) || photosRawExtensions().includes(extension);
+  return photosLibraryExtensions().includes(extension);
 }
 
-function photosRawExtensions() {
-  const el = document.getElementById('photos-raw-extensions-data');
+function photosLibraryExtensions() {
+  const el = document.getElementById('photos-library-extensions-data');
   try {
     return (el && JSON.parse(el.textContent)) || [];
   } catch (_) {

@@ -1,3 +1,4 @@
+{% load i18n %}
 <section
   id="dashboard-tasks"
   class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}"
@@ -9,17 +10,19 @@
           href="/projects"
           class="btn btn-ghost btn-sm absolute top-4 right-4 sm:top-6 sm:right-6"
         >
-          Projects
+          {% translate "Projects" %}
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </a>
         <div class="space-y-1">
           <h2 class="card-title text-xl">
             <i data-lucide="list-todo" class="w-5 h-5"></i>
-            My Tasks
+            {% translate "My Tasks" %}
           </h2>
-          <p class="text-sm text-base-content/60">Your assigned tasks, most urgent first.</p>
+          <p class="text-sm text-base-content/60">{% translate "Your assigned tasks, most urgent first." %}</p>
         </div>
         {% if tasks %}
+          {# Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25". #}
+          {% translate "M j" context "short due date format" as due_date_format %}
           <ul class="divide-y divide-base-200">
             {% for task in tasks %}
               <li>
@@ -40,7 +43,7 @@
                   {% if task.due_date %}
                     <span
                       class="text-xs tabular-nums flex-shrink-0 w-12 text-right {% if task.due_date < today %}text-error font-medium{% elif task.due_date == today %}text-warning font-medium{% else %}text-base-content/50{% endif %}"
-                    >{{ task.due_date|date:"M j" }}</span>
+                    >{{ task.due_date|date:due_date_format }}</span>
                   {% else %}
                     <span class="w-12 flex-shrink-0 hidden sm:block"></span>
                   {% endif %}
@@ -49,7 +52,7 @@
             {% endfor %}
           </ul>
         {% else %}
-          <p class="text-xs text-base-content/50 py-1">No open tasks assigned to you.</p>
+          <p class="text-xs text-base-content/50 py-1">{% translate "No open tasks assigned to you." %}</p>
         {% endif %}
       </div>
     </div>

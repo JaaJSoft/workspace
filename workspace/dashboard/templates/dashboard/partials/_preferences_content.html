@@ -1,8 +1,11 @@
+{% load i18n %}
 <div class="space-y-3">
   <label class="flex items-center justify-between gap-4">
     <div>
-      <div class="font-medium text-sm">Show upcoming events</div>
-      <div class="text-xs text-base-content/60">Display today's calendar events on the dashboard.</div>
+      <div class="font-medium text-sm">{% translate "Show upcoming events" %}</div>
+      <div
+        class="text-xs text-base-content/60"
+      >{% translate "Display today's calendar events on the dashboard." %}</div>
     </div>
     <input
       type="checkbox"
@@ -17,8 +20,10 @@
     :class="{ 'opacity-40 pointer-events-none': !showUpcoming }"
   >
     <div>
-      <div class="font-medium text-sm">Show empty state</div>
-      <div class="text-xs text-base-content/60">Display "No upcoming events today." when the list is empty.</div>
+      <div class="font-medium text-sm">{% translate "Show empty state" %}</div>
+      <div
+        class="text-xs text-base-content/60"
+      >{% translate 'Display "No upcoming events today." when the list is empty.' %}</div>
     </div>
     <input
       type="checkbox"
@@ -32,8 +37,10 @@
   {% if my_tasks_available %}
     <label class="flex items-center justify-between gap-4">
       <div>
-        <div class="font-medium text-sm">Show my tasks</div>
-        <div class="text-xs text-base-content/60">Display your assigned project tasks on the dashboard.</div>
+        <div class="font-medium text-sm">{% translate "Show my tasks" %}</div>
+        <div
+          class="text-xs text-base-content/60"
+        >{% translate "Display your assigned project tasks on the dashboard." %}</div>
       </div>
       <input
         type="checkbox"
@@ -45,8 +52,8 @@
   {% endif %}
 
   <div class="pt-3 border-t border-base-300">
-    <div class="font-medium text-sm">Apps</div>
-    <div class="text-xs text-base-content/60 mb-3">Choose which apps appear on your dashboard.</div>
+    <div class="font-medium text-sm">{% translate "Apps" %}</div>
+    <div class="text-xs text-base-content/60 mb-3">{% translate "Choose which apps appear on your dashboard." %}</div>
     <div class="space-y-2 max-h-72 overflow-y-auto">
       <template x-for="app in apps" :key="app.slug">
         <label class="flex items-center justify-between gap-4">

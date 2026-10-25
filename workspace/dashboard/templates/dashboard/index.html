@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
-{% load static ui_filters %}
+{% load i18n static ui_filters %}
 
-{% block title %}Dashboard - Workspace{% endblock %}
+{% block title %}{% translate "Dashboard" %} - Workspace{% endblock %}
 {% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
 {% block drawer_wrapper_class %}{% endblock %}
 {% block drawer_content_class %}{% endblock %}
@@ -12,11 +12,18 @@
 
     {# ── Hero ── #}
     <section class="text-center space-y-1 relative">
-      {# The name stays in HTML (Django autoescape); only the greeting word goes through JS. #}
-      <h1 class="text-3xl font-semibold text-base-content"><span
-  x-data
-  x-text="(() => { const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined; const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10) % 24; return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })()"
->Welcome back</span>, {{ user.first_name|default:user.username }}.</h1>
+      {% with name=user.first_name|default:user.username %}
+        {# The greeting depends on the hour in the user's timezone, so the browser picks it; x-text writes text, never markup. #}
+        <h1
+          class="text-3xl font-semibold text-base-content"
+          x-data
+          x-text="dashboardGreeting('{{ name|escapejs }}')"
+        >
+          {% blocktranslate trimmed %}
+            Welcome back, {{ name }}.
+          {% endblocktranslate %}
+        </h1>
+      {% endwith %}
       <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
         <span x-text="label"></span>
       </p>
@@ -33,7 +40,7 @@
             type="button"
             @click="toggle()"
             class="btn btn-ghost btn-sm btn-square"
-            title="Workspace usage"
+            title="{% translate 'Workspace usage' %}"
           >
             <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
           </button>
@@ -54,8 +61,8 @@
             type="button"
             tabindex="0"
             class="btn btn-ghost btn-sm btn-square"
-            aria-label="Dashboard preferences"
-            title="Dashboard preferences"
+            aria-label="{% translate 'Dashboard preferences' %}"
+            title="{% translate 'Dashboard preferences' %}"
           >
             <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
           </button>
@@ -65,7 +72,7 @@
           >
             <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
               <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
-              Dashboard
+              {% translate "Dashboard" %}
             </h4>
             {% include "dashboard/partials/_preferences_content.html" %}
           </div>
@@ -99,28 +106,28 @@
           >
             <span class="flex items-center gap-1">
               <kbd class="kbd kbd-xs">↑↓</kbd>
-              navigate
+              {% translate "navigate" %}
             </span>
             <span class="flex items-center gap-1">
               <kbd class="kbd kbd-xs">⏎</kbd>
-              select
+              {% translate "select" %}
             </span>
             <button
               type="button"
               @click="enterCommandMode()"
               class="flex items-center gap-1 hover:text-base-content"
-              title="Actions and apps only (Ctrl/Cmd+Shift+K)"
+              title="{% translate 'Actions and apps only (Ctrl/Cmd+Shift+K)' %}"
             >
               <kbd class="kbd kbd-xs">&gt;</kbd>
-              actions
+              {% translate "actions" %}
             </button>
             {% include "core/partials/search/scope_toggle.html" %}
             <button
               type="button"
               @click="close()"
               class="btn btn-ghost btn-xs"
-              title="Close"
-              aria-label="Close search results"
+              title="{% translate 'Close' %}"
+              aria-label="{% translate 'Close search results' %}"
             >
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
@@ -169,9 +176,9 @@
               <div class="space-y-1">
                 <h2 class="card-title text-xl">
                   <i data-lucide="activity" class="w-5 h-5"></i>
-                  Recent Activity
+                  {% translate "Recent Activity" %}
                 </h2>
-                <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
+                <p class="text-sm text-base-content/60">{% translate "What's happening across your workspace." %}</p>
               </div>
               <div class="flex items-center gap-2 min-w-0">
                 {% include "core/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
@@ -179,7 +186,7 @@
                   type="button"
                   class="btn btn-ghost btn-sm btn-square"
                   :class="searchOpen && 'btn-active'"
-                  title="Search"
+                  title="{% translate 'Search' %}"
                   @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
                 >
                   <i data-lucide="search" class="w-4 h-4"></i>
@@ -221,7 +228,8 @@
             {# Error markup, copied into the feed target by @ajax:error above so the card is never left blank #}
             <div x-ref="feedFailed" hidden>
               <p class="py-3 text-sm text-base-content/60">
-                Couldn't load activity. <a href="{% url 'dashboard:index' %}" class="link link-hover">Reload</a>
+                {% translate "Couldn't load activity." %}
+                <a href="{% url 'dashboard:index' %}" class="link link-hover">{% translate "Reload" %}</a>
               </p>
             </div>
           </div>
@@ -234,7 +242,27 @@
 
   <script src="{% static 'calendar/ui/js/event_card.js' %}"></script>
   <script src="{% static 'dashboard/js/badges.js' %}"></script>
+  {% translate "Good night, %(name)s." as greeting_night %}
+  {% translate "Good morning, %(name)s." as greeting_morning %}
+  {% translate "Good afternoon, %(name)s." as greeting_afternoon %}
+  {% translate "Good evening, %(name)s." as greeting_evening %}
   <script>
+    function dashboardGreeting(name) {
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+      const hour = parseInt(new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour: 'numeric',
+        hour12: false
+      }).format(new Date()), 10) % 24;
+      const greeting = hour < 5 ? '{{ greeting_night|escapejs }}' :
+        hour < 12 ? '{{ greeting_morning|escapejs }}' :
+        hour < 18 ? '{{ greeting_afternoon|escapejs }}' :
+        '{{ greeting_evening|escapejs }}';
+      return interpolate(greeting, {
+        name: name
+      }, true);
+    }
+
     const _weatherCodes = {
       0: 'clear-day',
       1: 'clear-day',
@@ -315,7 +343,7 @@
           function tick(now) {
             const progress = Math.min((now - start) / duration, 1);
             const eased = 1 - Math.pow(1 - progress, 3);
-            el.textContent = Math.round(eased * target).toLocaleString();
+            el.textContent = Math.round(eased * target).toLocaleString(window.getUserLocale());
             if (progress < 1) requestAnimationFrame(tick);
           }
           requestAnimationFrame(tick);
@@ -337,7 +365,7 @@
         init() {
           const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
           const now = new Date();
-          this.label = now.toLocaleDateString(undefined, {
+          this.label = now.toLocaleDateString(window.getUserLocale(), {
             timeZone: tz,
             weekday: 'long',
             month: 'long',
@@ -388,7 +416,7 @@
           const h = new Date().getHours();
           if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
           const icon = _weatherIcons[condition] || 'cloud';
-          const dateStr = new Date().toLocaleDateString(undefined, {
+          const dateStr = new Date().toLocaleDateString(window.getUserLocale(), {
             timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined,
             weekday: 'long',
             month: 'long',

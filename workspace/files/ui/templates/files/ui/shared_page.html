@@ -115,7 +115,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
                 :class="canGoBack ? 'text-base-content' : 'text-base-content/20'"
-                title="{% translate 'Back' %}"
+                title="{% translate 'Back' context 'history navigation' %}"
                 :disabled="!canGoBack"
                 @click="window.folderNav.back()"
               >

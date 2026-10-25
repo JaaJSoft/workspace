@@ -720,7 +720,7 @@ class SharedFolderListingTests(TestCase):
         self.doc.refresh_from_db()
         # filesizeformat joins the number and unit with a non-breaking space.
         self.assertContains(resp, "2.0\xa0KB")
-        self.assertContains(resp, date_filter(self.doc.updated_at, "M j, Y"))
+        self.assertContains(resp, date_filter(self.doc.updated_at, "DATE_FORMAT"))
 
     @override_settings(
         FILES_MALWARE_SCAN_ENABLED=True, FILES_MALWARE_ON_DETECTION="block"

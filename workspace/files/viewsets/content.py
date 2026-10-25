@@ -3,6 +3,7 @@
 from itertools import batched
 
 from django.http import Http404
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -98,7 +99,7 @@ class ContentMixin:
         if reason is None:
             return None
         return Response(
-            {"detail": "File is quarantined.", "reason": reason},
+            {"detail": _("File is quarantined."), "reason": reason},
             status=status.HTTP_403_FORBIDDEN,
         )
 

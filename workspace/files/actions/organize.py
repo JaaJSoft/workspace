@@ -1,3 +1,5 @@
+from django.utils.translation import gettext, gettext_lazy
+
 from workspace.files.models import File
 from workspace.files.services import FilePermission
 
@@ -8,7 +10,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class ToggleFavoriteAction(BaseFileAction):
     id = "toggle_favorite"
-    label = "Add to favorites"
+    label = gettext_lazy("Add to favorites")
     icon = "star"
     category = ActionCategory.ORGANIZE
     node_types = ("file", "folder")
@@ -22,8 +24,8 @@ class ToggleFavoriteAction(BaseFileAction):
 
     def get_label(self, file_obj):
         if getattr(file_obj, "is_favorite", False):
-            return "Remove from favorites"
-        return "Add to favorites"
+            return gettext("Remove from favorites")
+        return gettext("Add to favorites")
 
     def get_icon(self, file_obj):
         return "star"
@@ -37,7 +39,7 @@ class ToggleFavoriteAction(BaseFileAction):
 @ActionRegistry.register
 class TogglePinAction(BaseFileAction):
     id = "toggle_pin"
-    label = "Pin to sidebar"
+    label = gettext_lazy("Pin to sidebar")
     icon = "pin"
     category = ActionCategory.ORGANIZE
     node_types = ("folder",)
@@ -54,8 +56,8 @@ class TogglePinAction(BaseFileAction):
 
     def get_label(self, file_obj):
         if getattr(file_obj, "is_pinned", False):
-            return "Unpin from sidebar"
-        return "Pin to sidebar"
+            return gettext("Unpin from sidebar")
+        return gettext("Pin to sidebar")
 
     def get_icon(self, file_obj):
         return "pin"
@@ -77,7 +79,7 @@ class ToggleSensitiveAction(BaseFileAction):
     """
 
     id = "toggle_sensitive"
-    label = "Mark as sensitive"
+    label = gettext_lazy("Mark as sensitive")
     icon = "eye-closed"
     category = ActionCategory.ORGANIZE
     node_types = ("file",)
@@ -96,8 +98,8 @@ class ToggleSensitiveAction(BaseFileAction):
 
     def get_label(self, file_obj):
         if self._is_sensitive(file_obj):
-            return "Unmark as sensitive"
-        return "Mark as sensitive"
+            return gettext("Unmark as sensitive")
+        return gettext("Mark as sensitive")
 
     def get_icon(self, file_obj):
         return "eye" if self._is_sensitive(file_obj) else "eye-closed"
@@ -111,7 +113,7 @@ class ToggleSensitiveAction(BaseFileAction):
 @ActionRegistry.register
 class ManageTagsAction(BaseFileAction):
     id = "manage_tags"
-    label = "Tags"
+    label = gettext_lazy("Tags")
     icon = "tag"
     category = ActionCategory.ORGANIZE
     node_types = ("file", "folder")
@@ -129,7 +131,7 @@ class ManageTagsAction(BaseFileAction):
 @ActionRegistry.register
 class ShareAction(BaseFileAction):
     id = "share"
-    label = "Share"
+    label = gettext_lazy("Share")
     icon = "share-2"
     category = ActionCategory.ORGANIZE
     node_types = ("file", "folder")

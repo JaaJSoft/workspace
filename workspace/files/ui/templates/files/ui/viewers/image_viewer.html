@@ -1,4 +1,10 @@
-{% load static %}
+{% load i18n static %}
+{% translate "Edit %(current)s of %(total)s" as edit_counter_label %}
+{% translate "Someone else is editing this file." as edit_locked_message %}
+{% translate "The edit could not be saved." as edit_not_saved_message %}
+{% translate "Edit failed (HTTP %(status)s)" as ai_edit_failed_message %}
+{% translate "Save failed" as save_failed_message %}
+{% translate 'e.g. "remove the background", "make it brighter"' as edit_prompt_placeholder %}
 <!-- Image Viewer -->
 <div
   class="flex flex-col h-full"
@@ -16,7 +22,7 @@
       type="button"
       class="btn btn-sm btn-ghost"
       @click="zoom(-0.2)"
-      title="Zoom out (-)"
+      title="{% translate 'Zoom out (-)' %}"
     >
       <i data-lucide="zoom-out" class="w-4 h-4"></i>
     </button>
@@ -28,7 +34,7 @@
       type="button"
       class="btn btn-sm btn-ghost"
       @click="zoom(0.2)"
-      title="Zoom in (+)"
+      title="{% translate 'Zoom in (+)' %}"
     >
       <i data-lucide="zoom-in" class="w-4 h-4"></i>
     </button>
@@ -39,7 +45,7 @@
         type="button"
         class="btn btn-sm btn-ghost"
         @click="rotate(90)"
-        title="Rotate (R)"
+        title="{% translate 'Rotate (R)' %}"
       >
         <i data-lucide="rotate-cw" class="w-4 h-4"></i>
       </button>
@@ -48,7 +54,7 @@
       type="button"
       class="btn btn-sm btn-ghost"
       @click="reset()"
-      title="Reset (0)"
+      title="{% translate 'Reset (0)' %}"
     >
       <i data-lucide="refresh-cw" class="w-4 h-4"></i>
     </button>
@@ -59,11 +65,11 @@
         class="btn btn-sm btn-ghost"
         @click="startEditing()"
         :disabled="!!editPreview"
-        title="Rotate and crop"
+        title="{% translate 'Rotate and crop' %}"
         data-testid="image-edit-start"
       >
         <i data-lucide="crop" class="w-4 h-4"></i>
-        <span class="hidden sm:inline">Edit</span>
+        <span class="hidden sm:inline">{% translate "Edit" %}</span>
       </button>
     {% endif %}
     {% if ai_edit_available %}
@@ -73,10 +79,10 @@
         class="btn btn-sm"
         :class="editMode ? 'btn-module' : 'btn-ghost'"
         @click="toggleEditMode()"
-        title="AI Edit"
+        title="{% translate 'AI Edit' %}"
       >
         <i data-lucide="wand-2" class="w-4 h-4"></i>
-        <span class="hidden sm:inline">AI Edit</span>
+        <span class="hidden sm:inline">{% translate "AI Edit" %}</span>
       </button>
     {% endif %}
   </div>
@@ -94,8 +100,8 @@
         class="btn btn-sm btn-ghost"
         @click="rotateDraft(-1)"
         :disabled="saving"
-        title="Rotate left"
-        aria-label="Rotate left"
+        title="{% translate 'Rotate left' %}"
+        aria-label="{% translate 'Rotate left' %}"
       >
         <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
       </button>
@@ -104,8 +110,8 @@
         class="btn btn-sm btn-ghost"
         @click="rotateDraft(1)"
         :disabled="saving"
-        title="Rotate right"
-        aria-label="Rotate right"
+        title="{% translate 'Rotate right' %}"
+        aria-label="{% translate 'Rotate right' %}"
         data-testid="image-edit-rotate-right"
       >
         <i data-lucide="rotate-cw" class="w-4 h-4"></i>
@@ -116,11 +122,11 @@
         class="btn btn-sm btn-ghost"
         @click="resetDraft()"
         :disabled="saving || draftIsOriginal()"
-        title="Back to the image as it was uploaded"
+        title="{% translate 'Back to the image as it was uploaded' %}"
         data-testid="image-edit-original"
       >
         <i data-lucide="undo-2" class="w-4 h-4"></i>
-        <span class="hidden sm:inline">Original</span>
+        <span class="hidden sm:inline">{% translate "Original" %}</span>
       </button>
       <div class="divider divider-horizontal mx-1"></div>
       <button
@@ -129,7 +135,7 @@
         @click="cancelEditing()"
         :disabled="saving"
       >
-        Cancel
+        {% translate "Cancel" %}
       </button>
       <button
         type="button"
@@ -139,7 +145,7 @@
         data-testid="image-edit-save"
       >
         <span x-show="saving" x-cloak class="loading loading-spinner loading-xs"></span>
-        Save
+        {% translate "Save" %}
       </button>
     </div>
   {% endif %}
@@ -260,17 +266,17 @@
         <div class="p-4 flex flex-col gap-4 h-full">
           <h4 class="font-semibold text-sm flex items-center gap-2">
             <i data-lucide="wand-2" class="w-4 h-4"></i>
-            AI Image Edit
+            {% translate "AI Image Edit" %}
           </h4>
 
           <!-- Prompt -->
           <div class="form-control">
-            <label class="label"><span class="label-text text-xs">Describe the edit</span></label>
+            <label class="label"><span class="label-text text-xs">{% translate "Describe the edit" %}</span></label>
             <textarea
               x-model="editPrompt"
               class="textarea textarea-bordered textarea-sm w-full"
               rows="3"
-              placeholder='e.g. "remove the background", "make it brighter"'
+              placeholder="{{ edit_prompt_placeholder }}"
               :disabled="editLoading"
               @keydown.ctrl.enter="generateEdit()"
             ></textarea>
@@ -278,15 +284,15 @@
 
           <!-- Size selector -->
           <div class="form-control">
-            <label class="label"><span class="label-text text-xs">Output size</span></label>
+            <label class="label"><span class="label-text text-xs">{% translate "Output size" %}</span></label>
             <select
               x-model="editSize"
               class="select select-bordered select-sm w-full"
               :disabled="editLoading"
             >
               <option value="1024x1024">1024 x 1024</option>
-              <option value="1792x1024">1792 x 1024 (landscape)</option>
-              <option value="1024x1792">1024 x 1792 (portrait)</option>
+              <option value="1792x1024">{% translate "1792 x 1024 (landscape)" %}</option>
+              <option value="1024x1792">{% translate "1024 x 1792 (portrait)" %}</option>
             </select>
           </div>
 
@@ -299,11 +305,11 @@
           >
             <span x-show="!editLoading" class="flex items-center gap-2">
               <i data-lucide="sparkles" class="w-4 h-4"></i>
-              Generate
+              {% translate "Generate" %}
             </span>
             <span x-show="editLoading" class="flex items-center gap-2" x-cloak>
               <span class="loading loading-spinner loading-xs"></span>
-              Generating...
+              {% translate "Generating..." %}
             </span>
           </button>
 
@@ -317,7 +323,7 @@
             <div class="flex flex-col gap-2 mt-auto">
               <div
                 class="text-xs text-base-content/60 text-center"
-                x-text="'Edit ' + editHistory.length + ' of ' + editHistory.length"
+                x-text="interpolate('{{ edit_counter_label|escapejs }}', { current: editHistory.length, total: editHistory.length }, true)"
               ></div>
 
               <!-- Undo -->
@@ -328,7 +334,7 @@
                 :disabled="editHistory.length <= 1"
               >
                 <i data-lucide="undo-2" class="w-4 h-4"></i>
-                Undo
+                {% translate "Undo" %}
               </button>
 
               <!-- Save As -->
@@ -339,7 +345,7 @@
                 x-show="!showSaveAs"
               >
                 <i data-lucide="save" class="w-4 h-4"></i>
-                Save as copy
+                {% translate "Save as copy" %}
               </button>
 
               <!-- Save As form -->
@@ -349,7 +355,7 @@
                 class="flex flex-col gap-2 p-3 bg-base-200 rounded-lg"
               >
                 <div class="form-control">
-                  <label class="label"><span class="label-text text-xs">File name</span></label>
+                  <label class="label"><span class="label-text text-xs">{% translate "File name" %}</span></label>
                   <input
                     type="text"
                     x-model="saveAsName"
@@ -358,13 +364,13 @@
                   />
                 </div>
                 <div class="form-control">
-                  <label class="label"><span class="label-text text-xs">Folder</span></label>
+                  <label class="label"><span class="label-text text-xs">{% translate "Folder" %}</span></label>
                   <select
                     x-model="saveAsParent"
                     class="select select-bordered select-sm w-full"
                     :disabled="saveAsLoading"
                   >
-                    <option value="">Root</option>
+                    <option value="">{% translate "Root" %}</option>
                     <template x-for="folder in folders" :key="folder.uuid">
                       <option
                         :value="folder.uuid"
@@ -381,7 +387,7 @@
                     @click="showSaveAs = false"
                     :disabled="saveAsLoading"
                   >
-                    Cancel
+                    {% translate "Cancel" %}
                   </button>
                   <button
                     type="button"
@@ -389,7 +395,7 @@
                     @click="saveAsCopy()"
                     :disabled="saveAsLoading || !saveAsName.trim()"
                   >
-                    <span x-show="!saveAsLoading">Save</span>
+                    <span x-show="!saveAsLoading">{% translate "Save" %}</span>
                     <span
                       x-show="saveAsLoading"
                       x-cloak
@@ -406,7 +412,7 @@
                 @click="discardEdits()"
               >
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
-                Discard edits
+                {% translate "Discard edits" %}
               </button>
             </div>
           </template>
@@ -768,8 +774,8 @@
           const resp = await fetch('/api/v1/files/' + fileUuid + '/image-edit', request);
           if (!resp.ok) {
             throw new Error(resp.status === 423 ?
-              'Someone else is editing this file.' :
-              'The edit could not be saved.');
+              '{{ edit_locked_message|escapejs }}' :
+              '{{ edit_not_saved_message|escapejs }}');
           }
           const data = await resp.json();
           this.edit = data.image_edit;
@@ -884,7 +890,9 @@
             const err = await resp.json().catch(function() {
               return {};
             });
-            throw new Error(err.error || 'Edit failed (HTTP ' + resp.status + ')');
+            throw new Error(err.error || interpolate('{{ ai_edit_failed_message|escapejs }}', {
+              status: resp.status
+            }, true));
           }
 
           const data = await resp.json();
@@ -951,7 +959,7 @@
             const err = await resp.json().catch(function() {
               return {};
             });
-            throw new Error(err.detail || err.name || 'Save failed');
+            throw new Error(err.detail || err.name || '{{ save_failed_message|escapejs }}');
           }
 
           const saved = await resp.json();

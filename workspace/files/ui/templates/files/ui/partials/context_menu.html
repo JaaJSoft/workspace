@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Rows of the file browser context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from index.html, and it is
@@ -11,15 +12,15 @@ entry and is written out below.
 {% endcomment %}
 <template x-if="isBackgroundMenu">
   <ul class="menu menu-sm p-0">
-    {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label="New folder" click="createFolder()" only %}
-    {% include "ui/partials/context_menu_item.html" with icon="file-text" label="New file" click="createFile()" only %}
-    {% include "ui/partials/context_menu_item.html" with icon="file-plus" label="Upload files" click="uploadFiles()" only %}
+    {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label=_("New folder") click="createFolder()" only %}
+    {% include "ui/partials/context_menu_item.html" with icon="file-text" label=_("New file") click="createFile()" only %}
+    {% include "ui/partials/context_menu_item.html" with icon="file-plus" label=_("Upload files") click="uploadFiles()" only %}
 
     <template x-if="hasClipboardItems">
       <hr class="my-1 border-base-300" />
     </template>
     <template x-if="hasClipboardItems">
-      {% include "ui/partials/context_menu_item.html" with icon="clipboard-paste" label="Paste" shortcut="Ctrl+V" click="pasteHere()" only %}
+      {% include "ui/partials/context_menu_item.html" with icon="clipboard-paste" label=_("Paste") shortcut="Ctrl+V" click="pasteHere()" only %}
     </template>
   </ul>
 </template>

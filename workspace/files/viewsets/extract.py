@@ -2,6 +2,7 @@
 
 import logging
 
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -77,13 +78,13 @@ class ExtractMixin:
             ).first()
             if dest is None:
                 return Response(
-                    {"detail": "Destination folder not found."},
+                    {"detail": _("Destination folder not found.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
             perm = FileService.get_permission(request.user, dest)
             if perm is None or perm < FilePermission.EDIT:
                 return Response(
-                    {"detail": "Destination folder not found."},
+                    {"detail": _("Destination folder not found.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -91,7 +92,7 @@ class ExtractMixin:
             result = extract_zip(file_obj, dest, acting_user=request.user)
         except QuarantinedSource:
             return Response(
-                {"detail": "File is quarantined."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": _("File is quarantined.")}, status=status.HTTP_403_FORBIDDEN
             )
         except ArchiveTooLargeError as e:
             logger.info(
@@ -100,7 +101,7 @@ class ExtractMixin:
                 scrub(str(e)),
             )
             return Response(
-                {"detail": "Archive too large."},
+                {"detail": _("Archive too large.")},
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
         except ArchiveTooManyEntriesError as e:
@@ -110,7 +111,7 @@ class ExtractMixin:
                 scrub(str(e)),
             )
             return Response(
-                {"detail": "Too many entries in archive."},
+                {"detail": _("Too many entries in archive.")},
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
         except ValueError as e:
@@ -132,7 +133,7 @@ class ExtractMixin:
                     {"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND
                 )
             return Response(
-                {"detail": "Invalid request."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": _("Invalid request.")}, status=status.HTTP_400_BAD_REQUEST
             )
 
         return Response(result, status=status.HTTP_200_OK)

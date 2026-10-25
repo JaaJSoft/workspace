@@ -13,6 +13,7 @@ the client handles both the same way.
 import io
 import re
 
+from django.utils.translation import gettext, gettext_lazy
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -38,7 +39,7 @@ from .files import announce_replaced, duplicate_entries
 
 _CONTENT_RANGE = re.compile(r"^bytes (\d+)-(\d+)/(\d+|\*)$")
 
-FOLDER_GONE = "The folder this upload goes to no longer exists."
+FOLDER_GONE = gettext_lazy("The folder this upload goes to no longer exists.")
 
 
 def _offset_response(detail, offset, code):
@@ -95,7 +96,7 @@ class UploadSessionListView(APIView):
                 user, File.objects.filter(uuid=data["parent"]).first()
             )
             if parent is None:
-                raise ValidationError({"parent": ["Folder not found."]})
+                raise ValidationError({"parent": [gettext("Folder not found.")]})
 
         # Settled now when it can be, so a refused name costs no transfer.
         # Finalizing decides again: the folder can change in between.
@@ -371,7 +372,7 @@ class UploadSessionFinalizeView(APIView):
             ).first()
         if instance is None:
             return Response(
-                {"detail": "The uploaded file no longer exists."},
+                {"detail": gettext("The uploaded file no longer exists.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         data = FileSerializer(instance, context={"request": request}).data

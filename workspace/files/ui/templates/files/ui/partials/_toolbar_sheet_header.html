@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   Title row of a listing toolbar popover, shown only while the popover is a
   bottom sheet (below sm): a sheet covers the button that opened it, so it
@@ -13,7 +14,7 @@
   <button
     type="button"
     class="btn btn-ghost btn-sm btn-square"
-    aria-label="Close"
+    aria-label="{% translate 'Close' %}"
     @click="open = false"
   >
     <i data-lucide="x" class="w-4 h-4"></i>

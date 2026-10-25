@@ -1,4 +1,4 @@
-{% load file_filters l10n %}
+{% load i18n file_filters l10n %}
 {% comment %}
 Storage Analysis Partial
 ========================
@@ -33,8 +33,8 @@ Context (built by files.ui.views.storage):
         href="{{ parent_url }}{{ query_suffix }}"
         x-target="storage-analysis"
         class="btn btn-ghost btn-xs btn-square"
-        title="Up one level"
-        aria-label="Analyze the parent folder"
+        title="{% translate 'Up one level' %}"
+        aria-label="{% translate 'Analyze the parent folder' %}"
       >
         <i data-lucide="arrow-up" class="w-4 h-4"></i>
       </a>
@@ -50,7 +50,7 @@ Context (built by files.ui.views.storage):
       {% endif %}
     </div>
     <span class="ml-auto text-xs text-base-content/50 whitespace-nowrap">
-      {{ analysis.file_count }} file{{ analysis.file_count|pluralize }} · {{ analysis.folder_count }} folder{{ analysis.folder_count|pluralize }}
+      {% blocktranslate trimmed count counter=analysis.file_count %}{{ counter }} file{% plural %}{{ counter }} files{% endblocktranslate %} · {% blocktranslate trimmed count counter=analysis.folder_count %}{{ counter }} folder{% plural %}{{ counter }} folders{% endblocktranslate %}
     </span>
   </div>
 
@@ -62,7 +62,7 @@ Context (built by files.ui.views.storage):
       <div class="stat-figure text-module">
         <i data-lucide="hard-drive" class="w-6 h-6"></i>
       </div>
-      <div class="stat-title">Live files</div>
+      <div class="stat-title">{% translate "Live files" %}</div>
       <div class="stat-value text-2xl">{{ analysis.total_size|filesizeformat }}</div>
       {% if analysis.quota is not None %}
         <div class="stat-desc">
@@ -72,7 +72,11 @@ Context (built by files.ui.views.storage):
               value="{{ quota_percent|unlocalize }}"
               max="100"
             ></progress>
-            <span>{{ analysis.quota_used|filesizeformat }} of {{ analysis.quota|filesizeformat }} used, trash included ({{ quota_percent }}%)</span>
+            <span>
+              {% blocktranslate trimmed with used=analysis.quota_used|filesizeformat quota=analysis.quota|filesizeformat percent=quota_percent %}
+                {{ used }} of {{ quota }} used, trash included ({{ percent }}%)
+              {% endblocktranslate %}
+            </span>
           </div>
         </div>
       {% endif %}
@@ -82,10 +86,16 @@ Context (built by files.ui.views.storage):
         <div class="stat-figure text-error">
           <i data-lucide="trash-2" class="w-6 h-6"></i>
         </div>
-        <div class="stat-title">In trash</div>
+        <div class="stat-title">{% translate "In trash" %}</div>
         <div class="stat-value text-2xl">{{ analysis.trash.size|filesizeformat }}</div>
         <div class="stat-desc flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span>{{ analysis.trash.count }} file{{ analysis.trash.count|pluralize }}</span>
+          <span>
+            {% blocktranslate trimmed count counter=analysis.trash.count %}
+              {{ counter }} file
+            {% plural %}
+              {{ counter }} files
+            {% endblocktranslate %}
+          </span>
           {% if can_empty_trash and analysis.trash.count %}
             <button
               type="button"
@@ -93,7 +103,7 @@ Context (built by files.ui.views.storage):
               @click="emptyTrash()"
               :disabled="busy"
             >
-              Empty trash
+              {% translate "Empty trash" %}
             </button>
           {% endif %}
         </div>
@@ -103,11 +113,21 @@ Context (built by files.ui.views.storage):
       <div class="stat-figure text-warning">
         <i data-lucide="copy" class="w-6 h-6"></i>
       </div>
-      <div class="stat-title">Duplicates</div>
+      <div class="stat-title">{% translate "Duplicates" %}</div>
       <div class="stat-value text-2xl">
         {{ analysis.duplicates|length }}{% if analysis.duplicates_truncated %}+{% endif %}
       </div>
-      <div class="stat-desc">{% if analysis.duplicates %}group{{ analysis.duplicates|length|pluralize }} of identical files{% else %}no identical files{% endif %}</div>
+      <div class="stat-desc">
+        {% if analysis.duplicates %}
+          {% blocktranslate trimmed count counter=analysis.duplicates|length %}
+            group of identical files
+          {% plural %}
+            groups of identical files
+          {% endblocktranslate %}
+        {% else %}
+          {% translate "no identical files" %}
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -117,8 +137,8 @@ Context (built by files.ui.views.storage):
         data-lucide="chart-pie"
         class="w-10 h-10 mx-auto text-base-content/30"
       ></i>
-      <h5 class="font-semibold mt-3">Nothing to analyze</h5>
-      <p class="text-sm text-base-content/60 mt-1">This location holds no files yet.</p>
+      <h5 class="font-semibold mt-3">{% translate "Nothing to analyze" %}</h5>
+      <p class="text-sm text-base-content/60 mt-1">{% translate "This location holds no files yet." %}</p>
     </div>
   {% else %}
 
@@ -127,24 +147,27 @@ Context (built by files.ui.views.storage):
       <section class="rounded-box bg-base-200 p-4">
         <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm">
           <i data-lucide="chart-pie" class="w-4 h-4 text-accent"></i>
-          By category
+          {% translate "By category" %}
         </h5>
         <div class="flex flex-col items-center gap-4 min-w-0">
           <div class="relative shrink-0">
-            {% include "ui/partials/donut_chart.html" with chart=chart aria_label="Share of the used space per file category" class="w-36 h-36" %}
+            {% include "ui/partials/donut_chart.html" with chart=chart aria_label=_("Share of the used space per file category") class="w-36 h-36" %}
             <div
               class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
             >
               <span class="text-sm font-semibold leading-tight">{{ analysis.total_size|filesizeformat }}</span>
-              <span class="text-[10px] text-base-content/50 uppercase tracking-wider">used</span>
+              <span class="text-[10px] text-base-content/50 uppercase tracking-wider">{% translate "used" %}</span>
             </div>
           </div>
           <ul class="flex-1 w-full min-w-0 space-y-1 text-sm">
             {% comment %}"Other" merges several categories, so it cannot filter the largest files: rendered as a plain row.{% endcomment %}
             {% for c in analysis.categories %}
+              {% blocktranslate trimmed with category=c.label|lower asvar category_title %}
+                Show the largest {{ category }}
+              {% endblocktranslate %}
               <li>
                 <a
-                  {% if c.key != 'other' %}href="{{ base_url }}?category={{ c.key }}{{ query_param }}" x-target="storage-analysis" title="Show the largest {{ c.label|lower }}"{% endif %}
+                  {% if c.key != 'other' %}href="{{ base_url }}?category={{ c.key }}{{ query_param }}" x-target="storage-analysis" title="{{ category_title }}"{% endif %}
                   class="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors {% if c.key != 'other' %}hover:bg-base-300{% endif %} {% if active_category and active_category.key == c.key %}bg-base-300{% endif %}"
                 >
                   <svg
@@ -183,16 +206,19 @@ Context (built by files.ui.views.storage):
         >
           <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm shrink-0">
             <i data-lucide="folder-tree" class="w-4 h-4 text-accent"></i>
-            By folder
+            {% translate "By folder" %}
           </h5>
           <ul
             class="flex flex-col gap-1 max-h-72 md:max-h-none md:flex-1 md:min-h-0 overflow-y-auto pr-1"
           >
             {% for entry in analysis.subfolders %}
+              {% blocktranslate trimmed with name=entry.name asvar analyze_title %}
+                Analyze {{ name }}
+              {% endblocktranslate %}
               <li>
                 {% comment %}The loose-files row has no uuid: same element, no href, so it renders as a plain row.{% endcomment %}
                 <a
-                  {% if entry.uuid %}href="/files/storage/{{ entry.uuid }}{{ query_suffix }}" x-target="storage-analysis" title="Analyze {{ entry.name }}"{% endif %}
+                  {% if entry.uuid %}href="/files/storage/{{ entry.uuid }}{{ query_suffix }}" x-target="storage-analysis" title="{{ analyze_title }}"{% endif %}
                   class="block rounded-lg px-2 py-1.5 transition-colors {% if entry.uuid %}hover:bg-base-300{% endif %}"
                 >
                   <div class="flex items-baseline gap-2 text-sm">
@@ -207,7 +233,13 @@ Context (built by files.ui.views.storage):
                     <span class="w-11 text-right tabular-nums text-xs text-base-content/50">{{ entry.percent }}%</span>
                     <span
                       class="w-14 text-right text-xs text-base-content/50 whitespace-nowrap"
-                    >{{ entry.count }} file{{ entry.count|pluralize }}</span>
+                    >
+                      {% blocktranslate trimmed count counter=entry.count %}
+                        {{ counter }} file
+                      {% plural %}
+                        {{ counter }} files
+                      {% endblocktranslate %}
+                    </span>
                   </div>
                   <div class="h-1.5 mt-1.5 rounded-full bg-base-300 overflow-hidden">
                     <div
@@ -218,7 +250,7 @@ Context (built by files.ui.views.storage):
                 </a>
               </li>
             {% empty %}
-              <li class="text-sm text-base-content/50 italic">No sub-folders.</li>
+              <li class="text-sm text-base-content/50 italic">{% translate "No sub-folders." %}</li>
             {% endfor %}
           </ul>
         </section>
@@ -229,7 +261,7 @@ Context (built by files.ui.views.storage):
     <section class="rounded-box bg-base-200 p-4">
       <h5 class="font-semibold mb-3 flex items-center gap-2 text-sm">
         <i data-lucide="arrow-down-wide-narrow" class="w-4 h-4 text-accent"></i>
-        Largest files
+        {% translate "Largest files" %}
         {% if active_category %}
           <span
             class="badge badge-sm gap-1 {{ active_category.css_class }} border-current bg-transparent"
@@ -241,19 +273,23 @@ Context (built by files.ui.views.storage):
             href="{{ base_url }}{{ query_suffix }}"
             x-target="storage-analysis"
             class="btn btn-ghost btn-xs"
-            title="Show every category"
-          >Clear</a>
+            title="{% translate 'Show every category' %}"
+          >{% translate "Clear" %}</a>
         {% endif %}
         {% if analysis.query %}
           <span
             class="badge badge-sm badge-ghost gap-1 font-normal max-w-[14rem]"
-            title="Paths containing “{{ analysis.query }}”"
+            title="{% blocktranslate trimmed with query=analysis.query %}Paths containing “{{ query }}”{% endblocktranslate %}"
           >
             <i data-lucide="search" class="w-3 h-3 shrink-0"></i>
             <span class="truncate">{{ analysis.query }}</span>
           </span>
           <span class="text-xs text-base-content/50 font-normal">
-            {{ analysis.largest_files|length }} match{{ analysis.largest_files|length|pluralize:"es" }}
+            {% blocktranslate trimmed count counter=analysis.largest_files|length %}
+              {{ counter }} match
+            {% plural %}
+              {{ counter }} matches
+            {% endblocktranslate %}
           </span>
         {% endif %}
       </h5>
@@ -270,7 +306,7 @@ Context (built by files.ui.views.storage):
                 x-target.push="folder-browser"
                 @click="close()"
                 class="truncate block hover:text-module"
-                title="Open {{ f.name }}"
+                title="{% blocktranslate trimmed with name=f.name %}Open {{ name }}{% endblocktranslate %}"
               >{{ f.name }}</a>
               <p class="text-xs text-base-content/50 font-mono truncate">/{{ f.path|highlight:analysis.query }}</p>
             </div>
@@ -278,7 +314,7 @@ Context (built by files.ui.views.storage):
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square text-error"
-              title="Move to trash"
+              title="{% translate 'Move to trash' %}"
               @click="trashFile('{{ f.uuid|escapejs }}', '{{ f.name|escapejs }}')"
               :disabled="busy"
             >
@@ -286,7 +322,21 @@ Context (built by files.ui.views.storage):
             </button>
           </li>
         {% empty %}
-          <li class="text-sm text-base-content/50 italic py-2">No files{% if active_category %} in this category{% endif %}{% if analysis.query %} matching “{{ analysis.query }}”{% endif %}.</li>
+          <li class="text-sm text-base-content/50 italic py-2">
+            {% if active_category and analysis.query %}
+              {% blocktranslate trimmed with query=analysis.query %}
+                No files in this category matching “{{ query }}”.
+              {% endblocktranslate %}
+            {% elif active_category %}
+              {% translate "No files in this category." %}
+            {% elif analysis.query %}
+              {% blocktranslate trimmed with query=analysis.query %}
+                No files matching “{{ query }}”.
+              {% endblocktranslate %}
+            {% else %}
+              {% translate "No files." %}
+            {% endif %}
+          </li>
         {% endfor %}
       </ul>
     </section>
@@ -295,19 +345,37 @@ Context (built by files.ui.views.storage):
     <section class="rounded-box bg-base-200 p-4">
       <h5 class="font-semibold mb-1 flex items-center gap-2 text-sm">
         <i data-lucide="copy" class="w-4 h-4 text-accent"></i>
-        Duplicates
+        {% translate "Duplicates" %}
       </h5>
       <p class="text-xs text-base-content/50 mb-3">
-        Files with identical content, largest waste first. Keep one copy and trash the others to reclaim the space.
-        {% if analysis.query %}Showing groups with a copy matching “{{ analysis.query }}”; every copy of those groups is listed.{% endif %}
+        {% translate "Files with identical content, largest waste first. Keep one copy and trash the others to reclaim the space." %}
+        {% if analysis.query %}
+          {% blocktranslate trimmed with query=analysis.query %}
+            Showing groups with a copy matching “{{ query }}”; every copy of those groups is listed.
+          {% endblocktranslate %}
+        {% endif %}
       </p>
       <ul class="space-y-3">
         {% for group in analysis.duplicates %}
           <li class="rounded-lg bg-base-100/60 p-3">
             <div class="flex items-center gap-2 text-sm mb-2">
-              <span class="badge badge-warning badge-sm">{{ group.copies }} copies</span>
-              <span class="text-base-content/70">{{ group.size|filesizeformat }} each</span>
-              <span class="ml-auto font-medium tabular-nums">{{ group.wasted|filesizeformat }} wasted</span>
+              <span class="badge badge-warning badge-sm">
+                {% blocktranslate trimmed count counter=group.copies %}
+                  {{ counter }} copy
+                {% plural %}
+                  {{ counter }} copies
+                {% endblocktranslate %}
+              </span>
+              <span class="text-base-content/70">
+                {% blocktranslate trimmed with size=group.size|filesizeformat %}
+                  {{ size }} each
+                {% endblocktranslate %}
+              </span>
+              <span class="ml-auto font-medium tabular-nums">
+                {% blocktranslate trimmed with size=group.wasted|filesizeformat %}
+                  {{ size }} wasted
+                {% endblocktranslate %}
+              </span>
             </div>
             <ul class="space-y-1">
               {% for f in group.files %}
@@ -321,12 +389,12 @@ Context (built by files.ui.views.storage):
                     x-target.push="folder-browser"
                     @click="close()"
                     class="font-mono text-xs truncate hover:text-module {% if analysis.query and not f.matches %}text-base-content/50{% endif %}"
-                    title="Open {{ f.name }}"
+                    title="{% blocktranslate trimmed with name=f.name %}Open {{ name }}{% endblocktranslate %}"
                   >/{{ f.path|highlight:analysis.query }}</a>
                   <button
                     type="button"
                     class="btn btn-ghost btn-xs btn-square text-error ml-auto"
-                    title="Move to trash"
+                    title="{% translate 'Move to trash' %}"
                     @click="trashFile('{{ f.uuid|escapejs }}', '{{ f.name|escapejs }}')"
                     :disabled="busy"
                   >
@@ -336,14 +404,24 @@ Context (built by files.ui.views.storage):
               {% endfor %}
               {% if group.omitted %}
                 <li class="text-xs text-base-content/50 pl-5">
-                  and {{ group.omitted }} more cop{{ group.omitted|pluralize:"y,ies" }}
+                  {% blocktranslate trimmed count counter=group.omitted %}
+                    and {{ counter }} more copy
+                  {% plural %}
+                    and {{ counter }} more copies
+                  {% endblocktranslate %}
                 </li>
               {% endif %}
             </ul>
           </li>
         {% empty %}
           <li class="text-sm text-base-content/50 italic">
-            No identical files found{% if analysis.query %} matching “{{ analysis.query }}”{% endif %}.
+            {% if analysis.query %}
+              {% blocktranslate trimmed with query=analysis.query %}
+                No identical files found matching “{{ query }}”.
+              {% endblocktranslate %}
+            {% else %}
+              {% translate "No identical files found." %}
+            {% endif %}
           </li>
         {% endfor %}
       </ul>

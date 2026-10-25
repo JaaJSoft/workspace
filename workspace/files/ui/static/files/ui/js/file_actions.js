@@ -48,13 +48,13 @@ window.fileActions = {
     // DRF answers either {detail: "..."} or {field: ["..."]}; surface the
     // first human-readable message from whichever shape came back.
     firstErrorMessage: function(body) {
-        if (!body || typeof body !== 'object') return 'Unknown error';
+        if (!body || typeof body !== 'object') return gettext('Unknown error');
         if (typeof body.detail === 'string') return body.detail;
         for (const value of Object.values(body)) {
             if (typeof value === 'string') return value;
             if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
         }
-        return 'Unknown error';
+        return gettext('Unknown error');
     },
 
     // ── Dialog helpers ───────────────────────────────────
@@ -100,7 +100,7 @@ window.fileActions = {
         }).then(function(resp) {
             if (!resp.ok) {
                 return resp.json().catch(function() { return {}; }).then(function(data) {
-                    throw new Error(data.name ? data.name[0] : (data.detail || 'Failed to create folder'));
+                    throw new Error(data.name ? data.name[0] : (data.detail || gettext('Failed to create folder')));
                 });
             }
             const dlg = document.getElementById('create-folder-dialog');
@@ -128,7 +128,7 @@ window.fileActions = {
         }).then(function(resp) {
             if (!resp.ok) {
                 return resp.json().catch(function() { return {}; }).then(function(data) {
-                    throw new Error(data.name ? data.name[0] : (data.detail || 'Failed to create group folder'));
+                    throw new Error(data.name ? data.name[0] : (data.detail || gettext('Failed to create group folder')));
                 });
             }
             const dlg = document.getElementById('create-group-folder-dialog');
@@ -148,7 +148,7 @@ window.fileActions = {
         }).then(function(resp) {
             if (!resp.ok) {
                 return resp.json().catch(function() { return {}; }).then(function(data) {
-                    throw new Error(data.name ? data.name[0] : (data.detail || 'Failed to rename'));
+                    throw new Error(data.name ? data.name[0] : (data.detail || gettext('Failed to rename')));
                 });
             }
             const dlg = document.getElementById('rename-dialog');
@@ -165,7 +165,11 @@ window.fileActions = {
         let noticeEl = null;
         const noticeTimer = setTimeout(function() {
             noticeEl = window.AppAlert.show({
-                message: `Preparing an archive of ${uuids.length} item${uuids.length > 1 ? 's' : ''}...`,
+                message: interpolate(ngettext(
+                    'Preparing an archive of %(count)s item...',
+                    'Preparing an archive of %(count)s items...',
+                    uuids.length,
+                ), { count: uuids.length }, true),
                 type: 'info',
                 duration: 0,
                 dismissible: false,
@@ -179,7 +183,7 @@ window.fileActions = {
             });
             if (!resp.ok) {
                 const data = await resp.json().catch(function() { return {}; });
-                window.AppAlert.error(data.detail || 'Failed to download selected files');
+                window.AppAlert.error(data.detail || gettext('Failed to download selected files'));
                 return;
             }
             const blob = await resp.blob();
@@ -192,7 +196,7 @@ window.fileActions = {
             a.remove();
             URL.revokeObjectURL(url);
         } catch (e) {
-            window.AppAlert.error('Failed to download selected files');
+            window.AppAlert.error(gettext('Failed to download selected files'));
         } finally {
             clearTimeout(noticeTimer);
             if (noticeEl) window.AppAlert.dismiss(noticeEl);

@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
@@ -7,7 +9,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class RestoreAction(BaseFileAction):
     id = "restore"
-    label = "Restore"
+    label = _("Restore")
     icon = "rotate-ccw"
     category = ActionCategory.TRASH
     node_types = ("file", "folder")
@@ -22,7 +24,7 @@ class RestoreAction(BaseFileAction):
 @ActionRegistry.register
 class PurgeAction(BaseFileAction):
     id = "purge"
-    label = "Delete permanently"
+    label = _("Delete permanently")
     icon = "trash-2"
     category = ActionCategory.TRASH
     node_types = ("file", "folder")

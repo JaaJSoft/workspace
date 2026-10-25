@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.image_edits import can_edit_type
 from workspace.files.services.scanning.policy import is_blocked
@@ -9,7 +11,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class RenameAction(BaseFileAction):
     id = "rename"
-    label = "Rename"
+    label = _("Rename")
     icon = "pencil"
     category = ActionCategory.EDIT
     node_types = ("file", "folder")
@@ -35,7 +37,7 @@ class RenameAction(BaseFileAction):
 @ActionRegistry.register
 class CutAction(BaseFileAction):
     id = "cut"
-    label = "Cut"
+    label = _("Cut")
     icon = "scissors"
     category = ActionCategory.EDIT
     node_types = ("file", "folder")
@@ -54,7 +56,7 @@ class CutAction(BaseFileAction):
 @ActionRegistry.register
 class CopyAction(BaseFileAction):
     id = "copy"
-    label = "Copy"
+    label = _("Copy")
     icon = "copy"
     category = ActionCategory.EDIT
     node_types = ("file", "folder")
@@ -76,7 +78,7 @@ class CopyAction(BaseFileAction):
 @ActionRegistry.register
 class PasteIntoAction(BaseFileAction):
     id = "paste_into"
-    label = "Paste here"
+    label = _("Paste here")
     icon = "clipboard-paste"
     category = ActionCategory.EDIT
     node_types = ("folder",)
@@ -93,7 +95,7 @@ class EditImageAction(BaseFileAction):
     """Rotate and crop an image, its bytes untouched (services/image_edits.py)."""
 
     id = "edit_image"
-    label = "Crop & rotate"
+    label = _("Crop & rotate")
     icon = "crop"
     category = ActionCategory.EDIT
     node_types = ("file",)

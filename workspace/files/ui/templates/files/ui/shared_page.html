@@ -1,5 +1,5 @@
 {% extends "files/ui/shared_base.html" %}
-{% load static %}
+{% load i18n static %}
 {% block title %}{{ target.name }} - Workspace{% endblock %}
 {% block head_extra %}
   {% comment %}
@@ -76,12 +76,18 @@
               <h1 class="text-xl font-bold text-white truncate">{{ target.name }}</h1>
               <p class="text-white/70 text-sm">
                 {% if link.mode == "drop" %}
-                  Send files to {{ link.created_by.get_full_name|default:link.created_by.username }}
+                  {% blocktranslate trimmed with name=link.created_by.get_full_name|default:link.created_by.username %}
+                    Send files to {{ name }}
+                  {% endblocktranslate %}
                 {% elif is_folder %}
-                  Shared folder from {{ link.created_by.get_full_name|default:link.created_by.username }}
+                  {% blocktranslate trimmed with name=link.created_by.get_full_name|default:link.created_by.username %}
+                    Shared folder from {{ name }}
+                  {% endblocktranslate %}
                 {% else %}
-                  {{ target.type|default:"unknown" }} - {{ target.size|filesizeformat }}
-                  - shared by {{ link.created_by.get_full_name|default:link.created_by.username }}
+                  {% translate "unknown" as unknown_type_label %}
+                  {% blocktranslate trimmed with type=target.type|default:unknown_type_label size=target.size|filesizeformat name=link.created_by.get_full_name|default:link.created_by.username %}
+                    {{ type }} - {{ size }} - shared by {{ name }}
+                  {% endblocktranslate %}
                   {% if sibling_total > 1 %}
                     <span class="text-white/50">· {{ sibling_position }} / {{ sibling_total }}</span>
                   {% endif %}
@@ -94,7 +100,7 @@
                 class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
               >
                 <i data-lucide="download" class="w-4 h-4"></i>
-                Download
+                {% translate "Download" %}
               </a>
             {% endif %}
           </div>
@@ -109,7 +115,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
                 :class="canGoBack ? 'text-base-content' : 'text-base-content/20'"
-                title="Back"
+                title="{% translate 'Back' %}"
                 :disabled="!canGoBack"
                 @click="window.folderNav.back()"
               >
@@ -119,7 +125,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
                 :class="canGoForward ? 'text-base-content' : 'text-base-content/20'"
-                title="Forward"
+                title="{% translate 'Forward' %}"
                 :disabled="!canGoForward"
                 @click="window.folderNav.forward()"
               >
@@ -129,7 +135,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
                 :class="parentUrl ? 'text-base-content' : 'text-base-content/20'"
-                title="Up"
+                title="{% translate 'Up' %}"
                 :disabled="!parentUrl"
                 @click="navigateUp()"
               >
@@ -138,8 +144,8 @@
               <button
                 type="button"
                 class="btn btn-ghost btn-sm btn-square join-item"
-                title="Refresh"
-                aria-label="Refresh"
+                title="{% translate 'Refresh' %}"
+                aria-label="{% translate 'Refresh' %}"
                 @click="window.folderNav.reload()"
               >
                 <i data-lucide="rotate-cw" class="w-4 h-4"></i>
@@ -154,8 +160,8 @@
                   href="{{ list_view_url }}"
                   x-target.push="shared-content"
                   class="btn btn-ghost btn-sm btn-square {% if view_mode != 'grid' %}bg-module/15 text-module{% endif %}"
-                  title="List view"
-                  aria-label="List view"
+                  title="{% translate 'List view' %}"
+                  aria-label="{% translate 'List view' %}"
                 >
                   <i data-lucide="list" class="w-4 h-4"></i>
                 </a>
@@ -163,8 +169,8 @@
                   href="{{ grid_view_url }}"
                   x-target.push="shared-content"
                   class="btn btn-ghost btn-sm btn-square {% if view_mode == 'grid' %}bg-module/15 text-module{% endif %}"
-                  title="Grid view"
-                  aria-label="Grid view"
+                  title="{% translate 'Grid view' %}"
+                  aria-label="{% translate 'Grid view' %}"
                 >
                   <i data-lucide="grid-2x2" class="w-4 h-4"></i>
                 </a>

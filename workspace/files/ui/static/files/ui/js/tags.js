@@ -124,7 +124,7 @@ window.tagsMixin = function tagsMixin() {
                 body: JSON.stringify({ is_favorite: !tag.is_favorite }),
             });
             if (!resp.ok) {
-                this.tagManager.error = 'Failed to update the tag.';
+                this.tagManager.error = gettext('Failed to update the tag.');
                 return;
             }
             this._replaceTag(await resp.json());
@@ -132,13 +132,13 @@ window.tagsMixin = function tagsMixin() {
         },
 
         async deleteTag(tag) {
-            if (!confirm('Delete tag "' + tag.name + '"?')) return;
+            if (!confirm(interpolate(gettext('Delete tag "%(name)s"?'), { name: tag.name }, true))) return;
             const resp = await fetch('/api/v1/tags/' + tag.uuid, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': getCSRFToken() },
             });
             if (!(resp.ok || resp.status === 204)) {
-                this.tagManager.error = 'Failed to delete the tag.';
+                this.tagManager.error = gettext('Failed to delete the tag.');
                 return;
             }
             this._removeTag(tag.uuid);
@@ -171,7 +171,7 @@ window.tagsMixin = function tagsMixin() {
             m.busy = false;
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
-                m.error = data.into || data.detail || 'Failed to merge the tags.';
+                m.error = data.into || data.detail || gettext('Failed to merge the tags.');
                 return;
             }
             const merged = await resp.json();
@@ -184,13 +184,13 @@ window.tagsMixin = function tagsMixin() {
         async purgeUnusedTags() {
             const count = this.unusedTagCount();
             if (!count) return;
-            if (!confirm('Delete ' + count + ' unused tag' + (count === 1 ? '' : 's') + '?')) return;
+            if (!confirm(interpolate(ngettext('Delete %(count)s unused tag?', 'Delete %(count)s unused tags?', count), { count }, true))) return;
             const resp = await fetch('/api/v1/tags/purge-unused', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': getCSRFToken() },
             });
             if (!resp.ok) {
-                this.tagManager.error = 'Failed to delete the unused tags.';
+                this.tagManager.error = gettext('Failed to delete the unused tags.');
                 return;
             }
             this.allTags = this.allTags.filter((t) => t.file_count);
@@ -279,7 +279,7 @@ window.tagsMixin = function tagsMixin() {
 
             if (!resp.ok) {
                 const data = await resp.json().catch(function() { return {}; });
-                m.error = data.name ? data.name[0] : (data.detail || 'Failed to save tag.');
+                m.error = data.name ? data.name[0] : (data.detail || gettext('Failed to save tag.'));
                 m.saving = false;
                 return;
             }

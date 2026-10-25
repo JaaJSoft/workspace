@@ -8,6 +8,7 @@ import uuid
 from contextlib import contextmanager
 
 from django.db import IntegrityError, transaction
+from django.utils.translation import gettext, gettext_lazy
 
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
@@ -26,8 +27,12 @@ CLAIM_ATTEMPTS = 20
 STAGING_DIR = "tmp/staged"
 
 
-FILE_NAME_TAKEN = "A file with the same name already exists in this folder."
-FOLDER_NAME_TAKEN = "A folder with the same name already exists in this folder."
+FILE_NAME_TAKEN = gettext_lazy(
+    "A file with the same name already exists in this folder."
+)
+FOLDER_NAME_TAKEN = gettext_lazy(
+    "A folder with the same name already exists in this folder."
+)
 
 
 class NameTaken(ValueError):
@@ -282,8 +287,10 @@ def validate_move_target(file_obj, new_parent):
     """
     if file_obj.node_type == File.NodeType.FOLDER:
         if new_parent.pk == file_obj.pk:
-            raise ValueError("Cannot move a folder into itself.")
+            raise ValueError(gettext("Cannot move a folder into itself."))
         file_path = file_obj.path or file_obj.get_path()
         parent_path = new_parent.path or new_parent.get_path()
         if parent_path.startswith(f"{file_path}/"):
-            raise ValueError("Cannot move a folder into one of its descendants.")
+            raise ValueError(
+                gettext("Cannot move a folder into one of its descendants.")
+            )

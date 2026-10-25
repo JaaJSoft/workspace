@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   The viewer box inside the shared page's swappable content region: the
   resolved file's preview, the quarantine card, or a "no preview" fallback
@@ -8,10 +9,12 @@
   {% if quarantine_reason %}
     <div class="p-12 text-center">
       <i data-lucide="shield-alert" class="w-12 h-12 text-error mx-auto mb-4"></i>
-      <h2 class="text-lg font-bold mb-2">File quarantined</h2>
+      <h2 class="text-lg font-bold mb-2">{% translate "File quarantined" %}</h2>
       <p class="text-base-content/60">
-        The malware scanner flagged this file, so it can be neither previewed nor
-        downloaded.
+        {% blocktranslate trimmed %}
+          The malware scanner flagged this file, so it can be neither previewed nor
+          downloaded.
+        {% endblocktranslate %}
       </p>
       <p class="text-base-content/40 text-sm mt-2">{{ quarantine_reason }}</p>
     </div>
@@ -37,8 +40,8 @@
           href="{{ prev_url }}"
           x-target.push="shared-content"
           class="btn btn-circle absolute left-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow no-animation"
-          title="Previous file"
-          aria-label="Previous file"
+          title="{% translate 'Previous file' %}"
+          aria-label="{% translate 'Previous file' %}"
         >
           <i data-lucide="chevron-left" class="w-5 h-5"></i>
         </a>
@@ -49,8 +52,8 @@
           href="{{ next_url }}"
           x-target.push="shared-content"
           class="btn btn-circle absolute right-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow no-animation"
-          title="Next file"
-          aria-label="Next file"
+          title="{% translate 'Next file' %}"
+          aria-label="{% translate 'Next file' %}"
         >
           <i data-lucide="chevron-right" class="w-5 h-5"></i>
         </a>
@@ -62,11 +65,11 @@
         data-lucide="eye-off"
         class="w-12 h-12 text-base-content/30 mx-auto mb-4"
       ></i>
-      <p class="text-base-content/60 mb-4">Preview not available for this file type</p>
+      <p class="text-base-content/60 mb-4">{% translate "Preview not available for this file type" %}</p>
       {% if download_url %}
         <a href="{{ download_url }}" class="btn btn-module btn-sm gap-1">
           <i data-lucide="download" class="w-4 h-4"></i>
-          Download file
+          {% translate "Download file" %}
         </a>
       {% endif %}
     </div>

@@ -1,4 +1,4 @@
-{% load file_filters ui_filters %}
+{% load i18n file_filters ui_filters %}
 {% comment %}
 Properties Content Partial
 ==========================
@@ -15,6 +15,7 @@ Context:
 - sections: [(PropertiesSection, html)] contributed by other modules
   (see files/properties_sections.py)
 {% endcomment %}
+{% translate "Link copied to clipboard" as link_copied_message %}
 
 <div id="properties-content">
   <div
@@ -39,27 +40,27 @@ Context:
       <div class="flex flex-wrap justify-center gap-1.5">
         <span class="badge badge-sm badge-ghost">
           {% if file.node_type == "folder" %}
-            Folder
+            {% translate "Folder" %}
           {% else %}
-            File
+            {% translate "File" %}
           {% endif %}
         </span>
         {% if is_favorite %}
           <span class="badge badge-sm badge-warning gap-1">
             <i data-lucide="star" class="w-3 h-3 fill-current"></i>
-            Favorite
+            {% translate "Favorite" %}
           </span>
         {% endif %}
         {% if is_pinned %}
           <span class="badge badge-sm badge-module gap-1">
             <i data-lucide="pin" class="w-3 h-3 fill-current"></i>
-            Pinned
+            {% translate "Pinned" %}
           </span>
         {% endif %}
         {% if file.deleted_at %}
           <span class="badge badge-sm badge-error gap-1">
             <i data-lucide="trash-2" class="w-3 h-3"></i>
-            In Trash
+            {% translate "In Trash" %}
           </span>
         {% endif %}
       </div>
@@ -85,7 +86,11 @@ Context:
         <div class="flex items-center gap-2 text-base-content/60">
           <i data-lucide="layers" class="w-3.5 h-3.5 flex-shrink-0"></i>
           <span>
-            {{ children_count }} item{{ children_count|pluralize }}
+            {% blocktranslate trimmed count counter=children_count %}
+              {{ counter }} item
+            {% plural %}
+              {{ counter }} items
+            {% endblocktranslate %}
             {% if total_size %}
               <span class="text-base-content/40">({{ total_size|filesizeformat }})</span>
             {% endif %}
@@ -93,8 +98,8 @@ Context:
           <button
             type="button"
             class="btn btn-ghost btn-xs btn-square ml-auto hover:text-module"
-            title="Analyze storage"
-            aria-label="Analyze storage"
+            title="{% translate 'Analyze storage' %}"
+            aria-label="{% translate 'Analyze storage' %}"
             onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}' } }))"
           >
             <i data-lucide="chart-pie" class="w-3.5 h-3.5"></i>
@@ -103,11 +108,19 @@ Context:
       {% endif %}
       <div class="flex items-center gap-2 text-base-content/60">
         <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0"></i>
-        <span>Created {{ file.created_at|date:"N j, Y" }}</span>
+        <span>
+          {% blocktranslate trimmed with date=file.created_at|date:"DATE_FORMAT" %}
+            Created {{ date }}
+          {% endblocktranslate %}
+        </span>
       </div>
       <div class="flex items-center gap-2 text-base-content/60">
         <i data-lucide="clock" class="w-3.5 h-3.5 flex-shrink-0"></i>
-        <span>Modified {{ file.updated_at|date:"N j, Y" }}</span>
+        <span>
+          {% blocktranslate trimmed with date=file.updated_at|date:"DATE_FORMAT" %}
+            Modified {{ date }}
+          {% endblocktranslate %}
+        </span>
       </div>
       <div class="flex items-center text-base-content/60">
         <user-avatar user-id="{{ file.owner.id }}" username="{{ file.owner.username }}" size="2xs" presence card name name-class="text-sm"></user-avatar>
@@ -115,9 +128,9 @@ Context:
     </div>
 
     {% if file.is_quarantined %}
-      <inline-alert type="error" title="Quarantined" message="The malware scanner flagged this file. It cannot be opened or downloaded." class="mt-3"></inline-alert>
+      <inline-alert type="error" title="{% translate 'Quarantined' %}" message="{% translate 'The malware scanner flagged this file. It cannot be opened or downloaded.' %}" class="mt-3"></inline-alert>
     {% elif file.is_processing %}
-      <inline-alert type="info" icon="loader-circle" title="Processing" message="This file is being scanned and its preview and details prepared. They appear once processing finishes." class="mt-3"></inline-alert>
+      <inline-alert type="info" icon="loader-circle" title="{% translate 'Processing' %}" message="{% translate 'This file is being scanned and its preview and details prepared. They appear once processing finishes.' %}" class="mt-3"></inline-alert>
     {% endif %}
 
     {% for section, html in sections %}
@@ -130,25 +143,25 @@ Context:
        tag_dropdown checkboxes update them live; the initial
        state is seeded server-side via json_script) -->
       {{ file_tags|json_script:"properties-tags-data" }}
-      <div class="divider my-0 text-xs text-base-content/40">Tags</div>
+      <div class="divider my-0 text-xs text-base-content/40">{% translate "Tags" %}</div>
       <div
         class="flex flex-wrap items-center gap-1.5"
         x-init="selectedFile = { uuid: '{{ file.uuid|escapejs }}', tags: JSON.parse(document.getElementById('properties-tags-data').textContent) }"
       >
         <template x-for="t in (selectedFile ? selectedFile.tags : [])" :key="t.uuid">
-          <tag-chip :name="t.name" :color="t.color" :icon="t.icon" :trailing-icon="t.source === 'auto' ? 'sparkles' : null" trailing-label="Added automatically from what the photo shows"></tag-chip>
+          <tag-chip :name="t.name" :color="t.color" :icon="t.icon" :trailing-icon="t.source === 'auto' ? 'sparkles' : null" trailing-label="{% translate 'Added automatically from what the photo shows' %}"></tag-chip>
         </template>
         <span
           class="text-sm text-base-content/40"
           x-show="!selectedFile || selectedFile.tags.length === 0"
-        >No tags</span>
+        >{% translate "No tags" %}</span>
         <div class="ml-auto">{% include "files/ui/partials/tag_dropdown.html" %}</div>
       </div>
     {% endif %}
 
     {% if file.node_type == "folder" and is_owner %}
       <!-- Customize Icon -->
-      <div class="divider my-0 text-xs text-base-content/40">Customize Icon</div>
+      <div class="divider my-0 text-xs text-base-content/40">{% translate "Customize Icon" %}</div>
 
       {% include "ui/partials/icon_picker.html" %}
     {% endif %}
@@ -156,7 +169,7 @@ Context:
     {% if file.node_type == "file" %}
       <!-- Sharing -->
       <div class="divider my-0 text-xs text-base-content/40">
-        Sharing
+        {% translate "Sharing" %}
         {% if is_owner and shares %}
           <span class="badge badge-ghost badge-xs">{{ shares|length }}</span>
         {% endif %}
@@ -200,7 +213,7 @@ Context:
               {% endfor %}
             </ul>
           {% else %}
-            <p class="text-sm text-base-content/40">Not shared with anyone</p>
+            <p class="text-sm text-base-content/40">{% translate "Not shared with anyone" %}</p>
           {% endif %}
           <button
             type="button"
@@ -208,11 +221,11 @@ Context:
             onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}', nodeType: '{{ file.node_type }}' } }))"
           >
             <i data-lucide="settings" class="w-3 h-3"></i>
-            Manage sharing
+            {% translate "Manage sharing" %}
           </button>
         {% else %}
           <div class="flex items-center gap-2 text-sm">
-            <span class="text-base-content/60">Your access</span>
+            <span class="text-base-content/60">{% translate "Your access" %}</span>
             <span
               class="badge badge-sm {% if permission_is_write %}badge-module{% else %}badge-ghost{% endif %}"
             >{{ permission_label }}</span>
@@ -225,7 +238,7 @@ Context:
     {% if is_owner %}
       <!-- Share Links -->
       <div class="divider my-0 text-xs text-base-content/40">
-        Public links
+        {% translate "Public links" %}
         {% if share_links %}
           <span class="badge badge-ghost badge-xs">{{ share_links|length }}</span>
         {% endif %}
@@ -245,14 +258,14 @@ Context:
                   <i
                     data-lucide="lock"
                     class="w-3 h-3 text-base-content/40"
-                    title="Password protected"
+                    title="{% translate 'Password protected' %}"
                   ></i>
                 {% endif %}
                 <button
                   type="button"
                   class="btn btn-ghost btn-xs btn-square flex-shrink-0"
-                  title="Copy link"
-                  onclick="navigator.clipboard.writeText(window.location.origin + '/files/shared/{{ link.token }}').then(() => { if (window.AppAlert) window.AppAlert.success('Link copied to clipboard'); })"
+                  title="{% translate 'Copy link' %}"
+                  onclick="navigator.clipboard.writeText(window.location.origin + '/files/shared/{{ link.token }}').then(() => { if (window.AppAlert) window.AppAlert.success('{{ link_copied_message|escapejs }}'); })"
                 >
                   <i data-lucide="copy" class="w-3 h-3"></i>
                 </button>
@@ -260,19 +273,19 @@ Context:
               <div
                 class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-base-content/60 pl-5"
               >
-                <span>Views</span>
+                <span>{% translate "Views" %}</span>
                 <span class="font-medium text-base-content">{{ link.view_count }}</span>
-                <span>Last access</span>
-                <span class="font-medium text-base-content">{% if link.last_accessed_at %}{{ link.last_accessed_at|time_ago }}{% else %}Never{% endif %}</span>
-                <span>Expires</span>
+                <span>{% translate "Last access" %}</span>
+                <span class="font-medium text-base-content">{% if link.last_accessed_at %}{{ link.last_accessed_at|time_ago }}{% else %}{% translate "Never" %}{% endif %}</span>
+                <span>{% translate "Expires" %}</span>
                 <span class="font-medium text-base-content">
-                  {% if link.expires_at %}{{ link.expires_at|date:"M d, Y" }}{% else %}Permanent{% endif %}
+                  {% if link.expires_at %}{{ link.expires_at|date:"DATE_FORMAT" }}{% else %}{% translate "Permanent" %}{% endif %}
                 </span>
               </div>
             </div>
           {% endfor %}
         {% else %}
-          <p class="text-sm text-base-content/40">No public links</p>
+          <p class="text-sm text-base-content/40">{% translate "No public links" %}</p>
         {% endif %}
         <button
           type="button"
@@ -280,13 +293,13 @@ Context:
           onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}', nodeType: '{{ file.node_type }}' } }))"
         >
           <i data-lucide="settings" class="w-3 h-3"></i>
-          Manage links
+          {% translate "Manage links" %}
         </button>
       </div>
     {% endif %}
 
     <!-- Comments -->
-    <div class="divider my-0 text-xs text-base-content/40">Comments</div>
+    <div class="divider my-0 text-xs text-base-content/40">{% translate "Comments" %}</div>
 
     {% url 'file-comments' uuid=file.uuid as comments_url %}
     {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=True %}
@@ -316,7 +329,7 @@ Context:
       @ajax:error="loading = false"
     >
       <div x-show="loading" x-cloak>
-        <div class="divider my-0 text-xs text-base-content/40">Activity</div>
+        <div class="divider my-0 text-xs text-base-content/40">{% translate "Activity" %}</div>
         <div class="h-7 bg-base-300/60 rounded my-2 animate-pulse"></div>
         <ul class="space-y-2.5 animate-pulse">
           {% for _ in "1234" %}
@@ -343,7 +356,7 @@ Context:
       <summary
         class="flex items-center justify-between cursor-pointer text-xs text-base-content/40 hover:text-base-content/60 transition-colors list-none"
       >
-        <span>Advanced</span>
+        <span>{% translate "Advanced" %}</span>
         <i
           data-lucide="chevron-down"
           class="w-3.5 h-3.5 transition-transform group-open:rotate-180"

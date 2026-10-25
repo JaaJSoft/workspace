@@ -1,12 +1,26 @@
+{% load i18n %}
 <!-- Unified Picker Dialog (folder mode + file mode) — include once in base.html -->
+{% translate "My Files" as my_files_label %}
+{% translate "Choose File" as choose_file_title %}
+{% translate "Choose Folder" as choose_folder_title %}
+{% translate "Select a file from your workspace." as choose_file_message %}
+{% translate "Select a destination folder." as choose_folder_message %}
+{% translate "Failed to create folder" as create_folder_failed_message %}
+{% translate "No files found" as no_files_found_label %}
+{% translate "Empty folder" as empty_folder_label %}
+{% translate "No subfolders" as no_subfolders_label %}
+{% translate "%(count)s file selected" as one_file_selected_label %}
+{% translate "%(count)s files selected" as many_files_selected_label %}
+{% translate "Cancel" as cancel_label %}
+{% translate "Select" as select_label %}
 <dialog
   id="app-dialog-picker"
   class="modal"
   x-data="{
     open: false,
     mode: 'folder',
-    spaces: [{ key: 'personal', name: 'My Files', rootUuid: null }],
-    space: { key: 'personal', name: 'My Files', rootUuid: null },
+    spaces: [{ key: 'personal', name: '{{ my_files_label|escapejs }}', rootUuid: null }],
+    space: { key: 'personal', name: '{{ my_files_label|escapejs }}', rootUuid: null },
     currentFolder: null,
     items: [],
     breadcrumbs: [],
@@ -71,15 +85,15 @@
     rootFolder() {
       return this.space.rootUuid
         ? { uuid: this.space.rootUuid, name: this.space.name }
-        : { uuid: null, name: 'My Files' };
+        : { uuid: null, name: '{{ my_files_label|escapejs }}' };
     },
 
     get isFileMode() { return this.mode === 'file'; },
 
     get defaultIcon() { return this.isFileMode ? 'file-search' : 'folder-open'; },
     get defaultIconClass() { return this.isFileMode ? 'bg-info/10 text-info' : 'bg-warning/10 text-warning'; },
-    get defaultTitle() { return this.isFileMode ? 'Choose File' : 'Choose Folder'; },
-    get defaultMessage() { return this.isFileMode ? 'Select a file from your workspace.' : 'Select a destination folder.'; },
+    get defaultTitle() { return this.isFileMode ? '{{ choose_file_title|escapejs }}' : '{{ choose_folder_title|escapejs }}'; },
+    get defaultMessage() { return this.isFileMode ? '{{ choose_file_message|escapejs }}' : '{{ choose_folder_message|escapejs }}'; },
     get defaultOkClass() { return this.isFileMode ? 'btn-info' : 'btn-warning'; },
     get accent() {
       const cls = this.options.okClass || this.defaultOkClass;
@@ -196,7 +210,7 @@
           await this.fetchItems(this.currentFolder?.uuid || this.space.rootUuid);
         } else {
           const err = await res.json().catch(() => ({}));
-          alert(err.detail || err.name?.[0] || 'Failed to create folder');
+          alert(err.detail || err.name?.[0] || '{{ create_folder_failed_message|escapejs }}');
         }
       } catch (e) { /* ignore */ }
       this.creatingFolder = false;
@@ -261,10 +275,10 @@
       <select
         class="select select-bordered select-sm w-full"
         @change="selectSpace($event.target.value)"
-        aria-label="Location"
+        aria-label="{% translate 'Location' %}"
       >
-        <option value="personal" :selected="space.key === 'personal'">My Files</option>
-        <optgroup label="Groups">
+        <option value="personal" :selected="space.key === 'personal'">{{ my_files_label }}</option>
+        <optgroup label="{% translate 'Groups' %}">
           <template x-for="sp in spaces.slice(1)" :key="sp.key">
             <option :value="sp.key" :selected="sp.key === space.key" x-text="sp.name"></option>
           </template>
@@ -282,7 +296,7 @@
         <input
           type="text"
           class="input input-bordered input-sm w-full pl-9"
-          placeholder="Search files..."
+          placeholder="{% translate 'Search files...' %}"
           x-model="search"
           @input="handleSearch()"
           @keydown.escape.prevent="if (search) { search = ''; handleSearch(); } else { cancel(); }"
@@ -310,7 +324,7 @@
         class="flex items-center gap-1 px-2 text-base-content/60"
       >
         <i data-lucide="users" class="w-3 h-3"></i>
-        Groups
+        {% translate "Groups" %}
         <span class="text-base-content/40 ml-1">/</span>
       </span>
       <button
@@ -361,7 +375,7 @@
               <i x-show="isFileMode" data-lucide="file-x" class="w-8 h-8 mb-2"></i>
               <span
                 class="text-sm"
-                x-text="search ? 'No files found' : (isFileMode ? 'Empty folder' : 'No subfolders')"
+                x-text="search ? '{{ no_files_found_label|escapejs }}' : (isFileMode ? '{{ empty_folder_label|escapejs }}' : '{{ no_subfolders_label|escapejs }}')"
               ></span>
             </div>
           </template>
@@ -415,7 +429,7 @@
           @click="showNewFolder = true; $nextTick(() => $refs.newFolderInput?.focus())"
         >
           <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
-          New folder
+          {% translate "New folder" %}
         </button>
       </template>
       <template x-if="showNewFolder">
@@ -424,7 +438,7 @@
             x-ref="newFolderInput"
             type="text"
             class="input input-bordered input-sm flex-1"
-            placeholder="Folder name"
+            placeholder="{% translate 'Folder name' %}"
             x-model="newFolderName"
             @keydown.enter.prevent="createFolder()"
             @keydown.escape.prevent="showNewFolder = false; newFolderName = ''"
@@ -440,7 +454,7 @@
               <span class="loading loading-spinner loading-xs"></span>
             </template>
             <template x-if="!creatingFolder">
-              <span>Create</span>
+              <span>{% translate "Create" %}</span>
             </template>
           </button>
           <button
@@ -462,19 +476,21 @@
         <template x-if="!isFileMode">
           <span class="flex items-center gap-1.5">
             <i data-lucide="info" class="w-3.5 h-3.5"></i>
-            Saving to: <strong x-text="currentLocationLabel()"></strong>
+            {% blocktranslate trimmed with location='<strong x-text="currentLocationLabel()"></strong>' %}
+              Saving to: {{ location }}
+            {% endblocktranslate %}
           </span>
         </template>
         <!-- File mode: selection count -->
         <span x-show="isFileMode && selectedFiles.length > 0">
           <span
-            x-text="selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected'"
+            x-text="interpolate(selectedFiles.length === 1 ? '{{ one_file_selected_label|escapejs }}' : '{{ many_files_selected_label|escapejs }}', { count: selectedFiles.length }, true)"
           ></span>
         </span>
-        <span x-show="isFileMode && selectedFiles.length === 0">Click a file to select it</span>
+        <span x-show="isFileMode && selectedFiles.length === 0">{% translate "Click a file to select it" %}</span>
       </div>
       <button type="button" class="btn btn-ghost btn-sm" @click="cancel()">
-        <span x-text="options.cancelLabel || 'Cancel'"></span>
+        <span x-text="options.cancelLabel || '{{ cancel_label|escapejs }}'"></span>
       </button>
       <button
         type="button"
@@ -483,11 +499,11 @@
         @click="select()"
         :disabled="isFileMode && selectedFiles.length === 0"
       >
-        <span x-text="options.okLabel || 'Select'"></span>
+        <span x-text="options.okLabel || '{{ select_label|escapejs }}'"></span>
       </button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit" @click.prevent="cancel()">close</button>
+    <button type="submit" @click.prevent="cancel()">{% translate "close" %}</button>
   </form>
 </dialog>

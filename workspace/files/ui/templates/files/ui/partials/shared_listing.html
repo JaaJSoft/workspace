@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   The folder-listing box inside the shared page's swappable content region.
 
@@ -14,9 +15,9 @@
 <div id="shared-listing" class="bg-base-200 min-h-48">
   {% if not entries %}
     {% if link.allows_upload %}
-      {% include "files/ui/partials/empty_folder.html" with message="Send files below to fill it." %}
+      {% include "files/ui/partials/empty_folder.html" with message=_("Send files below to fill it.") %}
     {% else %}
-      {% include "files/ui/partials/empty_folder.html" with message="Nothing has been shared here yet." %}
+      {% include "files/ui/partials/empty_folder.html" with message=_("Nothing has been shared here yet.") %}
     {% endif %}
   {% elif view_mode == "grid" %}
     <div
@@ -33,7 +34,7 @@
             {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
             <p class="text-xs text-base-content/60 mt-0.5">
               {% if entry.is_folder %}
-                Folder
+                {% translate "Folder" %}
               {% else %}
                 {{ entry.size|filesizeformat }}
               {% endif %}
@@ -61,7 +62,7 @@
             {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
             <span class="block text-xs text-base-content/50 mt-0.5">
               {% if not entry.is_folder %}{{ entry.size|filesizeformat }} ·{% endif %}
-              {{ entry.modified|date:"M j, Y" }}
+              {{ entry.modified|date:"DATE_FORMAT" }}
             </span>
           </a>
 
@@ -69,7 +70,7 @@
             <a
               href="{{ entry.download_url }}"
               class="btn btn-ghost btn-sm btn-square"
-              title="Download"
+              title="{% translate 'Download' %}"
             >
               <i data-lucide="download" class="w-4 h-4"></i>
             </a>
@@ -83,7 +84,11 @@
     <div
       class="px-6 py-3 text-sm text-base-content/50 text-center border-t border-base-300"
     >
-      Only the first {{ entries|length }} entries are shown.
+      {% blocktranslate trimmed count counter=entries|length %}
+        Only the first {{ counter }} entry is shown.
+      {% plural %}
+        Only the first {{ counter }} entries are shown.
+      {% endblocktranslate %}
     </div>
   {% endif %}
 </div>

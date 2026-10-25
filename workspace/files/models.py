@@ -10,6 +10,7 @@ from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
+from django.utils.translation import gettext_lazy
 
 from workspace.common.text import caseless
 from workspace.common.uuids import uuid_v7_or_v4
@@ -976,9 +977,9 @@ class FileShareLink(models.Model):
     """A public share link for a file or folder, allowing unauthenticated access."""
 
     class Mode(models.TextChoices):
-        READ = "read", "Read only"
-        DROP = "drop", "Upload only"
-        BOTH = "both", "Read and upload"
+        READ = "read", gettext_lazy("Read only")
+        DROP = "drop", gettext_lazy("Upload only")
+        BOTH = "both", gettext_lazy("Read and upload")
 
     uuid = models.UUIDField(
         primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
@@ -1089,18 +1090,21 @@ class FileEvent(models.Model):
     """Audit log entry for non-read operations performed on a file or folder."""
 
     class Action(models.TextChoices):
-        CREATED = "created", "Created"
-        RENAMED = "renamed", "Renamed"
-        MOVED = "moved", "Moved"
-        CONTENT_REPLACED = "content_replaced", "Updated"
-        DELETED = "deleted", "Trashed"
-        RESTORED = "restored", "Restored"
-        SHARED = "shared", "Shared"
-        SHARE_PERMISSION_CHANGED = "share_permission_changed", "Permission changed"
-        UNSHARED = "unshared", "Unshared"
-        LINK_CREATED = "link_created", "Link created"
-        LINK_REVOKED = "link_revoked", "Link revoked"
-        LINK_UPLOAD = "link_upload", "Uploaded via link"
+        CREATED = "created", gettext_lazy("Created")
+        RENAMED = "renamed", gettext_lazy("Renamed")
+        MOVED = "moved", gettext_lazy("Moved")
+        CONTENT_REPLACED = "content_replaced", gettext_lazy("Updated")
+        DELETED = "deleted", gettext_lazy("Trashed")
+        RESTORED = "restored", gettext_lazy("Restored")
+        SHARED = "shared", gettext_lazy("Shared")
+        SHARE_PERMISSION_CHANGED = (
+            "share_permission_changed",
+            gettext_lazy("Permission changed"),
+        )
+        UNSHARED = "unshared", gettext_lazy("Unshared")
+        LINK_CREATED = "link_created", gettext_lazy("Link created")
+        LINK_REVOKED = "link_revoked", gettext_lazy("Link revoked")
+        LINK_UPLOAD = "link_upload", gettext_lazy("Uploaded via link")
 
     # Single source of truth for the per-action presentation metadata
     # (Lucide icon + category used for grouping in the filter dropdown).
@@ -1121,6 +1125,11 @@ class FileEvent(models.Model):
 
     # Display order for the action-filter dropdown's optgroups.
     _CATEGORY_ORDER = ["Lifecycle", "Edits", "Sharing"]
+    _CATEGORY_LABELS = {
+        "Lifecycle": gettext_lazy("Lifecycle"),
+        "Edits": gettext_lazy("Edits"),
+        "Sharing": gettext_lazy("Sharing"),
+    }
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="events")
@@ -1206,7 +1215,11 @@ class FileEvent(models.Model):
                 continue
             _icon, category = cls._ACTION_METADATA.get(value, ("activity", "Other"))
             groups.setdefault(category, []).append((value, label))
-        return [(cat, groups[cat]) for cat in cls._CATEGORY_ORDER if cat in groups]
+        return [
+            (cls._CATEGORY_LABELS[cat], groups[cat])
+            for cat in cls._CATEGORY_ORDER
+            if cat in groups
+        ]
 
 
 class FileLink(models.Model):

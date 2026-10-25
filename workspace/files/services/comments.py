@@ -1,11 +1,13 @@
 """File comment audience and notification fan-out."""
 
 from django.contrib.auth import get_user_model
+from django.utils.translation import gettext as _
 
 from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
 from workspace.notifications.services.notifications import notify_stream
 
 from ..models import FileComment
+from .share_notifications import in_recipient_languages
 
 User = get_user_model()
 
@@ -50,15 +52,17 @@ def _file_url(file_obj):
 
 
 def _notify_mentioned(file_obj, actor, mentioned):
-    notify_stream(
-        recipient_ids=[u.pk for u in mentioned],
-        source=file_obj,
-        origin="files",
-        title=f'{actor.username} mentioned you in a comment on "{file_obj.name}"',
-        url=_file_url(file_obj),
-        actor=actor,
-        default_priority="high",
-    )
+    for users in in_recipient_languages(mentioned):
+        notify_stream(
+            recipient_ids=[u.pk for u in users],
+            source=file_obj,
+            origin="files",
+            title=_('%(actor)s mentioned you in a comment on "%(name)s"')
+            % {"actor": actor.username, "name": file_obj.name},
+            url=_file_url(file_obj),
+            actor=actor,
+            default_priority="high",
+        )
 
 
 def notify_comment_added(file_obj, actor, body, *, audience=None):
@@ -85,12 +89,13 @@ def notify_comment_added(file_obj, actor, body, *, audience=None):
     )
     recipients.update(User.objects.filter(pk__in=commenter_ids))
     recipients = [u for u in recipients if u.pk not in mentioned_ids]
-    if recipients:
+    for users in in_recipient_languages(recipients):
         notify_stream(
-            recipient_ids=[u.pk for u in recipients],
+            recipient_ids=[u.pk for u in users],
             source=file_obj,
             origin="files",
-            title=f'{actor.username} commented on "{file_obj.name}"',
+            title=_('%(actor)s commented on "%(name)s"')
+            % {"actor": actor.username, "name": file_obj.name},
             url=_file_url(file_obj),
             actor=actor,
         )

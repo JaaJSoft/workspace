@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- Tag assignment dropdown — requires tagsMixin() in the Alpine component -->
 <div class="dropdown dropdown-end">
   <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square">
@@ -10,7 +11,7 @@
     <div
       class="px-2 py-1.5 text-xs font-semibold uppercase text-base-content/40"
     >
-      Tags
+      {% translate "Tags" %}
     </div>
     <ul class="menu menu-sm p-0">
       <template x-for="tag in allTags" :key="tag.uuid">
@@ -33,7 +34,7 @@
               type="button"
               class="ml-auto opacity-0 group-hover:opacity-100 hover:!opacity-100 p-0.5"
               @click.prevent.stop="showTagModal(tag)"
-              title="Edit tag"
+              title="{% translate 'Edit tag' %}"
             >
               <i data-lucide="pencil" class="w-3 h-3"></i>
             </button>
@@ -45,14 +46,14 @@
       x-show="allTags.length === 0"
       class="px-2 py-1.5 text-xs text-base-content/40"
     >
-      No tags yet
+      {% translate "No tags yet" %}
     </div>
     <hr class="my-1 border-base-300" />
     <ul class="menu menu-sm p-0">
       <li>
         <button type="button" class="gap-3 rounded" @click="showTagModal()">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>New tag</span>
+          <span>{% translate "New tag" %}</span>
         </button>
       </li>
     </ul>

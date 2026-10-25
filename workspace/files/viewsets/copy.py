@@ -1,5 +1,6 @@
 """Copy action for FileViewSet."""
 
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -77,7 +78,7 @@ class CopyMixin:
             permission=FileService.get_permission(request.user, file_obj),
         ):
             return Response(
-                {"detail": "Copying this item is not allowed."},
+                {"detail": _("Copying this item is not allowed.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
         parent_uuid = request.data.get("parent")
@@ -91,7 +92,7 @@ class CopyMixin:
             parsed_parent_uuid = parse_uuid_or_none(parent_uuid)
             if parsed_parent_uuid is None:
                 return Response(
-                    {"detail": "Parent folder not found."},
+                    {"detail": _("Parent folder not found.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             parent = File.objects.filter(
@@ -105,7 +106,7 @@ class CopyMixin:
                 # Same generic 400 whether the folder is missing or the user
                 # has no write access - avoids leaking folder existence.
                 return Response(
-                    {"detail": "Parent folder not found."},
+                    {"detail": _("Parent folder not found.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -117,7 +118,7 @@ class CopyMixin:
             parent_path = parent.path or parent.get_path()
             if parent.uuid == file_obj.uuid or parent_path.startswith(f"{file_path}/"):
                 return Response(
-                    {"detail": "Cannot copy folder into itself or its descendants."},
+                    {"detail": _("Cannot copy folder into itself or its descendants.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -135,7 +136,9 @@ class CopyMixin:
                 return Response(
                     {
                         "name": [
-                            "A file with the same name already exists in this folder."
+                            _(
+                                "A file with the same name already exists in this folder."
+                            )
                         ]
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -144,7 +147,9 @@ class CopyMixin:
                 if not file_obj.content:
                     return Response(
                         {
-                            "detail": "This file has no content to replace the existing one with."
+                            "detail": _(
+                                "This file has no content to replace the existing one with."
+                            )
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
@@ -172,7 +177,7 @@ class CopyMixin:
             )
         except QuarantinedSource:
             return Response(
-                {"detail": "File is quarantined."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": _("File is quarantined.")}, status=status.HTTP_403_FORBIDDEN
             )
         # get_queryset() only spans the user's own personal files; a copy
         # landing in a group folder needs the access-aware annotation instead

@@ -113,12 +113,12 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
           let errData = {};
           try { errData = await response.json(); } catch (e) {}
           if (window.AppAlert) {
-            window.AppAlert.show({ type: 'error', message: errData.detail || 'Failed to pin folder', duration: 5000 });
+            window.AppAlert.show({ type: 'error', message: errData.detail || gettext('Failed to pin folder'), duration: 5000 });
           }
         }
       } catch (error) {
         if (window.AppAlert) {
-          window.AppAlert.show({ type: 'error', message: 'Failed to pin folder', duration: 5000 });
+          window.AppAlert.show({ type: 'error', message: gettext('Failed to pin folder'), duration: 5000 });
         }
       }
     },

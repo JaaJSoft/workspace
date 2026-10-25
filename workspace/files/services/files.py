@@ -12,6 +12,7 @@ import logging
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
+from django.utils.translation import gettext
 
 from workspace.common.logging import scrub
 
@@ -525,7 +526,7 @@ class FileService:
         if old_parent_id == new_parent_id:
             return
         if FileService.is_group_root(file_obj):
-            raise GroupRootFolder("A group's root folder cannot be moved.")
+            raise GroupRootFolder(gettext("A group's root folder cannot be moved."))
 
         new_group = new_parent.group if new_parent else None
         old_group = file_obj.group
@@ -599,7 +600,7 @@ class FileService:
         if old_name == new_name:
             return file_obj
         if FileService.is_group_root(file_obj):
-            raise GroupRootFolder("A group's root folder cannot be renamed.")
+            raise GroupRootFolder(gettext("A group's root folder cannot be renamed."))
 
         _name_helpers.check_name_available(
             file_obj.owner,
@@ -906,7 +907,7 @@ class FileService:
     def soft_delete(file_obj, *, acting_user=None):
         """Soft-delete a file or folder (cascades to descendants)."""
         if FileService.is_group_root(file_obj):
-            raise GroupRootFolder("A group's root folder cannot be deleted.")
+            raise GroupRootFolder(gettext("A group's root folder cannot be deleted."))
         count = file_obj.soft_delete()
         record_event(
             file_obj,
@@ -1129,14 +1130,14 @@ class FileService:
         if new_parent is None:
             return
         if FileService.is_group_root(file_obj):
-            raise GroupRootFolder("A group's root folder cannot be moved.")
+            raise GroupRootFolder(gettext("A group's root folder cannot be moved."))
         _name_helpers.validate_move_target(file_obj, new_parent)
         if user is None:
             if new_parent.group_id:
-                raise ValueError("You are not a member of this group.")
+                raise ValueError(gettext("You are not a member of this group."))
             user = file_obj.owner
         if not FileService.can_create_in(user, new_parent):
-            raise ValueError("You cannot move items into this folder.")
+            raise ValueError(gettext("You cannot move items into this folder."))
 
     # ------------------------------------------------------------------
     # Reading

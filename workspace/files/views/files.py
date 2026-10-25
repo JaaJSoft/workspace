@@ -6,6 +6,8 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.http import Http404
+from django.utils import translation
+from django.utils.translation import gettext as _
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -29,7 +31,9 @@ from workspace.files.services import FilePermission, FileService
 from workspace.files.services.content_hash import find_duplicates
 from workspace.files.services.files import GroupRootFolder
 from workspace.files.services.locking import conflicting_lock, precondition_hash
+from workspace.files.services.share_notifications import in_recipient_languages
 from workspace.notifications.services.notifications import notify, notify_many
+from workspace.users.services.settings import get_user_language
 
 from ..models import File
 from ..serializers import FileSerializer, locked_payload
@@ -79,14 +83,16 @@ def announce_replaced(instance, actor):
     if instance.owner_id != actor.pk and FileService.can_access(
         instance.owner, instance
     ):
-        notify(
-            recipient=instance.owner,
-            origin="files",
-            title=f'{actor.username} edited "{instance.name}"',
-            url=f"/files/{instance.parent_id}" if instance.parent_id else "/files",
-            actor=actor,
-            source=instance,
-        )
+        with translation.override(get_user_language(instance.owner)):
+            notify(
+                recipient=instance.owner,
+                origin="files",
+                title=_('%(actor)s edited "%(name)s"')
+                % {"actor": actor.username, "name": instance.name},
+                url=f"/files/{instance.parent_id}" if instance.parent_id else "/files",
+                actor=actor,
+                source=instance,
+            )
 
 
 @extend_schema_view(
@@ -588,7 +594,7 @@ class FileViewSet(
         if group_id:
             if not request.user.groups.filter(id=group_id).exists():
                 return Response(
-                    {"group": "You are not a member of this group."},
+                    {"group": _("You are not a member of this group.")},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         serializer = self.get_serializer(data=request.data)
@@ -738,7 +744,7 @@ class FileViewSet(
             return None
         return Response(
             {
-                "detail": "The file changed since it was loaded.",
+                "detail": _("The file changed since it was loaded."),
                 "content_hash": target.content_hash,
             },
             status=status.HTTP_412_PRECONDITION_FAILED,
@@ -785,7 +791,7 @@ class FileViewSet(
                         permission=perm,
                     ):
                         return Response(
-                            {"detail": "Renaming this file is not allowed."},
+                            {"detail": _("Renaming this file is not allowed.")},
                             status=status.HTTP_403_FORBIDDEN,
                         )
 
@@ -824,7 +830,9 @@ class FileViewSet(
             if extra_fields:
                 return Response(
                     {
-                        "detail": "Shared write access only allows updating file content."
+                        "detail": _(
+                            "Shared write access only allows updating file content."
+                        )
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
@@ -843,25 +851,29 @@ class FileViewSet(
                 exclude_user_id=request.user.pk,
             )
             if FileService.can_access(file_obj.owner, file_obj):
-                notify(
-                    recipient=file_obj.owner,
-                    origin="files",
-                    title=f'{request.user.username} edited "{file_obj.name}"',
-                    url=(
-                        f"/files/{file_obj.parent_id}"
-                        if file_obj.parent_id
-                        else "/files"
-                    ),
-                    actor=request.user,
-                    source=file_obj,
-                )
+                with translation.override(get_user_language(file_obj.owner)):
+                    notify(
+                        recipient=file_obj.owner,
+                        origin="files",
+                        title=_('%(actor)s edited "%(name)s"')
+                        % {"actor": request.user.username, "name": file_obj.name},
+                        url=(
+                            f"/files/{file_obj.parent_id}"
+                            if file_obj.parent_id
+                            else "/files"
+                        ),
+                        actor=request.user,
+                        source=file_obj,
+                    )
             return Response(serializer.data)
 
     def perform_destroy(self, instance):
         try:
             FileService.soft_delete(instance, acting_user=self.request.user)
         except GroupRootFolder as exc:
-            raise PermissionDenied("A group's root folder cannot be deleted.") from exc
+            raise PermissionDenied(
+                _("A group's root folder cannot be deleted.")
+            ) from exc
         shared_users = User.objects.filter(
             Q(received_shares__file=instance)
             | Q(groups__received_file_shares__file=instance)
@@ -871,11 +883,11 @@ class FileViewSet(
             )
             | Q(groups__projects__received_file_shares__file=instance)
         ).distinct()
-        if shared_users.exists():
-            recipients = list(shared_users)
+        for users in in_recipient_languages(shared_users):
             notify_many(
-                recipients=recipients,
+                recipients=users,
                 origin="files",
-                title=f'{self.request.user.username} deleted "{instance.name}"',
+                title=_('%(actor)s deleted "%(name)s"')
+                % {"actor": self.request.user.username, "name": instance.name},
                 actor=self.request.user,
             )

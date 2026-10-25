@@ -40,7 +40,7 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
 
   function render() {
     if (!items.length) {
-      setMessage('wikilink-empty', 'No notes found');
+      setMessage('wikilink-empty', gettext('No notes found'));
       return;
     }
     clearMenu();
@@ -63,7 +63,7 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
     } catch (e) {
       if (g === generation) {
         items = [];  // drop stale results so Arrow/Enter can't resurrect them
-        setMessage('wikilink-error', "Couldn't load notes");
+        setMessage('wikilink-error', gettext("Couldn't load notes"));
       }
       return;
     }

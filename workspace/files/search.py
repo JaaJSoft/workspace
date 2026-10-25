@@ -1,3 +1,5 @@
+from django.utils.translation import gettext as _
+
 from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 from workspace.files.models import File
@@ -61,7 +63,7 @@ def search_files(query, user, limit, scope=SearchScope.ALL):
         else:
             url = f"/files?shared=1&open={f.uuid}"
             type_icon = "file"
-            tags = (SearchTag("Shared with me", "info"),)
+            tags = (SearchTag(_("Shared with me"), "info"),)
 
         if not tags and f.parent and browsable:
             tags = (SearchTag(f.parent.name, "primary"),)

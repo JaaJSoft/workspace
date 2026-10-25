@@ -190,7 +190,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       const urls = this._urls(uuid);
       const opener = this._openerOf(uuid);
       this.fileUuid = uuid;
-      this.fileName = name || 'File';
+      this.fileName = name || gettext('File');
       this.fileType = fileType || '';
       this.fileLocation = null;
       this.downloadUrl = urls.download;
@@ -280,7 +280,9 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     locationTitle() {
       const labels = this.fileLocation ? this.fileLocation.labels : [];
       const path = labels.join(' / ');
-      return this.fileLocation && this.fileLocation.url ? 'Show in Files: ' + path : path;
+      return this.fileLocation && this.fileLocation.url
+        ? interpolate(gettext('Show in Files: %(path)s'), { path }, true)
+        : path;
     },
 
     async _loadActions(uuid) {
@@ -321,7 +323,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
           detail: { uuid, isFavorite },
         }));
       } catch (_) {
-        window.AppAlert.error('Failed to update favorites');
+        window.AppAlert.error(gettext('Failed to update favorites'));
       } finally {
         this._favoriteBusy = false;
       }

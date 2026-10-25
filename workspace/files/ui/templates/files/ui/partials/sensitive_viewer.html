@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   A viewer behind a "Sensitive content" cover, for a file whose preview is
   blurred (files/sensitivity.py). The cover and the veil only apply while the
@@ -17,13 +18,13 @@
     <span class="rounded-full bg-base-300 p-4">
       <i data-lucide="eye-closed" class="w-8 h-8 text-base-content/70"></i>
     </span>
-    <p class="font-semibold">Sensitive content</p>
+    <p class="font-semibold">{% translate "Sensitive content" %}</p>
     <p class="text-sm text-base-content/60 max-w-xs">
-      This file is marked as sensitive. Show it only if no one else can see your screen.
+      {% translate "This file is marked as sensitive. Show it only if no one else can see your screen." %}
     </p>
     <button type="button" class="btn btn-sm" @click="revealed = true">
       <i data-lucide="eye" class="w-4 h-4"></i>
-      Show
+      {% translate "Show" %}
     </button>
   </div>
   <div

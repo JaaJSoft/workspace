@@ -447,10 +447,13 @@ def scan_file(self, file_uuid):
 def notify_share_link_uploads(link_uuid):
     """Tell the link owner about the uploads that landed since the last run."""
     from django.core.cache import cache
+    from django.utils import translation
+    from django.utils.translation import gettext, ngettext
 
     from workspace.files.models import FileShareLink
     from workspace.files.services.public_links import upload_notification_cache_key
     from workspace.notifications.services.notifications import notify
+    from workspace.users.services.settings import get_user_language
 
     link = (
         FileShareLink.objects.select_related("file", "created_by")
@@ -463,15 +466,20 @@ def notify_share_link_uploads(link_uuid):
 
     delta = link.upload_count - link.notified_upload_count
     if delta > 0:
-        subject = "1 file was" if delta == 1 else f"{delta} files were"
-        notify(
-            recipient=link.created_by,
-            origin="files",
-            title=f'{subject} added to "{link.file.name}"',
-            body="Uploaded through your share link.",
-            url=f"/files/{link.file.uuid}",
-            source=link.file,
-        )
+        with translation.override(get_user_language(link.created_by)):
+            notify(
+                recipient=link.created_by,
+                origin="files",
+                title=ngettext(
+                    '%(count)s file was added to "%(name)s"',
+                    '%(count)s files were added to "%(name)s"',
+                    delta,
+                )
+                % {"count": delta, "name": link.file.name},
+                body=gettext("Uploaded through your share link."),
+                url=f"/files/{link.file.uuid}",
+                source=link.file,
+            )
         FileShareLink.objects.filter(pk=link.pk).update(
             notified_upload_count=link.upload_count
         )

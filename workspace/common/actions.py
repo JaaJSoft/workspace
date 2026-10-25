@@ -47,7 +47,7 @@ class BaseAction(ABC):
     def serialize(self, obj):
         return {
             "id": self.id,
-            "label": self.get_label(obj),
+            "label": str(self.get_label(obj)),
             "icon": self.get_icon(obj),
             "category": self.category.value,
             "css_class": self.get_css_class(obj),

@@ -1,14 +1,16 @@
+{% load i18n %}
 {% comment %}
 Storage analysis dialog. Opened by the `open-storage-analysis` window event
 (detail: { uuid, name } - uuid null for the personal root); the body is the
 storage_analysis partial, loaded and re-loaded through alpine-ajax.
 {% endcomment %}
+{% translate "Failed to analyze storage" as analyze_failed_message %}
 {# `$ajax()` fires its lifecycle events on the component root, so the listeners sit here rather than on the modal box. #}
 <div
   x-data="storageAnalysis()"
   @ajax:before="loading = true"
   @ajax:merged="loading = false; hasContent = true; syncScope()"
-  @ajax:error="loading = false; if (window.AppAlert) AppAlert.error('Failed to analyze storage')"
+  @ajax:error="loading = false; if (window.AppAlert) AppAlert.error('{{ analyze_failed_message|escapejs }}')"
 >
   <dialog x-ref="dialog" class="modal" @close="onClose()">
     <div
@@ -21,7 +23,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
           <i data-lucide="chart-pie" class="w-5 h-5 text-module"></i>
         </div>
         <div class="min-w-0 pr-8 sm:pr-0">
-          <h3 class="font-bold text-lg">Storage</h3>
+          <h3 class="font-bold text-lg">{% translate "Storage" %}</h3>
           <p class="text-sm text-base-content/60 truncate" x-text="scopeName"></p>
         </div>
         <span
@@ -31,19 +33,19 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
         ></span>
         <label
           class="input input-sm input-bordered flex items-center gap-2 ml-auto w-full sm:w-60 order-last sm:order-none"
-          title="Filter the largest files and duplicates by path"
+          title="{% translate 'Filter the largest files and duplicates by path' %}"
         >
           <i data-lucide="search" class="w-4 h-4 text-base-content/50 shrink-0"></i>
           <input
             type="text"
             x-ref="searchInput"
             class="grow min-w-0"
-            placeholder="Filter by name or path…"
+            placeholder="{% translate 'Filter by name or path…' %}"
             x-model="query"
             @input.debounce.300ms="search()"
             @keydown.escape.stop.prevent="clearSearch()"
             maxlength="100"
-            aria-label="Filter the largest files and duplicates by path"
+            aria-label="{% translate 'Filter the largest files and duplicates by path' %}"
           />
           <button
             type="button"
@@ -51,7 +53,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
             x-cloak
             class="btn btn-ghost btn-xs btn-square -mr-2"
             @click="clearSearch()"
-            aria-label="Clear the filter"
+            aria-label="{% translate 'Clear the filter' %}"
           >
             <i data-lucide="x" class="w-3.5 h-3.5"></i>
           </button>
@@ -61,7 +63,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
           type="button"
           class="btn btn-ghost btn-sm btn-square absolute right-3 top-3 sm:static"
           @click="close()"
-          aria-label="Close"
+          aria-label="{% translate 'Close' %}"
         >
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
@@ -130,13 +132,13 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
               </div>
             {% endfor %}
           </div>
-          <p class="text-center text-xs text-base-content/50">Measuring what takes up space…</p>
+          <p class="text-center text-xs text-base-content/50">{% translate "Measuring what takes up space…" %}</p>
         </div>
         <div id="storage-analysis"></div>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 </div>

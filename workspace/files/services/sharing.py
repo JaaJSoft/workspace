@@ -8,6 +8,7 @@ might want to skip notifications, a user request always sends them).
 """
 
 from django.contrib.auth.hashers import make_password
+from django.utils.translation import gettext, gettext_lazy
 from rest_framework.exceptions import APIException
 
 from ..models import File, FileEvent, FileShare, FileShareLink
@@ -30,7 +31,7 @@ class ShareLinkRuleError(APIException):
 
     status_code = 400
     default_code = "invalid_share_link"
-    default_detail = "Invalid share link parameters."
+    default_detail = gettext_lazy("Invalid share link parameters.")
 
 
 def _share_target(target_user, target_group, target_project):
@@ -159,9 +160,11 @@ def create_share_link(
         if cap is None:
             continue
         if cap < 1:
-            raise ShareLinkRuleError("A cap must be a positive number.")
+            raise ShareLinkRuleError(gettext("A cap must be a positive number."))
         if cap > ceiling:
-            raise ShareLinkRuleError("A cap is larger than this server can store.")
+            raise ShareLinkRuleError(
+                gettext("A cap is larger than this server can store.")
+            )
 
     link = FileShareLink.objects.create(
         file=file_obj,

@@ -203,8 +203,8 @@ window.shareModal = function shareModal() {
     },
 
     entrySubtitle(entry) {
-      if (entry.type === 'project') return 'Project';
-      if (entry.type === 'group') return 'Group';
+      if (entry.type === 'project') return gettext('Project');
+      if (entry.type === 'group') return gettext('Group');
       return ((entry.first_name || '') + ' ' + (entry.last_name || '')).trim();
     },
 
@@ -261,9 +261,13 @@ window.shareModal = function shareModal() {
       this.saving = false;
 
       if (errors > 0 && window.AppAlert) {
-        window.AppAlert.error(`Some changes failed (${errors} error${errors > 1 ? 's' : ''})`);
+        window.AppAlert.error(interpolate(ngettext(
+          'Some changes failed (%(count)s error)',
+          'Some changes failed (%(count)s errors)',
+          errors,
+        ), { count: errors }, true));
       } else if (window.AppAlert) {
-        window.AppAlert.success('Sharing updated');
+        window.AppAlert.success(gettext('Sharing updated'));
       }
 
       // Reset staged changes, reload, and close
@@ -339,7 +343,7 @@ window.shareModal = function shareModal() {
         await navigator.clipboard.writeText(value);
         this.linkGeneratorError = '';
       } catch (err) {
-        this.linkGeneratorError = 'That password could not be copied.';
+        this.linkGeneratorError = gettext('That password could not be copied.');
       }
     },
 
@@ -355,9 +359,9 @@ window.shareModal = function shareModal() {
 
     availableModes() {
       return [
-        { value: 'read', label: 'Read only' },
-        { value: 'drop', label: 'Upload only' },
-        { value: 'both', label: 'Read and upload' },
+        { value: 'read', label: gettext('Read only') },
+        { value: 'drop', label: gettext('Upload only') },
+        { value: 'both', label: gettext('Read and upload') },
       ];
     },
 
@@ -429,16 +433,17 @@ window.shareModal = function shareModal() {
 
     copyShareLink(url) {
       navigator.clipboard.writeText(url).then(() => {
-        if (window.AppAlert) window.AppAlert.success('Link copied to clipboard');
+        if (window.AppAlert) window.AppAlert.success(gettext('Link copied to clipboard'));
       });
     },
 
     formatLinkExpiry(expiresAt) {
-      if (!expiresAt) return 'Permanent';
+      if (!expiresAt) return gettext('Permanent');
       // Expiry is stored as end-of-day in the user's zone: formatting in
       // that zone shows the day the user picked.
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      return new Date(expiresAt).toLocaleDateString(undefined, { timeZone: tz });
+      const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+      return new Date(expiresAt).toLocaleDateString(locale, { timeZone: tz });
     },
   };
 };

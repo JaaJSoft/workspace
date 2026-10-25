@@ -1,3 +1,5 @@
+from django.utils.translation import gettext, gettext_lazy
+
 from . import ActionRegistry
 from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
@@ -5,7 +7,7 @@ from .base import UNRESOLVED, ActionCategory, BaseFileAction
 @ActionRegistry.register
 class DownloadAction(BaseFileAction):
     id = "download"
-    label = "Download"
+    label = gettext_lazy("Download")
     icon = "download"
     category = ActionCategory.TRANSFER
     node_types = ("file", "folder")
@@ -22,14 +24,14 @@ class DownloadAction(BaseFileAction):
 
     def get_label(self, file_obj):
         if file_obj.node_type == "folder":
-            return "Download as ZIP"
-        return "Download"
+            return gettext("Download as ZIP")
+        return gettext("Download")
 
 
 @ActionRegistry.register
 class CopyLinkAction(BaseFileAction):
     id = "copy_link"
-    label = "Copy link"
+    label = gettext_lazy("Copy link")
     icon = "link"
     category = ActionCategory.TRANSFER
     node_types = ("file",)

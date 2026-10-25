@@ -61,7 +61,7 @@ window.propertiesPanelMixin = function propertiesPanelMixin() {
         else window.navHistory.push(url);
       }
 
-      const onError = () => { this.propertiesError = 'Failed to load properties'; };
+      const onError = () => { this.propertiesError = gettext('Failed to load properties'); };
       const onAfter = () => { this.propertiesLoading = false; };
       this.$el.addEventListener('ajax:error', onError, { once: true });
       this.$el.addEventListener('ajax:after', onAfter, { once: true });

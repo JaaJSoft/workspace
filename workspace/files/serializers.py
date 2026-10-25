@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 
 from django.db import transaction
+from django.utils.translation import gettext, gettext_lazy
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -32,13 +33,13 @@ from .models import File, FileComment, UploadSession
 
 class FileLocked(APIException):
     status_code = 423
-    default_detail = "File is locked by another user."
+    default_detail = gettext_lazy("File is locked by another user.")
     default_code = "locked"
 
 
 class FileContentStale(APIException):
     status_code = 412
-    default_detail = "The file changed since it was loaded."
+    default_detail = gettext_lazy("The file changed since it was loaded.")
     default_code = "precondition_failed"
 
 
@@ -99,28 +100,30 @@ def content_write_refusals():
             }
         ) from exc
     except QuarantinedSource as exc:
-        raise PermissionDenied("File is quarantined.") from exc
+        raise PermissionDenied(gettext("File is quarantined.")) from exc
 
 
 def ensure_replaceable(user, target):
     """Raise unless *user* may overwrite *target*'s content right now."""
     permission = FileService.get_permission(user, target)
     if permission is None or permission < FilePermission.WRITE:
-        raise PermissionDenied("You cannot replace the existing file.")
+        raise PermissionDenied(gettext("You cannot replace the existing file."))
     ensure_unlocked(user, target)
 
 
 def validate_node_name(value):
     """Refuse the path separators a name would be split on downstream."""
     if "/" in value:
-        raise serializers.ValidationError("File and folder names must not contain '/'.")
+        raise serializers.ValidationError(
+            gettext("File and folder names must not contain '/'.")
+        )
     if "\\" in value:
         raise serializers.ValidationError(
-            "File and folder names must not contain a backslash."
+            gettext("File and folder names must not contain a backslash.")
         )
     if value in (".", ".."):
         raise serializers.ValidationError(
-            "File and folder names must not be '.' or '..'."
+            gettext("File and folder names must not be '.' or '..'.")
         )
     return value
 
@@ -515,23 +518,29 @@ class FileSerializer(serializers.ModelSerializer):
                         if instance is None and attrs.get("content") is None:
                             raise serializers.ValidationError(
                                 {
-                                    "content": "Content is required to replace "
-                                    "the existing file."
+                                    "content": gettext(
+                                        "Content is required to replace "
+                                        "the existing file."
+                                    )
                                 }
                             )
                         if instance is not None and not instance.content:
                             raise serializers.ValidationError(
                                 {
-                                    "content": "This file has no content to "
-                                    "replace the existing one with."
+                                    "content": gettext(
+                                        "This file has no content to "
+                                        "replace the existing one with."
+                                    )
                                 }
                             )
                         self._replace_target = conflict
                     else:
                         raise serializers.ValidationError(
                             {
-                                "name": "A file with the same name already "
-                                "exists in this folder."
+                                "name": gettext(
+                                    "A file with the same name already "
+                                    "exists in this folder."
+                                )
                             }
                         )
 

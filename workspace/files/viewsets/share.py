@@ -2,6 +2,7 @@
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -108,7 +109,7 @@ class ShareMixin:
             )
         ):
             return Response(
-                {"detail": "Only files can be shared."},
+                {"detail": _("Only files can be shared.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -136,7 +137,7 @@ class ShareMixin:
             )
             if target_project is None:
                 return Response(
-                    {"detail": "Project not found."},
+                    {"detail": _("Project not found.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
         elif shared_with_id:
@@ -145,14 +146,14 @@ class ShareMixin:
                 return error
             if shared_with_id == request.user.pk:
                 return Response(
-                    {"detail": "Cannot share with yourself."},
+                    {"detail": _("Cannot share with yourself.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             try:
                 target_user = User.objects.get(pk=shared_with_id, is_active=True)
             except User.DoesNotExist:
                 return Response(
-                    {"detail": "User not found."},
+                    {"detail": _("User not found.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
         else:
@@ -163,7 +164,7 @@ class ShareMixin:
                 target_group = Group.objects.get(pk=group_id)
             except Group.DoesNotExist:
                 return Response(
-                    {"detail": "Group not found."},
+                    {"detail": _("Group not found.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -192,21 +193,27 @@ class ShareMixin:
                     target_group=target_group,
                     target_project=target_project,
                     actor=request.user,
-                    title=f'{request.user.username} shared "{file_obj.name}" with you',
+                    title=lambda: (
+                        _('%(actor)s shared "%(name)s" with you')
+                        % {"actor": request.user.username, "name": file_obj.name}
+                    ),
                 )
             if permission_changed:
-                perm_label = (
-                    "read & write"
-                    if permission == FileShare.Permission.READ_WRITE
-                    else "read only"
-                )
+
+                def permission_title():
+                    if permission == FileShare.Permission.READ_WRITE:
+                        message = _('Permission updated to read & write on "%(name)s"')
+                    else:
+                        message = _('Permission updated to read only on "%(name)s"')
+                    return message % {"name": file_obj.name}
+
                 notify_share_targets(
                     file_obj,
                     target_user=target_user,
                     target_group=target_group,
                     target_project=target_project,
                     actor=request.user,
-                    title=f'Permission updated to {perm_label} on "{file_obj.name}"',
+                    title=permission_title,
                 )
             return Response(
                 {"shared": True, "permission": share.permission},
@@ -223,7 +230,7 @@ class ShareMixin:
         )
         if not deleted:
             return Response(
-                {"detail": "Share not found."},
+                {"detail": _("Share not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         notify_share_targets(
@@ -232,7 +239,10 @@ class ShareMixin:
             target_group=target_group,
             target_project=target_project,
             actor=request.user,
-            title=f'{request.user.username} revoked your access to "{file_obj.name}"',
+            title=lambda: (
+                _('%(actor)s revoked your access to "%(name)s"')
+                % {"actor": request.user.username, "name": file_obj.name}
+            ),
             url="",
         )
         return Response({"shared": False}, status=status.HTTP_200_OK)
@@ -318,7 +328,7 @@ class ShareMixin:
             try:
                 return int(raw)
             except (ValueError, TypeError) as exc:
-                raise ValidationError({field: "Must be a whole number."}) from exc
+                raise ValidationError({field: _("Must be a whole number.")}) from exc
 
         link = service_create_share_link(
             file_obj,

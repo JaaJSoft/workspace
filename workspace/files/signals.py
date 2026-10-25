@@ -1,5 +1,7 @@
 """Group membership hooks, wired in ``apps.FilesConfig.ready()``."""
 
+from django.utils.translation import gettext as _
+
 
 def revoke_sharing_on_group_leave(sender, instance, action, pk_set, reverse, **kwargs):
     """Revoke the public links and shares a user made on a group's nodes when
@@ -42,6 +44,8 @@ def revoke_sharing_on_group_leave(sender, instance, action, pk_set, reverse, **k
             target_group=share.shared_with_group,
             target_project=share.shared_with_project,
             actor=share.shared_by,
-            title=f'"{share.file.name}" is no longer shared with you',
+            title=lambda share=share: (
+                _('"%(name)s" is no longer shared with you') % {"name": share.file.name}
+            ),
             url="",
         )

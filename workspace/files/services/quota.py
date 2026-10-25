@@ -16,6 +16,7 @@ from django.conf import settings
 from django.db.models import BigIntegerField, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.template.defaultfilters import filesizeformat
+from django.utils.translation import gettext, gettext_lazy
 from rest_framework.exceptions import APIException
 
 from ..models import File, GroupStorageQuota, UploadSession, UserStorageQuota
@@ -98,14 +99,12 @@ def group_usage_subquery(group_field="group_id"):
     )
 
 
-def _bucket_label(group):
-    """Name the bucket in a refusal message.
+def _group_name(group):
+    """Name the group bucket in a refusal message.
 
     Costs a query when *group* is a bare primary key, which is why it is only
     reached once a write has already been refused.
     """
-    if group is None:
-        return "Your personal storage"
     name = getattr(group, "name", None)
     if name is None:
         from django.contrib.auth.models import Group
@@ -113,7 +112,7 @@ def _bucket_label(group):
         name = (
             Group.objects.filter(pk=group).values_list("name", flat=True).first() or "?"
         )
-    return f'The group folder "{name}"'
+    return name
 
 
 def _open_sessions(*, owner, group, excluding=None):
@@ -197,7 +196,7 @@ class QuotaExceeded(APIException):
 
     status_code = 413
     default_code = "storage_quota_exceeded"
-    default_detail = "Storage quota exceeded."
+    default_detail = gettext_lazy("Storage quota exceeded.")
 
 
 def subtree_bytes(node, *, include_trashed):
@@ -227,13 +226,23 @@ def check_write_allowed(*, owner, group, additional_bytes, excluding=None):
     used, limit = bucket_state(owner=owner, group=group, excluding=excluding)
     if limit is None or used + additional_bytes <= limit:
         return
-    label = _bucket_label(group)
-    remedy = (
-        "Free up space or empty the trash."
-        if group is None
-        else "Free up space or ask an administrator to raise the limit."
-    )
-    raise QuotaExceeded(
-        f"{label} is full ({filesizeformat(used)} of {filesizeformat(limit)} used) "
-        f"and this write needs {filesizeformat(additional_bytes)}. {remedy}"
-    )
+    sizes = {
+        "used": filesizeformat(used),
+        "limit": filesizeformat(limit),
+        "needed": filesizeformat(additional_bytes),
+    }
+    if group is None:
+        message = (
+            gettext(
+                "Your personal storage is full (%(used)s of %(limit)s used) and "
+                "this write needs %(needed)s. Free up space or empty the trash."
+            )
+            % sizes
+        )
+    else:
+        message = gettext(
+            'The group folder "%(name)s" is full (%(used)s of %(limit)s used) and '
+            "this write needs %(needed)s. Free up space or ask an administrator "
+            "to raise the limit."
+        ) % {**sizes, "name": _group_name(group)}
+    raise QuotaExceeded(message)

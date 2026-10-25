@@ -1,45 +1,46 @@
+{% load i18n %}
 <div class="space-y-3">
-  {% include "ui/partials/pref_toggle.html" with label="Show hidden files" key="showHiddenFiles" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="Compact file list" key="compactList" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Show hidden files") key="showHiddenFiles" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Confirm before delete") key="confirmBeforeDelete" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Compact file list") key="compactList" accent="toggle-module" %}
   <hr class="border-base-300" />
-  <label class="text-sm text-base-content/60 block mb-1">Sidebar sections</label>
-  {% include "ui/partials/pref_toggle.html" with label="Show pinned folders" key="showPinned" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="Show group folders" key="showGroups" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="Show tags" key="showTags" accent="toggle-module" %}
+  <label class="text-sm text-base-content/60 block mb-1">{% translate "Sidebar sections" %}</label>
+  {% include "ui/partials/pref_toggle.html" with label=_("Show pinned folders") key="showPinned" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Show group folders") key="showGroups" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Show tags") key="showTags" accent="toggle-module" %}
   <hr class="border-base-300" />
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Default sort" %}</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.defaultSort"
       @change="update('defaultSort', $event.target.value)"
     >
-      <option value="default">Default</option>
-      <option value="name">Name</option>
-      <option value="modified">Modified</option>
-      <option value="created">Created</option>
-      <option value="size">Size</option>
-      <option value="type">Type</option>
+      <option value="default">{% translate "Default" %}</option>
+      <option value="name">{% translate "Name" %}</option>
+      <option value="modified">{% translate "Modified" %}</option>
+      <option value="created">{% translate "Created" %}</option>
+      <option value="size">{% translate "Size" %}</option>
+      <option value="type">{% translate "Type" %}</option>
     </select>
   </div>
   <hr class="border-base-300" />
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Same-name files</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Same-name files" %}</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.nameCollision"
       @change="update('nameCollision', $event.target.value)"
     >
-      <option value="ask">Ask me</option>
-      <option value="keep_both">Keep both</option>
-      <option value="replace">Replace</option>
-      <option value="skip">Skip</option>
+      <option value="ask">{% translate "Ask me" %}</option>
+      <option value="keep_both">{% translate "Keep both" %}</option>
+      <option value="replace">{% translate "Replace" %}</option>
+      <option value="skip">{% translate "Skip" %}</option>
     </select>
   </div>
   <hr class="border-base-300" />
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Breadcrumb collapse after</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Breadcrumb collapse after" %}</label>
     <div class="flex items-center gap-2">
       <input
         type="range"

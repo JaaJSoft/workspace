@@ -87,7 +87,7 @@ window.fileDragMove = (function () {
     const badge = document.createElement('div');
     badge.className = 'badge badge-module';
     badge.style.cssText = 'position:fixed;top:-1000px;left:0;pointer-events:none;';
-    badge.textContent = `${count} items`;
+    badge.textContent = interpolate(ngettext('%(count)s item', '%(count)s items', count), { count }, true);
     document.body.appendChild(badge);
     dataTransfer.setDragImage(badge, 12, 12);
     setTimeout(() => badge.remove(), 0);

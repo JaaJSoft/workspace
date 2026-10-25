@@ -1,4 +1,4 @@
-{% load ui_filters %}
+{% load i18n ui_filters %}
 {% comment %}
 Activity timeline for the right properties panel.
 
@@ -20,14 +20,17 @@ Loaded by:
 {% endcomment %}
 <div id="file-events-list">
   {% if grouped_actions %}
-    <div class="divider my-0 text-xs text-base-content/40">Activity</div>
+    {% translate "System" as system_label %}
+    {% translate "a user" as a_user_label %}
+    {% translate "another file" as another_file_label %}
+    <div class="divider my-0 text-xs text-base-content/40">{% translate "Activity" %}</div>
 
     <select
       class="select select-bordered select-xs w-full my-2"
-      aria-label="Filter activity by action"
+      aria-label="{% translate 'Filter activity by action' %}"
       x-on:change="$ajax('/files/{{ file.uuid|escapejs }}/events?action=' + encodeURIComponent($event.target.value), { target: 'file-events-list' })"
     >
-      <option value="" {% if not action_filter %}selected{% endif %}>All actions</option>
+      <option value="" {% if not action_filter %}selected{% endif %}>{% translate "All actions" %}</option>
       {% for category, actions in grouped_actions %}
         <optgroup label="{{ category }}">
           {% for value, label in actions %}
@@ -49,53 +52,68 @@ Loaded by:
               class="w-3.5 h-3.5 mt-1 text-base-content/50 flex-shrink-0"
             ></i>
             <div class="flex-1 min-w-0">
-              <p class="text-sm leading-tight">
-                <span class="font-medium">
-                  {% if event.actor %}
-                    {{ event.actor.username }}
+              {% with actor=event.actor.username|default:system_label %}
+                {% firstof event.metadata.shared_with_project_name event.metadata.shared_with_group_name event.metadata.shared_with_username a_user_label as target %}
+                {# djlint:off #}
+                <p class="text-sm leading-tight">
+                  {% if event.action == "renamed" %}
+                    {% blocktranslate trimmed with old_name=event.metadata.old_name|default:'' new_name=event.metadata.new_name|default:'' %}
+                      <span class="font-medium">{{ actor }}</span> renamed <span class="text-base-content/60">{{ old_name }}</span> → <span class="text-base-content/60">{{ new_name }}</span>
+                    {% endblocktranslate %}
+                  {% elif event.action == "moved" %}
+                    {% blocktranslate trimmed %}<span class="font-medium">{{ actor }}</span> moved this{% endblocktranslate %}
+                  {% elif event.action == "content_replaced" %}
+                    {% blocktranslate trimmed %}<span class="font-medium">{{ actor }}</span> updated the file{% endblocktranslate %}
+                  {% elif event.action == "created" %}
+                    {% if event.metadata.source_uuid or event.metadata.copied %}
+                      {% blocktranslate trimmed with source=event.metadata.source_name|default:another_file_label %}
+                        <span class="font-medium">{{ actor }}</span> copied from <span class="text-base-content/60">{{ source }}</span>
+                      {% endblocktranslate %}
+                    {% else %}
+                      {% blocktranslate trimmed %}<span class="font-medium">{{ actor }}</span> created this{% endblocktranslate %}
+                    {% endif %}
+                  {% elif event.action == "deleted" %}
+                    {% blocktranslate trimmed %}<span class="font-medium">{{ actor }}</span> moved this to the trash{% endblocktranslate %}
+                  {% elif event.action == "restored" %}
+                    {% blocktranslate trimmed %}<span class="font-medium">{{ actor }}</span> restored this from the trash{% endblocktranslate %}
+                  {% elif event.action == "shared" %}
+                    {% if event.metadata.shared_with_project_name %}
+                      {% blocktranslate trimmed %}
+                        <span class="font-medium">{{ actor }}</span> shared with the project <span class="text-base-content/60">{{ target }}</span>
+                      {% endblocktranslate %}
+                    {% elif event.metadata.shared_with_group_name %}
+                      {% blocktranslate trimmed %}
+                        <span class="font-medium">{{ actor }}</span> shared with the group <span class="text-base-content/60">{{ target }}</span>
+                      {% endblocktranslate %}
+                    {% else %}
+                      {% blocktranslate trimmed %}
+                        <span class="font-medium">{{ actor }}</span> shared with <span class="text-base-content/60">{{ target }}</span>
+                      {% endblocktranslate %}
+                    {% endif %}
+                    {% if event.metadata.permission == "rw" %}<span class="badge badge-xs badge-module">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
+                  {% elif event.action == "share_permission_changed" %}
+                    {% blocktranslate trimmed %}
+                      <span class="font-medium">{{ actor }}</span> changed <span class="text-base-content/60">{{ target }}</span>'s permission
+                    {% endblocktranslate %}
+                    {% if event.metadata.new_permission == "rw" %}<span class="badge badge-xs badge-module">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
+                  {% elif event.action == "unshared" %}
+                    {% blocktranslate trimmed %}
+                      <span class="font-medium">{{ actor }}</span> revoked <span class="text-base-content/60">{{ target }}</span>'s access
+                    {% endblocktranslate %}
+                  {% elif event.action == "link_created" %}
+                    {% blocktranslate trimmed %}<span class="font-medium">{{ actor }}</span> created a public link{% endblocktranslate %}
+                    {% if event.metadata.has_password %}
+                      <i data-lucide="lock" class="w-3 h-3 inline text-base-content/40"></i>
+                    {% endif %}
+                  {% elif event.action == "link_revoked" %}
+                    {% blocktranslate trimmed %}<span class="font-medium">{{ actor }}</span> revoked a public link{% endblocktranslate %}
                   {% else %}
-                    System
+                    <span class="font-medium">{{ actor }}</span>
+                    {{ event.short_label|lower }}
                   {% endif %}
-                </span>
-                {% if event.action == "renamed" %}
-                  renamed
-                  <span class="text-base-content/60">{{ event.metadata.old_name|default:'' }}</span>
-                  →
-                  <span class="text-base-content/60">{{ event.metadata.new_name|default:'' }}</span>
-                {% elif event.action == "moved" %}
-                  moved this
-                {% elif event.action == "content_replaced" %}
-                  updated the file
-                {% elif event.action == "created" %}
-                  {% if event.metadata.source_uuid or event.metadata.copied %}copied from <span class="text-base-content/60">{{ event.metadata.source_name|default:'another file' }}</span>{% else %}created this{% endif %}
-                {% elif event.action == "deleted" %}
-                  moved this to the trash
-                {% elif event.action == "restored" %}
-                  restored this from the trash
-                {% elif event.action == "shared" %}
-                  shared with
-                  {% if event.metadata.shared_with_project_name %}the project{% elif event.metadata.shared_with_group_name %}the group{% endif %}
-                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_project_name event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>
-                  {% if event.metadata.permission == "rw" %}<span class="badge badge-xs badge-module">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
-                {% elif event.action == "share_permission_changed" %}
-                  changed
-                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_project_name event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>'s
-                  permission
-                  {% if event.metadata.new_permission == "rw" %}<span class="badge badge-xs badge-module">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
-                {% elif event.action == "unshared" %}
-                  revoked
-                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_project_name event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>'s access
-                {% elif event.action == "link_created" %}
-                  created a public link
-                  {% if event.metadata.has_password %}
-                    <i data-lucide="lock" class="w-3 h-3 inline text-base-content/40"></i>
-                  {% endif %}
-                {% elif event.action == "link_revoked" %}
-                  revoked a public link
-                {% else %}
-                  {{ event.short_label|lower }}
-                {% endif %}
-              </p>
+                </p>
+                {# djlint:on #}
+              {% endwith %}
               <time class="text-xs text-base-content/40">{{ event.created_at|time_ago }}</time>
             </div>
           </li>
@@ -111,19 +129,25 @@ Loaded by:
             class="btn btn-ghost btn-xs gap-1"
           >
             <i data-lucide="chevron-down" class="w-3 h-3"></i>
-            Load more
-            <span class="text-base-content/40">({{ events_limit }} of {{ total_event_count }})</span>
+            {% translate "Load more" %}
+            <span class="text-base-content/40">
+              {% blocktranslate trimmed %}
+                ({{ events_limit }} of {{ total_event_count }})
+              {% endblocktranslate %}
+            </span>
           </a>
         {% elif total_event_count > events_limit %}
           <p class="text-xs text-base-content/40 text-center flex-1">
-            Showing the {{ max_events_limit }} most recent of {{ total_event_count }} events. Older entries aren't displayed.
+            {% blocktranslate trimmed %}
+              Showing the {{ max_events_limit }} most recent of {{ total_event_count }} events. Older entries aren't displayed.
+            {% endblocktranslate %}
           </p>
         {% endif %}
         {% include "ui/partials/refresh_button.html" with url_expr="'"|add:refresh_url|add:"'" target="file-events-list" loading_expr="loading" size="xs" %}
       </div>
 
     {% else %}
-      <p class="text-sm text-base-content/40 px-1 py-2">No events match this filter.</p>
+      <p class="text-sm text-base-content/40 px-1 py-2">{% translate "No events match this filter." %}</p>
     {% endif %}
   {% endif %}
 </div>

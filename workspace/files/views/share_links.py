@@ -7,6 +7,7 @@ from django.core.files.storage import default_storage
 from django.db.models import F
 from django.http import FileResponse
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
@@ -89,7 +90,7 @@ def _resolve_link(token):
         return None, Response(status=status.HTTP_404_NOT_FOUND)
     if link.is_expired:
         return None, Response(
-            {"detail": "This share link has expired."},
+            {"detail": _("This share link has expired.")},
             status=status.HTTP_410_GONE,
         )
     return link, None
@@ -106,7 +107,7 @@ def _verify_access_token(link, access_token):
         return None
     if not access_token:
         return Response(
-            {"detail": "Password required.", "has_password": True},
+            {"detail": _("Password required."), "has_password": True},
             status=status.HTTP_403_FORBIDDEN,
         )
     try:
@@ -115,7 +116,7 @@ def _verify_access_token(link, access_token):
             raise signing.BadSignature
     except signing.BadSignature, signing.SignatureExpired:
         return Response(
-            {"detail": "Invalid or expired access token."},
+            {"detail": _("Invalid or expired access token.")},
             status=status.HTTP_403_FORBIDDEN,
         )
     return None
@@ -137,7 +138,7 @@ def _check_quarantine(file_obj):
     if reason is None:
         return None
     return Response(
-        {"detail": "File is quarantined.", "reason": reason},
+        {"detail": _("File is quarantined."), "reason": reason},
         status=status.HTTP_403_FORBIDDEN,
     )
 
@@ -245,7 +246,7 @@ class SharedFileVerifyView(APIView):
         raw_password = request.data.get("password", "")
         if not check_password(raw_password, link.password):
             return Response(
-                {"detail": "Invalid password."},
+                {"detail": _("Invalid password.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -285,7 +286,7 @@ class SharedFileContentView(APIView):
 
         if not f.content:
             return Response(
-                {"detail": "File has no content."},
+                {"detail": _("File has no content.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -335,7 +336,7 @@ class SharedFileDownloadView(APIView):
 
         if not f.content:
             return Response(
-                {"detail": "File has no content."},
+                {"detail": _("File has no content.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -431,7 +432,7 @@ class SharedFolderUploadView(APIView):
         max_bytes = min(link.max_file_bytes or ceiling, ceiling)
         if (upload.size or 0) > max_bytes:
             return Response(
-                {"detail": "This file is too large for this link."},
+                {"detail": _("This file is too large for this link.")},
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
 
@@ -441,7 +442,7 @@ class SharedFolderUploadView(APIView):
 
         if not self._reserve_slot(link):
             return Response(
-                {"detail": "This link is no longer accepting files."},
+                {"detail": _("This link is no longer accepting files.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

@@ -79,11 +79,13 @@ tile server (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, no dark style)
 fits a small instance: its
 [tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
 allows people browsing a map, as both maps here do, but offers no guarantee and
-blocks heavy or anonymous traffic without notice. Tile requests carry the
-instance's origin as their Referer, which that policy requires, and never the
-page's path. The attribution is shown on the map and is required by every
-provider; HTML is allowed. Without a tile URL and an attribution there is no
-map.
+blocks heavy or anonymous traffic without notice. A tile request to another
+origin carries the instance's origin alone as its Referer, which that policy
+requires, never the page's path or query; a tile server on the instance's own
+origin (a self-hosted one behind the same host name) gets the full page URL,
+query and map view included. The attribution is shown on the map and is
+required by every provider; HTML is allowed. Without a tile URL and an
+attribution there is no map.
 
 Each user turns the map on, from **Show on a map** in the panel, from the
 **Map** page or from the Photos preferences, which name the servers the

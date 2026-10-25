@@ -59,7 +59,12 @@ _XMP_UUID = bytes.fromhex("be7acfcb97a942e89c71999491e3afac")
 _XMP_ATTRIBUTE_RE = re.compile(
     rb"""(?<![\w.-])[A-Za-z][\w.-]*:[Gg][Pp][Ss][\w.-]*\s*=\s*(?:"([^"]*)"|'([^']*)')"""
 )
-_XMP_ELEMENT_RE = re.compile(rb"<([A-Za-z][\w.-]*:[Gg][Pp][Ss][\w.-]*)>([^<]*)</\1>")
+# The opening tag of a GPS element, attributes included; a self-closing one
+# holds no value.
+_XMP_ELEMENT_RE = re.compile(
+    rb"<([A-Za-z][\w.-]*:[Gg][Pp][Ss][\w.-]*)(?:\s[^<>]*)?(?<!/)>"
+)
+_XMP_TAG_RE = re.compile(rb"<[^<>]*>")
 
 _ISOBMFF_TOP = {b"ftyp", b"moov", b"mdat", b"free", b"skip", b"wide", b"pnot"}
 _APPLE_LOCATION_KEY = b"com.apple.quicktime.location"
@@ -234,9 +239,18 @@ def _xmp(packet, base):
         if end > start:
             patches.append((base + start, b" " * (end - start)))
     for match in _XMP_ELEMENT_RE.finditer(packet):
-        start, end = match.span(2)
-        if end > start:
-            patches.append((base + start, b" " * (end - start)))
+        close = packet.find(b"</" + match.group(1), match.end())
+        if close < 0:
+            continue
+        # Every text node up to the closing tag, nested rdf:Alt / rdf:li
+        # values included; the tags stay, so the XML still parses.
+        position = match.end()
+        for tag in [*_XMP_TAG_RE.finditer(packet, position, close), None]:
+            text_end = tag.start() if tag else close
+            if text_end > position:
+                patches.append((base + position, b" " * (text_end - position)))
+            if tag:
+                position = tag.end()
     return patches
 
 

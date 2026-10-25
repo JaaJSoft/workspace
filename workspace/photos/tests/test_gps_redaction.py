@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import zlib
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pillow_heif
 from django.test import SimpleTestCase
@@ -83,6 +84,24 @@ class ImageContainerTests(SimpleTestCase):
 
     def test_jpeg(self):
         self.assert_redacted(_encode("JPEG", xmp=XMP), xmp=True)
+
+    def test_xmp_values_with_attributes_or_nested_in_rdf(self):
+        xmp = (
+            b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF '
+            b'xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+            b'<rdf:Description xmlns:exif="http://ns.adobe.com/exif/1.0/">'
+            b'<exif:GPSLatitude xml:lang="x-default">48,51.504N</exif:GPSLatitude>'
+            b"<exif:GPSLongitude><rdf:Alt><rdf:li>2,17.67E</rdf:li></rdf:Alt>"
+            b"</exif:GPSLongitude><exif:GPSVersionID/>"
+            b"</rdf:Description></rdf:RDF></x:xmpmeta>"
+        )
+
+        served = _redacted(_encode("JPEG", xmp=xmp))
+
+        self.assertNotIn(b"51.504", served)
+        self.assertNotIn(b"17.67", served)
+        packet = served[served.index(b"<x:xmpmeta") :]
+        ElementTree.fromstring(packet[: packet.index(b"</x:xmpmeta>") + 12])
 
     def test_png_keeps_a_valid_chunk_crc(self):
         served = self.assert_redacted(_encode("PNG"))

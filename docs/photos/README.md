@@ -83,9 +83,9 @@ no map.
 
 Each user turns the map on, from **Show on a map** in the panel, from the
 **Map** page or from the Photos preferences, which name the servers the
-location goes to. The map only changes what the viewer's own browser fetches:
-a photo shared or published through a link still carries its GPS position in
-the original.
+location goes to. The map only changes what the viewer's own browser fetches;
+what others learn of the position is the business of the section on shared
+photos below.
 
 The same tile server draws the **Map** page of the sidebar: every located photo
 and video of the library on screen (it follows the Mine / All / Shared / group
@@ -107,6 +107,26 @@ cost no request but the grid's, once the map rests.
 | `PHOTOS_MAP_TILE_URL` | empty | The tile server's URL template (`{z}`, `{x}`, `{y}`, optionally `{s}` and `{r}`). |
 | `PHOTOS_MAP_TILE_URL_DARK` | empty | The same map in a dark style, drawn under a dark theme. Without it, every theme gets the one above. |
 | `PHOTOS_MAP_TILE_ATTRIBUTION` | empty | The attribution shown on the map, for both styles. |
+
+## Location of shared photos
+
+A phone writes where a photo was taken into the file itself, often down to a
+few metres. **Remove the location from shared photos**, in the Photos
+preferences and on by default, keeps it from anyone but the owner: someone a
+file, a folder or an album is shared with, and a visitor through a public
+link, get the photo or the video without its position, and its properties
+panel shows neither the coordinates nor the map. Members of a group get the
+photos of its folder as they are: the group is a space they share on purpose.
+
+The stored file is never changed, and the owner keeps the position in their
+own library. What is served is the original with the position overwritten
+where it sits: the GPS block of the EXIF (JPEG and the extra images some
+phones store after it, PNG, WebP, HEIC, AVIF), the GPS properties of the XMP,
+and the location tags of an MP4 or a MOV. Nothing is re-encoded, so the
+quality, the other tags and the size stay the same, and a video still seeks.
+A position stored in a video's timed metadata track (some action cameras and
+drones) is not reached; a public album link that does not allow downloads
+serves a rendition without any metadata instead.
 
 ## Similar photos and search by description
 

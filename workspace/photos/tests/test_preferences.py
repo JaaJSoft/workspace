@@ -53,6 +53,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "show_hidden": False,
                 "auto_tags": True,
                 "show_map": False,
+                "strip_location_on_share": True,
                 "sensitive_blur": "standard",
                 "reveal_sensitive_on_hover": False,
                 "reveal_sensitive_in_viewer": False,
@@ -70,6 +71,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "show_hidden": True,
             "auto_tags": False,
             "show_map": True,
+            "strip_location_on_share": False,
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -84,6 +86,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
         self.assertIs(prefs["show_hidden"], True)
         self.assertIs(prefs["auto_tags"], False)
         self.assertIs(prefs["show_map"], True)
+        self.assertIs(prefs["strip_location_on_share"], False)
 
     def test_the_blur_is_a_core_setting(self):
         set_setting(self.user, "core", "sensitive_blur", "off")
@@ -127,6 +130,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "show_hidden": 1,
             "auto_tags": "no",
             "show_map": "true",
+            "strip_location_on_share": "false",
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -142,6 +146,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "show_hidden": False,
                 "auto_tags": True,
                 "show_map": False,
+                "strip_location_on_share": True,
                 "sensitive_blur": "standard",
                 "reveal_sensitive_on_hover": False,
                 "reveal_sensitive_in_viewer": False,

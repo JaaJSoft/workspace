@@ -18,6 +18,7 @@ from workspace.common.http_ranges import (
     stream_range as _stream_range,
 )
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.files.content_filters import open_served, served_handle
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
@@ -33,13 +34,14 @@ from workspace.files.services.scanning.policy import (
 _LOOKUP_CHUNK = 500
 
 
-def _chunked_field_file(field_file, block_size=65536):
-    """Yield successive chunks from a Django FieldFile, then close it.
+def _chunked_content(file_obj, reader, block_size=65536):
+    """Yield successive chunks of *file_obj*'s content as *reader* gets to
+    read it, then close it.
 
     Used as the data source for ZipStream so a multi-GB folder download
     can be streamed without ever holding more than one block in memory.
     """
-    fh = field_file.open("rb")
+    fh = open_served(file_obj, reader)
     try:
         while True:
             chunk = fh.read(block_size)
@@ -50,8 +52,9 @@ def _chunked_field_file(field_file, block_size=65536):
         fh.close()
 
 
-def _build_zip_stream(entries):
-    """Build a zipstream.ZipStream from an iterable of (File, arcname) pairs.
+def _build_zip_stream(entries, *, reader):
+    """Build a zipstream.ZipStream from an iterable of (File, arcname) pairs,
+    each read as *reader* gets to read it (None for a public link).
 
     Each entry's content is wired up as a lazy generator so the archive
     is generated as the response is iterated - constant RAM regardless of
@@ -65,22 +68,28 @@ def _build_zip_stream(entries):
         if not file_obj.content:
             continue
         zs.add(
-            _chunked_field_file(file_obj.content),
+            _chunked_content(file_obj, reader),
             arcname=arcname,
             size=file_obj.size or None,
         )
     return zs
 
 
-def edited_download_response(file_obj):
-    """*file_obj*, rotated and cropped as its edit shows it, as an attachment;
-    None when it cannot be rendered, and the caller serves the original."""
+def edited_download_response(file_obj, reader):
+    """*file_obj*, rotated and cropped as its edit shows it, as an attachment
+    for *reader*; None when it cannot be rendered, and the caller serves the
+    original."""
+    from io import BytesIO
+
     from django.http import HttpResponse
 
     rendered = render_edited(file_obj)
     if rendered is None:
         return None
     data, content_type, name = rendered
+    # The render keeps the original's EXIF, so the same filters apply.
+    with served_handle(file_obj, reader, BytesIO(data)) as handle:
+        data = handle.read()
     response = HttpResponse(data, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="{safe_filename(name)}"'
     response["Cache-Control"] = "private, no-cache"
@@ -150,7 +159,7 @@ class ContentMixin:
                 resp["Accept-Ranges"] = "bytes"
                 return resp
             start, end = parsed
-            file_handle = file_obj.content.open("rb")
+            file_handle = open_served(file_obj, request.user)
             response = StreamingHttpResponse(
                 _stream_range(file_handle, start, end),
                 status=206,
@@ -176,7 +185,7 @@ class ContentMixin:
 
         # Streamed whatever the type, text included: FileResponse closes the
         # handle once the body is sent.
-        file_handle = file_obj.content.open("rb")
+        file_handle = open_served(file_obj, request.user)
         response = FileResponse(
             file_handle, content_type=content_type, as_attachment=False
         )
@@ -301,7 +310,7 @@ class ContentMixin:
         # A rotated or cropped image downloads as it is shown. Its ETag would
         # name the original bytes, so the 304 below must not answer for it.
         if file_obj.node_type == File.NodeType.FILE and downloads_edited(file_obj):
-            response = edited_download_response(file_obj)
+            response = edited_download_response(file_obj, request.user)
             if response is not None:
                 return response
 
@@ -317,7 +326,7 @@ class ContentMixin:
                 return Response(
                     {"detail": "No content."}, status=status.HTTP_404_NOT_FOUND
                 )
-            file_handle = file_obj.content.open("rb")
+            file_handle = open_served(file_obj, request.user)
             response = FileResponse(
                 file_handle,
                 content_type=file_obj.mime_type or "application/octet-stream",
@@ -345,7 +354,10 @@ class ContentMixin:
             .exclude(content__isnull=True)
         )
 
-        zs = _build_zip_stream((desc, desc.path[len(prefix) :]) for desc in descendants)
+        zs = _build_zip_stream(
+            ((desc, desc.path[len(prefix) :]) for desc in descendants),
+            reader=request.user,
+        )
         zip_name = f"{safe_filename(file_obj.name)}.zip"
         response = StreamingHttpResponse(zs, content_type="application/zip")
         response["Content-Disposition"] = f'attachment; filename="{zip_name}"'
@@ -451,6 +463,8 @@ class ContentMixin:
                             "name",
                             "path",
                             "content",
+                            "owner_id",
+                            "group_id",
                         )
                         .exclude(content="")
                         .exclude(content__isnull=True)
@@ -458,7 +472,7 @@ class ContentMixin:
                     for desc in descendants:
                         yield desc, f"{obj.name}/{desc.path[len(prefix) :]}"
 
-        zs = _build_zip_stream(_entries())
+        zs = _build_zip_stream(_entries(), reader=request.user)
         response = StreamingHttpResponse(zs, content_type="application/zip")
         response["Content-Disposition"] = 'attachment; filename="download.zip"'
         return response

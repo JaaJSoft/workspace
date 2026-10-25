@@ -113,6 +113,12 @@
     </div>
     {% include "ui/partials/pref_toggle.html" with label="Show in the viewer without asking" state="photoPrefs.reveal_sensitive_in_viewer" change="savePhotoPref('reveal_sensitive_in_viewer', $event.target.checked)" accent="toggle-module" %}
   </div>
+  <div data-testid="photos-pref-strip-location">
+    {% include "ui/partials/pref_toggle.html" with label="Remove the location from shared photos" state="photoPrefs.strip_location_on_share" change="savePhotoPref('strip_location_on_share', $event.target.checked)" accent="toggle-module" %}
+    <p class="text-xs text-base-content/50 mt-1">
+      People you share a photo or a video with, and anyone with a link, get it without the place it was taken. You keep it in your library.
+    </p>
+  </div>
   {% if map_available %}
     <div data-testid="photos-pref-show-map">
       {% include "ui/partials/pref_toggle.html" with label="Show locations on a map" state="photoPrefs.show_map" change="savePhotoPref('show_map', $event.target.checked)" accent="toggle-module" %}

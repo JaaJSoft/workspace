@@ -9,6 +9,12 @@ const PHOTO_MAP_PIN = '<svg viewBox="0 0 24 24" width="28" height="28" aria-hidd
   + 'fill="currentColor" stroke="white" stroke-width="1.5"/>'
   + '<circle cx="12" cy="9" r="2.75" fill="white"/></svg>';
 
+// The page's Referrer-Policy (same-origin) would send tile servers no
+// Referer, which OpenStreetMap's policy blocks; the origin alone keeps the
+// page's path and query, the map's view included, to ourselves.
+// The library map (library_map.js) shares it.
+const PHOTO_MAP_TILE_REFERRER_POLICY = 'strict-origin-when-cross-origin';
+
 // Turns the `photos` / `show_map` setting on or off, then has the host reload
 // the panel so the section renders its new state: the reload cannot start
 // from in here, the swap removes this element with the request's listeners.
@@ -65,7 +71,11 @@ window.photoMap = function photoMap(config) {
       map = L.map(this.$refs.canvas, { scrollWheelZoom: false }).setView(position, config.zoom);
       map.attributionControl.setPrefix(false);
       shownUrl = tileUrl();
-      tiles = L.tileLayer(shownUrl, { attribution: config.attribution, maxZoom: 19 }).addTo(map);
+      tiles = L.tileLayer(shownUrl, {
+        attribution: config.attribution,
+        maxZoom: 19,
+        referrerPolicy: PHOTO_MAP_TILE_REFERRER_POLICY,
+      }).addTo(map);
       L.marker(position, {
         icon: L.divIcon({
           html: PHOTO_MAP_PIN,

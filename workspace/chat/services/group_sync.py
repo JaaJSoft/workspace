@@ -3,6 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
+from .conversations import ensure_group_admin, lock_conversation
 from .threads import mark_conversation_threads_read
 
 
@@ -12,9 +13,11 @@ def resync_conversation_members(conversation):
 
     Idempotent: creates missing rows, reactivates previously-left covered users
     (history preserved, unread reset), soft-deactivates rows no longer covered
-    by any attached group.
+    by any attached group, and promotes an admin if those took the last one.
     """
     from ..models import ConversationMember
+
+    lock_conversation(conversation.pk)
 
     # A bot never belongs to a group conversation (can_join_group): a bot
     # user in an attached group is not covered, so an existing bot row is
@@ -65,8 +68,10 @@ def resync_conversation_members(conversation):
     ]
     for m in to_deactivate:
         m.left_at = now
+        m.role = ConversationMember.Role.MEMBER
     if to_deactivate:
-        ConversationMember.objects.bulk_update(to_deactivate, ["left_at"])
+        ConversationMember.objects.bulk_update(to_deactivate, ["left_at", "role"])
+        ensure_group_admin(conversation.pk)
 
 
 def is_group_linked(conversation_id):
@@ -83,9 +88,9 @@ def create_group_conversation(user, groups, title=""):
     """Create a conversation whose membership follows *groups* (union).
 
     The creator must belong to at least one group; attaching further groups
-    they are not in is allowed (cross-team channels).
+    they are not in is allowed (cross-team channels). They are its first admin.
     """
-    from ..models import Conversation
+    from ..models import Conversation, ConversationMember
 
     groups = list(groups)
     if not user.groups.filter(pk__in=[g.pk for g in groups]).exists():
@@ -95,6 +100,9 @@ def create_group_conversation(user, groups, title=""):
         kind=Conversation.Kind.GROUP,
         title=(title or "").strip() or groups[0].name,
         created_by=user,
+    )
+    ConversationMember.objects.create(
+        conversation=conversation, user=user, role=ConversationMember.Role.ADMIN
     )
     conversation.groups.set(groups)
     resync_conversation_members(conversation)

@@ -268,13 +268,11 @@ class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_member_can_upload(self):
-        self.client.force_authenticate(self.member)
-        image = _make_test_image()
-        resp = self.client.post(
+    def _post_avatar(self):
+        return self.client.post(
             self.url(self.group.uuid),
             {
-                "image": image,
+                "image": _make_test_image(),
                 "crop_x": 0,
                 "crop_y": 0,
                 "crop_w": 100,
@@ -282,9 +280,20 @@ class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
             },
             format="multipart",
         )
+
+    def test_admin_can_upload(self):
+        self.client.force_authenticate(self.creator)
+        resp = self._post_avatar()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.group.refresh_from_db()
         self.assertTrue(self.group.has_avatar)
+
+    def test_member_cannot_upload(self):
+        self.client.force_authenticate(self.member)
+        resp = self._post_avatar()
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.group.refresh_from_db()
+        self.assertFalse(self.group.has_avatar)
 
     def test_dm_returns_400(self):
         self.client.force_authenticate(self.creator)
@@ -306,7 +315,7 @@ class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
         # Bytes pass the content-type/size guards but PIL can't decode them
         # (raises UnidentifiedImageError, an OSError subclass). Without
         # the try/except in the view this propagates as a 500.
-        self.client.force_authenticate(self.member)
+        self.client.force_authenticate(self.creator)
         bad = SimpleUploadedFile(
             "avatar.png",
             b"not-actually-a-png",
@@ -348,13 +357,20 @@ class GroupAvatarDeleteTests(ChatTestMixin, APITestCase):
             format="multipart",
         )
 
-    def test_member_can_delete(self):
+    def test_admin_can_delete(self):
         self._upload_avatar()
-        self.client.force_authenticate(self.member)
         resp = self.client.delete(self.url(self.group.uuid))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.group.refresh_from_db()
         self.assertFalse(self.group.has_avatar)
+
+    def test_member_cannot_delete(self):
+        self._upload_avatar()
+        self.client.force_authenticate(self.member)
+        resp = self.client.delete(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.group.refresh_from_db()
+        self.assertTrue(self.group.has_avatar)
 
     def test_outsider_cannot_delete(self):
         self._upload_avatar()

@@ -44,6 +44,7 @@
                 -
                 <button
                   type="button"
+                  x-show="canEditConversationDetails()"
                   class="inline-flex align-middle opacity-50 hover:opacity-100"
                   @click="editDescription()"
                   :title="'Edit description'"
@@ -56,6 +57,7 @@
             <template x-if="!activeConversation.description">
               <button
                 type="button"
+                x-show="canEditConversationDetails()"
                 class="inline-flex align-middle opacity-50 hover:opacity-100 ml-1"
                 @click="editDescription()"
                 title="Add description"

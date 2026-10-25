@@ -11,9 +11,9 @@ from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
 
-from ..models import Conversation
+from ..models import Conversation, ConversationMember
 from ..services import avatar as group_avatar_service
-from ..services.conversations import get_active_membership
+from ..services.conversations import get_conversation_role
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,8 @@ class GroupAvatarUploadView(APIView):
         },
     )
     def post(self, request, conversation_id):
-        membership = get_active_membership(request.user, conversation_id)
-        if not membership:
+        role = get_conversation_role(request.user, conversation_id)
+        if role is None:
             return Response(
                 {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -66,6 +66,12 @@ class GroupAvatarUploadView(APIView):
             return Response(
                 {"detail": "Avatars are only supported for group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if role != ConversationMember.Role.ADMIN:
+            return Response(
+                {"detail": "Only group admins can change the avatar."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         image = request.FILES.get("image")
@@ -140,8 +146,8 @@ class GroupAvatarUploadView(APIView):
         },
     )
     def delete(self, request, conversation_id):
-        membership = get_active_membership(request.user, conversation_id)
-        if not membership:
+        role = get_conversation_role(request.user, conversation_id)
+        if role is None:
             return Response(
                 {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -152,6 +158,12 @@ class GroupAvatarUploadView(APIView):
             return Response(
                 {"detail": "Avatars are only supported for group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if role != ConversationMember.Role.ADMIN:
+            return Response(
+                {"detail": "Only group admins can change the avatar."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         group_avatar_service.delete_group_avatar(conversation)

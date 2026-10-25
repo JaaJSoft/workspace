@@ -15,6 +15,7 @@ from .services.avatar import conversation_avatar_initial
 from .services.bot_tasks import can_manage_bot_task
 from .services.conversations import (
     can_clear_conversation,
+    get_conversation_role,
     is_bot_conversation,
     members_allow_clear,
 )
@@ -32,7 +33,17 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ConversationMember
-        fields = ["uuid", "user", "last_read_at", "joined_at", "left_at"]
+        fields = ["uuid", "user", "role", "last_read_at", "joined_at", "left_at"]
+
+
+def reader_role(conversation, user):
+    """The reader's role in *conversation*, off the prefetched active members if any."""
+    cache = getattr(conversation, "_prefetched_objects_cache", None)
+    if cache and "members" in cache:
+        return next(
+            (m.role for m in conversation.members.all() if m.user_id == user.id), None
+        )
+    return get_conversation_role(user, conversation)
 
 
 class ReactionSerializer(serializers.ModelSerializer):
@@ -200,6 +211,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     pin_position = serializers.IntegerField(read_only=True, default=None)
     is_bot_conversation = serializers.SerializerMethodField()
     can_clear = serializers.SerializerMethodField()
+    my_role = serializers.SerializerMethodField()
     avatar_initial = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
@@ -227,6 +239,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "pin_position",
             "is_bot_conversation",
             "can_clear",
+            "my_role",
             "notification_level",
         ]
 
@@ -241,6 +254,9 @@ class ConversationListSerializer(serializers.ModelSerializer):
 
     def get_avatar_initial(self, obj) -> str:
         return conversation_avatar_initial(obj, self.context["request"].user)
+
+    def get_my_role(self, obj) -> str | None:
+        return reader_role(obj, self.context["request"].user)
 
     def get_is_bot_conversation(self, obj):
         """Check if this conversation includes a bot member."""
@@ -280,6 +296,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
 class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     groups = GroupBriefSerializer(many=True, read_only=True)
+    my_role = serializers.SerializerMethodField()
     avatar_initial = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
@@ -300,8 +317,12 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             "avatar_initial",
             "members",
             "groups",
+            "my_role",
             "notification_level",
         ]
+
+    def get_my_role(self, obj) -> str | None:
+        return reader_role(obj, self.context["request"].user)
 
     def get_avatar_initial(self, obj) -> str:
         return conversation_avatar_initial(obj, self.context["request"].user)

@@ -18,11 +18,53 @@ window.chatMembersMixin = function chatMembersMixin() {
 
     _linkCopied: false,
 
+    // ── Roles ────────────────────────────────────────────────
+    // The server is the gate: these only hide what it would refuse. In a group
+    // the name, description, avatar and members are its admins' to change.
+    isGroupAdmin(conv = this.activeConversation) {
+      return conv?.kind === 'group' && conv.my_role === 'admin';
+    },
+
+    canEditConversationDetails(conv = this.activeConversation) {
+      return Boolean(conv) && (conv.kind !== 'group' || conv.my_role === 'admin');
+    },
+
+    groupAdminCount() {
+      return (this.activeConversation?.members || []).filter(m => m.role === 'admin').length;
+    },
+
+    _applyConversationDetail(updated) {
+      this.activeConversation.members = updated.members;
+      this.activeConversation.my_role = updated.my_role;
+      const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
+      if (conv) {
+        conv.members = updated.members;
+        conv.my_role = updated.my_role;
+      }
+    },
+
+    async setMemberRole(userId, role) {
+      if (!this.isGroupAdmin()) return;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/members/${userId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          credentials: 'same-origin',
+          body: JSON.stringify({ role }),
+        });
+        if (resp.ok) {
+          this._applyConversationDetail(await resp.json());
+        }
+      } catch (e) {
+        console.error('Failed to change member role', e);
+      }
+    },
+
     // ── Conversation rename / description / clear / leave ───
     async renameConversation() {
       if (!this.activeConversation) return;
       const isBot = this.activeConversation.is_bot_conversation;
-      if (!isBot && this.activeConversation.kind !== 'group') return;
+      if (!isBot && !this.isGroupAdmin()) return;
       const current = this.activeConversation.title || '';
       const title = await AppDialog.prompt({
         title: isBot ? 'Rename conversation' : 'Rename group',
@@ -54,7 +96,7 @@ window.chatMembersMixin = function chatMembersMixin() {
     },
 
     async editDescription() {
-      if (!this.activeConversation) return;
+      if (!this.canEditConversationDetails()) return;
       const current = this.activeConversation.description || '';
       const description = await AppDialog.prompt({
         title: 'Edit description',
@@ -153,7 +195,7 @@ window.chatMembersMixin = function chatMembersMixin() {
 
     // ── Member management (group only) ────────────────────────
     async addMembersToConversation() {
-      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+      if (!this.isGroupAdmin()) return;
       if (this.isGroupLinkedConversation()) return;
       this.addMemberSelected = [];
       this.addMemberSearchQuery = '';
@@ -240,10 +282,7 @@ window.chatMembersMixin = function chatMembersMixin() {
           body: JSON.stringify({ user_ids: this.addMemberSelected.map(u => u.id) }),
         });
         if (resp.ok) {
-          const updated = await resp.json();
-          this.activeConversation.members = updated.members;
-          const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
-          if (conv) conv.members = updated.members;
+          this._applyConversationDetail(await resp.json());
           this.$refs.addMemberDialog.close();
           this.refreshConversationList();
         }
@@ -254,7 +293,7 @@ window.chatMembersMixin = function chatMembersMixin() {
     },
 
     async removeMember(userId) {
-      if (!this.activeConversation) return;
+      if (!this.isGroupAdmin()) return;
       if (this.isGroupLinkedConversation()) return;
       const member = this.activeConversation.members?.find(m => m.user.id === userId);
       const name = member ? this.memberDisplayName(member) : 'this member';
@@ -287,7 +326,7 @@ window.chatMembersMixin = function chatMembersMixin() {
 
     // ── Group avatar (with cropper) ──────────────────────────
     uploadGroupAvatar(fileInput) {
-      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+      if (!this.isGroupAdmin()) return;
       const file = fileInput.files?.[0];
       if (!file) return;
       this._cropFile = file;
@@ -369,7 +408,7 @@ window.chatMembersMixin = function chatMembersMixin() {
     },
 
     async removeGroupAvatar() {
-      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+      if (!this.isGroupAdmin()) return;
 
       const ok = await AppDialog.confirm({
         title: 'Remove avatar',

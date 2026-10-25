@@ -42,8 +42,8 @@ urlpatterns = [
     ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/members/<int:user_id>",
-        conversations.ConversationMemberRemoveView.as_view(),
-        name="chat-conversation-member-remove",
+        conversations.ConversationMemberDetailView.as_view(),
+        name="chat-conversation-member-detail",
     ),
     # Per-member notification level
     path(

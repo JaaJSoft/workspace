@@ -734,7 +734,16 @@ def create_group_conversations(users, min_msgs, max_msgs, history_days, avatar_r
                 created_by=creator,
             )
             ConversationMember.objects.bulk_create(
-                [ConversationMember(conversation=conv, user=m) for m in members]
+                [
+                    ConversationMember(
+                        conversation=conv,
+                        user=m,
+                        role=ConversationMember.Role.ADMIN
+                        if m == creator
+                        else ConversationMember.Role.MEMBER,
+                    )
+                    for m in members
+                ]
             )
             total_msgs += _post_messages(
                 conv, members, min_msgs, max_msgs, history_days

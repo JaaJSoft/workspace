@@ -55,7 +55,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     dragOverPinned: null,
 
     // Context menu
-    ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false, isBot: false },
+    ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false, isBot: false, isAdmin: false, isGroupLinked: false },
 
     // AI title regeneration in flight (drives the header/sidebar spinners)
     titleRegeneratingUuid: null,
@@ -630,6 +630,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       const conv = this.conversations.find(c => c.uuid === uuid);
       this.ctxMenu.isPinned = isPinned || conv?.is_pinned || false;
       this.ctxMenu.isBot = conv?.is_bot_conversation || false;
+      this.ctxMenu.isAdmin = this.isGroupAdmin(conv);
+      this.ctxMenu.isGroupLinked = Boolean(conv?.groups?.length);
       this.ctxMenu.open = true;
 
       this.$nextTick(() => {

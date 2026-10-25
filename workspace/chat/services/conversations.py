@@ -1,4 +1,5 @@
 from django.db import DEFAULT_DB_ALIAS, transaction
+from django.utils import timezone
 
 # One order for every member list, so the member panel and the mention
 # autocomplete present people as they joined rather than as the database
@@ -147,6 +148,94 @@ def get_active_membership(user, conversation_id):
         user=user,
         left_at__isnull=True,
     ).first()
+
+
+def get_conversation_role(user, conversation):
+    """Return the user's role in *conversation*: 'admin', 'member', or None.
+
+    None when the user is not an active member. Only groups have admins: both
+    people of a direct message are members, and nothing there is gated on it.
+    """
+    from ..models import ConversationMember
+
+    return (
+        ConversationMember.objects.filter(
+            conversation=conversation,
+            user=user,
+            left_at__isnull=True,
+        )
+        .values_list("role", flat=True)
+        .first()
+    )
+
+
+def lock_conversation(conversation_id):
+    """Serialize the role changes of a conversation until the transaction ends.
+
+    Two admins demoting each other, or the last two leaving at once, would
+    both see another admin left and leave the group with none.
+    """
+    from ..models import Conversation
+
+    list(Conversation.objects.select_for_update().filter(pk=conversation_id).only("pk"))
+
+
+def ensure_group_admin(conversation_id):
+    """Promote the oldest active member of a group left without an admin.
+
+    Runs under ``lock_conversation``. Returns the promoted member, or None when
+    the group still has an admin, has nobody left, or is a direct message.
+    """
+    from ..models import Conversation, ConversationMember
+
+    active = ConversationMember.objects.filter(
+        conversation_id=conversation_id,
+        conversation__kind=Conversation.Kind.GROUP,
+        left_at__isnull=True,
+    )
+    if active.filter(role=ConversationMember.Role.ADMIN).exists():
+        return None
+    oldest = active.order_by(*MEMBER_ORDER).first()
+    if oldest is not None:
+        oldest.role = ConversationMember.Role.ADMIN
+        oldest.save(update_fields=["role"])
+    return oldest
+
+
+@transaction.atomic
+def end_membership(membership):
+    """Take *membership* out of its conversation, by leaving or by removal.
+
+    A last admin going hands the group to its oldest remaining member rather
+    than leaving it with nobody able to manage it.
+    """
+    from ..models import ConversationMember
+
+    lock_conversation(membership.conversation_id)
+    membership.left_at = timezone.now()
+    membership.role = ConversationMember.Role.MEMBER
+    membership.save(update_fields=["left_at", "role"])
+    ensure_group_admin(membership.conversation_id)
+
+
+@transaction.atomic
+def set_member_role(membership, role):
+    """Make *membership* an admin or a member. False if it would leave no admin."""
+    from ..models import ConversationMember
+
+    lock_conversation(membership.conversation_id)
+    if role == ConversationMember.Role.MEMBER:
+        other_admins = ConversationMember.objects.filter(
+            conversation_id=membership.conversation_id,
+            left_at__isnull=True,
+            role=ConversationMember.Role.ADMIN,
+        ).exclude(pk=membership.pk)
+        if not other_admins.exists():
+            return False
+    if membership.role != role:
+        membership.role = role
+        membership.save(update_fields=["role"])
+    return True
 
 
 def is_active_member(user_id, conversation_id):

@@ -166,7 +166,11 @@ window.libraryMap = function libraryMap() {
       });
       map.attributionControl.setPrefix(false);
       shownTileUrl = tileUrl();
-      tiles = L.tileLayer(shownTileUrl, { attribution: config.attribution, maxZoom: config.maxZoom }).addTo(map);
+      tiles = L.tileLayer(shownTileUrl, {
+        attribution: config.attribution,
+        maxZoom: config.maxZoom,
+        referrerPolicy: PHOTO_MAP_TILE_REFERRER_POLICY,
+      }).addTo(map);
       layer = L.layerGroup().addTo(map);
       if (config.view) {
         map.setView([config.view.lat, config.view.lng], Math.round(config.view.zoom));

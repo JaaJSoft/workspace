@@ -72,9 +72,11 @@ class PhotoLocationMapTests(PlaywrightTestCase):
             longitude=12.4922,
         )
         self.tile_requests = []
+        self.tile_referers = []
 
         def _stub_tile(route):
             self.tile_requests.append(route.request.url)
+            self.tile_referers.append(route.request.all_headers().get("referer"))
             route.fulfill(status=200, content_type="image/png", body=BLANK_TILE)
 
         self.context.route(f"https://{TILE_HOST}/**", _stub_tile)
@@ -147,6 +149,18 @@ class PhotoLocationMapTests(PlaywrightTestCase):
         expect(content.locator("[data-photo-map-offer]")).to_be_visible()
         expect(self.page.locator(".leaflet-container")).to_have_count(0)
         self.assertEqual(self.page.evaluate("window.__liveMaps"), 0)
+
+    def test_tile_requests_name_the_instance(self):
+        # Tile servers want a Referer (OpenStreetMap's policy blocks traffic
+        # without one); the page's same-origin policy would strip it.
+        set_setting(self.user, "photos", "show_map", True)
+        self._open_photos()
+
+        content = self._open_properties(self.paris)
+
+        expect(content.locator(".leaflet-tile-loaded").first).to_be_attached()
+        self.assertTrue(self.tile_referers)
+        self.assertEqual(set(self.tile_referers), {f"{self.live_server_url}/"})
 
     @override_settings(
         PHOTOS_MAP_TILE_URL_DARK=f"https://{TILE_HOST}/dark/{{z}}/{{x}}/{{y}}.png"

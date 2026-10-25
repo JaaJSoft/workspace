@@ -74,12 +74,18 @@ API key in the URL for production use.
 
 There is no default server. Every map opened sends the photo's position to the
 tile server, so pick one whose privacy and usage policy fit the instance: a
-self-hosted one, or a provider you have an agreement with.
-`tile.openstreetmap.org` is not meant for this; its
+self-hosted one, or a provider you have an agreement with. The OpenStreetMap
+tile server (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, no dark style)
+fits a small instance: its
 [tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
-forbids heavy use. The attribution is shown on the map and is required by
-every provider; HTML is allowed. Without a tile URL and an attribution there is
-no map.
+allows people browsing a map, as both maps here do, but offers no guarantee and
+blocks heavy or anonymous traffic without notice. A tile request to another
+origin carries the instance's origin alone as its Referer, which that policy
+requires, never the page's path or query; a tile server on the instance's own
+origin (a self-hosted one behind the same host name) gets the full page URL,
+query and map view included. The attribution is shown on the map and is
+required by every provider; HTML is allowed. Without a tile URL and an
+attribution there is no map.
 
 Each user turns the map on, from **Show on a map** in the panel, from the
 **Map** page or from the Photos preferences, which name the servers the

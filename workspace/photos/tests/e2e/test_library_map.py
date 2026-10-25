@@ -81,12 +81,13 @@ class LibraryMapTests(PlaywrightTestCase):
             latitude=41.8902,
             longitude=12.4922,
         )
-        self.context.route(
-            f"https://{TILE_HOST}/**",
-            lambda route: route.fulfill(
-                status=200, content_type="image/png", body=BLANK_TILE
-            ),
-        )
+        self.tile_referers = []
+
+        def _stub_tile(route):
+            self.tile_referers.append(route.request.all_headers().get("referer"))
+            route.fulfill(status=200, content_type="image/png", body=BLANK_TILE)
+
+        self.context.route(f"https://{TILE_HOST}/**", _stub_tile)
 
     def tearDown(self):
         cache.clear()
@@ -159,6 +160,15 @@ class LibraryMapTests(PlaywrightTestCase):
         expect(self.page.locator(LONE)).to_have_count(0)
         expect(self.page.locator(GRID)).to_have_count(3)
         expect(self.page).to_have_url(re.compile(r"from=2023-05&to=2024-07"))
+
+    def test_tile_requests_name_the_instance_and_nothing_more(self):
+        # The origin only: the page's path and query carry the map's view.
+        set_setting(self.user, "photos", "show_map", True)
+        self._open_map("?lat=46&lng=7&z=4")
+
+        expect(self.page.locator(f"{MAP} .leaflet-tile-loaded").first).to_be_attached()
+        self.assertTrue(self.tile_referers)
+        self.assertEqual(set(self.tile_referers), {f"{self.live_server_url}/"})
 
     def test_the_map_lives_and_dies_with_the_page(self):
         set_setting(self.user, "photos", "show_map", True)

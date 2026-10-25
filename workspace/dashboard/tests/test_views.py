@@ -1287,3 +1287,47 @@ class IndexViewTotalQueryBudgetTests(TestCase):
         # 2 of these belong to the storage gauge (usage aggregate + quota row).
         with self.assertNumQueries(24):
             self.assertEqual(self.client.get("/").status_code, 200)
+
+
+# ── French interface ────────────────────────────────────────────
+
+
+class DashboardFrenchTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="frenchuser", first_name="Élodie", password="pw"
+        )
+        set_setting(self.user, "core", "language", "fr")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_index_renders_in_french(self):
+        resp = self.client.get("/")
+        self.assertContains(resp, "Tableau de bord - Workspace")
+        self.assertContains(resp, "Bon retour, Élodie.")
+        self.assertContains(resp, "Activité récente")
+        self.assertNotContains(resp, "Recent Activity")
+
+    def test_shared_words_come_from_the_common_catalog(self):
+        resp = self.client.get("/")
+        self.assertContains(resp, 'title="Fermer"')
+        self.assertContains(resp, 'title="Rechercher"')
+
+    def test_greetings_reach_the_browser_translated(self):
+        resp = self.client.get("/")
+        self.assertContains(resp, "Bonjour, %(name)s.")
+        self.assertContains(resp, "Bonsoir, %(name)s.")
+
+    @patch("workspace.dashboard.views.get_usage_stats")
+    def test_unread_count_uses_the_french_plural(self, mock_stats):
+        # French catalogs carry three plural forms: 0 and 1, exact millions,
+        # and everything else, so a count of 3 reads the third one.
+        mock_stats.return_value = {"mail": {"unread_messages": 3}}
+        resp = self.client.get("/")
+        self.assertContains(resp, "3 non lus")
+
+    def test_upcoming_empty_state_in_french(self):
+        resp = self.client.get("/dashboard/upcoming")
+        self.assertContains(resp, "Aucun événement à venir aujourd’hui.")

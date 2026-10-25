@@ -1,0 +1,182 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-25 18:41+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: templates/dashboard/index.html
+msgid "Dashboard"
+msgstr "Tableau de bord"
+
+#: templates/dashboard/index.html
+#, python-format
+msgid "Welcome back, %(name)s."
+msgstr "Bon retour, %(name)s."
+
+#: templates/dashboard/index.html
+#: templates/dashboard/partials/usage_widget.html
+msgid "Workspace usage"
+msgstr "Utilisation de Workspace"
+
+#: templates/dashboard/index.html
+msgid "Dashboard preferences"
+msgstr "Préférences du tableau de bord"
+
+#: templates/dashboard/index.html
+msgid "navigate"
+msgstr "naviguer"
+
+#: templates/dashboard/index.html
+msgid "select"
+msgstr "sélectionner"
+
+#: templates/dashboard/index.html
+msgid "Actions and apps only (Ctrl/Cmd+Shift+K)"
+msgstr "Actions et applications uniquement (Ctrl/Cmd+Maj+K)"
+
+#: templates/dashboard/index.html
+msgid "actions"
+msgstr "actions"
+
+#: templates/dashboard/index.html
+msgid "Close search results"
+msgstr "Fermer les résultats de recherche"
+
+#: templates/dashboard/index.html
+msgid "Recent Activity"
+msgstr "Activité récente"
+
+#: templates/dashboard/index.html
+msgid "What's happening across your workspace."
+msgstr "Ce qui se passe dans votre Workspace."
+
+#: templates/dashboard/index.html
+msgid "Couldn't load activity."
+msgstr "Impossible de charger l’activité."
+
+#: templates/dashboard/index.html
+#, python-format
+msgid "Good night, %%(name)s."
+msgstr "Bonne nuit, %%(name)s."
+
+#: templates/dashboard/index.html
+#, python-format
+msgid "Good morning, %%(name)s."
+msgstr "Bonjour, %%(name)s."
+
+#: templates/dashboard/index.html
+#, python-format
+msgid "Good afternoon, %%(name)s."
+msgstr "Bon après-midi, %%(name)s."
+
+#: templates/dashboard/index.html
+#, python-format
+msgid "Good evening, %%(name)s."
+msgstr "Bonsoir, %%(name)s."
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Show upcoming events"
+msgstr "Afficher les événements à venir"
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Display today's calendar events on the dashboard."
+msgstr "Afficher les événements du jour sur le tableau de bord."
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Show empty state"
+msgstr "Afficher l’état vide"
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Display \"No upcoming events today.\" when the list is empty."
+msgstr ""
+"Afficher « Aucun événement à venir aujourd’hui. » quand la liste est vide."
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Show my tasks"
+msgstr "Afficher mes tâches"
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Display your assigned project tasks on the dashboard."
+msgstr ""
+"Afficher sur le tableau de bord les tâches de projet qui vous sont assignées."
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Apps"
+msgstr "Applications"
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Choose which apps appear on your dashboard."
+msgstr "Choisissez les applications affichées sur votre tableau de bord."
+
+#: templates/dashboard/partials/modules_grid.html
+msgid ""
+"Under active development: may have bugs, and its data may not be migrated or "
+"stay backward-compatible across updates."
+msgstr ""
+"En cours de développement : peut contenir des bugs, et ses données peuvent "
+"ne pas être migrées ni rester compatibles d’une mise à jour à l’autre."
+
+#: templates/dashboard/partials/modules_grid.html
+msgid "Preview"
+msgstr "Préversion"
+
+#: templates/dashboard/partials/my_tasks.html
+msgid "Projects"
+msgstr "Projets"
+
+#: templates/dashboard/partials/my_tasks.html
+msgid "My Tasks"
+msgstr "Mes tâches"
+
+#: templates/dashboard/partials/my_tasks.html
+msgid "Your assigned tasks, most urgent first."
+msgstr "Vos tâches assignées, les plus urgentes d’abord."
+
+#. Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25".
+#: templates/dashboard/partials/my_tasks.html
+msgctxt "short due date format"
+msgid "M j"
+msgstr "j N"
+
+#: templates/dashboard/partials/my_tasks.html
+msgid "No open tasks assigned to you."
+msgstr "Aucune tâche ouverte ne vous est assignée."
+
+#: templates/dashboard/partials/upcoming_events.html
+msgid "All day"
+msgstr "Toute la journée"
+
+#: templates/dashboard/partials/upcoming_events.html
+msgid "No upcoming events today."
+msgstr "Aucun événement à venir aujourd’hui."
+
+#: templates/dashboard/partials/usage_widget.html
+#, python-format
+msgid "%(size)s used"
+msgstr "%(size)s utilisés"
+
+#: templates/dashboard/partials/usage_widget.html
+msgid "Messages"
+msgstr "Messages"
+
+#: templates/dashboard/partials/usage_widget.html
+msgid "Mail"
+msgstr "E-mails"
+
+#: templates/dashboard/partials/usage_widget.html
+#, python-format
+msgid "%(counter)s unread"
+msgid_plural "%(counter)s unread"
+msgstr[0] "%(counter)s non lu"
+msgstr[1] "%(counter)s non lus"
+msgstr[2] "%(counter)s non lus"
+
+#: templates/dashboard/partials/usage_widget.html
+msgid "Events"
+msgstr "Événements"

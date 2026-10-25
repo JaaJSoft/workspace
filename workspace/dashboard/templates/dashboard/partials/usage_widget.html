@@ -1,8 +1,9 @@
+{% load i18n %}
 <div class="space-y-1">
   <div
     class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2 flex items-center gap-1.5"
   >
-    Workspace usage
+    {% translate "Workspace usage" %}
   </div>
 
   <a
@@ -16,7 +17,7 @@
       <div
         class="text-sm font-medium group-hover:text-primary transition-colors"
       >
-        Files
+        {% translate "Files" %}
       </div>
       <div class="w-full bg-base-300 rounded-full h-1.5 mt-1">
         <div
@@ -26,7 +27,7 @@
         ></div>
       </div>
       <div class="text-xs text-base-content/50 mt-0.5">
-        {% if storage_quota is not None %}{{ storage_usage|filesizeformat }} / {{ storage_quota|filesizeformat }}{% else %}{{ storage_usage|filesizeformat }} used{% endif %}
+        {% if storage_quota is not None %}{{ storage_usage|filesizeformat }} / {{ storage_quota|filesizeformat }}{% else %}{% blocktranslate trimmed with size=storage_usage|filesizeformat %}{{ size }} used{% endblocktranslate %}{% endif %}
       </div>
     </div>
     <div
@@ -46,7 +47,7 @@
       <i data-lucide="message-circle" class="w-4 h-4 text-info"></i>
     </div>
     <div class="flex-1 min-w-0">
-      <div class="text-sm font-medium group-hover:text-info transition-colors">Messages</div>
+      <div class="text-sm font-medium group-hover:text-info transition-colors">{% translate "Messages" %}</div>
     </div>
     <div
       class="font-semibold text-sm flex-shrink-0"
@@ -68,10 +69,16 @@
       <div
         class="text-sm font-medium group-hover:text-warning transition-colors"
       >
-        Mail
+        {% translate "Mail" %}
       </div>
       {% if usage_stats.mail.unread_messages %}
-        <div class="text-xs text-base-content/50">{{ usage_stats.mail.unread_messages }} unread</div>
+        <div class="text-xs text-base-content/50">
+          {% blocktranslate trimmed count counter=usage_stats.mail.unread_messages %}
+            {{ counter }} unread
+          {% plural %}
+            {{ counter }} unread
+          {% endblocktranslate %}
+        </div>
       {% endif %}
     </div>
     <div
@@ -91,7 +98,7 @@
       <i data-lucide="calendar" class="w-4 h-4 text-accent"></i>
     </div>
     <div class="flex-1 min-w-0">
-      <div class="text-sm font-medium group-hover:text-accent transition-colors">Events</div>
+      <div class="text-sm font-medium group-hover:text-accent transition-colors">{% translate "Events" %}</div>
     </div>
     <div
       class="font-semibold text-sm flex-shrink-0"

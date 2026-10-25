@@ -14,12 +14,14 @@ Params:
                       Omit for a read-only chip without a cross.
   - remove_show_expr: optional - expression gating the cross's visibility (x-show)
 {% endcomment %}
+{% load i18n %}
 <span
   class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-0.5 pr-1"
 >
   <user-avatar :user-id="{{ user_id_expr }}" :username="{{ username_expr }}" size="xs"></user-avatar>
   <span class="text-xs" x-text="{{ username_expr }}"></span>
   {% if remove_expr %}
+    {% translate "Remove %(name)s" as remove_label %}
     {% comment %}Inline SVG on purpose: lucide.createIcons() does not process
     nodes that Alpine clones out of an x-for template, so a data-lucide icon
     here would render blank.{% endcomment %}
@@ -28,7 +30,7 @@ Params:
       class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
       {% if remove_show_expr %} x-show="{{ remove_show_expr }}" x-cloak{% endif %}
       @click.stop="{{ remove_expr }}"
-      :aria-label="'Remove ' + {{ username_expr }}"
+      :aria-label="interpolate('{{ remove_label|escapejs }}', { name: {{ username_expr }} }, true)"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

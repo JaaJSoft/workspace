@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 17:22+0000\n"
+"POT-Creation-Date: 2026-10-25 18:41+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -11,24 +11,9 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
 
-#: actions/danger.py ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/tag_dialog.html
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
-msgid "Delete"
-msgstr "Supprimer"
-
-#: actions/edit.py ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/rename_dialog.html
-msgid "Rename"
-msgstr "Renommer"
-
 #: actions/edit.py ui/templates/files/ui/partials/dialogs.html
 msgid "Cut"
 msgstr "Couper"
-
-#: actions/edit.py ui/templates/files/ui/partials/dialogs.html
-msgid "Copy"
-msgstr "Copier"
 
 #: actions/edit.py
 msgid "Paste here"
@@ -45,16 +30,6 @@ msgstr "Extraire l’archive"
 #: actions/info.py ui/templates/files/ui/partials/properties_content.html
 msgid "Analyze storage"
 msgstr "Analyser le stockage"
-
-#: actions/info.py ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/file_viewer_inline.html
-#: ui/templates/files/ui/partials/properties_panel.html
-msgid "Properties"
-msgstr "Propriétés"
-
-#: actions/open.py ui/templates/files/ui/partials/file_card.html
-msgid "Open"
-msgstr "Ouvrir"
 
 #: actions/open.py ui/templates/files/ui/viewers/pdf_viewer.html
 msgid "Open in new tab"
@@ -88,43 +63,9 @@ msgstr "Marquer comme sensible"
 msgid "Unmark as sensitive"
 msgstr "Retirer la marque sensible"
 
-#: actions/organize.py ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/partials/properties_content.html
-#: ui/templates/files/ui/partials/tag_dropdown.html
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
-#: ui/templates/files/ui/partials/tag_picker_dialog.html
-#: ui/templates/files/ui/partials/tag_sidebar_section.html
-msgid "Tags"
-msgstr "Étiquettes"
-
-#: actions/organize.py ui/templates/files/ui/partials/share_modal.html
-msgid "Share"
-msgstr "Partager"
-
-#: actions/transfer.py ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/shared_listing.html
-#: ui/templates/files/ui/shared_page.html
-#: ui/templates/files/ui/viewers/media_viewer.html
-#: ui/templates/files/ui/viewers/office_viewer_unavailable.html
-msgid "Download"
-msgstr "Télécharger"
-
 #: actions/transfer.py
 msgid "Download as ZIP"
 msgstr "Télécharger en ZIP"
-
-#: actions/transfer.py ui/templates/files/ui/partials/properties_content.html
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Copy link"
-msgstr "Copier le lien"
-
-#: actions/trash.py
-msgid "Restore"
-msgstr "Restaurer"
-
-#: actions/trash.py
-msgid "Delete permanently"
-msgstr "Supprimer définitivement"
 
 #: models.py ui/templates/files/ui/partials/share_modal.html ui/views.py
 msgid "Read only"
@@ -424,11 +365,6 @@ msgid "Uploaded through your share link."
 msgstr "Téléversé via votre lien de partage."
 
 #: ui/templates/files/ui/index.html
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Files"
-msgstr "Fichiers"
-
-#: ui/templates/files/ui/index.html
 msgid "close sidebar"
 msgstr "fermer la barre latérale"
 
@@ -441,18 +377,9 @@ msgstr "Accès rapide"
 msgid "My Files"
 msgstr "Mes fichiers"
 
-#: ui/templates/files/ui/index.html
-#: ui/templates/files/ui/partials/folder_content.html ui/views.py
-msgid "Favorites"
-msgstr "Favoris"
-
 #: ui/templates/files/ui/index.html ui/views.py
 msgid "Recent"
 msgstr "Récents"
-
-#: ui/templates/files/ui/index.html ui/views.py
-msgid "Trash"
-msgstr "Corbeille"
 
 #: ui/templates/files/ui/index.html
 #: ui/templates/files/ui/partials/properties_content.html
@@ -471,27 +398,6 @@ msgstr "Mes fichiers"
 #: ui/templates/files/ui/partials/storage_dialog.html
 msgid "Storage"
 msgstr "Stockage"
-
-#: ui/templates/files/ui/index.html
-msgid "Help"
-msgstr "Aide"
-
-#: ui/templates/files/ui/index.html
-msgid "Expand sidebar"
-msgstr "Déplier la barre latérale"
-
-#: ui/templates/files/ui/index.html
-msgid "Collapse sidebar"
-msgstr "Replier la barre latérale"
-
-#: ui/templates/files/ui/index.html
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Collapse"
-msgstr "Replier"
-
-#: ui/templates/files/ui/index.html
-msgid "Preferences"
-msgstr "Préférences"
 
 #: ui/templates/files/ui/index.html
 msgid "Failed to refresh items"
@@ -539,17 +445,6 @@ msgstr "Les fichiers seront ajoutés au dossier actuel"
 msgid "Loading folder…"
 msgstr "Chargement du dossier…"
 
-#: ui/templates/files/ui/index.html
-#: ui/templates/files/ui/partials/_toolbar_sheet_header.html
-#: ui/templates/files/ui/partials/file_viewer_inline.html
-#: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/group_folder_dialog.html
-#: ui/templates/files/ui/partials/storage_dialog.html
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Close"
-msgstr "Fermer"
-
 #: ui/templates/files/ui/index.html ui/templates/files/ui/partials/dialogs.html
 #: ui/templates/files/ui/partials/file_picker.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
@@ -575,11 +470,6 @@ msgstr "un utilisateur"
 #: ui/templates/files/ui/partials/_events_list.html
 msgid "another file"
 msgstr "un autre fichier"
-
-#: ui/templates/files/ui/partials/_events_list.html
-#: ui/templates/files/ui/partials/properties_content.html
-msgid "Activity"
-msgstr "Activité"
 
 #: ui/templates/files/ui/partials/_events_list.html
 msgid "Filter activity by action"
@@ -694,10 +584,6 @@ msgid "<span class=\"font-medium\">%(actor)s</span> revoked a public link"
 msgstr "<span class=\"font-medium\">%(actor)s</span> a révoqué un lien public"
 
 #: ui/templates/files/ui/partials/_events_list.html
-msgid "Load more"
-msgstr "Charger plus"
-
-#: ui/templates/files/ui/partials/_events_list.html
 #, python-format
 msgid "(%(events_limit)s of %(total_event_count)s)"
 msgstr "(%(events_limit)s sur %(total_event_count)s)"
@@ -748,16 +634,6 @@ msgid "Default sort"
 msgstr "Tri par défaut"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
-msgid "Default"
-msgstr "Par défaut"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
-#: ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/partials/tag_dialog.html
-msgid "Name"
-msgstr "Nom"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
 #: ui/templates/files/ui/partials/folder_content.html
 #: ui/templates/files/ui/viewers/markdown_viewer.html
 #: ui/templates/files/ui/viewers/text_viewer.html
@@ -768,12 +644,6 @@ msgstr "Modifié"
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Size"
 msgstr "Taille"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
-#: ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Type"
-msgstr "Type"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
 msgid "Same-name files"
@@ -789,22 +659,12 @@ msgid "Keep both"
 msgstr "Conserver les deux"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
-msgid "Replace"
-msgstr "Remplacer"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
 msgid "Skip"
 msgstr "Ignorer"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
 msgid "Breadcrumb collapse after"
 msgstr "Replier le fil d’Ariane après"
-
-#: ui/templates/files/ui/partials/context_menu.html
-#: ui/templates/files/ui/partials/file_picker.html
-#: ui/templates/files/ui/partials/folder_dialog.html
-msgid "New folder"
-msgstr "Nouveau dossier"
 
 #: ui/templates/files/ui/partials/context_menu.html
 msgid "New file"
@@ -850,34 +710,8 @@ msgid "Extension"
 msgstr "Extension"
 
 #: ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/file_picker.html
-#: ui/templates/files/ui/partials/folder_dialog.html
-#: ui/templates/files/ui/partials/group_folder_dialog.html
-#: ui/templates/files/ui/partials/rename_dialog.html
-#: ui/templates/files/ui/partials/share_modal.html
-#: ui/templates/files/ui/partials/tag_dialog.html
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
-#: ui/templates/files/ui/partials/upload_panel.html
-#: ui/templates/files/ui/viewers/image_viewer.html
-msgid "Cancel"
-msgstr "Annuler"
-
-#: ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/file_picker.html
-#: ui/templates/files/ui/partials/folder_dialog.html
-#: ui/templates/files/ui/partials/group_folder_dialog.html
-#: ui/templates/files/ui/partials/share_modal.html
-#: ui/templates/files/ui/partials/tag_dialog.html
-msgid "Create"
-msgstr "Créer"
-
-#: ui/templates/files/ui/partials/dialogs.html
 msgid "Keyboard Shortcuts"
 msgstr "Raccourcis clavier"
-
-#: ui/templates/files/ui/partials/dialogs.html
-msgid "Navigation"
-msgstr "Navigation"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Go back"
@@ -932,14 +766,6 @@ msgstr "aucune sélection requise"
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "File Editor"
 msgstr "Éditeur de fichier"
-
-#: ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/share_modal.html
-#: ui/templates/files/ui/partials/tag_dialog.html
-#: ui/templates/files/ui/viewers/image_viewer.html
-#: ui/templates/files/ui/viewers/text_viewer.html
-msgid "Save"
-msgstr "Enregistrer"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Cancel editing"
@@ -1211,26 +1037,8 @@ msgid "%%(count)s files selected"
 msgstr "%%(count)s fichiers sélectionnés"
 
 #: ui/templates/files/ui/partials/file_picker.html
-msgid "Select"
-msgstr "Sélectionner"
-
-#: ui/templates/files/ui/partials/file_picker.html
-msgid "Location"
-msgstr "Emplacement"
-
-#: ui/templates/files/ui/partials/file_picker.html
-#: ui/templates/files/ui/partials/group_folders_section.html ui/views.py
-msgid "Groups"
-msgstr "Groupes"
-
-#: ui/templates/files/ui/partials/file_picker.html
 msgid "Search files..."
 msgstr "Rechercher des fichiers..."
-
-#: ui/templates/files/ui/partials/file_picker.html
-#: ui/templates/files/ui/partials/folder_dialog.html
-msgid "Folder name"
-msgstr "Nom du dossier"
 
 #: ui/templates/files/ui/partials/file_picker.html
 #, python-format
@@ -1322,33 +1130,12 @@ msgid "Filter by name"
 msgstr "Filtrer par nom"
 
 #: ui/templates/files/ui/partials/folder_content.html
-msgid "Filters"
-msgstr "Filtres"
-
-#: ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/partials/sensitive_viewer.html
-msgid "Show"
-msgstr "Afficher"
-
-#: ui/templates/files/ui/partials/folder_content.html
 msgid "All"
 msgstr "Tout"
 
 #: ui/templates/files/ui/partials/folder_content.html
-msgid "Folders"
-msgstr "Dossiers"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Clear filters"
-msgstr "Effacer les filtres"
-
-#: ui/templates/files/ui/partials/folder_content.html
 msgid "Sort"
 msgstr "Trier"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Sort by"
-msgstr "Trier par"
 
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Ascending"
@@ -1361,14 +1148,6 @@ msgstr "Décroissant"
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Paste items here"
 msgstr "Coller les éléments ici"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Tile size"
-msgstr "Taille des vignettes"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Columns"
-msgstr "Colonnes"
 
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "View options"
@@ -1399,21 +1178,8 @@ msgid "Reset columns"
 msgstr "Réinitialiser les colonnes"
 
 #: ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/shared_page.html
-msgid "List view"
-msgstr "Vue liste"
-
-#: ui/templates/files/ui/partials/folder_content.html
 msgid "Mosaic view"
 msgstr "Vue mosaïque"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Clear all"
-msgstr "Tout effacer"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Clear selection"
-msgstr "Effacer la sélection"
 
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Fav"
@@ -1422,10 +1188,6 @@ msgstr "Fav."
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Deleted"
 msgstr "Supprimé"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Actions"
-msgstr "Actions"
 
 #: ui/templates/files/ui/partials/folder_content.html
 #: ui/templates/files/ui/partials/node_name.html
@@ -1447,17 +1209,6 @@ msgstr ""
 #, python-format
 msgid "Show files tagged %(name)s"
 msgstr "Afficher les fichiers étiquetés %(name)s"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "More actions"
-msgstr "Plus d’actions"
-
-#: ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/partials/properties_content.html
-#: ui/templates/files/ui/partials/shared_listing.html
-#: ui/templates/files/ui/viewers/image_viewer.html
-msgid "Folder"
-msgstr "Dossier"
 
 #: ui/templates/files/ui/partials/folder_content.html
 #: ui/templates/files/ui/partials/properties_content.html
@@ -1649,10 +1400,6 @@ msgid "Last access"
 msgstr "Dernier accès"
 
 #: ui/templates/files/ui/partials/properties_content.html
-msgid "Never"
-msgstr "Jamais"
-
-#: ui/templates/files/ui/partials/properties_content.html
 msgid "Expires"
 msgstr "Expire"
 
@@ -1668,10 +1415,6 @@ msgstr "Aucun lien public"
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Manage links"
 msgstr "Gérer les liens"
-
-#: ui/templates/files/ui/partials/properties_content.html
-msgid "Comments"
-msgstr "Commentaires"
 
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Advanced"
@@ -1712,19 +1455,6 @@ msgstr ""
 "d’autre ne peut voir votre écran."
 
 #: ui/templates/files/ui/partials/share_modal.html
-msgid "Hide password"
-msgstr "Masquer le mot de passe"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Show password"
-msgstr "Afficher le mot de passe"
-
-#: ui/templates/files/ui/partials/share_modal.html
-#: ui/templates/files/ui/viewers/markdown_viewer.html
-msgid "Saving..."
-msgstr "Enregistrement..."
-
-#: ui/templates/files/ui/partials/share_modal.html
 msgid "Add people"
 msgstr "Ajouter des personnes"
 
@@ -1735,10 +1465,6 @@ msgstr "Rechercher par identifiant ou nom..."
 #: ui/templates/files/ui/partials/share_modal.html
 msgid "Add a group"
 msgstr "Ajouter un groupe"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Search groups..."
-msgstr "Rechercher des groupes..."
 
 #: ui/templates/files/ui/partials/share_modal.html
 #: ui/templates/files/ui/shared_base.html
@@ -1758,22 +1484,8 @@ msgid "Undo removal"
 msgstr "Annuler la suppression"
 
 #: ui/templates/files/ui/partials/share_modal.html
-#: ui/templates/files/ui/viewers/image_viewer.html
-msgid "Undo"
-msgstr "Annuler"
-
-#: ui/templates/files/ui/partials/share_modal.html
 msgid "Remove access"
 msgstr "Retirer l’accès"
-
-#: ui/templates/files/ui/partials/share_modal.html
-#: ui/templates/files/ui/shared_base.html
-msgid "Password"
-msgstr "Mot de passe"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Revoke"
-msgstr "Révoquer"
 
 #: ui/templates/files/ui/partials/share_modal.html
 msgid "Access"
@@ -1945,10 +1657,6 @@ msgid "Show every category"
 msgstr "Afficher toutes les catégories"
 
 #: ui/templates/files/ui/partials/storage_analysis.html
-msgid "Clear"
-msgstr "Effacer"
-
-#: ui/templates/files/ui/partials/storage_analysis.html
 #, python-format
 msgid "Paths containing “%(query)s”"
 msgstr "Chemins contenant « %(query)s »"
@@ -2068,10 +1776,6 @@ msgstr "Modifier l’étiquette"
 msgid "New Tag"
 msgstr "Nouvelle étiquette"
 
-#: ui/templates/files/ui/partials/tag_dialog.html
-msgid "Tag name"
-msgstr "Nom de l’étiquette"
-
 #: ui/templates/files/ui/partials/tag_dropdown.html
 msgid "Edit tag"
 msgstr "Modifier l’étiquette"
@@ -2081,13 +1785,6 @@ msgstr "Modifier l’étiquette"
 #: ui/templates/files/ui/partials/tag_picker_dialog.html
 msgid "No tags yet"
 msgstr "Aucune étiquette pour l’instant"
-
-#: ui/templates/files/ui/partials/tag_dropdown.html
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
-#: ui/templates/files/ui/partials/tag_picker_dialog.html
-#: ui/templates/files/ui/partials/tag_sidebar_section.html
-msgid "New tag"
-msgstr "Nouvelle étiquette"
 
 #: ui/templates/files/ui/partials/tag_manager_dialog.html
 #, python-format
@@ -2132,11 +1829,6 @@ msgid "Search tags"
 msgstr "Rechercher des étiquettes"
 
 #: ui/templates/files/ui/partials/tag_manager_dialog.html
-#: ui/templates/files/ui/viewers/image_viewer.html
-msgid "Edit"
-msgstr "Modifier"
-
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
 msgid "Merge into another tag"
 msgstr "Fusionner dans une autre étiquette"
 
@@ -2165,14 +1857,6 @@ msgstr "Fusionner dans"
 #: ui/templates/files/ui/partials/tag_manager_dialog.html
 msgid "Choose a tag"
 msgstr "Choisir une étiquette"
-
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
-msgid "Merge"
-msgstr "Fusionner"
-
-#: ui/templates/files/ui/partials/tag_picker_dialog.html
-msgid "Done"
-msgstr "Terminé"
 
 #: ui/templates/files/ui/partials/tag_sidebar_section.html
 msgid "Manage tags"
@@ -2216,16 +1900,8 @@ msgid "Uploads"
 msgstr "Téléversements"
 
 #: ui/templates/files/ui/partials/upload_panel.html
-msgid "Pause"
-msgstr "Pause"
-
-#: ui/templates/files/ui/partials/upload_panel.html
 msgid "Pause uploads"
 msgstr "Mettre en pause les téléversements"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Resume"
-msgstr "Reprendre"
 
 #: ui/templates/files/ui/partials/upload_panel.html
 msgid "Resume uploads"
@@ -2250,11 +1926,6 @@ msgstr "Tout conserver"
 #: ui/templates/files/ui/partials/upload_panel.html
 msgid "Discard upload"
 msgstr "Abandonner le téléversement"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-#: ui/templates/files/ui/viewers/markdown_viewer.html
-msgid "Retry"
-msgstr "Réessayer"
 
 #: ui/templates/files/ui/shared_base.html
 msgid "Link expired"
@@ -2300,6 +1971,7 @@ msgid "%(type)s - %(size)s - shared by %(name)s"
 msgstr "%(type)s - %(size)s - partagé par %(name)s"
 
 #: ui/templates/files/ui/shared_page.html
+msgctxt "history navigation"
 msgid "Back"
 msgstr "Précédent"
 
@@ -2310,10 +1982,6 @@ msgstr "Suivant"
 #: ui/templates/files/ui/shared_page.html
 msgid "Up"
 msgstr "Remonter"
-
-#: ui/templates/files/ui/shared_page.html
-msgid "Refresh"
-msgstr "Actualiser"
 
 #: ui/templates/files/ui/shared_page.html
 msgid "Grid view"
@@ -2336,11 +2004,6 @@ msgstr "La retouche n’a pas pu être enregistrée."
 #, python-format
 msgid "Edit failed (HTTP %%(status)s)"
 msgstr "Échec de la retouche (HTTP %%(status)s)"
-
-#: ui/templates/files/ui/viewers/image_viewer.html
-#: ui/templates/files/ui/viewers/markdown_viewer.html
-msgid "Save failed"
-msgstr "Échec de l’enregistrement"
 
 #: ui/templates/files/ui/viewers/image_viewer.html
 msgid "e.g. \"remove the background\", \"make it brighter\""
@@ -2407,10 +2070,6 @@ msgid "1024 x 1792 (portrait)"
 msgstr "1024 x 1792 (portrait)"
 
 #: ui/templates/files/ui/viewers/image_viewer.html
-msgid "Generate"
-msgstr "Générer"
-
-#: ui/templates/files/ui/viewers/image_viewer.html
 msgid "Generating..."
 msgstr "Génération..."
 
@@ -2425,10 +2084,6 @@ msgstr "Racine"
 #: ui/templates/files/ui/viewers/image_viewer.html
 msgid "Discard edits"
 msgstr "Abandonner les retouches"
-
-#: ui/templates/files/ui/viewers/markdown_viewer.html
-msgid "Saved"
-msgstr "Enregistré"
 
 #: ui/templates/files/ui/viewers/markdown_viewer.html
 #: ui/templates/files/ui/viewers/text_viewer.html
@@ -2454,11 +2109,6 @@ msgstr ""
 "Quelqu’un d’autre a enregistré cette note pendant votre absence, vos "
 "modifications n’ont donc pas été enregistrées. Copiez ce dont vous avez "
 "besoin, puis rechargez."
-
-#: ui/templates/files/ui/viewers/markdown_viewer.html
-#: ui/templates/files/ui/viewers/text_viewer.html
-msgid "Reload"
-msgstr "Recharger"
 
 #: ui/templates/files/ui/viewers/markdown_viewer.html
 msgid "Failed to load editor"
@@ -2640,16 +2290,8 @@ msgid "AI failed: %%(error)s"
 msgstr "Échec de l’IA : %%(error)s"
 
 #: ui/templates/files/ui/viewers/text_viewer.html
-msgid "Unknown error"
-msgstr "Erreur inconnue"
-
-#: ui/templates/files/ui/viewers/text_viewer.html
 msgid "Explanation"
 msgstr "Explication"
-
-#: ui/templates/files/ui/viewers/text_viewer.html
-msgid "Summary"
-msgstr "Résumé"
 
 #: ui/templates/files/ui/viewers/text_viewer_too_large.html
 msgid "Too large to preview"

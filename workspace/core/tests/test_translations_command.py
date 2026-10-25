@@ -1,11 +1,16 @@
+from pathlib import Path
+
 from django.core.management import CommandError, call_command
+from django.core.management.commands.makemessages import Command as MakeMessages
 from django.test import SimpleTestCase
 
 from workspace.core.management.commands.translations import (
+    _MakeMessages,
     tidy_new_header,
     translated_languages,
     workspace_modules,
 )
+from workspace.core.services.translations import SHARED_MODULE, shared_catalogs
 
 XGETTEXT_TEMPLATE = """# SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
@@ -69,3 +74,38 @@ class TranslationsCommandTests(SimpleTestCase):
     def test_unknown_module_is_refused(self):
         with self.assertRaisesMessage(CommandError, "Unknown module(s): nope"):
             call_command("translations", "nope")
+
+
+class SharedCatalogsTests(SimpleTestCase):
+    def setUp(self):
+        self.shared_locale = (
+            workspace_modules()[SHARED_MODULE] / "locale/fr/LC_MESSAGES"
+        )
+
+    def test_a_template_catalog_leaves_out_the_shared_template_catalog(self):
+        catalogs = shared_catalogs(workspace_modules()["dashboard"], "django")
+        self.assertEqual(catalogs, [self.shared_locale / "django.po"])
+
+    def test_a_script_catalog_leaves_out_both_shared_catalogs(self):
+        # The browser reads the shared server-side catalog as well.
+        catalogs = shared_catalogs(workspace_modules()["files"], "djangojs")
+        self.assertEqual(
+            catalogs,
+            [self.shared_locale / "django.po", self.shared_locale / "djangojs.po"],
+        )
+
+    def test_the_shared_module_scripts_leave_out_its_template_catalog(self):
+        module = workspace_modules()[SHARED_MODULE]
+        self.assertEqual(shared_catalogs(module, "django"), [])
+        self.assertEqual(
+            shared_catalogs(module, "djangojs"), [self.shared_locale / "django.po"]
+        )
+
+    def test_extraction_passes_the_catalogs_to_xgettext(self):
+        command = _MakeMessages([Path("/x/common/locale/fr/LC_MESSAGES/django.po")])
+        self.assertIn(
+            "--exclude-file=/x/common/locale/fr/LC_MESSAGES/django.po",
+            command.xgettext_options,
+        )
+        # The class attribute stays untouched for plain makemessages runs.
+        self.assertNotIn("--exclude-file", " ".join(MakeMessages.xgettext_options))

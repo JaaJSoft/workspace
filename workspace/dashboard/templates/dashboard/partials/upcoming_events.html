@@ -1,4 +1,4 @@
-{% load ui_filters %}
+{% load i18n ui_filters %}
 <div id="dashboard-upcoming" class="flex flex-wrap justify-center gap-2">
   {% if upcoming_events %}
     {% for event in upcoming_events %}
@@ -14,7 +14,7 @@
         <span class="text-sm font-medium text-base-content truncate flex-1 min-w-0">{{ event.title }}</span>
         <span class="text-xs text-base-content/50 tabular-nums flex-shrink-0">
           {% if event.all_day %}
-            All day
+            {% translate "All day" %}
           {% else %}
             {{ event.start|localtime_tag:"time" }}
           {% endif %}
@@ -22,6 +22,6 @@
       </a>
     {% endfor %}
   {% elif show_upcoming_empty %}
-    <p class="text-sm text-base-content/50">No upcoming events today.</p>
+    <p class="text-sm text-base-content/50">{% translate "No upcoming events today." %}</p>
   {% endif %}
 </div>

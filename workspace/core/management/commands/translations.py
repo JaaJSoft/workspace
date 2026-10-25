@@ -8,6 +8,9 @@ from django.apps import apps
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
+from django.core.management.commands import makemessages
+
+from workspace.core.services.translations import shared_catalogs
 
 # Paths no catalog reads strings from: test fixtures, migrations (copies of
 # the model strings), and vendored bundles, whose own gettext calls would
@@ -53,6 +56,17 @@ def tidy_new_header(text, language):
     )
     header = header.replace('"Language: \\n"', f'"Language: {language}\\n"')
     return header + sep + messages
+
+
+class _MakeMessages(makemessages.Command):
+    """makemessages, minus the msgids the given catalogs already hold."""
+
+    def __init__(self, exclude_catalogs):
+        super().__init__()
+        self.xgettext_options = [
+            *self.xgettext_options,
+            *(f"--exclude-file={catalog}" for catalog in exclude_catalogs),
+        ]
 
 
 class Command(BaseCommand):
@@ -103,21 +117,22 @@ class Command(BaseCommand):
             po: po.read_text(encoding="utf-8")
             for po in module_dir.glob("locale/*/LC_MESSAGES/*.po")
         }
-        common = {
+        makemessages_options = {
             "locale": languages,
             "no_obsolete": True,
             "add_location": "file",
             "verbosity": 0,
         }
-        call_command(
-            "makemessages", domain="django", ignore_patterns=_DJANGO_IGNORE, **common
-        )
-        call_command(
-            "makemessages",
-            domain="djangojs",
-            ignore_patterns=_DJANGOJS_IGNORE,
-            **common,
-        )
+        for domain, ignore_patterns in (
+            ("django", _DJANGO_IGNORE),
+            ("djangojs", _DJANGOJS_IGNORE),
+        ):
+            call_command(
+                _MakeMessages(shared_catalogs(module_dir, domain)),
+                domain=domain,
+                ignore_patterns=ignore_patterns,
+                **makemessages_options,
+            )
         for po in module_dir.glob("locale/*/LC_MESSAGES/*.po"):
             new = po.read_text(encoding="utf-8")
             old = before.get(po)

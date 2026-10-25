@@ -1,14 +1,91 @@
+#
 msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 16:07+0000\n"
+"POT-Creation-Date: 2026-10-25 18:40+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
+
+#: static/ui/js/attachment_input.js
+msgid "Select files to attach."
+msgstr "Sélectionnez les fichiers à joindre."
+
+#: static/ui/js/attachment_input.js
+msgid "Attach from Workspace"
+msgstr "Joindre depuis Workspace"
+
+#: static/ui/js/attachment_input.js
+msgid "Attach"
+msgstr "Joindre"
+
+#: static/ui/js/attachment_input.js
+msgid "Save to Files"
+msgstr "Enregistrer dans Fichiers"
+
+#: static/ui/js/attachment_input.js
+msgid "Choose a destination folder."
+msgstr "Choisissez un dossier de destination."
+
+#: static/ui/js/attachment_input.js
+msgid "Attachment saved to Files."
+msgstr "Pièce jointe enregistrée dans Fichiers."
+
+#: static/ui/js/attachment_input.js
+msgid "Failed to save attachment."
+msgstr "Impossible d’enregistrer la pièce jointe."
+
+#: static/ui/js/dialogs.js
+msgid "Error"
+msgstr "Erreur"
+
+#: static/ui/js/dialogs.js
+msgid "An error occurred."
+msgstr "Une erreur s’est produite."
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Yellow"
+msgstr "Jaune"
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Blue"
+msgstr "Bleu"
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Green"
+msgstr "Vert"
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Red"
+msgstr "Rouge"
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Purple"
+msgstr "Violet"
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Pink"
+msgstr "Rose"
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Orange"
+msgstr "Orange"
+
+#: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
+msgid "Cyan"
+msgstr "Cyan"
+
+#: static/ui/js/icon_picker.js
+msgid "Gray"
+msgstr "Gris"
+
+#: static/ui/js/inline_alert.js
+msgid "Dismiss"
+msgstr "Ignorer"
 
 #: static/ui/js/localtime.js
 msgid "Today"
@@ -17,3 +94,59 @@ msgstr "Aujourd’hui"
 #: static/ui/js/localtime.js
 msgid "Yesterday"
 msgstr "Hier"
+
+#: static/ui/js/password_generator.js
+msgid "Hyphen"
+msgstr "Trait d’union"
+
+#: static/ui/js/password_generator.js
+msgid "Period"
+msgstr "Point"
+
+#: static/ui/js/password_generator.js
+msgid "Underscore"
+msgstr "Tiret bas"
+
+#: static/ui/js/password_generator.js
+msgid "Comma"
+msgstr "Virgule"
+
+#: static/ui/js/password_generator.js
+msgid "Space"
+msgstr "Espace"
+
+#: static/ui/js/password_generator.js static/ui/js/password_strength.js
+msgid "Weak"
+msgstr "Faible"
+
+#: static/ui/js/password_generator.js
+msgid "Good"
+msgstr "Correct"
+
+#: static/ui/js/password_generator.js static/ui/js/password_strength.js
+msgid "Strong"
+msgstr "Robuste"
+
+#: static/ui/js/password_strength.js
+msgid "Very weak"
+msgstr "Très faible"
+
+#: static/ui/js/password_strength.js
+msgid "Fair"
+msgstr "Moyen"
+
+#: static/ui/js/password_strength.js
+msgid "Very strong"
+msgstr "Très robuste"
+
+#: static/ui/js/password_strength.js
+msgid "Checking…"
+msgstr "Vérification…"
+
+#: static/ui/js/password_strength.js
+msgid "Strength could not be checked on this device"
+msgstr "Impossible d’évaluer la robustesse sur cet appareil"
+
+#: static/ui/js/tag_chip.js
+msgid "None"
+msgstr "Aucune"

@@ -6,11 +6,14 @@ the translations command ships the old strings, silently.
 """
 
 import gettext
+import re
 from pathlib import Path
 
 import polib
 from django.conf import settings
 from django.test import SimpleTestCase
+
+from workspace.core.services.translations import shared_catalogs
 
 WORKSPACE_DIR = Path(settings.BASE_DIR) / "workspace"
 
@@ -85,3 +88,43 @@ class TranslationCatalogTests(SimpleTestCase):
                     entry.msgid for entry in polib.pofile(str(po_path)).fuzzy_entries()
                 ]
                 self.assertEqual(fuzzy, [])
+
+    def test_plural_entries_fill_every_form_of_the_language(self):
+        # makemessages writes two msgstr[] slots whatever Plural-Forms says.
+        # A missing form compiles fine and falls back to English for every
+        # count that selects it (French: 3 files, 12 files...).
+        for po_path in po_files():
+            with self.subTest(po=str(po_path.relative_to(settings.BASE_DIR))):
+                po = polib.pofile(str(po_path))
+                nplurals = int(
+                    re.search(r"nplurals=(\d+)", po.metadata["Plural-Forms"]).group(1)
+                )
+                incomplete = [
+                    entry.msgid
+                    for entry in po.translated_entries()
+                    if entry.msgid_plural and len(entry.msgstr_plural) < nplurals
+                ]
+                self.assertEqual(incomplete, [])
+
+    def test_no_catalog_repeats_a_shared_msgid(self):
+        # The shared module translates the words every module uses once; a
+        # catalog that carries one too lets the two translations drift.
+        for po_path in po_files():
+            module_dir = WORKSPACE_DIR / po_path.relative_to(WORKSPACE_DIR).parts[0]
+            shared = {
+                (entry.msgctxt, entry.msgid)
+                for catalog in shared_catalogs(module_dir, po_path.stem)
+                if catalog.parent.parent == po_path.parent.parent
+                for entry in polib.pofile(str(catalog))
+            }
+            with self.subTest(po=str(po_path.relative_to(settings.BASE_DIR))):
+                repeated = [
+                    entry.msgid
+                    for entry in polib.pofile(str(po_path))
+                    if (entry.msgctxt, entry.msgid) in shared
+                ]
+                self.assertEqual(
+                    repeated,
+                    [],
+                    "Run `manage.py translations <module>`: it drops shared msgids.",
+                )

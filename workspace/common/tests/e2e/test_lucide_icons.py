@@ -15,6 +15,9 @@ from workspace.common.tests.e2e.base import PlaywrightTestCase
 
 STATIC = settings.BASE_DIR / "workspace" / "common" / "static" / "ui" / "js"
 
+# The gettext() the JavaScript catalog defines, in the source language.
+UNTRANSLATED_CATALOG = "window.gettext = (msgid) => msgid;"
+
 PLACEHOLDERS = [
     '<i data-lucide="star" class="w-4 h-4 opacity-40"></i>',
     # An alias of ellipsis-vertical.
@@ -135,6 +138,9 @@ class ElementIconScopeTests(PlaywrightTestCase):
         self.page.set_content(
             '<!doctype html><html><body><i data-lucide="bell" id="bystander"></i></body></html>'
         )
+        # A real page loads the JavaScript catalog before these scripts, and
+        # tag_chip.js translates its palette as soon as it loads.
+        self.page.add_script_tag(content=UNTRANSLATED_CATALOG)
         for script in ("vendor/lucide/lucide.js", "tag_chip.js", "inline_alert.js"):
             self.page.add_script_tag(path=str(STATIC / script))
         self.page.evaluate(

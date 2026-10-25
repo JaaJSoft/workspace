@@ -6,10 +6,12 @@ needs to reveal the drawer. Params:
          is pinned open (`lg:drawer-open`)
 - label: accessible label (default "Open menu")
 {% endcomment %}
+{% load i18n %}
+{% translate "Open menu" as default_label %}
 <label
   for="{{ drawer_id }}"
   class="btn btn-ghost btn-sm btn-square cursor-pointer {{ class }}"
-  aria-label="{{ label|default:'Open menu' }}"
+  aria-label="{{ label|default:default_label }}"
 >
   <i data-lucide="menu" class="w-5 h-5"></i>
 </label>

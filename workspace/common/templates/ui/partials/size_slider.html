@@ -15,6 +15,7 @@ Params:
   - full_width:    optional - stretch the range over the width the slider is
                    given (a popover) instead of its compact toolbar size
 {% endcomment %}
+{% load i18n %}
 <div
   class="flex items-center gap-1.5 text-module{% if full_width %} w-full{% endif %}"
 >
@@ -28,8 +29,8 @@ Params:
     x-model.number="{{ model }}"
     @change="{{ change }}"
     class="range range-xs range-module {% if full_width %}flex-1 min-w-0{% else %}w-24{% endif %}"
-    title="Tile size"
-    aria-label="Tile size"
+    title="{% translate 'Tile size' %}"
+    aria-label="{% translate 'Tile size' %}"
   />
   <i data-lucide="grid-2x2" class="w-5 h-5 shrink-0 opacity-60"></i>
 </div>

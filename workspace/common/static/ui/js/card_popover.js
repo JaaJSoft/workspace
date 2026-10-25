@@ -134,11 +134,11 @@ function _formatCardTimes(container) {
     if (isNaN(d)) return;
     const mode = el.dataset.localtime;
     if (mode === 'time') {
-      el.textContent = d.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+      el.textContent = d.toLocaleTimeString(window.getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
     } else if (mode === 'date') {
-      el.textContent = d.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
+      el.textContent = d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
     } else {
-      el.textContent = d.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+      el.textContent = d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(window.getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
     }
   });
 }

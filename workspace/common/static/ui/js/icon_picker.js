@@ -26,15 +26,15 @@ window.ICON_PICKER_ICONS = [
 ];
 
 window.ICON_PICKER_COLORS = [
-  { name: 'Yellow', class: 'text-warning' },
-  { name: 'Blue', class: 'text-info' },
-  { name: 'Green', class: 'text-success' },
-  { name: 'Red', class: 'text-error' },
-  { name: 'Purple', class: 'text-secondary' },
-  { name: 'Pink', class: 'text-pink-500' },
-  { name: 'Orange', class: 'text-orange-500' },
-  { name: 'Cyan', class: 'text-cyan-500' },
-  { name: 'Gray', class: 'text-base-content/60' },
+  { name: gettext('Yellow'), class: 'text-warning' },
+  { name: gettext('Blue'), class: 'text-info' },
+  { name: gettext('Green'), class: 'text-success' },
+  { name: gettext('Red'), class: 'text-error' },
+  { name: gettext('Purple'), class: 'text-secondary' },
+  { name: gettext('Pink'), class: 'text-pink-500' },
+  { name: gettext('Orange'), class: 'text-orange-500' },
+  { name: gettext('Cyan'), class: 'text-cyan-500' },
+  { name: gettext('Gray'), class: 'text-base-content/60' },
 ];
 
 window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndpoint, onSaved) {

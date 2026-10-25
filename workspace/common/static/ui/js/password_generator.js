@@ -22,11 +22,11 @@ const LOOKALIKES = 'lI1O0';
 // together, and two draws can then spell the same string while the reported
 // entropy counts draws - the one place this file would overstate.
 const SEPARATORS = [
-  { value: '-', label: 'Hyphen' },
-  { value: '.', label: 'Period' },
-  { value: '_', label: 'Underscore' },
-  { value: ',', label: 'Comma' },
-  { value: ' ', label: 'Space' },
+  { value: '-', label: gettext('Hyphen') },
+  { value: '.', label: gettext('Period') },
+  { value: '_', label: gettext('Underscore') },
+  { value: ',', label: gettext('Comma') },
+  { value: ' ', label: gettext('Space') },
 ];
 
 // A class-presence retry cannot fail forever once the alphabet is valid and
@@ -370,9 +370,9 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps, pinned) {
     // reaches it. The wording stays vague on purpose - a precise claim would
     // depend on the attacker's hardware, which this page cannot know.
     strength() {
-      if (this.bits < 45) return { label: 'Weak', css: 'progress-error' };
-      if (this.bits < 70) return { label: 'Good', css: 'progress-warning' };
-      return { label: 'Strong', css: 'progress-success' };
+      if (this.bits < 45) return { label: gettext('Weak'), css: 'progress-error' };
+      if (this.bits < 70) return { label: gettext('Good'), css: 'progress-warning' };
+      return { label: gettext('Strong'), css: 'progress-success' };
     },
 
     // The value split into runs of one kind, so digits and symbols can be

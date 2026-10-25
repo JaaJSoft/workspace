@@ -1,9 +1,13 @@
+import gettext as gettext_module
+
 from django.apps import apps
 from django.conf import settings
 from django.http import Http404
 from django.utils import translation
 from django.utils.cache import patch_cache_control
 from django.views.i18n import JavaScriptCatalog
+
+from workspace.core.services.translations import shared_locale_dir
 
 
 class WorkspaceJavaScriptCatalog(JavaScriptCatalog):
@@ -17,6 +21,9 @@ class WorkspaceJavaScriptCatalog(JavaScriptCatalog):
     Only the workspace apps' catalogs are read. Django's own djangojs catalogs
     (the admin's) translate msgids such as "Today" in their own words, and
     would shadow ours whenever INSTALLED_APPS lists them first.
+
+    The shared module's server-side catalog is served too: the words every
+    module uses are translated once, for templates and scripts alike.
     """
 
     def get(self, request, *args, language, **kwargs):
@@ -35,3 +42,16 @@ class WorkspaceJavaScriptCatalog(JavaScriptCatalog):
         else:
             patch_cache_control(response, public=True, max_age=86400)
         return response
+
+    def get_catalog(self):
+        shared = gettext_module.translation(
+            "django",
+            localedir=shared_locale_dir(),
+            languages=[translation.to_locale(translation.get_language())],
+            fallback=True,
+        )
+        catalog = self.translation._catalog
+        for key, value in getattr(shared, "_catalog", {}).items():
+            if key and key not in catalog:
+                catalog[key] = value
+        return super().get_catalog()

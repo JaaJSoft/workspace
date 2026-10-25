@@ -14,7 +14,7 @@ const AppDialog = {
     }
   },
 
-  confirm({ title = 'Confirm', message = 'Are you sure?', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '' } = {}) {
+  confirm({ title = gettext('Confirm'), message = gettext('Are you sure?'), okLabel = gettext('OK'), cancelLabel = gettext('Cancel'), okClass = 'btn-primary', icon = '', iconClass = '' } = {}) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('app-dialog-confirm');
       const iconEl = document.getElementById('app-dialog-confirm-icon');
@@ -63,7 +63,7 @@ const AppDialog = {
     });
   },
 
-  prompt({ title = 'Input', message = '', value = '', placeholder = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '', inputSize = 'md' } = {}) {
+  prompt({ title = gettext('Input'), message = '', value = '', placeholder = '', okLabel = gettext('OK'), cancelLabel = gettext('Cancel'), okClass = 'btn-primary', icon = '', iconClass = '', inputSize = 'md' } = {}) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('app-dialog-prompt');
       const iconEl = document.getElementById('app-dialog-prompt-icon');
@@ -132,7 +132,7 @@ const AppDialog = {
     });
   },
 
-  message({ title = 'Message', message = 'Done.', okLabel = 'OK', icon = '', iconClass = '' } = {}) {
+  message({ title = gettext('Message'), message = gettext('Done.'), okLabel = gettext('OK'), icon = '', iconClass = '' } = {}) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('app-dialog-message');
       const iconEl = document.getElementById('app-dialog-message-icon');
@@ -156,12 +156,12 @@ const AppDialog = {
     });
   },
 
-  error({ title = 'Error', message = 'An error occurred.', okLabel = 'OK' } = {}) {
+  error({ title = gettext('Error'), message = gettext('An error occurred.'), okLabel = gettext('OK') } = {}) {
     return this.message({ title, message, okLabel, icon: 'circle-alert', iconClass: 'bg-error/10 text-error' });
   },
 
   // With a `checkbox` label, resolves { value, checked } instead of the bare value.
-  select({ title = 'Select', message = '', options = [], value = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '', checkbox = '' } = {}) {
+  select({ title = gettext('Select'), message = '', options = [], value = '', okLabel = gettext('OK'), cancelLabel = gettext('Cancel'), okClass = 'btn-primary', icon = '', iconClass = '', checkbox = '' } = {}) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('app-dialog-select');
       const iconEl = document.getElementById('app-dialog-select-icon');

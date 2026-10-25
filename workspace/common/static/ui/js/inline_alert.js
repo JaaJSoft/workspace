@@ -193,7 +193,7 @@ window.INLINE_ALERT_TYPES = {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'shrink-0 mt-0.5 text-base-content/40 hover:text-base-content/70 transition-colors';
-      btn.setAttribute('aria-label', 'Dismiss');
+      btn.setAttribute('aria-label', gettext('Dismiss'));
       btn.innerHTML = CROSS_SVG;
       btn.addEventListener('click', () => this.remove());
       return btn;

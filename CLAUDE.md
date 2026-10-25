@@ -728,6 +728,37 @@ with source.content.open('rb') as f:
 - `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
 - Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views/attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views/attachments.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
 
+### Static lists - one definition, everything else derives from it
+
+A list of file formats, extensions, MIME types, labels or any other static values is written down **once**. Every other place that needs it - another module, a template, a JS file - gets it from that definition: Python imports or computes from it, templates and JS receive it from the view through `|json_script`. A copy in a JS constant, a second one in a template attribute and a third in a Python module drift apart the first time one of them is edited, and nothing fails when they do.
+
+```python
+# ✅ photos/services/analysis.py - derived from what the library reads
+def library_extensions():
+    return sorted({
+        extension
+        for label in MEDIA_LABELS
+        for extension in get_label_info(label).get("extensions", [])
+    })
+```
+
+```django
+{# ✅ the picker and the drop filter read the same list #}
+{{ library_extensions|json_script:"photos-library-extensions-data" }}
+<input type="file" accept="{% for extension in library_extensions %}.{{ extension }}{% if not forloop.last %},{% endif %}{% endfor %}">
+```
+
+```js
+// ❌ a second copy of what the server already knows
+const PHOTOS_UNTYPED_MEDIA = /\.(heic|heif|avif|jxl)$/i;
+```
+
+**Rules:**
+
+- Before writing a literal list, look for the definition it should derive from: a registry, a label set (`RASTER_LABELS`, `MEDIA_LABELS`, `RAW_FORMATS`), the type table behind `detection.get_label_info`. When none exists, create it server-side, in the module that owns the concept, and pass it down.
+- A frontend that needs a server-side list reads it from the page (`|json_script`) or from an endpoint, never from a constant of its own. A frontend that needs one fact about the current object (is this file a RAW?) gets the answer from the view, not the list to work it out.
+- The one exception is a data migration: it copies what it needs, because a migration is a historical record that must not change meaning when live code does (see *Data migrations* above). Say so in its docstring.
+
 ### Prefer the standard library over hand-rolled collection plumbing
 
 We target Python 3.14, so reach for a stdlib primitive before writing manual loops over lists/sets: `itertools.batched` (chunking), `itertools.pairwise` (adjacent pairs), `itertools.chain.from_iterable` (flattening), `collections.Counter` (counting), `collections.defaultdict` (grouping), `dict.fromkeys` (order-preserving dedup), plus `math.prod` / `itertools.accumulate` / `statistics`.

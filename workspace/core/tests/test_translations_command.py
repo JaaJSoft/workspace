@@ -1,7 +1,13 @@
+from pathlib import Path
+
 from django.core.management import CommandError, call_command
+from django.core.management.commands.makemessages import Command as MakeMessages
 from django.test import SimpleTestCase
 
 from workspace.core.management.commands.translations import (
+    SHARED_MODULE,
+    _MakeMessages,
+    shared_catalogs,
     tidy_new_header,
     translated_languages,
     workspace_modules,
@@ -69,3 +75,27 @@ class TranslationsCommandTests(SimpleTestCase):
     def test_unknown_module_is_refused(self):
         with self.assertRaisesMessage(CommandError, "Unknown module(s): nope"):
             call_command("translations", "nope")
+
+
+class SharedCatalogsTests(SimpleTestCase):
+    def test_a_module_excludes_the_shared_catalogs_of_its_domain(self):
+        catalogs = shared_catalogs(workspace_modules()["dashboard"], "django")
+        self.assertIn(
+            workspace_modules()[SHARED_MODULE] / "locale/fr/LC_MESSAGES/django.po",
+            catalogs,
+        )
+        self.assertTrue(all(catalog.name == "django.po" for catalog in catalogs))
+
+    def test_the_shared_module_excludes_nothing(self):
+        self.assertEqual(
+            shared_catalogs(workspace_modules()[SHARED_MODULE], "django"), []
+        )
+
+    def test_extraction_passes_the_catalogs_to_xgettext(self):
+        command = _MakeMessages([Path("/x/common/locale/fr/LC_MESSAGES/django.po")])
+        self.assertIn(
+            "--exclude-file=/x/common/locale/fr/LC_MESSAGES/django.po",
+            command.xgettext_options,
+        )
+        # The class attribute stays untouched for plain makemessages runs.
+        self.assertNotIn("--exclude-file", " ".join(MakeMessages.xgettext_options))

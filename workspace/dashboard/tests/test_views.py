@@ -1310,6 +1310,11 @@ class DashboardFrenchTests(TestCase):
         self.assertContains(resp, "Activité récente")
         self.assertNotContains(resp, "Recent Activity")
 
+    def test_shared_words_come_from_the_common_catalog(self):
+        resp = self.client.get("/")
+        self.assertContains(resp, 'title="Fermer"')
+        self.assertContains(resp, 'title="Rechercher"')
+
     def test_greetings_reach_the_browser_translated(self):
         resp = self.client.get("/")
         self.assertContains(resp, "Bonjour, %(name)s.")

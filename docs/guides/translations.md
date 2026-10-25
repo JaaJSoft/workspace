@@ -75,6 +75,29 @@ entries.
 To add a language, add it to `LANGUAGES` and run `translations` once for every
 module that has a catalog.
 
+## Shared words
+
+Words every module uses ("Cancel", "Save", "Close", "Search") are translated
+once, in `common`, not once per module. They are listed in
+`workspace/common/vocabulary.py`, a `gettext_noop` list nothing imports: it
+exists so extraction puts them in `common`'s catalog.
+
+`translations <module>` passes `common`'s catalog of the same domain to
+`xgettext --exclude-file`, so a module that uses `{% translate "Cancel" %}`
+gets no entry of its own and the lookup lands on `common`'s translation:
+Django merges every installed app's catalog into one. A module catalog that
+repeats a shared msgid fails `core.tests.test_translation_catalogs`.
+
+- Before translating a generic word in a module, add it to the vocabulary,
+  run `translations common`, then `translations <module>` to drop it from the
+  module.
+- A word whose meaning depends on the page (a noun on one page, a verb on
+  another) takes a context at its call site
+  (`{% translate "Share" context "noun" %}`): a msgid with a context is a
+  different message, so it stays in the module.
+- In JavaScript the same applies to `common`'s djangojs catalog, which holds
+  the strings of `common`'s own scripts ("Today", "Yesterday").
+
 ## Marking strings
 
 ### Templates
@@ -94,7 +117,9 @@ module that has a catalog.
   word order differs between languages.
 - Use `{% blocktranslate count %}` for anything with a number in it. French has
   three plural forms in current gettext catalogs: `0` and `1`, millions
-  (`1 000 000 de fichiers`), and everything else.
+  (`1 000 000 de fichiers`), and everything else. `makemessages` only writes
+  two `msgstr[]` slots, so add the third by hand: a missing form compiles fine
+  and shows the English string for every count that selects it.
 - A translated string that ends up inside JavaScript (an inline `<script>`, an
   Alpine attribute) goes through a variable and `|escapejs`, like any other
   value:
@@ -140,6 +165,7 @@ calls `gettext`.
 
 ## What stays in English
 
+- The product name, Workspace, in every language.
 - The changelog (`CHANGELOG.md`) and the "What's new" modal it feeds.
 - Seeded demo data, and content users create.
 - AI system prompts and tool descriptions: they are instructions to a model,

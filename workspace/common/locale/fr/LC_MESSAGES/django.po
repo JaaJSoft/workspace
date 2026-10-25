@@ -1,0 +1,79 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-25 17:39+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: vocabulary.py
+msgid "Back"
+msgstr "Retour"
+
+#: vocabulary.py
+msgid "Cancel"
+msgstr "Annuler"
+
+#: vocabulary.py
+msgid "Close"
+msgstr "Fermer"
+
+#: vocabulary.py
+msgid "Confirm"
+msgstr "Confirmer"
+
+#: vocabulary.py
+msgid "Copy"
+msgstr "Copier"
+
+#: vocabulary.py
+msgid "Delete"
+msgstr "Supprimer"
+
+#: vocabulary.py
+msgid "Download"
+msgstr "Télécharger"
+
+#: vocabulary.py
+msgid "Edit"
+msgstr "Modifier"
+
+#: vocabulary.py
+msgid "Loading…"
+msgstr "Chargement…"
+
+#: vocabulary.py
+msgid "Next"
+msgstr "Suivant"
+
+#: vocabulary.py
+msgid "Previous"
+msgstr "Précédent"
+
+#: vocabulary.py
+msgid "Refresh"
+msgstr "Actualiser"
+
+#: vocabulary.py
+msgid "Reload"
+msgstr "Recharger"
+
+#: vocabulary.py
+msgid "Rename"
+msgstr "Renommer"
+
+#: vocabulary.py
+msgid "Retry"
+msgstr "Réessayer"
+
+#: vocabulary.py
+msgid "Save"
+msgstr "Enregistrer"
+
+#: vocabulary.py
+msgid "Search"
+msgstr "Rechercher"

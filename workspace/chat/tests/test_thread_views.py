@@ -395,6 +395,9 @@ class MarkReadThreadInteractionTests(TestCase):
         ConversationMember.objects.filter(pk=self.membership.pk).update(
             left_at=timezone.now()
         )
+        ConversationMember.objects.filter(
+            conversation=self.conversation, user=self.bob
+        ).update(role=ConversationMember.Role.ADMIN)
 
         api = APIClient()
         api.force_authenticate(user=self.bob)

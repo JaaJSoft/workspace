@@ -363,7 +363,14 @@ def _seed_chat(alex, sam, jordan, now):
         created_by=alex,
     )
     ConversationMember.objects.bulk_create(
-        ConversationMember(conversation=group, user=u, last_read_at=now)
+        ConversationMember(
+            conversation=group,
+            user=u,
+            last_read_at=now,
+            role=ConversationMember.Role.ADMIN
+            if u == alex
+            else ConversationMember.Role.MEMBER,
+        )
         for u in (alex, sam, jordan)
     )
     thread = [

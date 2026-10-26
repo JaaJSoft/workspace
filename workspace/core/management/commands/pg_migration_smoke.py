@@ -107,7 +107,9 @@ class Command(BaseCommand):
         conv = Conversation.objects.create(
             kind="group", title="Smoke Chat", created_by=alice
         )
-        ConversationMember.objects.create(conversation=conv, user=alice)
+        ConversationMember.objects.create(
+            conversation=conv, user=alice, role=ConversationMember.Role.ADMIN
+        )
         post_message(conv, alice, SEED_CHAT_BODY)
 
         from workspace.projects.models import Project, ProjectMember, Task, TaskStatus

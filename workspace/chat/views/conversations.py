@@ -4,7 +4,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Subquery
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -26,9 +25,13 @@ from ..services.conversations import (
     can_add_users,
     can_join_group,
     default_group_title,
+    end_membership,
     get_active_membership,
+    get_conversation_role,
     get_or_create_dm,
     get_unread_counts,
+    lock_conversation,
+    set_member_role,
     user_conversation_ids,
 )
 from ..services.group_sync import create_group_conversation, is_group_linked
@@ -38,6 +41,8 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 BOTS_ONLY_IN_DIRECT_CONVERSATIONS = "Bots can only be in a direct conversation."
+NOT_A_MEMBER = "Not a member of this conversation."
+GROUP_ADMINS_ONLY = "Only group admins can do this."
 
 
 def _trigger_bot_response(conversation_id, message, sender):
@@ -231,7 +236,14 @@ class ConversationListView(CacheControlMixin, APIView):
                 created_by=request.user,
             )
             created_members = [
-                ConversationMember(conversation=conversation, user=u) for u in members
+                ConversationMember(
+                    conversation=conversation,
+                    user=u,
+                    role=ConversationMember.Role.ADMIN
+                    if u.id == request.user.id
+                    else ConversationMember.Role.MEMBER,
+                )
+                for u in members
             ]
             ConversationMember.objects.bulk_create(created_members)
 
@@ -296,14 +308,22 @@ class ConversationDetailView(APIView):
         ),
     )
     def patch(self, request, conversation_id):
-        membership = get_active_membership(request.user, conversation_id)
-        if not membership:
+        role = get_conversation_role(request.user, conversation_id)
+        if role is None:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": NOT_A_MEMBER},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
+        if (
+            conversation.kind == Conversation.Kind.GROUP
+            and role != ConversationMember.Role.ADMIN
+        ):
+            return Response(
+                {"detail": GROUP_ADMINS_ONLY},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         update_fields = []
 
         # Title update (groups and bot conversations)
@@ -363,8 +383,7 @@ class ConversationDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        membership.left_at = timezone.now()
-        membership.save(update_fields=["left_at"])
+        end_membership(membership)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -385,10 +404,10 @@ class ConversationMembersView(APIView):
     )
     @transaction.atomic
     def post(self, request, conversation_id):
-        membership = get_active_membership(request.user, conversation_id)
-        if not membership:
+        role = get_conversation_role(request.user, conversation_id)
+        if role is None:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": NOT_A_MEMBER},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -397,6 +416,12 @@ class ConversationMembersView(APIView):
             return Response(
                 {"detail": "Can only add members to group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if role != ConversationMember.Role.ADMIN:
+            return Response(
+                {"detail": GROUP_ADMINS_ONLY},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if is_group_linked(conversation.pk):
@@ -448,7 +473,8 @@ class ConversationMembersView(APIView):
                 if existing.left_at is not None:
                     existing.left_at = None
                     existing.unread_count = 0
-                    existing.save(update_fields=["left_at", "unread_count"])
+                    existing.role = ConversationMember.Role.MEMBER
+                    existing.save(update_fields=["left_at", "unread_count", "role"])
                     rejoined_ids.append(u.id)
                     added.append(u.id)
                 # Already active member - skip silently
@@ -507,37 +533,99 @@ class ConversationNotificationLevelView(APIView):
         return Response({"notification_level": level})
 
 
+class MemberRoleSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=ConversationMember.Role.choices)
+
+
+def _group_admin_refusal(user, conversation_id):
+    """The response refusing *user* a group-management action, or None.
+
+    Re-checks the role under ``lock_conversation`` once the cheap checks pass,
+    so an admin demoted or removed meanwhile cannot act; the caller must be
+    inside a transaction for the lock to hold.
+    """
+    role = get_conversation_role(user, conversation_id)
+    if role is None:
+        return Response({"detail": NOT_A_MEMBER}, status=status.HTTP_403_FORBIDDEN)
+    if not Conversation.objects.filter(
+        pk=conversation_id, kind=Conversation.Kind.GROUP
+    ).exists():
+        return Response(
+            {"detail": "Only group conversations have admins."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if role != ConversationMember.Role.ADMIN:
+        return Response({"detail": GROUP_ADMINS_ONLY}, status=status.HTTP_403_FORBIDDEN)
+    lock_conversation(conversation_id)
+    if get_conversation_role(user, conversation_id) != ConversationMember.Role.ADMIN:
+        return Response({"detail": GROUP_ADMINS_ONLY}, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
+def _active_member(conversation_id, user_id):
+    return ConversationMember.objects.filter(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        left_at__isnull=True,
+    ).first()
+
+
 @extend_schema(tags=["Chat - Conversations"])
-class ConversationMemberRemoveView(APIView):
+class ConversationMemberDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Remove a member from a group conversation (creator only)")
-    def delete(self, request, conversation_id, user_id):
-        membership = get_active_membership(request.user, conversation_id)
-        if not membership:
+    @extend_schema(
+        summary="Make a group member an admin or a member (admins only)",
+        request=MemberRoleSerializer,
+    )
+    @transaction.atomic
+    def patch(self, request, conversation_id, user_id):
+        refusal = _group_admin_refusal(request.user, conversation_id)
+        if refusal:
+            return refusal
+
+        ser = MemberRoleSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        target_membership = _active_member(conversation_id, user_id)
+        if not target_membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"detail": "User is not an active member."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        conversation = Conversation.objects.get(pk=conversation_id)
-        if conversation.kind != Conversation.Kind.GROUP:
+        if not set_member_role(target_membership, ser.validated_data["role"]):
             return Response(
-                {"detail": "Can only remove members from group conversations."},
+                {"detail": "A group needs at least one admin."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if is_group_linked(conversation.pk):
+        conversation = (
+            Conversation.objects.filter(pk=conversation_id)
+            .prefetch_related(
+                Prefetch("members", queryset=active_members_queryset()),
+                "groups",
+            )
+            .first()
+        )
+        return Response(
+            ConversationDetailSerializer(
+                conversation, context={"request": request}
+            ).data
+        )
+
+    @extend_schema(summary="Remove a member from a group conversation (admins only)")
+    @transaction.atomic
+    def delete(self, request, conversation_id, user_id):
+        refusal = _group_admin_refusal(request.user, conversation_id)
+        if refusal:
+            return refusal
+
+        if is_group_linked(conversation_id):
             return Response(
                 {
                     "detail": "Members of a group-linked conversation are managed through its groups."
                 },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        if conversation.created_by_id != request.user.id:
-            return Response(
-                {"detail": "Only the group creator can remove members."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -547,17 +635,12 @@ class ConversationMemberRemoveView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        target_membership = ConversationMember.objects.filter(
-            conversation=conversation,
-            user_id=user_id,
-            left_at__isnull=True,
-        ).first()
+        target_membership = _active_member(conversation_id, user_id)
         if not target_membership:
             return Response(
                 {"detail": "User is not an active member."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        target_membership.left_at = timezone.now()
-        target_membership.save(update_fields=["left_at"])
+        end_membership(target_membership)
         return Response(status=status.HTTP_204_NO_CONTENT)

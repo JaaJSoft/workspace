@@ -48,6 +48,7 @@ class ChatTestMixin:
         ConversationMember.objects.create(
             conversation=self.group,
             user=self.creator,
+            role=ConversationMember.Role.ADMIN,
         )
         ConversationMember.objects.create(
             conversation=self.group,

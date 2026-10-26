@@ -51,6 +51,17 @@ class ConversationMember(models.Model):
         MENTIONS = "mentions", "Mentions only"
         NONE = "none", "Nothing"
 
+    class Role(models.TextChoices):
+        """Who may manage a group: its members, name, avatar and admins.
+
+        Only groups use it. An active group always has at least one admin
+        (services/conversations), and a row that leaves drops back to member,
+        so nobody comes back as an admin.
+        """
+
+        ADMIN = "admin", "Admin"
+        MEMBER = "member", "Member"
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     conversation = models.ForeignKey(
         Conversation,
@@ -71,6 +82,7 @@ class ConversationMember(models.Model):
         choices=NotificationLevel.choices,
         default=NotificationLevel.ALL,
     )
+    role = models.CharField(max_length=6, choices=Role.choices, default=Role.MEMBER)
 
     class Meta:
         constraints = [

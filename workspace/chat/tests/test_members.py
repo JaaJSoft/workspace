@@ -30,18 +30,31 @@ class AddMembersTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_member_can_add_to_group(self):
+    def test_member_cannot_add_to_group(self):
         self.client.force_authenticate(self.member)
         resp = self.client.post(
             self.url(self.group.uuid), {"user_ids": [self.extra_user.id]}, format="json"
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
             ConversationMember.objects.filter(
-                conversation=self.group,
-                user=self.extra_user,
-                left_at__isnull=True,
+                conversation=self.group, user=self.extra_user
             ).exists()
+        )
+
+    def test_member_cannot_bring_back_someone_an_admin_removed(self):
+        ConversationMember.objects.create(
+            conversation=self.group, user=self.extra_user, left_at=timezone.now()
+        )
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(
+            self.url(self.group.uuid), {"user_ids": [self.extra_user.id]}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIsNotNone(
+            ConversationMember.objects.get(
+                conversation=self.group, user=self.extra_user
+            ).left_at
         )
 
     def test_creator_can_add_to_group(self):
@@ -133,8 +146,8 @@ class AddMembersTests(ChatTestMixin, APITestCase):
         return bot_user
 
     def test_cannot_add_a_bot_the_caller_has_no_access_to(self):
-        private_bot = self._bot("privbot", is_public=False, created_by=self.creator)
-        self.client.force_authenticate(self.member)
+        private_bot = self._bot("privbot", is_public=False, created_by=self.outsider)
+        self.client.force_authenticate(self.creator)
         resp = self.client.post(
             self.url(self.group.uuid), {"user_ids": [private_bot.id]}, format="json"
         )
@@ -149,7 +162,7 @@ class AddMembersTests(ChatTestMixin, APITestCase):
         """A bot in a group shows one member's tool results to all of them,
         so bots only live in a direct conversation - nobody may add one."""
         public_bot = self._bot("pubbot", is_public=True)
-        self.client.force_authenticate(self.member)
+        self.client.force_authenticate(self.creator)
         resp = self.client.post(
             self.url(self.group.uuid),
             {"user_ids": [public_bot.id, self.extra_user.id]},
@@ -197,7 +210,7 @@ class RemoveMemberTests(ChatTestMixin, APITestCase):
         resp = self.client.delete(self.url(self.group.uuid, self.member.id))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_non_creator_member_cannot_remove(self):
+    def test_non_admin_member_cannot_remove(self):
         self.client.force_authenticate(self.member)
         # Add extra_user first
         ConversationMember.objects.create(conversation=self.group, user=self.extra_user)
@@ -261,14 +274,23 @@ class RenameConversationTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_member_can_rename_group(self):
-        self.client.force_authenticate(self.member)
+    def test_admin_can_rename_group(self):
+        self.client.force_authenticate(self.creator)
         resp = self.client.patch(
             self.url(self.group.uuid), {"title": "Renamed"}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.group.refresh_from_db()
         self.assertEqual(self.group.title, "Renamed")
+
+    def test_member_cannot_rename_group(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.patch(
+            self.url(self.group.uuid), {"title": "Renamed"}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.title, "Test Group")
 
     def test_cannot_rename_dm(self):
         self.client.force_authenticate(self.creator)
@@ -291,8 +313,8 @@ class ConversationDescriptionTests(ChatTestMixin, APITestCase):
     def url(self, conv_id):
         return f"/api/v1/chat/conversations/{conv_id}"
 
-    def test_member_can_set_description_on_group(self):
-        self.client.force_authenticate(self.member)
+    def test_admin_can_set_description_on_group(self):
+        self.client.force_authenticate(self.creator)
         resp = self.client.patch(
             self.url(self.group.uuid),
             {"description": "A test description"},
@@ -301,6 +323,17 @@ class ConversationDescriptionTests(ChatTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.group.refresh_from_db()
         self.assertEqual(self.group.description, "A test description")
+
+    def test_member_cannot_set_description_on_group(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.patch(
+            self.url(self.group.uuid),
+            {"description": "A test description"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.description, "")
 
     def test_member_can_set_description_on_dm(self):
         self.client.force_authenticate(self.creator)
@@ -314,7 +347,7 @@ class ConversationDescriptionTests(ChatTestMixin, APITestCase):
     def test_description_can_be_cleared(self):
         self.group.description = "Existing description"
         self.group.save(update_fields=["description"])
-        self.client.force_authenticate(self.member)
+        self.client.force_authenticate(self.creator)
         resp = self.client.patch(
             self.url(self.group.uuid), {"description": ""}, format="json"
         )
@@ -330,7 +363,7 @@ class ConversationDescriptionTests(ChatTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_title_and_description_together(self):
-        self.client.force_authenticate(self.member)
+        self.client.force_authenticate(self.creator)
         resp = self.client.patch(
             self.url(self.group.uuid),
             {
@@ -345,7 +378,7 @@ class ConversationDescriptionTests(ChatTestMixin, APITestCase):
         self.assertEqual(self.group.description, "New Desc")
 
     def test_no_fields_returns_400(self):
-        self.client.force_authenticate(self.member)
+        self.client.force_authenticate(self.creator)
         resp = self.client.patch(self.url(self.group.uuid), {}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 

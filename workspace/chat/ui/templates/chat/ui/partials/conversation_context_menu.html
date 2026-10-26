@@ -7,9 +7,9 @@ Rows of the conversation context menu. The panel around them is
   {% include "ui/partials/context_menu_item.html" with icon="link" label="Copy link" click="ctxMenuAction('copy_link')" only %}
   {% include "ui/partials/context_menu_item.html" with show="!ctxMenu.isPinned" icon="pin" label="Pin conversation" click="ctxMenuAction('pin')" only %}
   {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isPinned" icon="pin-off" label="Unpin conversation" click="ctxMenuAction('unpin')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.kind === 'group' || ctxMenu.isBot" icon="pencil" label="Rename" click="ctxMenuAction('rename')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isAdmin || ctxMenu.isBot" icon="pencil" label="Rename" click="ctxMenuAction('rename')" only %}
   {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isBot" icon="sparkles" label="Regenerate title" click="ctxMenuAction('regenerate_title')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.kind === 'group'" icon="user-plus" label="Add members" click="ctxMenuAction('add_members')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isAdmin && !ctxMenu.isGroupLinked" icon="user-plus" label="Add members" click="ctxMenuAction('add_members')" only %}
 
   <hr class="my-1 border-base-300" />
   {% include "ui/partials/context_menu_item.html" with icon="log-out" label="Leave conversation" tone="error" click="ctxMenuAction('leave')" only %}

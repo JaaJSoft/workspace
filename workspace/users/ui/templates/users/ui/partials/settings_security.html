@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "Updating..." as updating_label %}
+{% translate "Update Password" as update_password_label %}
 <!-- Security Tab -->
 <div
   x-show="tab === 'security'"
@@ -9,16 +12,19 @@
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="shield-check" class="w-5 h-5"></i>
-          Password
+          {% translate "Password" %}
         </h2>
         <p class="text-sm text-base-content/70 mt-1">
-          Your account signs in through {{ oidc_provider_name }} (single sign-on),
-          so it has no local password.
+          {% blocktranslate trimmed with provider=oidc_provider_name %}
+            Your account signs in through {{ provider }} (single sign-on),
+            so it has no local password.
+          {% endblocktranslate %}
         </p>
         <p class="text-sm text-base-content/70">
-          To connect external clients such as a WebDAV mount, create an
-          <a href="#tokens" class="link link-primary">API token</a>
-          and use it as the password.
+          {% blocktranslate trimmed with token_link='<a href="#tokens" class="link link-primary">' end_link='</a>' %}
+            To connect external clients such as a WebDAV mount, create an
+            {{ token_link }}API token{{ end_link }} and use it as the password.
+          {% endblocktranslate %}
         </p>
       </div>
     </div>
@@ -27,7 +33,7 @@
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="lock" class="w-5 h-5"></i>
-          Change Password
+          {% translate "Change Password" %}
         </h2>
 
         <!-- Success/error feedback -->
@@ -39,7 +45,7 @@
 
           <!-- Current password -->
           <div class="form-control">
-            <label class="label"><span class="label-text font-medium">Current Password</span></label>
+            <label class="label"><span class="label-text font-medium">{% translate "Current Password" %}</span></label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
@@ -48,7 +54,7 @@
                 :type="showCurrent ? 'text' : 'password'"
                 x-model="currentPassword"
                 class="grow"
-                placeholder="Enter current password"
+                placeholder="{% translate 'Enter current password' %}"
                 required
                 autocomplete="current-password"
               />
@@ -74,7 +80,7 @@
 
           <!-- New password -->
           <div class="form-control">
-            <label class="label"><span class="label-text font-medium">New Password</span></label>
+            <label class="label"><span class="label-text font-medium">{% translate "New Password" %}</span></label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
@@ -83,7 +89,7 @@
                 :type="showNew ? 'text' : 'password'"
                 x-model="newPassword"
                 class="grow"
-                placeholder="Enter new password"
+                placeholder="{% translate 'Enter new password' context 'change password form' %}"
                 required
                 autocomplete="new-password"
               />
@@ -170,7 +176,7 @@
 
           <!-- Confirm password -->
           <div class="form-control">
-            <label class="label"><span class="label-text font-medium">Confirm New Password</span></label>
+            <label class="label"><span class="label-text font-medium">{% translate "Confirm New Password" %}</span></label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
               :class="{ 'input-error': confirmMismatch }"
@@ -180,7 +186,7 @@
                 :type="showConfirm ? 'text' : 'password'"
                 x-model="confirmPassword"
                 class="grow"
-                placeholder="Confirm new password"
+                placeholder="{% translate 'Confirm new password' %}"
                 required
                 autocomplete="new-password"
               />
@@ -203,7 +209,7 @@
               </button>
             </label>
             <label class="label" x-show="confirmMismatch" x-cloak>
-              <span class="label-text-alt text-error">Passwords do not match.</span>
+              <span class="label-text-alt text-error">{% translate "Passwords do not match." %}</span>
             </label>
           </div>
 
@@ -212,7 +218,7 @@
             <button type="submit" class="btn btn-primary gap-2" :disabled="!canSubmit">
               <span x-show="!loading"><i data-lucide="save" class="w-4 h-4"></i></span>
               <span x-show="loading" class="loading loading-spinner loading-sm"></span>
-              <span x-text="loading ? 'Updating...' : 'Update Password'"></span>
+              <span x-text="loading ? '{{ updating_label|escapejs }}' : '{{ update_password_label|escapejs }}'"></span>
             </button>
           </div>
         </form>
@@ -222,6 +228,9 @@
 </div>
 
 {% if not oidc_managed %}
+  {% translate "Password updated successfully." as password_updated_message %}
+  {% translate "An unexpected error occurred." as unexpected_error_message %}
+  {% translate "Network error. Please try again." as network_error_retry_message %}
   <script>
     function changePasswordForm() {
       return {
@@ -280,13 +289,13 @@
               this.currentPassword = '';
               this.newPassword = '';
               this.confirmPassword = '';
-              this.showFeedback('success', data.message || 'Password updated successfully.');
+              this.showFeedback('success', data.message || '{{ password_updated_message|escapejs }}');
             } else {
-              const msgs = data.errors || ['An unexpected error occurred.'];
+              const msgs = data.errors || ['{{ unexpected_error_message|escapejs }}'];
               this.showFeedback('error', msgs.join(', '));
             }
           } catch (e) {
-            this.showFeedback('error', 'Network error. Please try again.');
+            this.showFeedback('error', '{{ network_error_retry_message|escapejs }}');
           } finally {
             this.loading = false;
           }

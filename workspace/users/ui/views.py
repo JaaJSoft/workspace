@@ -9,6 +9,8 @@ from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
+from django.utils.translation import ngettext, pgettext_lazy
 
 from workspace.core.services.activity import (
     allowed_activity_sources,
@@ -25,6 +27,22 @@ from workspace.users.services import presence as presence_service
 from workspace.users.services.settings import get_module_settings
 
 ACTIVITY_LIMIT = 10
+
+# Django's own "M" format abbreviates June and July to "Jui" and "Jul" in French.
+MONTH_ABBREVIATIONS = (
+    pgettext_lazy("abbreviated month", "Jan"),
+    pgettext_lazy("abbreviated month", "Feb"),
+    pgettext_lazy("abbreviated month", "Mar"),
+    pgettext_lazy("abbreviated month", "Apr"),
+    pgettext_lazy("abbreviated month", "May"),
+    pgettext_lazy("abbreviated month", "Jun"),
+    pgettext_lazy("abbreviated month", "Jul"),
+    pgettext_lazy("abbreviated month", "Aug"),
+    pgettext_lazy("abbreviated month", "Sep"),
+    pgettext_lazy("abbreviated month", "Oct"),
+    pgettext_lazy("abbreviated month", "Nov"),
+    pgettext_lazy("abbreviated month", "Dec"),
+)
 
 
 class WorkspaceLoginView(LoginView):
@@ -91,6 +109,12 @@ def _build_heatmap_data(user_id, viewer_id=None, allowed_sources=None):
                 "date": current.isoformat(),
                 "count": c,
                 "level": level(c),
+                "label": ngettext(
+                    "%(count)s contribution on %(date)s",
+                    "%(count)s contributions on %(date)s",
+                    c,
+                )
+                % {"count": c, "date": date_format(current)},
             }
         )
         if len(week) == 7:
@@ -102,27 +126,13 @@ def _build_heatmap_data(user_id, viewer_id=None, allowed_sources=None):
 
     # Month labels: label only the first week that contains a new month
     month_labels = []
-    month_names = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ]
     last_labeled_month = None
     for w in weeks:
         label = ""
         for day in w:
             d = date_type.fromisoformat(day["date"])
             if d.day <= 7 and d.month != last_labeled_month:
-                label = month_names[d.month - 1]
+                label = MONTH_ABBREVIATIONS[d.month - 1]
                 last_labeled_month = d.month
                 break
         month_labels.append(label)

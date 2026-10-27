@@ -1,10 +1,13 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}Login · Workspace{% endblock %}
+{% block title %}{% translate "Login" %} · Workspace{% endblock %}
 
 {% block body_class %}bg-gradient-to-br from-base-200 to-base-300 min-h-screen{% endblock %}
 
 {% block body %}
+  {% translate "Signing in..." as signing_in_label %}
+  {% translate "Sign In" as sign_in_label %}
   <div class="min-h-screen flex items-center justify-center p-4">
     <div
       class="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300"
@@ -13,17 +16,17 @@
         <!-- Logo/Header -->
         <div class="flex flex-col items-center mb-8">
           <div class="mb-3">{% include "ui/partials/app_logo.html" with size="md" %}</div>
-          <p class="text-base-content/60 text-sm">Sign in to continue</p>
+          <p class="text-base-content/60 text-sm">{% translate "Sign in to continue" %}</p>
         </div>
 
         <!-- Error messages -->
         {% if form.errors %}
-          <inline-alert type="error" message="Invalid username or password. Please try again." class="mb-4"></inline-alert>
+          <inline-alert type="error" message="{% translate 'Invalid username or password. Please try again.' %}" class="mb-4"></inline-alert>
         {% endif %}
 
         {% if next %}
           {% if user.is_authenticated %}
-            <inline-alert type="warning" message="Your account doesn't have access to this page." class="mb-4"></inline-alert>
+            <inline-alert type="warning" message="{% translate "Your account doesn't have access to this page." %}" class="mb-4"></inline-alert>
           {% endif %}
         {% endif %}
 
@@ -34,9 +37,11 @@
             class="btn btn-outline w-full gap-2 mb-2"
           >
             <i data-lucide="key-round" class="w-5 h-5"></i>
-            Sign in with {{ oidc_provider_name }}
+            {% blocktranslate trimmed with provider=oidc_provider_name %}
+              Sign in with {{ provider }}
+            {% endblocktranslate %}
           </a>
-          <div class="divider text-xs text-base-content/40 my-2">OR</div>
+          <div class="divider text-xs text-base-content/40 my-2">{% translate "OR" %}</div>
         {% endif %}
 
         <!-- Login Form -->
@@ -51,7 +56,7 @@
           <!-- Username Field -->
           <div class="form-control w-full mb-4">
             <label class="label" for="{{ form.username.id_for_label }}">
-              <span class="label-text font-medium">Username</span>
+              <span class="label-text font-medium">{% translate "Username" context "login form" %}</span>
             </label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
@@ -62,7 +67,7 @@
                 name="username"
                 id="{{ form.username.id_for_label }}"
                 class="grow"
-                placeholder="Enter your username"
+                placeholder="{% translate 'Enter your username' %}"
                 required
                 autofocus
               />
@@ -72,7 +77,7 @@
           <!-- Password Field -->
           <div class="form-control w-full mb-6">
             <label class="label" for="{{ form.password.id_for_label }}">
-              <span class="label-text font-medium">Password</span>
+              <span class="label-text font-medium">{% translate "Password" %}</span>
             </label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
@@ -83,7 +88,7 @@
                 name="password"
                 id="{{ form.password.id_for_label }}"
                 class="grow"
-                placeholder="Enter your password"
+                placeholder="{% translate 'Enter your password' %}"
                 required
               />
             </label>
@@ -103,7 +108,7 @@
                 <i data-lucide="log-in" class="w-5 h-5"></i>
               </span>
               <span x-show="isSubmitting" class="loading loading-spinner loading-md"></span>
-              <span x-text="isSubmitting ? 'Signing in...' : 'Sign In'"></span>
+              <span x-text="isSubmitting ? '{{ signing_in_label|escapejs }}' : '{{ sign_in_label|escapejs }}'"></span>
             </button>
           </div>
         </form>
@@ -115,7 +120,7 @@
             class="text-xs text-base-content/50 hover:text-base-content transition-colors inline-flex items-center gap-1.5"
           >
             <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-            Admin Login
+            {% translate "Admin Login" %}
           </a>
         </div>
       </div>

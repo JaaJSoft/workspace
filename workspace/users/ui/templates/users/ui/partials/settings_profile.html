@@ -1,3 +1,8 @@
+{% load i18n %}
+{% translate "Uploading..." as uploading_label %}
+{% translate "Confirm" as confirm_label %}
+{% translate "Hide custom" as hide_custom_label %}
+{% translate "Custom colors" as custom_colors_label %}
 <!-- Profile Tab -->
 <div x-show="tab === 'profile'" x-cloak>
   <div x-data="avatarUploadForm()">
@@ -5,11 +10,11 @@
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="camera" class="w-5 h-5"></i>
-          Profile Picture
+          {% translate "Profile Picture" %}
         </h2>
 
         <p class="text-sm text-base-content/60 mt-1">
-          Upload a photo to personalize your account. The image will be cropped to a square.
+          {% translate "Upload a photo to personalize your account. The image will be cropped to a square." %}
         </p>
 
         <!-- Feedback -->
@@ -25,7 +30,7 @@
               <img
                 x-show="hasAvatar"
                 :src="avatarPreviewUrl"
-                alt="Avatar"
+                alt="{% translate 'Avatar' %}"
                 class="rounded-full object-cover"
                 x-ref="avatarPreview"
               />
@@ -39,7 +44,7 @@
               class="btn btn-primary btn-sm gap-2"
             >
               <i data-lucide="upload" class="w-4 h-4"></i>
-              Upload Photo
+              {% translate "Upload Photo" %}
             </button>
             <button
               x-show="hasAvatar"
@@ -49,9 +54,9 @@
               :disabled="loading"
             >
               <i data-lucide="trash-2" class="w-4 h-4"></i>
-              Remove
+              {% translate "Remove" context "profile picture" %}
             </button>
-            <p class="text-xs text-base-content/40">JPEG, PNG, WebP or GIF. Max 10 MB.</p>
+            <p class="text-xs text-base-content/40">{% translate "JPEG, PNG, WebP or GIF. Max 10 MB." %}</p>
           </div>
         </div>
 
@@ -68,12 +73,12 @@
     <!-- Crop dialog -->
     <dialog x-ref="cropDialog" class="modal">
       <div class="modal-box max-w-lg">
-        <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
+        <h3 class="font-bold text-lg mb-4">{% translate "Crop your photo" %}</h3>
         <div class="w-full" style="max-height: 400px">
           <img x-ref="cropImage" alt="" style="display: block; max-width: 100%" />
         </div>
         <div class="modal-action">
-          <button type="button" @click="cancelCrop()" class="btn btn-ghost btn-sm">Cancel</button>
+          <button type="button" @click="cancelCrop()" class="btn btn-ghost btn-sm">{% translate "Cancel" %}</button>
           <button
             type="button"
             @click="confirmCrop()"
@@ -81,12 +86,12 @@
             :disabled="loading"
           >
             <span x-show="loading" class="loading loading-spinner loading-sm"></span>
-            <span x-text="loading ? 'Uploading...' : 'Confirm'"></span>
+            <span x-text="loading ? '{{ uploading_label|escapejs }}' : '{{ confirm_label|escapejs }}'"></span>
           </button>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop">
-        <button type="submit" @click="cancelCrop()">close</button>
+        <button type="submit" @click="cancelCrop()">{% translate "Close" %}</button>
       </form>
     </dialog>
   </div>
@@ -99,41 +104,41 @@
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
         <i data-lucide="user" class="w-5 h-5"></i>
-        About You
+        {% translate "About You" %}
       </h2>
 
       <div x-ref="profileFieldsFeedback"></div>
 
       <!-- Role -->
       <div class="form-control mt-3">
-        <label class="label"><span class="label-text font-medium">Role</span></label>
+        <label class="label"><span class="label-text font-medium">{% translate "Role" %}</span></label>
         <input
           type="text"
           x-model="role"
           maxlength="50"
-          placeholder="ex: Lead Backend, Designer..."
+          placeholder="{% translate 'ex: Lead Backend, Designer...' %}"
           class="input input-bordered input-sm w-full max-w-md"
           @blur="saveField('role', role)"
           @keydown.enter="$event.target.blur()"
         />
         <label class="label">
-          <span class="label-text-alt text-base-content/40">Displayed below your name on your profile.</span>
+          <span class="label-text-alt text-base-content/40">{% translate "Displayed below your name on your profile." %}</span>
         </label>
       </div>
 
       <!-- Bio -->
       <div class="form-control mt-2">
-        <label class="label"><span class="label-text font-medium">Bio</span></label>
+        <label class="label"><span class="label-text font-medium">{% translate "Bio" %}</span></label>
         <textarea
           x-model="bio"
           maxlength="200"
           rows="3"
-          placeholder="A few words about yourself..."
+          placeholder="{% translate 'A few words about yourself...' %}"
           class="textarea textarea-bordered w-full max-w-md text-sm"
           @blur="saveField('bio', bio)"
         ></textarea>
         <label class="label">
-          <span class="label-text-alt text-base-content/40">Visible on your public profile.</span>
+          <span class="label-text-alt text-base-content/40">{% translate "Visible on your public profile." %}</span>
           <span
             class="label-text-alt"
             :class="bio.length > 180 ? 'text-warning' : 'text-base-content/40'"
@@ -153,9 +158,9 @@
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
         <i data-lucide="paintbrush" class="w-5 h-5"></i>
-        Banner Color
+        {% translate "Banner Color" %}
       </h2>
-      <p class="text-sm text-base-content/60 mt-1">Choose a gradient for your profile banner.</p>
+      <p class="text-sm text-base-content/60 mt-1">{% translate "Choose a gradient for your profile banner." %}</p>
 
       <div x-ref="paletteFeedback"></div>
 
@@ -181,7 +186,7 @@
           class="btn btn-ghost btn-xs gap-1"
         >
           <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
-          <span x-text="showCustom ? 'Hide custom' : 'Custom colors'"></span>
+          <span x-text="showCustom ? '{{ hide_custom_label|escapejs }}' : '{{ custom_colors_label|escapejs }}'"></span>
         </button>
         <button
           type="button"
@@ -190,7 +195,7 @@
           class="btn btn-ghost btn-xs gap-1 text-base-content/50"
         >
           <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-          Reset to default
+          {% translate "Reset to default" %}
         </button>
       </div>
 
@@ -202,7 +207,7 @@
       >
         <div class="flex items-center gap-4">
           <label class="flex items-center gap-2 text-sm">
-            <span class="text-base-content/60 w-10">From</span>
+            <span class="text-base-content/60 w-10">{% translate "From" context "gradient start color" %}</span>
             <input
               type="color"
               x-model="customFrom"
@@ -212,7 +217,7 @@
             <span class="text-xs text-base-content/40 font-mono" x-text="customFrom"></span>
           </label>
           <label class="flex items-center gap-2 text-sm">
-            <span class="text-base-content/60 w-10">Via</span>
+            <span class="text-base-content/60 w-10">{% translate "Via" context "gradient middle color" %}</span>
             <input
               type="color"
               x-model="customVia"
@@ -222,7 +227,7 @@
             <span class="text-xs text-base-content/40 font-mono" x-text="customVia"></span>
           </label>
           <label class="flex items-center gap-2 text-sm">
-            <span class="text-base-content/60 w-10">To</span>
+            <span class="text-base-content/60 w-10">{% translate "To" context "gradient end color" %}</span>
             <input
               type="color"
               x-model="customTo"
@@ -243,13 +248,25 @@
           class="btn btn-primary btn-sm gap-2"
         >
           <i data-lucide="check" class="w-4 h-4"></i>
-          Apply custom colors
+          {% translate "Apply custom colors" %}
         </button>
       </div>
     </div>
   </div>
 </div>
 
+{% translate "Avatar updated." as avatar_updated_message %}
+{% translate "Upload failed." as upload_failed_message %}
+{% translate "Avatar removed." as avatar_removed_message %}
+{% translate "Failed to remove avatar." as avatar_remove_failed_message %}
+{% translate "Network error. Please try again." as network_error_retry_message %}
+{% translate "Network error." as network_error_message %}
+{% translate "Role saved." as role_saved_message %}
+{% translate "Bio saved." as bio_saved_message %}
+{% translate "Failed to save." as save_failed_message %}
+{% translate "Banner reset to default." as banner_reset_message %}
+{% translate "Banner palette saved." as palette_saved_message %}
+{% translate "Failed to save palette." as palette_save_failed_message %}
 <script>
   function avatarUploadForm() {
     return {
@@ -326,14 +343,14 @@
           if (res.ok) {
             this.hasAvatar = true;
             this.avatarPreviewUrl = '/api/v1/users/{{ request.user.id }}/avatar?t=' + Date.now();
-            this.showFeedback('success', result.message || 'Avatar updated.');
+            this.showFeedback('success', result.message || '{{ avatar_updated_message|escapejs }}');
             window.refreshUserAvatar({{ request.user.id }});
           } else {
-            const msgs = result.errors || ['Upload failed.'];
+            const msgs = result.errors || ['{{ upload_failed_message|escapejs }}'];
             this.showFeedback('error', msgs.join(', '));
           }
         } catch (e) {
-          this.showFeedback('error', 'Network error. Please try again.');
+          this.showFeedback('error', '{{ network_error_retry_message|escapejs }}');
         } finally {
           this.loading = false;
           this.$refs.cropDialog.close();
@@ -359,13 +376,13 @@
           const result = await res.json();
           if (res.ok) {
             this.hasAvatar = false;
-            this.showFeedback('success', result.message || 'Avatar removed.');
+            this.showFeedback('success', result.message || '{{ avatar_removed_message|escapejs }}');
             window.refreshUserAvatar({{ request.user.id }});
           } else {
-            this.showFeedback('error', 'Failed to remove avatar.');
+            this.showFeedback('error', '{{ avatar_remove_failed_message|escapejs }}');
           }
         } catch (e) {
-          this.showFeedback('error', 'Network error. Please try again.');
+          this.showFeedback('error', '{{ network_error_retry_message|escapejs }}');
         } finally {
           this.loading = false;
         }
@@ -400,13 +417,13 @@
             }),
           });
           if (res.ok) {
-            this.showFeedback('success', key.charAt(0).toUpperCase() + key.slice(1) + ' saved.');
+            this.showFeedback('success', key === 'role' ? '{{ role_saved_message|escapejs }}' : '{{ bio_saved_message|escapejs }}');
           } else {
             const data = await res.json();
-            this.showFeedback('error', data.detail || 'Failed to save.');
+            this.showFeedback('error', data.detail || '{{ save_failed_message|escapejs }}');
           }
         } catch (e) {
-          this.showFeedback('error', 'Network error. Please try again.');
+          this.showFeedback('error', '{{ network_error_retry_message|escapejs }}');
         }
       },
       showFeedback(type, message) {
@@ -458,9 +475,9 @@
               'X-CSRFToken': csrfToken
             },
           });
-          this.showFeedback('success', 'Banner reset to default.');
+          this.showFeedback('success', '{{ banner_reset_message|escapejs }}');
         } catch (e) {
-          this.showFeedback('error', 'Network error.');
+          this.showFeedback('error', '{{ network_error_message|escapejs }}');
         }
       },
       async _save(value) {
@@ -477,12 +494,12 @@
             }),
           });
           if (res.ok) {
-            this.showFeedback('success', 'Banner palette saved.');
+            this.showFeedback('success', '{{ palette_saved_message|escapejs }}');
           } else {
-            this.showFeedback('error', 'Failed to save palette.');
+            this.showFeedback('error', '{{ palette_save_failed_message|escapejs }}');
           }
         } catch (e) {
-          this.showFeedback('error', 'Network error.');
+          this.showFeedback('error', '{{ network_error_message|escapejs }}');
         }
       },
       showFeedback(type, message) {

@@ -1,4 +1,4 @@
-{% load avatar_tags %}
+{% load avatar_tags i18n %}
 <div id="user-card-{{ card_user.id }}">
   <div class="p-3 w-64">
     <div class="flex items-center gap-3 mb-2">
@@ -23,7 +23,7 @@
         {% if card_user_last_seen %}data-last-seen="{{ card_user_last_seen|date:'c' }}"{% endif %}
       >
         <span class="w-2 h-2 rounded-full flex-shrink-0" data-status-dot></span>
-        <span class="font-medium capitalize" data-status-label></span>
+        <span class="font-medium" data-status-label></span>
         <span class="text-base-content/40" data-status-ago></span>
       </div>
       {% if card_user.email %}
@@ -34,17 +34,17 @@
       {% endif %}
       <div class="flex items-center gap-1.5">
         <i data-lucide="calendar" class="w-3 h-3 flex-shrink-0"></i>
-        <span>Joined {{ card_user.date_joined|date:"N j, Y" }}</span>
+        <span>{% blocktranslate trimmed with date=card_user.date_joined|date:"DATE_FORMAT" %}Joined {{ date }}{% endblocktranslate %}</span>
       </div>
       {% if card_user.is_superuser %}
         <span class="badge badge-sm badge-error gap-1">
           <i data-lucide="shield-check" class="w-2.5 h-2.5"></i>
-          Admin
+          {% translate "Admin" %}
         </span>
       {% elif card_user.is_staff %}
         <span class="badge badge-sm badge-warning gap-1">
           <i data-lucide="shield" class="w-2.5 h-2.5"></i>
-          Staff
+          {% translate "Staff" %}
         </span>
       {% endif %}
     </div>
@@ -55,7 +55,7 @@
         class="btn btn-ghost btn-xs flex-1 gap-1"
       >
         <i data-lucide="user" class="w-3 h-3"></i>
-        Profile
+        {% translate "Profile" %}
       </a>
       {% if card_user.id != request.user.id %}
         <a
@@ -63,7 +63,7 @@
           class="btn btn-outline btn-info btn-xs flex-1 gap-1"
         >
           <i data-lucide="message-circle" class="w-3 h-3"></i>
-          Message
+          {% translate "Message" %}
         </a>
       {% endif %}
     </div>

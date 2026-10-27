@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import FileResponse, HttpResponse
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -241,8 +242,10 @@ class ChangePasswordView(APIView):
             return Response(
                 {
                     "errors": [
-                        "Your password is managed by your identity provider "
-                        "and cannot be changed here."
+                        _(
+                            "Your password is managed by your identity provider "
+                            "and cannot be changed here."
+                        )
                     ]
                 },
                 status=status.HTTP_403_FORBIDDEN,
@@ -253,13 +256,13 @@ class ChangePasswordView(APIView):
 
         if not current_password or not new_password:
             return Response(
-                {"errors": ["Current password and new password are required."]},
+                {"errors": [_("Current password and new password are required.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not request.user.check_password(current_password):
             return Response(
-                {"errors": ["Current password is incorrect."]},
+                {"errors": [_("Current password is incorrect.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -275,7 +278,7 @@ class ChangePasswordView(APIView):
         request.user.save()
         update_session_auth_hash(request, request.user)
 
-        return Response({"message": "Password updated successfully."})
+        return Response({"message": _("Password updated successfully.")})
 
 
 AVATAR_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -362,19 +365,19 @@ class UserAvatarUploadView(APIView):
         image = request.FILES.get("image")
         if not image:
             return Response(
-                {"errors": ["No image provided."]},
+                {"errors": [_("No image provided.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if image.content_type not in AVATAR_ALLOWED_TYPES:
             return Response(
-                {"errors": ["Unsupported image type. Use JPEG, PNG, WebP, or GIF."]},
+                {"errors": [_("Unsupported image type. Use JPEG, PNG, WebP, or GIF.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if image.size > AVATAR_MAX_SIZE:
             return Response(
-                {"errors": ["Image too large. Maximum size is 10 MB."]},
+                {"errors": [_("Image too large. Maximum size is 10 MB.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -385,13 +388,13 @@ class UserAvatarUploadView(APIView):
             crop_h = float(request.data.get("crop_h", 0))
         except TypeError, ValueError:
             return Response(
-                {"errors": ["Invalid crop coordinates."]},
+                {"errors": [_("Invalid crop coordinates.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if crop_w <= 0 or crop_h <= 0:
             return Response(
-                {"errors": ["Crop width and height must be positive."]},
+                {"errors": [_("Crop width and height must be positive.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -415,10 +418,10 @@ class UserAvatarUploadView(APIView):
                 exc_info=True,
             )
             return Response(
-                {"errors": ["Invalid image or crop parameters."]},
+                {"errors": [_("Invalid image or crop parameters.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response({"message": "Avatar updated successfully."})
+        return Response({"message": _("Avatar updated successfully.")})
 
     @extend_schema(
         summary="Delete avatar",
@@ -432,7 +435,7 @@ class UserAvatarUploadView(APIView):
     )
     def delete(self, request):
         avatar_service.delete_avatar(request.user)
-        return Response({"message": "Avatar removed."})
+        return Response({"message": _("Avatar removed.")})
 
 
 @extend_schema(tags=["Users"])

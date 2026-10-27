@@ -1,14 +1,277 @@
+#
 msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 16:07+0000\n"
+"POT-Creation-Date: 2026-10-27 18:06+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
+
+#: banner_palettes.py
+msgid "Sunset"
+msgstr "Coucher de soleil"
+
+#: banner_palettes.py
+msgid "Ocean"
+msgstr "Océan"
+
+#: banner_palettes.py
+msgid "Forest"
+msgstr "Forêt"
+
+#: banner_palettes.py
+msgid "Aurora"
+msgstr "Aurore"
+
+#: banner_palettes.py
+msgid "Ember"
+msgstr "Braise"
+
+#: banner_palettes.py
+msgid "Midnight"
+msgstr "Minuit"
+
+#: banner_palettes.py
+msgid "Golden"
+msgstr "Doré"
+
+#: banner_palettes.py
+msgid "Lavender"
+msgstr "Lavande"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Login"
+msgstr "Connexion"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Signing in..."
+msgstr "Connexion..."
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Sign In"
+msgstr "Se connecter"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Sign in to continue"
+msgstr "Connectez-vous pour continuer"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Invalid username or password. Please try again."
+msgstr "Nom d’utilisateur ou mot de passe incorrect. Veuillez réessayer."
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Your account doesn't have access to this page."
+msgstr "Votre compte n’a pas accès à cette page."
+
+#: ui/templates/users/ui/auth/login.html
+#, python-format
+msgid "Sign in with %(provider)s"
+msgstr "Se connecter avec %(provider)s"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "OR"
+msgstr "OU"
+
+#: ui/templates/users/ui/auth/login.html
+msgctxt "login form"
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Enter your username"
+msgstr "Saisissez votre nom d’utilisateur"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Enter your password"
+msgstr "Saisissez votre mot de passe"
+
+#: ui/templates/users/ui/auth/login.html
+msgid "Admin Login"
+msgstr "Connexion administrateur"
+
+#: ui/templates/users/ui/partials/settings_appearance.html
+#: ui/templates/users/ui/settings.html
+msgid "Appearance"
+msgstr "Apparence"
+
+#: ui/templates/users/ui/partials/settings_appearance.html
+msgid ""
+"Pick the theme used in light mode and the one used in dark mode. The toggle "
+"in the navigation bar switches between them."
+msgstr ""
+"Choisissez le thème utilisé en mode clair et celui utilisé en mode sombre. "
+"Le bouton de la barre de navigation bascule de l’un à l’autre."
+
+#: ui/templates/users/ui/partials/settings_appearance.html
+msgid "Light theme"
+msgstr "Thème clair"
+
+#: ui/templates/users/ui/partials/settings_appearance.html
+msgctxt "current theme"
+msgid "Active"
+msgstr "Actif"
+
+#: ui/templates/users/ui/partials/settings_appearance.html
+msgid "Dark theme"
+msgstr "Thème sombre"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Uploading..."
+msgstr "Envoi..."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Hide custom"
+msgstr "Masquer la personnalisation"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Custom colors"
+msgstr "Couleurs personnalisées"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Profile Picture"
+msgstr "Photo de profil"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid ""
+"Upload a photo to personalize your account. The image will be cropped to a "
+"square."
+msgstr ""
+"Ajoutez une photo pour personnaliser votre compte. L’image sera recadrée en "
+"carré."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Avatar"
+msgstr "Avatar"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Upload Photo"
+msgstr "Envoyer une photo"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgctxt "profile picture"
+msgid "Remove"
+msgstr "Supprimer"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "JPEG, PNG, WebP or GIF. Max 10 MB."
+msgstr "JPEG, PNG, WebP ou GIF. 10 Mo maximum."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Crop your photo"
+msgstr "Recadrez votre photo"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "About You"
+msgstr "À propos de vous"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Role"
+msgstr "Rôle"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "ex: Lead Backend, Designer..."
+msgstr "ex. : Lead backend, Designer..."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Displayed below your name on your profile."
+msgstr "Affiché sous votre nom sur votre profil."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Bio"
+msgstr "Bio"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "A few words about yourself..."
+msgstr "Quelques mots sur vous..."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Visible on your public profile."
+msgstr "Visible sur votre profil public."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Banner Color"
+msgstr "Couleur de la bannière"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Choose a gradient for your profile banner."
+msgstr "Choisissez un dégradé pour la bannière de votre profil."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Reset to default"
+msgstr "Rétablir par défaut"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgctxt "gradient start color"
+msgid "From"
+msgstr "De"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgctxt "gradient middle color"
+msgid "Via"
+msgstr "Via"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgctxt "gradient end color"
+msgid "To"
+msgstr "À"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Apply custom colors"
+msgstr "Appliquer les couleurs personnalisées"
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Avatar updated."
+msgstr "Avatar mis à jour."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Upload failed."
+msgstr "Échec de l’envoi."
+
+#: ui/templates/users/ui/partials/settings_profile.html views.py
+msgid "Avatar removed."
+msgstr "Avatar supprimé."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Failed to remove avatar."
+msgstr "Impossible de supprimer l’avatar."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Network error. Please try again."
+msgstr "Erreur réseau. Veuillez réessayer."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Network error."
+msgstr "Erreur réseau."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Role saved."
+msgstr "Rôle enregistré."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Bio saved."
+msgstr "Bio enregistrée."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Failed to save."
+msgstr "Impossible d’enregistrer."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Banner reset to default."
+msgstr "Bannière rétablie par défaut."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Banner palette saved."
+msgstr "Palette de la bannière enregistrée."
+
+#: ui/templates/users/ui/partials/settings_profile.html
+msgid "Failed to save palette."
+msgstr "Impossible d’enregistrer la palette."
 
 #: ui/templates/users/ui/partials/settings_region.html
 msgid "Language"
@@ -43,21 +306,300 @@ msgstr "Impossible d’enregistrer la langue"
 msgid "Failed to save timezone"
 msgstr "Impossible d’enregistrer le fuseau horaire"
 
-#: ui/templates/users/ui/settings.html
-msgid "Settings"
-msgstr "Paramètres"
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Updating..."
+msgstr "Mise à jour..."
 
-#: ui/templates/users/ui/settings.html
-msgid "Manage your profile, preferences and security settings."
-msgstr "Gérez votre profil, vos préférences et vos paramètres de sécurité."
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Update Password"
+msgstr "Mettre à jour le mot de passe"
 
+#: ui/templates/users/ui/partials/settings_security.html
+#, python-format
+msgid ""
+"Your account signs in through %(provider)s (single sign-on), so it has no "
+"local password."
+msgstr ""
+"Votre compte se connecte via %(provider)s (authentification unique) : il n’a "
+"donc pas de mot de passe local."
+
+#: ui/templates/users/ui/partials/settings_security.html
+#, python-format
+msgid ""
+"To connect external clients such as a WebDAV mount, create an "
+"%(token_link)sAPI token%(end_link)s and use it as the password."
+msgstr ""
+"Pour connecter des clients externes, comme un montage WebDAV, créez un "
+"%(token_link)sjeton d’API%(end_link)s et utilisez-le comme mot de passe."
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Change Password"
+msgstr "Changer le mot de passe"
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Current Password"
+msgstr "Mot de passe actuel"
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Enter current password"
+msgstr "Saisissez le mot de passe actuel"
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "New Password"
+msgstr "Nouveau mot de passe"
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgctxt "change password form"
+msgid "Enter new password"
+msgstr "Saisissez le nouveau mot de passe"
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Confirm New Password"
+msgstr "Confirmer le nouveau mot de passe"
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Confirm new password"
+msgstr "Confirmez le nouveau mot de passe"
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "Passwords do not match."
+msgstr "Les mots de passe ne correspondent pas."
+
+#: ui/templates/users/ui/partials/settings_security.html views.py
+msgid "Password updated successfully."
+msgstr "Mot de passe mis à jour."
+
+#: ui/templates/users/ui/partials/settings_security.html
+msgid "An unexpected error occurred."
+msgstr "Une erreur inattendue s’est produite."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Unnamed token"
+msgstr "Jeton sans nom"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+#, python-format
+msgid "Created %%(date)s"
+msgstr "Créé le %%(date)s"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+#, python-format
+msgid "Expires %%(date)s"
+msgstr "Expire le %%(date)s"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Creating..."
+msgstr "Création..."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+#: ui/templates/users/ui/settings.html
+msgid "API Tokens"
+msgstr "Jetons d’API"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "New Token"
+msgstr "Nouveau jeton"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Create tokens to authenticate API requests. Use the header"
+msgstr ""
+"Créez des jetons pour authentifier les requêtes à l’API. Utilisez l’en-tête"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Search tokens..."
+msgstr "Rechercher des jetons..."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "No API tokens yet."
+msgstr "Aucun jeton d’API pour l’instant."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "No tokens matching your search."
+msgstr "Aucun jeton ne correspond à votre recherche."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "No expiration"
+msgstr "Sans expiration"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Revoke token"
+msgstr "Révoquer le jeton"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Create API Token"
+msgstr "Créer un jeton d’API"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "e.g. CI script, My bot"
+msgstr "ex. : script de CI, Mon bot"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Expiration"
+msgstr "Expiration"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+#, python-format
+msgid "%(counter)s day"
+msgid_plural "%(counter)s days"
+msgstr[0] "%(counter)s jour"
+msgstr[1] "%(counter)s de jours"
+msgstr[2] "%(counter)s jours"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "1 year"
+msgstr "1 an"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Token Created"
+msgstr "Jeton créé"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Copy this token now. You won't be able to see it again."
+msgstr "Copiez ce jeton maintenant. Vous ne pourrez plus le revoir."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Failed to load tokens."
+msgstr "Impossible de charger les jetons."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Failed to create token."
+msgstr "Impossible de créer le jeton."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+#, python-format
+msgid "Revoke \"%%(name)s\"? This cannot be undone."
+msgstr "Révoquer « %%(name)s » ? Cette action est irréversible."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Token revoked."
+msgstr "Jeton révoqué."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Failed to revoke token."
+msgstr "Impossible de révoquer le jeton."
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Total files"
+msgstr "Fichiers au total"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Storage used"
+msgstr "Stockage utilisé"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Chat"
+msgstr "Discussions"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Conversations"
+msgstr "Conversations"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Messages sent"
+msgstr "Messages envoyés"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Accounts"
+msgstr "Comptes"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgctxt "unread mail messages"
+msgid "Unread"
+msgstr "Non lus"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Calendar"
+msgstr "Agenda"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgid "Total events"
+msgstr "Événements au total"
+
+#: ui/templates/users/ui/partials/settings_usage.html
+msgctxt "upcoming events"
+msgid "Upcoming"
+msgstr "À venir"
+
+#: ui/templates/users/ui/partials/user_card.html
+#, python-format
+msgid "Joined %(date)s"
+msgstr "Inscrit le %(date)s"
+
+#: ui/templates/users/ui/partials/user_card.html
+#: ui/templates/users/ui/profile.html
+msgid "Admin"
+msgstr "Administrateur"
+
+#: ui/templates/users/ui/partials/user_card.html
+#: ui/templates/users/ui/profile.html
+msgid "Staff"
+msgstr "Équipe"
+
+#: ui/templates/users/ui/partials/user_card.html
 #: ui/templates/users/ui/settings.html
 msgid "Profile"
 msgstr "Profil"
 
+#: ui/templates/users/ui/partials/user_selector.html
+msgid "Search users..."
+msgstr "Rechercher des utilisateurs..."
+
+#: ui/templates/users/ui/partials/user_selector.html
+msgid "No users found"
+msgstr "Aucun utilisateur trouvé"
+
+#: ui/templates/users/ui/profile.html ui/templates/users/ui/settings.html
+msgid "Settings"
+msgstr "Paramètres"
+
+#: ui/templates/users/ui/profile.html
+msgid "Send message"
+msgstr "Envoyer un message"
+
+#: ui/templates/users/ui/profile.html
+msgid "Member"
+msgstr "Membre"
+
+#: ui/templates/users/ui/profile.html
+msgid "Member since"
+msgstr "Membre depuis"
+
+#: ui/templates/users/ui/profile.html
+#, python-format
+msgid "%(counter)s contribution in the last year"
+msgid_plural "%(counter)s contributions in the last year"
+msgstr[0] "%(counter)s contribution au cours de la dernière année"
+msgstr[1] "%(counter)s de contributions au cours de la dernière année"
+msgstr[2] "%(counter)s contributions au cours de la dernière année"
+
+#: ui/templates/users/ui/profile.html
+msgctxt "abbreviated weekday"
+msgid "Mon"
+msgstr "lun."
+
+#: ui/templates/users/ui/profile.html
+msgctxt "abbreviated weekday"
+msgid "Wed"
+msgstr "mer."
+
+#: ui/templates/users/ui/profile.html
+msgctxt "abbreviated weekday"
+msgid "Fri"
+msgstr "ven."
+
+#: ui/templates/users/ui/profile.html
+msgctxt "heatmap legend"
+msgid "Less"
+msgstr "Moins"
+
+#: ui/templates/users/ui/profile.html
+msgctxt "heatmap legend"
+msgid "More"
+msgstr "Plus"
+
 #: ui/templates/users/ui/settings.html
-msgid "Appearance"
-msgstr "Apparence"
+msgid "Manage your profile, preferences and security settings."
+msgstr "Gérez votre profil, vos préférences et vos paramètres de sécurité."
 
 #: ui/templates/users/ui/settings.html
 msgid "Language & region"
@@ -68,9 +610,117 @@ msgid "Security"
 msgstr "Sécurité"
 
 #: ui/templates/users/ui/settings.html
-msgid "API Tokens"
-msgstr "Jetons d’API"
-
-#: ui/templates/users/ui/settings.html
 msgid "Usage"
 msgstr "Utilisation"
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Jan"
+msgstr "janv."
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Feb"
+msgstr "févr."
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Mar"
+msgstr "mars"
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Apr"
+msgstr "avr."
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "May"
+msgstr "mai"
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Jun"
+msgstr "juin"
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Jul"
+msgstr "juil."
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Aug"
+msgstr "août"
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Sep"
+msgstr "sept."
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Oct"
+msgstr "oct."
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Nov"
+msgstr "nov."
+
+#: ui/views.py
+msgctxt "abbreviated month"
+msgid "Dec"
+msgstr "déc."
+
+#: ui/views.py
+#, python-format
+msgid "%(count)s contribution on %(date)s"
+msgid_plural "%(count)s contributions on %(date)s"
+msgstr[0] "%(count)s contribution le %(date)s"
+msgstr[1] "%(count)s de contributions le %(date)s"
+msgstr[2] "%(count)s contributions le %(date)s"
+
+#: views.py
+msgid ""
+"Your password is managed by your identity provider and cannot be changed "
+"here."
+msgstr ""
+"Votre mot de passe est géré par votre fournisseur d’identité et ne peut pas "
+"être modifié ici."
+
+#: views.py
+msgid "Current password and new password are required."
+msgstr "Le mot de passe actuel et le nouveau mot de passe sont obligatoires."
+
+#: views.py
+msgid "Current password is incorrect."
+msgstr "Le mot de passe actuel est incorrect."
+
+#: views.py
+msgid "No image provided."
+msgstr "Aucune image fournie."
+
+#: views.py
+msgid "Unsupported image type. Use JPEG, PNG, WebP, or GIF."
+msgstr "Type d’image non pris en charge. Utilisez JPEG, PNG, WebP ou GIF."
+
+#: views.py
+msgid "Image too large. Maximum size is 10 MB."
+msgstr "Image trop volumineuse. La taille maximale est de 10 Mo."
+
+#: views.py
+msgid "Invalid crop coordinates."
+msgstr "Coordonnées de recadrage invalides."
+
+#: views.py
+msgid "Crop width and height must be positive."
+msgstr "La largeur et la hauteur du recadrage doivent être positives."
+
+#: views.py
+msgid "Invalid image or crop parameters."
+msgstr "Image ou paramètres de recadrage invalides."
+
+#: views.py
+msgid "Avatar updated successfully."
+msgstr "Avatar mis à jour."

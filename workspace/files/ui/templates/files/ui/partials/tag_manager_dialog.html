@@ -141,7 +141,7 @@ and the tag_dialog partial on the same page for create/edit.
 <dialog id="tag-merge-dialog" class="modal" @close="cancelTagMerge()">
   <div class="modal-box max-w-sm">
     {% translate "Merge tag" as merge_tag_title %}
-    {% include "ui/partials/dialog_header.html" with icon="git-merge" title=merge_tag_title close_expr="cancelTagMerge()" class="mb-3" only %}
+    {% include "ui/partials/dialog_header.html" with icon="git-merge" title=merge_tag_title class="mb-3" only %}
     <p class="text-sm text-base-content/70 mb-3">
       {% blocktranslate trimmed %}
         Every file tagged

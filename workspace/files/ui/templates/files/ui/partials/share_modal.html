@@ -8,7 +8,7 @@
   <dialog x-ref="shareDialog" class="modal" @close="closeModal()">
     <div class="modal-box max-w-md">
       {% translate "Share" as share_title %}
-      {% include "ui/partials/dialog_header.html" with icon="share-2" title=share_title subtitle_expr="fileName" close_expr="closeModal()" only %}
+      {% include "ui/partials/dialog_header.html" with icon="share-2" title=share_title subtitle_expr="fileName" only %}
 
       <!-- User search -->
       <div class="mb-4" x-show="canShareWithPeople()">

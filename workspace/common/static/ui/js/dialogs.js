@@ -48,7 +48,8 @@ const AppDialog = {
       };
 
       const onKeydown = (e) => {
-        if (e.key === 'Enter') {
+        // Enter on the focused Cancel button must cancel: leave it to the button.
+        if (e.key === 'Enter' && e.target !== cancelBtn) {
           e.preventDefault();
           e.stopPropagation();
           onOk();

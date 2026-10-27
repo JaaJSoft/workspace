@@ -27,7 +27,9 @@
   Neither close_expr nor close_form: no close button.
 {% endcomment %}
 {% load i18n %}
-<div class="flex items-start justify-between gap-3 {{ class|default:'mb-4' }}">
+<div
+  class="flex items-start justify-between gap-3 {{ class|default:'mb-4' }}"
+>
   <div class="flex items-center gap-3 min-w-0">
     <div
       class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center{% if not icon_class_expr %} {{ icon_class|default:'bg-module/15 text-module' }}{% endif %}"
@@ -48,7 +50,10 @@
         {% if not title_expr %}{{ title }}{% endif %}
       </h3>
       {% if subtitle_expr %}
-        <p class="text-sm text-base-content/60 truncate mt-0.5" x-text="{{ subtitle_expr }}"></p>
+        <p
+          class="text-sm text-base-content/60 truncate mt-0.5"
+          x-text="{{ subtitle_expr }}"
+        ></p>
       {% elif subtitle %}
         <p class="text-sm text-base-content/60 mt-0.5">{{ subtitle }}</p>
       {% endif %}
@@ -56,10 +61,16 @@
   </div>
   {% if actions_template or close_expr or close_form %}
     <div class="flex items-center gap-1 shrink-0">
-      {% if actions_template %}{% include actions_template %}{% endif %}
+      {% if actions_template %}
+        {% include actions_template %}
+      {% endif %}
       {% if close_form %}
         <form method="dialog">
-          <button type="submit" class="btn btn-ghost btn-sm btn-square" aria-label="{% translate 'Close' %}">
+          <button
+            type="submit"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label="{% translate 'Close' %}"
+          >
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </form>

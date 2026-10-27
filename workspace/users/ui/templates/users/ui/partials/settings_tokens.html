@@ -155,9 +155,8 @@
             />
           </label>
           <div class="label">
-            <span class="label-text-alt text-base-content/50">
-              {% translate "Helps you recognize where the token is used." %}
-            </span>
+            {% translate "Helps you recognize where the token is used." as name_hint %}
+            <span class="label-text-alt text-base-content/50">{{ name_hint }}</span>
           </div>
         </label>
 
@@ -220,8 +219,13 @@
       {% translate "Copy this token now. You won't be able to see it again." as copy_warning %}
       <inline-alert type="warning" message="{{ copy_warning }}" class="mb-4"></inline-alert>
 
-      <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 p-3">
-        <code class="font-mono text-sm break-all flex-1 select-all" x-text="createdToken"></code>
+      <div
+        class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 p-3"
+      >
+        <code
+          class="font-mono text-sm break-all flex-1 select-all"
+          x-text="createdToken"
+        ></code>
         <button
           type="button"
           @click="copyToken()"
@@ -401,9 +405,13 @@
         const expiry = new Date(Date.now() + parseInt(this.newExpiry) * 86400000);
         const date = expiry.toLocaleDateString(window.getUserLocale(), {
           timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined,
-          day: 'numeric', month: 'long', year: 'numeric',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
         });
-        return interpolate('{{ expires_on_hint|escapejs }}', { date }, true);
+        return interpolate('{{ expires_on_hint|escapejs }}', {
+          date
+        }, true);
       },
 
       closeTokenCreatedDialog() {

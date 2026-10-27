@@ -23,7 +23,7 @@ class ApiTokenIconScopeTests(IconScopeMixin, PlaywrightTestCase):
         self.forget_bystander_redraws()
 
         self.page.get_by_placeholder("e.g. CI script, My bot").fill("CI")
-        self.page.get_by_role("button", name="Create", exact=True).click()
+        self.page.get_by_role("button", name="Create token", exact=True).click()
 
         created = self.page.get_by_role("dialog").filter(has_text="Token Created")
         expect(created).to_be_visible()

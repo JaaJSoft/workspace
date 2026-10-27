@@ -15,6 +15,7 @@ does an adjective whose French agrees with the noun it describes ("Created",
 from django.utils.translation import gettext_noop
 
 VOCABULARY = [
+    gettext_noop("%(size)s used"),
     gettext_noop("Actions"),
     gettext_noop("Activity"),
     gettext_noop("Back"),
@@ -32,6 +33,7 @@ VOCABULARY = [
     gettext_noop("Continue"),
     gettext_noop("Copy"),
     gettext_noop("Copy link"),
+    gettext_noop("Couldn't load activity."),
     gettext_noop("Create"),
     gettext_noop("Default"),
     gettext_noop("Delete"),
@@ -39,6 +41,7 @@ VOCABULARY = [
     gettext_noop("Done"),
     gettext_noop("Download"),
     gettext_noop("Edit"),
+    gettext_noop("Events"),
     gettext_noop("Expand sidebar"),
     gettext_noop("Favorites"),
     gettext_noop("Files"),
@@ -54,7 +57,9 @@ VOCABULARY = [
     gettext_noop("Load more"),
     gettext_noop("Loading…"),
     gettext_noop("Location"),
+    gettext_noop("Mail"),
     gettext_noop("Merge"),
+    gettext_noop("Messages"),
     gettext_noop("More actions"),
     gettext_noop("Name"),
     gettext_noop("Navigation"),

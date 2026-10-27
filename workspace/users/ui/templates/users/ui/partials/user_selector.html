@@ -3,7 +3,7 @@
   Features: real avatars, keyboard navigation (arrows + enter), hover highlight.
 
   Parameters:
-    - placeholder: Placeholder text for the search input (default: "Search users...")
+    - placeholder: Placeholder text for the search input (default: "Search users...", translated)
     - icon: Lucide icon name for the input (default: "search")
     - on_select_event: Custom event name dispatched when a user is selected (required)
     - local_source: Optional Alpine expression (evaluated in the parent scope)
@@ -17,7 +17,8 @@
 
   The dispatched event contains { detail: { user: { id, username, first_name, last_name } } }
 {% endcomment %}
-
+{% load i18n %}
+{% translate "Search users..." as default_placeholder %}
 <div
   x-data="userSelector('{{ on_select_event|escapejs }}'{% if local_source %}, () => ({{ local_source }}){% endif %})"
   class="relative"
@@ -31,7 +32,7 @@
     <input
       type="text"
       class="grow min-w-0"
-      placeholder="{{ placeholder|default:'Search users...' }}"
+      placeholder="{{ placeholder|default:default_placeholder }}"
       x-model="query"
       @input.debounce.300ms="search()"
       @focus="openLocal()"
@@ -87,6 +88,6 @@
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
   >
-    No users found
+    {% translate "No users found" %}
   </div>
 </div>

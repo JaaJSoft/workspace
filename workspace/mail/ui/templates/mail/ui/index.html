@@ -163,14 +163,7 @@
   <!-- Label create/edit dialog -->
   <dialog id="mail-label-dialog" class="modal">
     <div class="modal-box max-w-md">
-      <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-        <span
-          :class="labelModal.color && labelModal.color !== 'ghost' ? 'text-' + labelModal.color : 'text-base-content/50'"
-        >
-          <i :data-lucide="labelModal.icon || 'tag'" class="w-5 h-5"></i>
-        </span>
-        <span x-text="labelModal.uuid ? 'Edit Label' : 'New Label'"></span>
-      </h3>
+      {% include "ui/partials/dialog_header.html" with icon_expr="labelModal.icon || 'tag'" icon_class_expr="labelModal.color && labelModal.color !== 'ghost' ? 'bg-base-200 text-' + labelModal.color : 'bg-module/15 text-module'" title_expr="labelModal.uuid ? 'Edit Label' : 'New Label'" only %}
       <form @submit.prevent="saveLabelModal()">
         <label class="form-control w-full mb-3">
           <div class="label"><span class="label-text">Name</span></div>
@@ -296,11 +289,7 @@
        )"
       x-effect="if (folderIconEdit.uuid) { uuid = folderIconEdit.uuid; selectedIcon = folderIconEdit.icon || 'folder'; selectedColor = folderIconEdit.color || 'text-warning'; $nextTick(() => updatePreviewIcon()); }"
     >
-      <h3 class="font-bold text-lg mb-1">Change folder icon</h3>
-      <p
-        class="text-sm text-base-content/50 mb-4"
-        x-text="folderIconEdit.name"
-      ></p>
+      {% include "ui/partials/dialog_header.html" with icon="folder-pen" title="Change folder icon" subtitle_expr="folderIconEdit.name" only %}
 
       <!-- Preview -->
       <div class="flex justify-center mb-4">
@@ -334,11 +323,8 @@
   <!-- Mobile preferences dialog -->
   <dialog id="mail-prefs-dialog" class="modal" x-data="mailPreferences()">
     <div class="modal-box">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-module"></i>
-        Preferences
-      </h3>
-      <div class="mt-4">{% include "mail/ui/partials/_preferences_content.html" %}</div>
+      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title="Preferences" only %}
+      <div>{% include "mail/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
           <button type="submit" class="btn btn-sm">Close</button>
@@ -356,7 +342,7 @@
   <!-- Add account dialog -->
   <dialog id="mail-add-account-dialog" class="modal">
     <div class="modal-box max-w-lg">
-      <h3 class="font-bold text-lg mb-4">Add Mail Account</h3>
+      {% include "ui/partials/dialog_header.html" with icon="mail-plus" title="Add Mail Account" only %}
 
       <!-- OAuth buttons -->
       <template x-if="oauthProviders.length > 0">
@@ -539,8 +525,7 @@
   <dialog id="mail-edit-account-dialog" class="modal">
     <template x-if="editAccount">
       <div class="modal-box max-w-lg">
-        <h3 class="font-bold text-lg mb-1">Edit Account</h3>
-        <p class="text-sm text-base-content/50 mb-4" x-text="editAccount?.email"></p>
+        {% include "ui/partials/dialog_header.html" with icon="mail-pen" title="Edit Account" subtitle_expr="editAccount?.email" only %}
         <form @submit.prevent="saveAccount()">
           <div class="grid grid-cols-1 gap-3">
             <label class="form-control w-full">
@@ -660,11 +645,7 @@
   <!-- Signature dialog (opened per-account from the account context menu) -->
   <dialog id="mail-signature-dialog" class="modal">
     <div class="modal-box max-w-lg">
-      <h3 class="font-bold text-lg mb-1">Signature</h3>
-      <p
-        class="text-sm text-base-content/50 mb-4"
-        x-text="signatureEdit.email"
-      ></p>
+      {% include "ui/partials/dialog_header.html" with icon="signature" title="Signature" subtitle_expr="signatureEdit.email" only %}
       <form @submit.prevent="saveSignature()">
         <label class="form-control w-full">
           <div class="label">

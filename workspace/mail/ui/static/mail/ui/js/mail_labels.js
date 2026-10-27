@@ -76,10 +76,20 @@ window.mailLabelsMixin = function mailLabelsMixin() {
       }
     },
 
+    // The label colour is a Tailwind text class, and the dialog header tints
+    // its icon square inline: resolve the class to the colour it paints.
     async deleteLabelConfirm() {
       const m = this.labelModal;
       if (!m.uuid) return;
-      if (!confirm(`Delete label "${m.name}"? Messages won't be deleted.`)) return;
+      const confirmed = await AppDialog.confirm({
+        title: 'Delete label',
+        message: `Delete label "${m.name}"? Messages won't be deleted.`,
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!confirmed) return;
       try {
         const csrfToken = getCSRFToken();
         const resp = await fetch(`/api/v1/mail/labels/${m.uuid}`, {

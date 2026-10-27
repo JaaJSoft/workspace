@@ -5,17 +5,7 @@
   @chat-new-conv-group-selected.window="addSelectedGroup($event.detail.group)"
 >
   <div class="modal-box max-w-md p-0 flex flex-col overflow-visible">
-    <!-- Header -->
-    <div class="flex items-center justify-between px-5 pt-5 pb-2">
-      <h3 class="font-bold text-lg">New conversation</h3>
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm btn-square"
-        @click="$refs.newConvDialog.close()"
-      >
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="message-square-plus" title="New conversation" close_expr="$refs.newConvDialog.close()" class="px-5 pt-5 pb-2" only %}
 
     <!-- Body -->
     <div class="px-5 pb-5 flex flex-col gap-3">

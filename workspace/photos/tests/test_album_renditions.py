@@ -28,6 +28,7 @@ from workspace.photos.services.album_renditions import (
 )
 from workspace.photos.services.album_sharing import create_link, share_album
 from workspace.photos.services.albums import add_items, create_album
+from workspace.users.services.settings import set_setting
 
 from .images import jpeg_bytes, make_video, upload
 
@@ -235,7 +236,22 @@ class ServingTests(RenditionTestCase):
         self.assertIn("located.webp", response["Content-Disposition"])
         self.assertEqual(len(Image.open(io.BytesIO(data)).getexif()), 0)
 
-    def test_a_link_with_downloads_serves_the_original(self):
+    def test_a_link_with_downloads_serves_the_original_without_its_position(self):
+        link = create_link(self.album, acting_user=self.owner, allow_download=True)
+
+        _, data = self.content(
+            f"/api/v1/photos/shared/{link.token}/files/{self.photo.uuid}/content"
+        )
+
+        with self.photo.content.open("rb") as original:
+            self.assertEqual(len(data), len(original.read()))
+        exif = Image.open(io.BytesIO(data)).getexif()
+        self.assertEqual(dict(exif.get_ifd(ExifTags.IFD.GPSInfo)), {})
+
+    def test_a_link_with_downloads_serves_the_original_as_is_when_the_owner_keeps_it(
+        self,
+    ):
+        set_setting(self.owner, "photos", "strip_location_on_share", False)
         link = create_link(self.album, acting_user=self.owner, allow_download=True)
 
         _, data = self.content(

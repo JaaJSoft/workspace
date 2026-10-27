@@ -73,13 +73,13 @@ def upload(owner, name, data=None, *, parent=None):
     )
 
 
-def make_photo(owner, name, taken_at, *, parent=None, **fields):
+def make_photo(owner, name, taken_at, *, parent=None, data=None, **fields):
     """An uploaded JPEG with its MediaItem row written directly, for listing tests.
 
     Outside a TestCase transaction the upload's own handler may already have
     written the row, so this overwrites it rather than inserting.
     """
-    file_obj = upload(owner, name, parent=parent)
+    file_obj = upload(owner, name, data, parent=parent)
     MediaItem.objects.update_or_create(
         file=file_obj,
         defaults={

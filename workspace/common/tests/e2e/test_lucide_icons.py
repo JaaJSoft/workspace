@@ -275,7 +275,9 @@ class ObserverScopeTests(PlaywrightTestCase):
     def test_an_icon_renamed_in_place_leaves_its_neighbours_alone(self):
         replaced = self.change(
             "() => document.getElementById('toggle').setAttribute('data-lucide', 'chevron-right')",
-            'svg[data-lucide="chevron-right"]',
+            # The renamed svg matches a data-lucide selector before it is
+            # redrawn; only the new drawing carries the icon's class.
+            "svg.lucide-chevron-right",
         )
         # The renamed svg itself is the one node that had to go.
         self.assertEqual(replaced, 1)

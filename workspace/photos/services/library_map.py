@@ -16,15 +16,20 @@ from django.db.models import F, Q
 from workspace.files.services.image_edits import edit_version
 
 from ..models import MediaItem
+from .shared_location import location_shown_q
 
 # Decimal places kept on a point's coordinates: about a metre.
 COORDINATE_PLACES = 5
 
 
-def located(files):
-    """The files of *files* whose MediaItem carries a position."""
+def located(files, viewer):
+    """The files of *files* whose MediaItem carries a position *viewer* may
+    learn: the owner of a photo shared with them may keep it to themselves
+    (services/shared_location.py)."""
     return files.filter(
-        media_item__latitude__isnull=False, media_item__longitude__isnull=False
+        location_shown_q(viewer),
+        media_item__latitude__isnull=False,
+        media_item__longitude__isnull=False,
     )
 
 
@@ -35,7 +40,7 @@ def month_index(moment, tz):
     return local.year * 12 + local.month - 1
 
 
-def map_points(files, tz):
+def map_points(files, tz, viewer):
     """The located files of *files* as points, newest first, undated last.
 
     Each point is a list, so a library of tens of thousands of photos stays
@@ -45,7 +50,7 @@ def map_points(files, tz):
     else the edit version its URL carries ("" for an unedited image).
     """
     rows = (
-        located(files)
+        located(files, viewer)
         .order_by(F("media_item__taken_at").desc(nulls_last=True), "-uuid")
         .values_list(
             "uuid",
@@ -120,15 +125,15 @@ def _wrap(longitude):
     return (longitude + 180) % 360 - 180
 
 
-def in_area(files, area):
-    """The files of *files* placed inside *area*."""
+def in_area(files, area, viewer):
+    """The files of *files* placed inside *area*, as *viewer* may see them."""
     longitude = (
         Q(media_item__longitude__gte=area.west, media_item__longitude__lte=area.east)
         if area.west <= area.east
         else Q(media_item__longitude__gte=area.west)
         | Q(media_item__longitude__lte=area.east)
     )
-    return located(files).filter(
+    return located(files, viewer).filter(
         longitude,
         media_item__latitude__gte=area.south,
         media_item__latitude__lte=area.north,

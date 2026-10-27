@@ -17,6 +17,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
+from workspace.files.content_filters import open_served
 from workspace.files.models import File, FileEvent, FileShareLink
 from workspace.files.services import FileService
 from workspace.files.services.events import record_event
@@ -292,7 +293,7 @@ class SharedFileContentView(APIView):
 
         # Streamed with Range support, text included: shared videos can seek.
         try:
-            fh = f.content.open("rb")
+            fh = open_served(f, None)
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return serve_with_ranges(
@@ -341,7 +342,7 @@ class SharedFileDownloadView(APIView):
             )
 
         try:
-            fh = f.content.open("rb")
+            fh = open_served(f, None)
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
         # Range support lets the user resume an interrupted download.

@@ -71,4 +71,5 @@ class LibraryMapView(APIView):
             return Response(
                 {"detail": "Unknown media type."}, status=status.HTTP_400_BAD_REQUEST
             )
-        return Response({"points": map_points(files, get_user_timezone(request.user))})
+        tz = get_user_timezone(request.user)
+        return Response({"points": map_points(files, tz, request.user)})

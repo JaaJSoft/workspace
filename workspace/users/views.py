@@ -546,6 +546,7 @@ _PHOTOS_FLAGS = (
     "show_hidden",
     "auto_tags",
     "show_map",
+    "strip_location_on_share",
 )
 _PHOTOS_CHOICES = {
     "tile_shape": ("square", "original"),

@@ -132,7 +132,7 @@ class AlbumLinkContentView(_PublicView):
             return error
         if not link.allow_download:
             return rendition_response(request, file_obj)
-        return content_response(request, file_obj)
+        return content_response(request, file_obj, reader=None)
 
 
 @extend_schema(tags=["Photos - Album links"])
@@ -144,7 +144,7 @@ class AlbumLinkDownloadView(_PublicView):
             return error
         if not link.allow_download:
             return Response(status=status.HTTP_403_FORBIDDEN)
-        return content_response(request, file_obj, attachment=True)
+        return content_response(request, file_obj, reader=None, attachment=True)
 
 
 @extend_schema(tags=["Photos - Album links"])
@@ -156,4 +156,4 @@ class AlbumLinkArchiveView(_PublicView):
             return error
         if not link.allow_download:
             return Response(status=status.HTTP_403_FORBIDDEN)
-        return archive_response(link_files(link.album), link.album.title)
+        return archive_response(link_files(link.album), link.album.title, reader=None)

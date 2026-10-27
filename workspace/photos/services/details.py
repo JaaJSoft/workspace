@@ -13,6 +13,7 @@ from workspace.files.services.thumbnails.generation import VIDEO_LABELS
 
 from ..models import MediaItem
 from .location_map import location_map
+from .shared_location import withholds_location
 
 # Below this, a shutter speed reads as a fraction of a second ("1/4 s",
 # "1/120 s"); from it up, as a decimal ("0.3 s", "2 s"), the way cameras
@@ -106,15 +107,16 @@ def video_details(file_obj):
     return VideoDetails(**details)
 
 
-def photo_details(item):
-    """The :class:`PhotoDetails` of a photo's MediaItem row."""
+def photo_details(item, *, located=True):
+    """The :class:`PhotoDetails` of a photo's MediaItem row, without its
+    position unless *located*."""
     details = {}
     if item.width and item.height:
         details["dimensions"] = f"{item.width} × {item.height}"
         megapixels = item.width * item.height / 1_000_000
         if megapixels >= 0.1:
             details["megapixels"] = f"{megapixels:.1f} MP"
-    if item.latitude is not None and item.longitude is not None:
+    if located and item.latitude is not None and item.longitude is not None:
         details.update(_location(item))
     return PhotoDetails(
         taken_at=item.taken_at,
@@ -199,11 +201,16 @@ def _location(item):
 
 def is_section_visible(user, file_obj):
     item = current_photo_item(file_obj)
-    return item is not None and bool(photo_details(item))
+    if item is None:
+        return False
+    located = not withholds_location(file_obj, user)
+    return bool(photo_details(item, located=located))
 
 
 def section_context(user, file_obj):
     item = current_photo_item(file_obj)
+    if withholds_location(file_obj, user):
+        return {"photo": photo_details(item, located=False), "map": None}
     return {"photo": photo_details(item), "map": location_map(user, item)}
 
 

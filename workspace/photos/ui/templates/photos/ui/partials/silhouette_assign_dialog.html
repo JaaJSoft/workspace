@@ -5,13 +5,7 @@
 {% endcomment %}
 <dialog id="silhouette-assign-dialog" class="modal">
   <div class="modal-box max-w-md">
-    <h3 class="font-bold text-lg flex items-center gap-2">
-      <i data-lucide="user-round-pen" class="w-5 h-5 text-module"></i>
-      <span
-        x-text="selectedFaces.length === 1 ? 'Who is this?' : 'Who are these ' + selectedFaces.length + ' people?'"
-      ></span>
-    </h3>
-    <p class="text-sm text-base-content/60 mb-4">Pick someone whose face is in your photos.</p>
+    {% include "ui/partials/dialog_header.html" with icon="user-round-pen" title_expr="selectedFaces.length === 1 ? 'Who is this?' : 'Who are these ' + selectedFaces.length + ' people?'" subtitle="Pick someone whose face is in your photos." only %}
 
     <label class="input input-bordered input-sm flex items-center gap-2 w-full">
       <i data-lucide="search" class="w-4 h-4 opacity-60"></i>

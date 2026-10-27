@@ -8,28 +8,7 @@
   @keydown.escape.window="showPollListModal && (showPollListModal = false)"
 >
   <div class="modal-box w-11/12 max-w-2xl h-[75vh] flex flex-col p-0">
-    <!-- Header -->
-    <div
-      class="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0"
-    >
-      <h3 class="font-bold text-lg">Polls</h3>
-      <div class="flex items-center gap-1">
-        <button
-          type="button"
-          class="btn btn-sm btn-module gap-1.5"
-          @click="openPollCreate()"
-        >
-          <i data-lucide="plus" class="w-3.5 h-3.5"></i> New
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-square btn-ghost"
-          @click="showPollListModal = false"
-        >
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="vote" title="Polls" actions_template="calendar/ui/partials/_poll_list_header_actions.html" close_expr="showPollListModal = false" class="px-5 pt-5 pb-3 flex-shrink-0" only %}
 
     <!-- Toolbar: filters + search -->
     <div class="px-5 pb-3 flex flex-col gap-2 flex-shrink-0">
@@ -196,23 +175,7 @@
   @keydown.escape.window="showPollCreateModal && (showPollCreateModal = false)"
 >
   <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col">
-    <div class="flex items-center justify-between mb-4 flex-shrink-0">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <span
-          class="w-8 h-8 rounded-full flex items-center justify-center bg-module/15 text-module"
-        >
-          <i data-lucide="plus" class="w-4 h-4"></i>
-        </span>
-        New Poll
-      </h3>
-      <button
-        type="button"
-        class="btn btn-sm btn-square btn-ghost"
-        @click="showPollCreateModal = false"
-      >
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="plus" title="New Poll" close_expr="showPollCreateModal = false" class="mb-4 flex-shrink-0" only %}
 
     <form @submit.prevent="submitPoll()" class="flex-1 flex flex-col min-h-0">
       <!-- Scrollable content -->
@@ -343,23 +306,7 @@
   @keydown.escape.window="showPollEditModal && (showPollEditModal = false)"
 >
   <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col">
-    <div class="flex items-center justify-between mb-4 flex-shrink-0">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <span
-          class="w-8 h-8 rounded-full flex items-center justify-center bg-module/15 text-module"
-        >
-          <i data-lucide="pencil" class="w-4 h-4"></i>
-        </span>
-        Edit Poll
-      </h3>
-      <button
-        type="button"
-        class="btn btn-sm btn-square btn-ghost"
-        @click="showPollEditModal = false"
-      >
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="pencil" title="Edit Poll" close_expr="showPollEditModal = false" class="mb-4 flex-shrink-0" only %}
 
     <form @submit.prevent="savePollEdit()" class="flex-1 flex flex-col min-h-0">
       <!-- Scrollable content -->
@@ -490,71 +437,7 @@
   @keydown.escape.window="showPollDetailModal && closePollDetail()"
 >
   <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col !p-0">
-    <!-- Header -->
-    <div class="flex items-start justify-between px-4 pt-4 pb-3 flex-shrink-0">
-      <div class="flex items-start gap-3 min-w-0">
-        <button
-          type="button"
-          class="btn btn-sm btn-ghost btn-square flex-shrink-0 mt-0.5"
-          @click="closePollDetail(); openPollList()"
-        >
-          <i data-lucide="arrow-left" class="w-4 h-4"></i>
-        </button>
-        <div class="min-w-0" x-show="currentPoll">
-          <h3 class="font-bold text-lg truncate" x-text="currentPoll?.title"></h3>
-          <div class="flex items-center gap-2 mt-0.5">
-            <span
-              class="badge badge-sm"
-              :class="currentPoll?.status === 'open' ? 'badge-success' : 'badge-ghost'"
-              x-text="currentPoll?.status"
-            ></span>
-            <span
-              class="text-xs text-base-content/50"
-              x-text="'by ' + (currentPoll?.created_by?.username || '')"
-            ></span>
-          </div>
-        </div>
-      </div>
-      <div class="flex items-center gap-1 flex-shrink-0">
-        <button
-          type="button"
-          class="btn btn-sm btn-ghost"
-          @click="copyPollShareLink()"
-          title="Copy share link"
-          x-show="currentPoll"
-        >
-          <i data-lucide="share-2" class="w-4 h-4"></i>
-          <span class="hidden sm:inline">Share</span>
-        </button>
-        <template x-if="isPollCreator() && currentPoll?.status === 'open'">
-          <button
-            type="button"
-            class="btn btn-sm btn-ghost"
-            @click="openPollEdit()"
-            title="Edit poll"
-          >
-            <i data-lucide="pencil" class="w-4 h-4"></i>
-          </button>
-        </template>
-        <template x-if="isPollCreator()">
-          <button
-            type="button"
-            class="btn btn-sm btn-ghost text-error"
-            @click="deletePoll(currentPoll.uuid)"
-            title="Delete poll"
-          >
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
-        </template>
-        <button
-          type="button"
-          class="btn btn-sm btn-square btn-ghost"
-          @click="closePollDetail()"
-        >
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="vote" title_expr="currentPoll?.title || ''" subtitle_expr="currentPoll ? 'by ' + (currentPoll.created_by?.username || '') : ''" actions_template="calendar/ui/partials/_poll_detail_header_actions.html" close_expr="closePollDetail()" class="px-4 pt-4 pb-3 flex-shrink-0" only %}
 
     <!-- Loading -->
     <div x-show="currentPollLoading" class="flex justify-center py-12 px-4">

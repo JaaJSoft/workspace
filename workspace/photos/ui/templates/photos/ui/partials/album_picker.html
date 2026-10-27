@@ -5,22 +5,7 @@
 {% endcomment %}
 <dialog id="album-picker" class="modal" @close="picker.open = false">
   <div class="modal-box max-w-md p-0 flex flex-col max-h-[80vh]">
-    <div class="px-5 pt-5 pb-3 border-b border-base-300">
-      <h3 class="font-bold text-lg flex items-center gap-3">
-        <span
-          class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
-        >
-          <i data-lucide="book-image" class="w-5 h-5"></i>
-        </span>
-        <span>
-          Add to album
-          <span
-            class="block text-sm font-normal text-base-content/60"
-            x-text="countLabel(picker.files.length)"
-          ></span>
-        </span>
-      </h3>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="book-image" title="Add to album" subtitle_expr="countLabel(picker.files.length)" class="px-5 pt-5 pb-3 border-b border-base-300" only %}
     <ul class="menu w-full p-2 overflow-y-auto flex-1 flex-nowrap">
       <li>
         <button

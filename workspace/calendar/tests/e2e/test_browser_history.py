@@ -51,7 +51,8 @@ class CalendarBrowserHistoryTests(PlaywrightTestCase):
         expect(self.page).to_have_url(self.event_url)
 
     def _close_panel(self):
-        self.page.get_by_role("main").get_by_label("Close", exact=True).click()
+        # The dialogs carry their own Close buttons, closed or not: skip them.
+        self.page.locator('main button[aria-label="Close"]:not(dialog *)').click()
         expect(self._panel_title()).to_be_hidden()
 
     def _nav(self, expression):

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-25 16:07+0000\n"
+"POT-Creation-Date: 2026-10-27 18:42+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -42,6 +42,79 @@ msgstr "Impossible d’enregistrer la langue"
 #: ui/templates/users/ui/partials/settings_region.html
 msgid "Failed to save timezone"
 msgstr "Impossible d’enregistrer le fuseau horaire"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "New API token"
+msgstr "Nouveau jeton d’API"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "The token acts on your behalf, with your permissions."
+msgstr "Le jeton agit en votre nom, avec vos permissions."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "e.g. CI script, My bot"
+msgstr "ex. : script de CI, mon bot"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Helps you recognize where the token is used."
+msgstr "Pour retrouver facilement où le jeton est utilisé."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Expiration"
+msgstr "Expiration"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "No expiration"
+msgstr "Sans expiration"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "7 days"
+msgstr "7 jours"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "30 days"
+msgstr "30 jours"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "90 days"
+msgstr "90 jours"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "180 days"
+msgstr "180 jours"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "1 year"
+msgstr "1 an"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Create token"
+msgstr "Créer le jeton"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Token created"
+msgstr "Jeton créé"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Send it in the Authorization header of your API requests."
+msgstr "Envoyez-le dans l’en-tête Authorization de vos requêtes API."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Copy this token now. You won't be able to see it again."
+msgstr "Copiez ce jeton maintenant. Vous ne pourrez plus le revoir."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Copied"
+msgstr "Copié"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Never expires: revoke it yourself once it is no longer needed."
+msgstr "N’expire jamais : révoquez-le vous-même quand il n’est plus utile."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+#, python-format
+msgid "Expires on %%(date)s"
+msgstr "Expire le %%(date)s"
 
 #: ui/templates/users/ui/settings.html
 msgid "Settings"

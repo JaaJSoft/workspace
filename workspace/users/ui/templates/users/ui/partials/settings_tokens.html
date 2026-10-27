@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- API Tokens Tab -->
 <div
   x-show="tab === 'tokens'"
@@ -129,81 +130,135 @@
   </div>
 
   <!-- Create Token Dialog -->
-  <dialog x-ref="createDialog" class="modal">
+  <dialog x-ref="createDialog" class="modal" @close="resetCreateForm()">
     <div class="modal-box max-w-md">
-      <h3 class="font-bold text-lg mb-4">Create API Token</h3>
-
-      <div class="space-y-4">
-        <div class="form-control">
-          <label class="label"><span class="label-text font-medium">Name</span></label>
-          <input
-            type="text"
-            x-model="newName"
-            class="input input-bordered input-sm w-full"
-            placeholder="e.g. CI script, My bot"
-          />
+      <div class="flex items-start justify-between gap-3 mb-5">
+        <div class="flex items-center gap-3 min-w-0">
+          <div
+            class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary"
+          >
+            <i data-lucide="key-round" class="w-5 h-5"></i>
+          </div>
+          <div class="min-w-0">
+            <h3 class="font-bold text-lg leading-tight">{% translate "New API token" %}</h3>
+            <p class="text-sm text-base-content/60">
+              {% translate "The token acts on your behalf, with your permissions." %}
+            </p>
+          </div>
         </div>
-
-        <div class="form-control">
-          <label class="label"><span class="label-text font-medium">Expiration</span></label>
-          <select x-model="newExpiry" class="select select-bordered select-sm w-full">
-            <option value="">No expiration</option>
-            <option value="7">7 days</option>
-            <option value="30">30 days</option>
-            <option value="90">90 days</option>
-            <option value="180">180 days</option>
-            <option value="365">1 year</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="modal-action">
         <button
           type="button"
           @click="closeCreateDialog()"
-          class="btn btn-ghost btn-sm"
+          class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+          title="{% translate 'Close' %}"
         >
-          Cancel
-        </button>
-        <button
-          type="button"
-          @click="createToken()"
-          class="btn btn-primary btn-sm"
-          :disabled="creating"
-        >
-          <span x-show="creating" class="loading loading-spinner loading-xs"></span>
-          <span x-text="creating ? 'Creating...' : 'Create'"></span>
+          <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
+
+      <form @submit.prevent="createToken()" class="space-y-4">
+        <label class="form-control w-full">
+          <div class="label"><span class="label-text font-medium">{% translate "Name" %}</span></div>
+          <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+            <i data-lucide="tag" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              type="text"
+              x-model="newName"
+              maxlength="128"
+              class="grow"
+              placeholder="{% translate 'e.g. CI script, My bot' %}"
+              autocomplete="off"
+              autofocus
+            />
+          </label>
+          <div class="label">
+            <span class="label-text-alt text-base-content/50">
+              {% translate "Helps you recognize where the token is used." %}
+            </span>
+          </div>
+        </label>
+
+        <label class="form-control w-full">
+          <div class="label"><span class="label-text font-medium">{% translate "Expiration" %}</span></div>
+          <select x-model="newExpiry" class="select select-bordered select-sm w-full">
+            <option value="">{% translate "No expiration" %}</option>
+            <option value="7">{% translate "7 days" %}</option>
+            <option value="30">{% translate "30 days" %}</option>
+            <option value="90">{% translate "90 days" %}</option>
+            <option value="180">{% translate "180 days" %}</option>
+            <option value="365">{% translate "1 year" %}</option>
+          </select>
+          <div class="label">
+            <span
+              class="label-text-alt flex items-center gap-1"
+              :class="newExpiry ? 'text-base-content/50' : 'text-warning'"
+            >
+              <i
+                :data-lucide="newExpiry ? 'calendar-clock' : 'alert-triangle'"
+                class="w-3.5 h-3.5"
+              ></i>
+              <span x-text="expiryHint()"></span>
+            </span>
+          </div>
+        </label>
+
+        <div class="modal-action mt-6">
+          <button
+            type="button"
+            @click="closeCreateDialog()"
+            class="btn btn-ghost btn-sm"
+          >
+            {% translate "Cancel" %}
+          </button>
+          <button
+            type="submit"
+            class="btn btn-primary btn-sm gap-1"
+            :disabled="creating"
+          >
+            <span x-show="creating" class="loading loading-spinner loading-xs"></span>
+            <i x-show="!creating" data-lucide="plus" class="w-4 h-4"></i>
+            {% translate "Create token" %}
+          </button>
+        </div>
+      </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit" @click="closeCreateDialog()">close</button>
+      <button type="submit">{% translate "Close" %}</button>
     </form>
   </dialog>
 
   <!-- Token Created Dialog (show token once) -->
-  <dialog x-ref="tokenCreatedDialog" class="modal">
+  <dialog x-ref="tokenCreatedDialog" class="modal" @close="createdToken = ''">
     <div class="modal-box max-w-lg">
-      <h3 class="font-bold text-lg mb-2">Token Created</h3>
-      <div x-ref="tokenCreatedFeedback"></div>
-      <p class="text-sm text-warning mb-4">
-        <i
-          data-lucide="alert-triangle"
-          class="w-4 h-4 inline-block align-text-bottom mr-1"
-        ></i>
-        Copy this token now. You won't be able to see it again.
-      </p>
+      <div class="flex items-center gap-3 mb-5">
+        <div
+          class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-success/10 text-success"
+        >
+          <i data-lucide="check" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg leading-tight">{% translate "Token created" %}</h3>
+          <p class="text-sm text-base-content/60">
+            {% translate "Send it in the Authorization header of your API requests." %}
+          </p>
+        </div>
+      </div>
 
-      <div class="flex items-center gap-2 bg-base-200 rounded-lg p-3">
-        <code class="text-sm break-all flex-1 select-all" x-text="createdToken"></code>
+      {% translate "Copy this token now. You won't be able to see it again." as copy_warning %}
+      <inline-alert type="warning" message="{{ copy_warning }}" class="mb-4"></inline-alert>
+
+      <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 p-3">
+        <code class="font-mono text-sm break-all flex-1 select-all" x-text="createdToken"></code>
         <button
           type="button"
           @click="copyToken()"
-          class="btn btn-ghost btn-sm btn-square flex-shrink-0"
-          title="Copy"
+          class="btn btn-sm flex-shrink-0 gap-1"
+          :class="copied ? 'btn-success btn-outline' : 'btn-ghost'"
         >
           <i x-show="!copied" data-lucide="copy" class="w-4 h-4"></i>
-          <i x-show="copied" data-lucide="check" class="w-4 h-4 text-success"></i>
+          <i x-show="copied" data-lucide="check" class="w-4 h-4"></i>
+          <span x-show="!copied">{% translate "Copy" %}</span>
+          <span x-show="copied">{% translate "Copied" %}</span>
         </button>
       </div>
 
@@ -213,13 +268,15 @@
           @click="closeTokenCreatedDialog()"
           class="btn btn-primary btn-sm"
         >
-          Done
+          {% translate "Done" %}
         </button>
       </div>
     </div>
   </dialog>
 </div>
 
+{% translate "Never expires: revoke it yourself once it is no longer needed." as no_expiry_hint %}
+{% translate "Expires on %(date)s" as expires_on_hint %}
 <script>
   function apiTokensTab() {
     return {
@@ -279,8 +336,6 @@
             this.createdToken = data.token;
             this.copied = false;
             this.$refs.createDialog.close();
-            this.newName = '';
-            this.newExpiry = '';
             this.$refs.tokenCreatedDialog.showModal();
             await this.fetchTokens();
           } else {
@@ -345,13 +400,25 @@
 
       closeCreateDialog() {
         this.$refs.createDialog.close();
+      },
+
+      resetCreateForm() {
         this.newName = '';
         this.newExpiry = '';
       },
 
+      expiryHint() {
+        if (!this.newExpiry) return '{{ no_expiry_hint|escapejs }}';
+        const expiry = new Date(Date.now() + parseInt(this.newExpiry) * 86400000);
+        const date = expiry.toLocaleDateString(window.getUserLocale(), {
+          timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined,
+          day: 'numeric', month: 'long', year: 'numeric',
+        });
+        return interpolate('{{ expires_on_hint|escapejs }}', { date }, true);
+      },
+
       closeTokenCreatedDialog() {
         this.$refs.tokenCreatedDialog.close();
-        this.createdToken = '';
       },
 
       showFeedback(type, message) {

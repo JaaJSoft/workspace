@@ -72,6 +72,8 @@ window.chatMembersMixin = function chatMembersMixin() {
         value: current,
         placeholder: isBot ? 'Conversation name' : 'Group name',
         okLabel: 'Rename',
+        icon: 'pencil',
+        iconClass: 'bg-module/15 text-module',
       });
       if (title === null) return;
       const trimmed = title.trim();
@@ -105,6 +107,8 @@ window.chatMembersMixin = function chatMembersMixin() {
         placeholder: 'Add a description...',
         okLabel: 'Save',
         inputSize: 'textarea',
+        icon: 'text',
+        iconClass: 'bg-module/15 text-module',
       });
       if (description === null) return;
       const trimmed = description.trim();

@@ -57,7 +57,7 @@ test('deleteTag drops the tag locally and announces the change', async () => {
       calls.push([url, opts.method]);
       return { ok: true, status: 204 };
     },
-    confirm: () => true,
+    AppDialog: { confirm: async () => true },
     CustomEvent: class { constructor(type) { this.type = type; } },
     dispatchEvent: (e) => events.push(e.type),
   });

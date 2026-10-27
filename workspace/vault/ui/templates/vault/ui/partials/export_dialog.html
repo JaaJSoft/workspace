@@ -34,15 +34,9 @@
       {% endcomment %}
       <template x-if="exportConfirming">
         <div>
-          <h3
-            id="vault-export-warning-title"
-            class="font-bold text-lg flex items-center gap-2 text-error"
-          >
-            <i data-lucide="triangle-alert" class="w-5 h-5"></i>
-            <span>This file is not protected</span>
-          </h3>
+          {% include "ui/partials/dialog_header.html" with icon="triangle-alert" icon_class="bg-error/10 text-error" title="This file is not protected" title_id="vault-export-warning-title" close_expr="closeExportDialog()" only %}
 
-          <inline-alert type="error" class="mt-4">
+          <inline-alert type="error">
           It contains every password in this account in plain text. Anyone who
           opens the file can read them. Nothing encrypts it.
           </inline-alert>
@@ -56,15 +50,9 @@
 
       <template x-if="!exportConfirming">
         <div>
-          <h3
-            id="vault-export-dialog-title"
-            class="font-bold text-lg flex items-center gap-2"
-          >
-            <i data-lucide="download" class="w-5 h-5 text-module"></i>
-            <span>Export this account</span>
-          </h3>
+          {% include "ui/partials/dialog_header.html" with icon="download" title="Export this account" title_id="vault-export-dialog-title" close_expr="closeExportDialog()" only %}
 
-          <inline-alert type="error" class="mt-4" x-show="exportError" x-cloak>
+          <inline-alert type="error" class="mb-4" x-show="exportError" x-cloak>
           <span x-text="exportError"></span>
           </inline-alert>
 
@@ -74,11 +62,11 @@
             alert above: inline-alert reads its attributes once, when it
             connects.
           {% endcomment %}
-          <inline-alert type="warning" class="mt-4" x-show="exportSkipped" x-cloak>
+          <inline-alert type="warning" class="mb-4" x-show="exportSkipped" x-cloak>
           <span x-text="skippedMessage()"></span>
           </inline-alert>
 
-          <div class="mt-4 flex flex-col gap-2">
+          <div class="flex flex-col gap-2">
             <label class="flex items-start gap-3 cursor-pointer">
               <input
                 type="radio"

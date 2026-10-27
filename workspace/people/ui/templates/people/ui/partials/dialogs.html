@@ -6,7 +6,7 @@
   @close="resetPersonForm()"
 >
   <div class="modal-box">
-    {% include "people/ui/partials/_dialog_header.html" with icon="user-plus" title="New contact" subtitle_expr="'Choose the address book it goes in.'" close_expr="$refs.personDialog.close()" %}
+    {% include "ui/partials/dialog_header.html" with icon="user-plus" title="New contact" subtitle_expr="'Choose the address book it goes in.'" close_expr="$refs.personDialog.close()" only %}
     <form @submit.prevent="createPerson()" class="space-y-3">
       <label class="form-control w-full">
         <div class="label"><span class="label-text">Name</span></div>
@@ -73,7 +73,7 @@
   @close="resetImportForm()"
 >
   <div class="modal-box">
-    {% include "people/ui/partials/_dialog_header.html" with icon="upload" title="Import contacts" subtitle_expr="'A .vcf file from a phone, Google Contacts or Nextcloud.'" close_expr="$refs.importDialog.close()" %}
+    {% include "ui/partials/dialog_header.html" with icon="upload" title="Import contacts" subtitle_expr="'A .vcf file from a phone, Google Contacts or Nextcloud.'" close_expr="$refs.importDialog.close()" only %}
     <form
       @submit.prevent="runImport()"
       class="space-y-3"
@@ -172,7 +172,7 @@
 
 <dialog id="people-export-dialog" x-ref="exportDialog" class="modal">
   <div class="modal-box">
-    {% include "people/ui/partials/_dialog_header.html" with icon="download" title="Export contacts" subtitle_expr="'A .vcf file (vCard 4.0) for a phone, Google Contacts or Nextcloud.'" close_expr="$refs.exportDialog.close()" %}
+    {% include "ui/partials/dialog_header.html" with icon="download" title="Export contacts" subtitle_expr="'A .vcf file (vCard 4.0) for a phone, Google Contacts or Nextcloud.'" close_expr="$refs.exportDialog.close()" only %}
     <form @submit.prevent class="space-y-3">
       <label class="form-control w-full">
         <div class="label"><span class="label-text">What to export</span></div>
@@ -236,7 +236,7 @@
   @close="resetListForm()"
 >
   <div class="modal-box">
-    {% include "people/ui/partials/_dialog_header.html" with icon="list" title_expr="listForm.uuid ? 'Rename list' : 'New list'" subtitle_expr="listForm.uuid ? listForm.original : 'Choose the address book it goes in.'" close_expr="$refs.listDialog.close()" %}
+    {% include "ui/partials/dialog_header.html" with icon="list" title_expr="listForm.uuid ? 'Rename list' : 'New list'" subtitle_expr="listForm.uuid ? listForm.original : 'Choose the address book it goes in.'" close_expr="$refs.listDialog.close()" only %}
     <form @submit.prevent="saveList()" class="space-y-3">
       <label class="form-control w-full">
         <div class="label"><span class="label-text">Name</span></div>
@@ -289,7 +289,7 @@
 
 <dialog id="people-qrcode-dialog" x-ref="qrDialog" class="modal">
   <div class="modal-box max-w-sm">
-    {% include "people/ui/partials/_dialog_header.html" with icon="qr-code" title="QR code" subtitle_expr="qrPerson ? qrPerson.name : ''" close_expr="$refs.qrDialog.close()" %}
+    {% include "ui/partials/dialog_header.html" with icon="qr-code" title="QR code" subtitle_expr="qrPerson ? qrPerson.name : ''" close_expr="$refs.qrDialog.close()" only %}
     {% comment %}
       x-if, not x-show: the image url is built from the contact the dialog
       was opened on, so the element must be created once that is known

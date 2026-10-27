@@ -8,19 +8,7 @@
   @keydown.escape.window="showModal && !showScopeDialog && closeModal()"
 >
   <div class="modal-box w-11/12 max-w-lg">
-    <div class="flex items-center justify-between mb-4">
-      <h3
-        class="font-bold text-lg"
-        x-text="modalMode === 'create' ? 'New event' : 'Edit event'"
-      ></h3>
-      <button
-        type="button"
-        class="btn btn-sm btn-square btn-ghost"
-        @click="closeModal()"
-      >
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon_expr="modalMode === 'create' ? 'calendar-plus' : 'pencil'" title_expr="modalMode === 'create' ? 'New event' : 'Edit event'" close_expr="closeModal()" only %}
 
     <form @submit.prevent="saveEvent()" class="space-y-3">
       <label class="form-control w-full">
@@ -293,12 +281,7 @@
   @keydown.escape.window="showScopeDialog && resolveScopeDialog(null)"
 >
   <div class="modal-box w-11/12 max-w-xs">
-    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-      <i data-lucide="repeat" class="w-5 h-5 text-module"></i>
-      <span
-        x-text="scopeAction === 'delete' ? 'Delete recurring event' : 'Edit recurring event'"
-      ></span>
-    </h3>
+    {% include "ui/partials/dialog_header.html" with icon="repeat" title_expr="scopeAction === 'delete' ? 'Delete recurring event' : 'Edit recurring event'" only %}
     <div class="space-y-2">
       <button
         type="button"

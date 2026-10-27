@@ -1,18 +1,8 @@
 {% load i18n %}
 <dialog id="{{ dialog_id }}" class="modal">
   <div class="modal-box max-w-3xl">
-    <form method="dialog">
-      <button
-        type="submit"
-        class="btn btn-sm btn-square btn-ghost absolute right-2 top-2"
-      >
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </form>
-    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
-      <i data-lucide="circle-help" class="w-6 h-6 text-{{ accent_color }}"></i>
-      {% translate "Help" %}
-    </h3>
+    {% translate "Help" as help_title %}
+    {% include "ui/partials/dialog_header.html" with icon="circle-help" icon_class="bg-"|add:accent_color|add:"/15 text-"|add:accent_color title=help_title close_form=True class="mb-6" only %}
 
     <div class="space-y-2">
       {% for item in items %}

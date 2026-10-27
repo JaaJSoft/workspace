@@ -4,14 +4,8 @@
 <!-- Create File Dialog -->
 <dialog id="create-file-dialog" class="modal">
   <div class="modal-box" x-data="{ fileType: 'txt' }">
-    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
-      <div
-        class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
-      >
-        <i data-lucide="file-plus" class="w-5 h-5"></i>
-      </div>
-      {% translate "Create New File" %}
-    </h3>
+    {% translate "Create New File" as create_file_title %}
+    {% include "ui/partials/dialog_header.html" with icon="file-plus" title=create_file_title only %}
     <form
       @submit.prevent="$dispatch('create-file', { name: $refs.fileName.value, fileType, customExt: $refs.customExt ? $refs.customExt.value : '' })"
     >

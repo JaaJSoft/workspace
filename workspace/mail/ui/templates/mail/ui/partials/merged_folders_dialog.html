@@ -5,14 +5,7 @@ mergedGroupsAccount, both filled by _showMergedFolders.
 {% endcomment %}
 <dialog id="mail-merged-folders-dialog" class="modal">
   <div class="modal-box max-w-sm">
-    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-      <span
-        class="w-8 h-8 rounded-full bg-module/15 text-module flex items-center justify-center flex-shrink-0"
-      >
-        <i data-lucide="git-merge" class="w-4 h-4"></i>
-      </span>
-      Merged folders
-    </h3>
+    {% include "ui/partials/dialog_header.html" with icon="git-merge" title="Merged folders" only %}
 
     <template x-if="mergedGroups.length === 0">
       <p class="text-base-content/60 text-sm py-4 text-center">No merged folders for this account.</p>

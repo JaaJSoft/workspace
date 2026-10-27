@@ -6,17 +6,11 @@
 <!-- Tag create/edit dialog — requires tagsMixin() in the Alpine component -->
 <dialog id="tag-dialog" class="modal">
   <div class="modal-box max-w-md">
-    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-      <span
-        :class="tagModal.color ? '' : 'text-base-content/50'"
-        :style="tagModal.color ? 'color: ' + tagModal.color : ''"
-      >
-        <i :data-lucide="tagModal.icon || 'tag'" class="w-5 h-5"></i>
-      </span>
-      <span
-        x-text="tagModal.uuid ? '{{ edit_tag_title|escapejs }}' : '{{ new_tag_title|escapejs }}'"
-      ></span>
-    </h3>
+    {% with edit_js=edit_tag_title|escapejs new_js=new_tag_title|escapejs %}
+      {% with title_js="tagModal.uuid ? '"|add:edit_js|add:"' : '"|add:new_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon_expr="tagModal.icon || 'tag'" icon_class="bg-base-200 text-base-content/50" icon_style_expr="{ color: tagModal.color || '', backgroundColor: tagModal.color ? 'color-mix(in oklab, ' + tagModal.color + ' 15%, transparent)' : '' }" title_expr=title_js close_expr="closeTagModal()" only %}
+      {% endwith %}
+    {% endwith %}
     <form @submit.prevent="saveTagModal()">
       <label class="form-control w-full mb-3">
         <div class="label"><span class="label-text">{% translate "Name" %}</span></div>

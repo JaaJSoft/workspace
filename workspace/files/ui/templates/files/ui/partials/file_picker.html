@@ -210,7 +210,7 @@
           await this.fetchItems(this.currentFolder?.uuid || this.space.rootUuid);
         } else {
           const err = await res.json().catch(() => ({}));
-          alert(err.detail || err.name?.[0] || '{{ create_folder_failed_message|escapejs }}');
+          AppDialog.error({ message: err.detail || err.name?.[0] || '{{ create_folder_failed_message|escapejs }}' });
         }
       } catch (e) { /* ignore */ }
       this.creatingFolder = false;
@@ -251,20 +251,21 @@
 >
   <div class="modal-box flex flex-col max-h-[70vh]">
     <!-- Header -->
+    {# Same layout as ui/partials/dialog_header.html, whose subtitle_expr truncates: the caller's message here is a sentence and must wrap. #}
     <div class="flex items-center gap-3 mb-4">
       <div
         :class="options.iconClass || defaultIconClass"
-        class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+        class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
       >
         <i :data-lucide="options.icon || defaultIcon" class="w-5 h-5"></i>
       </div>
       <div class="flex-1 min-w-0">
         <h3
-          class="font-bold text-lg break-words"
+          class="font-bold text-lg leading-tight break-words"
           x-text="options.title || defaultTitle"
         ></h3>
         <p
-          class="text-sm text-base-content/60 break-words"
+          class="text-sm text-base-content/60 break-words mt-0.5"
           x-text="options.message || defaultMessage"
         ></p>
       </div>

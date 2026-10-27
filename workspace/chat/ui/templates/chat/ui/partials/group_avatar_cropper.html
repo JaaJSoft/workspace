@@ -14,7 +14,7 @@ copy opens with no box.
 
 <dialog x-ref="cropperDialog" class="modal">
   <div class="modal-box max-w-lg">
-    <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
+    {% include "ui/partials/dialog_header.html" with icon="crop" title="Crop your photo" only %}
     <div class="w-full" style="max-height: 400px">
       <img x-ref="cropperImage" alt="" style="display: block; max-width: 100%" />
     </div>

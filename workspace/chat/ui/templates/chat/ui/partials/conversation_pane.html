@@ -507,10 +507,7 @@
 <!-- Preferences dialog (mobile) -->
 <dialog id="chat-prefs-dialog" class="modal" x-data="chatPreferences()">
   <div class="modal-box max-w-sm">
-    <h3 class="font-semibold text-base mb-3 flex items-center gap-2">
-      <i data-lucide="sliders-horizontal" class="w-4 h-4 text-module"></i>
-      Preferences
-    </h3>
+    {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title="Preferences" only %}
     {% include "chat/ui/partials/_preferences_content.html" %}
     <div class="modal-action">
       <form method="dialog">
@@ -526,14 +523,7 @@
 <!-- Call connection diagnostic -->
 <dialog :class="{'modal-open': diagOpen}" class="modal">
   <div class="modal-box max-w-md">
-    <h3 class="font-semibold text-base mb-1 flex items-center gap-2">
-      <i data-lucide="activity" class="w-4 h-4 text-module"></i>
-      Connection diagnostic
-    </h3>
-    <p class="text-sm text-base-content/60 mb-4">
-      Checks your microphone, network,
-      and a test call through the server.
-    </p>
+    {% include "ui/partials/dialog_header.html" with icon="activity" title="Connection diagnostic" subtitle="Checks your microphone, network, and a test call through the server." only %}
 
     <ul class="space-y-3">
       <template x-for="step in diagSteps" :key="step.key">
@@ -622,19 +612,7 @@
 {% if ai_enabled %}
   <dialog :class="{'modal-open': showBotPicker}" class="modal">
     <div class="modal-box max-w-sm p-0 flex flex-col">
-      <div class="flex items-center justify-between px-5 pt-5 pb-2">
-        <h3 class="font-bold text-lg flex items-center gap-2">
-          <i data-lucide="sparkles" class="w-5 h-5 text-secondary"></i>
-          Start AI Chat
-        </h3>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-square"
-          @click="showBotPicker = false"
-        >
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
+      {% include "ui/partials/dialog_header.html" with icon="sparkles" title="Start AI Chat" close_expr="showBotPicker = false" class="px-5 pt-5 pb-2" only %}
       <div class="px-5 pb-1" x-show="availableBots.length > 5">
         <label class="input input-bordered input-sm flex items-center gap-2 w-full">
           <i data-lucide="search" class="w-4 h-4 opacity-50"></i>

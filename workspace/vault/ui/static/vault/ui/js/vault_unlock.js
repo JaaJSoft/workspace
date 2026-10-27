@@ -145,7 +145,13 @@ window.vaultUnlockMixin = (function () {
         const confirmed = await this.confirm(
           'Forget the recovery key stored in this browser? You will need your '
             + 'emergency kit the next time you unlock here.',
-          { title: 'Forget the key on this device', okLabel: 'Forget it', okClass: 'btn-error' }
+          {
+            title: 'Forget the key on this device',
+            okLabel: 'Forget it',
+            okClass: 'btn-error',
+            icon: 'key-round',
+            iconClass: 'bg-error/10 text-error',
+          }
         );
         if (!confirmed) return;
         window.vaultSession.forgetDevice();

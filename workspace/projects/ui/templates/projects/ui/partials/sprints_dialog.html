@@ -13,41 +13,7 @@ menus without a reload.
       x-data="projectSprints({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
       @sprint-add.window="openAdd()"
     >
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="bg-module/15 text-module rounded-lg p-2 shrink-0">
-            <i data-lucide="timer" class="w-5 h-5"></i>
-          </div>
-          <div class="min-w-0">
-            <h3 class="font-bold text-lg">Sprints</h3>
-            <p class="text-sm text-base-content/60">
-              Plan sprints from the backlog;
-              start and complete them from the board.
-            </p>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 shrink-0">
-          {% if writable %}
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm btn-square"
-              @click="toggleAdd()"
-              aria-label="Add sprint"
-              title="Add sprint"
-            >
-              <i data-lucide="plus" class="w-4 h-4"></i>
-            </button>
-          {% endif %}
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm btn-square"
-            aria-label="Close"
-            @click="document.getElementById('sprints-dialog').close()"
-          >
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
-        </div>
-      </div>
+      {% include "ui/partials/dialog_header.html" with icon="timer" title="Sprints" subtitle="Plan sprints from the backlog; start and complete them from the board." actions_template="projects/ui/partials/_sprints_header_actions.html" writable=writable close_expr="document.getElementById('sprints-dialog').close()" class="mb-0" only %}
       <div
         class="flex flex-wrap items-center gap-3"
         x-show="items.length"

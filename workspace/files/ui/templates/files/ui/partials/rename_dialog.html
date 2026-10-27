@@ -6,14 +6,8 @@
     x-data="{ uuid: '', name: '' }"
     @open-rename.window="uuid = $event.detail.uuid; name = $event.detail.name"
   >
-    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
-      <div
-        class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
-      >
-        <i data-lucide="pencil" class="w-5 h-5"></i>
-      </div>
-      {% translate "Rename" %}
-    </h3>
+    {% translate "Rename" as rename_title %}
+    {% include "ui/partials/dialog_header.html" with icon="pencil" title=rename_title only %}
     <form
       @submit.prevent="window.dispatchEvent(new CustomEvent('rename-item', { detail: { uuid: uuid, name: name } }))"
     >

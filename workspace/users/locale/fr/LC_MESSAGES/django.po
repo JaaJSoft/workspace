@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-27 18:06+0000\n"
+"POT-Creation-Date: 2026-10-27 19:36+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -388,10 +388,6 @@ msgid "Expires %%(date)s"
 msgstr "Expire le %%(date)s"
 
 #: ui/templates/users/ui/partials/settings_tokens.html
-msgid "Creating..."
-msgstr "Création..."
-
-#: ui/templates/users/ui/partials/settings_tokens.html
 #: ui/templates/users/ui/settings.html
 msgid "API Tokens"
 msgstr "Jetons d’API"
@@ -430,8 +426,16 @@ msgid "Create API Token"
 msgstr "Créer un jeton d’API"
 
 #: ui/templates/users/ui/partials/settings_tokens.html
+msgid "The token acts on your behalf, with your permissions."
+msgstr "Le jeton agit en votre nom, avec vos permissions."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
 msgid "e.g. CI script, My bot"
 msgstr "ex. : script de CI, Mon bot"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Helps you recognize where the token is used."
+msgstr "Pour retrouver facilement où le jeton est utilisé."
 
 #: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Expiration"
@@ -450,12 +454,24 @@ msgid "1 year"
 msgstr "1 an"
 
 #: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Create token"
+msgstr "Créer le jeton"
+
+#: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Token Created"
 msgstr "Jeton créé"
 
 #: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Send it in the Authorization header of your API requests."
+msgstr "Envoyez-le dans l’en-tête Authorization de vos requêtes API."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Copy this token now. You won't be able to see it again."
 msgstr "Copiez ce jeton maintenant. Vous ne pourrez plus le revoir."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Copied"
+msgstr "Copié"
 
 #: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Failed to load tokens."
@@ -477,6 +493,15 @@ msgstr "Jeton révoqué."
 #: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Failed to revoke token."
 msgstr "Impossible de révoquer le jeton."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+msgid "Never expires: revoke it yourself once it is no longer needed."
+msgstr "N’expire jamais : révoquez-le vous-même quand il n’est plus utile."
+
+#: ui/templates/users/ui/partials/settings_tokens.html
+#, python-format
+msgid "Expires on %%(date)s"
+msgstr "Expire le %%(date)s"
 
 #: ui/templates/users/ui/partials/settings_usage.html
 msgid "Total files"

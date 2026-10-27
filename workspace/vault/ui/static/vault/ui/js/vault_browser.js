@@ -105,6 +105,8 @@ window.vaultBrowser = (function () {
     title: 'This cannot be undone',
     okLabel: 'Delete permanently',
     okClass: 'btn-error',
+    icon: 'trash-2',
+    iconClass: 'bg-error/10 text-error',
   };
 
   // Which actions stop and ask. The trash is not among them: asking about a
@@ -1607,7 +1609,13 @@ window.vaultBrowser = (function () {
       deleteTag: async function (tag) {
         const confirmed = await this.confirm(
           'Remove the tag "' + tag.name + '" from every entry that carries it?',
-          { title: 'Delete tag', okLabel: 'Delete', okClass: 'btn-error' }
+          {
+            title: 'Delete tag',
+            okLabel: 'Delete',
+            okClass: 'btn-error',
+            icon: 'trash-2',
+            iconClass: 'bg-error/10 text-error',
+          }
         );
         if (!confirmed) return;
         await this.flushDeferredReload();
@@ -1638,7 +1646,13 @@ window.vaultBrowser = (function () {
       deleteFolder: async function (folder) {
         const confirmed = await this.confirm(
           'Delete the folder "' + folder.name + '"? Its entries move to the vault root.',
-          { title: 'Delete folder', okLabel: 'Delete', okClass: 'btn-error' }
+          {
+            title: 'Delete folder',
+            okLabel: 'Delete',
+            okClass: 'btn-error',
+            icon: 'trash-2',
+            iconClass: 'bg-error/10 text-error',
+          }
         );
         if (!confirmed) return;
         await this.flushDeferredReload();

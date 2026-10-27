@@ -11,10 +11,7 @@
 <template x-if="generatorOpen">
   <div class="modal modal-open">
     <div class="modal-box max-w-md">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="dices" class="w-5 h-5 text-module"></i>
-        <span>Password generator</span>
-      </h3>
+      {% include "ui/partials/dialog_header.html" with icon="dices" title="Password generator" close_expr="closeGeneratorDialog()" only %}
 
       {% comment %}
         Inside the dialog, not in the page's own alert: the backdrop covers
@@ -22,11 +19,11 @@
         person who can act on it. Slot mode because inline-alert reads its
         attributes once, when it connects.
       {% endcomment %}
-      <inline-alert type="error" class="mt-4" x-show="generatorError" x-cloak>
+      <inline-alert type="error" class="mb-4" x-show="generatorError" x-cloak>
       <span x-text="generatorError"></span>
       </inline-alert>
 
-      <div class="mt-4" @password-copy="copyGenerated($event.detail.value)">
+      <div @password-copy="copyGenerated($event.detail.value)">
         {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" %}
       </div>
 

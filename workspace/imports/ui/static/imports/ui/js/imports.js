@@ -627,6 +627,8 @@ window.importsApp = function importsApp() {
         title: 'Import into',
         message: 'The imported folders and files land here.',
         okLabel: 'Choose',
+        icon: 'folder-input',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!picked) return;
       this.wizard.options.files.destination = picked.uuid;

@@ -270,6 +270,8 @@ window.peopleApp = function peopleApp(config) {
         message: `Delete "${data.name}"? This cannot be undone.`,
         okLabel: 'Delete',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
       const res = await fetch(`/api/v1/people/${data.uuid}`, {
@@ -424,6 +426,8 @@ window.peopleApp = function peopleApp(config) {
         message: `Delete "${list.name}"? Contacts stay in your address book.`,
         okLabel: 'Delete',
         okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
       const res = await fetch(`/api/v1/people/lists/${list.uuid}`, {

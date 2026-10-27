@@ -2,14 +2,8 @@
 <!-- Create Group Folder Dialog -->
 <dialog id="create-group-folder-dialog" class="modal">
   <div class="modal-box" x-data="{ selectedGroup: '' }">
-    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
-      <div
-        class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-secondary/10 text-secondary"
-      >
-        <i data-lucide="users" class="w-5 h-5"></i>
-      </div>
-      {% translate "Create Group Folder" %}
-    </h3>
+    {% translate "Create Group Folder" as create_group_folder_title %}
+    {% include "ui/partials/dialog_header.html" with icon="users" title=create_group_folder_title only %}
     {% if available_groups %}
       <form
         @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.groupSelect.options[$refs.groupSelect.selectedIndex].text } })); }"

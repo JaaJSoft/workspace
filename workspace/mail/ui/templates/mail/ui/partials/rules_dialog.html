@@ -1,49 +1,7 @@
 <!-- Mail rules management dialog (per-account) -->
 <dialog id="mail-rules-dialog" class="modal">
   <div class="modal-box max-w-3xl">
-    <div class="flex items-center justify-between gap-2 mb-4">
-      <div class="flex items-center gap-2 min-w-0">
-        <span
-          class="w-8 h-8 rounded-full bg-module/15 text-module flex items-center justify-center flex-shrink-0"
-        >
-          <i data-lucide="filter" class="w-4 h-4"></i>
-        </span>
-        <div class="min-w-0">
-          <h3 class="font-bold text-lg leading-tight truncate">Filters &amp; Rules</h3>
-          <p
-            x-show="rulesAccount"
-            class="text-xs text-base-content/60 truncate"
-            x-text="rulesAccount && rulesAccount.email"
-          ></p>
-        </div>
-      </div>
-      <div
-        class="flex items-center gap-2 flex-shrink-0"
-        x-show="rulesEditing === null && rulesApplying === null"
-      >
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-square"
-          :title="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
-          :aria-label="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
-          @click="rulesToggleCompact()"
-        >
-          <i
-            :data-lucide="mailPrefs.rulesCompact ? 'rows-2' : 'rows-3'"
-            class="w-4 h-4"
-          ></i>
-        </button>
-        <button
-          type="button"
-          class="btn btn-module btn-sm"
-          @click="rulesOpenForm()"
-          aria-label="New rule"
-        >
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          <span class="hidden sm:inline">New rule</span>
-        </button>
-      </div>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="filter" title="Filters &amp; Rules" subtitle_expr="rulesAccount && rulesAccount.email" actions_template="mail/ui/partials/_rules_header_actions.html" only %}
 
     <!-- List mode -->
     <template x-if="rulesEditing === null && rulesApplying === null">

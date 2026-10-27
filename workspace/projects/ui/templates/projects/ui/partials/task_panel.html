@@ -762,18 +762,7 @@
           {# with the project, so the member picks the share permission here. #}
           <dialog x-ref="linkFileDialog" class="modal" @close="cancelLinkFiles()">
             <div class="modal-box max-w-sm">
-              <div class="flex items-start gap-3 mb-4">
-                <div class="bg-info/10 rounded-lg p-2 shrink-0">
-                  <i data-lucide="file-symlink" class="w-5 h-5 text-info"></i>
-                </div>
-                <div class="min-w-0">
-                  <h3 class="font-bold text-lg">Link to the task</h3>
-                  <p class="text-sm text-base-content/60">
-                    Linking shares the files with every member of the project.
-                    The share shows up on each file and can be revoked there.
-                  </p>
-                </div>
-              </div>
+              {% include "ui/partials/dialog_header.html" with icon="file-symlink" title="Link to the task" subtitle="Linking shares the files with every member of the project. The share shows up on each file and can be revoked there." only %}
               <ul class="flex flex-col gap-1 mb-4 max-h-40 overflow-y-auto text-sm">
                 <template x-for="f in pendingFileLinks" :key="f.uuid">
                   <li class="flex items-center gap-2 min-w-0">

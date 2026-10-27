@@ -7,18 +7,7 @@ rules folder dropdown, so the picker looks identical everywhere.
 {% endcomment %}
 <dialog id="mail-move-dialog" class="modal">
   <div class="modal-box max-w-sm">
-    <div class="flex items-center gap-2 mb-4">
-      <span
-        class="w-8 h-8 rounded-full bg-module/15 text-module flex items-center justify-center flex-shrink-0"
-      >
-        <i data-lucide="folder-input" class="w-4 h-4"></i>
-      </span>
-      <h3 class="font-bold text-lg">Move to</h3>
-    </div>
-    <p
-      class="text-sm text-base-content/60 mb-3"
-      x-text="moveCount === 1 ? 'Select a destination folder.' : `Move ${moveCount} messages to:`"
-    ></p>
+    {% include "ui/partials/dialog_header.html" with icon="folder-input" title="Move to" subtitle_expr="moveCount === 1 ? 'Select a destination folder.' : `Move ${moveCount} messages to:`" only %}
     {% include "mail/ui/partials/_folder_list.html" with model="moveSelectedId" folders="moveTargets" %}
     <div class="modal-action">
       <button type="button" class="btn btn-ghost btn-sm" @click="moveCancel()">Cancel</button>

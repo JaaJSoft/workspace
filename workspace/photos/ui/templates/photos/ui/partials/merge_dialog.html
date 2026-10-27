@@ -4,13 +4,7 @@
 {% endcomment %}
 <dialog id="merge-clusters-dialog" class="modal">
   <div class="modal-box max-w-lg">
-    <h3 class="font-bold text-lg flex items-center gap-2 mb-1">
-      <i data-lucide="combine" class="w-5 h-5 text-module"></i>
-      Merge people
-    </h3>
-    <p class="text-sm text-base-content/60 mb-4">
-      Pick the people who are the same person as this one. Their photos move here, and the people you pick disappear from the list.
-    </p>
+    {% include "ui/partials/dialog_header.html" with icon="combine" title="Merge people" subtitle="Pick the people who are the same person as this one. Their photos move here, and the people you pick disappear from the list." only %}
     <div class="flex items-center gap-3 mb-4">
       <img
         :src="mergeDialog.target?.cover_url"

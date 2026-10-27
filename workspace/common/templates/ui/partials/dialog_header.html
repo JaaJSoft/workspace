@@ -1,0 +1,89 @@
+{% comment %}
+  Header of a modal dialog: a tinted square icon, a title, an optional
+  subtitle and an optional close button. Every modal-box starts with it.
+
+  Params:
+    icon / icon_expr          Lucide name, or an Alpine expression returning one
+    icon_class                tint of the square, default "bg-module/15 text-module"
+                              (destructive: "bg-error/10 text-error")
+    icon_class_expr           Alpine expression returning the tint classes, when they
+                              are only known at runtime; replaces icon_class
+    icon_style_expr           optional Alpine object bound with :style on the square
+                              (a colour picked by the user, e.g. a tag colour)
+    title / title_expr        text, or an Alpine expression
+    title_id                  optional id on the <h3> (aria-labelledby, JS that rewrites it)
+    subtitle / subtitle_expr  optional line under the title; the expression form is
+                              truncated, it usually holds a name
+    close_expr                Alpine expression run by the close button
+    close_form                any truthy value: the close button submits a
+                              <form method="dialog"> instead (no Alpine needed)
+    actions_template          optional template rendered before the close button,
+                              for header buttons (a "New" button, a counter)
+    class                     classes of the row, default "mb-4"
+
+  Include it with `only`: a page-level `title` or `icon` in the context would
+  otherwise fill a param the caller left out.
+
+  Neither close_expr nor close_form: no close button.
+{% endcomment %}
+{% load i18n %}
+<div
+  class="flex items-start justify-between gap-3 {{ class|default:'mb-4' }}"
+>
+  <div class="flex items-center gap-3 min-w-0">
+    <div
+      class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center{% if not icon_class_expr %} {{ icon_class|default:'bg-module/15 text-module' }}{% endif %}"
+      {% if icon_class_expr %}:class="{{ icon_class_expr }}"{% endif %}
+      {% if icon_style_expr %}:style="{{ icon_style_expr }}"{% endif %}
+    >
+      <i
+        {% if icon_expr %}:data-lucide="{{ icon_expr }}"{% else %}data-lucide="{{ icon }}"{% endif %}
+        class="w-5 h-5"
+      ></i>
+    </div>
+    <div class="min-w-0">
+      <h3
+        {% if title_id %}id="{{ title_id }}"{% endif %}
+        class="font-bold text-lg leading-tight"
+        {% if title_expr %}x-text="{{ title_expr }}"{% endif %}
+      >
+        {% if not title_expr %}{{ title }}{% endif %}
+      </h3>
+      {% if subtitle_expr %}
+        <p
+          class="text-sm text-base-content/60 truncate mt-0.5"
+          x-text="{{ subtitle_expr }}"
+        ></p>
+      {% elif subtitle %}
+        <p class="text-sm text-base-content/60 mt-0.5">{{ subtitle }}</p>
+      {% endif %}
+    </div>
+  </div>
+  {% if actions_template or close_expr or close_form %}
+    <div class="flex items-center gap-1 shrink-0">
+      {% if actions_template %}
+        {% include actions_template %}
+      {% endif %}
+      {% if close_form %}
+        <form method="dialog">
+          <button
+            type="submit"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label="{% translate 'Close' %}"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </form>
+      {% elif close_expr %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label="{% translate 'Close' %}"
+          @click="{{ close_expr }}"
+        >
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>

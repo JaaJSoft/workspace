@@ -1,0 +1,27 @@
+{# Header buttons of the rules dialog: view density and "New rule", list mode only. #}
+<div
+  class="flex items-center gap-2 flex-shrink-0"
+  x-show="rulesEditing === null && rulesApplying === null"
+>
+  <button
+    type="button"
+    class="btn btn-ghost btn-sm btn-square"
+    :title="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
+    :aria-label="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
+    @click="rulesToggleCompact()"
+  >
+    <i
+      :data-lucide="mailPrefs.rulesCompact ? 'rows-2' : 'rows-3'"
+      class="w-4 h-4"
+    ></i>
+  </button>
+  <button
+    type="button"
+    class="btn btn-module btn-sm"
+    @click="rulesOpenForm()"
+    aria-label="New rule"
+  >
+    <i data-lucide="plus" class="w-4 h-4"></i>
+    <span class="hidden sm:inline">New rule</span>
+  </button>
+</div>

@@ -15,14 +15,12 @@ and the tag_dialog partial on the same page for create/edit.
 {% translate "Delete %(count)s unused" as delete_unused_label %}
 <dialog id="tag-manager-dialog" class="modal">
   <div class="modal-box max-w-lg flex flex-col max-h-[85vh]">
-    <div class="flex items-center gap-2 mb-3">
-      <i data-lucide="tags" class="w-5 h-5 text-module flex-shrink-0"></i>
-      <h3 class="font-bold text-lg flex-1">{% translate "Tags" %}</h3>
-      <span
-        class="text-sm text-base-content/50 tabular-nums"
-        x-text="interpolate(allTags.length === 1 ? '{{ tag_count_one|escapejs }}' : '{{ tag_count_other|escapejs }}', { count: allTags.length }, true)"
-      ></span>
-    </div>
+    {% translate "Tags" as tags_title %}
+    {% with one_js=tag_count_one|escapejs other_js=tag_count_other|escapejs %}
+      {% with count_js="interpolate(allTags.length === 1 ? '"|add:one_js|add:"' : '"|add:other_js|add:"', { count: allTags.length }, true)" %}
+        {% include "ui/partials/dialog_header.html" with icon="tags" title=tags_title subtitle_expr=count_js close_expr="closeTagManager()" class="mb-3" only %}
+      {% endwith %}
+    {% endwith %}
     <label class="input input-bordered input-sm flex items-center gap-2 mb-2">
       <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
       <input
@@ -142,10 +140,8 @@ and the tag_dialog partial on the same page for create/edit.
 
 <dialog id="tag-merge-dialog" class="modal" @close="cancelTagMerge()">
   <div class="modal-box max-w-sm">
-    <h3 class="font-bold text-lg flex items-center gap-2 mb-1">
-      <i data-lucide="git-merge" class="w-5 h-5 text-module flex-shrink-0"></i>
-      {% translate "Merge tag" %}
-    </h3>
+    {% translate "Merge tag" as merge_tag_title %}
+    {% include "ui/partials/dialog_header.html" with icon="git-merge" title=merge_tag_title class="mb-3" only %}
     <p class="text-sm text-base-content/70 mb-3">
       {% blocktranslate trimmed %}
         Every file tagged

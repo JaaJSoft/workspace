@@ -7,19 +7,8 @@
 <div x-data="shareModal()">
   <dialog x-ref="shareDialog" class="modal" @close="closeModal()">
     <div class="modal-box max-w-md">
-      <!-- Header -->
-      <div class="flex items-center gap-3 mb-4">
-        <div class="bg-secondary/10 rounded-lg p-2">
-          <i data-lucide="share-2" class="w-5 h-5 text-secondary"></i>
-        </div>
-        <div>
-          <h3 class="font-bold text-lg">{% translate "Share" %}</h3>
-          <p
-            class="text-sm text-base-content/60 truncate max-w-[300px]"
-            x-text="fileName"
-          ></p>
-        </div>
-      </div>
+      {% translate "Share" as share_title %}
+      {% include "ui/partials/dialog_header.html" with icon="share-2" title=share_title subtitle_expr="fileName" only %}
 
       <!-- User search -->
       <div class="mb-4" x-show="canShareWithPeople()">

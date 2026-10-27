@@ -223,25 +223,7 @@
       class="modal-box max-w-sm"
       x-data="{ creating: false, name: '', description: '', type: 'kanban', error: '' }"
     >
-      <div class="flex items-start justify-between gap-3 mb-4">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="bg-module/15 text-module rounded-lg p-2 shrink-0">
-            <i data-lucide="square-kanban" class="w-5 h-5"></i>
-          </div>
-          <div class="min-w-0">
-            <h3 class="font-bold text-lg">New project</h3>
-            <p class="text-sm text-base-content/60">Board and backlog for your tasks</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-square"
-          aria-label="Close"
-          @click="document.getElementById('new-project-dialog').close()"
-        >
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
+      {% include "ui/partials/dialog_header.html" with icon="square-kanban" title="New project" subtitle="Board and backlog for your tasks" close_expr="document.getElementById('new-project-dialog').close()" only %}
       <template x-if="error">
         <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
       </template>

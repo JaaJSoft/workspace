@@ -383,11 +383,9 @@
   <!-- Mobile preferences dialog -->
   <dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
     <div class="modal-box">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-module"></i>
-        {% translate "Preferences" %}
-      </h3>
-      <div class="mt-4">{% include "files/ui/partials/_preferences_content.html" %}</div>
+      {% translate "Preferences" as preferences_title %}
+      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title=preferences_title only %}
+      <div>{% include "files/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
           <button type="submit" class="btn btn-sm">{% translate "Close" %}</button>

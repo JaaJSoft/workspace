@@ -6,17 +6,7 @@
 {% endcomment %}
 <dialog id="capture-details-dialog" class="modal">
   <div class="modal-box max-w-lg">
-    <div class="flex items-center gap-3 mb-5">
-      <span
-        class="flex w-10 h-10 items-center justify-center rounded-full bg-module/10 text-module shrink-0"
-      >
-        <i data-lucide="calendar-clock" class="w-5 h-5"></i>
-      </span>
-      <div class="min-w-0">
-        <h3 class="font-bold text-lg">Edit date &amp; location</h3>
-        <p class="text-sm text-base-content/60" x-text="captureCountLabel()"></p>
-      </div>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="calendar-clock" title="Edit date &amp; location" subtitle_expr="captureCountLabel()" class="mb-5" only %}
 
     <form @submit.prevent="saveCaptureDetails()" class="space-y-6">
       <fieldset class="space-y-3" :disabled="captureDialog.saving">

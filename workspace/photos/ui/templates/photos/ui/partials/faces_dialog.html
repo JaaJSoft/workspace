@@ -9,16 +9,7 @@
 {% endcomment %}
 <dialog id="photo-faces-dialog" class="modal" @close="facesDialogClosed()">
   <div class="modal-box max-w-lg">
-    <h3 class="font-bold text-lg flex items-center gap-2">
-      <i data-lucide="scan-face" class="w-5 h-5 text-module"></i>
-      <span
-        x-text="facesDialogIsVideo() ? 'People in this video' : 'People in this photo'"
-      >People in this photo</span>
-    </h3>
-    <p
-      class="text-sm text-base-content/60 mb-4 truncate"
-      x-text="facesDialog.photo?.name"
-    ></p>
+    {% include "ui/partials/dialog_header.html" with icon="scan-face" title_expr="facesDialogIsVideo() ? 'People in this video' : 'People in this photo'" subtitle_expr="facesDialog.photo?.name" only %}
 
     <div x-show="facesDialog.loading" class="flex justify-center py-8">
       <span class="loading loading-spinner loading-md"></span>

@@ -4,21 +4,7 @@
   @keydown.escape.prevent="closeGoalEditor()"
 >
   <div class="modal-box max-w-2xl p-0 flex flex-col max-h-[90vh]">
-    <!-- Header -->
-    <div class="flex items-center justify-between px-5 pt-5 pb-2">
-      <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="target" class="w-5 h-5 text-warning"></i>
-        Edit goal
-      </h3>
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm btn-square"
-        @click="closeGoalEditor()"
-        aria-label="Close"
-      >
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="target" icon_class="bg-warning/10 text-warning" title="Edit goal" close_expr="closeGoalEditor()" class="px-5 pt-5 pb-2" only %}
 
     <p class="px-5 text-xs text-base-content/50">
       Everything here is read by the bot at every check-in. The more precise it is, the better it

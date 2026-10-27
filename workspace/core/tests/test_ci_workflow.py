@@ -5,7 +5,10 @@ Chromium on every run. That image only contains the browser build matching
 its own tag, and the ``playwright`` Python package only drives the build it
 was released with - so the image tag and the locked package version have to
 move together. Nothing at runtime checks that: a mismatch surfaces as
-"Executable doesn't exist" once the tests are already running.
+"Executable doesn't exist" once the tests are already running. The job's
+runner has to be the image's Ubuntu release too: setup-python hands the
+container an interpreter built for the host, linked against the host's
+OpenSSL, and `import ssl` fails when the container's is older.
 
 The E2E and JS jobs also enumerate their modules by hand, so a module whose
 tests land after the matrix was written is never run - and the workflow stays
@@ -24,6 +27,15 @@ LOCK = settings.BASE_DIR / "uv.lock"
 IMAGE_RE = re.compile(
     r"image:\s*mcr\.microsoft\.com/playwright/python:v(?P<version>[\d.]+)-\w+"
 )
+IMAGE_CODENAME_RE = re.compile(
+    r"image:\s*mcr\.microsoft\.com/playwright/python:v[\d.]+-(?P<codename>\w+)"
+)
+RUNS_ON_RE = re.compile(r"^    runs-on:\s*(?P<runner>\S+)", re.M)
+UBUNTU_RUNNERS = {
+    "jammy": "ubuntu-22.04",
+    "noble": "ubuntu-24.04",
+    "resolute": "ubuntu-26.04",
+}
 JOB_RE = re.compile(r"^  (?P<name>[\w-]+):\n(?P<body>(?:(?:    .*)?\n)*)", re.M)
 MATRIX_MODULES_RE = re.compile(r"^ +module:\n(?P<items>(?:^ +- [\w.-]+\n)+)", re.M)
 
@@ -35,14 +47,17 @@ def _locked_playwright_version():
     )
 
 
-def _matrix_modules(job):
-    """The `module:` list of a workflow job, as a set."""
-    body = next(
+def _job_body(job):
+    return next(
         m["body"]
         for m in JOB_RE.finditer(WORKFLOW.read_text(encoding="utf-8"))
         if m["name"] == job
     )
-    items = MATRIX_MODULES_RE.search(body)["items"]
+
+
+def _matrix_modules(job):
+    """The `module:` list of a workflow job, as a set."""
+    items = MATRIX_MODULES_RE.search(_job_body(job))["items"]
     return {line.strip(" -") for line in items.splitlines()}
 
 
@@ -66,6 +81,15 @@ class PlaywrightImageTests(unittest.TestCase):
                 _locked_playwright_version(),
                 "bump the Playwright image tag in tests.yml to the version pinned in uv.lock",
             )
+
+    def test_e2e_runner_matches_image_ubuntu_release(self):
+        body = _job_body("e2e")
+        codename = IMAGE_CODENAME_RE.search(body)["codename"]
+        self.assertEqual(
+            RUNS_ON_RE.search(body)["runner"],
+            UBUNTU_RUNNERS[codename],
+            f"run the e2e job on the Ubuntu release of its -{codename} image, not ubuntu-latest",
+        )
 
 
 class MatrixCoverageTests(unittest.TestCase):

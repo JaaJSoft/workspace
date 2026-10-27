@@ -1,15 +1,18 @@
+{% load i18n %}
 <!-- Appearance Tab -->
 <div x-show="tab === 'appearance'" x-cloak x-data="themePickerForm()">
   <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
         <i data-lucide="palette" class="w-5 h-5"></i>
-        Appearance
+        {% translate "Appearance" %}
       </h2>
 
       <p class="text-sm text-base-content/60 mt-1">
-        Pick the theme used in light mode and the one used in dark mode.
-        The toggle in the navigation bar switches between them.
+        {% blocktranslate trimmed %}
+          Pick the theme used in light mode and the one used in dark mode.
+          The toggle in the navigation bar switches between them.
+        {% endblocktranslate %}
       </p>
 
       <!-- Light themes -->
@@ -19,12 +22,12 @@
           <h3
             class="font-semibold text-sm uppercase tracking-wide text-base-content/70"
           >
-            Light theme
+            {% translate "Light theme" %}
           </h3>
           <span
             x-show="currentTheme === lightTheme"
             class="badge badge-xs badge-success"
-          >Active</span>
+          >{% translate "Active" context "current theme" %}</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           <template x-for="t in lightThemes" :key="t.id">
@@ -53,12 +56,12 @@
           <h3
             class="font-semibold text-sm uppercase tracking-wide text-base-content/70"
           >
-            Dark theme
+            {% translate "Dark theme" %}
           </h3>
           <span
             x-show="currentTheme === darkTheme"
             class="badge badge-xs badge-success"
-          >Active</span>
+          >{% translate "Active" context "current theme" %}</span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           <template x-for="t in darkThemes" :key="t.id">

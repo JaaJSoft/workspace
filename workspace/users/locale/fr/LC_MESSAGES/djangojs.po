@@ -1,0 +1,32 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-27 17:56+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/users/ui/js/avatar.js
+msgid "Bot"
+msgstr "Bot"
+
+#: ui/static/users/ui/js/avatar.js
+msgid "Online"
+msgstr "En ligne"
+
+#: ui/static/users/ui/js/avatar.js
+msgid "Away"
+msgstr "Absent"
+
+#: ui/static/users/ui/js/avatar.js
+msgid "Busy"
+msgstr "Occupé"
+
+#: ui/static/users/ui/js/avatar.js
+msgid "Offline"
+msgstr "Hors ligne"

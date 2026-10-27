@@ -18,6 +18,17 @@ const _statusConfig = {
   offline: { dot: 'bg-base-300', label: 'text-base-content/40', showAgo: true  },
 };
 
+/** The presence status as the interface language writes it. */
+window.presenceStatusLabel = function presenceStatusLabel(status) {
+  switch (status) {
+    case 'bot': return gettext('Bot');
+    case 'online': return gettext('Online');
+    case 'away': return gettext('Away');
+    case 'busy': return gettext('Busy');
+    default: return gettext('Offline');
+  }
+};
+
 function _patchCardStatus(container) {
   const el = container.querySelector('[data-user-card-status]');
   if (!el) return;
@@ -35,8 +46,8 @@ function _patchCardStatus(container) {
     dot.className = 'w-2 h-2 rounded-full flex-shrink-0 ' + cfg.dot;
   }
   if (label) {
-    label.className = 'font-medium capitalize ' + cfg.label;
-    label.textContent = status;
+    label.className = 'font-medium ' + cfg.label;
+    label.textContent = window.presenceStatusLabel(status);
   }
   if (ago) {
     const lastSeen = el.dataset.lastSeen;

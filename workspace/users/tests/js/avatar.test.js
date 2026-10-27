@@ -9,14 +9,14 @@ const { loadScripts } = require('../../../common/tests/js/loader');
 // timeago.test.js; here we cover the wiring: which statuses show a "last
 // seen" and which suppress it.
 
-function patchWithStatus(status, lastSeen) {
+function patchWithStatus(status, lastSeen, extraGlobals = {}) {
   const ctx = loadScripts(
     [
       'workspace/common/static/ui/js/zoned_formatter.js',
       'workspace/common/static/ui/js/timeago.js',
       'workspace/users/ui/static/users/ui/js/avatar.js',
     ],
-    { Alpine: { store: () => ({ statusOf: () => status }) } },
+    { Alpine: { store: () => ({ statusOf: () => status }) }, ...extraGlobals },
   );
   const dot = { className: '' };
   const label = { className: '', textContent: '' };
@@ -34,8 +34,16 @@ const minutesAgo = (m) => new Date(Date.now() - m * 60 * 1000).toISOString();
 
 test('offline status shows how long ago the user was last seen', () => {
   const { label, ago } = patchWithStatus('offline', minutesAgo(5));
-  assert.equal(label.textContent, 'offline');
+  assert.equal(label.textContent, 'Offline');
   assert.equal(ago.textContent, '· 5m ago');
+});
+
+test('the status label is written in the interface language', () => {
+  const french = { Away: 'Absent' };
+  const { label } = patchWithStatus('away', minutesAgo(5), {
+    gettext: (msgid) => french[msgid] || msgid,
+  });
+  assert.equal(label.textContent, 'Absent');
 });
 
 test('away status shows the last-seen time too', () => {

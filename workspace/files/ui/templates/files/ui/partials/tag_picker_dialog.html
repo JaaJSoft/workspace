@@ -9,13 +9,11 @@
   @keydown.escape="onTagPickerClosed()"
 >
   <div class="modal-box max-w-sm">
-    <h3 class="font-bold text-lg flex items-center gap-2 mb-3">
-      <i data-lucide="tag" class="w-5 h-5 text-module flex-shrink-0"></i>
-      <span
-        class="truncate"
-        x-text="tagPickerName || '{{ tags_title|escapejs }}'"
-      ></span>
-    </h3>
+    {% with tags_js=tags_title|escapejs %}
+      {% with title_js="tagPickerName || '"|add:tags_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="tag" title_expr=title_js class="mb-3" only %}
+      {% endwith %}
+    {% endwith %}
     <div class="max-h-72 overflow-y-auto space-y-0.5">
       <template x-for="tag in allTags" :key="tag.uuid">
         <label

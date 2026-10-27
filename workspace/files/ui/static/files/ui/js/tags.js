@@ -132,7 +132,15 @@ window.tagsMixin = function tagsMixin() {
         },
 
         async deleteTag(tag) {
-            if (!confirm(interpolate(gettext('Delete tag "%(name)s"?'), { name: tag.name }, true))) return;
+            const confirmed = await AppDialog.confirm({
+                title: gettext('Delete'),
+                message: interpolate(gettext('Delete tag "%(name)s"?'), { name: tag.name }, true),
+                okLabel: gettext('Delete'),
+                okClass: 'btn-error',
+                icon: 'trash-2',
+                iconClass: 'bg-error/10 text-error',
+            });
+            if (!confirmed) return;
             const resp = await fetch('/api/v1/tags/' + tag.uuid, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': getCSRFToken() },
@@ -184,7 +192,15 @@ window.tagsMixin = function tagsMixin() {
         async purgeUnusedTags() {
             const count = this.unusedTagCount();
             if (!count) return;
-            if (!confirm(interpolate(ngettext('Delete %(count)s unused tag?', 'Delete %(count)s unused tags?', count), { count }, true))) return;
+            const confirmed = await AppDialog.confirm({
+                title: gettext('Delete'),
+                message: interpolate(ngettext('Delete %(count)s unused tag?', 'Delete %(count)s unused tags?', count), { count }, true),
+                okLabel: gettext('Delete'),
+                okClass: 'btn-error',
+                icon: 'trash-2',
+                iconClass: 'bg-error/10 text-error',
+            });
+            if (!confirmed) return;
             const resp = await fetch('/api/v1/tags/purge-unused', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': getCSRFToken() },

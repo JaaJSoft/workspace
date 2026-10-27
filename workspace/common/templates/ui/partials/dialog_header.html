@@ -6,6 +6,8 @@
     icon / icon_expr          Lucide name, or an Alpine expression returning one
     icon_class                tint of the square, default "bg-module/15 text-module"
                               (destructive: "bg-error/10 text-error")
+    icon_class_expr           Alpine expression returning the tint classes, when they
+                              are only known at runtime; replaces icon_class
     icon_style_expr           optional Alpine object bound with :style on the square
                               (a colour picked by the user, e.g. a tag colour)
     title / title_expr        text, or an Alpine expression
@@ -28,7 +30,8 @@
 <div class="flex items-start justify-between gap-3 {{ class|default:'mb-4' }}">
   <div class="flex items-center gap-3 min-w-0">
     <div
-      class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center {{ icon_class|default:'bg-module/15 text-module' }}"
+      class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center{% if not icon_class_expr %} {{ icon_class|default:'bg-module/15 text-module' }}{% endif %}"
+      {% if icon_class_expr %}:class="{{ icon_class_expr }}"{% endif %}
       {% if icon_style_expr %}:style="{{ icon_style_expr }}"{% endif %}
     >
       <i

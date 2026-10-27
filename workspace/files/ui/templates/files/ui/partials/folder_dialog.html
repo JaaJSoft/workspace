@@ -2,14 +2,8 @@
 <!-- Create Folder Dialog -->
 <dialog id="create-folder-dialog" class="modal">
   <div class="modal-box" x-data="{ folderName: '' }">
-    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
-      <div
-        class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
-      >
-        <i data-lucide="folder-plus" class="w-5 h-5"></i>
-      </div>
-      {% translate "Create New Folder" %}
-    </h3>
+    {% translate "Create New Folder" as create_folder_title %}
+    {% include "ui/partials/dialog_header.html" with icon="folder-plus" title=create_folder_title only %}
     <form
       @submit.prevent="window.dispatchEvent(new CustomEvent('create-folder', { detail: { name: folderName } }))"
     >

@@ -108,7 +108,9 @@
                 <i data-lucide="log-in" class="w-5 h-5"></i>
               </span>
               <span x-show="isSubmitting" class="loading loading-spinner loading-md"></span>
-              <span x-text="isSubmitting ? '{{ signing_in_label|escapejs }}' : '{{ sign_in_label|escapejs }}'"></span>
+              <span
+                x-text="isSubmitting ? '{{ signing_in_label|escapejs }}' : '{{ sign_in_label|escapejs }}'"
+              ></span>
             </button>
           </div>
         </form>

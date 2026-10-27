@@ -178,7 +178,9 @@
           :disabled="creating"
         >
           <span x-show="creating" class="loading loading-spinner loading-xs"></span>
-          <span x-text="creating ? '{{ creating_label|escapejs }}' : '{{ create_label|escapejs }}'"></span>
+          <span
+            x-text="creating ? '{{ creating_label|escapejs }}' : '{{ create_label|escapejs }}'"
+          ></span>
         </button>
       </div>
     </div>
@@ -319,7 +321,9 @@
       async revokeToken(token) {
         const confirmed = await AppDialog.confirm({
           title: '{{ revoke_title|escapejs }}',
-          message: interpolate('{{ revoke_message|escapejs }}', { name: token.name || token.token_key }, true),
+          message: interpolate('{{ revoke_message|escapejs }}', {
+            name: token.name || token.token_key
+          }, true),
           okLabel: '{{ revoke_label|escapejs }}',
           okClass: 'btn-error',
           icon: 'trash-2',

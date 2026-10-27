@@ -86,7 +86,9 @@
             :disabled="loading"
           >
             <span x-show="loading" class="loading loading-spinner loading-sm"></span>
-            <span x-text="loading ? '{{ uploading_label|escapejs }}' : '{{ confirm_label|escapejs }}'"></span>
+            <span
+              x-text="loading ? '{{ uploading_label|escapejs }}' : '{{ confirm_label|escapejs }}'"
+            ></span>
           </button>
         </div>
       </div>
@@ -122,7 +124,9 @@
           @keydown.enter="$event.target.blur()"
         />
         <label class="label">
-          <span class="label-text-alt text-base-content/40">{% translate "Displayed below your name on your profile." %}</span>
+          <span
+            class="label-text-alt text-base-content/40"
+          >{% translate "Displayed below your name on your profile." %}</span>
         </label>
       </div>
 
@@ -186,7 +190,9 @@
           class="btn btn-ghost btn-xs gap-1"
         >
           <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
-          <span x-text="showCustom ? '{{ hide_custom_label|escapejs }}' : '{{ custom_colors_label|escapejs }}'"></span>
+          <span
+            x-text="showCustom ? '{{ hide_custom_label|escapejs }}' : '{{ custom_colors_label|escapejs }}'"
+          ></span>
         </button>
         <button
           type="button"

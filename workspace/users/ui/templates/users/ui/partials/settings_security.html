@@ -176,7 +176,9 @@
 
           <!-- Confirm password -->
           <div class="form-control">
-            <label class="label"><span class="label-text font-medium">{% translate "Confirm New Password" %}</span></label>
+            <label class="label">
+              <span class="label-text font-medium">{% translate "Confirm New Password" %}</span>
+            </label>
             <label
               class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
               :class="{ 'input-error': confirmMismatch }"
@@ -218,7 +220,9 @@
             <button type="submit" class="btn btn-primary gap-2" :disabled="!canSubmit">
               <span x-show="!loading"><i data-lucide="save" class="w-4 h-4"></i></span>
               <span x-show="loading" class="loading loading-spinner loading-sm"></span>
-              <span x-text="loading ? '{{ updating_label|escapejs }}' : '{{ update_password_label|escapejs }}'"></span>
+              <span
+                x-text="loading ? '{{ updating_label|escapejs }}' : '{{ update_password_label|escapejs }}'"
+              ></span>
             </button>
           </div>
         </form>

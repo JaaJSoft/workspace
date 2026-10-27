@@ -25,10 +25,16 @@ class AppDialogEnterKeyTests(PlaywrightTestCase):
         return self.page.evaluate("window.__answer")
 
     def test_enter_on_cancel_cancels_a_confirm(self):
-        self.assertIs(self._answer_with_enter_on("confirm", "app-dialog-confirm-cancel"), False)
+        self.assertIs(
+            self._answer_with_enter_on("confirm", "app-dialog-confirm-cancel"), False
+        )
 
     def test_enter_on_ok_confirms(self):
-        self.assertIs(self._answer_with_enter_on("confirm", "app-dialog-confirm-ok"), True)
+        self.assertIs(
+            self._answer_with_enter_on("confirm", "app-dialog-confirm-ok"), True
+        )
 
     def test_enter_on_cancel_cancels_a_prompt(self):
-        self.assertIsNone(self._answer_with_enter_on("prompt", "app-dialog-prompt-cancel"))
+        self.assertIsNone(
+            self._answer_with_enter_on("prompt", "app-dialog-prompt-cancel")
+        )

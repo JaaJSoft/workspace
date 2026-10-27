@@ -8,7 +8,7 @@ const AppDialog = {
       i.setAttribute('data-lucide', icon);
       i.className = 'w-5 h-5';
       iconEl.appendChild(i);
-      iconEl.className = `flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${iconClass || 'bg-base-200 text-base-content'}`;
+      iconEl.className = `flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${iconClass || 'bg-base-200 text-base-content'}`;
     } else {
       iconEl.className = 'hidden';
     }

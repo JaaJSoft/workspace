@@ -1,4 +1,3 @@
-{% load i18n %}
 <!-- API Tokens Tab -->
 <div
   x-show="tab === 'tokens'"
@@ -140,9 +139,9 @@
             <i data-lucide="key-round" class="w-5 h-5"></i>
           </div>
           <div class="min-w-0">
-            <h3 class="font-bold text-lg leading-tight">{% translate "New API token" %}</h3>
+            <h3 class="font-bold text-lg leading-tight">New API token</h3>
             <p class="text-sm text-base-content/60">
-              {% translate "The token acts on your behalf, with your permissions." %}
+              The token acts on your behalf, with your permissions.
             </p>
           </div>
         </div>
@@ -150,7 +149,7 @@
           type="button"
           @click="closeCreateDialog()"
           class="btn btn-ghost btn-sm btn-square flex-shrink-0"
-          title="{% translate 'Close' %}"
+          title="Close"
         >
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
@@ -158,7 +157,7 @@
 
       <form @submit.prevent="createToken()" class="space-y-4">
         <label class="form-control w-full">
-          <div class="label"><span class="label-text font-medium">{% translate "Name" %}</span></div>
+          <div class="label"><span class="label-text font-medium">Name</span></div>
           <label class="input input-bordered input-sm flex items-center gap-2 w-full">
             <i data-lucide="tag" class="w-4 h-4 text-base-content/40"></i>
             <input
@@ -166,27 +165,27 @@
               x-model="newName"
               maxlength="128"
               class="grow"
-              placeholder="{% translate 'e.g. CI script, My bot' %}"
+              placeholder="e.g. CI script, My bot"
               autocomplete="off"
               autofocus
             />
           </label>
           <div class="label">
             <span class="label-text-alt text-base-content/50">
-              {% translate "Helps you recognize where the token is used." %}
+              Helps you recognize where the token is used.
             </span>
           </div>
         </label>
 
         <label class="form-control w-full">
-          <div class="label"><span class="label-text font-medium">{% translate "Expiration" %}</span></div>
+          <div class="label"><span class="label-text font-medium">Expiration</span></div>
           <select x-model="newExpiry" class="select select-bordered select-sm w-full">
-            <option value="">{% translate "No expiration" %}</option>
-            <option value="7">{% translate "7 days" %}</option>
-            <option value="30">{% translate "30 days" %}</option>
-            <option value="90">{% translate "90 days" %}</option>
-            <option value="180">{% translate "180 days" %}</option>
-            <option value="365">{% translate "1 year" %}</option>
+            <option value="">No expiration</option>
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="180">180 days</option>
+            <option value="365">1 year</option>
           </select>
           <div class="label">
             <span
@@ -208,7 +207,7 @@
             @click="closeCreateDialog()"
             class="btn btn-ghost btn-sm"
           >
-            {% translate "Cancel" %}
+            Cancel
           </button>
           <button
             type="submit"
@@ -217,13 +216,13 @@
           >
             <span x-show="creating" class="loading loading-spinner loading-xs"></span>
             <i x-show="!creating" data-lucide="plus" class="w-4 h-4"></i>
-            {% translate "Create token" %}
+            Create token
           </button>
         </div>
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">{% translate "Close" %}</button>
+      <button type="submit">Close</button>
     </form>
   </dialog>
 
@@ -237,15 +236,18 @@
           <i data-lucide="check" class="w-5 h-5"></i>
         </div>
         <div class="min-w-0">
-          <h3 class="font-bold text-lg leading-tight">{% translate "Token created" %}</h3>
+          <h3 class="font-bold text-lg leading-tight">Token created</h3>
           <p class="text-sm text-base-content/60">
-            {% translate "Send it in the Authorization header of your API requests." %}
+            Send it in the Authorization header of your API requests.
           </p>
         </div>
       </div>
 
-      {% translate "Copy this token now. You won't be able to see it again." as copy_warning %}
-      <inline-alert type="warning" message="{{ copy_warning }}" class="mb-4"></inline-alert>
+      <inline-alert
+        type="warning"
+        message="Copy this token now. You won't be able to see it again."
+        class="mb-4"
+      ></inline-alert>
 
       <div class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/60 p-3">
         <code class="font-mono text-sm break-all flex-1 select-all" x-text="createdToken"></code>
@@ -257,8 +259,8 @@
         >
           <i x-show="!copied" data-lucide="copy" class="w-4 h-4"></i>
           <i x-show="copied" data-lucide="check" class="w-4 h-4"></i>
-          <span x-show="!copied">{% translate "Copy" %}</span>
-          <span x-show="copied">{% translate "Copied" %}</span>
+          <span x-show="!copied">Copy</span>
+          <span x-show="copied">Copied</span>
         </button>
       </div>
 
@@ -268,15 +270,13 @@
           @click="closeTokenCreatedDialog()"
           class="btn btn-primary btn-sm"
         >
-          {% translate "Done" %}
+          Done
         </button>
       </div>
     </div>
   </dialog>
 </div>
 
-{% translate "Never expires: revoke it yourself once it is no longer needed." as no_expiry_hint %}
-{% translate "Expires on %(date)s" as expires_on_hint %}
 <script>
   function apiTokensTab() {
     return {
@@ -408,13 +408,13 @@
       },
 
       expiryHint() {
-        if (!this.newExpiry) return '{{ no_expiry_hint|escapejs }}';
+        if (!this.newExpiry) return 'Never expires: revoke it yourself once it is no longer needed.';
         const expiry = new Date(Date.now() + parseInt(this.newExpiry) * 86400000);
         const date = expiry.toLocaleDateString(window.getUserLocale(), {
           timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined,
           day: 'numeric', month: 'long', year: 'numeric',
         });
-        return interpolate('{{ expires_on_hint|escapejs }}', { date }, true);
+        return 'Expires on ' + date;
       },
 
       closeTokenCreatedDialog() {

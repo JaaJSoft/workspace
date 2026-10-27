@@ -231,21 +231,7 @@
     <!-- Connection dialog -->
     <dialog x-ref="connectionDialog" class="modal">
       <div class="modal-box max-w-lg">
-        <div class="flex items-center gap-3 mb-1">
-          <div
-            class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
-          >
-            <i data-lucide="plug" class="w-5 h-5"></i>
-          </div>
-          <h3
-            class="font-bold text-lg"
-            x-text="connEditing ? 'Edit connection' : 'Add a connection'"
-          ></h3>
-        </div>
-        <p class="text-sm text-base-content/60 mb-4">
-          Nothing is saved until the server
-          has answered with these credentials.
-        </p>
+        {% include "ui/partials/dialog_header.html" with icon="plug" title_expr="connEditing ? 'Edit connection' : 'Add a connection'" subtitle="Nothing is saved until the server has answered with these credentials." only %}
         <form class="space-y-3" @submit.prevent="saveConnection()">
           <div class="form-control" x-show="!connEditing">
             <label class="label"><span class="label-text font-medium">Provider</span></label>
@@ -335,14 +321,7 @@
     <!-- Wizard dialog -->
     <dialog x-ref="wizardDialog" class="modal">
       <div class="modal-box max-w-2xl">
-        <div class="flex items-center gap-3 mb-3">
-          <div
-            class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
-          >
-            <i data-lucide="download-cloud" class="w-5 h-5"></i>
-          </div>
-          <h3 class="font-bold text-lg">New import</h3>
-        </div>
+        {% include "ui/partials/dialog_header.html" with icon="download-cloud" title="New import" only %}
         <ul class="steps steps-horizontal w-full text-xs mb-4">
           <li class="step" :class="wizard.step >= 1 && 'step-module'">Source</li>
           <li class="step" :class="wizard.step >= 2 && 'step-module'">What</li>
@@ -687,17 +666,7 @@
     <!-- Errors dialog -->
     <dialog x-ref="errorsDialog" class="modal">
       <div class="modal-box max-w-2xl">
-        <div class="flex items-center gap-3 mb-1">
-          <div
-            class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-error/10 text-error"
-          >
-            <i data-lucide="circle-alert" class="w-5 h-5"></i>
-          </div>
-          <h3 class="font-bold text-lg">Entries that could not be imported</h3>
-        </div>
-        <p class="text-sm text-base-content/60 mb-3">
-          <span x-text="errorsDialog.count"></span> failed. Retry the import to try them again.
-        </p>
+        {% include "ui/partials/dialog_header.html" with icon="circle-alert" icon_class="bg-error/10 text-error" title="Entries that could not be imported" subtitle_expr="errorsDialog.count + ' failed. Retry the import to try them again.'" only %}
         <div x-show="errorsDialog.loading" class="py-6 text-center">
           <span class="loading loading-spinner"></span>
         </div>

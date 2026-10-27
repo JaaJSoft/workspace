@@ -44,7 +44,9 @@
         {% if title_id %}id="{{ title_id }}"{% endif %}
         class="font-bold text-lg leading-tight"
         {% if title_expr %}x-text="{{ title_expr }}"{% endif %}
-      >{% if not title_expr %}{{ title }}{% endif %}</h3>
+      >
+        {% if not title_expr %}{{ title }}{% endif %}
+      </h3>
       {% if subtitle_expr %}
         <p class="text-sm text-base-content/60 truncate mt-0.5" x-text="{{ subtitle_expr }}"></p>
       {% elif subtitle %}

@@ -68,7 +68,7 @@
     <!-- Crop dialog -->
     <dialog x-ref="cropDialog" class="modal">
       <div class="modal-box max-w-lg">
-        <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
+        {% include "ui/partials/dialog_header.html" with icon="crop" title="Crop your photo" close_expr="cancelCrop()" only %}
         <div class="w-full" style="max-height: 400px">
           <img x-ref="cropImage" alt="" style="display: block; max-width: 100%" />
         </div>

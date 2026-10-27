@@ -353,7 +353,7 @@
 
     <dialog id="people-list-pick-dialog" x-ref="listPickDialog" class="modal">
       <div class="modal-box">
-        {% include "people/ui/partials/_dialog_header.html" with icon="list-plus" title="Add to list" subtitle_expr="person.display_name" close_expr="$refs.listPickDialog.close()" %}
+        {% include "ui/partials/dialog_header.html" with icon="list-plus" title="Add to list" subtitle_expr="person.display_name" close_expr="$refs.listPickDialog.close()" only %}
         <form @submit.prevent="confirmAddToList()" class="space-y-3">
           <label class="form-control w-full">
             <div class="label"><span class="label-text">List</span></div>
@@ -387,7 +387,7 @@
 
     <dialog id="people-move-dialog" x-ref="moveDialog" class="modal">
       <div class="modal-box">
-        {% include "people/ui/partials/_dialog_header.html" with icon="users" title="Move to" subtitle_expr="person.display_name" close_expr="$refs.moveDialog.close()" %}
+        {% include "ui/partials/dialog_header.html" with icon="users" title="Move to" subtitle_expr="person.display_name" close_expr="$refs.moveDialog.close()" only %}
         <form @submit.prevent="confirmMove()" class="space-y-3">
           <label class="form-control w-full">
             <div class="label"><span class="label-text">Address book</span></div>
@@ -427,7 +427,7 @@
 
     <dialog x-ref="cropDialog" class="modal">
       <div class="modal-box">
-        {% include "people/ui/partials/_dialog_header.html" with icon="camera" title="Crop the photo" subtitle_expr="person.display_name" close_expr="cancelCrop()" %}
+        {% include "ui/partials/dialog_header.html" with icon="camera" title="Crop the photo" subtitle_expr="person.display_name" close_expr="cancelCrop()" only %}
         <div class="max-h-96 overflow-hidden">
           <img x-ref="cropImage" alt="" class="max-w-full block" />
         </div>

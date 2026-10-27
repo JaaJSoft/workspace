@@ -15,28 +15,7 @@
 >
   <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
     <!-- Header -->
-    <div
-      class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0"
-    >
-      <div class="rounded-lg bg-primary/10 p-2">
-        <i data-lucide="rocket" class="w-5 h-5 text-primary"></i>
-      </div>
-      <div class="flex-1">
-        <h3 id="onboarding-title" class="font-bold text-lg">Welcome aboard</h3>
-        <p class="text-xs text-base-content/50">
-          Step <span x-text="step"></span> of 3
-        </p>
-      </div>
-      <form method="dialog">
-        <button
-          type="submit"
-          class="btn btn-ghost btn-sm btn-square"
-          aria-label="Close"
-        >
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </form>
-    </div>
+    {% include "ui/partials/dialog_header.html" with icon="rocket" icon_class="bg-primary/10 text-primary" title="Welcome aboard" title_id="onboarding-title" subtitle_expr="'Step ' + step + ' of 3'" close_form=True class="px-5 py-4 border-b border-base-300 shrink-0" only %}
 
     <!-- Progress bar -->
     <div class="h-1 bg-base-200" aria-hidden="true">

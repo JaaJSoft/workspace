@@ -50,13 +50,14 @@ Configurable chat bots with system prompts, vision, function calling, extended t
 
 ![AI Assistants](docs/images/ai_1.png)
 
-### [Vault](docs/vault/CRYPTO.md) (preview)
+### [Vault](docs/vault/CRYPTO.md)
 An end-to-end encrypted password manager. Names, logins, passwords and notes are
 sealed in the browser and the server never sees a key: it stores ciphertext,
 serves it back, and can neither read an entry nor forge one, because every
 record carries a signature made by your account. Unlocking derives the keys from
 your master password and a recovery key with Argon2id, and they leave memory
-again after the idle delay you choose, five minutes by default. Browse by folder or tag, copy a password behind a
+again after the idle delay you choose, five minutes by default. Browse by folder or tag, file entries
+by dialog or drag and drop, keep notes beside them, copy a password behind a
 countdown that takes it back off the clipboard, and see immediately when a
 record no longer matches what you signed.
 

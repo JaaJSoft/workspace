@@ -94,6 +94,8 @@ Other `celery beat` options follow the same pattern as the worker's, with the `C
 
 Workspace expects to run behind a TLS-terminating reverse proxy (nginx, Caddy, Traefik, an ingress controller, etc.). The application speaks plain HTTP/1.1 on port 8000 - the proxy handles TLS, HTTP/2, HTTP/3, compression, and rate limiting as the operator sees fit.
 
+**The vault requires HTTPS.** It encrypts in the browser, and browsers only provide the cryptography it uses on a secure origin: HTTPS, or `localhost`. Served over plain HTTP under any other name (a LAN address, a `.local` hostname), the vault pages show that a secure connection is required and nothing can be created or unlocked.
+
 ### Required headers from the proxy
 
 | Header              | Purpose                                                  |

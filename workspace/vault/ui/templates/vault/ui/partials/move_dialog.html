@@ -13,24 +13,10 @@
       aria-labelledby="vault-move-dialog-title"
       @keydown.escape.window="closeMoveDialog()"
     >
-      <h3
-        id="vault-move-dialog-title"
-        class="font-bold text-lg flex items-center gap-2"
-      >
-        <i data-lucide="folder-input" class="w-5 h-5 text-module"></i>
-        <span
-          x-text="'Move ' + (moveDialog.uuids.length === 1
-            ? ((entries.find((e) => e.uuid === moveDialog.uuids[0]) || {}).name || '')
-            : moveDialog.uuids.length + ' entries')"
-        ></span>
-      </h3>
-      <p
-        class="text-sm opacity-60 mt-1"
-        x-text="moveDialog.uuids.length > 1 ? 'Choose where they go in this vault.' : 'Choose where it goes in this vault.'"
-      ></p>
+      {% include "ui/partials/dialog_header.html" with icon="folder-input" title_expr="'Move ' + (moveDialog.uuids.length === 1 ? ((entries.find((e) => e.uuid === moveDialog.uuids[0]) || {}).name || '') : moveDialog.uuids.length + ' entries')" title_id="vault-move-dialog-title" subtitle_expr="moveDialog.uuids.length > 1 ? 'Choose where they go in this vault.' : 'Choose where it goes in this vault.'" close_expr="closeMoveDialog()" only %}
 
       <ul
-        class="menu bg-base-200/50 rounded-box mt-4 max-h-72 overflow-y-auto flex-nowrap"
+        class="menu bg-base-200/50 rounded-box max-h-72 overflow-y-auto flex-nowrap"
       >
         <li>
           <a

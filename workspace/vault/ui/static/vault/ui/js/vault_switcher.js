@@ -181,6 +181,8 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
             title: 'This cannot be undone',
             okLabel: 'Delete the vault',
             okClass: 'btn-error',
+            icon: 'trash-2',
+            iconClass: 'bg-error/10 text-error',
           }
         );
         if (!confirmed) return;

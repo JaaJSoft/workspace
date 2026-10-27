@@ -14,22 +14,12 @@
       aria-labelledby="vault-entry-tags-dialog-title"
       @keydown.escape.window="closeTagsDialog()"
     >
-      <h3
-        id="vault-entry-tags-dialog-title"
-        class="font-bold text-lg flex items-center gap-2"
-      >
-        <i data-lucide="tags" class="w-5 h-5 text-module"></i>
-        <span
-          x-text="'Tags for ' + (tagsDialog.uuids.length === 1
-            ? ((entries.find((e) => e.uuid === tagsDialog.uuids[0]) || {}).name || '')
-            : tagsDialog.uuids.length + ' entries')"
-        ></span>
-      </h3>
-      <p class="text-sm opacity-60 mt-1" x-show="tagsDialog.uuids.length > 1">
+      {% include "ui/partials/dialog_header.html" with icon="tags" title_expr="'Tags for ' + (tagsDialog.uuids.length === 1 ? ((entries.find((e) => e.uuid === tagsDialog.uuids[0]) || {}).name || '') : tagsDialog.uuids.length + ' entries')" title_id="vault-entry-tags-dialog-title" close_expr="closeTagsDialog()" only %}
+      <p class="text-sm opacity-60 mb-4" x-show="tagsDialog.uuids.length > 1">
         A dash means some of them have the tag. Only the tags you click change; the rest stay as they are on each entry.
       </p>
 
-      <ul class="mt-4 space-y-1 max-h-72 overflow-y-auto">
+      <ul class="space-y-1 max-h-72 overflow-y-auto">
         <template x-for="tag in tags" :key="tag.uuid">
           <li>
             <label

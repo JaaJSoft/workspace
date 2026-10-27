@@ -5,12 +5,9 @@
 {% endcomment %}
 <dialog id="vault-help-dialog" class="modal">
   <div class="modal-box max-w-lg">
-    <h3 class="font-bold text-lg flex items-center gap-2">
-      <i data-lucide="circle-help" class="w-5 h-5 text-module"></i>
-      About your vault
-    </h3>
+    {% include "ui/partials/dialog_header.html" with icon="circle-help" title="About your vault" close_form=True only %}
 
-    <div class="mt-4 space-y-4 text-sm">
+    <div class="space-y-4 text-sm">
       <div>
         <h4 class="font-semibold mb-1">Everything is encrypted here</h4>
         <p class="text-base-content/70">

@@ -281,12 +281,16 @@ jobs:
             --fail-under=${{ matrix.min_coverage }}
 
   e2e:
-    runs-on: ubuntu-latest
+    # Pinned to the Ubuntu release of the container below, never ubuntu-latest:
+    # setup-python takes its interpreter from the host's tool cache, built
+    # against the host's OpenSSL, and runs it inside the container. On a newer
+    # host `import ssl` fails with "version `OPENSSL_3.x' not found".
+    runs-on: ubuntu-24.04
     # The official Playwright image ships Chromium and its system libraries,
     # so the job skips `playwright install --with-deps` entirely. The image tag
     # must match the playwright version pinned in uv.lock - the Python package
     # only drives the browser build it was released with. core's
-    # test_ci_workflow pins the two together.
+    # test_ci_workflow pins the two together, and the runner to the image.
     container:
       image: mcr.microsoft.com/playwright/python:v1.64.1-noble
     strategy:

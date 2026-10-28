@@ -266,9 +266,9 @@ window.peopleApp = function peopleApp(config) {
 
     async deletePerson(data) {
       const ok = await AppDialog.confirm({
-        title: 'Delete contact',
-        message: `Delete "${data.name}"? This cannot be undone.`,
-        okLabel: 'Delete',
+        title: gettext('Delete contact'),
+        message: interpolate(gettext('Delete "%(name)s"? This cannot be undone.'), { name: data.name }, true),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -279,7 +279,7 @@ window.peopleApp = function peopleApp(config) {
         headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not delete the contact.' });
+        AppAlert.show({ type: 'error', message: gettext('Could not delete the contact.') });
         return;
       }
       this.onScopeChanged({ from: data.scope, to: null });
@@ -346,7 +346,7 @@ window.peopleApp = function peopleApp(config) {
           const first = Object.values(data).flat()[0];
           AppAlert.show({
             type: 'error',
-            message: typeof first === 'string' ? first : 'Could not create the contact.',
+            message: typeof first === 'string' ? first : gettext('Could not create the contact.'),
           });
           return;
         }
@@ -402,7 +402,7 @@ window.peopleApp = function peopleApp(config) {
           const first = Object.values(data).flat()[0];
           AppAlert.show({
             type: 'error',
-            message: typeof first === 'string' ? first : 'Could not save the list.',
+            message: typeof first === 'string' ? first : gettext('Could not save the list.'),
           });
           return;
         }
@@ -422,9 +422,9 @@ window.peopleApp = function peopleApp(config) {
 
     async deleteList(list) {
       const ok = await AppDialog.confirm({
-        title: 'Delete list',
-        message: `Delete "${list.name}"? Contacts stay in your address book.`,
-        okLabel: 'Delete',
+        title: gettext('Delete list'),
+        message: interpolate(gettext('Delete "%(name)s"? Contacts stay in your address book.'), { name: list.name }, true),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -435,7 +435,7 @@ window.peopleApp = function peopleApp(config) {
         headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not delete the list.' });
+        AppAlert.show({ type: 'error', message: gettext('Could not delete the list.') });
         return;
       }
       this.lists = this.lists.filter((entry) => entry.uuid !== list.uuid);
@@ -473,7 +473,7 @@ window.peopleApp = function peopleApp(config) {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           const first = Object.values(data).flat()[0];
-          this.importError = typeof first === 'string' ? first : 'Could not import the file.';
+          this.importError = typeof first === 'string' ? first : gettext('Could not import the file.');
           return;
         }
         this.importResult = await res.json();
@@ -517,8 +517,21 @@ window.peopleApp = function peopleApp(config) {
 
     exportSummaryText() {
       const { contacts, lists } = this.exportSummary();
-      const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-      return `${count(contacts, 'contact')} and ${count(lists, 'list')} will be exported.`;
+      const contactCount = interpolate(
+        ngettext('%(count)s contact', '%(count)s contacts', contacts),
+        { count: contacts },
+        true
+      );
+      const listCount = interpolate(
+        ngettext('%(count)s list', '%(count)s lists', lists),
+        { count: lists },
+        true
+      );
+      return interpolate(
+        gettext('%(contacts)s and %(lists)s will be exported.'),
+        { contacts: contactCount, lists: listCount },
+        true
+      );
     },
 
     exportHref() {
@@ -551,7 +564,7 @@ window.peopleApp = function peopleApp(config) {
     async reloadLists() {
       const res = await fetch('/api/v1/people/lists');
       if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not refresh the lists.' });
+        AppAlert.show({ type: 'error', message: gettext('Could not refresh the lists.') });
         return;
       }
       this.lists = await res.json();
@@ -626,7 +639,7 @@ window.personPanel = function personPanel() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         const first = Object.values(data).flat()[0];
-        AppAlert.show({ type: 'error', message: typeof first === 'string' ? first : 'Could not save.' });
+        AppAlert.show({ type: 'error', message: typeof first === 'string' ? first : gettext('Could not save.') });
         return null;
       }
       const updated = await res.json();
@@ -721,7 +734,7 @@ window.personPanel = function personPanel() {
         body: JSON.stringify({ uuids: [this.person.uuid] }),
       });
       if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not add to the list.' });
+        AppAlert.show({ type: 'error', message: gettext('Could not add to the list.') });
         return;
       }
       const list = this.lists.find((l) => l.uuid === choice);
@@ -737,7 +750,7 @@ window.personPanel = function personPanel() {
         body: JSON.stringify({ uuids: [this.person.uuid] }),
       });
       if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not remove from the list.' });
+        AppAlert.show({ type: 'error', message: gettext('Could not remove from the list.') });
         return;
       }
       const list = this.lists.find((l) => l.uuid === uuid);
@@ -804,7 +817,7 @@ window.personPanel = function personPanel() {
           this.avatarStamp = Date.now();
           this.refreshList();
         } else {
-          AppAlert.show({ type: 'error', message: 'Upload failed.' });
+          AppAlert.show({ type: 'error', message: gettext('Upload failed.') });
         }
       } finally {
         this.uploading = false;
@@ -819,7 +832,7 @@ window.personPanel = function personPanel() {
         headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not remove the photo.' });
+        AppAlert.show({ type: 'error', message: gettext('Could not remove the photo.') });
         return;
       }
       this.person.has_avatar = false;

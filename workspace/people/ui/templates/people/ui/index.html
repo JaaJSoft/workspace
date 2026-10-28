@@ -1,8 +1,10 @@
 {% extends "base_with_navbar.html" %}
 
-{% load static %}
+{% load i18n static %}
 
-{% block title %}People{% endblock %}
+{% block title %}
+  {% translate "People" %}
+{% endblock %}
 
 {% block navbar %}
   {% include "core/partials/navbar.html" with navbar_full_width=True %}
@@ -20,6 +22,7 @@
 {% endblock %}
 
 {% block drawer_attrs %}
+  {% translate "Could not load that contact." as load_failed %}
   x-data="peopleApp({
   query: '{{ query|escapejs }}',
   scope: '{{ scope|escapejs }}',
@@ -29,7 +32,7 @@
   @nav:restore.window="onRestore($event)"
   @people-lists-changed.window="reloadLists()"
   @people-scope-changed.window="onScopeChanged($event.detail)"
-  @ajax:error="AppAlert.show({ type: 'error', message: 'Could not load that contact.' })"
+  @ajax:error="AppAlert.show({ type: 'error', message: '{{ load_failed|escapejs }}' })"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -58,8 +61,8 @@
               type="button"
               class="btn btn-ghost btn-sm btn-square mr-1 hover:text-module"
               @click="newPerson()"
-              title="New contact"
-              aria-label="New contact"
+              title="{% translate "New contact" %}"
+              aria-label="{% translate "New contact" %}"
             >
               <i data-lucide="user-plus" class="w-4 h-4"></i>
             </button>
@@ -69,8 +72,10 @@
       <!-- Address books and lists -->
       <div class="flex-1 overflow-y-auto py-2 px-3">
         <ul class="menu p-0 space-y-0.5">
-          {% include "ui/partials/drawer_item.html" with icon="users" label="All" color="module" onclick="setScope('')" active_binding="scope === '' && !listUuid" tooltip="All" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-          {% include "ui/partials/drawer_item.html" with icon="user" label="My contacts" color="module" onclick="setScope('mine')" active_binding="scope === 'mine'" tooltip="My contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% translate "All" context "address books" as all_label %}
+          {% translate "My contacts" as mine_label %}
+          {% include "ui/partials/drawer_item.html" with icon="users" label=all_label color="module" onclick="setScope('')" active_binding="scope === '' && !listUuid" tooltip=all_label collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="user" label=mine_label color="module" onclick="setScope('mine')" active_binding="scope === 'mine'" tooltip=mine_label collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {# Only groups holding contacts, so the rows come from the component state and follow creations and moves. #}
           <template x-for="group in visibleGroups()" :key="group.id">
             <li
@@ -114,20 +119,21 @@
           >
             <span class="flex items-center gap-2">
               <i data-lucide="list" class="w-3 h-3"></i>
-              Lists
+              {% translate "Lists" %}
             </span>
           </h3>
           <button
             type="button"
             class="btn btn-ghost btn-xs btn-square"
             @click="newList()"
-            title="New list"
-            aria-label="New list"
+            title="{% translate "New list" %}"
+            aria-label="{% translate "New list" %}"
           >
             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
           </button>
         </div>
         <hr class="my-1 border-base-300" x-show="sidebarCollapsed()" />
+        {% translate "Actions for %(name)s" as list_actions_label %}
         <ul class="space-y-0.5">
           <template x-for="list in lists" :key="list.uuid">
             <li
@@ -164,8 +170,8 @@
                 type="button"
                 class="btn btn-ghost btn-xs btn-square absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
                 x-show="!sidebarCollapsed()"
-                :title="'Actions for ' + list.name"
-                :aria-label="'Actions for ' + list.name"
+                :title="interpolate('{{ list_actions_label|escapejs }}', { name: list.name }, true)"
+                :aria-label="interpolate('{{ list_actions_label|escapejs }}', { name: list.name }, true)"
                 @click.stop="openCtxMenu($event, 'list', list)"
               >
                 <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
@@ -181,21 +187,28 @@
         x-show="sidebarCollapsed()"
       >
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="user-plus" label="New" color="module" onclick="newPerson()" tooltip="New contact" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% translate "New" context "new contact" as new_label %}
+          {% include "ui/partials/drawer_item.html" with icon="user-plus" label=new_label color="module" onclick="newPerson()" tooltip=_("New contact") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
       <!-- Import / export, then help -->
       <div class="px-3 pb-2">
         <ul class="menu p-0 space-y-0.5">
-          {% include "ui/partials/drawer_item.html" with icon="upload" label="Import" color="module" onclick="openImport()" tooltip="Import contacts" aria_label="Import contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-          {% include "ui/partials/drawer_item.html" with icon="download" label="Export" color="module" onclick="openExport()" tooltip="Export contacts" aria_label="Export contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('people-help-dialog').showModal()" tooltip="Help" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="upload" label=_("Import") color="module" onclick="openImport()" tooltip=_("Import contacts") aria_label=_("Import contacts") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="download" label=_("Export") color="module" onclick="openExport()" tooltip=_("Export contacts") aria_label=_("Export contacts") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('people-help-dialog').showModal()" tooltip=_("Help") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
       <!-- Bottom action: collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
+        {% translate "Expand sidebar" as expand_sidebar_label %}
+        {% translate "Collapse sidebar" as collapse_sidebar_label %}
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+            {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+            {% endwith %}
+          {% endwith %}
         </ul>
       </div>
     </aside>
@@ -217,7 +230,7 @@
         <input
           type="search"
           class="grow"
-          placeholder="Search people..."
+          placeholder="{% translate "Search people..." %}"
           x-model="query"
           @input.debounce.300ms="refreshList()"
         />
@@ -240,7 +253,7 @@
       class="flex-1 flex items-center justify-center bg-base-200 text-base-content/50 text-sm{% if panel_person_uuid %} hidden{% endif %}"
       :class="{ hidden: panelOpen }"
     >
-      Select a contact to see its details.
+      {% translate "Select a contact to see its details." %}
     </div>
     <section
       id="person-panel"

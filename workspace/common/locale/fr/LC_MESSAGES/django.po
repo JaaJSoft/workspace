@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-28 18:41+0000\n"
+"POT-Creation-Date: 2026-10-28 20:29+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -215,12 +215,24 @@ msgid "Activity"
 msgstr "Activité"
 
 #: vocabulary.py
+msgid "API Access"
+msgstr "Accès à l’API"
+
+#: vocabulary.py
 msgid "Apps"
 msgstr "Applications"
 
 #: vocabulary.py
+msgid "Authentication:"
+msgstr "Authentification :"
+
+#: vocabulary.py
 msgid "Back"
 msgstr "Retour"
+
+#: vocabulary.py
+msgid "Base URL:"
+msgstr "URL de base :"
 
 #: vocabulary.py
 msgid "Clear"
@@ -237,6 +249,10 @@ msgstr "Effacer les filtres"
 #: vocabulary.py
 msgid "Clear selection"
 msgstr "Effacer la sélection"
+
+#: vocabulary.py
+msgid "close"
+msgstr "fermer"
 
 #: vocabulary.py
 msgid "Collapse"
@@ -279,6 +295,10 @@ msgid "Delete permanently"
 msgstr "Supprimer définitivement"
 
 #: vocabulary.py
+msgid "Documentation:"
+msgstr "Documentation :"
+
+#: vocabulary.py
 msgid "Done"
 msgstr "Terminé"
 
@@ -319,6 +339,10 @@ msgid "Folders"
 msgstr "Dossiers"
 
 #: vocabulary.py
+msgid "Full API docs are available at"
+msgstr "La documentation complète de l’API est disponible à l’adresse"
+
+#: vocabulary.py
 msgid "Generate"
 msgstr "Générer"
 
@@ -329,6 +353,10 @@ msgstr "Groupes"
 #: vocabulary.py
 msgid "Hide password"
 msgstr "Masquer le mot de passe"
+
+#: vocabulary.py
+msgid "List"
+msgstr "Liste"
 
 #: vocabulary.py
 msgid "List view"
@@ -463,6 +491,17 @@ msgid "Sign In"
 msgstr "Se connecter"
 
 #: vocabulary.py
+msgid ""
+"Sign in with your username and password. If your account uses single sign-"
+"on, create an API token in <strong>Settings &gt; API Tokens</strong> and "
+"enter it as the password."
+msgstr ""
+"Connectez-vous avec votre nom d’utilisateur et votre mot de passe. Si votre "
+"compte utilise l’authentification unique, créez un jeton d’API dans "
+"<strong>Paramètres &gt; Jetons d’API</strong> et saisissez-le comme mot de "
+"passe."
+
+#: vocabulary.py
 msgid "Sort by"
 msgstr "Trier par"
 
@@ -493,3 +532,11 @@ msgstr "Annuler"
 #: vocabulary.py
 msgid "Unknown error"
 msgstr "Erreur inconnue"
+
+#: vocabulary.py
+msgid "Upload failed."
+msgstr "Échec de l’envoi."
+
+#: vocabulary.py
+msgid "Use your session cookie or API token."
+msgstr "Utilisez votre cookie de session ou un jeton d’API."

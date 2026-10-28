@@ -1,3 +1,4 @@
+{% load i18n %}
 <div
   id="person-list"
   class="flex-1 overflow-y-auto"
@@ -6,9 +7,11 @@
   {% if not groups_of_persons %}
     <div class="p-8 text-center text-sm text-base-content/60">
       {% if query %}
-        No contact matches "{{ query }}".
+        {% blocktranslate trimmed %}
+          No contact matches "{{ query }}".
+        {% endblocktranslate %}
       {% else %}
-        No contacts yet.
+        {% translate "No contacts yet." %}
       {% endif %}
     </div>
   {% endif %}

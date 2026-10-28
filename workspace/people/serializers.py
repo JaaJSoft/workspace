@@ -1,4 +1,5 @@
 from django.db import IntegrityError, transaction
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -33,7 +34,7 @@ def parse_scope(user, raw):
             group = user.groups.filter(pk=int(group_id)).first()
             if group is not None:
                 return {"group": group}
-    raise serializers.ValidationError("Unknown scope.")
+    raise serializers.ValidationError(_("Unknown scope."))
 
 
 class EmailEntrySerializer(serializers.Serializer):
@@ -45,7 +46,7 @@ class EmailEntrySerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if not attrs.get("value"):
-            raise serializers.ValidationError("A value is required.")
+            raise serializers.ValidationError(_("A value is required."))
         attrs.setdefault("type", "other")
         return attrs
 
@@ -56,7 +57,7 @@ class PhoneEntrySerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if not attrs.get("value"):
-            raise serializers.ValidationError("A value is required.")
+            raise serializers.ValidationError(_("A value is required."))
         attrs.setdefault("type", "other")
         return attrs
 
@@ -72,7 +73,7 @@ class AddressEntrySerializer(serializers.Serializer):
     def validate(self, attrs):
         lines = ("street", "city", "region", "postal_code", "country")
         if not any(attrs.get(line) for line in lines):
-            raise serializers.ValidationError("An address needs at least one line.")
+            raise serializers.ValidationError(_("An address needs at least one line."))
         for line in lines:
             attrs.setdefault(line, "")
         attrs.setdefault("type", "home")
@@ -93,7 +94,7 @@ class LinkedUserSerializer(serializers.Serializer):
 
 def _linked_user_clash():
     return serializers.ValidationError(
-        {"linked_user_id": ["Another contact is already linked to this account."]}
+        {"linked_user_id": [_("Another contact is already linked to this account.")]}
     )
 
 
@@ -190,7 +191,9 @@ class PersonSerializer(serializers.ModelSerializer):
             if clash.exists():
                 raise serializers.ValidationError(
                     {
-                        "linked_user_id": "Another contact is already linked to this account."
+                        "linked_user_id": _(
+                            "Another contact is already linked to this account."
+                        )
                     }
                 )
         return attrs
@@ -245,7 +248,7 @@ class PersonListSerializer(serializers.ModelSerializer):
     def validate_scope(self, value):
         if self.instance is not None:
             raise serializers.ValidationError(
-                "A list cannot change scope; create one in the other address book."
+                _("A list cannot change scope; create one in the other address book.")
             )
         return parse_scope(self.context["request"].user, value)
 

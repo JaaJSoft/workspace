@@ -223,10 +223,6 @@ msgstr "Appliquer les couleurs personnalisées"
 msgid "Avatar updated."
 msgstr "Avatar mis à jour."
 
-#: ui/templates/users/ui/partials/settings_profile.html
-msgid "Upload failed."
-msgstr "Échec de l’envoi."
-
 #: ui/templates/users/ui/partials/settings_profile.html views.py
 msgid "Avatar removed."
 msgstr "Avatar supprimé."

@@ -1,4 +1,5 @@
 from django.http import HttpResponse
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
@@ -75,11 +76,11 @@ class PersonImportView(APIView):
         upload = request.FILES.get("file")
         if upload is None:
             return Response(
-                {"file": ["No file provided."]}, status=status.HTTP_400_BAD_REQUEST
+                {"file": [_("No file provided.")]}, status=status.HTTP_400_BAD_REQUEST
             )
         if upload.size > IMPORT_MAX_SIZE:
             return Response(
-                {"file": ["File too large. Maximum size is 20 MB."]},
+                {"file": [_("File too large. Maximum size is 20 MB.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         scope = parse_scope(request.user, request.data.get("scope", "mine"))
@@ -87,7 +88,7 @@ class PersonImportView(APIView):
             report = import_vcards(_decode(upload.read()), **scope)
         except VCardError:
             return Response(
-                {"file": ["This is not a vCard file."]},
+                {"file": [_("This is not a vCard file.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(report.as_dict())

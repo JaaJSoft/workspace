@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-28 18:46+0000\n"
+"POT-Creation-Date: 2026-10-28 20:29+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -445,20 +445,6 @@ msgstr "Les fichiers seront ajoutés au dossier actuel"
 msgid "Loading folder…"
 msgstr "Chargement du dossier…"
 
-#: ui/templates/files/ui/index.html ui/templates/files/ui/partials/dialogs.html
-#: ui/templates/files/ui/partials/file_picker.html
-#: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/folder_dialog.html
-#: ui/templates/files/ui/partials/group_folder_dialog.html
-#: ui/templates/files/ui/partials/rename_dialog.html
-#: ui/templates/files/ui/partials/share_modal.html
-#: ui/templates/files/ui/partials/storage_dialog.html
-#: ui/templates/files/ui/partials/tag_dialog.html
-#: ui/templates/files/ui/partials/tag_manager_dialog.html
-#: ui/templates/files/ui/partials/tag_picker_dialog.html
-msgid "close"
-msgstr "fermer"
-
 #: ui/templates/files/ui/partials/_events_list.html
 msgid "System"
 msgstr "Système"
@@ -792,17 +778,6 @@ msgid "your-domain"
 msgstr "votre-domaine"
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"Sign in with your username and password. If your account uses single sign-"
-"on, create an API token in <strong>Settings &gt; API Tokens</strong> and "
-"enter it as the password."
-msgstr ""
-"Connectez-vous avec votre nom d’utilisateur et votre mot de passe. Si votre "
-"compte utilise l’authentification unique, créez un jeton d’API dans "
-"<strong>Paramètres &gt; Jetons d’API</strong> et saisissez-le comme mot de "
-"passe."
-
-#: ui/templates/files/ui/partials/dialogs.html
 msgid "Open File Explorer and click <strong>Map network drive</strong>."
 msgstr ""
 "Ouvrez l’Explorateur de fichiers et cliquez sur <strong>Connecter un lecteur "
@@ -950,33 +925,9 @@ msgid "All other file types can be downloaded."
 msgstr "Tous les autres types de fichiers peuvent être téléchargés."
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid "API Access"
-msgstr "Accès à l’API"
-
-#: ui/templates/files/ui/partials/dialogs.html
 msgid "A REST API is available for programmatic access to your files."
 msgstr ""
 "Une API REST est disponible pour accéder à vos fichiers par programmation."
-
-#: ui/templates/files/ui/partials/dialogs.html
-msgid "Base URL:"
-msgstr "URL de base :"
-
-#: ui/templates/files/ui/partials/dialogs.html
-msgid "Authentication:"
-msgstr "Authentification :"
-
-#: ui/templates/files/ui/partials/dialogs.html
-msgid "Use your session cookie or API token."
-msgstr "Utilisez votre cookie de session ou un jeton d’API."
-
-#: ui/templates/files/ui/partials/dialogs.html
-msgid "Documentation:"
-msgstr "Documentation :"
-
-#: ui/templates/files/ui/partials/dialogs.html
-msgid "Full API docs are available at"
-msgstr "La documentation complète de l’API est disponible à l’adresse"
 
 #: ui/templates/files/ui/partials/duration_badge.html
 msgid "Opens at"
@@ -1162,10 +1113,6 @@ msgstr "Options d’affichage"
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Layout"
 msgstr "Disposition"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "List"
-msgstr "Liste"
 
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Mosaic"

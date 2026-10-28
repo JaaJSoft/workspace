@@ -1,0 +1,87 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-28 18:43+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/people/ui/js/people.js
+msgid "Delete contact"
+msgstr "Supprimer le contact"
+
+#: ui/static/people/ui/js/people.js
+msgid "Delete \"%(name)s\"? This cannot be undone."
+msgstr "Supprimer « %(name)s » ? Cette action est irréversible."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not delete the contact."
+msgstr "Impossible de supprimer le contact."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not create the contact."
+msgstr "Impossible de créer le contact."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not save the list."
+msgstr "Impossible d’enregistrer la liste."
+
+#: ui/static/people/ui/js/people.js
+msgid "Delete list"
+msgstr "Supprimer la liste"
+
+#: ui/static/people/ui/js/people.js
+msgid "Delete \"%(name)s\"? Contacts stay in your address book."
+msgstr ""
+"Supprimer « %(name)s » ? Les contacts restent dans votre carnet d’adresses."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not delete the list."
+msgstr "Impossible de supprimer la liste."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not import the file."
+msgstr "Impossible d’importer le fichier."
+
+#: ui/static/people/ui/js/people.js
+msgid "%(count)s contact"
+msgid_plural "%(count)s contacts"
+msgstr[0] "%(count)s contact"
+msgstr[1] "%(count)s de contacts"
+msgstr[2] "%(count)s contacts"
+
+#: ui/static/people/ui/js/people.js
+msgid "%(count)s list"
+msgid_plural "%(count)s lists"
+msgstr[0] "%(count)s liste"
+msgstr[1] "%(count)s de listes"
+msgstr[2] "%(count)s listes"
+
+#: ui/static/people/ui/js/people.js
+msgid "%(contacts)s and %(lists)s will be exported."
+msgstr "À exporter : %(contacts)s et %(lists)s."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not refresh the lists."
+msgstr "Impossible d’actualiser les listes."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not save."
+msgstr "Impossible d’enregistrer."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not add to the list."
+msgstr "Impossible d’ajouter à la liste."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not remove from the list."
+msgstr "Impossible de retirer de la liste."
+
+#: ui/static/people/ui/js/people.js
+msgid "Could not remove the photo."
+msgstr "Impossible de supprimer la photo."

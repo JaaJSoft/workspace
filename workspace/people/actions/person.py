@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from . import PersonActionRegistry
 from .base import ActionCategory, BasePersonAction
 
@@ -5,7 +7,7 @@ from .base import ActionCategory, BasePersonAction
 @PersonActionRegistry.register
 class EditAction(BasePersonAction):
     id = "edit"
-    label = "Edit"
+    label = _("Edit")
     icon = "pencil"
     category = ActionCategory.EDIT
 
@@ -13,7 +15,7 @@ class EditAction(BasePersonAction):
 @PersonActionRegistry.register
 class UnlinkUserAction(BasePersonAction):
     id = "unlink_user"
-    label = "Unlink account"
+    label = _("Unlink account")
     icon = "unlink"
     category = ActionCategory.EDIT
 
@@ -24,7 +26,7 @@ class UnlinkUserAction(BasePersonAction):
 @PersonActionRegistry.register
 class AddToListAction(BasePersonAction):
     id = "add_to_list"
-    label = "Add to list"
+    label = _("Add to list")
     icon = "list-plus"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -33,7 +35,7 @@ class AddToListAction(BasePersonAction):
 @PersonActionRegistry.register
 class MoveAction(BasePersonAction):
     id = "move"
-    label = "Move to..."
+    label = _("Move to...")
     icon = "users"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -45,7 +47,7 @@ class MoveAction(BasePersonAction):
 @PersonActionRegistry.register
 class ExportAction(BasePersonAction):
     id = "export"
-    label = "Export vCard"
+    label = _("Export vCard")
     icon = "download"
     category = ActionCategory.ORGANIZE
 
@@ -53,7 +55,7 @@ class ExportAction(BasePersonAction):
 @PersonActionRegistry.register
 class QRCodeAction(BasePersonAction):
     id = "qrcode"
-    label = "Show QR code"
+    label = _("Show QR code")
     icon = "qr-code"
     category = ActionCategory.ORGANIZE
 
@@ -61,7 +63,7 @@ class QRCodeAction(BasePersonAction):
 @PersonActionRegistry.register
 class DeleteAction(BasePersonAction):
     id = "delete"
-    label = "Delete"
+    label = _("Delete")
     icon = "trash-2"
     category = ActionCategory.DANGER
     css_class = "text-error"

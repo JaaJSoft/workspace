@@ -4,6 +4,7 @@
   input, the actions button), then cards on a base-200 body. Fields PATCH on
   change; the action list from the registry gates editing.
 {% endcomment %}
+{% load i18n %}
 <section
   id="person-panel"
   class="flex-1 h-full min-h-0 min-w-0 flex flex-col bg-base-200"
@@ -27,8 +28,8 @@
           type="button"
           class="btn btn-ghost btn-sm btn-square lg:hidden"
           @click="closePanel()"
-          title="Back"
-          aria-label="Back"
+          title="{% translate "Back" %}"
+          aria-label="{% translate "Back" %}"
         >
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </button>
@@ -39,14 +40,14 @@
           x-model="person.display_name"
           @change="saveField('display_name')"
           :readonly="!can('edit')"
-          placeholder="Name"
+          placeholder="{% translate "Name" %}"
         />
       </div>
       {# A plain download link, offered by the registry like every other action: the menu shows the same row. #}
       <a
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"
-        title="Export vCard"
-        aria-label="Export vCard"
+        title="{% translate "Export vCard" %}"
+        aria-label="{% translate "Export vCard" %}"
         x-show="can('export')"
         :href="peopleHelpers.exportUrl('person:' + person.uuid)"
         download
@@ -57,8 +58,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"
-        title="Show QR code"
-        aria-label="Show QR code"
+        title="{% translate "Show QR code" %}"
+        aria-label="{% translate "Show QR code" %}"
         x-show="can('qrcode')"
         @click="openQrCode({ uuid: person.uuid, name: person.display_name })"
       >
@@ -67,8 +68,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"
-        title="Actions"
-        aria-label="Actions"
+        title="{% translate "Actions" %}"
+        aria-label="{% translate "Actions" %}"
         @click="openCtxMenu($event, 'person', { uuid: person.uuid, name: person.display_name, scope: person.scope })"
       >
         <i data-lucide="more-vertical" class="w-4 h-4"></i>
@@ -81,7 +82,7 @@
           <h3
             class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
           >
-            <i data-lucide="id-card" class="w-3.5 h-3.5"></i>Identity
+            <i data-lucide="id-card" class="w-3.5 h-3.5"></i>{% translate "Identity" %}
           </h3>
           <div class="flex items-start gap-4">
             <div class="relative shrink-0">
@@ -89,7 +90,7 @@
               <user-avatar size="xl" :user-id="person.linked_user ? person.linked_user.id : null" :username="person.linked_user ? person.linked_user.username : person.display_name" :color-key="person.uuid" :src="!person.linked_user && person.avatar_url ? person.avatar_url + '?t=' + avatarStamp : null"></user-avatar>
               <label
                 class="absolute -bottom-1 -right-1 btn btn-circle btn-xs"
-                title="Change photo"
+                title="{% translate "Change photo" %}"
                 x-show="!person.linked_user && can('edit')"
               >
                 <i data-lucide="camera" class="w-3 h-3"></i>
@@ -103,7 +104,7 @@
               <button
                 type="button"
                 class="absolute -top-1 -right-1 btn btn-circle btn-xs"
-                title="Remove photo"
+                title="{% translate "Remove photo" %}"
                 x-show="!person.linked_user && person.avatar_url && can('edit')"
                 @click="deleteAvatar()"
               >
@@ -112,7 +113,7 @@
             </div>
             <div class="grid gap-3 sm:grid-cols-2 flex-1 min-w-0">
               <label class="form-control">
-                <span class="label-text text-xs opacity-60">First name</span>
+                <span class="label-text text-xs opacity-60">{% translate "First name" %}</span>
                 <input
                   type="text"
                   class="input input-bordered input-sm"
@@ -122,7 +123,7 @@
                 />
               </label>
               <label class="form-control">
-                <span class="label-text text-xs opacity-60">Last name</span>
+                <span class="label-text text-xs opacity-60">{% translate "Last name" %}</span>
                 <input
                   type="text"
                   class="input input-bordered input-sm"
@@ -132,7 +133,7 @@
                 />
               </label>
               <label class="form-control">
-                <span class="label-text text-xs opacity-60">Organization</span>
+                <span class="label-text text-xs opacity-60">{% translate "Organization" %}</span>
                 <input
                   type="text"
                   class="input input-bordered input-sm"
@@ -142,7 +143,7 @@
                 />
               </label>
               <label class="form-control">
-                <span class="label-text text-xs opacity-60">Title</span>
+                <span class="label-text text-xs opacity-60">{% translate "Title" context "job title" %}</span>
                 <input
                   type="text"
                   class="input input-bordered input-sm"
@@ -152,7 +153,7 @@
                 />
               </label>
               <label class="form-control">
-                <span class="label-text text-xs opacity-60">Birthday</span>
+                <span class="label-text text-xs opacity-60">{% translate "Birthday" %}</span>
                 <input
                   type="date"
                   class="input input-bordered input-sm"
@@ -169,7 +170,7 @@
           <h3
             class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
           >
-            <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>Contact details
+            <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>{% translate "Contact details" %}
           </h3>
           {% for kind, label, types in entry_kinds %}
             <div>
@@ -181,7 +182,7 @@
                   @click="addEntry('{{ kind|escapejs }}')"
                   x-show="can('edit')"
                 >
-                  <i data-lucide="plus" class="w-3 h-3"></i> Add
+                  <i data-lucide="plus" class="w-3 h-3"></i> {% translate "Add" context "contact detail" %}
                 </button>
               </div>
               <template x-for="(entry, index) in person.{{ kind }}" :key="index">
@@ -194,14 +195,14 @@
                     @change="saveEntries('{{ kind|escapejs }}')"
                     :disabled="!can('edit')"
                   >
-                    {% for type in types %}<option value="{{ type }}">{{ type|capfirst }}</option>{% endfor %}
+                    {% for type, type_label in types %}<option value="{{ type }}">{{ type_label }}</option>{% endfor %}
                   </select>
                   {% if kind == "addresses" %}
                     <div class="flex-1 min-w-0 space-y-2">
                       <input
                         type="text"
                         class="input input-bordered input-xs w-full"
-                        placeholder="Street"
+                        placeholder="{% translate "Street" %}"
                         x-model="entry.street"
                         @change="saveEntries('addresses')"
                         :readonly="!can('edit')"
@@ -210,7 +211,7 @@
                         <input
                           type="text"
                           class="input input-bordered input-xs w-full"
-                          placeholder="Postal code"
+                          placeholder="{% translate "Postal code" %}"
                           x-model="entry.postal_code"
                           @change="saveEntries('addresses')"
                           :readonly="!can('edit')"
@@ -218,7 +219,7 @@
                         <input
                           type="text"
                           class="input input-bordered input-xs w-full"
-                          placeholder="City"
+                          placeholder="{% translate "City" %}"
                           x-model="entry.city"
                           @change="saveEntries('addresses')"
                           :readonly="!can('edit')"
@@ -226,7 +227,7 @@
                         <input
                           type="text"
                           class="input input-bordered input-xs w-full"
-                          placeholder="Country"
+                          placeholder="{% translate "Country" %}"
                           x-model="entry.country"
                           @change="saveEntries('addresses')"
                           :readonly="!can('edit')"
@@ -247,13 +248,13 @@
                     class="btn btn-ghost btn-xs"
                     @click="removeEntry('{{ kind|escapejs }}', index)"
                     x-show="can('edit')"
-                    title="Remove"
+                    title="{% translate "Remove" context "contact detail" %}"
                   >
                     <i data-lucide="x" class="w-3 h-3"></i>
                   </button>
                 </div>
               </template>
-              <p class="text-xs opacity-50" x-show="!person.{{ kind }}.length">None.</p>
+              <p class="text-xs opacity-50" x-show="!person.{{ kind }}.length">{% translate "None." %}</p>
             </div>
           {% endfor %}
         </div>
@@ -262,10 +263,10 @@
           <h3
             class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
           >
-            <i data-lucide="list" class="w-3.5 h-3.5"></i>Lists and account
+            <i data-lucide="list" class="w-3.5 h-3.5"></i>{% translate "Lists and account" %}
           </h3>
           <div>
-            <h4 class="text-sm font-medium mb-2">Lists</h4>
+            <h4 class="text-sm font-medium mb-2">{% translate "Lists" %}</h4>
             <div class="flex flex-wrap gap-2">
               <template x-for="list in lists.filter(l => l.member)" :key="list.uuid">
                 <span class="badge badge-outline gap-1">
@@ -275,7 +276,7 @@
                     class="opacity-60 hover:opacity-100"
                     @click="removeFromList(list.uuid)"
                     x-show="can('edit')"
-                    title="Remove from list"
+                    title="{% translate "Remove from list" %}"
                   >
                     <i data-lucide="x" class="w-3 h-3"></i>
                   </button>
@@ -287,18 +288,18 @@
                 @click="addToList()"
                 x-show="can('add_to_list') && lists.some(l => !l.member)"
               >
-                <i data-lucide="plus" class="w-3 h-3"></i> Add to list
+                <i data-lucide="plus" class="w-3 h-3"></i> {% translate "Add to list" %}
               </button>
               <p
                 class="text-xs opacity-50"
                 x-show="!lists.some(l => l.member) && !lists.some(l => !l.member)"
               >
-                None.
+                {% translate "None." %}
               </p>
             </div>
           </div>
           <div>
-            <h4 class="text-sm font-medium mb-2">Workspace account</h4>
+            <h4 class="text-sm font-medium mb-2">{% translate "Workspace account" %}</h4>
             <template x-if="person.linked_user">
               <div class="flex items-center gap-2">
                 {% include "ui/partials/user_chip.html" with user_id_expr="person.linked_user.id" username_expr="person.linked_user.username" remove_expr="unlinkUser()" remove_show_expr="can('unlink_user')" %}
@@ -314,7 +315,7 @@
                 class="max-w-xs"
                 @person-link-user-selected.window="linkUser($event.detail.user)"
               >
-                {% include "users/ui/partials/user_selector.html" with on_select_event="person-link-user-selected" placeholder="Link a workspace account..." %}
+                {% include "users/ui/partials/user_selector.html" with on_select_event="person-link-user-selected" placeholder=_("Link a workspace account...") %}
               </div>
             </template>
           </div>
@@ -324,7 +325,7 @@
           <h3
             class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
           >
-            <i data-lucide="sticky-note" class="w-3.5 h-3.5"></i>Notes
+            <i data-lucide="sticky-note" class="w-3.5 h-3.5"></i>{% translate "Notes" %}
           </h3>
           <textarea
             class="textarea textarea-bordered w-full"
@@ -353,10 +354,11 @@
 
     <dialog id="people-list-pick-dialog" x-ref="listPickDialog" class="modal">
       <div class="modal-box">
-        {% include "ui/partials/dialog_header.html" with icon="list-plus" title="Add to list" subtitle_expr="person.display_name" close_expr="$refs.listPickDialog.close()" only %}
+        {% translate "Add to list" as add_to_list_title %}
+        {% include "ui/partials/dialog_header.html" with icon="list-plus" title=add_to_list_title subtitle_expr="person.display_name" close_expr="$refs.listPickDialog.close()" only %}
         <form @submit.prevent="confirmAddToList()" class="space-y-3">
           <label class="form-control w-full">
-            <div class="label"><span class="label-text">List</span></div>
+            <div class="label"><span class="label-text">{% translate "List" %}</span></div>
             <select
               name="list"
               class="select select-bordered select-sm w-full"
@@ -374,29 +376,32 @@
               class="btn btn-ghost btn-sm"
               @click="$refs.listPickDialog.close()"
             >
-              Cancel
+              {% translate "Cancel" %}
             </button>
-            <button type="submit" class="btn btn-module btn-sm" :disabled="!listPick">Add</button>
+            <button type="submit" class="btn btn-module btn-sm" :disabled="!listPick">
+              {% translate "Add" context "add to list" %}
+            </button>
           </div>
         </form>
       </div>
       <form method="dialog" class="modal-backdrop">
-        <button type="submit">close</button>
+        <button type="submit">{% translate "close" %}</button>
       </form>
     </dialog>
 
     <dialog id="people-move-dialog" x-ref="moveDialog" class="modal">
       <div class="modal-box">
-        {% include "ui/partials/dialog_header.html" with icon="users" title="Move to" subtitle_expr="person.display_name" close_expr="$refs.moveDialog.close()" only %}
+        {% translate "Move to" as move_to_title %}
+        {% include "ui/partials/dialog_header.html" with icon="users" title=move_to_title subtitle_expr="person.display_name" close_expr="$refs.moveDialog.close()" only %}
         <form @submit.prevent="confirmMove()" class="space-y-3">
           <label class="form-control w-full">
-            <div class="label"><span class="label-text">Address book</span></div>
+            <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
             <select
               name="scope"
               class="select select-bordered select-sm w-full"
               x-model="movePick"
             >
-              <option value="mine">My contacts</option>
+              <option value="mine">{% translate "My contacts" %}</option>
               <template x-for="group in groups" :key="group.id">
                 <option :value="'group:' + group.id" x-text="group.name"></option>
               </template>
@@ -408,38 +413,39 @@
               class="btn btn-ghost btn-sm"
               @click="$refs.moveDialog.close()"
             >
-              Cancel
+              {% translate "Cancel" %}
             </button>
             <button
               type="submit"
               class="btn btn-module btn-sm"
               :disabled="movePick === person.scope"
             >
-              Move
+              {% translate "Move" %}
             </button>
           </div>
         </form>
       </div>
       <form method="dialog" class="modal-backdrop">
-        <button type="submit">close</button>
+        <button type="submit">{% translate "close" %}</button>
       </form>
     </dialog>
 
     <dialog x-ref="cropDialog" class="modal">
       <div class="modal-box">
-        {% include "ui/partials/dialog_header.html" with icon="camera" title="Crop the photo" subtitle_expr="person.display_name" close_expr="cancelCrop()" only %}
+        {% translate "Crop the photo" as crop_title %}
+        {% include "ui/partials/dialog_header.html" with icon="camera" title=crop_title subtitle_expr="person.display_name" close_expr="cancelCrop()" only %}
         <div class="max-h-96 overflow-hidden">
           <img x-ref="cropImage" alt="" class="max-w-full block" />
         </div>
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost btn-sm" @click="cancelCrop()">Cancel</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="cancelCrop()">{% translate "Cancel" %}</button>
           <button
             type="button"
             class="btn btn-module btn-sm"
             :disabled="uploading"
             @click="confirmCrop()"
           >
-            Save
+            {% translate "Save" %}
           </button>
         </div>
       </div>

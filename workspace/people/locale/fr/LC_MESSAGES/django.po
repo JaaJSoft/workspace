@@ -1,0 +1,575 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-28 18:43+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: actions/person.py
+msgid "Unlink account"
+msgstr "Dissocier le compte"
+
+#: actions/person.py ui/templates/people/ui/partials/person_panel.html
+msgid "Add to list"
+msgstr "Ajouter à une liste"
+
+#: actions/person.py
+msgid "Move to..."
+msgstr "Déplacer vers..."
+
+#: actions/person.py ui/templates/people/ui/partials/context_menu.html
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Export vCard"
+msgstr "Exporter en vCard"
+
+#: actions/person.py ui/templates/people/ui/partials/person_panel.html
+msgid "Show QR code"
+msgstr "Afficher le QR code"
+
+#: serializers.py
+msgid "Unknown scope."
+msgstr "Carnet d’adresses inconnu."
+
+#: serializers.py
+msgid "A value is required."
+msgstr "Une valeur est requise."
+
+#: serializers.py
+msgid "An address needs at least one line."
+msgstr "Une adresse doit comporter au moins une ligne."
+
+#: serializers.py
+msgid "Another contact is already linked to this account."
+msgstr "Un autre contact est déjà associé à ce compte."
+
+#: serializers.py
+msgid "A list cannot change scope; create one in the other address book."
+msgstr ""
+"Une liste ne peut pas changer de carnet d’adresses ; créez-en une dans "
+"l’autre carnet."
+
+#: ui/templates/people/ui/index.html
+msgid "People"
+msgstr "Contacts"
+
+#: ui/templates/people/ui/index.html
+msgid "Could not load that contact."
+msgstr "Impossible de charger ce contact."
+
+#: ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "New contact"
+msgstr "Nouveau contact"
+
+#: ui/templates/people/ui/index.html
+msgctxt "address books"
+msgid "All"
+msgstr "Tous"
+
+#: ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "My contacts"
+msgstr "Mes contacts"
+
+#: ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+#: ui/templates/people/ui/partials/help_dialog.html
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Lists"
+msgstr "Listes"
+
+#: ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "New list"
+msgstr "Nouvelle liste"
+
+#: ui/templates/people/ui/index.html
+#, python-format
+msgid "Actions for %%(name)s"
+msgstr "Actions pour %%(name)s"
+
+#: ui/templates/people/ui/index.html
+msgctxt "new contact"
+msgid "New"
+msgstr "Nouveau"
+
+#: ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Import"
+msgstr "Importer"
+
+#: ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Import contacts"
+msgstr "Importer des contacts"
+
+#: ui/templates/people/ui/index.html
+msgid "Export"
+msgstr "Exporter"
+
+#: ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Export contacts"
+msgstr "Exporter des contacts"
+
+#: ui/templates/people/ui/index.html
+msgid "Search people..."
+msgstr "Rechercher des contacts..."
+
+#: ui/templates/people/ui/index.html
+msgid "Select a contact to see its details."
+msgstr "Sélectionnez un contact pour afficher sa fiche."
+
+#: ui/templates/people/ui/partials/context_menu.html
+msgid "Nothing can be done with this contact"
+msgstr "Aucune action possible sur ce contact"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Choose the address book it goes in."
+msgstr "Choisissez le carnet d’adresses de destination."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Full name"
+msgstr "Nom complet"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Email <span class=\"opacity-60\">(optional)</span>"
+msgstr "E-mail <span class=\"opacity-60\">(facultatif)</span>"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "name@example.com"
+msgstr "nom@exemple.com"
+
+#: ui/templates/people/ui/partials/dialogs.html
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Address book"
+msgstr "Carnet d’adresses"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "A .vcf file from a phone, Google Contacts or Nextcloud."
+msgstr ""
+"Un fichier .vcf issu d’un téléphone, de Google Contacts ou de Nextcloud."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "vCard file"
+msgstr "Fichier vCard"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid ""
+"A contact already in the address book (same card or same email) is updated "
+"rather than duplicated. Groups become lists."
+msgstr ""
+"Un contact déjà présent dans le carnet (même fiche ou même e-mail) est mis à "
+"jour plutôt que dupliqué. Les groupes deviennent des listes."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgctxt "imported contacts"
+msgid "Created"
+msgstr "Créés"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "new contacts"
+msgstr "nouveaux contacts"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgctxt "imported contacts"
+msgid "Updated"
+msgstr "Mis à jour"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "already there"
+msgstr "déjà présents"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "from groups"
+msgstr "issues des groupes"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "A .vcf file (vCard 4.0) for a phone, Google Contacts or Nextcloud."
+msgstr ""
+"Un fichier .vcf (vCard 4.0) pour un téléphone, Google Contacts ou Nextcloud."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "What to export"
+msgstr "Que faut-il exporter"
+
+#: ui/templates/people/ui/partials/dialogs.html
+#, python-format
+msgid "Contact: %%(name)s"
+msgstr "Contact : %%(name)s"
+
+#: ui/templates/people/ui/partials/dialogs.html
+#, python-format
+msgid "List: %%(name)s"
+msgstr "Liste : %%(name)s"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Everything"
+msgstr "Tout"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid ""
+"Photos and every property a contact came in with are included. Importing the "
+"file back creates no duplicate."
+msgstr ""
+"Les photos et toutes les propriétés d’origine des contacts sont incluses. "
+"Réimporter le fichier ne crée aucun doublon."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Download .vcf"
+msgstr "Télécharger le .vcf"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Rename list"
+msgstr "Renommer la liste"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Family, Clients..."
+msgstr "Famille, Clients..."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "QR code"
+msgstr "QR code"
+
+#: ui/templates/people/ui/partials/dialogs.html
+#, python-format
+msgid "QR code for %%(name)s"
+msgstr "QR code de %%(name)s"
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Point another phone's camera at it to add the contact."
+msgstr ""
+"Pointez l’appareil photo d’un autre téléphone vers ce code pour ajouter le "
+"contact."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid ""
+"This contact holds more than a QR code can carry. Export it as a .vcf file "
+"instead."
+msgstr ""
+"Ce contact contient plus de données qu’un QR code ne peut en porter. "
+"Exportez-le plutôt en fichier .vcf."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Could not load the QR code. Reload the page and try again."
+msgstr "Impossible de charger le QR code. Rechargez la page et réessayez."
+
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Download PNG"
+msgstr "Télécharger en PNG"
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid "Address books"
+msgstr "Carnets d’adresses"
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"A contact belongs to one address book: <strong>My contacts</strong>, which "
+"only you see, or one of your groups, shared with every member of that group."
+msgstr ""
+"Un contact appartient à un seul carnet d’adresses : <strong>Mes contacts</"
+"strong>, que vous seul voyez, ou celui de l’un de vos groupes, partagé avec "
+"tous ses membres."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"Pick the book in the sidebar to narrow the list; <strong>All</strong> shows "
+"every contact you can reach."
+msgstr ""
+"Choisissez un carnet dans la barre latérale pour filtrer la liste ; "
+"<strong>Tous</strong> affiche tous les contacts auxquels vous avez accès."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"A contact can be moved to another book from its <strong>Actions</strong> "
+"menu."
+msgstr ""
+"Un contact peut être déplacé vers un autre carnet depuis son menu "
+"<strong>Actions</strong>."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"Link a contact to a workspace account to show that account's picture and "
+"name."
+msgstr ""
+"Associez un contact à un compte Workspace pour afficher la photo et le nom "
+"de ce compte."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid "Lists gather contacts of one address book: family, clients, a team."
+msgstr ""
+"Les listes regroupent des contacts d’un même carnet : la famille, des "
+"clients, une équipe."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"Create a list with the <strong>+</strong> next to the Lists heading; rename "
+"or delete it from its row menu."
+msgstr ""
+"Créez une liste avec le <strong>+</strong> à côté du titre Listes ; renommez-"
+"la ou supprimez-la depuis le menu de sa ligne."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"Add a contact from its panel with <strong>Add to list</strong>; deleting a "
+"list never deletes its contacts."
+msgstr ""
+"Ajoutez un contact depuis sa fiche avec <strong>Ajouter à une liste</"
+"strong> ; supprimer une liste ne supprime jamais ses contacts."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid "The group icon on a row marks a list that belongs to a group's book."
+msgstr ""
+"L’icône de groupe sur une ligne signale une liste qui appartient au carnet "
+"d’un groupe."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid "Sharing a contact"
+msgstr "Partager un contact"
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"A contact leaves the workspace as a vCard, the format every phone and "
+"address book reads."
+msgstr ""
+"Un contact sort de Workspace sous forme de vCard, le format que lisent tous "
+"les téléphones et carnets d’adresses."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"<strong>Export</strong> writes a <code>.vcf</code> file: one contact, one "
+"list, or a whole address book."
+msgstr ""
+"<strong>Exporter</strong> produit un fichier <code>.vcf</code> : un contact, "
+"une liste ou un carnet d’adresses entier."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"<strong>Show QR code</strong> puts a single contact on screen; another "
+"phone's camera reads it straight into its address book."
+msgstr ""
+"<strong>Afficher le QR code</strong> affiche un contact à l’écran ; "
+"l’appareil photo d’un autre téléphone l’ajoute directement à son carnet "
+"d’adresses."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"<strong>Import</strong> reads a <code>.vcf</code> back, updating a contact "
+"already there rather than duplicating it."
+msgstr ""
+"<strong>Importer</strong> relit un fichier <code>.vcf</code> et met à jour "
+"un contact déjà présent plutôt que de le dupliquer."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid "Sync with Your Devices"
+msgstr "Synchroniser avec vos appareils"
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"Your address books sync both ways with the contacts app of your phone or "
+"computer (CardDAV). The server address is:"
+msgstr ""
+"Vos carnets d’adresses se synchronisent dans les deux sens avec "
+"l’application Contacts de votre téléphone ou de votre ordinateur (CardDAV). "
+"L’adresse du serveur est :"
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"<strong>iPhone, iPad, Mac</strong>: Add a CardDAV account and enter the "
+"server address."
+msgstr ""
+"<strong>iPhone, iPad, Mac</strong> : ajoutez un compte CardDAV et saisissez "
+"l’adresse du serveur."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"<strong>Android</strong>: Use <strong>DAVx⁵</strong> with the server address."
+msgstr ""
+"<strong>Android</strong> : utilisez <strong>DAVx⁵</strong> avec l’adresse du "
+"serveur."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"<strong>Thunderbird</strong>: New address book &gt; Add CardDAV address "
+"book, then the server address."
+msgstr ""
+"<strong>Thunderbird</strong> : Nouveau carnet d’adresses &gt; Ajouter un "
+"carnet d’adresses CardDAV, puis l’adresse du serveur."
+
+#: ui/templates/people/ui/partials/help_dialog.html
+msgid ""
+"<strong>My contacts</strong> and each of your groups' books appear as "
+"separate address books, and lists sync as contact groups."
+msgstr ""
+"<strong>Mes contacts</strong> et le carnet de chacun de vos groupes "
+"apparaissent comme des carnets d’adresses distincts, et les listes se "
+"synchronisent comme des groupes de contacts."
+
+#: ui/templates/people/ui/partials/person_list.html
+#, python-format
+msgid "No contact matches \"%(query)s\"."
+msgstr "Aucun contact ne correspond à « %(query)s »."
+
+#: ui/templates/people/ui/partials/person_list.html
+msgid "No contacts yet."
+msgstr "Aucun contact pour l’instant."
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Identity"
+msgstr "Identité"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Change photo"
+msgstr "Changer la photo"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Remove photo"
+msgstr "Supprimer la photo"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "First name"
+msgstr "Prénom"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Last name"
+msgstr "Nom"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Organization"
+msgstr "Organisation"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgctxt "job title"
+msgid "Title"
+msgstr "Fonction"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Birthday"
+msgstr "Anniversaire"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Contact details"
+msgstr "Coordonnées"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgctxt "contact detail"
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Street"
+msgstr "Rue"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Postal code"
+msgstr "Code postal"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "City"
+msgstr "Ville"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Country"
+msgstr "Pays"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgctxt "contact detail"
+msgid "Remove"
+msgstr "Supprimer"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "None."
+msgstr "Aucune entrée."
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Lists and account"
+msgstr "Listes et compte"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Remove from list"
+msgstr "Retirer de la liste"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Workspace account"
+msgstr "Compte Workspace"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Link a workspace account..."
+msgstr "Associer un compte Workspace..."
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Notes"
+msgstr "Notes"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgctxt "add to list"
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Move to"
+msgstr "Déplacer vers"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Move"
+msgstr "Déplacer"
+
+#: ui/templates/people/ui/partials/person_panel.html
+msgid "Crop the photo"
+msgstr "Recadrer la photo"
+
+#: ui/views.py
+msgctxt "contact detail type"
+msgid "Home"
+msgstr "Domicile"
+
+#: ui/views.py
+msgctxt "contact detail type"
+msgid "Work"
+msgstr "Travail"
+
+#: ui/views.py
+msgctxt "contact detail type"
+msgid "Cell"
+msgstr "Mobile"
+
+#: ui/views.py
+msgctxt "contact detail type"
+msgid "Fax"
+msgstr "Fax"
+
+#: ui/views.py
+msgctxt "contact detail type"
+msgid "Other"
+msgstr "Autre"
+
+#: ui/views.py
+msgid "Emails"
+msgstr "E-mails"
+
+#: ui/views.py
+msgid "Phones"
+msgstr "Téléphones"
+
+#: ui/views.py
+msgid "Addresses"
+msgstr "Adresses"
+
+#: views/vcard.py
+msgid "No file provided."
+msgstr "Aucun fichier fourni."
+
+#: views/vcard.py
+msgid "File too large. Maximum size is 20 MB."
+msgstr "Fichier trop volumineux. La taille maximale est de 20 Mo."
+
+#: views/vcard.py
+msgid "This is not a vCard file."
+msgstr "Ce n’est pas un fichier vCard."

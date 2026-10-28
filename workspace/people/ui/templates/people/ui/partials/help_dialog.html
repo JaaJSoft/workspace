@@ -1,55 +1,103 @@
-{% load ui_tags %}
+{% load i18n ui_tags %}
 {% help_items as items %}
-  book-user | Address books | checked
+  book-user | {% translate "Address books" %} | checked
   <p class="mb-2">
-    A contact belongs to one address book: <strong>My contacts</strong>, which only you see,
-    or one of your groups, shared with every member of that group.
+    {% blocktranslate trimmed %}
+      A contact belongs to one address book: <strong>My contacts</strong>, which only you see,
+      or one of your groups, shared with every member of that group.
+    {% endblocktranslate %}
   </p>
   <ul>
-    <li>Pick the book in the sidebar to narrow the list; <strong>All</strong> shows every contact you can reach.</li>
-    <li>A contact can be moved to another book from its <strong>Actions</strong> menu.</li>
-    <li>Link a contact to a workspace account to show that account's picture and name.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        Pick the book in the sidebar to narrow the list; <strong>All</strong> shows every contact you can reach.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        A contact can be moved to another book from its <strong>Actions</strong> menu.
+      {% endblocktranslate %}
+    </li>
+    <li>{% translate "Link a contact to a workspace account to show that account's picture and name." %}</li>
   </ul>
   ---
-  list | Lists
-  <p class="mb-2">Lists gather contacts of one address book: family, clients, a team.</p>
+  list | {% translate "Lists" %}
+  <p class="mb-2">{% translate "Lists gather contacts of one address book: family, clients, a team." %}</p>
   <ul>
-    <li>Create a list with the <strong>+</strong> next to the Lists heading; rename or delete it from its row menu.</li>
-    <li>Add a contact from its panel with <strong>Add to list</strong>; deleting a list never deletes its contacts.</li>
-    <li>The group icon on a row marks a list that belongs to a group's book.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        Create a list with the <strong>+</strong> next to the Lists heading; rename or delete it from its row menu.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        Add a contact from its panel with <strong>Add to list</strong>; deleting a list never deletes its contacts.
+      {% endblocktranslate %}
+    </li>
+    <li>{% translate "The group icon on a row marks a list that belongs to a group's book." %}</li>
   </ul>
   ---
-  share-2 | Sharing a contact
-  <p class="mb-2">A contact leaves the workspace as a vCard, the format every phone and address book reads.</p>
+  share-2 | {% translate "Sharing a contact" %}
+  <p class="mb-2">
+    {% translate "A contact leaves the workspace as a vCard, the format every phone and address book reads." %}
+  </p>
   <ul>
-    <li><strong>Export</strong> writes a <code>.vcf</code> file: one contact, one list, or a whole address book.</li>
-    <li><strong>Show QR code</strong> puts a single contact on screen; another phone's camera reads it straight into its address book.</li>
-    <li><strong>Import</strong> reads a <code>.vcf</code> back, updating a contact already there rather than duplicating it.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Export</strong> writes a <code>.vcf</code> file: one contact, one list, or a whole address book.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Show QR code</strong> puts a single contact on screen; another phone's camera reads it straight into its address book.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Import</strong> reads a <code>.vcf</code> back, updating a contact already there rather than duplicating it.
+      {% endblocktranslate %}
+    </li>
   </ul>
   ---
-  smartphone | Sync with Your Devices
-  <p>Your address books sync both ways with the contacts app of your phone or computer (CardDAV). The server address is:</p>
+  smartphone | {% translate "Sync with Your Devices" %}
+  <p>{% translate "Your address books sync both ways with the contacts app of your phone or computer (CardDAV). The server address is:" %}</p>
   <code
     class="block bg-base-300 px-3 py-2 rounded text-sm mb-3"
   >{{ request.scheme }}://{{ request.get_host }}/carddav/</code>
   <p class="mb-3">
-    Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.
+    {% blocktranslate trimmed %}
+      Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.
+    {% endblocktranslate %}
   </p>
   <ul>
-    <li><strong>iPhone, iPad, Mac</strong>: Add a CardDAV account and enter the server address.</li>
-    <li><strong>Android</strong>: Use <strong>DAVx⁵</strong> with the server address.</li>
-    <li><strong>Thunderbird</strong>: New address book &gt; Add CardDAV address book, then the server address.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>iPhone, iPad, Mac</strong>: Add a CardDAV account and enter the server address.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Android</strong>: Use <strong>DAVx⁵</strong> with the server address.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Thunderbird</strong>: New address book &gt; Add CardDAV address book, then the server address.
+      {% endblocktranslate %}
+    </li>
   </ul>
   <p class="mt-3">
-    <strong>My contacts</strong> and each of your groups' books appear as separate address books, and lists sync as contact groups.
+    {% blocktranslate trimmed %}
+      <strong>My contacts</strong> and each of your groups' books appear as separate address books, and lists sync as contact groups.
+    {% endblocktranslate %}
   </p>
   ---
-  code | API Access
+  code | {% translate "API Access" %}
   <ul>
-    <li><strong>Base URL:</strong> <code>/api/v1/people</code></li>
-    <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+    <li><strong>{% translate "Base URL:" %}</strong> <code>/api/v1/people</code></li>
+    <li><strong>{% translate "Authentication:" %}</strong> {% translate "Use your session cookie or API token." %}</li>
     <li>
-      <strong>Documentation:</strong> Full API docs are available at
+      <strong>{% translate "Documentation:" %}</strong> {% translate "Full API docs are available at" %}
       <a href="/schema/swagger-ui/" class="link link-module">/schema/swagger-ui/</a>.
     </li>
   </ul>

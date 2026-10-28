@@ -5,6 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import render
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.exceptions import ValidationError
 
@@ -21,10 +23,23 @@ from workspace.people.queries import (
 from workspace.people.sections import render_sections
 from workspace.people.serializers import PersonSerializer, parse_scope, scope_label
 
+ENTRY_TYPE_LABELS = {
+    "home": pgettext_lazy("contact detail type", "Home"),
+    "work": pgettext_lazy("contact detail type", "Work"),
+    "cell": pgettext_lazy("contact detail type", "Cell"),
+    "fax": pgettext_lazy("contact detail type", "Fax"),
+    "other": pgettext_lazy("contact detail type", "Other"),
+}
+
+
+def _typed(types):
+    return [(value, ENTRY_TYPE_LABELS[value]) for value in types]
+
+
 ENTRY_KINDS = [
-    ("emails", "Emails", EMAIL_TYPES),
-    ("phones", "Phones", PHONE_TYPES),
-    ("addresses", "Addresses", ADDRESS_TYPES),
+    ("emails", _("Emails"), _typed(EMAIL_TYPES)),
+    ("phones", _("Phones"), _typed(PHONE_TYPES)),
+    ("addresses", _("Addresses"), _typed(ADDRESS_TYPES)),
 ]
 
 

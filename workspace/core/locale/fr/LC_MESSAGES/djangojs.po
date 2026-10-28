@@ -1,0 +1,53 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-28 18:42+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: static/core/js/command_palette_dropdown.js
+msgid "No matching action"
+msgstr "Aucune action correspondante"
+
+#: static/core/js/command_palette_dropdown.js
+msgid "No results in your own items"
+msgstr "Aucun résultat parmi vos propres éléments"
+
+#: static/core/js/command_palette_dropdown.js
+msgid "No results found"
+msgstr "Aucun résultat"
+
+#: static/core/js/command_palette_dropdown.js
+msgid "%(count)s result"
+msgid_plural "%(count)s results"
+msgstr[0] "%(count)s résultat"
+msgstr[1] "%(count)s de résultats"
+msgstr[2] "%(count)s résultats"
+
+#: static/core/js/onboarding_wizard.js
+msgid "Step %(step)s of %(total)s"
+msgstr "Étape %(step)s sur %(total)s"
+
+#: static/core/js/timezone_suggest.js
+msgid "Your browser looks like it is in %(zone)s. Update your timezone?"
+msgstr ""
+"Votre navigateur semble être dans le fuseau %(zone)s. Mettre à jour votre "
+"fuseau horaire ?"
+
+#: static/core/js/timezone_suggest.js
+msgid "Update"
+msgstr "Mettre à jour"
+
+#: static/core/js/timezone_suggest.js
+msgid "Could not save your timezone. Try again?"
+msgstr "Impossible d’enregistrer votre fuseau horaire. Réessayer ?"
+
+#: static/core/js/timezone_suggest.js
+msgid "Ignore"
+msgstr "Ignorer"

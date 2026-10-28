@@ -120,6 +120,19 @@ A catalog that repeats a shared msgid fails
   with `common`'s translation: a word that read differently in the module is
   one that needs a context.
 
+## Catalogs that shadow ours
+
+Django merges every installed app's catalog, and an app listed earlier in
+`INSTALLED_APPS` wins a msgid both hold. Django's and DRF's own catalogs come
+first, so a common msgid can come out in their words rather than ours: "Page
+not found" reads "Page non trouvée", "View" reads "Afficher", "Created" reads
+"Création". Give such a msgid a context at its call site
+(`{% translate "View" context "activity item" %}`).
+`core.tests.test_translation_catalogs` resolves every translated msgid under
+its language, through gettext for server-side catalogs and through the
+JavaScript catalog view for script catalogs, and fails on any that comes out
+differently.
+
 ## Marking strings
 
 ### Templates
@@ -193,6 +206,9 @@ calls `gettext`.
 - AI system prompts and tool descriptions: they are instructions to a model,
   not interface text.
 - Log messages, management command output and API documentation.
+- The offline page (`core/static/offline.html`) and the service worker's
+  fallback notification title: the service worker serves them as they are,
+  with no template engine and no catalog.
 - The admin (`django-unfold`): it has no strings of ours. Django and unfold
   ship their own catalogs, so the admin follows the user's language wherever
   those catalogs cover it.

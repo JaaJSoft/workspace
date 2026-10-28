@@ -1,6 +1,7 @@
 {% extends "base_with_navbar.html" %}
+{% load i18n %}
 
-{% block title %}400 - Bad Request{% endblock %}
+{% block title %}400 - {% translate "Bad Request" %}{% endblock %}
 
 {% block main_class %}flex items-center justify-center{% endblock %}
 
@@ -14,16 +15,18 @@
       </div>
     </div>
     <div class="text-8xl font-black text-base-content/10 select-none mb-2">400</div>
-    <h1 class="text-2xl font-bold mb-2">Bad request</h1>
-    <p class="text-base-content/60 mb-8">The server couldn't understand your request. Please try again.</p>
+    <h1 class="text-2xl font-bold mb-2">{% translate "Bad request" %}</h1>
+    <p
+      class="text-base-content/60 mb-8"
+    >{% translate "The server couldn't understand your request. Please try again." %}</p>
     <div class="flex gap-3 justify-center">
       <a href="/" data-nav-back class="btn btn-ghost gap-2">
         <i data-lucide="arrow-left" class="w-4 h-4"></i>
-        Go back
+        {% translate "Go back" context "error page" %}
       </a>
       <a href="/" class="btn btn-primary gap-2">
         <i data-lucide="home" class="w-4 h-4"></i>
-        Home
+        {% translate "Home" %}
       </a>
     </div>
   </div>

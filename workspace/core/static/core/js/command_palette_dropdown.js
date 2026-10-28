@@ -214,6 +214,17 @@ window.commandPaletteDropdown = function () {
         && this.commands.length === 0 && this.results.length === 0;
     },
 
+    emptyStateMessage() {
+      if (this.isCommandMode()) return gettext('No matching action');
+      if (this.isMineOnly()) return gettext('No results in your own items');
+      return gettext('No results found');
+    },
+
+    resultsHeading() {
+      const count = this.results.length;
+      return interpolate(ngettext('%(count)s result', '%(count)s results', count), { count }, true);
+    },
+
     // An empty list under "Mine only" offers the way out, so a forgotten
     // switch never reads as a search that lost the user's files.
     showMineOnlyHint() {

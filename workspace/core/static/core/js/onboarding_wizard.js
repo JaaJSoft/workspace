@@ -10,6 +10,9 @@ function onboardingWizard(pending) {
       this.step = Math.max(1, this.step - 1);
       this.focusStep();
     },
+    stepLabel() {
+      return interpolate(gettext('Step %(step)s of %(total)s'), { step: this.step, total: 3 }, true);
+    },
     focusStep() {
       // Move focus to the active step's heading so screen readers announce
       // the new step (the body is aria-live, but focusing the heading gives

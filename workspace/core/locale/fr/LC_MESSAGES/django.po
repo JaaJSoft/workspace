@@ -1,0 +1,425 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-28 18:53+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: templates/400.html
+msgid "Bad Request"
+msgstr "Requête incorrecte"
+
+#: templates/400.html
+msgid "Bad request"
+msgstr "Requête incorrecte"
+
+#: templates/400.html
+msgid "The server couldn't understand your request. Please try again."
+msgstr "Le serveur n’a pas pu comprendre votre requête. Veuillez réessayer."
+
+#: templates/400.html templates/403.html templates/404.html templates/500.html
+msgctxt "error page"
+msgid "Go back"
+msgstr "Retour"
+
+#: templates/400.html templates/403.html templates/404.html templates/500.html
+#: templates/core/partials/module_switcher.html
+msgid "Home"
+msgstr "Accueil"
+
+#: templates/403.html
+msgid "Forbidden"
+msgstr "Accès interdit"
+
+#: templates/403.html
+msgid "Access denied"
+msgstr "Accès refusé"
+
+#: templates/403.html
+msgid "You don't have permission to access this page."
+msgstr "Vous n’avez pas l’autorisation d’accéder à cette page."
+
+#: templates/404.html
+msgid "Page Not Found"
+msgstr "Page introuvable"
+
+#: templates/404.html
+msgctxt "error page"
+msgid "Page not found"
+msgstr "Page introuvable"
+
+#: templates/404.html
+msgid "The page you're looking for doesn't exist or has been moved."
+msgstr "La page que vous cherchez n’existe pas ou a été déplacée."
+
+#: templates/500.html
+msgid "Server Error"
+msgstr "Erreur du serveur"
+
+#: templates/500.html
+msgid "Something went wrong"
+msgstr "Une erreur est survenue"
+
+#: templates/500.html
+msgid "An unexpected error occurred. Our team has been notified."
+msgstr "Une erreur inattendue s’est produite. Notre équipe a été prévenue."
+
+#: templates/core/partials/activity_feed.html
+#: templates/core/partials/activity_page.html
+msgid "Show older activity"
+msgstr "Afficher l’activité plus ancienne"
+
+#: templates/core/partials/activity_feed.html
+msgid "No activity matching your search."
+msgstr "Aucune activité ne correspond à votre recherche."
+
+#: templates/core/partials/activity_feed.html
+msgid "No activity to show."
+msgstr "Aucune activité à afficher."
+
+#: templates/core/partials/activity_item.html
+msgctxt "activity item"
+msgid "View"
+msgstr "Voir"
+
+#: templates/core/partials/activity_search.html
+msgid "Search activity..."
+msgstr "Rechercher dans l’activité..."
+
+#: templates/core/partials/activity_tabs.html
+msgctxt "activity sources"
+msgid "All"
+msgstr "Tout"
+
+#: templates/core/partials/changelog.html
+msgid "Versions"
+msgstr "Versions"
+
+#: templates/core/partials/changelog.html
+msgid "Already read"
+msgstr "Déjà lu"
+
+#: templates/core/partials/changelog.html
+msgid "New to you"
+msgstr "Nouveau pour vous"
+
+#: templates/core/partials/changelog.html
+msgctxt "changelog version"
+msgid "Latest"
+msgstr "Dernière"
+
+#: templates/core/partials/changelog.html
+msgid "No changelog available."
+msgstr "Aucune note de version disponible."
+
+#: templates/core/partials/module_switcher.html
+msgid "Switch module (Alt+K)"
+msgstr "Changer de module (Alt+K)"
+
+#: templates/core/partials/module_switcher.html
+#, python-format
+msgid "Switch module, currently %(name)s"
+msgstr "Changer de module, actuellement %(name)s"
+
+#: templates/core/partials/module_switcher.html
+msgid "Open the switcher with Alt+K"
+msgstr "Ouvrir le sélecteur avec Alt+K"
+
+#: templates/core/partials/module_switcher.html
+msgid "Modules"
+msgstr "Modules"
+
+#: templates/core/partials/navbar.html
+msgctxt "presence status"
+msgid "Invisible"
+msgstr "Invisible"
+
+#: templates/core/partials/navbar.html
+msgid "No email"
+msgstr "Pas d’adresse e-mail"
+
+#: templates/core/partials/navbar.html
+msgid "Close search"
+msgstr "Fermer la recherche"
+
+#: templates/core/partials/navbar.html
+msgid "Toggle theme"
+msgstr "Changer de thème"
+
+#: templates/core/partials/navbar.html
+msgctxt "module stage"
+msgid "Preview"
+msgstr "Préversion"
+
+#: templates/core/partials/navbar.html
+msgid "What's new"
+msgstr "Nouveautés"
+
+#: templates/core/partials/navbar.html
+msgid "Welcome tour"
+msgstr "Visite guidée"
+
+#: templates/core/partials/navbar.html
+msgid "Source code"
+msgstr "Code source"
+
+#: templates/core/partials/navbar.html
+msgid "Report an issue"
+msgstr "Signaler un problème"
+
+#: templates/core/partials/navbar.html
+msgctxt "user menu section"
+msgid "Admin"
+msgstr "Administration"
+
+#: templates/core/partials/navbar.html
+msgid "Admin Panel"
+msgstr "Panneau d’administration"
+
+#: templates/core/partials/navbar.html
+msgid "API Docs"
+msgstr "Documentation de l’API"
+
+#: templates/core/partials/navbar.html
+msgid "Sign Out"
+msgstr "Se déconnecter"
+
+#: templates/core/partials/navbar.html
+#, python-format
+msgid "Version %(version)s"
+msgstr "Version %(version)s"
+
+#: templates/core/partials/notifications.html
+msgid "Disable push notifications"
+msgstr "Désactiver les notifications push"
+
+#: templates/core/partials/notifications.html
+msgid "Enable push notifications"
+msgstr "Activer les notifications push"
+
+#: templates/core/partials/notifications.html
+msgid "No matching notifications"
+msgstr "Aucune notification correspondante"
+
+#: templates/core/partials/notifications.html
+msgid "No notifications"
+msgstr "Aucune notification"
+
+#: templates/core/partials/notifications.html
+msgctxt "notification priority"
+msgid "Urgent"
+msgstr "urgente"
+
+#: templates/core/partials/notifications.html
+msgctxt "notification priority"
+msgid "High"
+msgstr "haute"
+
+#: templates/core/partials/notifications.html
+msgid "Notifications"
+msgstr "Notifications"
+
+#: templates/core/partials/notifications.html
+msgid "Mark all read"
+msgstr "Tout marquer lu"
+
+#: templates/core/partials/notifications.html
+msgid "Search notifications..."
+msgstr "Rechercher des notifications..."
+
+#: templates/core/partials/notifications.html
+msgctxt "notifications filter"
+msgid "All"
+msgstr "Toutes"
+
+#: templates/core/partials/notifications.html
+msgctxt "notifications filter"
+msgid "Unread"
+msgstr "Non lues"
+
+#: templates/core/partials/notifications.html
+msgid "Dismiss all"
+msgstr "Tout ignorer"
+
+#: templates/core/partials/onboarding.html
+msgid "Welcome aboard"
+msgstr "Bienvenue à bord"
+
+#: templates/core/partials/onboarding.html
+msgid "The changelog lists every recent improvement and fix."
+msgstr ""
+"Les notes de version listent chaque amélioration et correction récente."
+
+#: templates/core/partials/onboarding.html
+#, python-format
+msgid "Welcome, %(name)s"
+msgstr "Bienvenue, %(name)s"
+
+#: templates/core/partials/onboarding.html
+msgid "Welcome"
+msgstr "Bienvenue"
+
+#: templates/core/partials/onboarding.html
+msgid ""
+"JaaJ Workspace is your all-in-one space for files, notes, mail, calendar, "
+"chat, and more. Let's take a quick tour so you know where everything lives."
+msgstr ""
+"JaaJ Workspace réunit en un seul endroit vos fichiers, notes, e-mails, "
+"agenda, discussions et bien plus. Faisons un petit tour pour que vous "
+"sachiez où tout se trouve."
+
+#: templates/core/partials/onboarding.html
+msgid "Everything in one place"
+msgstr "Tout au même endroit"
+
+#: templates/core/partials/onboarding.html
+msgid ""
+"Each module lives in its own page. Pick one to jump straight in - you can "
+"always come back here later."
+msgstr ""
+"Chaque module a sa propre page. Choisissez-en un pour y aller directement - "
+"vous pourrez toujours revenir ici plus tard."
+
+#: templates/core/partials/onboarding.html
+msgid "Your modules will appear here once they're enabled."
+msgstr "Vos modules apparaîtront ici une fois activés."
+
+#: templates/core/partials/onboarding.html
+msgid "You're all set"
+msgstr "Tout est prêt"
+
+#: templates/core/partials/onboarding.html
+msgid "A few tips to get the most out of the app:"
+msgstr "Quelques conseils pour tirer le meilleur parti de l’application :"
+
+#: templates/core/partials/onboarding.html
+msgid "Search everything from the top bar"
+msgstr "Recherchez tout depuis la barre du haut"
+
+#: templates/core/partials/onboarding.html
+msgid ""
+"Find files, notes, mail and conversations, or jump to any module quickly."
+msgstr ""
+"Trouvez fichiers, notes, e-mails et conversations, ou accédez rapidement à "
+"n’importe quel module."
+
+#: templates/core/partials/onboarding.html
+msgid "Personalize your workspace"
+msgstr "Personnalisez votre espace"
+
+#: templates/core/partials/onboarding.html
+msgid ""
+"Pick a theme, set your timezone and configure notifications from the user "
+"menu."
+msgstr ""
+"Choisissez un thème, réglez votre fuseau horaire et configurez les "
+"notifications depuis le menu utilisateur."
+
+#: templates/core/partials/onboarding.html
+msgid "Re-open this tour anytime"
+msgstr "Rouvrez cette visite à tout moment"
+
+#: templates/core/partials/onboarding.html
+msgid "Click “Welcome tour” in the user menu to revisit these steps."
+msgstr ""
+"Cliquez sur « Visite guidée » dans le menu utilisateur pour revoir ces "
+"étapes."
+
+#: templates/core/partials/onboarding.html
+msgid "See what's new in each release"
+msgstr "Découvrez les nouveautés de chaque version"
+
+#: templates/core/partials/onboarding.html
+msgid "View changelog"
+msgstr "Voir les notes de version"
+
+#: templates/core/partials/onboarding.html
+msgctxt "wizard step"
+msgid "Back"
+msgstr "Précédent"
+
+#: templates/core/partials/onboarding.html
+msgid "Skip tour"
+msgstr "Passer la visite"
+
+#: templates/core/partials/onboarding.html
+msgid "Get started"
+msgstr "C’est parti"
+
+#: templates/core/partials/search/footer_hints.html
+msgid "navigate"
+msgstr "naviguer"
+
+#: templates/core/partials/search/footer_hints.html
+msgid "select"
+msgstr "sélectionner"
+
+#: templates/core/partials/search/footer_hints.html
+msgid "Actions and apps only (Ctrl/Cmd+Shift+K)"
+msgstr "Actions et applications uniquement (Ctrl/Cmd+Maj+K)"
+
+#: templates/core/partials/search/footer_hints.html
+msgid "actions"
+msgstr "actions"
+
+#: templates/core/partials/search/footer_hints.html
+msgid "Close search results"
+msgstr "Fermer les résultats de recherche"
+
+#: templates/core/partials/search/quick_actions.html
+msgid "Quick Actions"
+msgstr "Actions rapides"
+
+#: templates/core/partials/search/scope_toggle.html
+msgid "Hide what you reach through groups, shares and other people's projects"
+msgstr ""
+"Masquer ce qui vous parvient par les groupes, les partages et les projets "
+"des autres"
+
+#: templates/core/partials/search/scope_toggle.html
+msgid "Mine only"
+msgstr "Mes éléments"
+
+#: templates/core/partials/search/search_input.html
+msgid "Search..."
+msgstr "Rechercher..."
+
+#: templates/core/partials/search/search_results.html
+msgctxt "search match"
+msgid "in content"
+msgstr "dans le contenu"
+
+#: templates/core/partials/search/search_results.html
+msgid "Keep typing to search"
+msgstr "Continuez à taper pour rechercher"
+
+#: templates/core/partials/search/search_results.html
+#, python-format
+msgid "At least 2 characters, or %(key)s for actions"
+msgstr "Au moins 2 caractères, ou %(key)s pour les actions"
+
+#: templates/core/partials/search/search_results.html
+msgid "Searching..."
+msgstr "Recherche..."
+
+#: templates/core/partials/search/search_results.html
+msgid "Search is unavailable"
+msgstr "La recherche est indisponible"
+
+#: templates/core/partials/search/search_results.html
+msgid ""
+"The search service could not be reached. Check your connection, then try "
+"again."
+msgstr ""
+"Le service de recherche est injoignable. Vérifiez votre connexion, puis "
+"réessayez."
+
+#: templates/core/partials/search/search_results.html
+msgid "Search everything"
+msgstr "Tout rechercher"

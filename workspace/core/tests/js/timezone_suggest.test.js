@@ -39,13 +39,14 @@ class FakeElement {
 }
 
 function boot({ stored = 'UTC', detected = 'Europe/Paris', dismissed = null,
-                storageThrows = false, reply = { ok: true } } = {}) {
+                storageThrows = false, reply = { ok: true }, gettext } = {}) {
   const banner = new FakeElement();
   banner.classes.add('hidden');
   const state = { fetches: [], warnings: [], stored: dismissed, reloaded: false };
   let resolveFetch;
 
   const ctx = loadScript('workspace/core/static/core/js/timezone_suggest.js', {
+    ...(gettext ? { gettext } : {}),
     getCSRFToken: () => 'token',
     fetch: (url, options) => {
       state.fetches.push({ url, options });
@@ -156,4 +157,17 @@ test('a successful update reloads the page', async () => {
   banner.find('Update').click();
   await tick();
   assert.equal(state.reloaded, true);
+});
+
+test('the zone lands where the translation puts it', () => {
+  const { banner, state } = boot({
+    gettext: (msgid) => (msgid.startsWith('Your browser')
+      ? 'Mettre à jour vers %(zone)s, le fuseau de votre navigateur ?'
+      : msgid),
+  });
+  state.ready();
+  const text = banner.children[0].children[0];
+  assert.equal(text.children[0], 'Mettre à jour vers ');
+  assert.equal(text.children[1].textContent, 'Europe/Paris');
+  assert.equal(text.children[2], ', le fuseau de votre navigateur ?');
 });

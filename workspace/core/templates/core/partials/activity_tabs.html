@@ -7,6 +7,7 @@ under pressure - auto-cols-max keeps each tab at its natural width and lets
 the row overflow into the horizontal scroll instead; min-w-0 lets the block
 shrink inside the header flex row rather than squeezing the card title.
 {% endcomment %}
+{% load i18n %}
 <div
   class="tabs tabs-boxed grid-flow-col auto-cols-max overflow-x-auto min-w-0"
 >
@@ -18,7 +19,7 @@ shrink inside the header flex row rather than squeezing the card title.
     x-target="{{ activity_prefix }}"
   >
     <i data-lucide="layers" class="w-4 h-4 shrink-0"></i>
-    <span class="text-xs leading-none max-w-full truncate">All</span>
+    <span class="text-xs leading-none max-w-full truncate">{% translate "All" context "activity sources" %}</span>
   </a>
   {% for src in activity_sources %}
     <a

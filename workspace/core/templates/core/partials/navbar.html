@@ -1,3 +1,6 @@
+{% load i18n %}
+{% translate "Invisible" context "presence status" as invisible_label %}
+{% translate "No email" as no_email_label %}
 <div
   class="navbar bg-base-100 border-b border-base-300 backdrop-blur-lg bg-opacity-80 sticky top-0 z-50 min-h-[3.25rem] py-1"
 >
@@ -25,7 +28,7 @@
         type="button"
         @click="mobileSearchOpen = true"
         class="btn btn-ghost btn-circle btn-sm sm:hidden"
-        title="Search"
+        title="{% translate 'Search' %}"
       >
         <i data-lucide="search" class="w-5 h-5"></i>
       </button>
@@ -49,39 +52,7 @@
           {% include "core/partials/search/quick_actions.html" %}
           {% include "core/partials/search/search_results.html" %}
 
-          <!-- Footer hints -->
-          <div
-            x-show="open"
-            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
-          >
-            <span class="flex items-center gap-1">
-              <kbd class="kbd kbd-xs">↑↓</kbd>
-              navigate
-            </span>
-            <span class="flex items-center gap-1">
-              <kbd class="kbd kbd-xs">⏎</kbd>
-              select
-            </span>
-            <button
-              type="button"
-              @click="enterCommandMode()"
-              class="flex items-center gap-1 hover:text-base-content"
-              title="Actions and apps only (Ctrl/Cmd+Shift+K)"
-            >
-              <kbd class="kbd kbd-xs">&gt;</kbd>
-              actions
-            </button>
-            {% include "core/partials/search/scope_toggle.html" %}
-            <button
-              type="button"
-              @click="close()"
-              class="btn btn-ghost btn-xs"
-              title="Close"
-              aria-label="Close search results"
-            >
-              <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-          </div>
+          {% include "core/partials/search/footer_hints.html" %}
         </div>
       </div>
 
@@ -117,6 +88,7 @@
               type="button"
               @click="mobileSearchOpen = false"
               class="btn btn-ghost btn-circle btn-sm flex-shrink-0"
+              aria-label="{% translate 'Close search' %}"
             >
               <i data-lucide="x" class="w-5 h-5"></i>
             </button>
@@ -128,38 +100,7 @@
             {% include "core/partials/search/search_results.html" with on_click="mobileSearchOpen = false" container_class="p-2" %}
           </div>
 
-          <!-- Footer hints -->
-          <div
-            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
-          >
-            <span class="flex items-center gap-1">
-              <kbd class="kbd kbd-xs">↑↓</kbd>
-              navigate
-            </span>
-            <span class="flex items-center gap-1">
-              <kbd class="kbd kbd-xs">⏎</kbd>
-              select
-            </span>
-            <button
-              type="button"
-              @click="enterCommandMode()"
-              class="flex items-center gap-1 hover:text-base-content"
-              title="Actions and apps only (Ctrl/Cmd+Shift+K)"
-            >
-              <kbd class="kbd kbd-xs">&gt;</kbd>
-              actions
-            </button>
-            {% include "core/partials/search/scope_toggle.html" %}
-            <button
-              type="button"
-              @click="mobileSearchOpen = false"
-              class="btn btn-ghost btn-xs"
-              title="Close"
-              aria-label="Close search results"
-            >
-              <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-          </div>
+          {% include "core/partials/search/footer_hints.html" with close_expr="mobileSearchOpen = false" always_visible=True %}
         </div>
       </div>
     </div>
@@ -169,9 +110,13 @@
       <!-- Theme toggle -->
       <label
         class="swap swap-rotate btn btn-ghost btn-circle btn-sm hover:bg-warning/10 transition-all"
-        title="Toggle theme"
+        title="{% translate 'Toggle theme' %}"
       >
-        <input id="themeToggle" type="checkbox" aria-label="Toggle theme" />
+        <input
+          id="themeToggle"
+          type="checkbox"
+          aria-label="{% translate 'Toggle theme' %}"
+        />
         <!-- Sun icon (light) -->
         <div class="swap-off">
           <i data-lucide="sun" class="w-5 h-5 text-warning"></i>
@@ -198,7 +143,7 @@
               <user-avatar user-id="{{ user.id }}" username="{{ user.username }}" size="md" presence></user-avatar>
               <div class="flex-1 min-w-0">
                 <div class="font-semibold text-base-content truncate">{{ user.username }}</div>
-                <div class="text-xs text-base-content/60 truncate">{{ user.email|default:"No email" }}</div>
+                <div class="text-xs text-base-content/60 truncate">{{ user.email|default:no_email_label }}</div>
               </div>
             </li>
             <div class="divider my-1"></div>
@@ -209,10 +154,10 @@
                 open: false,
                 current: 'auto',
                 statuses: [
-                  { value: 'online', label: 'Online', dot: 'bg-success' },
-                  { value: 'away', label: 'Away', dot: 'bg-warning' },
-                  { value: 'busy', label: 'Busy', dot: 'bg-error' },
-                  { value: 'invisible', label: 'Invisible', dot: 'bg-base-300' },
+                  { value: 'online', label: presenceStatusLabel('online'), dot: 'bg-success' },
+                  { value: 'away', label: presenceStatusLabel('away'), dot: 'bg-warning' },
+                  { value: 'busy', label: presenceStatusLabel('busy'), dot: 'bg-error' },
+                  { value: 'invisible', label: '{{ invisible_label|escapejs }}', dot: 'bg-base-300' },
                 ],
                 async init() {
                   try {
@@ -241,7 +186,7 @@
                 },
                 currentLabel() {
                   const s = this.statuses.find(s => this.isActive(s.value));
-                  return s ? s.label : 'Online';
+                  return s ? s.label : presenceStatusLabel('online');
                 }
               }"
             >
@@ -252,7 +197,7 @@
                   @click="open = !open"
                 >
                   <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="currentDot()"></span>
-                  <span class="font-medium" x-text="currentLabel()">Online</span>
+                  <span class="font-medium" x-text="currentLabel()"></span>
                   <i
                     data-lucide="chevron-down"
                     class="w-3.5 h-3.5 ml-auto transition-transform duration-200"
@@ -292,7 +237,7 @@
                 {% if request.resolver_match.view_name == 'users_ui:profile' %}aria-current="page"{% endif %}
               >
                 <i data-lucide="user" class="w-4 h-4"></i>
-                <span class="font-medium">Profile</span>
+                <span class="font-medium">{% translate "Profile" %}</span>
               </a>
             </li>
 
@@ -311,7 +256,7 @@
                 {% if request.resolver_match.view_name == 'users_ui:settings' %}aria-current="page"{% endif %}
               >
                 <i data-lucide="settings" class="w-4 h-4"></i>
-                <span class="font-medium">Settings</span>
+                <span class="font-medium">{% translate "Settings" %}</span>
               </a>
             </li>
 
@@ -326,7 +271,11 @@
                   >
                     <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>
                     <span class="font-medium">{{ module.name }}</span>
-                    {% if module.preview %}<span class="badge badge-xs badge-warning ml-auto">Preview</span>{% endif %}
+                    {% if module.preview %}
+                      <span
+                        class="badge badge-xs badge-warning ml-auto"
+                      >{% translate "Preview" context "module stage" %}</span>
+                    {% endif %}
                   </a>
                 </li>
               {% endif %}
@@ -340,7 +289,7 @@
                 class="gap-3 hover:bg-warning/10 hover:text-warning transition-colors"
               >
                 <i data-lucide="sparkles" class="w-4 h-4"></i>
-                <span class="font-medium">What's new</span>
+                <span class="font-medium">{% translate "What's new" %}</span>
                 <span class="badge badge-xs badge-ghost text-base-content/50 ml-auto">{{ APP_VERSION }}</span>
               </button>
             </li>
@@ -353,7 +302,7 @@
                 class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
               >
                 <i data-lucide="rocket" class="w-4 h-4"></i>
-                <span class="font-medium">Welcome tour</span>
+                <span class="font-medium">{% translate "Welcome tour" %}</span>
               </button>
             </li>
 
@@ -366,7 +315,7 @@
                 class="gap-3 hover:bg-secondary/10 hover:text-secondary transition-colors"
               >
                 <i data-lucide="code" class="w-4 h-4"></i>
-                <span class="font-medium">Source code</span>
+                <span class="font-medium">{% translate "Source code" %}</span>
                 <i data-lucide="external-link" class="w-3.5 h-3.5 ml-auto opacity-40"></i>
               </a>
             </li>
@@ -381,14 +330,16 @@
                 class="gap-3 hover:bg-error/10 hover:text-error transition-colors"
               >
                 <i data-lucide="bug" class="w-4 h-4"></i>
-                <span class="font-medium">Report an issue</span>
+                <span class="font-medium">{% translate "Report an issue" %}</span>
                 <i data-lucide="external-link" class="w-3.5 h-3.5 ml-auto opacity-40"></i>
               </a>
             </li>
 
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
-                <span class="text-xs text-base-content/40 uppercase tracking-wider">Admin</span>
+                <span
+                  class="text-xs text-base-content/40 uppercase tracking-wider"
+                >{% translate "Admin" context "user menu section" %}</span>
               </div>
 
               <!-- Admin -->
@@ -398,7 +349,7 @@
                   class="gap-3 hover:bg-error/10 hover:text-error transition-colors"
                 >
                   <i data-lucide="shield" class="w-4 h-4"></i>
-                  <span class="font-medium">Admin Panel</span>
+                  <span class="font-medium">{% translate "Admin Panel" %}</span>
                 </a>
               </li>
 
@@ -409,7 +360,7 @@
                   class="gap-3 hover:bg-secondary/10 hover:text-secondary transition-colors"
                 >
                   <i data-lucide="code-2" class="w-4 h-4"></i>
-                  <span class="font-medium">API Docs</span>
+                  <span class="font-medium">{% translate "API Docs" %}</span>
                 </a>
               </li>
             {% endif %}
@@ -424,7 +375,7 @@
                 class="gap-3 hover:bg-error/10 hover:text-error transition-colors font-medium"
               >
                 <i data-lucide="log-out" class="w-4 h-4"></i>
-                <span>Sign Out</span>
+                <span>{% translate "Sign Out" %}</span>
               </button>
             </li>
           {% else %}
@@ -434,7 +385,7 @@
                 class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
               >
                 <i data-lucide="log-in" class="w-4 h-4"></i>
-                <span class="font-medium">Sign In</span>
+                <span class="font-medium">{% translate "Sign In" %}</span>
               </a>
             </li>
           {% endif %}
@@ -492,19 +443,28 @@
           <i data-lucide="sparkles" class="w-5 h-5"></i>
         </div>
         <div class="flex-1 min-w-0">
-          <h3 class="font-bold text-lg leading-tight">What's new</h3>
+          <h3 class="font-bold text-lg leading-tight">{% translate "What's new" %}</h3>
           <p class="text-sm text-base-content/60 mt-0.5">
             <a
               href="https://github.com/JaaJSoft/workspace"
               target="_blank"
               rel="noopener noreferrer"
               class="link link-hover"
-            >Version {{ APP_VERSION }}</a>
+            >
+              {% blocktranslate trimmed with version=APP_VERSION %}
+                Version {{ version }}
+              {% endblocktranslate %}
+            </a>
           </p>
         </div>
         <form method="dialog">
           {# Keeps showModal() from landing on the version link, which sits earlier in the header. #}
-          <button type="submit" class="btn btn-ghost btn-sm btn-square" autofocus>
+          <button
+            type="submit"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label="{% translate 'Close' %}"
+            autofocus
+          >
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </form>
@@ -521,7 +481,7 @@
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "Close" %}</button>
     </form>
   </dialog>
 {% endif %}

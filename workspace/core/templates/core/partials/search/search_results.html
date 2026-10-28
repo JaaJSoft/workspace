@@ -8,13 +8,15 @@
   The minimum-length hint is a sibling of the results container, not a child:
   showResults() is false below two characters, which is what left it blank.
 {% endcomment %}
+{% load i18n %}
+{% translate "in content" context "search match" as in_content_label %}
 <div x-show="showMinLengthHint()" x-cloak class="px-4 py-6 text-center">
   <i data-lucide="type" class="w-6 h-6 mx-auto mb-2 opacity-30"></i>
-  <div class="text-sm text-base-content/60">Keep typing to search</div>
+  <div class="text-sm text-base-content/60">{% translate "Keep typing to search" %}</div>
   <div class="text-xs text-base-content/40 mt-1">
-    At least 2 characters, or
-    <kbd class="kbd kbd-xs">&gt;</kbd>
-    for actions
+    {% blocktranslate trimmed with key='<kbd class="kbd kbd-xs">&gt;</kbd>' %}
+      At least 2 characters, or {{ key }} for actions
+    {% endblocktranslate %}
   </div>
 </div>
 
@@ -36,7 +38,7 @@
     <div
       class="{% if size == 'lg' %}px-3{% else %}px-2{% endif %} py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
     >
-      Searching...
+      {% translate "Searching..." %}
     </div>
     <template x-for="i in 3" :key="i">
       <div
@@ -64,7 +66,7 @@
   {% endcomment %}
   <template x-if="error">
     <div class="p-3">
-      <inline-alert type="error" title="Search is unavailable" message="The search service could not be reached. Check your connection, then try again."></inline-alert>
+      <inline-alert type="error" title="{% translate 'Search is unavailable' %}" message="{% translate 'The search service could not be reached. Check your connection, then try again.' %}"></inline-alert>
     </div>
   </template>
 
@@ -73,7 +75,7 @@
     <div
       class="{% if size == 'lg' %}px-3{% else %}px-2{% endif %} py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
     >
-      Actions
+      {% translate "Actions" %}
     </div>
     <template x-for="(cmd, index) in commands" :key="cmd.name + cmd.url">
       <a
@@ -115,7 +117,7 @@
     <div
       class="{% if size == 'lg' %}px-3{% else %}px-2{% endif %} py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider"
     >
-      <span x-text="`${results.length} Result${results.length > 1 ? 's' : ''}`"></span>
+      <span x-text="resultsHeading()"></span>
     </div>
     {% comment %}
       Two providers can legitimately return the same entity with different
@@ -172,7 +174,7 @@
               to say why it is in the list. The index stores lexemes only, so
               there is no snippet to show.
             {% endcomment %}
-            <tag-chip x-show="result.match_type === 'content'" name="in content" size="sm" class="flex-shrink-0"></tag-chip>
+            <tag-chip x-show="result.match_type === 'content'" name="{{ in_content_label }}" size="sm" class="flex-shrink-0"></tag-chip>
             <template x-for="tag in (result.tags || [])" :key="tag.label">
               <tag-chip :name="tag.label" :color="tag.color" size="sm" class="flex-shrink-0"></tag-chip>
             </template>
@@ -186,17 +188,14 @@
   <!-- No results -->
   <div x-show="showEmptyState()" class="px-4 py-8 text-center">
     <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
-    <div
-      class="text-sm text-base-content/60"
-      x-text="isCommandMode() ? 'No matching action' : (isMineOnly() ? 'No results in your own items' : 'No results found')"
-    ></div>
+    <div class="text-sm text-base-content/60" x-text="emptyStateMessage()"></div>
     <button
       type="button"
       x-show="showMineOnlyHint()"
       @click="setMineOnly(false)"
       class="btn btn-ghost btn-sm text-primary mt-2"
     >
-      Search everything
+      {% translate "Search everything" %}
     </button>
   </div>
 </div>

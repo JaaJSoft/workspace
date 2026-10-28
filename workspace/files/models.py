@@ -10,7 +10,7 @@ from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext_lazy, pgettext_lazy
 
 from workspace.common.text import caseless
 from workspace.common.uuids import uuid_v7_or_v4
@@ -1090,7 +1090,7 @@ class FileEvent(models.Model):
     """Audit log entry for non-read operations performed on a file or folder."""
 
     class Action(models.TextChoices):
-        CREATED = "created", gettext_lazy("Created")
+        CREATED = "created", pgettext_lazy("file event", "Created")
         RENAMED = "renamed", gettext_lazy("Renamed")
         MOVED = "moved", gettext_lazy("Moved")
         CONTENT_REPLACED = "content_replaced", gettext_lazy("Updated")

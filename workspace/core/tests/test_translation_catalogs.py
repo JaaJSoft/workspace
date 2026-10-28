@@ -11,15 +11,18 @@ from pathlib import Path
 
 import polib
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.http import HttpResponse
+from django.test import RequestFactory, SimpleTestCase
+from django.utils import translation
 
 from workspace.core.services.translations import shared_catalogs
+from workspace.core.views.i18n import WorkspaceJavaScriptCatalog
 
 WORKSPACE_DIR = Path(settings.BASE_DIR) / "workspace"
 
 
-def po_files():
-    return sorted(WORKSPACE_DIR.glob("*/locale/*/LC_MESSAGES/*.po"))
+def po_files(domain="*"):
+    return sorted(WORKSPACE_DIR.glob(f"*/locale/*/LC_MESSAGES/{domain}.po"))
 
 
 def mo_catalog(path):
@@ -33,13 +36,51 @@ def po_catalog(po):
     """What msgfmt compiles out of a .po: its translated, non-fuzzy entries."""
     catalog = {}
     for entry in po.translated_entries():
-        msgid = f"{entry.msgctxt}\x04{entry.msgid}" if entry.msgctxt else entry.msgid
+        msgid = msgid_key(entry)
         if entry.msgid_plural:
             for index, msgstr in entry.msgstr_plural.items():
                 catalog[(msgid, int(index))] = msgstr
         else:
             catalog[msgid] = entry.msgstr
     return catalog
+
+
+def msgid_key(entry):
+    return f"{entry.msgctxt}\x04{entry.msgid}" if entry.msgctxt else entry.msgid
+
+
+def expected(entry):
+    """The entry's msgstr; for a plural, the form of n=1 (index 0 in French)."""
+    return entry.msgstr_plural[0] if entry.msgid_plural else entry.msgstr
+
+
+def server_translation(entry):
+    """What templates and Python get for the entry under the active language."""
+    if entry.msgid_plural and entry.msgctxt:
+        return translation.npgettext(entry.msgctxt, entry.msgid, entry.msgid_plural, 1)
+    if entry.msgid_plural:
+        return translation.ngettext(entry.msgid, entry.msgid_plural, 1)
+    if entry.msgctxt:
+        return translation.pgettext(entry.msgctxt, entry.msgid)
+    return translation.gettext(entry.msgid)
+
+
+class _CapturedScriptCatalog(WorkspaceJavaScriptCatalog):
+    def render_to_response(self, context, **response_kwargs):
+        response = HttpResponse()
+        response.catalog = context["catalog"]
+        return response
+
+
+def served_script_catalog(language):
+    """The msgid -> msgstr mapping the JavaScript catalog view sends."""
+    view = _CapturedScriptCatalog.as_view()
+    return view(RequestFactory().get("/"), language=language).catalog
+
+
+def script_translation(catalog, entry):
+    value = catalog.get(msgid_key(entry))
+    return value[0] if entry.msgid_plural and value else value
 
 
 class TranslationCatalogTests(SimpleTestCase):
@@ -128,3 +169,35 @@ class TranslationCatalogTests(SimpleTestCase):
                     [],
                     "Run `manage.py translations <module>`: it drops shared msgids.",
                 )
+
+    def test_no_server_translation_is_shadowed(self):
+        # Every installed app's catalog is merged into one, and an app listed
+        # earlier wins a msgid both hold: Django's and DRF's catalogs read
+        # "Page not found" as "Page non trouvée" and "Created" as "Création",
+        # whatever ours says. The cure is a context at the call site.
+        for po_path in po_files("django"):
+            language = po_path.parent.parent.name
+            with (
+                self.subTest(po=str(po_path.relative_to(settings.BASE_DIR))),
+                translation.override(language),
+            ):
+                shadowed = [
+                    (entry.msgctxt, entry.msgid, got)
+                    for entry in polib.pofile(str(po_path)).translated_entries()
+                    if (got := server_translation(entry)) != expected(entry)
+                ]
+                self.assertEqual(shadowed, [])
+
+    def test_no_script_translation_is_shadowed(self):
+        # The browser reads the catalog the view serves, not the merged one:
+        # check each script msgid there, against the same precedence.
+        for po_path in po_files("djangojs"):
+            language = po_path.parent.parent.name
+            with self.subTest(po=str(po_path.relative_to(settings.BASE_DIR))):
+                catalog = served_script_catalog(language)
+                shadowed = [
+                    (entry.msgctxt, entry.msgid, got)
+                    for entry in polib.pofile(str(po_path)).translated_entries()
+                    if (got := script_translation(catalog, entry)) != expected(entry)
+                ]
+                self.assertEqual(shadowed, [])

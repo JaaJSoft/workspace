@@ -437,3 +437,25 @@ describe('the "Mine only" switch', () => {
     assert.equal(palette.showMineOnlyHint(), false);
   });
 });
+
+describe('labels', () => {
+  test('the empty state says which list came back empty', () => {
+    const { palette } = boot();
+    palette.query = 'budget';
+    assert.equal(palette.emptyStateMessage(), 'No results found');
+    palette.query = '>budget';
+    assert.equal(palette.emptyStateMessage(), 'No matching action');
+
+    const { palette: mine } = boot({ scope: 'mine' });
+    mine.query = 'budget';
+    assert.equal(mine.emptyStateMessage(), 'No results in your own items');
+  });
+
+  test('the results heading is one plural message, not a suffixed word', () => {
+    const { palette } = boot();
+    palette.results = [{}];
+    assert.equal(palette.resultsHeading(), '1 result');
+    palette.results = [{}, {}, {}];
+    assert.equal(palette.resultsHeading(), '3 results');
+  });
+});

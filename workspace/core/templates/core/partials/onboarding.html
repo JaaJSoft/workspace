@@ -1,4 +1,6 @@
-{% load static %}
+{% load i18n static %}
+{% translate "Welcome aboard" as welcome_title %}
+{% translate "The changelog lists every recent improvement and fix." as changelog_hint %}
 <dialog
   id="onboarding-dialog"
   class="modal"
@@ -15,7 +17,7 @@
 >
   <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
     <!-- Header -->
-    {% include "ui/partials/dialog_header.html" with icon="rocket" icon_class="bg-primary/10 text-primary" title="Welcome aboard" title_id="onboarding-title" subtitle_expr="'Step ' + step + ' of 3'" close_form=True class="px-5 py-4 border-b border-base-300 shrink-0" only %}
+    {% include "ui/partials/dialog_header.html" with icon="rocket" icon_class="bg-primary/10 text-primary" title=welcome_title title_id="onboarding-title" subtitle_expr="stepLabel()" close_form=True class="px-5 py-4 border-b border-base-300 shrink-0" only %}
 
     <!-- Progress bar -->
     <div class="h-1 bg-base-200" aria-hidden="true">
@@ -38,19 +40,29 @@
           <i data-lucide="sparkles" class="w-10 h-10 text-primary"></i>
         </div>
         <h2 data-step-title tabindex="-1" class="text-2xl font-bold mb-2">
-          Welcome{% if user.first_name %}, {{ user.first_name }}{% endif %}
+          {% if user.first_name %}
+            {% blocktranslate trimmed with name=user.first_name %}
+              Welcome, {{ name }}
+            {% endblocktranslate %}
+          {% else %}
+            {% translate "Welcome" %}
+          {% endif %}
         </h2>
         <p class="text-base-content/70 max-w-md mx-auto">
-          JaaJ Workspace is your all-in-one space for files, notes, mail, calendar, chat, and more.
-          Let's take a quick tour so you know where everything lives.
+          {% blocktranslate trimmed %}
+            JaaJ Workspace is your all-in-one space for files, notes, mail, calendar, chat, and more.
+            Let's take a quick tour so you know where everything lives.
+          {% endblocktranslate %}
         </p>
       </div>
 
       <!-- Step 2: Modules -->
       <div x-show="step === 2" data-step="2" x-cloak>
-        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">Everything in one place</h2>
+        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">{% translate "Everything in one place" %}</h2>
         <p class="text-sm text-base-content/60 mb-4">
-          Each module lives in its own page. Pick one to jump straight in - you can always come back here later.
+          {% blocktranslate trimmed %}
+            Each module lives in its own page. Pick one to jump straight in - you can always come back here later.
+          {% endblocktranslate %}
         </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for module in workspace_active_modules %}
@@ -89,24 +101,26 @@
               </div>
             {% endif %}
           {% empty %}
-            <p class="text-sm text-base-content/50">Your modules will appear here once they're enabled.</p>
+            <p
+              class="text-sm text-base-content/50"
+            >{% translate "Your modules will appear here once they're enabled." %}</p>
           {% endfor %}
         </div>
       </div>
 
       <!-- Step 3: Ready -->
       <div x-show="step === 3" data-step="3" x-cloak>
-        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">You're all set</h2>
-        <p class="text-sm text-base-content/60 mb-4">A few tips to get the most out of the app:</p>
+        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">{% translate "You're all set" %}</h2>
+        <p class="text-sm text-base-content/60 mb-4">{% translate "A few tips to get the most out of the app:" %}</p>
         <ul class="space-y-3">
           <li class="flex items-start gap-3">
             <div class="rounded-lg bg-info/10 p-2 shrink-0">
               <i data-lucide="search" class="w-4 h-4 text-info"></i>
             </div>
             <div>
-              <div class="font-medium text-sm">Search everything from the top bar</div>
+              <div class="font-medium text-sm">{% translate "Search everything from the top bar" %}</div>
               <div class="text-xs text-base-content/60">
-                Find files, notes, mail and conversations, or jump to any module quickly.
+                {% translate "Find files, notes, mail and conversations, or jump to any module quickly." %}
               </div>
             </div>
           </li>
@@ -115,9 +129,9 @@
               <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
             </div>
             <div>
-              <div class="font-medium text-sm">Personalize your workspace</div>
+              <div class="font-medium text-sm">{% translate "Personalize your workspace" %}</div>
               <div class="text-xs text-base-content/60">
-                Pick a theme, set your timezone and configure notifications from the user menu.
+                {% translate "Pick a theme, set your timezone and configure notifications from the user menu." %}
               </div>
             </div>
           </li>
@@ -126,10 +140,9 @@
               <i data-lucide="rotate-ccw" class="w-4 h-4 text-success"></i>
             </div>
             <div>
-              <div class="font-medium text-sm">Re-open this tour anytime</div>
+              <div class="font-medium text-sm">{% translate "Re-open this tour anytime" %}</div>
               <div class="text-xs text-base-content/60">
-                Click "Welcome tour" in the user menu
-                to revisit these steps.
+                {% translate "Click “Welcome tour” in the user menu to revisit these steps." %}
               </div>
             </div>
           </li>
@@ -138,15 +151,15 @@
               <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <div class="font-medium text-sm">See what's new in each release</div>
-              <div class="text-xs text-base-content/60">The changelog lists every recent improvement and fix.</div>
+              <div class="font-medium text-sm">{% translate "See what's new in each release" %}</div>
+              <div class="text-xs text-base-content/60">{{ changelog_hint }}</div>
             </div>
             <button
               type="button"
               class="btn btn-xs btn-ghost shrink-0 self-center gap-1 hover:bg-primary/10 hover:text-primary"
               @click="openChangelog()"
             >
-              View changelog
+              {% translate "View changelog" %}
               <i data-lucide="external-link" class="w-3 h-3"></i>
             </button>
           </li>
@@ -166,10 +179,10 @@
           @click="prev()"
         >
           <i data-lucide="chevron-left" class="w-4 h-4"></i>
-          Back
+          {% translate "Back" context "wizard step" %}
         </button>
         <form method="dialog" x-show="step < 3">
-          <button type="submit" class="btn btn-ghost btn-sm text-base-content/50">Skip tour</button>
+          <button type="submit" class="btn btn-ghost btn-sm text-base-content/50">{% translate "Skip tour" %}</button>
         </form>
       </div>
       <div class="flex gap-2" aria-hidden="true">
@@ -186,7 +199,7 @@
         class="btn btn-primary btn-sm"
         @click="next()"
       >
-        Next
+        {% translate "Next" %}
         <i data-lucide="chevron-right" class="w-4 h-4"></i>
       </button>
       <a
@@ -196,13 +209,13 @@
         class="btn btn-primary btn-sm"
         @click.prevent="goTo('{% url 'dashboard:index' %}')"
       >
-        Get started
+        {% translate "Get started" %}
         <i data-lucide="check" class="w-4 h-4"></i>
       </a>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "Close" %}</button>
   </form>
 </dialog>
 

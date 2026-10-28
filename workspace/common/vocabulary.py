@@ -19,6 +19,7 @@ VOCABULARY = [
     gettext_noop("Actions"),
     gettext_noop("Activity"),
     gettext_noop("API Access"),
+    gettext_noop("Apps"),
     gettext_noop("Authentication:"),
     gettext_noop("Back"),
     gettext_noop("Base URL:"),
@@ -79,6 +80,7 @@ VOCABULARY = [
     gettext_noop("Pause"),
     gettext_noop("Preferences"),
     gettext_noop("Previous"),
+    gettext_noop("Profile"),
     gettext_noop("Properties"),
     gettext_noop("Refresh"),
     gettext_noop("Reload"),
@@ -93,9 +95,11 @@ VOCABULARY = [
     gettext_noop("Saved"),
     gettext_noop("Saving..."),
     gettext_noop("Search"),
+    gettext_noop("Settings"),
     gettext_noop("Share"),
     gettext_noop("Show"),
     gettext_noop("Show password"),
+    gettext_noop("Sign In"),
     gettext_noop(
         "Sign in with your username and password. If your account uses single "
         "sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> "

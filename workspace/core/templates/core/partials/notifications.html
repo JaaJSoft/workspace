@@ -1,3 +1,10 @@
+{% load i18n %}
+{% translate "Disable push notifications" as disable_push_label %}
+{% translate "Enable push notifications" as enable_push_label %}
+{% translate "No matching notifications" as no_matching_label %}
+{% translate "No notifications" as no_notifications_label %}
+{% translate "Urgent" context "notification priority" as urgent_label %}
+{% translate "High" context "notification priority" as high_label %}
 <!-- Notifications dropdown -->
 <div
   class="dropdown dropdown-end"
@@ -52,7 +59,7 @@
     type="button"
     @click="toggle()"
     class="btn btn-ghost btn-circle btn-sm hover:bg-primary/10 transition-all indicator"
-    title="Notifications"
+    title="{% translate 'Notifications' %}"
   >
     <i data-lucide="bell" class="w-5 h-5"></i>
     <span
@@ -77,7 +84,7 @@
     <div
       class="px-3 py-2.5 border-b border-base-300 flex items-center justify-between"
     >
-      <h3 class="font-semibold text-base-content">Notifications</h3>
+      <h3 class="font-semibold text-base-content">{% translate "Notifications" %}</h3>
       <div class="flex items-center gap-1">
         <button
           type="button"
@@ -86,7 +93,7 @@
           @click="$store.push.toggle()"
           class="btn btn-ghost btn-xs btn-circle"
           :class="$store.push.enabled ? 'text-primary' : 'text-base-content/50'"
-          :title="$store.push.enabled ? 'Disable push notifications' : 'Enable push notifications'"
+          :title="$store.push.enabled ? '{{ disable_push_label|escapejs }}' : '{{ enable_push_label|escapejs }}'"
           :disabled="$store.push.loading"
         >
           <i
@@ -99,7 +106,7 @@
           @click="searchOpen ? clearSearch() : (searchOpen = true, $nextTick(() => $refs.searchInput.focus()))"
           class="btn btn-ghost btn-xs btn-circle"
           :class="searchOpen ? 'text-primary' : 'text-base-content/50'"
-          title="Search"
+          title="{% translate 'Search' %}"
         >
           <i data-lucide="search" class="w-3.5 h-3.5"></i>
         </button>
@@ -109,7 +116,7 @@
           @click="$store.notifications.markAllRead()"
           class="btn btn-ghost btn-xs text-primary hover:bg-primary/10"
         >
-          Mark all read
+          {% translate "Mark all read" %}
         </button>
       </div>
     </div>
@@ -122,7 +129,7 @@
         x-effect="if (searchOpen) applySearch()"
         type="text"
         class="input input-bordered input-xs w-full"
-        placeholder="Search notifications..."
+        placeholder="{% translate 'Search notifications...' %}"
         @keydown.escape="clearSearch()"
       />
     </div>
@@ -139,7 +146,7 @@
         :class="filter === 'all' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
       >
         <i data-lucide="layers" class="w-3 h-3"></i>
-        All
+        {% translate "All" context "notifications filter" %}
       </button>
       <button
         type="button"
@@ -148,7 +155,7 @@
         :class="filter === 'unread' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
       >
         <i data-lucide="circle-dot" class="w-3 h-3"></i>
-        Unread
+        {% translate "Unread" context "notifications filter" %}
       </button>
       <template x-for="o in origins" :key="o">
         <button
@@ -188,7 +195,7 @@
         ></i>
         <p
           class="text-sm"
-          x-text="(filter !== 'all' || search) ? 'No matching notifications' : 'No notifications'"
+          x-text="(filter !== 'all' || search) ? '{{ no_matching_label|escapejs }}' : '{{ no_notifications_label|escapejs }}'"
         ></p>
       </div>
 
@@ -239,7 +246,7 @@
               <span
                 x-show="item.priority === 'urgent' || item.priority === 'high'"
                 class="badge badge-error badge-xs"
-                x-text="item.priority"
+                x-text="item.priority === 'urgent' ? '{{ urgent_label|escapejs }}' : '{{ high_label|escapejs }}'"
               ></span>
             </div>
           </div>
@@ -263,7 +270,7 @@
           x-show="$store.notifications.loadingMore"
           class="loading loading-spinner loading-xs"
         ></span>
-        <span x-show="!$store.notifications.loadingMore">Load more</span>
+        <span x-show="!$store.notifications.loadingMore">{% translate "Load more" %}</span>
       </button>
     </div>
 
@@ -277,7 +284,7 @@
         @click="$store.notifications.markAllRead(); notificationsOpen = false;"
         class="btn btn-ghost btn-sm btn-block text-primary hover:bg-primary/10"
       >
-        Dismiss all
+        {% translate "Dismiss all" %}
       </button>
     </div>
   </div>

@@ -6,6 +6,7 @@
   - on_escape: handler personnalisé pour Escape (défaut: "close()")
   - size: taille du composant - "lg" pour grande taille (optionnel, défaut: taille normale)
 {% endcomment %}
+{% load i18n %}
 <div class="relative group flex-1">
   <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
     <i
@@ -26,7 +27,7 @@
     @keydown.escape="{{ on_escape|default:'close() ' }}"
     @palette:commands="enterCommandMode()"
     class="input input-bordered w-full {% if size == 'lg' %}pl-12{% else %}pl-10{% endif %} pr-10 {% if show_kbd %}sm:pr-20{% endif %} bg-base-200/50 focus:bg-base-100 border-base-300 focus:border-primary/50 transition-all {{ input_class }}"
-    placeholder="Search..."
+    placeholder="{% translate 'Search...' %}"
     autocomplete="off"
   />
   <div

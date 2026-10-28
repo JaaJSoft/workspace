@@ -1,3 +1,4 @@
+{% load i18n %}
 <div id="{{ activity_prefix }}" class="space-y-3">
   {% if activity_events %}
     <ul
@@ -21,15 +22,15 @@
           x-target="{{ activity_prefix }}-list {{ activity_prefix }}-load-more"
         >
           <i data-lucide="chevrons-down" class="w-4 h-4"></i>
-          Show older activity
+          {% translate "Show older activity" %}
         </a>
       </div>
     {% endif %}
   {% else %}
     {% if activity_search %}
-      <inline-alert type="info" message="No activity matching your search."></inline-alert>
+      <inline-alert type="info" message="{% translate 'No activity matching your search.' %}"></inline-alert>
     {% else %}
-      <inline-alert type="info" message="No activity to show."></inline-alert>
+      <inline-alert type="info" message="{% translate 'No activity to show.' %}"></inline-alert>
     {% endif %}
   {% endif %}
 </div>

@@ -544,7 +544,10 @@
                 {% endif %}
                 <th class="hidden lg:table-cell w-48" data-col="tags">{% translate "Tags" %}</th>
                 <th class="hidden sm:table-cell w-24" data-col="size">{% translate "Size" %}</th>
-                <th class="hidden md:table-cell w-36" data-col="created">{% translate "Created" %}</th>
+                <th
+                  class="hidden md:table-cell w-36"
+                  data-col="created"
+                >{% translate "Created" context "file date" %}</th>
                 <th class="hidden md:table-cell w-36" data-col="modified">
                   {% if is_trash_view %}
                     {% translate "Deleted" %}

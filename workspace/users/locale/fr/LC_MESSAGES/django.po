@@ -52,10 +52,6 @@ msgid "Signing in..."
 msgstr "Connexion..."
 
 #: ui/templates/users/ui/auth/login.html
-msgid "Sign In"
-msgstr "Se connecter"
-
-#: ui/templates/users/ui/auth/login.html
 msgid "Sign in to continue"
 msgstr "Connectez-vous pour continuer"
 
@@ -556,11 +552,6 @@ msgstr "Administrateur"
 msgid "Staff"
 msgstr "Équipe"
 
-#: ui/templates/users/ui/partials/user_card.html
-#: ui/templates/users/ui/settings.html
-msgid "Profile"
-msgstr "Profil"
-
 #: ui/templates/users/ui/partials/user_selector.html
 msgid "Search users..."
 msgstr "Rechercher des utilisateurs..."
@@ -568,10 +559,6 @@ msgstr "Rechercher des utilisateurs..."
 #: ui/templates/users/ui/partials/user_selector.html
 msgid "No users found"
 msgstr "Aucun utilisateur trouvé"
-
-#: ui/templates/users/ui/profile.html ui/templates/users/ui/settings.html
-msgid "Settings"
-msgstr "Paramètres"
 
 #: ui/templates/users/ui/profile.html
 msgid "Send message"

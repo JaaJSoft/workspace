@@ -17,6 +17,7 @@ Params:
                  chevron in the HTML itself so the rail never paints them
                  before Alpine binds
 {% endcomment %}
+{% load i18n %}
 {% with ce=collapse_expr|default:"collapsed" %}
   <div
     id="module-switcher"
@@ -34,8 +35,8 @@ Params:
     <label
       tabindex="0"
       class="btn btn-ghost btn-sm h-auto min-h-0 border-0 normal-case flex-nowrap gap-2 p-1 cursor-pointer hover:bg-module/15 transition-all"
-      title="Switch module (Alt+K)"
-      aria-label="Switch module, currently {{ module.name }}"
+      title="{% translate 'Switch module (Alt+K)' %}"
+      aria-label="{% blocktranslate trimmed with name=module.name %}Switch module, currently {{ name }}{% endblocktranslate %}"
     >
       <span
         class="w-8 h-8 shrink-0 rounded-lg bg-module/15 text-module flex items-center justify-center"
@@ -69,11 +70,11 @@ Params:
       >
         <span
           class="pl-2 text-xs font-semibold uppercase tracking-wider text-base-content/50"
-        >Apps</span>
+        >{% translate "Apps" %}</span>
         <span class="flex items-center gap-1.5">
           <span
             class="flex items-center gap-0.5"
-            title="Open the switcher with Alt+K"
+            title="{% translate 'Open the switcher with Alt+K' %}"
           >
             <kbd class="kbd kbd-xs">Alt</kbd>
             <kbd class="kbd kbd-xs">K</kbd>
@@ -81,8 +82,8 @@ Params:
           <a
             href="{% url 'users_ui:settings' %}"
             class="btn btn-ghost btn-xs btn-square text-base-content/60 hover:text-base-content"
-            title="Settings"
-            aria-label="Settings"
+            title="{% translate 'Settings' %}"
+            aria-label="{% translate 'Settings' %}"
           >
             <i data-lucide="settings" class="w-3.5 h-3.5"></i>
           </a>
@@ -91,7 +92,7 @@ Params:
       <section
         id="module-switcher-grid"
         class="grid grid-cols-4 gap-1"
-        aria-label="Modules"
+        aria-label="{% translate 'Modules' %}"
       >
         <a
           href="/"
@@ -102,7 +103,7 @@ Params:
           >
             <i data-lucide="home" class="w-5 h-5"></i>
           </span>
-          <span class="text-[11px] font-medium leading-tight">Home</span>
+          <span class="text-[11px] font-medium leading-tight">{% translate "Home" %}</span>
         </a>
         {% for m in workspace_switcher_modules %}
           <a

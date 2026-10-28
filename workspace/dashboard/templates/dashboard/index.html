@@ -99,39 +99,7 @@
           {% include "core/partials/search/quick_actions.html" with size="lg" %}
           {% include "core/partials/search/search_results.html" with size="lg" %}
 
-          {# ── Footer hints ── #}
-          <div
-            x-show="open"
-            class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
-          >
-            <span class="flex items-center gap-1">
-              <kbd class="kbd kbd-xs">↑↓</kbd>
-              {% translate "navigate" %}
-            </span>
-            <span class="flex items-center gap-1">
-              <kbd class="kbd kbd-xs">⏎</kbd>
-              {% translate "select" %}
-            </span>
-            <button
-              type="button"
-              @click="enterCommandMode()"
-              class="flex items-center gap-1 hover:text-base-content"
-              title="{% translate 'Actions and apps only (Ctrl/Cmd+Shift+K)' %}"
-            >
-              <kbd class="kbd kbd-xs">&gt;</kbd>
-              {% translate "actions" %}
-            </button>
-            {% include "core/partials/search/scope_toggle.html" %}
-            <button
-              type="button"
-              @click="close()"
-              class="btn btn-ghost btn-xs"
-              title="{% translate 'Close' %}"
-              aria-label="{% translate 'Close search results' %}"
-            >
-              <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-          </div>
+          {% include "core/partials/search/footer_hints.html" %}
         </div>
       </div>
     </section>

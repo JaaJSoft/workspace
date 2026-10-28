@@ -47,7 +47,10 @@
     const zone = document.createElement('strong');
     zone.textContent = detected;
     const text = document.createElement('span');
-    text.append('Your browser looks like it is in ', zone, '. Update your timezone?');
+    // The zone is an element, so the sentence is split around its placeholder
+    // rather than interpolated: the translation decides where it goes.
+    const [before, after = ''] = gettext('Your browser looks like it is in %(zone)s. Update your timezone?').split('%(zone)s');
+    text.append(before, zone, after);
     let saving = false;
     const alert = document.createElement('inline-alert');
     alert.setAttribute('type', 'info');
@@ -56,7 +59,7 @@
     update.type = 'button';
     update.setAttribute('slot', 'actions');
     update.className = 'btn btn-xs btn-primary';
-    update.textContent = 'Update';
+    update.textContent = gettext('Update');
     update.addEventListener('click', function() {
       if (saving) return;
       saving = true;
@@ -65,14 +68,14 @@
         window.location.reload();
       }).catch(function() {
         saving = false;
-        text.textContent = 'Could not save your timezone. Try again?';
+        text.textContent = gettext('Could not save your timezone. Try again?');
       });
     });
     const ignore = document.createElement('button');
     ignore.type = 'button';
     ignore.setAttribute('slot', 'actions');
     ignore.className = 'btn btn-xs btn-ghost';
-    ignore.textContent = 'Ignore';
+    ignore.textContent = gettext('Ignore');
     ignore.addEventListener('click', function() {
       // Not while a save is in flight: its failure has to be able to reach the
       // user, and a dismissal stored here would outlive the banner.

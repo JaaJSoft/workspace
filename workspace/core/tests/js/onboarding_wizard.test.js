@@ -70,3 +70,11 @@ test('an account that already finished the tour writes nothing', async () => {
   assert.equal(app.completed, true);
   await app.markCompleteIfNeeded();
 });
+
+test('the subtitle names the current step out of three', () => {
+  const { app } = wizard();
+  assert.equal(app.stepLabel(), 'Step 1 of 3');
+  app.$nextTick = () => {};
+  app.next();
+  assert.equal(app.stepLabel(), 'Step 2 of 3');
+});

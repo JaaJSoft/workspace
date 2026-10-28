@@ -96,6 +96,26 @@ test('the export dialog opens on the sidebar selection and counts what it covers
   assert.equal(app.mineCount, 5);
 });
 
+test('the export summary is one translated sentence with translated plurals', () => {
+  const catalog = {
+    '%(contacts)s and %(lists)s will be exported.': 'À exporter : %(contacts)s et %(lists)s.',
+  };
+  const plurals = {
+    '%(count)s contact': ['%(count)s contact', '%(count)s contacts'],
+    '%(count)s list': ['%(count)s liste', '%(count)s listes'],
+  };
+  const ctx = load(null, {
+    gettext: (msgid) => catalog[msgid] || msgid,
+    // French puts 0 with 1 in the singular form.
+    ngettext: (singular, plural, count) => plurals[singular][count <= 1 ? 0 : 1],
+  });
+  const app = ctx.peopleApp({});
+  app.mineCount = 3;
+  app.lists = [];
+  app.exportForm.target = 'mine';
+  assert.equal(app.exportSummaryText(), 'À exporter : 3 contacts et 0 liste.');
+});
+
 test('menu rows open the export dialog on their target instead of downloading', () => {
   const ctx = load();
   const app = ctx.peopleApp({ scope: 'mine' });

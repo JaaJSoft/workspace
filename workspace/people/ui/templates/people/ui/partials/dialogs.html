@@ -1,4 +1,6 @@
 {# Dialogs of the page shell: new contact, new or renamed list, vCard import and export, and a contact's QR code. The panel's own dialogs live in person_panel.html. #}
+{% load i18n %}
+{% translate "Choose the address book it goes in." as choose_book %}
 <dialog
   id="people-person-dialog"
   x-ref="personDialog"
@@ -6,38 +8,49 @@
   @close="resetPersonForm()"
 >
   <div class="modal-box">
-    {% include "ui/partials/dialog_header.html" with icon="user-plus" title="New contact" subtitle_expr="'Choose the address book it goes in.'" close_expr="$refs.personDialog.close()" only %}
+    {% translate "New contact" as new_contact_title %}
+    {% with choose_book_js=choose_book|escapejs %}
+      {% with subtitle="'"|add:choose_book_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="user-plus" title=new_contact_title subtitle_expr=subtitle close_expr="$refs.personDialog.close()" only %}
+      {% endwith %}
+    {% endwith %}
     <form @submit.prevent="createPerson()" class="space-y-3">
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Name</span></div>
+        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
         <input
           type="text"
           name="display_name"
           class="input input-bordered input-sm w-full"
-          placeholder="Full name"
+          placeholder="{% translate "Full name" %}"
           x-ref="personName"
           x-model="personForm.name"
           required
         />
       </label>
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Email <span class="opacity-60">(optional)</span></span></div>
+        <div class="label">
+          <span class="label-text">
+            {% blocktranslate trimmed %}
+              Email <span class="opacity-60">(optional)</span>
+            {% endblocktranslate %}
+          </span>
+        </div>
         <input
           type="email"
           name="email"
           class="input input-bordered input-sm w-full"
-          placeholder="name@example.com"
+          placeholder="{% translate "name@example.com" %}"
           x-model="personForm.email"
         />
       </label>
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Address book</span></div>
+        <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
         <select
           name="scope"
           class="select select-bordered select-sm w-full"
           x-model="personForm.scope"
         >
-          <option value="mine">My contacts</option>
+          <option value="mine">{% translate "My contacts" %}</option>
           <template x-for="group in groups" :key="group.id">
             <option :value="'group:' + group.id" x-text="group.name"></option>
           </template>
@@ -49,20 +62,20 @@
           class="btn btn-ghost btn-sm"
           @click="$refs.personDialog.close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="submit"
           class="btn btn-module btn-sm"
           :disabled="saving || !personForm.name.trim()"
         >
-          Create
+          {% translate "Create" %}
         </button>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>
 
@@ -73,14 +86,20 @@
   @close="resetImportForm()"
 >
   <div class="modal-box">
-    {% include "ui/partials/dialog_header.html" with icon="upload" title="Import contacts" subtitle_expr="'A .vcf file from a phone, Google Contacts or Nextcloud.'" close_expr="$refs.importDialog.close()" only %}
+    {% translate "Import contacts" as import_title %}
+    {% translate "A .vcf file from a phone, Google Contacts or Nextcloud." as import_subtitle %}
+    {% with import_subtitle_js=import_subtitle|escapejs %}
+      {% with subtitle="'"|add:import_subtitle_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="upload" title=import_title subtitle_expr=subtitle close_expr="$refs.importDialog.close()" only %}
+      {% endwith %}
+    {% endwith %}
     <form
       @submit.prevent="runImport()"
       class="space-y-3"
       x-show="!importResult"
     >
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">vCard file</span></div>
+        <div class="label"><span class="label-text">{% translate "vCard file" %}</span></div>
         <input
           type="file"
           name="file"
@@ -91,20 +110,20 @@
         />
       </label>
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Address book</span></div>
+        <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
         <select
           name="scope"
           class="select select-bordered select-sm w-full"
           x-model="importForm.scope"
         >
-          <option value="mine">My contacts</option>
+          <option value="mine">{% translate "My contacts" %}</option>
           <template x-for="group in groups" :key="group.id">
             <option :value="'group:' + group.id" x-text="group.name"></option>
           </template>
         </select>
       </label>
       <p class="text-xs text-base-content/60">
-        A contact already in the address book (same card or same email) is updated rather than duplicated. Groups become lists.
+        {% translate "A contact already in the address book (same card or same email) is updated rather than duplicated. Groups become lists." %}
       </p>
       <template x-if="importError">
         <inline-alert type="error"><span x-text="importError"></span></inline-alert>
@@ -115,7 +134,7 @@
           class="btn btn-ghost btn-sm"
           @click="$refs.importDialog.close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="submit"
@@ -123,35 +142,35 @@
           :disabled="saving || !importForm.file"
         >
           <span x-show="saving" class="loading loading-spinner loading-xs"></span>
-          Import
+          {% translate "Import" %}
         </button>
       </div>
     </form>
     <div x-show="importResult" class="space-y-3" x-cloak>
       <div class="stats stats-vertical sm:stats-horizontal w-full bg-base-200">
         <div class="stat">
-          <div class="stat-title">Created</div>
+          <div class="stat-title">{% translate "Created" context "imported contacts" %}</div>
           <div
             class="stat-value text-2xl text-module"
             x-text="importResult ? importResult.created : 0"
           ></div>
-          <div class="stat-desc">new contacts</div>
+          <div class="stat-desc">{% translate "new contacts" %}</div>
         </div>
         <div class="stat">
-          <div class="stat-title">Updated</div>
+          <div class="stat-title">{% translate "Updated" context "imported contacts" %}</div>
           <div
             class="stat-value text-2xl"
             x-text="importResult ? importResult.updated : 0"
           ></div>
-          <div class="stat-desc">already there</div>
+          <div class="stat-desc">{% translate "already there" %}</div>
         </div>
         <div class="stat">
-          <div class="stat-title">Lists</div>
+          <div class="stat-title">{% translate "Lists" %}</div>
           <div
             class="stat-value text-2xl"
             x-text="importResult ? importResult.lists : 0"
           ></div>
-          <div class="stat-desc">from groups</div>
+          <div class="stat-desc">{% translate "from groups" %}</div>
         </div>
       </div>
       <div class="modal-action">
@@ -160,22 +179,30 @@
           class="btn btn-module btn-sm"
           @click="$refs.importDialog.close()"
         >
-          Done
+          {% translate "Done" %}
         </button>
       </div>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>
 
 <dialog id="people-export-dialog" x-ref="exportDialog" class="modal">
   <div class="modal-box">
-    {% include "ui/partials/dialog_header.html" with icon="download" title="Export contacts" subtitle_expr="'A .vcf file (vCard 4.0) for a phone, Google Contacts or Nextcloud.'" close_expr="$refs.exportDialog.close()" only %}
+    {% translate "Export contacts" as export_title %}
+    {% translate "A .vcf file (vCard 4.0) for a phone, Google Contacts or Nextcloud." as export_subtitle %}
+    {% with export_subtitle_js=export_subtitle|escapejs %}
+      {% with subtitle="'"|add:export_subtitle_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="download" title=export_title subtitle_expr=subtitle close_expr="$refs.exportDialog.close()" only %}
+      {% endwith %}
+    {% endwith %}
     <form @submit.prevent class="space-y-3">
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">What to export</span></div>
+        <div class="label"><span class="label-text">{% translate "What to export" %}</span></div>
+        {% translate "Contact: %(name)s" as contact_target %}
+        {% translate "List: %(name)s" as list_target %}
         <select
           name="target"
           class="select select-bordered select-sm w-full"
@@ -184,23 +211,26 @@
           <template x-if="exportPerson">
             <option
               :value="'person:' + exportPerson.uuid"
-              x-text="'Contact: ' + exportPerson.name"
+              x-text="interpolate('{{ contact_target|escapejs }}', { name: exportPerson.name }, true)"
             ></option>
           </template>
-          <option value="all">Everything</option>
-          <option value="mine">My contacts</option>
+          <option value="all">{% translate "Everything" %}</option>
+          <option value="mine">{% translate "My contacts" %}</option>
           <template x-for="group in groups" :key="group.id">
             <option :value="'group:' + group.id" x-text="group.name"></option>
           </template>
           <template x-for="list in lists" :key="list.uuid">
-            <option :value="'list:' + list.uuid" x-text="'List: ' + list.name"></option>
+            <option
+              :value="'list:' + list.uuid"
+              x-text="interpolate('{{ list_target|escapejs }}', { name: list.name }, true)"
+            ></option>
           </template>
         </select>
       </label>
       <div class="bg-base-200 rounded-box p-3 text-sm space-y-1">
         <p class="font-medium" x-text="exportSummaryText()"></p>
         <p class="text-xs text-base-content/60">
-          Photos and every property a contact came in with are included. Importing the file back creates no duplicate.
+          {% translate "Photos and every property a contact came in with are included. Importing the file back creates no duplicate." %}
         </p>
       </div>
       <div class="modal-action">
@@ -209,7 +239,7 @@
           class="btn btn-ghost btn-sm"
           @click="$refs.exportDialog.close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         {# A download link rather than a request: the browser names the file from the response. #}
         <a
@@ -219,13 +249,13 @@
           download
           @click="$refs.exportDialog.close()"
         >
-          Download .vcf
+          {% translate "Download .vcf" %}
         </a>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>
 
@@ -236,15 +266,21 @@
   @close="resetListForm()"
 >
   <div class="modal-box">
-    {% include "ui/partials/dialog_header.html" with icon="list" title_expr="listForm.uuid ? 'Rename list' : 'New list'" subtitle_expr="listForm.uuid ? listForm.original : 'Choose the address book it goes in.'" close_expr="$refs.listDialog.close()" only %}
+    {% translate "Rename list" as rename_list_title %}
+    {% translate "New list" as new_list_title %}
+    {% with rename_js=rename_list_title|escapejs new_js=new_list_title|escapejs choose_book_js=choose_book|escapejs %}
+      {% with title="listForm.uuid ? '"|add:rename_js|add:"' : '"|add:new_js|add:"'" subtitle="listForm.uuid ? listForm.original : '"|add:choose_book_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="list" title_expr=title subtitle_expr=subtitle close_expr="$refs.listDialog.close()" only %}
+      {% endwith %}
+    {% endwith %}
     <form @submit.prevent="saveList()" class="space-y-3">
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Name</span></div>
+        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
         <input
           type="text"
           name="name"
           class="input input-bordered input-sm w-full"
-          placeholder="Family, Clients..."
+          placeholder="{% translate "Family, Clients..." %}"
           x-ref="listName"
           x-model="listForm.name"
           required
@@ -252,13 +288,13 @@
       </label>
       <div x-show="!listForm.uuid">
         <label class="form-control w-full">
-          <div class="label"><span class="label-text">Address book</span></div>
+          <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
           <select
             name="scope"
             class="select select-bordered select-sm w-full"
             x-model="listForm.scope"
           >
-            <option value="mine">My contacts</option>
+            <option value="mine">{% translate "My contacts" %}</option>
             <template x-for="group in groups" :key="group.id">
               <option :value="'group:' + group.id" x-text="group.name"></option>
             </template>
@@ -271,25 +307,28 @@
           class="btn btn-ghost btn-sm"
           @click="$refs.listDialog.close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
+        {% translate "Rename" as rename_label %}
+        {% translate "Create" as create_label %}
         <button
           type="submit"
           class="btn btn-module btn-sm"
           :disabled="saving || !listForm.name.trim()"
-          x-text="listForm.uuid ? 'Rename' : 'Create'"
+          x-text="listForm.uuid ? '{{ rename_label|escapejs }}' : '{{ create_label|escapejs }}'"
         ></button>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>
 
 <dialog id="people-qrcode-dialog" x-ref="qrDialog" class="modal">
   <div class="modal-box max-w-sm">
-    {% include "ui/partials/dialog_header.html" with icon="qr-code" title="QR code" subtitle_expr="qrPerson ? qrPerson.name : ''" close_expr="$refs.qrDialog.close()" only %}
+    {% translate "QR code" as qr_title %}
+    {% include "ui/partials/dialog_header.html" with icon="qr-code" title=qr_title subtitle_expr="qrPerson ? qrPerson.name : ''" close_expr="$refs.qrDialog.close()" only %}
     {% comment %}
       x-if, not x-show: the image url is built from the contact the dialog
       was opened on, so the element must be created once that is known
@@ -305,22 +344,23 @@
             Rendered server-side and always dark-on-white: a scanner reads
             the image, not the page, so the theme never reaches it.
           {% endcomment %}
+          {% translate "QR code for %(name)s" as qr_alt %}
           <img
             :src="qrSrc()"
-            alt="QR code"
-            :alt="'QR code for ' + qrPerson.name"
+            alt="{% translate "QR code" %}"
+            :alt="interpolate('{{ qr_alt|escapejs }}', { name: qrPerson.name }, true)"
             class="w-56 h-56"
             @error="qrLoadFailed()"
           />
         </div>
         <p class="text-xs text-base-content/60 text-center" x-show="!qrError">
-          Point another phone's camera at it to add the contact.
+          {% translate "Point another phone's camera at it to add the contact." %}
         </p>
         <template x-if="qrError === 'too_large'">
-          <inline-alert type="error" message="This contact holds more than a QR code can carry. Export it as a .vcf file instead."></inline-alert>
+          <inline-alert type="error" message="{% translate "This contact holds more than a QR code can carry. Export it as a .vcf file instead." %}"></inline-alert>
         </template>
         <template x-if="qrError === 'failed'">
-          <inline-alert type="error" message="Could not load the QR code. Reload the page and try again."></inline-alert>
+          <inline-alert type="error" message="{% translate "Could not load the QR code. Reload the page and try again." %}"></inline-alert>
         </template>
         <div class="modal-action">
           <a
@@ -329,20 +369,20 @@
             :download="qrPerson.name + '.png'"
             x-show="!qrError"
           >
-            Download PNG
+            {% translate "Download PNG" %}
           </a>
           <button
             type="button"
             class="btn btn-module btn-sm"
             @click="$refs.qrDialog.close()"
           >
-            Close
+            {% translate "Close" %}
           </button>
         </div>
       </div>
     </template>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

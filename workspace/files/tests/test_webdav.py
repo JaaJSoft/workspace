@@ -1952,10 +1952,11 @@ class WebDAVIntegrationTests(TestCase):
             headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
         )
         self.assertIn(code, (200, 201))
-        token = headers.get("Lock-Token")
         file_obj.refresh_from_db()
         self.assertEqual(file_obj.locked_by_id, self.user.pk)
-        self.assertEqual(file_obj.lock_token, token)
+        # RFC 4918 sends the token as a Coded-URL; the row stores the bare token.
+        self.assertTrue(file_obj.lock_token)
+        self.assertEqual(headers.get("Lock-Token"), f"<{file_obj.lock_token}>")
         self.assertTrue(file_obj.is_locked())
 
     def test_dav_unlock_releases_the_app_lock(self):

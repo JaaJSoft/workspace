@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.utils import translation
 
 from workspace.users.models import UserSetting
 from workspace.users.services.settings import (
@@ -11,6 +12,7 @@ from workspace.users.services.settings import (
     get_user_language,
     get_user_languages,
     get_user_timezone,
+    in_recipient_languages,
     set_setting,
 )
 
@@ -582,3 +584,27 @@ class GetUserLanguagesTests(TestCase):
     def test_no_user_costs_no_query(self):
         with self.assertNumQueries(0):
             self.assertEqual(get_user_languages([]), {})
+
+
+class InRecipientLanguagesTests(TestCase):
+    def setUp(self):
+        self.camille = User.objects.create_user(username="camille", password="pass")
+        self.dominique = User.objects.create_user(username="dominique", password="pass")
+        self.alex = User.objects.create_user(username="alex", password="pass")
+        set_setting(self.camille, "core", "language", "fr")
+        set_setting(self.dominique, "core", "language", "fr")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_groups_recipients_by_language_with_it_active(self):
+        groups = {}
+        for users in in_recipient_languages([self.camille, self.alex, self.dominique]):
+            groups[translation.get_language()] = {u.username for u in users}
+        self.assertEqual(groups, {"fr": {"camille", "dominique"}, "en": {"alex"}})
+
+    def test_restores_the_language_afterwards(self):
+        with translation.override("en"):
+            for _users in in_recipient_languages([self.camille]):
+                pass
+            self.assertEqual(translation.get_language(), "en")

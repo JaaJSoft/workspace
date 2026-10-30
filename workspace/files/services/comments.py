@@ -5,9 +5,9 @@ from django.utils.translation import gettext as _
 
 from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
 from workspace.notifications.services.notifications import notify_stream
+from workspace.users.services.settings import in_recipient_languages
 
 from ..models import FileComment
-from .share_notifications import in_recipient_languages
 
 User = get_user_model()
 

@@ -31,9 +31,8 @@ from workspace.files.services import FilePermission, FileService
 from workspace.files.services.content_hash import find_duplicates
 from workspace.files.services.files import GroupRootFolder
 from workspace.files.services.locking import conflicting_lock, precondition_hash
-from workspace.files.services.share_notifications import in_recipient_languages
 from workspace.notifications.services.notifications import notify, notify_many
-from workspace.users.services.settings import get_user_language
+from workspace.users.services.settings import get_user_language, in_recipient_languages
 
 from ..models import File
 from ..serializers import FileSerializer, locked_payload

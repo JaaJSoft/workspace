@@ -21,6 +21,17 @@ DATABASES = {
 }
 
 
+def _pool_seconds(name, default):
+    """A pool duration in seconds. Zero is refused: at 0 a timeout fails a
+    request as soon as every connection is busy, a max_idle reschedules the
+    pool's shrink task with no delay forever, and a max_lifetime discards
+    every connection as soon as it is handed back."""
+    value = env_non_negative_int(name)
+    if value == 0:
+        raise ImproperlyConfigured(f"{name} must be at least 1 second")
+    return default if value is None else value
+
+
 def _pool_options():
     """Arguments of the psycopg ConnectionPool, from the DB_POOL_* env vars.
 
@@ -35,9 +46,6 @@ def _pool_options():
     max_size = env_non_negative_int("DB_POOL_MAX_SIZE")
     if max_size is None:
         max_size = max(min_size, 1)
-    timeout = env_non_negative_int("DB_POOL_TIMEOUT")
-    max_idle = env_non_negative_int("DB_POOL_MAX_IDLE")
-    max_lifetime = env_non_negative_int("DB_POOL_MAX_LIFETIME")
     # psycopg only checks these when the first request opens the pool: a
     # mistake would start every process fine and fail every request.
     if max_size < max(min_size, 1):
@@ -45,17 +53,12 @@ def _pool_options():
             f"DB_POOL_MAX_SIZE ({max_size}) must be at least 1 and at least "
             f"DB_POOL_MIN_SIZE ({min_size})"
         )
-    if timeout == 0:
-        raise ImproperlyConfigured(
-            "DB_POOL_TIMEOUT must be at least 1 second: at 0 a request fails "
-            "as soon as every connection is busy"
-        )
     return {
         "min_size": min_size,
         "max_size": max_size,
-        "timeout": 30 if timeout is None else timeout,
-        "max_idle": 600 if max_idle is None else max_idle,
-        "max_lifetime": 3600 if max_lifetime is None else max_lifetime,
+        "timeout": _pool_seconds("DB_POOL_TIMEOUT", 30),
+        "max_idle": _pool_seconds("DB_POOL_MAX_IDLE", 600),
+        "max_lifetime": _pool_seconds("DB_POOL_MAX_LIFETIME", 3600),
     }
 
 

@@ -86,7 +86,10 @@ class PoolOptionsTests(SimpleTestCase):
             },
             "no connection at all": {"DB_POOL_MIN_SIZE": "0", "DB_POOL_MAX_SIZE": "0"},
             "zero timeout": {"DB_POOL_TIMEOUT": "0"},
+            "zero idle time": {"DB_POOL_MAX_IDLE": "0"},
+            "zero lifetime": {"DB_POOL_MAX_LIFETIME": "0"},
             "negative size": {"DB_POOL_MAX_SIZE": "-1"},
+            "negative lifetime": {"DB_POOL_MAX_LIFETIME": "-1"},
             "not a number": {"DB_POOL_TIMEOUT": "30s"},
         }
         for label, env in cases.items():

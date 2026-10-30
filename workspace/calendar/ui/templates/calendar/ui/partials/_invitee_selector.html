@@ -9,6 +9,9 @@
   Icons inside the x-for rows are inline SVG: lucide.createIcons() does not
   process nodes Alpine clones out of a template, so data-lucide would render blank.
 {% endcomment %}
+{% load i18n %}
+{% translate "Search people, contacts or lists..." as default_placeholder %}
+{% translate "No email address" as no_email_label %}
 <div
   x-data="inviteeSelector('{{ on_select_event|escapejs }}')"
   class="relative"
@@ -18,7 +21,7 @@
     <input
       type="text"
       class="grow min-w-0"
-      placeholder="{{ placeholder|default:'Search people, contacts or lists...' }}"
+      placeholder="{{ placeholder|default:default_placeholder }}"
       x-model="query"
       @input.debounce.300ms="search()"
       @keydown="handleKeydown($event)"
@@ -88,13 +91,13 @@
                   ></span>
                   <span
                     class="text-xs opacity-70 w-full truncate text-left"
-                    x-text="item.linked ? '@' + item.person.linked_user.username : (item.email || 'No email address')"
+                    x-text="item.linked ? '@' + item.person.linked_user.username : (item.email || '{{ no_email_label|escapejs }}')"
                   ></span>
                 </div>
                 <span
                   x-show="!item.linked"
                   class="badge badge-xs badge-outline gap-1 shrink-0"
-                  title="Invited by email"
+                  title="{% translate "Invited by email" %}"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -109,7 +112,7 @@
                     <rect width="20" height="16" x="2" y="4" rx="2" />
                     <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                   </svg>
-                  External
+                  {% translate "External" context "contact" %}
                 </span>
               </div>
             </template>
@@ -143,7 +146,7 @@
                   ></span>
                   <span
                     class="text-xs opacity-70 w-full truncate text-left"
-                    x-text="item.list.member_count ? 'Invite all ' + item.list.member_count + ' contact' + (item.list.member_count === 1 ? '' : 's') : 'Empty list'"
+                    x-text="listHint(item.list)"
                   ></span>
                 </div>
               </div>
@@ -159,6 +162,6 @@
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
   >
-    No people, contacts or lists found
+    {% translate "No people, contacts or lists found" %}
   </div>
 </div>

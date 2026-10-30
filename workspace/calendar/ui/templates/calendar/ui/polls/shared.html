@@ -1,11 +1,16 @@
-{% load static %}
+{% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="{{ LANGUAGE_CODE }}" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Poll — Workspace</title>
+    <title>{% translate "Poll" %} — Workspace</title>
     <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    {# Ahead of every script that calls gettext(), at load time or later. #}
+    <script
+      src="{% url 'javascript-catalog' LANGUAGE_CODE %}?v={{ APP_VERSION|urlencode }}"
+    ></script>
     <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
     <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
     <script src="{% static 'ui/js/lucide.js' %}"></script>
@@ -51,26 +56,22 @@
               <div class="flex flex-wrap items-center gap-2 mb-2">
                 <div class="badge badge-ghost gap-1.5">
                   <i data-lucide="calendar-days" class="w-3 h-3"></i>
-                  <span
-                    x-text="poll.slots.length + ' slot' + (poll.slots.length > 1 ? 's' : '')"
-                  ></span>
+                  <span x-text="pollUtils.slotCountLabel(poll.slots.length)"></span>
                 </div>
                 <div class="badge badge-ghost gap-1.5">
                   <i data-lucide="users" class="w-3 h-3"></i>
-                  <span
-                    x-text="participantCount() + ' participant' + (participantCount() !== 1 ? 's' : '')"
-                  ></span>
+                  <span x-text="pollUtils.participantCountLabel(participantCount())"></span>
                 </div>
                 <template x-if="poll.status === 'open'">
                   <div class="badge badge-success gap-1.5">
                     <i data-lucide="circle-dot" class="w-3 h-3"></i>
-                    Open
+                    {% translate "Open" context "poll status" %}
                   </div>
                 </template>
                 <template x-if="poll.status === 'closed'">
                   <div class="badge badge-neutral gap-1.5">
                     <i data-lucide="lock" class="w-3 h-3"></i>
-                    Finalized
+                    {% translate "Finalized" context "poll status" %}
                   </div>
                 </template>
               </div>
@@ -80,26 +81,30 @@
                 <div class="bg-base-200/50 rounded-xl p-4 mb-2">
                   <div class="flex items-center gap-2 mb-3">
                     <i data-lucide="user-round" class="w-4 h-4 text-primary"></i>
-                    <span class="text-sm font-medium">Your identity</span>
+                    <span class="text-sm font-medium">{% translate "Your identity" %}</span>
                   </div>
                   <div class="flex gap-4">
                     <div class="form-control flex-1">
-                      <label class="label py-0.5"><span class="label-text text-xs">Name *</span></label>
+                      <label class="label py-0.5">
+                        <span class="label-text text-xs">{% translate "Name *" %}</span>
+                      </label>
                       <input
                         type="text"
                         class="input input-bordered input-sm"
                         x-model="guestName"
-                        placeholder="Your name"
+                        placeholder="{% translate 'Your name' %}"
                         maxlength="100"
                       />
                     </div>
                     <div class="form-control flex-1">
-                      <label class="label py-0.5"><span class="label-text text-xs">Email (optional)</span></label>
+                      <label class="label py-0.5">
+                        <span class="label-text text-xs">{% translate "Email (optional)" %}</span>
+                      </label>
                       <input
                         type="email"
                         class="input input-bordered input-sm"
                         x-model="guestEmail"
-                        placeholder="your@email.com"
+                        placeholder="{% translate 'your@email.com' %}"
                       />
                     </div>
                   </div>
@@ -110,7 +115,7 @@
               <template x-if="votesRestored && poll.status === 'open'">
                 <div class="alert mb-2 bg-base-200 border-base-300">
                   <i data-lucide="info" class="w-5 h-5 text-info"></i>
-                  <span>Your previous votes have been restored. You can update them below.</span>
+                  <span>{% translate "Your previous votes have been restored. You can update them below." %}</span>
                 </div>
               </template>
 
@@ -119,12 +124,12 @@
                 <div class="alert mb-2 bg-base-200 border-base-300">
                   <i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>
                   <div>
-                    <span>Your votes have been saved!</span>
+                    <span>{% translate "Your votes have been saved!" %}</span>
                     <p class="text-sm opacity-60 mt-0.5" x-show="guestEmail.trim()">
-                      You'll receive an email once a final slot is chosen.
+                      {% translate "You'll receive an email once a final slot is chosen." %}
                     </p>
                     <p class="text-sm opacity-60 mt-0.5" x-show="!guestEmail.trim()">
-                      Bookmark this page to come back and see the final result.
+                      {% translate "Bookmark this page to come back and see the final result." %}
                     </p>
                   </div>
                 </div>
@@ -138,7 +143,7 @@
                       <th class="min-w-[120px]">
                         <div class="flex items-center gap-1.5 text-base-content/60">
                           <i data-lucide="user" class="w-3.5 h-3.5"></i>
-                          Participant
+                          {% translate "Participant" context "poll grid" %}
                         </div>
                       </th>
                       <template x-for="slot in poll.slots" :key="slot.uuid">
@@ -159,7 +164,7 @@
                             <template x-if="poll.status === 'closed' && poll.chosen_slot_id === slot.uuid">
                               <div class="badge badge-success badge-xs gap-0.5 mt-0.5">
                                 <i data-lucide="trophy" class="w-2.5 h-2.5"></i>
-                                chosen
+                                {% translate "chosen" context "poll slot" %}
                               </div>
                             </template>
                           </div>
@@ -205,7 +210,8 @@
                             >
                               <i data-lucide="pencil" class="w-3 h-3"></i>
                             </div>
-                            <span x-text="guestName || 'You'"></span>
+                            {% translate "You" context "poll vote row" as you_label %}
+                            <span x-text="guestName || '{{ you_label|escapejs }}'"></span>
                           </div>
                         </td>
                         <template x-for="slot in poll.slots" :key="slot.uuid">
@@ -228,7 +234,7 @@
                       <td class="text-sm font-medium opacity-70">
                         <div class="flex items-center gap-1.5">
                           <i data-lucide="thumbs-up" class="w-3.5 h-3.5 text-success"></i>
-                          Yes votes
+                          {% translate "Yes votes" %}
                         </div>
                       </td>
                       <template x-for="slot in poll.slots" :key="slot.uuid">
@@ -255,7 +261,7 @@
                   >
                     <i data-lucide="check" class="w-3 h-3 text-success"></i>
                   </div>
-                  Yes
+                  {% translate "Yes" context "poll vote" %}
                 </div>
                 <div class="flex items-center gap-1.5">
                   <div
@@ -263,13 +269,13 @@
                   >
                     <i data-lucide="help-circle" class="w-3 h-3 text-warning"></i>
                   </div>
-                  Maybe
+                  {% translate "Maybe" context "poll vote" %}
                 </div>
                 <div class="flex items-center gap-1.5">
                   <div class="w-5 h-5 rounded bg-error/20 flex items-center justify-center">
                     <i data-lucide="x" class="w-3 h-3 text-error"></i>
                   </div>
-                  No
+                  {% translate "No" context "poll vote" %}
                 </div>
               </div>
 
@@ -284,7 +290,7 @@
                   >
                     <span x-show="submitting" class="loading loading-spinner loading-sm"></span>
                     <i x-show="!submitting" data-lucide="send" class="w-4 h-4"></i>
-                    Save my votes
+                    {% translate "Save my votes" %}
                   </button>
                 </div>
               </template>
@@ -294,10 +300,10 @@
                 <div class="alert mt-4 bg-base-200 border-base-300">
                   <i data-lucide="trophy" class="w-5 h-5 text-success flex-shrink-0"></i>
                   <div>
-                    <span class="font-medium">This poll has been finalized.</span>
+                    <span class="font-medium">{% translate "This poll has been finalized." %}</span>
                     <template x-if="chosenSlot()">
                       <p class="text-sm opacity-60 mt-0.5">
-                        Chosen date: <span
+                        {% translate "Chosen date:" %} <span
    class="font-medium text-base-content"
    x-text="formatSlotDate(chosenSlot()) + ' ' + formatSlotTime(chosenSlot())"
  ></span>
@@ -319,7 +325,7 @@
               >
                 <i data-lucide="users" class="w-3.5 h-3.5 text-white"></i>
               </div>
-              <span>Poll created with</span>
+              <span>{% translate "Poll created with" %}</span>
               <a
                 href="/"
                 class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"

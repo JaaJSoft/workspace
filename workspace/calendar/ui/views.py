@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
+from django.utils.translation import pgettext
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.calendar.models import (
@@ -26,7 +27,7 @@ def _ensure_default_calendar(user):
     if not Calendar.objects.filter(owner=user).exists():
         Calendar.objects.create(
             owner=user,
-            name="Personal",
+            name=pgettext("default calendar name", "Personal"),
             color="primary",
         )
 

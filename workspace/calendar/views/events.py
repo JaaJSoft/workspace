@@ -5,6 +5,7 @@ from dateutil.parser import parse as dateutil_parse
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Q, Subquery
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -16,7 +17,6 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import (
     mark_source_read,
     mark_sources_read,
-    notify_many,
 )
 
 from ..models import Calendar, Event, EventMember
@@ -37,6 +37,7 @@ from ..services.event_scope import (
 )
 from ..services.guests import sync_guests
 from ..services.invitations import NotInvitedError, respond_to_invitation
+from ..services.notifications import notify_in_languages
 from ..services.timezones import current_timezone_name
 from ..upcoming import get_upcoming_page
 
@@ -317,11 +318,13 @@ class EventListView(CacheControlMixin, APIView):
             EventMember.objects.bulk_create(
                 [EventMember(event=event, user=u) for u in users]
             )
-            notify_many(
+            notify_in_languages(
                 recipients=users,
-                origin="calendar",
-                title=f'Invited to "{event.title}"',
-                body=f"{request.user.username} invited you to an event.",
+                message=lambda: (
+                    _('Invited to "%(title)s"') % {"title": event.title},
+                    _("%(user)s invited you to an event.")
+                    % {"user": request.user.username},
+                ),
                 url=f"/calendar?event={event.pk}",
                 actor=request.user,
                 source=event,

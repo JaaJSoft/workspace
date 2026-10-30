@@ -311,7 +311,7 @@ window.calendarApp = function calendarApp() {
     },
     _syncTitle() {
       if (this.currentView === 'agenda') {
-        this.currentTitle = 'Agenda';
+        this.currentTitle = pgettext('calendar view', 'Agenda');
       } else if (this.calendar) {
         this.currentTitle = this.calendar.view.title;
       }
@@ -422,6 +422,10 @@ window.calendarApp = function calendarApp() {
       return window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     },
 
+    _locale() {
+      return window.getUserLocale ? window.getUserLocale() : undefined;
+    },
+
     _dayKeyIn(d, tz) {
       return dayKeyFormatter(tz).format(d);
     },
@@ -449,9 +453,9 @@ window.calendarApp = function calendarApp() {
       const isTomorrow = this._dayKeyIn(d, tz) === this._dayKey(new Date(today.getTime() + 86400000));
       const opts = { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' };
       if (this._dayKeyIn(d, tz).slice(0, 4) !== this._dayKey(today).slice(0, 4)) opts.year = 'numeric';
-      const datePart = d.toLocaleDateString('en-US', opts);
-      if (isToday) return `Today — ${datePart}`;
-      if (isTomorrow) return `Tomorrow — ${datePart}`;
+      const datePart = d.toLocaleDateString(this._locale(), opts);
+      if (isToday) return interpolate(gettext('Today — %(date)s'), { date: datePart }, true);
+      if (isTomorrow) return interpolate(gettext('Tomorrow — %(date)s'), { date: datePart }, true);
       return datePart;
     },
 
@@ -459,9 +463,10 @@ window.calendarApp = function calendarApp() {
       if (!isoStr) return '';
       const tz = this._tz();
       const d = new Date(isoStr);
-      return this.prefs.timeFormat === '12h'
-        ? d.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
-        : d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+      const hour12 = this.prefs.timeFormat === '12h';
+      return d.toLocaleTimeString(this._locale(), {
+        timeZone: tz, hour: hour12 ? 'numeric' : '2-digit', minute: '2-digit', hour12,
+      });
     },
 
     _sameDay(a, b) {

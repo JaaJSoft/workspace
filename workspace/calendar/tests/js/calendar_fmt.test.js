@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
-function makeApp(userTz) {
+function makeApp(userTz, extraGlobals = {}) {
   const ctx = loadScripts([
     'workspace/common/static/ui/js/zoned_formatter.js',
     'workspace/calendar/ui/static/calendar/ui/js/calendar.js',
@@ -20,6 +20,9 @@ localStorage: { getItem: () => null, setItem: () => {} },
     calendarTasksMixin: () => ({}),
     calendarRecurrenceMixin: () => ({}),
     calendarPollsMixin: () => ({}),
+    // Pinned so the English assertions hold whatever the host's default is.
+    getUserLocale: () => 'en-US',
+    ...extraGlobals,
   });
   ctx.getUserTimeZone = () => userTz;
   return { ctx, app: ctx.calendarApp() };
@@ -77,4 +80,22 @@ test('_fmtDate builds one day-key formatter per zone, not one per value', () => 
   app._fmtDate('2026-08-01');
   app._fmtDate('2026-08-02');
   assert.equal(counter.built, 2);
+});
+
+test('_fmtDate follows the interface language and translates the day prefix', () => {
+  const { app } = makeApp('Europe/Paris', {
+    getUserLocale: () => 'fr-FR',
+    gettext: (msgid) => ({ 'Today — %(date)s': 'Aujourd’hui — %(date)s' }[msgid] || msgid),
+  });
+  assert.match(app._fmtDate('2098-08-01'), /1 août 2098/);
+  const today = new Date().toISOString();
+  assert.match(app._fmtDate(today), /^Aujourd’hui — /);
+});
+
+test('_fmtTime keeps the 12h/24h preference in any language', () => {
+  const { app } = makeApp('UTC', { getUserLocale: () => 'fr-FR' });
+  app.prefs.timeFormat = '24h';
+  assert.equal(app._fmtTime('2026-01-15T14:05:00Z'), '14:05');
+  app.prefs.timeFormat = '12h';
+  assert.match(app._fmtTime('2026-01-15T14:05:00Z'), /^2:05\s?PM$/i);
 });

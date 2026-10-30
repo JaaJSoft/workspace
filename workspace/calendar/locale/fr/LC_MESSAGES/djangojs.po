@@ -1,0 +1,295 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 11:56+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/calendar/ui/js/calendar.js
+msgctxt "calendar view"
+msgid "Agenda"
+msgstr "Agenda"
+
+#: ui/static/calendar/ui/js/calendar.js
+msgid "Today — %(date)s"
+msgstr "Aujourd’hui — %(date)s"
+
+#: ui/static/calendar/ui/js/calendar.js
+msgid "Tomorrow — %(date)s"
+msgstr "Demain — %(date)s"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Replace the link"
+msgstr "Remplacer le lien"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Apps subscribed with the current link will stop receiving updates."
+msgstr ""
+"Les applications abonnées avec le lien actuel ne recevront plus les mises à "
+"jour."
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Could not create the link"
+msgstr "Impossible de créer le lien"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Turn off the link"
+msgstr "Désactiver le lien"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Apps subscribed with this link will stop receiving updates."
+msgstr ""
+"Les applications abonnées avec ce lien ne recevront plus les mises à jour."
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Turn off"
+msgstr "Désactiver"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Link copied!"
+msgstr "Lien copié !"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Delete calendar"
+msgstr "Supprimer le calendrier"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Delete \"%(name)s\" and all its events?"
+msgstr "Supprimer « %(name)s » et tous ses événements ?"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "External calendar"
+msgstr "Calendrier externe"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Remove external calendar"
+msgstr "Retirer le calendrier externe"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgid "Remove \"%(name)s\" and all its synced events?"
+msgstr "Retirer « %(name)s » et tous ses événements synchronisés ?"
+
+#: ui/static/calendar/ui/js/calendar_calendars.js
+msgctxt "external calendar"
+msgid "Remove"
+msgstr "Retirer"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgctxt "calendar grid"
+msgid "all-day"
+msgstr "Toute la journée"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "+%(count)s more"
+msgid_plural "+%(count)s more"
+msgstr[0] "+%(count)s autre"
+msgstr[1] "+%(count)s autres"
+msgstr[2] "+%(count)s autres"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Show %(count)s more event"
+msgid_plural "Show %(count)s more events"
+msgstr[0] "Afficher %(count)s autre événement"
+msgstr[1] "Afficher %(count)s autres événements"
+msgstr[2] "Afficher %(count)s autres événements"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgctxt "week number prefix"
+msgid "W"
+msgstr "S"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgctxt "week number"
+msgid "Week"
+msgstr "Semaine"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Today · %(date)s"
+msgstr "Aujourd’hui · %(date)s"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Tomorrow · %(date)s"
+msgstr "Demain · %(date)s"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "End date cannot be before start date."
+msgstr "La date de fin ne peut pas être antérieure à la date de début."
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Delete event"
+msgstr "Supprimer l’événement"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Delete \"%(title)s\"?"
+msgstr "Supprimer « %(title)s » ?"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Could not add these invitees. Please try again."
+msgstr "Impossible d’ajouter ces invités. Veuillez réessayer."
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "%(name)s has no email address and was not invited."
+msgstr "Aucune invitation pour %(name)s, qui n’a pas d’adresse e-mail."
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "%(count)s contact has no email address and was not invited: %(names)s."
+msgid_plural ""
+"%(count)s contacts have no email address and were not invited: %(names)s."
+msgstr[0] ""
+"%(count)s contact n’a pas d’adresse e-mail et n’a pas été invité : %(names)s."
+msgstr[1] ""
+"%(count)s de contacts n’ont pas d’adresse e-mail et n’ont pas été invités : "
+"%(names)s."
+msgstr[2] ""
+"%(count)s contacts n’ont pas d’adresse e-mail et n’ont pas été invités : "
+"%(names)s."
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgctxt "invitation status"
+msgid "accepted"
+msgstr "accepté"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgctxt "invitation status"
+msgid "declined"
+msgstr "refusé"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgctxt "invitation status"
+msgid "pending"
+msgstr "en attente"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "At least 2 time slots with a start time are required."
+msgstr "Au moins 2 créneaux avec une heure de début sont nécessaires."
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Failed to create poll."
+msgstr "Impossible de créer le sondage."
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Votes saved!"
+msgstr "Votes enregistrés !"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Poll finalized! Event created."
+msgstr "Sondage finalisé ! Événement créé."
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Delete poll"
+msgstr "Supprimer le sondage"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Delete this poll and all its votes?"
+msgstr "Supprimer ce sondage et tous ses votes ?"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Share link copied!"
+msgstr "Lien de partage copié !"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "%(name)s invited!"
+msgstr "Invitation envoyée à %(name)s !"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Invitation removed"
+msgstr "Invitation retirée"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "by %(name)s"
+msgstr "par %(name)s"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Poll updated!"
+msgstr "Sondage mis à jour !"
+
+#: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Failed to update poll."
+msgstr "Impossible de mettre à jour le sondage."
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgctxt "recurrence interval in weeks"
+msgid "Every"
+msgstr "Toutes les"
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgctxt "recurrence interval in months"
+msgid "Every"
+msgstr "Tous les"
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgctxt "recurrence interval in years"
+msgid "Every"
+msgstr "Tous les"
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgctxt "recurrence interval in days"
+msgid "Every"
+msgstr "Tous les"
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgid "day"
+msgid_plural "days"
+msgstr[0] "jour"
+msgstr[1] "jours"
+msgstr[2] "jours"
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgid "week"
+msgid_plural "weeks"
+msgstr[0] "semaine"
+msgstr[1] "semaines"
+msgstr[2] "semaines"
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgid "month"
+msgid_plural "months"
+msgstr[0] "mois"
+msgstr[1] "mois"
+msgstr[2] "mois"
+
+#: ui/static/calendar/ui/js/calendar_recurrence.js
+msgid "year"
+msgid_plural "years"
+msgstr[0] "an"
+msgstr[1] "ans"
+msgstr[2] "ans"
+
+#: ui/static/calendar/ui/js/invitee_selector.js
+msgid "Contacts"
+msgstr "Contacts"
+
+#: ui/static/calendar/ui/js/invitee_selector.js
+msgid "Lists"
+msgstr "Listes"
+
+#: ui/static/calendar/ui/js/invitee_selector.js
+msgid "Empty list"
+msgstr "Liste vide"
+
+#: ui/static/calendar/ui/js/invitee_selector.js
+msgid "Invite all %(count)s contact"
+msgid_plural "Invite all %(count)s contacts"
+msgstr[0] "Inviter %(count)s contact"
+msgstr[1] "Inviter les %(count)s de contacts"
+msgstr[2] "Inviter les %(count)s contacts"
+
+#: ui/static/calendar/ui/js/polls.js
+msgid "%(count)s participant"
+msgid_plural "%(count)s participants"
+msgstr[0] "%(count)s participant"
+msgstr[1] "%(count)s de participants"
+msgstr[2] "%(count)s participants"
+
+#: ui/static/calendar/ui/js/polls.js
+msgid "%(count)s slot"
+msgid_plural "%(count)s slots"
+msgstr[0] "%(count)s créneau"
+msgstr[1] "%(count)s de créneaux"
+msgstr[2] "%(count)s créneaux"

@@ -38,6 +38,30 @@ window.calendarRecurrenceMixin = function calendarRecurrenceMixin() {
       return `RRULE:${parts.join(';')}`;
     },
 
+    // The label before the interval input. Its own message per frequency,
+    // because it agrees with the unit in some languages (French "tous les
+    // jours" but "toutes les semaines").
+    recurrenceEveryLabel() {
+      switch (this.form.recurrence_frequency) {
+        case 'weekly': return pgettext('recurrence interval in weeks', 'Every');
+        case 'monthly': return pgettext('recurrence interval in months', 'Every');
+        case 'yearly': return pgettext('recurrence interval in years', 'Every');
+        default: return pgettext('recurrence interval in days', 'Every');
+      }
+    },
+
+    // The unit after the interval input, in the plural form its value takes.
+    recurrenceUnitLabel(frequency) {
+      const interval = this.form.recurrence_interval || 1;
+      switch (frequency) {
+        case 'daily': return ngettext('day', 'days', interval);
+        case 'weekly': return ngettext('week', 'weeks', interval);
+        case 'monthly': return ngettext('month', 'months', interval);
+        case 'yearly': return ngettext('year', 'years', interval);
+        default: return '';
+      }
+    },
+
     recurrenceLabel() {
       return this._panelRaw?.recurrence_summary || '';
     },

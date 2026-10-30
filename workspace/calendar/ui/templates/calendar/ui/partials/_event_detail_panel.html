@@ -1,5 +1,6 @@
 {# Right-hand event detail panel: skeleton, header, date/time, recurrence, location, description, poll link, organizer/guests, response and owner actions. #}
 {# Included from index.html inside the main content block. #}
+{% load i18n %}
 <!-- Event detail panel (full-screen on mobile, w-80 right sidebar on desktop) -->
 <div
   x-show="showPanel"
@@ -56,7 +57,7 @@
             type="button"
             class="btn btn-sm btn-square btn-ghost flex-shrink-0 -mt-1 -ml-1 lg:hidden"
             @click="closePanel()"
-            aria-label="Back to calendar"
+            aria-label="{% translate "Back to calendar" %}"
           >
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
@@ -78,7 +79,7 @@
             type="button"
             class="btn btn-sm btn-square btn-ghost flex-shrink-0 -mt-1 -mr-1 hidden lg:inline-flex"
             @click="closePanel()"
-            aria-label="Close"
+            aria-label="{% translate "Close" %}"
           >
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
@@ -138,7 +139,7 @@
               class="link link-module"
               @click="openPollDetail(_panelRaw.poll_id)"
             >
-              View poll
+              {% translate "View poll" %}
             </button>
           </div>
         </template>
@@ -146,6 +147,7 @@
         <!-- People section -->
         <div class="border-t border-base-200 pt-3 space-y-3">
           <!-- Organizer -->
+          {% translate "External calendar" as external_calendar_label %}
           <template x-if="isExternalEvent()">
             <div class="flex items-center gap-2.5 text-sm">
               <div
@@ -156,9 +158,9 @@
               <div class="flex-1 min-w-0">
                 <span
                   class="font-medium block truncate"
-                  x-text="externalOrganizer || eventCalendarObj()?.name || 'External calendar'"
+                  x-text="externalOrganizer || eventCalendarObj()?.name || '{{ external_calendar_label|escapejs }}'"
                 ></span>
-                <span class="text-xs text-base-content/40">External organizer</span>
+                <span class="text-xs text-base-content/40">{% translate "External organizer" %}</span>
               </div>
             </div>
           </template>
@@ -169,7 +171,7 @@
               </template>
               <div class="flex-1 min-w-0">
                 <span class="font-medium block truncate" x-text="eventOwner?.username"></span>
-                <span class="text-xs text-base-content/40">Organizer</span>
+                <span class="text-xs text-base-content/40">{% translate "Organizer" %}</span>
               </div>
             </div>
           </template>
@@ -180,7 +182,7 @@
               <div
                 class="text-xs font-medium text-base-content/40 uppercase tracking-wider flex items-center gap-1.5"
               >
-                Guests
+                {% translate "Guests" %}
                 <span class="badge badge-xs badge-ghost" x-text="eventMembers.length"></span>
               </div>
               <template x-for="member in eventMembers" :key="member.uuid">
@@ -203,12 +205,15 @@
                   </template>
                   {% comment %}An external guest has no account to answer from,
                   so a "pending" badge would never change: it gets a fixed label.{% endcomment %}
-                  <span x-show="!member.user" class="badge badge-xs badge-ghost shrink-0">external</span>
+                  <span
+                    x-show="!member.user"
+                    class="badge badge-xs badge-ghost shrink-0"
+                  >{% translate "external" context "guest badge" %}</span>
                   <span
                     x-show="member.user"
                     class="badge badge-xs shrink-0"
                     :class="{'badge-success': member.status==='accepted','badge-warning': member.status==='pending','badge-error': member.status==='declined'}"
-                    x-text="member.status"
+                    x-text="inviteStatusLabel(member.status)"
                   ></span>
                 </div>
               </template>
@@ -225,7 +230,7 @@
               :class="myInviteStatus==='accepted' ? 'btn-success' : 'btn-ghost'"
               @click="respondToInvitation('accepted')"
             >
-              <i data-lucide="check" class="w-4 h-4"></i> Accept
+              <i data-lucide="check" class="w-4 h-4"></i> {% translate "Accept" context "invitation" %}
             </button>
             <button
               type="button"
@@ -233,7 +238,7 @@
               :class="myInviteStatus==='declined' ? 'btn-error' : 'btn-ghost'"
               @click="respondToInvitation('declined')"
             >
-              <i data-lucide="x" class="w-4 h-4"></i> Decline
+              <i data-lucide="x" class="w-4 h-4"></i> {% translate "Decline" context "invitation" %}
             </button>
           </div>
         </template>
@@ -244,7 +249,7 @@
             class="flex items-center gap-2 pt-2 border-t border-base-200 text-xs text-base-content/50"
           >
             <i data-lucide="globe" class="w-3.5 h-3.5"></i>
-            <span>External calendar — read only</span>
+            <span>{% translate "External calendar — read only" %}</span>
           </div>
         </template>
 
@@ -256,7 +261,7 @@
               class="btn btn-sm btn-module flex-1"
               @click="openEditModal()"
             >
-              <i data-lucide="pencil" class="w-4 h-4"></i> Edit
+              <i data-lucide="pencil" class="w-4 h-4"></i> {% translate "Edit" %}
             </button>
             <button
               type="button"

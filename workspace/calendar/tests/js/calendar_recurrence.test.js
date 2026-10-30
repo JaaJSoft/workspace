@@ -59,3 +59,25 @@ test('a rule the picker cannot express is returned untouched', () => {
   });
   assert.equal(mixin.buildRecurrenceRule('Europe/Paris'), 'RRULE:FREQ=MONTHLY;BYDAY=2TU');
 });
+
+test('the interval unit follows the plural form of the interval', () => {
+  const mixin = makeMixin({ ...SIMPLE, recurrence_interval: 1 });
+  assert.equal(mixin.recurrenceUnitLabel('weekly'), 'week');
+  mixin.form.recurrence_interval = 3;
+  assert.equal(mixin.recurrenceUnitLabel('weekly'), 'weeks');
+  assert.equal(mixin.recurrenceUnitLabel('yearly'), 'years');
+});
+
+test('the "Every" label is one message per frequency, so it can agree with the unit', () => {
+  const contexts = [];
+  const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar_recurrence.js', {
+    pgettext: (context, msgid) => { contexts.push(context); return msgid; },
+  });
+  const mixin = ctx.calendarRecurrenceMixin();
+  mixin.form = { ...SIMPLE };
+  for (const frequency of ['daily', 'weekly', 'monthly', 'yearly']) {
+    mixin.form.recurrence_frequency = frequency;
+    assert.equal(mixin.recurrenceEveryLabel(), 'Every');
+  }
+  assert.equal(new Set(contexts).size, 4);
+});

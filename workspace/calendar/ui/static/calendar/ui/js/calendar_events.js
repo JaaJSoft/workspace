@@ -6,6 +6,10 @@ window.calendarEventsMixin = function calendarEventsMixin() {
   // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
   const dayKeyFormatter = window.zonedFormatter('en-CA');
 
+  // The interface language (localtime.js); undefined, the browser default,
+  // where that helper is not loaded.
+  const userLocale = () => (window.getUserLocale ? window.getUserLocale() : undefined);
+
   // Hardcoded SVG markup for the recurring-event indicator. Kept as a
   // module-level constant so the hot path in eventDidMount() doesn't
   // re-allocate the string on every render.
@@ -37,10 +41,16 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         // date strings emitted by FullCalendar then carry that offset.
         timeZone: (window.getUserTimeZone && window.getUserTimeZone()) || 'local',
         headerToolbar: false,
-        // Follow the browser's language (e.g. en-US, fr-FR) so FullCalendar
-        // formats weekdays, months, and the toolbar title consistently with
-        // the rest of the UI (which uses `toLocaleDateString(undefined, ...)`).
-        locale: (navigator.language || 'en').toLowerCase(),
+        // Follow the interface language so FullCalendar formats weekdays,
+        // months, and the toolbar title like the rest of the UI. The bundle
+        // ships no locale texts: the ones the grid shows are passed below.
+        locale: (userLocale() || navigator.language || 'en').toLowerCase(),
+        allDayText: pgettext('calendar grid', 'all-day'),
+        moreLinkText: (count) => interpolate(ngettext('+%(count)s more', '+%(count)s more', count), { count }, true),
+        moreLinkHint: (count) => interpolate(ngettext('Show %(count)s more event', 'Show %(count)s more events', count), { count }, true),
+        weekText: pgettext('week number prefix', 'W'),
+        weekTextLong: pgettext('week number', 'Week'),
+        closeHint: gettext('Close'),
         firstDay: this.prefs.firstDay,
         weekNumbers: this.prefs.weekNumbers,
         nowIndicator: true,
@@ -364,13 +374,12 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         const key = keyIn(d, evTz);
         if (key !== currentKey) {
           currentKey = key;
-          // `undefined` locale uses the browser's default (OS/language settings)
-          const dateLabel = d.toLocaleDateString(undefined, { timeZone: evTz, weekday: 'long', day: 'numeric', month: 'long' });
+          const dateLabel = d.toLocaleDateString(userLocale(), { timeZone: evTz, weekday: 'long', day: 'numeric', month: 'long' });
           let label;
           if (key === todayKey) {
-            label = `Today · ${dateLabel}`;
+            label = interpolate(gettext('Today · %(date)s'), { date: dateLabel }, true);
           } else if (key === tomorrowKey) {
-            label = `Tomorrow · ${dateLabel}`;
+            label = interpolate(gettext('Tomorrow · %(date)s'), { date: dateLabel }, true);
           } else {
             label = dateLabel;
           }
@@ -388,14 +397,13 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     },
 
     formatAgendaEventTime(event) {
-      if (event.all_day) return 'All day';
+      if (event.all_day) return gettext('All day');
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(event.start);
       const opts = this.prefs.timeFormat === '12h'
         ? { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }
         : { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false };
-      // `undefined` locale uses browser default
-      return d.toLocaleTimeString(undefined, opts);
+      return d.toLocaleTimeString(userLocale(), opts);
     },
 
     agendaEventClasses(event) {
@@ -649,7 +657,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     async saveEvent() {
       if (!this.form.title.trim()) return;
       if (this.form.end && this.form.start && new Date(this.form.end) < new Date(this.form.start)) {
-        await AppDialog.error({ message: 'End date cannot be before start date.' });
+        await AppDialog.error({ message: gettext('End date cannot be before start date.') });
         return;
       }
       this.saving = true;
@@ -779,9 +787,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       }
 
       const ok = await AppDialog.confirm({
-        title: 'Delete event',
-        message: `Delete "${this.form.title}"?`,
-        okLabel: 'Delete',
+        title: gettext('Delete event'),
+        message: interpolate(gettext('Delete "%(title)s"?'), { title: this.form.title }, true),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -866,7 +874,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           body: JSON.stringify(body),
         });
         if (!resp.ok) {
-          this.inviteeNotice = 'Could not add these invitees. Please try again.';
+          this.inviteeNotice = gettext('Could not add these invitees. Please try again.');
           return;
         }
         const data = await resp.json();
@@ -877,12 +885,17 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         data.guests.forEach(g => this._addGuest(g));
         if (data.skipped.length) {
           const names = data.skipped.map(p => p.display_name).join(', ');
-          this.inviteeNotice = data.skipped.length === 1
-            ? `${names} has no email address and was not invited.`
-            : `${data.skipped.length} contacts have no email address and were not invited: ${names}.`;
+          const count = data.skipped.length;
+          this.inviteeNotice = count === 1
+            ? interpolate(gettext('%(name)s has no email address and was not invited.'), { name: names }, true)
+            : interpolate(ngettext(
+              '%(count)s contact has no email address and was not invited: %(names)s.',
+              '%(count)s contacts have no email address and were not invited: %(names)s.',
+              count,
+            ), { count, names }, true);
         }
       } catch (e) {
-        this.inviteeNotice = 'Could not add these invitees. Please try again.';
+        this.inviteeNotice = gettext('Could not add these invitees. Please try again.');
       }
     },
     removeMember(userId) {
@@ -1009,9 +1022,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           const url = new URL(window.location.origin + window.location.pathname);
           url.searchParams.set('event', rawEvent.uuid);
           navigator.clipboard.writeText(url.toString()).then(() => {
-            if (window.AppAlert) window.AppAlert.success('Link copied to clipboard', { duration: 2000 });
+            if (window.AppAlert) window.AppAlert.success(gettext('Link copied to clipboard'), { duration: 2000 });
           }).catch(() => {
-            if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+            if (window.AppAlert) window.AppAlert.error(gettext('Failed to copy link'));
           });
           break;
         }
@@ -1083,7 +1096,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       const raw = this._panelRaw;
       if (!raw) return '';
       const { start, end, all_day } = raw;
-      if (all_day) return 'All day';
+      if (all_day) return gettext('All day');
       if (!start) return '';
       const startTime = this._fmtTime(start);
       if (!end || this._sameDay(start, end)) {
@@ -1091,6 +1104,16 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         return endTime ? `${startTime} – ${endTime}` : startTime;
       }
       return startTime;
+    },
+
+    // The badge next to a guest in the panel, from EventMember.status.
+    inviteStatusLabel(status) {
+      switch (status) {
+        case 'accepted': return pgettext('invitation status', 'accepted');
+        case 'declined': return pgettext('invitation status', 'declined');
+        case 'pending': return pgettext('invitation status', 'pending');
+        default: return status;
+      }
     },
 
     eventCalendarObj() {

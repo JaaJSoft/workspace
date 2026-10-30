@@ -6,6 +6,8 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext as _
+from django.utils.translation import pgettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -15,7 +17,6 @@ from rest_framework.views import APIView
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import (
     mark_source_read,
-    notify_many,
 )
 from workspace.users.services.settings import get_setting
 
@@ -31,6 +32,7 @@ from ..serializers_polls import (
     PublicPollSerializer,
     VoteSubmitSerializer,
 )
+from ..services.notifications import notify_in_languages
 
 User = get_user_model()
 
@@ -216,11 +218,14 @@ class PollDetailView(APIView):
                 )
                 voters = list(User.objects.filter(id__in=voter_ids))
                 if voters:
-                    notify_many(
+                    notify_in_languages(
                         recipients=voters,
-                        origin="calendar",
-                        title=f'Poll updated: "{poll.title}"',
-                        body="Time slots have been updated. Please review your votes.",
+                        message=lambda: (
+                            _('Poll updated: "%(title)s"') % {"title": poll.title},
+                            _(
+                                "Time slots have been updated. Please review your votes."
+                            ),
+                        ),
                         url=f"/calendar?poll={poll.pk}",
                         actor=request.user,
                         source=poll,
@@ -269,11 +274,13 @@ class PollVoteView(APIView):
                 poll.created_by, "calendar", "preferences", default={}
             )
             if creator_prefs.get("notifyPollVotes", True):
-                notify_many(
+                notify_in_languages(
                     recipients=[poll.created_by],
-                    origin="calendar",
-                    title=f'New vote on "{poll.title}"',
-                    body=f"{request.user.username} voted on your poll.",
+                    message=lambda: (
+                        _('New vote on "%(title)s"') % {"title": poll.title},
+                        _("%(user)s voted on your poll.")
+                        % {"user": request.user.username},
+                    ),
                     url=f"/calendar?poll={poll.pk}",
                     actor=request.user,
                     source=poll,
@@ -317,7 +324,7 @@ class PollFinalizeView(APIView):
         if not calendar:
             calendar = Calendar.objects.create(
                 owner=request.user,
-                name="Personal",
+                name=pgettext("default calendar name", "Personal"),
                 color="primary",
             )
 
@@ -362,22 +369,25 @@ class PollFinalizeView(APIView):
         )
         attendees = [u for u in invitee_users if u.id in member_ids]
         non_attendees = [u for u in invitee_users if u.id not in member_ids]
+
+        def finalized_message():
+            return (
+                _('Poll finalized: "%(title)s"') % {"title": poll.title},
+                _("A date has been chosen."),
+            )
+
         if attendees:
-            notify_many(
+            notify_in_languages(
                 recipients=attendees,
-                origin="calendar",
-                title=f'Poll finalized: "{poll.title}"',
-                body="A date has been chosen.",
+                message=finalized_message,
                 url=f"/calendar?event={event.pk}",
                 actor=request.user,
                 source=event,
             )
         if non_attendees:
-            notify_many(
+            notify_in_languages(
                 recipients=non_attendees,
-                origin="calendar",
-                title=f'Poll finalized: "{poll.title}"',
-                body="A date has been chosen.",
+                message=finalized_message,
                 url=f"/calendar?poll={poll.pk}",
                 actor=request.user,
                 source=poll,
@@ -416,11 +426,13 @@ class PollInviteView(APIView):
         # Notify newly invited users
         newly_invited = list(users)
         if newly_invited:
-            notify_many(
+            notify_in_languages(
                 recipients=newly_invited,
-                origin="calendar",
-                title=f'Poll invitation: "{poll.title}"',
-                body=f"{request.user.username} invited you to vote on a poll.",
+                message=lambda: (
+                    _('Poll invitation: "%(title)s"') % {"title": poll.title},
+                    _("%(user)s invited you to vote on a poll.")
+                    % {"user": request.user.username},
+                ),
                 url=f"/calendar?poll={poll.pk}",
                 actor=request.user,
                 source=poll,
@@ -527,7 +539,7 @@ class SharedPollVoteView(APIView):
         attempts = cache.get(rate_key, 0)
         if attempts >= 10:
             return Response(
-                {"detail": "Too many vote submissions. Please try again later."},
+                {"detail": _("Too many vote submissions. Please try again later.")},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
         cache.set(rate_key, attempts + 1, 3600)
@@ -562,12 +574,17 @@ class SharedPollVoteView(APIView):
             poll.created_by, "calendar", "preferences", default={}
         )
         if creator_prefs.get("notifyPollVotes", True):
-            guest_label = d["guest_name"] or "A guest"
-            notify_many(
+
+            def guest_vote_message():
+                if d["guest_name"]:
+                    body = _("%(user)s voted on your poll.") % {"user": d["guest_name"]}
+                else:
+                    body = _("A guest voted on your poll.")
+                return _('New vote on "%(title)s"') % {"title": poll.title}, body
+
+            notify_in_languages(
                 recipients=[poll.created_by],
-                origin="calendar",
-                title=f'New vote on "{poll.title}"',
-                body=f"{guest_label} voted on your poll.",
+                message=guest_vote_message,
                 url=f"/calendar?poll={poll.pk}",
                 source=poll,
             )

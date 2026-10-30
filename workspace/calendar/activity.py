@@ -1,6 +1,7 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import formats, timezone
+from django.utils.translation import gettext as _
 
 from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
@@ -77,11 +78,11 @@ class CalendarActivityProvider(ActivityProvider):
             is_external = hasattr(evt.calendar, "external_source")
 
             if is_external:
-                label = "Event synced"
+                label = _("Event synced")
                 actor = None
             else:
                 is_new = abs((evt.created_at - evt.updated_at).total_seconds()) < 2
-                label = "Event created" if is_new else "Event updated"
+                label = _("Event created") if is_new else _("Event updated")
                 actor = {
                     "id": evt.owner_id,
                     "username": evt.owner.username,

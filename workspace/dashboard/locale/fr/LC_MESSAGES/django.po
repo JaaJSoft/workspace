@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-28 18:42+0000\n"
+"POT-Creation-Date: 2026-10-30 11:55+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -119,10 +119,6 @@ msgstr "j N"
 #: templates/dashboard/partials/my_tasks.html
 msgid "No open tasks assigned to you."
 msgstr "Aucune tâche ouverte ne vous est assignée."
-
-#: templates/dashboard/partials/upcoming_events.html
-msgid "All day"
-msgstr "Toute la journée"
 
 #: templates/dashboard/partials/upcoming_events.html
 msgid "No upcoming events today."

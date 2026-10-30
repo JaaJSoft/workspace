@@ -89,9 +89,9 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       if (!uuid || this.calendarFeed.busy) return;
       if (this.calendarFeed.url) {
         const ok = await AppDialog.confirm({
-          title: 'Replace the link',
-          message: 'Apps subscribed with the current link will stop receiving updates.',
-          okLabel: 'Replace',
+          title: gettext('Replace the link'),
+          message: gettext('Apps subscribed with the current link will stop receiving updates.'),
+          okLabel: gettext('Replace'),
           icon: 'refresh-cw',
         });
         if (!ok) return;
@@ -104,7 +104,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
           headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (resp.ok) this.calendarFeed.url = (await resp.json()).url;
-        else if (window.AppAlert) window.AppAlert.error('Could not create the link');
+        else if (window.AppAlert) window.AppAlert.error(gettext('Could not create the link'));
       } finally {
         this.calendarFeed.busy = false;
       }
@@ -114,9 +114,9 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       const uuid = this.calendarForm.uuid;
       if (!uuid || this.calendarFeed.busy) return;
       const ok = await AppDialog.confirm({
-        title: 'Turn off the link',
-        message: 'Apps subscribed with this link will stop receiving updates.',
-        okLabel: 'Turn off',
+        title: gettext('Turn off the link'),
+        message: gettext('Apps subscribed with this link will stop receiving updates.'),
+        okLabel: gettext('Turn off'),
         okClass: 'btn-error',
         icon: 'link-2-off',
         iconClass: 'bg-error/10 text-error',
@@ -139,21 +139,21 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       if (!this.calendarFeed.url) return;
       // Undefined outside a secure context, e.g. plain HTTP on a LAN address.
       if (!navigator.clipboard) {
-        if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+        if (window.AppAlert) window.AppAlert.error(gettext('Failed to copy link'));
         return;
       }
       navigator.clipboard.writeText(this.calendarFeed.url).then(() => {
-        if (window.AppAlert) window.AppAlert.success('Link copied!', { duration: 2000 });
+        if (window.AppAlert) window.AppAlert.success(gettext('Link copied!'), { duration: 2000 });
       }).catch(() => {
-        if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+        if (window.AppAlert) window.AppAlert.error(gettext('Failed to copy link'));
       });
     },
 
     async deleteCalendar(cal) {
       const ok = await AppDialog.confirm({
-        title: 'Delete calendar',
-        message: `Delete "${cal.name}" and all its events?`,
-        okLabel: 'Delete',
+        title: gettext('Delete calendar'),
+        message: interpolate(gettext('Delete "%(name)s" and all its events?'), { name: cal.name }, true),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -225,7 +225,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ name: (name.trim() || 'External calendar'), url: url.trim(), color }),
+          body: JSON.stringify({ name: (name.trim() || gettext('External calendar')), url: url.trim(), color }),
         });
         if (resp.ok) {
           const ext = await resp.json();
@@ -246,9 +246,9 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
 
     async deleteExternalCalendar(ext) {
       const ok = await AppDialog.confirm({
-        title: 'Remove external calendar',
-        message: `Remove "${ext.name}" and all its synced events?`,
-        okLabel: 'Remove',
+        title: gettext('Remove external calendar'),
+        message: interpolate(gettext('Remove "%(name)s" and all its synced events?'), { name: ext.name }, true),
+        okLabel: pgettext('external calendar', 'Remove'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

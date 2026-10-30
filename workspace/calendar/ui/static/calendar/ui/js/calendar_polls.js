@@ -76,7 +76,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       if (!this.pollForm.title.trim()) return;
       const validSlots = this.pollForm.slots.filter(s => s.start);
       if (validSlots.length < 2) {
-        this.pollFormError = 'At least 2 time slots with a start time are required.';
+        this.pollFormError = gettext('At least 2 time slots with a start time are required.');
         return;
       }
       this.pollFormSubmitting = true;
@@ -101,10 +101,10 @@ window.calendarPollsMixin = function calendarPollsMixin() {
           this.openPollDetail(created.uuid);
         } else {
           const data = await resp.json().catch(() => null);
-          this.pollFormError = data?.detail || data?.slots?.[0] || 'Failed to create poll.';
+          this.pollFormError = data?.detail || data?.slots?.[0] || gettext('Failed to create poll.');
         }
       } catch (e) {
-        this.pollFormError = 'Network error. Please try again.';
+        this.pollFormError = gettext('Network error. Please try again.');
       }
       this.pollFormSubmitting = false;
     },
@@ -197,7 +197,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
-          if (window.AppAlert) window.AppAlert.success('Votes saved!', { duration: 2000 });
+          if (window.AppAlert) window.AppAlert.success(gettext('Votes saved!'), { duration: 2000 });
 
         }
       } catch (e) {}
@@ -218,7 +218,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
           this.currentPoll = await resp.json();
           if (this.calendar) this.calendar.refetchEvents();
           this.refetchAgenda();
-          if (window.AppAlert) window.AppAlert.success('Poll finalized! Event created.', { duration: 3000 });
+          if (window.AppAlert) window.AppAlert.success(gettext('Poll finalized! Event created.'), { duration: 3000 });
         }
       } catch (e) {}
       this.pollSubmitting = false;
@@ -226,9 +226,9 @@ window.calendarPollsMixin = function calendarPollsMixin() {
 
     async deletePoll(uuid) {
       const ok = await AppDialog.confirm({
-        title: 'Delete poll',
-        message: 'Delete this poll and all its votes?',
-        okLabel: 'Delete',
+        title: gettext('Delete poll'),
+        message: gettext('Delete this poll and all its votes?'),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -254,9 +254,9 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     copyPollShareLink() {
       if (!this.currentPoll?.share_url) return;
       navigator.clipboard.writeText(this.currentPoll.share_url).then(() => {
-        if (window.AppAlert) window.AppAlert.success('Share link copied!', { duration: 2000 });
+        if (window.AppAlert) window.AppAlert.success(gettext('Share link copied!'), { duration: 2000 });
       }).catch(() => {
-        if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+        if (window.AppAlert) window.AppAlert.error(gettext('Failed to copy link'));
       });
     },
 
@@ -302,7 +302,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
-          if (window.AppAlert) window.AppAlert.success(`${user.username} invited!`, { duration: 2000 });
+          if (window.AppAlert) window.AppAlert.success(interpolate(gettext('%(name)s invited!'), { name: user.username }, true), { duration: 2000 });
 
         }
       } catch (e) {}
@@ -319,10 +319,15 @@ window.calendarPollsMixin = function calendarPollsMixin() {
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
-          if (window.AppAlert) window.AppAlert.success('Invitation removed', { duration: 2000 });
+          if (window.AppAlert) window.AppAlert.success(gettext('Invitation removed'), { duration: 2000 });
 
         }
       } catch (e) {}
+    },
+
+    pollCreatorLabel() {
+      if (!this.currentPoll) return '';
+      return interpolate(gettext('by %(name)s'), { name: this.currentPoll.created_by?.username || '' }, true);
     },
 
     isPollCreator() {
@@ -356,7 +361,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       if (!this.currentPoll || !this.pollForm.title.trim()) return;
       const validSlots = this.pollForm.slots.filter(s => s.start);
       if (validSlots.length < 2) {
-        this.pollFormError = 'At least 2 time slots with a start time are required.';
+        this.pollFormError = gettext('At least 2 time slots with a start time are required.');
         return;
       }
       this.pollFormSubmitting = true;
@@ -389,14 +394,14 @@ window.calendarPollsMixin = function calendarPollsMixin() {
             }
           }
           this.pollMyVotes = myVotes;
-          if (window.AppAlert) window.AppAlert.success('Poll updated!', { duration: 2000 });
+          if (window.AppAlert) window.AppAlert.success(gettext('Poll updated!'), { duration: 2000 });
 
         } else {
           const data = await resp.json().catch(() => null);
-          this.pollFormError = data?.detail || data?.slots?.[0] || 'Failed to update poll.';
+          this.pollFormError = data?.detail || data?.slots?.[0] || gettext('Failed to update poll.');
         }
       } catch (e) {
-        this.pollFormError = 'Network error. Please try again.';
+        this.pollFormError = gettext('Network error. Please try again.');
       }
       this.pollFormSubmitting = false;
     },

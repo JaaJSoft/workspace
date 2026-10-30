@@ -1,109 +1,159 @@
-{% load ui_tags %}
+{% load i18n ui_tags %}
 {% help_items as items %}
-  keyboard | Keyboard Shortcuts | checked
-  <h4 class="font-semibold mt-0 mb-2">Navigation</h4>
+  keyboard | {% translate "Keyboard Shortcuts" %} | checked
+  <h4 class="font-semibold mt-0 mb-2">{% translate "Navigation" %}</h4>
   <table class="table table-sm">
     <tbody>
       <tr>
         <td><kbd class="kbd kbd-sm">T</kbd></td>
-        <td>Go to today</td>
+        <td>{% translate "Go to today" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">&larr;</kbd></td>
-        <td>Previous period</td>
+        <td>{% translate "Previous period" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">&rarr;</kbd></td>
-        <td>Next period</td>
+        <td>{% translate "Next period" %}</td>
       </tr>
     </tbody>
   </table>
-  <h4 class="font-semibold mt-3 mb-2">Views</h4>
+  <h4 class="font-semibold mt-3 mb-2">{% translate "Views" %}</h4>
   <table class="table table-sm">
     <tbody>
       <tr>
         <td><kbd class="kbd kbd-sm">M</kbd></td>
-        <td>Month view</td>
+        <td>{% translate "Month view" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">W</kbd></td>
-        <td>Week view</td>
+        <td>{% translate "Week view" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">D</kbd></td>
-        <td>Day view</td>
+        <td>{% translate "Day view" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">A</kbd></td>
-        <td>Agenda view</td>
+        <td>{% translate "Agenda view" %}</td>
       </tr>
     </tbody>
   </table>
-  <h4 class="font-semibold mt-3 mb-2">Actions</h4>
+  <h4 class="font-semibold mt-3 mb-2">{% translate "Actions" %}</h4>
   <table class="table table-sm">
     <tbody>
       <tr>
         <td><kbd class="kbd kbd-sm">N</kbd></td>
-        <td>New event</td>
+        <td>{% translate "New event" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Esc</kbd></td>
-        <td>Close panel / modal</td>
+        <td>{% translate "Close panel / modal" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">K</kbd></td>
-        <td>Command palette</td>
+        <td>{% translate "Command palette" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">?</kbd></td>
-        <td>Show this help</td>
+        <td>{% translate "Show this help" %}</td>
       </tr>
     </tbody>
   </table>
   ---
-  calendar | Calendar Management
+  calendar | {% translate "Calendar Management" %}
   <ul>
-    <li><strong>Multiple calendars</strong> &mdash; Create separate calendars for work, personal, etc.</li>
-    <li><strong>Color coding</strong> &mdash; Assign colors to calendars to distinguish events at a glance.</li>
-    <li><strong>Visibility</strong> &mdash; Toggle calendar checkboxes in the sidebar to show/hide their events.</li>
-    <li><strong>Subscribed calendars</strong> &mdash; Calendars shared with you appear under "Other calendars".</li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Multiple calendars</strong> &mdash; Create separate calendars for work, personal, etc.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Color coding</strong> &mdash; Assign colors to calendars to distinguish events at a glance.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Visibility</strong> &mdash; Toggle calendar checkboxes in the sidebar to show/hide their events.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Subscribed calendars</strong> &mdash; Calendars shared with you appear under "Other calendars".
+      {% endblocktranslate %}
+    </li>
   </ul>
   ---
-  smartphone | Sync with Your Devices
-  <p>Your calendars sync both ways with the calendar app of your phone or computer (CalDAV). The server address is:</p>
+  smartphone | {% translate "Sync with Your Devices" %}
+  <p>{% translate "Your calendars sync both ways with the calendar app of your phone or computer (CalDAV). The server address is:" %}</p>
   <code
     class="block bg-base-300 px-3 py-2 rounded text-sm mb-3"
   >{{ request.scheme }}://{{ request.get_host }}/caldav/</code>
   <p class="mb-3">
-    Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.
+    {% blocktranslate trimmed %}
+      Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.
+    {% endblocktranslate %}
   </p>
   <ul>
-    <li><strong>iPhone, iPad, Mac</strong> &mdash; Add a CalDAV account and enter the server address.</li>
-    <li><strong>Android</strong> &mdash; Use <strong>DAVx⁵</strong> with the server address.</li>
-    <li><strong>Thunderbird</strong> &mdash; New calendar &gt; On the network, then the server address.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>iPhone, iPad, Mac</strong> &mdash; Add a CalDAV account and enter the server address.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Android</strong> &mdash; Use <strong>DAVx⁵</strong> with the server address.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Thunderbird</strong> &mdash; New calendar &gt; On the network, then the server address.
+      {% endblocktranslate %}
+    </li>
   </ul>
   <p class="mt-3">
-    To let an app without an account follow a calendar read-only, open the calendar's <strong>Edit</strong> dialog and create a subscription link.
+    {% blocktranslate trimmed %}
+      To let an app without an account follow a calendar read-only, open the calendar's <strong>Edit</strong> dialog and create a subscription link.
+    {% endblocktranslate %}
   </p>
   ---
-  calendar-plus | Events
+  calendar-plus | {% translate "Events" %}
   <ul>
     <li>
-      <strong>Create</strong> &mdash; Click a date or drag a time range on the calendar, or press
-      <kbd class="kbd kbd-xs">N</kbd>.
+      {% blocktranslate trimmed %}
+        <strong>Create</strong> &mdash; Click a date or drag a time range on the calendar, or press
+        <kbd class="kbd kbd-xs">N</kbd>.
+      {% endblocktranslate %}
     </li>
-    <li><strong>Quick duration</strong> &mdash; Use duration chips (30m, 1h, 2h...) when creating an event.</li>
-    <li><strong>Invite guests</strong> &mdash; Search and add users as guests to your events.</li>
-    <li><strong>Respond</strong> &mdash; Accept or decline event invitations from the detail panel.</li>
-    <li><strong>Detail panel</strong> &mdash; Click an event to open its details in the right panel.</li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Quick duration</strong> &mdash; Use duration chips (30m, 1h, 2h...) when creating an event.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Invite guests</strong> &mdash; Search and add users as guests to your events.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Respond</strong> &mdash; Accept or decline event invitations from the detail panel.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Detail panel</strong> &mdash; Click an event to open its details in the right panel.
+      {% endblocktranslate %}
+    </li>
   </ul>
   ---
-  code | API Access
+  code | {% translate "API Access" %}
   <ul>
-    <li><strong>Endpoints:</strong> <code>/api/v1/calendars</code>, <code>/api/v1/events</code>, <code>/api/v1/polls</code></li>
-    <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+    <li><strong>{% translate "Endpoints:" %}</strong> <code>/api/v1/calendars</code>, <code>/api/v1/events</code>, <code>/api/v1/polls</code></li>
+    <li><strong>{% translate "Authentication:" %}</strong> {% translate "Use your session cookie or API token." %}</li>
     <li>
-      <strong>Documentation:</strong> Full API docs are available at
+      <strong>{% translate "Documentation:" %}</strong> {% translate "Full API docs are available at" %}
       <a href="/schema/swagger-ui/" class="link link-module">/schema/swagger-ui/</a>.
     </li>
   </ul>

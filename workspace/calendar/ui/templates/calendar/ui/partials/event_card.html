@@ -1,4 +1,4 @@
-{% load ui_filters %}
+{% load i18n ui_filters %}
 <div class="p-3 w-72">
   <div class="flex items-start gap-3 mb-2">
     <span
@@ -19,7 +19,7 @@
     <div class="flex items-center gap-1.5">
       <i data-lucide="clock" class="w-3 h-3 flex-shrink-0"></i>
       {% if event.all_day %}
-        <span>All day</span>
+        <span>{% translate "All day" %}</span>
       {% elif occ_start %}
         <span>{{ occ_start|localtime_tag:"datetime" }}{% if occ_end %} – {{ occ_end|localtime_tag:"time" }}{% endif %}</span>
       {% else %}
@@ -71,7 +71,7 @@
       class="btn btn-ghost btn-xs flex-1 gap-1"
     >
       <i data-lucide="eye" class="w-3 h-3"></i>
-      View
+      {% translate "View" context "open the event" %}
     </a>
     {% if is_owner and not is_external %}
       <button
@@ -80,7 +80,7 @@
         onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'edit', eventId: '{{ event.uuid }}'}}))"
       >
         <i data-lucide="pencil" class="w-3 h-3"></i>
-        Edit
+        {% translate "Edit" %}
       </button>
       <button
         type="button"
@@ -111,7 +111,7 @@
         class="flex items-center gap-1 text-xs text-base-content/40 flex-1 justify-center"
       >
         <i data-lucide="globe" class="w-3 h-3"></i>
-        Read only
+        {% translate "Read only" %}
       </span>
     {% endif %}
   </div>

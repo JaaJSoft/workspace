@@ -1,0 +1,1047 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 11:56+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: activity.py
+msgid "Event synced"
+msgstr "Événement synchronisé"
+
+#: activity.py
+msgid "Event created"
+msgstr "Événement créé"
+
+#: activity.py
+msgid "Event updated"
+msgstr "Événement modifié"
+
+#: ai_tools.py views/polls.py
+#, python-format
+msgid "Poll invitation: \"%(title)s\""
+msgstr "Invitation au sondage « %(title)s »"
+
+#: ai_tools.py views/polls.py
+#, python-format
+msgid "%(user)s invited you to vote on a poll."
+msgstr "%(user)s vous invite à répondre à un sondage."
+
+#: services/event_scope.py
+#, python-format
+msgid "Removed from \"%(title)s\""
+msgstr "Vous ne participez plus à « %(title)s »"
+
+#: services/event_scope.py
+#, python-format
+msgid "%(user)s removed you from an event."
+msgstr "%(user)s a mis fin à votre participation à un événement."
+
+#: services/event_scope.py views/events.py
+#, python-format
+msgid "Invited to \"%(title)s\""
+msgstr "Invitation à « %(title)s »"
+
+#: services/event_scope.py views/events.py
+#, python-format
+msgid "%(user)s invited you to an event."
+msgstr "%(user)s vous invite à un événement."
+
+#: services/event_scope.py
+#, python-format
+msgid "\"%(title)s\" was updated"
+msgstr "Modification de « %(title)s »"
+
+#: services/event_scope.py
+#, python-format
+msgid "%(user)s updated an event you are part of."
+msgstr "%(user)s a modifié un événement auquel vous participez."
+
+#: services/event_scope.py
+#, python-format
+msgid "\"%(title)s\" was cancelled"
+msgstr "Annulation de « %(title)s »"
+
+#: services/event_scope.py
+#, python-format
+msgid "%(user)s cancelled an event you were part of."
+msgstr "%(user)s a annulé un événement auquel vous participiez."
+
+#: services/ics_processor.py
+#, python-format
+msgid "Cancelled: %(title)s"
+msgstr "Annulation : %(title)s"
+
+#: services/ics_processor.py
+#, python-format
+msgid "Invitation: %(title)s"
+msgstr "Invitation : %(title)s"
+
+#: services/ics_processor.py
+#, python-format
+msgid "From %(organizer)s"
+msgstr "De la part de %(organizer)s"
+
+#: services/ics_processor.py
+#, python-format
+msgid "Updated: %(title)s"
+msgstr "Modification : %(title)s"
+
+#: services/ics_processor.py
+msgid "The event has been updated"
+msgstr "L’événement a été modifié"
+
+#: services/invitations.py
+#, python-format
+msgid "%(user)s accepted \"%(title)s\""
+msgstr "%(user)s a accepté « %(title)s »"
+
+#: services/invitations.py
+#, python-format
+msgid "%(user)s declined \"%(title)s\""
+msgstr "%(user)s a refusé « %(title)s »"
+
+#: services/invitations.py
+#, python-format
+msgid "%(user)s answered \"%(title)s\""
+msgstr "%(user)s a répondu à « %(title)s »"
+
+#: tasks.py
+msgid "All day today"
+msgstr "Toute la journée aujourd’hui"
+
+#: tasks.py
+#, python-format
+msgid "Today at %(time)s"
+msgstr "Aujourd’hui à %(time)s"
+
+#: ui/templates/calendar/ui/index.html
+msgctxt "page title"
+msgid "Calendar"
+msgstr "Calendrier"
+
+#: ui/templates/calendar/ui/index.html
+msgid "Open sidebar"
+msgstr "Ouvrir la barre latérale"
+
+#: ui/templates/calendar/ui/index.html
+msgid "Change view"
+msgstr "Changer de vue"
+
+#: ui/templates/calendar/ui/index.html
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgctxt "calendar view"
+msgid "Month"
+msgstr "Mois"
+
+#: ui/templates/calendar/ui/index.html
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgctxt "calendar view"
+msgid "Week"
+msgstr "Semaine"
+
+#: ui/templates/calendar/ui/index.html
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgctxt "calendar view"
+msgid "Day"
+msgstr "Jour"
+
+#: ui/templates/calendar/ui/index.html
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgctxt "calendar view"
+msgid "Agenda"
+msgstr "Agenda"
+
+#: ui/templates/calendar/ui/index.html
+msgid "No upcoming events"
+msgstr "Aucun événement à venir"
+
+#: ui/templates/calendar/ui/index.html
+#: ui/templates/calendar/ui/partials/_event_modal.html
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "New event"
+msgstr "Nouvel événement"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "New calendar"
+msgstr "Nouveau calendrier"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "Edit calendar"
+msgstr "Modifier le calendrier"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "Calendar name"
+msgstr "Nom du calendrier"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "Subscription link"
+msgstr "Lien d’abonnement"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid ""
+"Anyone with the link can see this calendar from another calendar app, read-"
+"only."
+msgstr ""
+"Toute personne disposant du lien peut consulter ce calendrier depuis une "
+"autre application d’agenda, en lecture seule."
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "Create link"
+msgstr "Créer le lien"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "New link"
+msgstr "Nouveau lien"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "Turn off"
+msgstr "Désactiver"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "Add external calendar"
+msgstr "Ajouter un calendrier externe"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "ICS URL"
+msgstr "URL ICS"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "My external calendar"
+msgstr "Mon calendrier externe"
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgid "Adding..."
+msgstr "Ajout..."
+
+#: ui/templates/calendar/ui/partials/_calendar_modals.html
+msgctxt "external calendar"
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgid "Back to calendar"
+msgstr "Retour au calendrier"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgid "View poll"
+msgstr "Voir le sondage"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgid "External calendar"
+msgstr "Calendrier externe"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgid "External organizer"
+msgstr "Organisateur externe"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgid "Organizer"
+msgstr "Organisateur"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgid "Guests"
+msgstr "Participants"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgctxt "guest badge"
+msgid "external"
+msgstr "externe"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgctxt "invitation"
+msgid "Accept"
+msgstr "Accepter"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgctxt "invitation"
+msgid "Decline"
+msgstr "Refuser"
+
+#: ui/templates/calendar/ui/partials/_event_detail_panel.html
+msgid "External calendar — read only"
+msgstr "Calendrier externe — lecture seule"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Edit event"
+msgstr "Modifier l’événement"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgctxt "event field"
+msgid "Title"
+msgstr "Titre"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Event title"
+msgstr "Titre de l’événement"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgctxt "event field"
+msgid "Calendar"
+msgstr "Calendrier"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgctxt "event field"
+msgid "Start"
+msgstr "Début"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgctxt "event field"
+msgid "End"
+msgstr "Fin"
+
+#. Translators: duration shortcut button; "m" abbreviates minutes.
+#: ui/templates/calendar/ui/partials/_event_modal.html
+#, python-format
+msgid "%(minutes)sm"
+msgstr "%(minutes)s min"
+
+#. Translators: duration shortcut button; "h" abbreviates hours.
+#: ui/templates/calendar/ui/partials/_event_modal.html
+#, python-format
+msgid "%(hours)sh"
+msgstr "%(hours)s h"
+
+#. Translators: duration shortcut button, one hour and a half.
+#: ui/templates/calendar/ui/partials/_event_modal.html
+#, python-format
+msgid "%(hours)sh%(minutes)s"
+msgstr "%(hours)s h %(minutes)s"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+#, python-format
+msgid "%(counter)s day"
+msgid_plural "%(counter)s days"
+msgstr[0] "%(counter)s jour"
+msgstr[1] "%(counter)s de jours"
+msgstr[2] "%(counter)s jours"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+#, python-format
+msgid "%(counter)s week"
+msgid_plural "%(counter)s weeks"
+msgstr[0] "%(counter)s semaine"
+msgstr[1] "%(counter)s de semaines"
+msgstr[2] "%(counter)s semaines"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Repeat"
+msgstr "Répéter"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgctxt "recurrence end date"
+msgid "Until"
+msgstr "Jusqu’au"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "No end date"
+msgstr "Pas de date de fin"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "This repeat rule was set in another app and cannot be edited here."
+msgstr ""
+"Cette règle de récurrence a été définie dans une autre application et ne "
+"peut pas être modifiée ici."
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Add a location"
+msgstr "Ajouter un lieu"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgctxt "event field"
+msgid "Description"
+msgstr "Description"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Add a description"
+msgstr "Ajouter une description"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Invite guests"
+msgstr "Inviter des participants"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Delete recurring event"
+msgstr "Supprimer un événement récurrent"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "Edit recurring event"
+msgstr "Modifier un événement récurrent"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "This event only"
+msgstr "Cet événement uniquement"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "This and future events"
+msgstr "Cet événement et les suivants"
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgid "All events in series"
+msgstr "Tous les événements de la série"
+
+#: ui/templates/calendar/ui/partials/_invitee_selector.html
+msgid "Search people, contacts or lists..."
+msgstr "Rechercher des personnes, des contacts ou des listes..."
+
+#: ui/templates/calendar/ui/partials/_invitee_selector.html
+msgid "No email address"
+msgstr "Aucune adresse e-mail"
+
+#: ui/templates/calendar/ui/partials/_invitee_selector.html
+msgid "Invited by email"
+msgstr "Invité par e-mail"
+
+#: ui/templates/calendar/ui/partials/_invitee_selector.html
+msgctxt "contact"
+msgid "External"
+msgstr "Externe"
+
+#: ui/templates/calendar/ui/partials/_invitee_selector.html
+msgid "No people, contacts or lists found"
+msgstr "Aucune personne, aucun contact ni aucune liste trouvés"
+
+#: ui/templates/calendar/ui/partials/_poll_detail_header_actions.html
+msgctxt "poll status"
+msgid "open"
+msgstr "ouvert"
+
+#: ui/templates/calendar/ui/partials/_poll_detail_header_actions.html
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "poll status"
+msgid "closed"
+msgstr "clôturé"
+
+#: ui/templates/calendar/ui/partials/_poll_detail_header_actions.html
+msgid "Back to polls"
+msgstr "Retour aux sondages"
+
+#: ui/templates/calendar/ui/partials/_poll_detail_header_actions.html
+msgid "Copy share link"
+msgstr "Copier le lien de partage"
+
+#: ui/templates/calendar/ui/partials/_poll_detail_header_actions.html
+msgid "Edit poll"
+msgstr "Modifier le sondage"
+
+#: ui/templates/calendar/ui/partials/_poll_detail_header_actions.html
+msgid "Delete poll"
+msgstr "Supprimer le sondage"
+
+#: ui/templates/calendar/ui/partials/_poll_list_header_actions.html
+msgctxt "poll"
+msgid "New"
+msgstr "Nouveau"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Polls"
+msgstr "Sondages"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "My polls"
+msgstr "Mes sondages"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "polls"
+msgid "Shared with me"
+msgstr "Partagés avec moi"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "polls"
+msgid "Show closed"
+msgstr "Afficher les clôturés"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Search polls..."
+msgstr "Rechercher des sondages..."
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "No polls yet"
+msgstr "Aucun sondage pour l’instant"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Create a poll to find the best time for your event"
+msgstr "Créez un sondage pour trouver le meilleur moment pour votre événement"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "No shared polls"
+msgstr "Aucun sondage partagé"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Polls you're invited to will appear here"
+msgstr "Les sondages auxquels vous êtes invité apparaîtront ici"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "poll search"
+msgid "No match"
+msgstr "Aucun résultat"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Try a different search term"
+msgstr "Essayez un autre terme de recherche"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "New Poll"
+msgstr "Nouveau sondage"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "poll"
+msgid "Title"
+msgstr "Titre"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "e.g. Team meeting next week"
+msgstr "ex. Réunion d’équipe la semaine prochaine"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "poll"
+msgid "Description"
+msgstr "Description"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Optional description"
+msgstr "Description facultative"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Time slots"
+msgstr "Créneaux"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Add slot"
+msgstr "Ajouter un créneau"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "time range"
+msgid "to"
+msgstr "à"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Remove end time"
+msgstr "Retirer l’heure de fin"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Add end time"
+msgstr "Ajouter une heure de fin"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "poll slot end time"
+msgid "End"
+msgstr "Fin"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Remove slot"
+msgstr "Retirer le créneau"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Create poll"
+msgstr "Créer le sondage"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Edit Poll"
+msgstr "Modifier le sondage"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Save changes"
+msgstr "Enregistrer les modifications"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Invite members"
+msgstr "Inviter des participants"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Search users to invite..."
+msgstr "Rechercher des utilisateurs à inviter..."
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "poll invitees"
+msgid "Invited"
+msgstr "Invités"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "This poll has been finalized."
+msgstr "Ce sondage a été finalisé."
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "An event has been created."
+msgstr "Un événement a été créé."
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Chosen date:"
+msgstr "Date retenue :"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "View event"
+msgstr "Voir l’événement"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Finalize:"
+msgstr "Finaliser :"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Choose winning slot..."
+msgstr "Choisir le créneau retenu..."
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Finalize"
+msgstr "Finaliser"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll grid"
+msgid "Participant"
+msgstr "Participant"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll slot"
+msgid "chosen"
+msgstr "retenu"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "poll participant"
+msgid "guest"
+msgstr "invité"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Your vote"
+msgstr "Votre vote"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgid "Click to cycle: yes / maybe / no"
+msgstr "Cliquer pour alterner : oui / peut-être / non"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Yes votes"
+msgstr "Votes « oui »"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll vote"
+msgid "Yes"
+msgstr "Oui"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll vote"
+msgid "Maybe"
+msgstr "Peut-être"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll vote"
+msgid "No"
+msgstr "Non"
+
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Save my votes"
+msgstr "Enregistrer mes votes"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "Default view"
+msgstr "Vue par défaut"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "First day of week"
+msgstr "Premier jour de la semaine"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgctxt "first day of week"
+msgid "Monday"
+msgstr "Lundi"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgctxt "first day of week"
+msgid "Sunday"
+msgstr "Dimanche"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgctxt "first day of week"
+msgid "Saturday"
+msgstr "Samedi"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "Time format"
+msgstr "Format de l’heure"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "24h (14:00)"
+msgstr "24 h (14:00)"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "12h (2:00 PM)"
+msgstr "12 h (2:00 PM)"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "Show week numbers"
+msgstr "Afficher les numéros de semaine"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "Default to all day"
+msgstr "Toute la journée par défaut"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "Show declined events"
+msgstr "Afficher les événements refusés"
+
+#: ui/templates/calendar/ui/partials/_preferences_content.html
+msgid "Poll vote notifications"
+msgstr "Notifications de vote aux sondages"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "close sidebar"
+msgstr "fermer la barre latérale"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "My calendars"
+msgstr "Mes calendriers"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "No calendars yet"
+msgstr "Aucun calendrier pour l’instant"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgctxt "calendars"
+msgid "External"
+msgstr "Externes"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Add ICS feed"
+msgstr "Ajouter un flux ICS"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Sync now"
+msgstr "Synchroniser maintenant"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgctxt "external calendar"
+msgid "Remove"
+msgstr "Retirer"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Task due dates"
+msgstr "Échéances des tâches"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Projects"
+msgstr "Projets"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Other calendars"
+msgstr "Autres calendriers"
+
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Help (?)"
+msgstr "Aide (?)"
+
+#: ui/templates/calendar/ui/partials/event_card.html
+msgctxt "open the event"
+msgid "View"
+msgstr "Voir"
+
+#: ui/templates/calendar/ui/partials/event_card.html
+msgid "Read only"
+msgstr "Lecture seule"
+
+#: ui/templates/calendar/ui/partials/event_context_menu.html
+msgid "View details"
+msgstr "Voir les détails"
+
+#: ui/templates/calendar/ui/partials/event_context_menu.html
+msgid "Accept"
+msgstr "Accepter"
+
+#: ui/templates/calendar/ui/partials/event_context_menu.html
+msgid "Decline"
+msgstr "Refuser"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Keyboard Shortcuts"
+msgstr "Raccourcis clavier"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Go to today"
+msgstr "Aller à aujourd’hui"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Previous period"
+msgstr "Période précédente"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Next period"
+msgstr "Période suivante"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Views"
+msgstr "Vues"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Month view"
+msgstr "Vue mois"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Week view"
+msgstr "Vue semaine"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Day view"
+msgstr "Vue jour"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Agenda view"
+msgstr "Vue agenda"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Close panel / modal"
+msgstr "Fermer le panneau / la fenêtre"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Command palette"
+msgstr "Palette de commandes"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Show this help"
+msgstr "Afficher cette aide"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Calendar Management"
+msgstr "Gestion des calendriers"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Multiple calendars</strong> &mdash; Create separate calendars for "
+"work, personal, etc."
+msgstr ""
+"<strong>Plusieurs calendriers</strong> &mdash; Créez des calendriers "
+"distincts pour le travail, la vie personnelle, etc."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Color coding</strong> &mdash; Assign colors to calendars to "
+"distinguish events at a glance."
+msgstr ""
+"<strong>Codes couleur</strong> &mdash; Attribuez une couleur à chaque "
+"calendrier pour distinguer les événements d’un coup d’œil."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Visibility</strong> &mdash; Toggle calendar checkboxes in the "
+"sidebar to show/hide their events."
+msgstr ""
+"<strong>Visibilité</strong> &mdash; Cochez ou décochez les calendriers dans "
+"la barre latérale pour afficher ou masquer leurs événements."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Subscribed calendars</strong> &mdash; Calendars shared with you "
+"appear under \"Other calendars\"."
+msgstr ""
+"<strong>Calendriers abonnés</strong> &mdash; Les calendriers partagés avec "
+"vous apparaissent sous « Autres calendriers »."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Sync with Your Devices"
+msgstr "Synchroniser avec vos appareils"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"Your calendars sync both ways with the calendar app of your phone or "
+"computer (CalDAV). The server address is:"
+msgstr ""
+"Vos calendriers se synchronisent dans les deux sens avec l’application "
+"d’agenda de votre téléphone ou de votre ordinateur (CalDAV). L’adresse du "
+"serveur est :"
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>iPhone, iPad, Mac</strong> &mdash; Add a CalDAV account and enter "
+"the server address."
+msgstr ""
+"<strong>iPhone, iPad, Mac</strong> &mdash; Ajoutez un compte CalDAV et "
+"saisissez l’adresse du serveur."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Android</strong> &mdash; Use <strong>DAVx⁵</strong> with the server "
+"address."
+msgstr ""
+"<strong>Android</strong> &mdash; Utilisez <strong>DAVx⁵</strong> avec "
+"l’adresse du serveur."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Thunderbird</strong> &mdash; New calendar &gt; On the network, then "
+"the server address."
+msgstr ""
+"<strong>Thunderbird</strong> &mdash; Nouvel agenda &gt; Sur le réseau, puis "
+"l’adresse du serveur."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"To let an app without an account follow a calendar read-only, open the "
+"calendar's <strong>Edit</strong> dialog and create a subscription link."
+msgstr ""
+"Pour qu’une application sans compte suive un calendrier en lecture seule, "
+"ouvrez la fenêtre <strong>Modifier</strong> du calendrier et créez un lien "
+"d’abonnement."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Create</strong> &mdash; Click a date or drag a time range on the "
+"calendar, or press <kbd class=\"kbd kbd-xs\">N</kbd>."
+msgstr ""
+"<strong>Créer</strong> &mdash; Cliquez sur une date ou faites glisser une "
+"plage horaire dans le calendrier, ou appuyez sur <kbd class=\"kbd kbd-"
+"xs\">N</kbd>."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Quick duration</strong> &mdash; Use duration chips (30m, 1h, 2h...) "
+"when creating an event."
+msgstr ""
+"<strong>Durée rapide</strong> &mdash; Utilisez les pastilles de durée (30 "
+"min, 1 h, 2 h...) lors de la création d’un événement."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Invite guests</strong> &mdash; Search and add users as guests to "
+"your events."
+msgstr ""
+"<strong>Inviter des participants</strong> &mdash; Recherchez des "
+"utilisateurs et ajoutez-les comme invités à vos événements."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Respond</strong> &mdash; Accept or decline event invitations from "
+"the detail panel."
+msgstr ""
+"<strong>Répondre</strong> &mdash; Acceptez ou refusez les invitations depuis "
+"le panneau de détails."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid ""
+"<strong>Detail panel</strong> &mdash; Click an event to open its details in "
+"the right panel."
+msgstr ""
+"<strong>Panneau de détails</strong> &mdash; Cliquez sur un événement pour "
+"afficher ses détails dans le panneau de droite."
+
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "Endpoints:"
+msgstr "Points d’accès :"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Poll"
+msgstr "Sondage"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll status"
+msgid "Open"
+msgstr "Ouvert"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll status"
+msgid "Finalized"
+msgstr "Finalisé"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Your identity"
+msgstr "Votre identité"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Name *"
+msgstr "Nom *"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Your name"
+msgstr "Votre nom"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Email (optional)"
+msgstr "E-mail (facultatif)"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "your@email.com"
+msgstr "vous@exemple.com"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Your previous votes have been restored. You can update them below."
+msgstr ""
+"Vos votes précédents ont été restaurés. Vous pouvez les modifier ci-dessous."
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Your votes have been saved!"
+msgstr "Vos votes ont été enregistrés !"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "You'll receive an email once a final slot is chosen."
+msgstr "Vous recevrez un e-mail dès qu’un créneau final aura été choisi."
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Bookmark this page to come back and see the final result."
+msgstr "Ajoutez cette page à vos favoris pour revenir voir le résultat final."
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgctxt "poll vote row"
+msgid "You"
+msgstr "Vous"
+
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Poll created with"
+msgstr "Sondage créé avec"
+
+#: ui/views.py views/polls.py
+msgctxt "default calendar name"
+msgid "Personal"
+msgstr "Personnel"
+
+#: views/polls.py
+#, python-format
+msgid "Poll updated: \"%(title)s\""
+msgstr "Sondage modifié : « %(title)s »"
+
+#: views/polls.py
+msgid "Time slots have been updated. Please review your votes."
+msgstr "Les créneaux ont été modifiés. Vérifiez vos votes."
+
+#: views/polls.py
+#, python-format
+msgid "New vote on \"%(title)s\""
+msgstr "Nouveau vote sur « %(title)s »"
+
+#: views/polls.py
+#, python-format
+msgid "%(user)s voted on your poll."
+msgstr "%(user)s a répondu à votre sondage."
+
+#: views/polls.py
+#, python-format
+msgid "Poll finalized: \"%(title)s\""
+msgstr "Sondage finalisé : « %(title)s »"
+
+#: views/polls.py
+msgid "A date has been chosen."
+msgstr "Une date a été choisie."
+
+#: views/polls.py
+msgid "Too many vote submissions. Please try again later."
+msgstr "Trop de votes envoyés. Réessayez plus tard."
+
+#: views/polls.py
+msgid "A guest voted on your poll."
+msgstr "Un invité a répondu à votre sondage."

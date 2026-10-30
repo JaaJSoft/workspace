@@ -137,7 +137,16 @@ window.inviteeSelector = function inviteeSelector(eventName) {
     },
 
     groupLabel(kind) {
-      return { user: 'Workspace', person: 'Contacts', list: 'Lists' }[kind];
+      return { user: 'Workspace', person: gettext('Contacts'), list: gettext('Lists') }[kind];
+    },
+
+    listHint(list) {
+      if (!list.member_count) return gettext('Empty list');
+      return interpolate(
+        ngettext('Invite all %(count)s contact', 'Invite all %(count)s contacts', list.member_count),
+        { count: list.member_count },
+        true,
+      );
     },
 
     moveHighlight(step) {

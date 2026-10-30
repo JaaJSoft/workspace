@@ -181,9 +181,12 @@ def notify_today_events():
 
     from django.contrib.auth import get_user_model
     from django.utils import timezone as dj_timezone
+    from django.utils import translation
+    from django.utils.translation import gettext as _
 
     from workspace.calendar.upcoming import VirtualOccurrence, get_upcoming_for_user
     from workspace.notifications.services.notifications import notify_stream
+    from workspace.users.services.settings import get_user_languages
 
     now = dj_timezone.now()
     end_of_today = dj_timezone.make_aware(
@@ -191,14 +194,19 @@ def notify_today_events():
         dj_timezone.get_current_timezone(),
     )
 
+    users = list(get_user_model().objects.filter(is_active=True).only("pk"))
+    languages = get_user_languages([user.pk for user in users])
     notified = 0
-    for user in get_user_model().objects.filter(is_active=True).only("pk"):
+    for user in users:
         for event in get_upcoming_for_user(user, now, end_of_today):
             source = event.master if isinstance(event, VirtualOccurrence) else event
-            if event.all_day:
-                body = "All day today"
-            else:
-                body = f"Today at {dj_timezone.localtime(event.start):%H:%M}"
+            with translation.override(languages[user.pk]):
+                if event.all_day:
+                    body = _("All day today")
+                else:
+                    body = _("Today at %(time)s") % {
+                        "time": f"{dj_timezone.localtime(event.start):%H:%M}"
+                    }
             url = ""
             if not isinstance(event, VirtualOccurrence):
                 url = f"/calendar?event={event.uuid}"

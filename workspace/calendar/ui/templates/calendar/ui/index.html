@@ -1,7 +1,9 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}Calendar - Workspace{% endblock %}
+{% block title %}
+  {% translate "Calendar" context "page title" %} - Workspace
+{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'calendar/ui/css/calendar.css' %}" />
@@ -33,12 +35,12 @@
       <div
         class="lg:hidden flex items-center gap-2 p-3 border-b border-base-300 bg-base-100 flex-shrink-0"
       >
-        {% include "ui/partials/drawer_toggle.html" with drawer_id="calendar-drawer" label="Open sidebar" %}
+        {% include "ui/partials/drawer_toggle.html" with drawer_id="calendar-drawer" label=_("Open sidebar") %}
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-circle"
           @click="calendarPrev()"
-          aria-label="Previous"
+          aria-label="{% translate "Previous" %}"
         >
           <i data-lucide="chevron-left" class="w-4 h-4"></i>
         </button>
@@ -50,16 +52,16 @@
           type="button"
           class="btn btn-ghost btn-sm btn-circle"
           @click="calendarNext()"
-          aria-label="Next"
+          aria-label="{% translate "Next" %}"
         >
           <i data-lucide="chevron-right" class="w-4 h-4"></i>
         </button>
-        <button type="button" class="btn btn-ghost btn-xs" @click="calendarToday()">Today</button>
+        <button type="button" class="btn btn-ghost btn-xs" @click="calendarToday()">{% translate "Today" %}</button>
         <div class="dropdown dropdown-end">
           <label
             tabindex="0"
             class="btn btn-ghost btn-sm btn-circle"
-            aria-label="Change view"
+            aria-label="{% translate "Change view" %}"
           >
             <i data-lucide="layout-grid" class="w-4 h-4"></i>
           </label>
@@ -74,7 +76,7 @@
                 :class="currentView === 'dayGridMonth' ? 'active' : ''"
                 @click="changeView('dayGridMonth'); document.activeElement.blur()"
               >
-                <i data-lucide="calendar-days" class="w-4 h-4"></i> Month
+                <i data-lucide="calendar-days" class="w-4 h-4"></i> {% translate "Month" context "calendar view" %}
               </button>
             </li>
             <li>
@@ -84,7 +86,7 @@
                 :class="currentView === 'timeGridWeek' ? 'active' : ''"
                 @click="changeView('timeGridWeek'); document.activeElement.blur()"
               >
-                <i data-lucide="calendar-range" class="w-4 h-4"></i> Week
+                <i data-lucide="calendar-range" class="w-4 h-4"></i> {% translate "Week" context "calendar view" %}
               </button>
             </li>
             <li>
@@ -94,7 +96,7 @@
                 :class="currentView === 'timeGridDay' ? 'active' : ''"
                 @click="changeView('timeGridDay'); document.activeElement.blur()"
               >
-                <i data-lucide="calendar-clock" class="w-4 h-4"></i> Day
+                <i data-lucide="calendar-clock" class="w-4 h-4"></i> {% translate "Day" context "calendar view" %}
               </button>
             </li>
             <li>
@@ -104,7 +106,7 @@
                 :class="currentView === 'agenda' ? 'active' : ''"
                 @click="changeView('agenda'); document.activeElement.blur()"
               >
-                <i data-lucide="list" class="w-4 h-4"></i> Agenda
+                <i data-lucide="list" class="w-4 h-4"></i> {% translate "Agenda" context "calendar view" %}
               </button>
             </li>
           </ul>
@@ -129,7 +131,7 @@
         >
           <div class="agenda-empty">
             <i data-lucide="calendar" class="w-10 h-10 opacity-50"></i>
-            <p>No upcoming events</p>
+            <p>{% translate "No upcoming events" %}</p>
           </div>
         </template>
 
@@ -196,10 +198,10 @@
             @click="loadMoreAgenda()"
             :disabled="agenda.loading"
           >
-            <span x-show="!agenda.loading">Load more</span>
+            <span x-show="!agenda.loading">{% translate "Load more" %}</span>
             <span x-show="agenda.loading">
               <span class="loading loading-spinner loading-xs"></span>
-              Loading…
+              {% translate "Loading…" %}
             </span>
           </button>
         </div>
@@ -215,7 +217,7 @@
       @click="createEventNow()"
       x-show="!showPanel"
       x-cloak
-      aria-label="New event"
+      aria-label="{% translate "New event" %}"
     >
       <i data-lucide="plus" class="w-5 h-5"></i>
     </button>
@@ -233,16 +235,16 @@
   <!-- Mobile preferences dialog -->
   <dialog id="calendar-prefs-dialog" class="modal">
     <div class="modal-box">
-      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title="Preferences" only %}
+      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title=_("Preferences") only %}
       <div>{% include "calendar/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
-          <button type="submit" class="btn btn-sm">Close</button>
+          <button type="submit" class="btn btn-sm">{% translate "Close" %}</button>
         </form>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 {% endblock %}

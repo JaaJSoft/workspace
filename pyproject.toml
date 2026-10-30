@@ -92,7 +92,7 @@ dependencies = [
     "numpy>=2.5.4",
     # photos face detection and embedding (photos/services/detection/), run on
     # the model files directly: no opencv, no insightface package.
-    "onnxruntime>=1.31.0",
+    "onnxruntime>=1.31.1",
     "fastembed>=0.9.1",
 ]
 

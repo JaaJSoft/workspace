@@ -152,6 +152,7 @@ The most common variables are listed below. For the full, annotated list - inclu
 | `ALLOWED_HOSTS`        | Comma-separated allowed hosts                     | `*`                          |
 | `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins              | *(none)*                     |
 | `DATABASE_URL`         | Database connection string                        | `sqlite:///db.sqlite3`       |
+| `DB_POOL_MAX_SIZE`     | PostgreSQL connections per process ([sizing](docs/deployments/README.md#database-connections)) | `4` |
 | `REDIS_URL`            | Redis URL for cache and sessions                  | *(none, in-memory fallback)* |
 | `PROCESS_TYPE`         | What the image runs: `web`, `worker` or `beat`    | `web`                        |
 | `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                    | `2`                          |

@@ -3,9 +3,10 @@
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 from .base import BASE_DIR, TESTING
-from .env import env_bool
+from .env import env_bool, env_non_negative_int
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
@@ -19,6 +20,45 @@ DATABASES = {
     ),
 }
 
+
+def _pool_options():
+    """Arguments of the psycopg ConnectionPool, from the DB_POOL_* env vars.
+
+    The pool belongs to the process: every greenlet of a gevent web worker, or
+    every thread of a Celery child, borrows from the same one, so max_size is
+    how many queries the process can run at once. Above it a request waits up
+    to timeout seconds for a connection, then fails.
+    """
+    min_size = env_non_negative_int("DB_POOL_MIN_SIZE")
+    if min_size is None:
+        min_size = 4
+    max_size = env_non_negative_int("DB_POOL_MAX_SIZE")
+    if max_size is None:
+        max_size = max(min_size, 1)
+    timeout = env_non_negative_int("DB_POOL_TIMEOUT")
+    max_idle = env_non_negative_int("DB_POOL_MAX_IDLE")
+    max_lifetime = env_non_negative_int("DB_POOL_MAX_LIFETIME")
+    # psycopg only checks these when the first request opens the pool: a
+    # mistake would start every process fine and fail every request.
+    if max_size < max(min_size, 1):
+        raise ImproperlyConfigured(
+            f"DB_POOL_MAX_SIZE ({max_size}) must be at least 1 and at least "
+            f"DB_POOL_MIN_SIZE ({min_size})"
+        )
+    if timeout == 0:
+        raise ImproperlyConfigured(
+            "DB_POOL_TIMEOUT must be at least 1 second: at 0 a request fails "
+            "as soon as every connection is busy"
+        )
+    return {
+        "min_size": min_size,
+        "max_size": max_size,
+        "timeout": 30 if timeout is None else timeout,
+        "max_idle": 600 if max_idle is None else max_idle,
+        "max_lifetime": 3600 if max_lifetime is None else max_lifetime,
+    }
+
+
 # PostgreSQL: connection pooling + Prometheus DB metrics
 if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
     DATABASES["default"]["ENGINE"] = "django_prometheus.db.backends.postgresql"
@@ -30,7 +70,7 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
     DATABASES["default"]["CONN_HEALTH_CHECKS"] = False
     DATABASES["default"]["OPTIONS"] = {
         **DATABASES["default"].get("OPTIONS", {}),
-        "pool": True,
+        "pool": _pool_options(),
     }
 
 # SQLite-specific optimizations (WAL mode, PRAGMAs)

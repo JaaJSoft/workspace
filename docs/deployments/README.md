@@ -86,6 +86,30 @@ Keep the default `prefork` pool (`CELERY_WORKER_POOL`): several tasks rely on ti
 
 Other `celery beat` options follow the same pattern as the worker's, with the `CELERY_BEAT_` prefix.
 
+### Database connections
+
+On PostgreSQL every process keeps a pool of connections ([psycopg_pool](https://www.psycopg.org/psycopg3/docs/advanced/pool.html)), shared by everything running in it: all the requests a gevent web worker serves at once, or a Celery child and the threads it starts. A request borrows a connection at its first query and gives it back when it ends. Pools are never shared between processes: each Gunicorn worker and each Celery child has its own. SQLite has no pool; these variables are ignored there.
+
+| Variable               | Default            | Effect |
+|------------------------|--------------------|--------|
+| `DB_POOL_MAX_SIZE`     | `DB_POOL_MIN_SIZE` | Connections one process may hold. A request that needs one while all are busy waits for the next one freed |
+| `DB_POOL_MIN_SIZE`     | `4`                | Connections opened as soon as the process runs its first query, and kept open while idle |
+| `DB_POOL_TIMEOUT`      | `30`               | Seconds a request waits for a free connection before failing with an error |
+| `DB_POOL_MAX_IDLE`     | `600`              | Seconds an idle connection above `DB_POOL_MIN_SIZE` stays open |
+| `DB_POOL_MAX_LIFETIME` | `3600`             | Seconds after which a connection is replaced, idle or not, once it is back in the pool |
+
+`DB_POOL_MAX_SIZE` caps how many requests of one web worker run queries at the same time, however many it serves. Four is enough for a small instance; past a few dozen concurrent users, or when requests pile up waiting for a connection, raise it on the web containers (`DB_POOL_MIN_SIZE=2` and `DB_POOL_MAX_SIZE=20`, for instance). A Celery child runs one task at a time and needs at most `AI_TOOL_CONCURRENCY` + 1 connections, when an assistant runs its tool calls in parallel.
+
+Each container may set its own values. Whatever they are, PostgreSQL must accept every connection the deployment can open at once, below its `max_connections` (`100` by default, minus the few kept for superusers):
+
+```
+DB_POOL_MAX_SIZE × GUNICORN_WORKERS × web containers
++ DB_POOL_MAX_SIZE × CELERY_WORKER_CONCURRENCY × worker containers
++ a few for migrations and maintenance commands
+```
+
+`DB_POOL_MIN_SIZE` connections stay open in every process, used or not: keep it low on workers with many children. When the total does not fit, raise `max_connections` or put a pooler such as PgBouncer between the app and the database.
+
 ### Memory allocator
 
 `run.sh` sets `MALLOC_MMAP_THRESHOLD_=131072` for all three processes. By default glibc keeps the large buffers a request or a task reads (a whole file, a decoded image) on its heap once they are freed. With a fixed threshold, they go back to the system. Set another value in bytes to override it.

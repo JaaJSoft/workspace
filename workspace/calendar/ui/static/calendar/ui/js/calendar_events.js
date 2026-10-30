@@ -45,6 +45,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         // months, and the toolbar title like the rest of the UI. The bundle
         // ships no locale texts: the ones the grid shows are passed below.
         locale: (userLocale() || navigator.language || 'en').toLowerCase(),
+        // Translators: label of the all-day row in the narrow time column of the week and day views; keep it short.
         allDayText: pgettext('calendar grid', 'all-day'),
         moreLinkText: (count) => interpolate(ngettext('+%(count)s more', '+%(count)s more', count), { count }, true),
         moreLinkHint: (count) => interpolate(ngettext('Show %(count)s more event', 'Show %(count)s more events', count), { count }, true),

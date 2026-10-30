@@ -71,6 +71,13 @@
   text-decoration: none;
 }
 
+/* Time axis of the week and day views: FullCalendar caps the cushion at
+   60px, which wraps or clips an all-day label longer than the English one.
+   Without the cap the axis is sized to its widest label. */
+.fc .fc-timegrid-axis-cushion {
+  max-width: none;
+}
+
 /* Day cells */
 .fc .fc-daygrid-day-number {
   color: oklch(var(--bc));

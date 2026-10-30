@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 11:56+0000\n"
+"POT-Creation-Date: 2026-10-30 12:18+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -111,6 +111,124 @@ msgstr "%(user)s a refusé « %(title)s »"
 #, python-format
 msgid "%(user)s answered \"%(title)s\""
 msgstr "%(user)s a répondu à « %(title)s »"
+
+#: services/recurrence_rule.py
+msgid "Every day"
+msgstr "Tous les jours"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(count)s days"
+msgstr "Tous les %(count)s jours"
+
+#: services/recurrence_rule.py
+msgid "Every week"
+msgstr "Toutes les semaines"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(count)s weeks"
+msgstr "Toutes les %(count)s semaines"
+
+#: services/recurrence_rule.py
+msgid "Every month"
+msgstr "Tous les mois"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(count)s months"
+msgstr "Tous les %(count)s mois"
+
+#: services/recurrence_rule.py
+msgid "Every year"
+msgstr "Tous les ans"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(count)s years"
+msgstr "Tous les %(count)s ans"
+
+#: services/recurrence_rule.py
+msgctxt "nth weekday of the month"
+msgid "1st"
+msgstr "premier"
+
+#: services/recurrence_rule.py
+msgctxt "nth weekday of the month"
+msgid "2nd"
+msgstr "deuxième"
+
+#: services/recurrence_rule.py
+msgctxt "nth weekday of the month"
+msgid "3rd"
+msgstr "troisième"
+
+#: services/recurrence_rule.py
+msgctxt "nth weekday of the month"
+msgid "4th"
+msgstr "quatrième"
+
+#: services/recurrence_rule.py
+msgctxt "nth weekday of the month"
+msgid "last"
+msgstr "dernier"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid ", until %(date)s"
+msgstr ", jusqu’au %(date)s"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid ", for %(count)s occurrence"
+msgid_plural ", for %(count)s occurrences"
+msgstr[0] ", pour %(count)s occurrence"
+msgstr[1] ", pour %(count)s d’occurrences"
+msgstr[2] ", pour %(count)s occurrences"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(ordinal)s %(weekday)s of the month"
+msgstr "Le %(ordinal)s %(weekday)s de chaque mois"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(ordinal)s %(weekday)s of the month every %(count)s months"
+msgstr "Le %(ordinal)s %(weekday)s du mois, tous les %(count)s mois"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "%(items)s and %(last)s"
+msgstr "%(items)s et %(last)s"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every week on %(days)s"
+msgstr "Toutes les semaines le %(days)s"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(count)s weeks on %(days)s"
+msgstr "Toutes les %(count)s semaines le %(days)s"
+
+#: services/recurrence_rule.py
+msgid "Monthly on the last day"
+msgstr "Tous les mois le dernier jour"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(count)s months on the last day"
+msgstr "Tous les %(count)s mois le dernier jour"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Monthly on day %(day)s"
+msgstr "Tous les mois le %(day)s"
+
+#: services/recurrence_rule.py
+#, python-format
+msgid "Every %(count)s months on day %(day)s"
+msgstr "Tous les %(count)s mois le %(day)s"
 
 #: tasks.py
 msgid "All day today"

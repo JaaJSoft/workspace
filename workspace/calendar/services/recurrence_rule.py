@@ -27,6 +27,10 @@ from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import rrulestr
+from django.utils.dates import WEEKDAYS, WEEKDAYS_ABBR
+from django.utils.formats import date_format
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy, ngettext, pgettext_lazy
 from icalendar.parser import Contentline
 from icalendar.prop import vDDDLists, vRecur
 
@@ -56,11 +60,14 @@ _FIXED_STEP_FREQ = {"DAILY", "WEEKLY", "HOURLY", "MINUTELY", "SECONDLY"}
 
 _INTERVAL_RE = re.compile(r"(?:^|;)\s*INTERVAL\s*=([^;]*)", re.IGNORECASE)
 
-_UNIT_LABELS = {
-    "daily": ("day", "days"),
-    "weekly": ("week", "weeks"),
-    "monthly": ("month", "months"),
-    "yearly": ("year", "years"),
+# describe()'s summary for each picker frequency: (interval of 1, interval
+# of N). Whole sentences rather than "Every" + unit, because the French
+# article agrees with the unit ("tous les jours", "toutes les semaines").
+_FREQUENCY_SUMMARIES = {
+    "daily": (gettext_lazy("Every day"), gettext_lazy("Every %(count)s days")),
+    "weekly": (gettext_lazy("Every week"), gettext_lazy("Every %(count)s weeks")),
+    "monthly": (gettext_lazy("Every month"), gettext_lazy("Every %(count)s months")),
+    "yearly": (gettext_lazy("Every year"), gettext_lazy("Every %(count)s years")),
 }
 
 # describe()'s BY-qualified branch: rules to_simple() rejects (a BYDAY, a
@@ -69,27 +76,16 @@ _UNIT_LABELS = {
 # line, an RDATE - keeps returning the raw rule text, same as before.
 _BY_QUALIFIED_KEYS = {"FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "COUNT", "UNTIL"}
 
-_WEEKDAY_SHORT = {
-    "MO": "Mon",
-    "TU": "Tue",
-    "WE": "Wed",
-    "TH": "Thu",
-    "FR": "Fri",
-    "SA": "Sat",
-    "SU": "Sun",
-}
+# BYDAY codes to the index of Django's translated WEEKDAYS / WEEKDAYS_ABBR.
+_WEEKDAY_INDEX = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
-_WEEKDAY_FULL = {
-    "MO": "Monday",
-    "TU": "Tuesday",
-    "WE": "Wednesday",
-    "TH": "Thursday",
-    "FR": "Friday",
-    "SA": "Saturday",
-    "SU": "Sunday",
+_ORDINAL_LABELS = {
+    1: pgettext_lazy("nth weekday of the month", "1st"),
+    2: pgettext_lazy("nth weekday of the month", "2nd"),
+    3: pgettext_lazy("nth weekday of the month", "3rd"),
+    4: pgettext_lazy("nth weekday of the month", "4th"),
+    -1: pgettext_lazy("nth weekday of the month", "last"),
 }
-
-_ORDINAL_LABELS = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", -1: "last"}
 
 
 def _ical_utc(value):
@@ -520,12 +516,14 @@ def _until_phrase(until):
     Shared by the FREQ/INTERVAL/UNTIL branch and the BY-qualified branch so
     the two never drift into two different UNTIL phrasings.
     """
-    return f", until {until.day} {until.strftime('%B %Y')}"
+    return _(", until %(date)s") % {"date": date_format(until, "j F Y")}
 
 
 def _count_phrase(count):
     """ ", for 10 occurrences"."""
-    return f", for {count} occurrence{'' if count == 1 else 's'}"
+    return ngettext(
+        ", for %(count)s occurrence", ", for %(count)s occurrences", count
+    ) % {"count": count}
 
 
 def _by_qualified_tail(parts):
@@ -565,27 +563,38 @@ def _describe_byday(freq, interval, weekdays):
         label = _ORDINAL_LABELS.get(ordinal)
         if label is None:
             return None
-        weekday_name = _WEEKDAY_FULL[weekday]
-        phrase = f"Every {label} {weekday_name} of the month"
-        if interval > 1:
-            phrase += f" every {interval} months"
-        return phrase
+        values = {
+            "ordinal": label,
+            "weekday": WEEKDAYS[_WEEKDAY_INDEX[weekday]],
+            "count": interval,
+        }
+        if interval == 1:
+            return _("Every %(ordinal)s %(weekday)s of the month") % values
+        return (
+            _("Every %(ordinal)s %(weekday)s of the month every %(count)s months")
+            % values
+        )
 
-    if any(ordinal is not None for ordinal, _ in tokens):
+    if any(ordinal is not None for ordinal, _weekday in tokens):
         # A mixed or multi-entry ordinal set ("1MO,3MO") isn't one this
         # phrases; the raw text beats a confident mistranslation.
         return None
     if freq != "WEEKLY":
         return None
 
-    labels = [_WEEKDAY_SHORT[weekday] for _, weekday in tokens]
+    labels = [
+        str(WEEKDAYS_ABBR[_WEEKDAY_INDEX[weekday]]) for _ordinal, weekday in tokens
+    ]
     if len(labels) == 1:
-        joined = labels[0]
+        days = labels[0]
     else:
-        joined = ", ".join(labels[:-1]) + f" and {labels[-1]}"
-    singular, plural = _UNIT_LABELS["weekly"]
-    prefix = f"Every {singular}" if interval == 1 else f"Every {interval} {plural}"
-    return f"{prefix} on {joined}"
+        days = _("%(items)s and %(last)s") % {
+            "items": ", ".join(labels[:-1]),
+            "last": labels[-1],
+        }
+    if interval == 1:
+        return _("Every week on %(days)s") % {"days": days}
+    return _("Every %(count)s weeks on %(days)s") % {"count": interval, "days": days}
 
 
 def _describe_bymonthday(freq, interval, days):
@@ -598,14 +607,14 @@ def _describe_bymonthday(freq, interval, days):
         return None
     day = days[0]
     if day == -1:
-        day_phrase = "on the last day"
-    elif 1 <= day <= 31:
-        day_phrase = f"on day {day}"
-    else:
+        if interval == 1:
+            return _("Monthly on the last day")
+        return _("Every %(count)s months on the last day") % {"count": interval}
+    if not 1 <= day <= 31:
         return None
     if interval == 1:
-        return f"Monthly {day_phrase}"
-    return f"Every {interval} months {day_phrase}"
+        return _("Monthly on day %(day)s") % {"day": day}
+    return _("Every %(count)s months on day %(day)s") % {"count": interval, "day": day}
 
 
 def _describe_by_qualified(rule_text):
@@ -655,9 +664,9 @@ def describe(rule_text):
     """
     simple = to_simple(rule_text)
     if simple is not None:
-        singular, plural = _UNIT_LABELS[simple["frequency"]]
+        one, many = _FREQUENCY_SUMMARIES[simple["frequency"]]
         interval = simple["interval"]
-        summary = f"Every {singular}" if interval == 1 else f"Every {interval} {plural}"
+        summary = str(one) if interval == 1 else many % {"count": interval}
         if simple["until"]:
             summary += _until_phrase(simple["until"])
         return summary
@@ -703,7 +712,7 @@ def continue_after(rule_text, dtstart, instant, tz=None):
 
     out = []
     for line in _rule_lines(rule_text):
-        name, _, _ = line.partition(":")
+        name = line.partition(":")[0]
         parsed = _contentline(line)
         parts = _recur_parts(parsed[2]) if parsed and parsed[0] == "RRULE" else None
         if parts is None or "COUNT" not in parts:
@@ -729,7 +738,7 @@ def truncate_before(rule_text, instant):
     """
     out = []
     for line in _rule_lines(rule_text):
-        name, _, body = line.partition(":")
+        name, _sep, body = line.partition(":")
         parsed = _contentline(line)
         prop, params = (parsed[0], parsed[1]) if parsed else ("", {})
         parts = _recur_parts(parsed[2]) if prop == "RRULE" else None

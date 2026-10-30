@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 
 from workspace.calendar.activity import CalendarActivityProvider
 from workspace.calendar.models import Calendar, Event, Poll, PollInvitee, PollSlot
+from workspace.calendar.services.recurrence_rule import describe
 from workspace.calendar.tasks import notify_today_events
 from workspace.notifications.models import Notification
 from workspace.users.services.settings import set_setting
@@ -176,3 +177,21 @@ class ActivityLanguageTests(TestCase):
         with translation.override("fr"):
             events = provider.get_recent_events(self.user.id, viewer_id=None)
         self.assertEqual(events[0]["label"], "Événement créé")
+
+
+class RecurrenceSummaryLanguageTests(TestCase):
+    def test_summary_is_one_french_sentence(self):
+        from django.utils import translation
+
+        cases = {
+            "RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=20270301T000000Z": (
+                "Toutes les 2 semaines, jusqu’au 1 mars 2027"
+            ),
+            "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR": "Toutes les semaines le lun, mer et ven",
+            "RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=5": (
+                "Le deuxième mardi de chaque mois, pour 5 occurrences"
+            ),
+        }
+        for rule, expected in cases.items():
+            with self.subTest(rule=rule), translation.override("fr"):
+                self.assertEqual(describe(rule), expected)

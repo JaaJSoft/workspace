@@ -878,9 +878,10 @@ into an event."""
         from django.contrib.auth import get_user_model
         from django.db import transaction
         from django.utils import timezone as dj_tz
+        from django.utils.translation import gettext as _
 
         from workspace.calendar.models import Poll, PollInvitee, PollSlot
-        from workspace.notifications.services.notifications import notify_many
+        from workspace.calendar.services.notifications import notify_in_languages
         from workspace.users.services.settings import get_user_timezone
 
         title = args.title.strip()
@@ -936,11 +937,13 @@ into an event."""
 
         if invitees:
             recipients = list(get_user_model().objects.filter(id__in=invitees))
-            notify_many(
+            notify_in_languages(
                 recipients=recipients,
-                origin="calendar",
-                title=f'Poll invitation: "{poll.title}"',
-                body=f"{user.username} invited you to vote on a poll.",
+                message=lambda: (
+                    _('Poll invitation: "%(title)s"') % {"title": poll.title},
+                    _("%(user)s invited you to vote on a poll.")
+                    % {"user": user.username},
+                ),
                 url=f"/calendar?poll={poll.pk}",
                 actor=user,
                 source=poll,

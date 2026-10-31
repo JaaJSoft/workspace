@@ -1,6 +1,9 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.utils import translation
 
 from workspace.users.models import UserSetting
 from workspace.users.services.settings import (
@@ -11,6 +14,7 @@ from workspace.users.services.settings import (
     get_user_language,
     get_user_languages,
     get_user_timezone,
+    in_recipient_languages,
     set_setting,
 )
 
@@ -582,3 +586,42 @@ class GetUserLanguagesTests(TestCase):
     def test_no_user_costs_no_query(self):
         with self.assertNumQueries(0):
             self.assertEqual(get_user_languages([]), {})
+
+    def test_splits_a_large_fan_out_into_bounded_queries(self):
+        # SQLite caps the parameters of one query (32766): a fan-out to every
+        # active user must not put them all in a single IN list.
+        set_setting(self.users[0], "core", "language", "fr")
+        set_setting(self.users[2], "core", "language", "fr")
+        with (
+            patch("workspace.users.services.settings._LANGUAGE_BATCH_SIZE", 2),
+            self.assertNumQueries(2),
+        ):
+            languages = get_user_languages([u.pk for u in self.users])
+        self.assertEqual(
+            languages,
+            {self.users[0].pk: "fr", self.users[1].pk: "en", self.users[2].pk: "fr"},
+        )
+
+
+class InRecipientLanguagesTests(TestCase):
+    def setUp(self):
+        self.camille = User.objects.create_user(username="camille", password="pass")
+        self.dominique = User.objects.create_user(username="dominique", password="pass")
+        self.alex = User.objects.create_user(username="alex", password="pass")
+        set_setting(self.camille, "core", "language", "fr")
+        set_setting(self.dominique, "core", "language", "fr")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_groups_recipients_by_language_with_it_active(self):
+        groups = {}
+        for users in in_recipient_languages([self.camille, self.alex, self.dominique]):
+            groups[translation.get_language()] = {u.username for u in users}
+        self.assertEqual(groups, {"fr": {"camille", "dominique"}, "en": {"alex"}})
+
+    def test_restores_the_language_afterwards(self):
+        with translation.override("en"):
+            for _users in in_recipient_languages([self.camille]):
+                pass
+            self.assertEqual(translation.get_language(), "en")

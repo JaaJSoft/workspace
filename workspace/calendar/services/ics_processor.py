@@ -3,6 +3,8 @@ import logging
 import icalendar
 from django.db import IntegrityError, transaction
 from django.utils import timezone as django_tz
+from django.utils import translation
+from django.utils.translation import gettext as _
 
 from workspace.calendar.models import Event, EventMember
 from workspace.calendar.services.event_creation import create_event_from_payload
@@ -14,7 +16,7 @@ from workspace.calendar.services.ics_common import (
 from workspace.calendar.services.timezones import normalize_all_day
 from workspace.common.logging import scrub
 from workspace.notifications.services.notifications import notify
-from workspace.users.services.settings import get_user_timezone
+from workspace.users.services.settings import get_user_language, get_user_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,7 @@ def _parse_event_times(vevent, user):
     """Return (start, end, all_day, tzid) for a VEVENT, invariant-normalized."""
     owner_tz = get_user_timezone(user)
     start, tzid = parse_dt_prop(vevent.get("DTSTART"), owner_tz)
-    end, _ = parse_dt_prop(vevent.get("DTEND"), owner_tz)
+    end, _end_tzid = parse_dt_prop(vevent.get("DTEND"), owner_tz)
     all_day = is_all_day(vevent.get("DTSTART"))
     if all_day:
         start = normalize_all_day(start)
@@ -119,13 +121,14 @@ def _handle_cancel(vevent, uid, mail_message):
         event.save(update_fields=["is_cancelled"])
 
         if _is_future_event(event):
-            notify(
-                recipient=user,
-                origin="calendar",
-                title=f"Cancelled: {event.title}",
-                url=f"/calendar?event={event.pk}",
-                source=event,
-            )
+            with translation.override(get_user_language(user)):
+                notify(
+                    recipient=user,
+                    origin="calendar",
+                    title=_("Cancelled: %(title)s") % {"title": event.title},
+                    url=f"/calendar?event={event.pk}",
+                    source=event,
+                )
 
 
 @transaction.atomic
@@ -160,14 +163,15 @@ def _create_event(vevent, uid, sequence, mail_message):
     )
 
     if _is_future_event(event):
-        notify(
-            recipient=user,
-            origin="calendar",
-            title=f"Invitation: {event.title}",
-            body=f"From {external_organizer}",
-            url=f"/calendar?event={event.pk}",
-            source=event,
-        )
+        with translation.override(get_user_language(user)):
+            notify(
+                recipient=user,
+                origin="calendar",
+                title=_("Invitation: %(title)s") % {"title": event.title},
+                body=_("From %(organizer)s") % {"organizer": external_organizer},
+                url=f"/calendar?event={event.pk}",
+                source=event,
+            )
 
     return event
 
@@ -200,14 +204,15 @@ def _update_event(event, vevent, sequence, mail_message):
     )
 
     if _is_future_event(event):
-        notify(
-            recipient=event.owner,
-            origin="calendar",
-            title=f"Updated: {event.title}",
-            body="The event has been updated",
-            url=f"/calendar?event={event.pk}",
-            source=event,
-        )
+        with translation.override(get_user_language(event.owner)):
+            notify(
+                recipient=event.owner,
+                origin="calendar",
+                title=_("Updated: %(title)s") % {"title": event.title},
+                body=_("The event has been updated"),
+                url=f"/calendar?event={event.pk}",
+                source=event,
+            )
 
 
 def _is_future_event(event):

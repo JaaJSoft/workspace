@@ -14,12 +14,12 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-
-from workspace.notifications.services.notifications import notify_many
+from django.utils.translation import gettext as _
 
 from ..models import Calendar, Event, EventMember
 from ..models_external import ExternalCalendar
 from .guests import copy_guests, sync_guests
+from .notifications import notify_in_languages
 from .recurrence_rule import apply_rule, continue_after, truncate_before
 from .timezones import current_timezone_name, event_timezone, normalize_all_day
 
@@ -139,11 +139,13 @@ def sync_members(event, member_ids, owner_id):
         removed_users = list(User.objects.filter(id__in=to_remove))
         EventMember.objects.filter(event=event, user_id__in=to_remove).delete()
         if removed_users:
-            notify_many(
+            notify_in_languages(
                 recipients=removed_users,
-                origin="calendar",
-                title=f'Removed from "{event.title}"',
-                body=f"{event.owner.username} removed you from an event.",
+                message=lambda: (
+                    _('Removed from "%(title)s"') % {"title": event.title},
+                    _("%(user)s removed you from an event.")
+                    % {"user": event.owner.username},
+                ),
                 url=f"/calendar?event={event.pk}",
                 actor=event.owner,
                 source=event,
@@ -154,11 +156,12 @@ def sync_members(event, member_ids, owner_id):
         EventMember.objects.bulk_create(
             [EventMember(event=event, user=u) for u in users]
         )
-        notify_many(
+        notify_in_languages(
             recipients=users,
-            origin="calendar",
-            title=f'Invited to "{event.title}"',
-            body=f"{event.owner.username} invited you to an event.",
+            message=lambda: (
+                _('Invited to "%(title)s"') % {"title": event.title},
+                _("%(user)s invited you to an event.") % {"user": event.owner.username},
+            ),
             url=f"/calendar?event={event.pk}",
             actor=event.owner,
             source=event,
@@ -194,11 +197,12 @@ def _copy_members(source, target, data, user):
     EventMember.objects.bulk_create([EventMember(event=target, user=u) for u in users])
     new_users = [u for u in users if u.id not in existing_ids]
     if new_users:
-        notify_many(
+        notify_in_languages(
             recipients=new_users,
-            origin="calendar",
-            title=f'Invited to "{target.title}"',
-            body=f"{user.username} invited you to an event.",
+            message=lambda: (
+                _('Invited to "%(title)s"') % {"title": target.title},
+                _("%(user)s invited you to an event.") % {"user": user.username},
+            ),
             url=f"/calendar?event={target.pk}",
             actor=user,
             source=target,
@@ -276,11 +280,13 @@ def _update_whole_event(event, data, user):
         )
     )
     if member_users:
-        notify_many(
+        notify_in_languages(
             recipients=member_users,
-            origin="calendar",
-            title=f'"{event.title}" was updated',
-            body=f"{user.username} updated an event you are part of.",
+            message=lambda: (
+                _('"%(title)s" was updated') % {"title": event.title},
+                _("%(user)s updated an event you are part of.")
+                % {"user": user.username},
+            ),
             url=f"/calendar?event={event.pk}",
             actor=user,
             source=event,
@@ -387,11 +393,13 @@ def cancel_event(event, user, *, scope, original_start=None):
             User.objects.filter(calendar_invitations__event=event).exclude(id=user.id)
         )
         if member_users:
-            notify_many(
+            notify_in_languages(
                 recipients=member_users,
-                origin="calendar",
-                title=f'"{event.title}" was cancelled',
-                body=f"{user.username} cancelled an event you were part of.",
+                message=lambda: (
+                    _('"%(title)s" was cancelled') % {"title": event.title},
+                    _("%(user)s cancelled an event you were part of.")
+                    % {"user": user.username},
+                ),
                 actor=user,
             )
         event.delete()

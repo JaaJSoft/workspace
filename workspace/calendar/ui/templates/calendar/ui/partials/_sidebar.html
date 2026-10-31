@@ -1,11 +1,12 @@
 {# Calendar drawer sidebar: header, navigation controls, calendar lists (owned/external/subscribed), polls/help/collapse buttons. #}
 {# Included from index.html inside the {% block drawer_sidebar %} block. #}
+{% load i18n %}
 {{ calendars|json_script:"calendars-data" }}
 {{ prefs|json_script:"calendar-prefs-data" }}
 <div class="drawer-side z-40 h-full !overflow-visible">
   <label
     for="calendar-drawer"
-    aria-label="close sidebar"
+    aria-label="{% translate "close sidebar" %}"
     class="drawer-overlay"
   ></label>
 
@@ -33,7 +34,7 @@
             class="btn btn-ghost btn-sm hover:text-module"
             @click="calendarToday()"
           >
-            Today
+            {% translate "Today" %}
           </button>
           {% include "ui/partials/preferences_popover.html" with content="calendar/ui/partials/_preferences_content.html" accent="text-module" button_class="hover:text-module" %}
         </div>
@@ -51,7 +52,7 @@
           type="button"
           class="btn btn-ghost btn-xs btn-square"
           @click="calendarPrev()"
-          title="Previous"
+          title="{% translate "Previous" %}"
         >
           <i data-lucide="chevron-left" class="w-4 h-4"></i>
         </button>
@@ -63,7 +64,7 @@
           type="button"
           class="btn btn-ghost btn-xs btn-square"
           @click="calendarNext()"
-          title="Next"
+          title="{% translate "Next" %}"
         >
           <i data-lucide="chevron-right" class="w-4 h-4"></i>
         </button>
@@ -76,7 +77,7 @@
           :class="currentView === 'dayGridMonth' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('dayGridMonth')"
         >
-          Month
+          {% translate "Month" context "calendar view" %}
         </button>
         <button
           type="button"
@@ -84,7 +85,7 @@
           :class="currentView === 'timeGridWeek' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('timeGridWeek')"
         >
-          Week
+          {% translate "Week" context "calendar view" %}
         </button>
         <button
           type="button"
@@ -92,7 +93,7 @@
           :class="currentView === 'timeGridDay' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('timeGridDay')"
         >
-          Day
+          {% translate "Day" context "calendar view" %}
         </button>
         <button
           type="button"
@@ -100,7 +101,7 @@
           :class="currentView === 'agenda' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('agenda')"
         >
-          Agenda
+          {% translate "Agenda" context "calendar view" %}
         </button>
       </div>
     </div>
@@ -118,14 +119,14 @@
         >
           <span class="flex items-center gap-2">
             <i data-lucide="user" class="w-3 h-3"></i>
-            My calendars
+            {% translate "My calendars" %}
           </span>
         </h3>
         <button
           type="button"
           class="btn btn-ghost btn-xs btn-square"
           @click="createCalendar()"
-          title="New calendar"
+          title="{% translate "New calendar" %}"
         >
           <i data-lucide="plus" class="w-3 h-3"></i>
         </button>
@@ -156,7 +157,7 @@
                   type="button"
                   class="btn btn-ghost btn-xs btn-square"
                   @click.stop="editCalendar(cal)"
-                  title="Edit"
+                  title="{% translate "Edit" %}"
                 >
                   <i data-lucide="pencil" class="w-3 h-3"></i>
                 </button>
@@ -164,7 +165,7 @@
                   type="button"
                   class="btn btn-ghost btn-xs btn-square"
                   @click.stop="deleteCalendar(cal)"
-                  title="Delete"
+                  title="{% translate "Delete" %}"
                 >
                   <i data-lucide="trash-2" class="w-3 h-3"></i>
                 </button>
@@ -184,7 +185,7 @@
           class="text-xs text-base-content/40 px-1.5 py-1{% if owned_calendars or workspace_sidebar_collapsed %} hidden{% endif %}"
           :class="{ hidden: !(ownedCalendars.length === 0 && !sidebarCollapsed()) }"
         >
-          No calendars yet
+          {% translate "No calendars yet" %}
         </li>
       </ul>
 
@@ -204,14 +205,14 @@
             >
               <span class="flex items-center gap-2">
                 <i data-lucide="globe" class="w-3 h-3"></i>
-                External
+                {% translate "External" context "calendars" %}
               </span>
             </h3>
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square"
               @click="createExternalCalendar()"
-              title="Add ICS feed"
+              title="{% translate "Add ICS feed" %}"
             >
               <i data-lucide="plus" class="w-3 h-3"></i>
             </button>
@@ -241,7 +242,7 @@
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"
                       @click.stop="syncExternalCalendar(ext)"
-                      title="Sync now"
+                      title="{% translate "Sync now" %}"
                       :disabled="syncingExternal[ext.uuid] === true"
                     >
                       <span
@@ -258,7 +259,7 @@
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"
                       @click.stop="deleteExternalCalendar(ext)"
-                      title="Remove"
+                      title="{% translate "Remove" context "external calendar" %}"
                     >
                       <i data-lucide="trash-2" class="w-3 h-3"></i>
                     </button>
@@ -283,6 +284,7 @@
         showTasks preference rather than visibleCalendars (whose keys are
         sent verbatim as calendar_ids to the events endpoint).
       {% endcomment %}
+      {% translate "Task due dates" as task_due_dates_label %}
       <div>
         <hr
           class="mb-3 border-base-300 transition-all duration-200"
@@ -294,7 +296,7 @@
         >
           <span class="flex items-center gap-2">
             <i data-lucide="kanban" class="w-3 h-3"></i>
-            Projects
+            {% translate "Projects" %}
           </span>
         </h3>
         <ul class="space-y-1 mb-4">
@@ -304,7 +306,7 @@
           >
             <span
               class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-secondary"
-              :title="sidebarCollapsed() ? 'Task due dates' : ''"
+              :title="sidebarCollapsed() ? '{{ task_due_dates_label|escapejs }}' : ''"
             >
               <i data-lucide="square-check-big" class="w-4 h-4"></i>
             </span>
@@ -313,7 +315,7 @@
               x-transition
               class="flex-1 truncate{% if workspace_sidebar_collapsed %} hidden{% endif %}"
               :class="{ hidden: sidebarCollapsed() }"
-            >Task due dates</span>
+            >{{ task_due_dates_label }}</span>
             <input
               x-show="!sidebarCollapsed()"
               type="checkbox"
@@ -339,7 +341,7 @@
           >
             <span class="flex items-center gap-2">
               <i data-lucide="users" class="w-3 h-3"></i>
-              Other calendars
+              {% translate "Other calendars" %}
             </span>
           </h3>
           <ul class="space-y-1">
@@ -376,11 +378,12 @@
 
     <!-- Polls button -->
     <div class="px-3 pb-2">
+      {% translate "Polls" as polls_label %}
       <ul class="menu p-0">
         {% if poll_count %}
-          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="module" onclick="openPollList()" tooltip="Polls" badge=poll_count collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label=polls_label color="module" onclick="openPollList()" tooltip=polls_label badge=poll_count collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         {% else %}
-          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="module" onclick="openPollList()" tooltip="Polls" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label=polls_label color="module" onclick="openPollList()" tooltip=polls_label collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         {% endif %}
       </ul>
     </div>
@@ -388,17 +391,23 @@
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('calendar-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('calendar-help-dialog').showModal()" tooltip=_("Help (?)") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </ul>
     </div>
 
     <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
+      {% translate "Expand sidebar" as expand_sidebar_label %}
+      {% translate "Collapse sidebar" as collapse_sidebar_label %}
       <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+        {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+          {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+            {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% endwith %}
+        {% endwith %}
       </ul>
       <ul class="menu p-0 lg:hidden">
-        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip=_("Preferences") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </ul>
     </div>
   </aside>

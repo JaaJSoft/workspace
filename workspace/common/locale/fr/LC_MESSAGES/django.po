@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-28 20:29+0000\n"
+"POT-Creation-Date: 2026-10-30 11:55+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -215,6 +215,10 @@ msgid "Activity"
 msgstr "Activité"
 
 #: vocabulary.py
+msgid "All day"
+msgstr "Toute la journée"
+
+#: vocabulary.py
 msgid "API Access"
 msgstr "Accès à l’API"
 
@@ -295,6 +299,10 @@ msgid "Delete permanently"
 msgstr "Supprimer définitivement"
 
 #: vocabulary.py
+msgid "Dismiss"
+msgstr "Ignorer"
+
+#: vocabulary.py
 msgid "Documentation:"
 msgstr "Documentation :"
 
@@ -313,6 +321,10 @@ msgstr "Événements"
 #: vocabulary.py
 msgid "Expand sidebar"
 msgstr "Déplier la barre latérale"
+
+#: vocabulary.py
+msgid "Failed to copy link"
+msgstr "Impossible de copier le lien"
 
 #: vocabulary.py
 msgid "Favorites"
@@ -353,6 +365,10 @@ msgstr "Groupes"
 #: vocabulary.py
 msgid "Hide password"
 msgstr "Masquer le mot de passe"
+
+#: vocabulary.py
+msgid "Link copied to clipboard"
+msgstr "Lien copié dans le presse-papiers"
 
 #: vocabulary.py
 msgid "List"
@@ -397,6 +413,10 @@ msgstr "Nom"
 #: vocabulary.py
 msgid "Navigation"
 msgstr "Navigation"
+
+#: vocabulary.py
+msgid "Network error. Please try again."
+msgstr "Erreur réseau. Veuillez réessayer."
 
 #: vocabulary.py
 msgid "Never"
@@ -516,6 +536,10 @@ msgstr "Nom de l’étiquette"
 #: vocabulary.py
 msgid "Tags"
 msgstr "Étiquettes"
+
+#: vocabulary.py
+msgid "Today"
+msgstr "Aujourd’hui"
 
 #: vocabulary.py
 msgid "Trash"

@@ -26,25 +26,40 @@ window.pollUtils = {
     return new Set((poll?.votes || []).map(v => v.participant)).size;
   },
 
+  participantCountLabel(count) {
+    return interpolate(ngettext('%(count)s participant', '%(count)s participants', count), { count }, true);
+  },
+
+  slotCountLabel(count) {
+    return interpolate(ngettext('%(count)s slot', '%(count)s slots', count), { count }, true);
+  },
+
   isChosenSlot(poll, slotUuid) {
     return poll?.status === 'closed' && poll?.chosen_slot_id === slotUuid;
+  },
+
+  // The standalone guest page loads no localtime.js, so getUserLocale() may
+  // be missing there: <html lang> carries the interface language instead.
+  locale() {
+    if (window.getUserLocale) return window.getUserLocale();
+    return document.documentElement.lang || undefined;
   },
 
   formatSlotDate(slot) {
     if (!slot?.start) return '';
     const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     const d = new Date(slot.start);
-    return d.toLocaleDateString(undefined, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(this.locale(), { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' });
   },
 
   formatSlotTime(slot) {
     if (!slot?.start) return '';
     const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     const start = new Date(slot.start);
-    const parts = [start.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' })];
+    const parts = [start.toLocaleTimeString(this.locale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' })];
     if (slot.end) {
       const end = new Date(slot.end);
-      parts.push(end.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' }));
+      parts.push(end.toLocaleTimeString(this.locale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' }));
     }
     return parts.join(' - ');
   },

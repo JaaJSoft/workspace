@@ -1,45 +1,46 @@
+{% load i18n %}
 <div class="space-y-3">
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Default view</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Default view" %}</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.defaultView"
       @change="updatePref('defaultView', $event.target.value)"
     >
-      <option value="dayGridMonth">Month</option>
-      <option value="timeGridWeek">Week</option>
-      <option value="timeGridDay">Day</option>
-      <option value="agenda">Agenda</option>
+      <option value="dayGridMonth">{% translate "Month" context "calendar view" %}</option>
+      <option value="timeGridWeek">{% translate "Week" context "calendar view" %}</option>
+      <option value="timeGridDay">{% translate "Day" context "calendar view" %}</option>
+      <option value="agenda">{% translate "Agenda" context "calendar view" %}</option>
     </select>
   </div>
   <hr class="border-base-300" />
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">First day of week</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "First day of week" %}</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.firstDay"
       @change="updatePref('firstDay', parseInt($event.target.value))"
     >
-      <option value="1">Monday</option>
-      <option value="0">Sunday</option>
-      <option value="6">Saturday</option>
+      <option value="1">{% translate "Monday" context "first day of week" %}</option>
+      <option value="0">{% translate "Sunday" context "first day of week" %}</option>
+      <option value="6">{% translate "Saturday" context "first day of week" %}</option>
     </select>
   </div>
   <hr class="border-base-300" />
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Time format</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Time format" %}</label>
     <select
       class="select select-bordered select-sm w-full"
       :value="prefs.timeFormat"
       @change="updatePref('timeFormat', $event.target.value)"
     >
-      <option value="24h">24h (14:00)</option>
-      <option value="12h">12h (2:00 PM)</option>
+      <option value="24h">{% translate "24h (14:00)" %}</option>
+      <option value="12h">{% translate "12h (2:00 PM)" %}</option>
     </select>
   </div>
   <hr class="border-base-300" />
-  {% include "ui/partials/pref_toggle.html" with label="Show week numbers" key="weekNumbers" accent="toggle-module" handler="updatePref" %}
-  {% include "ui/partials/pref_toggle.html" with label="Default to all day" key="defaultAllDay" accent="toggle-module" handler="updatePref" %}
-  {% include "ui/partials/pref_toggle.html" with label="Show declined events" key="showDeclined" accent="toggle-module" handler="updatePref" %}
-  {% include "ui/partials/pref_toggle.html" with label="Poll vote notifications" key="notifyPollVotes" accent="toggle-module" handler="updatePref" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Show week numbers") key="weekNumbers" accent="toggle-module" handler="updatePref" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Default to all day") key="defaultAllDay" accent="toggle-module" handler="updatePref" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Show declined events") key="showDeclined" accent="toggle-module" handler="updatePref" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Poll vote notifications") key="notifyPollVotes" accent="toggle-module" handler="updatePref" %}
 </div>

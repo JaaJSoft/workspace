@@ -1,15 +1,18 @@
 {# Header buttons of the poll detail modal, rendered by ui/partials/dialog_header.html. #}
+{% load i18n %}
+{% translate "open" context "poll status" as status_open %}
+{% translate "closed" context "poll status" as status_closed %}
 <span
   class="badge badge-sm mr-1"
   :class="currentPoll?.status === 'open' ? 'badge-success' : 'badge-ghost'"
   x-show="currentPoll"
-  x-text="currentPoll?.status"
+  x-text="currentPoll?.status === 'open' ? '{{ status_open|escapejs }}' : currentPoll?.status === 'closed' ? '{{ status_closed|escapejs }}' : currentPoll?.status"
 ></span>
 <button
   type="button"
   class="btn btn-sm btn-ghost btn-square"
   @click="closePollDetail(); openPollList()"
-  title="Back to polls"
+  title="{% translate 'Back to polls' %}"
 >
   <i data-lucide="arrow-left" class="w-4 h-4"></i>
 </button>
@@ -17,18 +20,18 @@
   type="button"
   class="btn btn-sm btn-ghost"
   @click="copyPollShareLink()"
-  title="Copy share link"
+  title="{% translate 'Copy share link' %}"
   x-show="currentPoll"
 >
   <i data-lucide="share-2" class="w-4 h-4"></i>
-  <span class="hidden sm:inline">Share</span>
+  <span class="hidden sm:inline">{% translate "Share" %}</span>
 </button>
 <template x-if="isPollCreator() && currentPoll?.status === 'open'">
   <button
     type="button"
     class="btn btn-sm btn-ghost"
     @click="openPollEdit()"
-    title="Edit poll"
+    title="{% translate 'Edit poll' %}"
   >
     <i data-lucide="pencil" class="w-4 h-4"></i>
   </button>
@@ -38,7 +41,7 @@
     type="button"
     class="btn btn-sm btn-ghost text-error"
     @click="deletePoll(currentPoll.uuid)"
-    title="Delete poll"
+    title="{% translate 'Delete poll' %}"
   >
     <i data-lucide="trash-2" class="w-4 h-4"></i>
   </button>

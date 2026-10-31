@@ -1,5 +1,6 @@
 {# Calendar Create/Edit modal and External Calendar (ICS) modal. #}
 {# Included from index.html inside the main content block. #}
+{% load i18n %}
 <!-- Calendar Create/Edit Modal -->
 <dialog
   class="modal"
@@ -8,23 +9,29 @@
   @keydown.escape.window="showCalendarModal = false"
 >
   <div class="modal-box w-11/12 max-w-sm">
-    {% include "ui/partials/dialog_header.html" with icon_expr="calendarModalMode === 'create' ? 'calendar-plus' : 'pencil'" title_expr="calendarModalMode === 'create' ? 'New calendar' : 'Edit calendar'" close_expr="showCalendarModal = false" only %}
+    {% translate "New calendar" as new_calendar_title %}
+    {% translate "Edit calendar" as edit_calendar_title %}
+    {% with new_js=new_calendar_title|escapejs edit_js=edit_calendar_title|escapejs %}
+      {% with title="calendarModalMode === 'create' ? '"|add:new_js|add:"' : '"|add:edit_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon_expr="calendarModalMode === 'create' ? 'calendar-plus' : 'pencil'" title_expr=title close_expr="showCalendarModal = false" only %}
+      {% endwith %}
+    {% endwith %}
 
     <form @submit.prevent="saveCalendar()" class="space-y-4">
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Name</span></div>
+        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
         <input
           id="calendar-form-name"
           type="text"
           class="input input-bordered input-sm w-full"
           x-model="calendarForm.name"
-          placeholder="Calendar name"
+          placeholder="{% translate "Calendar name" %}"
           required
         />
       </label>
 
       <div>
-        <div class="label"><span class="label-text">Color</span></div>
+        <div class="label"><span class="label-text">{% translate "Color" %}</span></div>
         <div class="flex flex-wrap gap-2">
           <template x-for="c in calendarColors" :key="c">
             <button
@@ -53,10 +60,10 @@
       >
         <div class="flex items-center gap-2 text-sm font-medium">
           <i data-lucide="rss" class="w-4 h-4 text-module"></i>
-          Subscription link
+          {% translate "Subscription link" %}
         </div>
         <p class="text-xs text-base-content/60 mt-1">
-          Anyone with the link can see this calendar from another calendar app, read-only.
+          {% translate "Anyone with the link can see this calendar from another calendar app, read-only." %}
         </p>
         <div x-show="calendarFeed.loading" class="mt-3">
           <span class="loading loading-spinner loading-xs"></span>
@@ -69,7 +76,7 @@
             @click="enableCalendarFeed()"
           >
             <i data-lucide="link" class="w-4 h-4"></i>
-            Create link
+            {% translate "Create link" %}
           </button>
         </template>
         <template x-if="!calendarFeed.loading && calendarFeed.url">
@@ -81,12 +88,12 @@
                 :value="calendarFeed.url"
                 readonly
                 @focus="$event.target.select()"
-                aria-label="Subscription link"
+                aria-label="{% translate "Subscription link" %}"
               />
               <button
                 type="button"
                 class="btn btn-sm join-item"
-                title="Copy link"
+                title="{% translate "Copy link" %}"
                 @click="copyCalendarFeed()"
               >
                 <i data-lucide="copy" class="w-4 h-4"></i>
@@ -100,7 +107,7 @@
                 @click="enableCalendarFeed()"
               >
                 <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                New link
+                {% translate "New link" %}
               </button>
               <button
                 type="button"
@@ -109,7 +116,7 @@
                 @click="disableCalendarFeed()"
               >
                 <i data-lucide="link-2-off" class="w-3 h-3"></i>
-                Turn off
+                {% translate "Turn off" %}
               </button>
             </div>
           </div>
@@ -122,7 +129,7 @@
           class="btn btn-sm btn-ghost"
           @click="showCalendarModal = false"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="submit"
@@ -130,7 +137,11 @@
           :disabled="savingCalendar || !calendarForm.name.trim()"
         >
           <span class="loading loading-spinner loading-xs" x-show="savingCalendar"></span>
-          <span x-text="calendarModalMode === 'create' ? 'Create' : 'Save'"></span>
+          {% translate "Create" as create_label %}
+          {% translate "Save" as save_label %}
+          <span
+            x-text="calendarModalMode === 'create' ? '{{ create_label|escapejs }}' : '{{ save_label|escapejs }}'"
+          ></span>
         </button>
       </div>
     </form>
@@ -145,11 +156,11 @@
   @keydown.escape.window="showExternalModal && (showExternalModal = false)"
 >
   <div class="modal-box w-11/12 max-w-sm">
-    {% include "ui/partials/dialog_header.html" with icon="globe" icon_class="bg-info/10 text-info" title="Add external calendar" close_expr="showExternalModal = false" only %}
+    {% include "ui/partials/dialog_header.html" with icon="globe" icon_class="bg-info/10 text-info" title=_("Add external calendar") close_expr="showExternalModal = false" only %}
 
     <form @submit.prevent="saveExternalCalendar()" class="space-y-4">
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">ICS URL</span></div>
+        <div class="label"><span class="label-text">{% translate "ICS URL" %}</span></div>
         <input
           id="external-form-url"
           type="url"
@@ -161,17 +172,17 @@
       </label>
 
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Name</span></div>
+        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
         <input
           type="text"
           class="input input-bordered input-sm w-full"
           x-model="externalForm.name"
-          placeholder="My external calendar"
+          placeholder="{% translate "My external calendar" %}"
         />
       </label>
 
       <div>
-        <div class="label"><span class="label-text">Color</span></div>
+        <div class="label"><span class="label-text">{% translate "Color" %}</span></div>
         <div class="flex flex-wrap gap-2">
           <template x-for="c in calendarColors" :key="c">
             <button
@@ -201,7 +212,7 @@
           @click="showExternalModal = false"
           :disabled="savingExternal"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="submit"
@@ -209,7 +220,11 @@
           :disabled="!externalForm.url.trim() || savingExternal"
         >
           <span class="loading loading-spinner loading-xs" x-show="savingExternal"></span>
-          <span x-text="savingExternal ? 'Adding...' : 'Add'"></span>
+          {% translate "Adding..." as adding_label %}
+          {% translate "Add" context "external calendar" as add_label %}
+          <span
+            x-text="savingExternal ? '{{ adding_label|escapejs }}' : '{{ add_label|escapejs }}'"
+          ></span>
         </button>
       </div>
     </form>

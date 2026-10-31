@@ -10,10 +10,13 @@ Usage from another app::
 
 from __future__ import annotations
 
+from collections import defaultdict
+from itertools import batched
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
+from django.utils import translation
 
 from workspace.common.cache import cached, invalidate_tags
 from workspace.users.models import UserSetting
@@ -21,6 +24,11 @@ from workspace.users.models import UserSetting
 UTC = ZoneInfo("UTC")
 
 _CACHE_TTL = 300  # 5 minutes
+
+# Users per query in get_user_languages. SQLite, the default database in
+# production too, refuses a query with more than 32766 parameters, and a fan-out
+# to every active user would otherwise put them all in one IN list.
+_LANGUAGE_BATCH_SIZE = 5000
 
 
 def _module_tag(user_id: int, module: str) -> str:
@@ -51,7 +59,7 @@ def get_user_language(user) -> str:
 
 
 def get_user_languages(user_ids) -> dict[int, str]:
-    """Interface language of each of *user_ids*, in one query.
+    """Interface language of each of *user_ids*, in one query per batch.
 
     For fan-outs (a notification to every member of a group), where calling
     :func:`get_user_language` per recipient would cost one query each on a
@@ -59,17 +67,36 @@ def get_user_languages(user_ids) -> dict[int, str]:
     write by its TTL, and the rows are what the cache is built from.
     """
     offered = dict(settings.LANGUAGES)
-    stored = dict(
-        UserSetting.objects.filter(
-            user_id__in=user_ids, module="core", key="language"
-        ).values_list("user_id", "value")
-    )
+    stored = {}
+    for batch in batched(user_ids, _LANGUAGE_BATCH_SIZE, strict=False):
+        stored.update(
+            UserSetting.objects.filter(
+                user_id__in=batch, module="core", key="language"
+            ).values_list("user_id", "value")
+        )
     return {
         user_id: stored[user_id]
         if stored.get(user_id) in offered
         else settings.LANGUAGE_CODE
         for user_id in user_ids
     }
+
+
+def in_recipient_languages(recipients):
+    """Yield *recipients* grouped by the language they read, that language active.
+
+    A notification is rendered once and stored as text, so its title has to
+    be built inside the loop body for each group to get it in their own
+    language rather than the actor's.
+    """
+    recipients = list(recipients)
+    languages = get_user_languages([user.pk for user in recipients])
+    by_language = defaultdict(list)
+    for user in recipients:
+        by_language[languages[user.pk]].append(user)
+    for language, users in by_language.items():
+        with translation.override(language):
+            yield users
 
 
 def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:

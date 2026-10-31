@@ -1,5 +1,6 @@
 {# Poll modals: list, create, edit, detail. #}
 {# Included from index.html inside the main content block. #}
+{% load i18n %}
 <!-- Poll List Modal -->
 <dialog
   class="modal"
@@ -8,7 +9,8 @@
   @keydown.escape.window="showPollListModal && (showPollListModal = false)"
 >
   <div class="modal-box w-11/12 max-w-2xl h-[75vh] flex flex-col p-0">
-    {% include "ui/partials/dialog_header.html" with icon="vote" title="Polls" actions_template="calendar/ui/partials/_poll_list_header_actions.html" close_expr="showPollListModal = false" class="px-5 pt-5 pb-3 flex-shrink-0" only %}
+    {% translate "Polls" as polls_title %}
+    {% include "ui/partials/dialog_header.html" with icon="vote" title=polls_title actions_template="calendar/ui/partials/_poll_list_header_actions.html" close_expr="showPollListModal = false" class="px-5 pt-5 pb-3 flex-shrink-0" only %}
 
     <!-- Toolbar: filters + search -->
     <div class="px-5 pb-3 flex flex-col gap-2 flex-shrink-0">
@@ -20,7 +22,7 @@
             :class="pollFilter === 'mine' ? 'btn-active' : ''"
             @click="setPollFilter('mine')"
           >
-            My polls
+            {% translate "My polls" %}
           </button>
           <button
             type="button"
@@ -28,7 +30,7 @@
             :class="pollFilter === 'shared' ? 'btn-active' : ''"
             @click="setPollFilter('shared')"
           >
-            Shared with me
+            {% translate "Shared with me" context "polls" %}
           </button>
         </div>
         <label class="flex items-center gap-1.5 cursor-pointer select-none">
@@ -38,7 +40,7 @@
             :checked="pollShowClosed"
             @change="togglePollShowClosed()"
           />
-          <span class="text-xs text-base-content/60">Show closed</span>
+          <span class="text-xs text-base-content/60">{% translate "Show closed" context "polls" %}</span>
         </label>
       </div>
       <label class="input input-sm input-bordered flex items-center gap-2 w-full">
@@ -46,7 +48,7 @@
         <input
           type="text"
           class="grow"
-          placeholder="Search polls..."
+          placeholder="{% translate 'Search polls...' %}"
           x-model="pollSearch"
         />
         <kbd
@@ -78,14 +80,16 @@
         </div>
         <template x-if="pollFilter === 'mine'">
           <div>
-            <p class="font-medium text-base-content/70">No polls yet</p>
-            <p class="text-sm text-base-content/40 mt-1">Create a poll to find the best time for your event</p>
+            <p class="font-medium text-base-content/70">{% translate "No polls yet" %}</p>
+            <p
+              class="text-sm text-base-content/40 mt-1"
+            >{% translate "Create a poll to find the best time for your event" %}</p>
           </div>
         </template>
         <template x-if="pollFilter === 'shared'">
           <div>
-            <p class="font-medium text-base-content/70">No shared polls</p>
-            <p class="text-sm text-base-content/40 mt-1">Polls you're invited to will appear here</p>
+            <p class="font-medium text-base-content/70">{% translate "No shared polls" %}</p>
+            <p class="text-sm text-base-content/40 mt-1">{% translate "Polls you're invited to will appear here" %}</p>
           </div>
         </template>
       </div>
@@ -100,8 +104,8 @@
         >
           <i data-lucide="search-x" class="w-5 h-5 opacity-40"></i>
         </div>
-        <p class="font-medium text-base-content/70">No match</p>
-        <p class="text-sm text-base-content/40 mt-1">Try a different search term</p>
+        <p class="font-medium text-base-content/70">{% translate "No match" context "poll search" %}</p>
+        <p class="text-sm text-base-content/40 mt-1">{% translate "Try a different search term" %}</p>
       </div>
 
       <!-- Poll list -->
@@ -125,7 +129,10 @@
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
                 <span class="font-medium text-sm truncate" x-text="poll.title"></span>
-                <span x-show="poll.status === 'closed'" class="badge badge-xs badge-ghost">closed</span>
+                <span
+                  x-show="poll.status === 'closed'"
+                  class="badge badge-xs badge-ghost"
+                >{% translate "closed" context "poll status" %}</span>
               </div>
               <div class="flex items-center gap-3 mt-0.5 text-xs text-base-content/50">
                 <span x-show="pollFilter === 'shared'" class="flex items-center gap-1">
@@ -134,12 +141,10 @@
                 </span>
                 <span class="flex items-center gap-1">
                   <i data-lucide="users" class="w-3 h-3"></i>
-                  <span
-                    x-text="poll.participant_count + ' participant' + (poll.participant_count !== 1 ? 's' : '')"
-                  ></span>
+                  <span x-text="pollUtils.participantCountLabel(poll.participant_count)"></span>
                 </span>
                 <span
-                  x-text="new Date(poll.created_at).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"
+                  x-text="new Date(poll.created_at).toLocaleDateString(window.getUserLocale ? window.getUserLocale() : undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"
                 ></span>
               </div>
             </div>
@@ -150,7 +155,7 @@
                   type="button"
                   class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity"
                   @click.stop="deletePoll(poll.uuid)"
-                  title="Delete"
+                  title="{% translate 'Delete' %}"
                 >
                   <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                 </button>
@@ -175,7 +180,8 @@
   @keydown.escape.window="showPollCreateModal && (showPollCreateModal = false)"
 >
   <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col">
-    {% include "ui/partials/dialog_header.html" with icon="plus" title="New Poll" close_expr="showPollCreateModal = false" class="mb-4 flex-shrink-0" only %}
+    {% translate "New Poll" as new_poll_title %}
+    {% include "ui/partials/dialog_header.html" with icon="plus" title=new_poll_title close_expr="showPollCreateModal = false" class="mb-4 flex-shrink-0" only %}
 
     <form @submit.prevent="submitPoll()" class="flex-1 flex flex-col min-h-0">
       <!-- Scrollable content -->
@@ -189,31 +195,31 @@
         </template>
 
         <label class="form-control w-full">
-          <div class="label"><span class="label-text">Title</span></div>
+          <div class="label"><span class="label-text">{% translate "Title" context "poll" %}</span></div>
           <input
             type="text"
             class="input input-bordered input-sm w-full"
             x-model="pollForm.title"
-            placeholder="e.g. Team meeting next week"
+            placeholder="{% translate 'e.g. Team meeting next week' %}"
             required
           />
         </label>
 
         <label class="form-control w-full">
-          <div class="label"><span class="label-text">Description</span></div>
+          <div class="label"><span class="label-text">{% translate "Description" context "poll" %}</span></div>
           <textarea
             class="textarea textarea-bordered textarea-sm w-full"
             rows="2"
             x-model="pollForm.description"
-            placeholder="Optional description"
+            placeholder="{% translate 'Optional description' %}"
           ></textarea>
         </label>
 
         <div>
           <div class="flex items-center justify-between mb-2">
-            <span class="label-text font-medium">Time slots</span>
+            <span class="label-text font-medium">{% translate "Time slots" %}</span>
             <button type="button" class="btn btn-ghost btn-xs" @click="addPollSlot()">
-              <i data-lucide="plus" class="w-3 h-3"></i> Add slot
+              <i data-lucide="plus" class="w-3 h-3"></i> {% translate "Add slot" %}
             </button>
           </div>
           <div class="space-y-2">
@@ -229,7 +235,7 @@
                 </label>
                 <template x-if="pollForm.slots[i].showEnd">
                   <div class="flex items-center gap-2 flex-1">
-                    <span class="text-base-content/40 text-sm">to</span>
+                    <span class="text-base-content/40 text-sm">{% translate "to" context "time range" %}</span>
                     <label class="form-control flex-1">
                       <input
                         type="datetime-local"
@@ -241,7 +247,7 @@
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"
                       @click="pollForm.slots[i].showEnd = false; pollForm.slots[i].end = ''"
-                      title="Remove end time"
+                      title="{% translate 'Remove end time' %}"
                     >
                       <i data-lucide="clock" class="w-3 h-3 opacity-50"></i>
                     </button>
@@ -252,9 +258,9 @@
                     type="button"
                     class="btn btn-ghost btn-xs"
                     @click="pollForm.slots[i].showEnd = true"
-                    title="Add end time"
+                    title="{% translate 'Add end time' %}"
                   >
-                    <i data-lucide="plus" class="w-3 h-3"></i> End
+                    <i data-lucide="plus" class="w-3 h-3"></i> {% translate "End" context "poll slot end time" %}
                   </button>
                 </template>
                 <button
@@ -263,7 +269,7 @@
                   :class="pollForm.slots.length <= 2 ? 'opacity-30 cursor-not-allowed' : ''"
                   @click="removePollSlot(i)"
                   :disabled="pollForm.slots.length <= 2"
-                  title="Remove slot"
+                  title="{% translate 'Remove slot' %}"
                 >
                   <i data-lucide="x" class="w-3 h-3"></i>
                 </button>
@@ -280,7 +286,7 @@
           class="btn btn-sm btn-ghost"
           @click="showPollCreateModal = false"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="submit"
@@ -291,7 +297,7 @@
             x-show="pollFormSubmitting"
             class="loading loading-spinner loading-xs"
           ></span>
-          Create poll
+          {% translate "Create poll" %}
         </button>
       </div>
     </form>
@@ -306,7 +312,8 @@
   @keydown.escape.window="showPollEditModal && (showPollEditModal = false)"
 >
   <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col">
-    {% include "ui/partials/dialog_header.html" with icon="pencil" title="Edit Poll" close_expr="showPollEditModal = false" class="mb-4 flex-shrink-0" only %}
+    {% translate "Edit Poll" as edit_poll_title %}
+    {% include "ui/partials/dialog_header.html" with icon="pencil" title=edit_poll_title close_expr="showPollEditModal = false" class="mb-4 flex-shrink-0" only %}
 
     <form @submit.prevent="savePollEdit()" class="flex-1 flex flex-col min-h-0">
       <!-- Scrollable content -->
@@ -320,31 +327,31 @@
         </template>
 
         <label class="form-control w-full">
-          <div class="label"><span class="label-text">Title</span></div>
+          <div class="label"><span class="label-text">{% translate "Title" context "poll" %}</span></div>
           <input
             type="text"
             class="input input-bordered input-sm w-full"
             x-model="pollForm.title"
-            placeholder="e.g. Team meeting next week"
+            placeholder="{% translate 'e.g. Team meeting next week' %}"
             required
           />
         </label>
 
         <label class="form-control w-full">
-          <div class="label"><span class="label-text">Description</span></div>
+          <div class="label"><span class="label-text">{% translate "Description" context "poll" %}</span></div>
           <textarea
             class="textarea textarea-bordered textarea-sm w-full"
             rows="2"
             x-model="pollForm.description"
-            placeholder="Optional description"
+            placeholder="{% translate 'Optional description' %}"
           ></textarea>
         </label>
 
         <div>
           <div class="flex items-center justify-between mb-2">
-            <span class="label-text font-medium">Time slots</span>
+            <span class="label-text font-medium">{% translate "Time slots" %}</span>
             <button type="button" class="btn btn-ghost btn-xs" @click="addPollSlot()">
-              <i data-lucide="plus" class="w-3 h-3"></i> Add slot
+              <i data-lucide="plus" class="w-3 h-3"></i> {% translate "Add slot" %}
             </button>
           </div>
           <div class="space-y-2">
@@ -360,7 +367,7 @@
                 </label>
                 <template x-if="pollForm.slots[i].showEnd">
                   <div class="flex items-center gap-2 flex-1">
-                    <span class="text-base-content/40 text-sm">to</span>
+                    <span class="text-base-content/40 text-sm">{% translate "to" context "time range" %}</span>
                     <label class="form-control flex-1">
                       <input
                         type="datetime-local"
@@ -372,7 +379,7 @@
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"
                       @click="pollForm.slots[i].showEnd = false; pollForm.slots[i].end = ''"
-                      title="Remove end time"
+                      title="{% translate 'Remove end time' %}"
                     >
                       <i data-lucide="clock" class="w-3 h-3 opacity-50"></i>
                     </button>
@@ -383,9 +390,9 @@
                     type="button"
                     class="btn btn-ghost btn-xs"
                     @click="pollForm.slots[i].showEnd = true"
-                    title="Add end time"
+                    title="{% translate 'Add end time' %}"
                   >
-                    <i data-lucide="plus" class="w-3 h-3"></i> End
+                    <i data-lucide="plus" class="w-3 h-3"></i> {% translate "End" context "poll slot end time" %}
                   </button>
                 </template>
                 <button
@@ -394,7 +401,7 @@
                   :class="pollForm.slots.length <= 2 ? 'opacity-30 cursor-not-allowed' : ''"
                   @click="removePollSlot(i)"
                   :disabled="pollForm.slots.length <= 2"
-                  title="Remove slot"
+                  title="{% translate 'Remove slot' %}"
                 >
                   <i data-lucide="x" class="w-3 h-3"></i>
                 </button>
@@ -411,7 +418,7 @@
           class="btn btn-sm btn-ghost"
           @click="showPollEditModal = false"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="submit"
@@ -422,7 +429,7 @@
             x-show="pollFormSubmitting"
             class="loading loading-spinner loading-xs"
           ></span>
-          Save changes
+          {% translate "Save changes" %}
         </button>
       </div>
     </form>
@@ -437,7 +444,7 @@
   @keydown.escape.window="showPollDetailModal && closePollDetail()"
 >
   <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col !p-0">
-    {% include "ui/partials/dialog_header.html" with icon="vote" title_expr="currentPoll?.title || ''" subtitle_expr="currentPoll ? 'by ' + (currentPoll.created_by?.username || '') : ''" actions_template="calendar/ui/partials/_poll_detail_header_actions.html" close_expr="closePollDetail()" class="px-4 pt-4 pb-3 flex-shrink-0" only %}
+    {% include "ui/partials/dialog_header.html" with icon="vote" title_expr="currentPoll?.title || ''" subtitle_expr="pollCreatorLabel()" actions_template="calendar/ui/partials/_poll_detail_header_actions.html" close_expr="closePollDetail()" class="px-4 pt-4 pb-3 flex-shrink-0" only %}
 
     <!-- Loading -->
     <div x-show="currentPollLoading" class="flex justify-center py-12 px-4">
@@ -464,9 +471,10 @@
             class="text-xs font-medium text-base-content/40 uppercase tracking-wider mb-2 flex items-center gap-1.5"
           >
             <i data-lucide="user-plus" class="w-3 h-3"></i>
-            Invite members
+            {% translate "Invite members" %}
           </div>
-          {% include "users/ui/partials/user_selector.html" with on_select_event="poll-invitee-selected" placeholder="Search users to invite..." %}
+          {% translate "Search users to invite..." as invite_placeholder %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="poll-invitee-selected" placeholder=invite_placeholder %}
           <div
             class="flex flex-wrap gap-1 mt-2"
             x-show="(currentPoll?.invitees || []).length > 0"
@@ -487,7 +495,7 @@
             class="text-xs font-medium text-base-content/40 uppercase tracking-wider mb-2 flex items-center gap-1.5"
           >
             <i data-lucide="users" class="w-3 h-3"></i>
-            Invited
+            {% translate "Invited" context "poll invitees" %}
             <span
               class="badge badge-xs badge-ghost"
               x-text="currentPoll.invitees.length"
@@ -506,13 +514,13 @@
         <div class="alert mb-4 bg-base-200 border-base-300">
           <i data-lucide="trophy" class="w-5 h-5 text-success flex-shrink-0"></i>
           <div class="flex-1">
-            <span class="font-medium">This poll has been finalized.</span>
+            <span class="font-medium">{% translate "This poll has been finalized." %}</span>
             <template x-if="currentPoll?.event_id">
-              <span class="ml-1">An event has been created.</span>
+              <span class="ml-1">{% translate "An event has been created." %}</span>
             </template>
             <template x-if="pollChosenSlot()">
               <p class="text-sm opacity-60 mt-0.5">
-                Chosen date: <span
+                {% translate "Chosen date:" %} <span
    class="font-medium text-base-content"
    x-text="formatPollSlotDate(pollChosenSlot()) + ' ' + formatPollSlotTime(pollChosenSlot())"
  ></span>
@@ -526,7 +534,7 @@
               @click="closePollDetail(); openEventById(currentPoll.event_id)"
             >
               <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-              View event
+              {% translate "View event" %}
             </button>
           </template>
         </div>
@@ -536,12 +544,12 @@
       <template x-if="isPollCreator() && currentPoll?.status === 'open'">
         <div class="flex items-center gap-2 mb-4 p-3 bg-base-200/50 rounded-lg">
           <i data-lucide="trophy" class="w-4 h-4 text-success flex-shrink-0"></i>
-          <span class="text-sm font-medium flex-shrink-0">Finalize:</span>
+          <span class="text-sm font-medium flex-shrink-0">{% translate "Finalize:" %}</span>
           <select
             class="select select-bordered select-sm flex-1"
             x-model="pollFinalizeSlotId"
           >
-            <option value="">Choose winning slot...</option>
+            <option value="">{% translate "Choose winning slot..." %}</option>
             <template x-for="slot in (currentPoll?.slots || [])" :key="slot.uuid">
               <option
                 :value="slot.uuid"
@@ -556,7 +564,7 @@
             :disabled="!pollFinalizeSlotId || pollSubmitting"
           >
             <span x-show="pollSubmitting" class="loading loading-spinner loading-xs"></span>
-            <i data-lucide="check" class="w-4 h-4" x-show="!pollSubmitting"></i> Finalize
+            <i data-lucide="check" class="w-4 h-4" x-show="!pollSubmitting"></i> {% translate "Finalize" %}
           </button>
         </div>
       </template>
@@ -569,7 +577,7 @@
               <th class="min-w-[120px]">
                 <div class="flex items-center gap-1.5 text-base-content/60">
                   <i data-lucide="user" class="w-3.5 h-3.5"></i>
-                  Participant
+                  {% translate "Participant" context "poll grid" %}
                 </div>
               </th>
               <template x-for="slot in (currentPoll?.slots || [])" :key="slot.uuid">
@@ -590,7 +598,7 @@
                     <template x-if="isPollChosenSlot(slot.uuid)">
                       <div class="badge badge-success badge-xs gap-0.5 mt-0.5">
                         <i data-lucide="trophy" class="w-2.5 h-2.5"></i>
-                        chosen
+                        {% translate "chosen" context "poll slot" %}
                       </div>
                     </template>
                   </div>
@@ -614,7 +622,10 @@
                       ></div>
                     </template>
                     <span x-text="p.name"></span>
-                    <span x-show="!p.isUser" class="badge badge-xs badge-ghost">guest</span>
+                    <span
+                      x-show="!p.isUser"
+                      class="badge badge-xs badge-ghost"
+                    >{% translate "guest" context "poll participant" %}</span>
                   </div>
                 </td>
                 <template x-for="slot in (currentPoll?.slots || [])" :key="slot.uuid">
@@ -643,7 +654,7 @@
                     >
                       <i data-lucide="pencil" class="w-3 h-3"></i>
                     </div>
-                    Your vote
+                    {% translate "Your vote" %}
                   </div>
                 </td>
                 <template x-for="slot in (currentPoll?.slots || [])" :key="slot.uuid">
@@ -653,7 +664,7 @@
                       class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto cursor-pointer transition-all hover:scale-110 active:scale-95"
                       :class="pollVoteClass(pollMyVotes[slot.uuid])"
                       @click="pollCycleVote(slot.uuid)"
-                      title="Click to cycle: yes / maybe / no"
+                      title="{% translate 'Click to cycle: yes / maybe / no' %}"
                     >
                       <i :data-lucide="pollVoteIcon(pollMyVotes[slot.uuid])" class="w-4 h-4"></i>
                     </button>
@@ -667,7 +678,7 @@
               <td class="text-sm font-medium opacity-70">
                 <div class="flex items-center gap-1.5">
                   <i data-lucide="thumbs-up" class="w-3.5 h-3.5 text-success"></i>
-                  Yes votes
+                  {% translate "Yes votes" %}
                 </div>
               </td>
               <template x-for="slot in (currentPoll?.slots || [])" :key="slot.uuid">
@@ -691,7 +702,7 @@
           >
             <i data-lucide="check" class="w-3 h-3 text-success"></i>
           </div>
-          Yes
+          {% translate "Yes" context "poll vote" %}
         </div>
         <div class="flex items-center gap-1.5">
           <div
@@ -699,13 +710,13 @@
           >
             <i data-lucide="help-circle" class="w-3 h-3 text-warning"></i>
           </div>
-          Maybe
+          {% translate "Maybe" context "poll vote" %}
         </div>
         <div class="flex items-center gap-1.5">
           <div class="w-5 h-5 rounded bg-error/20 flex items-center justify-center">
             <i data-lucide="x" class="w-3 h-3 text-error"></i>
           </div>
-          No
+          {% translate "No" context "poll vote" %}
         </div>
       </div>
 
@@ -713,7 +724,7 @@
 
     <!-- Fixed bottom actions -->
     <div class="modal-action flex-shrink-0 px-4 pb-4">
-      <button type="button" class="btn btn-sm btn-ghost" @click="closePollDetail()">Close</button>
+      <button type="button" class="btn btn-sm btn-ghost" @click="closePollDetail()">{% translate "Close" %}</button>
       <template x-if="currentPoll?.status === 'open'">
         <button
           type="button"
@@ -723,7 +734,7 @@
         >
           <span x-show="pollSubmitting" class="loading loading-spinner loading-xs"></span>
           <i data-lucide="save" class="w-4 h-4" x-show="!pollSubmitting"></i>
-          Save my votes
+          {% translate "Save my votes" %}
         </button>
       </template>
     </div>

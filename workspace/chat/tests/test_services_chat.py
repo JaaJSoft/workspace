@@ -156,11 +156,13 @@ class NotifyNewMessageTests(TestCase):
         self.assertEqual(mock_push.call_count, 0)
 
     def test_sse_fires_for_every_member_on_both_paths(self, mock_push, mock_sse):
-        notify_new_message(self.conv, self.author, "first")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(self.conv, self.author, "first")
         self.assertEqual(mock_sse.call_count, 2)
 
         mock_sse.reset_mock()
-        notify_new_message(self.conv, self.author, "second")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(self.conv, self.author, "second")
         # SSE still fires on the merge path — recipients need the bell
         # content refresh even when the notif count is unchanged.
         self.assertEqual(mock_sse.call_count, 2)
@@ -322,7 +324,8 @@ class NotifyNewMessageTests(TestCase):
         """
         self._set_level(self.alice, ConversationMember.NotificationLevel.NONE)
 
-        notify_new_message(self.conv, self.author, "hello")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_new_message(self.conv, self.author, "hello")
 
         notified = {call.args[1] for call in mock_sse.call_args_list}
         self.assertEqual(notified, {self.bob.id})

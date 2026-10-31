@@ -5,16 +5,23 @@ LLM with a strict event-extraction prompt, validate the response, and
 materialize an Event + MailExtraction for each high-confidence,
 future-dated entry. Per-message transactions: one bad mail does not
 poison the batch.
+
+Every new mail of a thread sends the whole thread again, so the model
+keeps seeing events it already reported - under a new title more often
+than not. An extracted event is therefore identified by its start, never
+by its title: see _previous_event.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from celery import shared_task
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone as dj_tz
 from pydantic import BaseModel
 
@@ -135,6 +142,12 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
             logger.debug("Extract: dropping past-dated event")
             continue
 
+        found, previous = _previous_event(msg, thread, extracted, user_tz)
+        if found:
+            if previous is not None:
+                created += _link_extraction(msg, previous, extracted, result, event_ct)
+            continue
+
         with transaction.atomic():
             event = create_event_from_payload(
                 user=msg.account.owner,
@@ -161,3 +174,89 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
         created += 1
 
     return {"count": created, **usage}
+
+
+def _same_moment_q(extracted: ExtractedEvent, user_tz: ZoneInfo) -> Q:
+    """Events starting when `extracted` does: the same instant, or the same
+    local day for an all-day event, whose time of day the model makes up."""
+    if not extracted.all_day:
+        return Q(all_day=False, start=extracted.start)
+    day = extracted.start.astimezone(user_tz).date()
+    day_start = datetime.combine(day, time.min, tzinfo=user_tz)
+    return Q(
+        all_day=True, start__gte=day_start, start__lt=day_start + timedelta(days=1)
+    )
+
+
+def _is_same_moment(raw: dict, extracted: ExtractedEvent, user_tz: ZoneInfo) -> bool:
+    try:
+        start = datetime.fromisoformat(raw["start"])
+    except KeyError, TypeError, ValueError:
+        return False
+    if bool(raw.get("all_day")) != extracted.all_day:
+        return False
+    if not extracted.all_day:
+        return start == extracted.start
+    return (
+        start.astimezone(user_tz).date() == extracted.start.astimezone(user_tz).date()
+    )
+
+
+def _previous_event(
+    msg: MailMessage,
+    thread: list[MailMessage],
+    extracted: ExtractedEvent,
+    user_tz: ZoneInfo,
+) -> tuple[bool, Event | None]:
+    """Whether `extracted` was already reported, and the event that stands
+    for it when that event still exists.
+
+    The thread's own extractions come first: when the user deleted or
+    dismissed what an earlier mail produced, or moved it to another time,
+    a reply quoting that mail must not bring it back. Outside the thread,
+    a reminder that does not reply to the confirmation, or the invitation
+    the same mail carried as an ICS, already put the event in the calendar.
+    """
+    thread_extractions = MailExtraction.objects.filter(
+        mail_message__in=thread, kind=MailExtraction.Kind.EVENT
+    ).order_by("created_at")
+    for extraction in thread_extractions:
+        if _is_same_moment(extraction.raw_output or {}, extracted, user_tz):
+            alive = extraction.status != MailExtraction.Status.DISMISSED
+            return True, extraction.target if alive else None
+
+    existing = (
+        Event.objects.filter(
+            _same_moment_q(extracted, user_tz),
+            owner=msg.account.owner,
+            source__in=(Event.Source.LLM, Event.Source.ICS),
+            is_cancelled=False,
+            recurrence_parent__isnull=True,
+        )
+        .order_by("created_at")
+        .first()
+    )
+    return existing is not None, existing
+
+
+def _link_extraction(
+    msg: MailMessage,
+    event: Event,
+    extracted: ExtractedEvent,
+    result: dict,
+    event_ct: ContentType,
+) -> int:
+    """Attach `msg` to an event an earlier mail produced, so the mail still
+    shows what it is about. Returns the number of rows created."""
+    _, created = MailExtraction.objects.get_or_create(
+        mail_message=msg,
+        kind=MailExtraction.Kind.EVENT,
+        target_content_type=event_ct,
+        target_object_id=event.uuid,
+        defaults={
+            "confidence": extracted.confidence,
+            "model_used": result.get("model", ""),
+            "raw_output": extracted.model_dump(mode="json"),
+        },
+    )
+    return int(created)

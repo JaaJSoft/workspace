@@ -220,3 +220,148 @@ class ExtractFromMailTests(TestCase):
         self.assertEqual(MailExtraction.objects.count(), 0)
         self.ai_task.refresh_from_db()
         self.assertEqual(self.ai_task.status, AITask.Status.COMPLETED)
+
+
+def _event(title, start, *, all_day=False, confidence="high"):
+    return {
+        "title": title,
+        "start": start.isoformat(),
+        "end": None,
+        "all_day": all_day,
+        "location": "",
+        "description": "",
+        "confidence": confidence,
+        "reasoning": "r",
+    }
+
+
+class ExtractDeduplicationTests(TestCase):
+    """Every mail of a thread re-sends the whole thread to the model, which
+    names the same event differently each time: the title is no identity."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="dup", password="p")
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="dup@x.com",
+            imap_host="x",
+            imap_port=993,
+            smtp_host="x",
+            smtp_port=587,
+        )
+        self.folder = MailFolder.objects.create(
+            account=self.account, name="INBOX", folder_type="inbox"
+        )
+        self.first = self._message(1, "<a@x>", "Dentist")
+        self.start = (dj_tz.now() + timedelta(days=3)).replace(microsecond=0)
+
+    def _message(self, uid, message_id, subject, in_reply_to=""):
+        return MailMessage.objects.create(
+            account=self.account,
+            folder=self.folder,
+            imap_uid=uid,
+            message_id=message_id,
+            in_reply_to=in_reply_to,
+            date=dj_tz.now(),
+            subject=subject,
+            body_text="See you then.",
+            from_email="doc@x.com",
+        )
+
+    def _extract(self, message, mock_llm, events):
+        from workspace.ai.tasks.calendar import extract_from_mail_messages
+
+        mock_llm.return_value = _llm_payload(events)
+        task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.EXTRACT,
+            input_data={"message_uuids": [str(message.uuid)]},
+        )
+        extract_from_mail_messages(str(task.uuid))
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_reply_renaming_the_same_event_reuses_it(self, mock_llm):
+        reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
+
+        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        self._extract(
+            reply, mock_llm, [_event("Dental appointment - Dr Martin", self.start)]
+        )
+
+        event = Event.objects.get()
+        self.assertEqual(event.title, "Dentist")
+        reply_extraction = MailExtraction.objects.get(mail_message=reply)
+        self.assertEqual(reply_extraction.target_object_id, event.uuid)
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_unthreaded_reminder_reuses_the_event(self, mock_llm):
+        reminder = self._message(2, "<reminder@x>", "Reminder: your appointment")
+
+        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        self._extract(reminder, mock_llm, [_event("Appointment", self.start)])
+
+        self.assertEqual(Event.objects.count(), 1)
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_event_from_an_invitation_is_not_extracted_again(self, mock_llm):
+        from workspace.calendar.services.event_creation import (
+            create_event_from_payload,
+        )
+
+        create_event_from_payload(
+            user=self.user,
+            payload={"title": "Dentist (invite)", "start": self.start},
+            source_message=self.first,
+            source=Event.Source.ICS,
+            ical_uid="uid-1",
+        )
+
+        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+
+        self.assertEqual(Event.objects.count(), 1)
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_event_the_user_deleted_is_not_recreated_by_a_reply(self, mock_llm):
+        reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
+
+        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        Event.objects.all().delete()
+        self._extract(reply, mock_llm, [_event("Dentist appointment", self.start)])
+
+        self.assertEqual(Event.objects.count(), 0)
+        self.assertFalse(MailExtraction.objects.filter(mail_message=reply).exists())
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_all_day_event_on_the_same_day_is_reused(self, mock_llm):
+        reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
+        midnight = self.start.replace(hour=0, minute=0, second=0)
+
+        self._extract(self.first, mock_llm, [_event("Trip", midnight, all_day=True)])
+        self._extract(
+            reply,
+            mock_llm,
+            [_event("Holiday trip", midnight + timedelta(hours=2), all_day=True)],
+        )
+
+        self.assertEqual(Event.objects.count(), 1)
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_rerun_on_the_same_message_adds_no_extraction(self, mock_llm):
+        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+
+        self.assertEqual(Event.objects.count(), 1)
+        self.assertEqual(MailExtraction.objects.count(), 1)
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_event_at_another_time_is_still_created(self, mock_llm):
+        reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
+
+        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        self._extract(
+            reply,
+            mock_llm,
+            [_event("Follow-up visit", self.start + timedelta(days=7))],
+        )
+
+        self.assertEqual(Event.objects.count(), 2)

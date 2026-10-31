@@ -1,7 +1,9 @@
-from datetime import timedelta
+from datetime import UTC, datetime, time, timedelta
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone as dj_tz
 
@@ -13,6 +15,7 @@ from workspace.mail.models import (
     MailFolder,
     MailMessage,
 )
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -255,6 +258,9 @@ class ExtractDeduplicationTests(TestCase):
         self.first = self._message(1, "<a@x>", "Dentist")
         self.start = (dj_tz.now() + timedelta(days=3)).replace(microsecond=0)
 
+    def tearDown(self):
+        cache.clear()
+
     def _message(self, uid, message_id, subject, in_reply_to=""):
         return MailMessage.objects.create(
             account=self.account,
@@ -318,6 +324,40 @@ class ExtractDeduplicationTests(TestCase):
 
         self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
 
+        ics_event = Event.objects.get()
+        self.assertTrue(
+            MailExtraction.objects.filter(
+                mail_message=self.first, target_object_id=ics_event.uuid
+            ).exists()
+        )
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_all_day_invitation_matches_a_local_midnight_west_of_utc(self, mock_llm):
+        from workspace.calendar.services.event_creation import (
+            create_event_from_payload,
+        )
+
+        day = (self.start + timedelta(days=1)).date()
+        create_event_from_payload(
+            user=self.user,
+            payload={
+                "title": "Offsite (invite)",
+                "start": datetime.combine(day, time.min, tzinfo=UTC),
+                "all_day": True,
+            },
+            source_message=self.first,
+            source=Event.Source.ICS,
+            ical_uid="uid-2",
+        )
+        set_setting(self.user, "core", "timezone", "America/New_York")
+        new_york_midnight = datetime.combine(
+            day, time.min, tzinfo=ZoneInfo("America/New_York")
+        )
+
+        self._extract(
+            self.first, mock_llm, [_event("Offsite", new_york_midnight, all_day=True)]
+        )
+
         self.assertEqual(Event.objects.count(), 1)
 
     @patch("workspace.ai.services.llm.call_llm")
@@ -365,3 +405,30 @@ class ExtractDeduplicationTests(TestCase):
         )
 
         self.assertEqual(Event.objects.count(), 2)
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_all_day_event_is_stored_on_the_day_the_mail_names(self, mock_llm):
+        """All-day events live at UTC midnight of their day: a local midnight
+        east of UTC is the previous UTC day, and would show a day early."""
+        day = (self.start + timedelta(days=1)).date()
+        paris_midnight = datetime.combine(
+            day, time.min, tzinfo=ZoneInfo("Europe/Paris")
+        )
+
+        self._extract(
+            self.first,
+            mock_llm,
+            [
+                {
+                    **_event("Trip", paris_midnight, all_day=True),
+                    "end": (paris_midnight + timedelta(days=2)).isoformat(),
+                }
+            ],
+        )
+
+        event = Event.objects.get()
+        self.assertEqual(event.start, datetime.combine(day, time.min, tzinfo=UTC))
+        self.assertEqual(
+            event.end,
+            datetime.combine(day + timedelta(days=2), time.min, tzinfo=UTC),
+        )

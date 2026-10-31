@@ -13,15 +13,13 @@ by its title: see _previous_event.
 """
 
 import logging
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 from celery import shared_task
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone as dj_tz
 from pydantic import BaseModel
 
@@ -142,7 +140,12 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
             logger.debug("Extract: dropping past-dated event")
             continue
 
-        found, previous = _previous_event(msg, thread, extracted, user_tz)
+        start, end = extracted.start, extracted.end
+        if extracted.all_day:
+            start = _all_day_anchor(start)
+            end = end and _all_day_anchor(end)
+
+        found, previous = _previous_event(msg, thread, extracted.all_day, start)
         if found:
             if previous is not None:
                 created += _link_extraction(msg, previous, extracted, result, event_ct)
@@ -153,8 +156,8 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
                 user=msg.account.owner,
                 payload={
                     "title": extracted.title,
-                    "start": extracted.start,
-                    "end": extracted.end,
+                    "start": start,
+                    "end": end,
                     "all_day": extracted.all_day,
                     "location": extracted.location,
                     "description": extracted.description,
@@ -176,40 +179,33 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
     return {"count": created, **usage}
 
 
-def _same_moment_q(extracted: ExtractedEvent, user_tz: ZoneInfo) -> Q:
-    """Events starting when `extracted` does: the same instant, or the same
-    local day for an all-day event, whose time of day the model makes up."""
-    if not extracted.all_day:
-        return Q(all_day=False, start=extracted.start)
-    day = extracted.start.astimezone(user_tz).date()
-    day_start = datetime.combine(day, time.min, tzinfo=user_tz)
-    return Q(
-        all_day=True, start__gte=day_start, start__lt=day_start + timedelta(days=1)
-    )
+def _all_day_anchor(value: datetime) -> datetime:
+    """UTC midnight of the day the model wrote, as every all-day event is
+    stored (calendar/services/timezones.py). The model writes a local
+    midnight, which east of UTC is still the previous UTC day."""
+    return datetime.combine(value.date(), time.min, tzinfo=UTC)
 
 
-def _is_same_moment(raw: dict, extracted: ExtractedEvent, user_tz: ZoneInfo) -> bool:
+def _is_same_moment(raw: dict, all_day: bool, start: datetime) -> bool:
     try:
-        start = datetime.fromisoformat(raw["start"])
+        raw_start = datetime.fromisoformat(raw["start"])
     except KeyError, TypeError, ValueError:
         return False
-    if bool(raw.get("all_day")) != extracted.all_day:
+    if bool(raw.get("all_day")) != all_day:
         return False
-    if not extracted.all_day:
-        return start == extracted.start
-    return (
-        start.astimezone(user_tz).date() == extracted.start.astimezone(user_tz).date()
-    )
+    if all_day:
+        raw_start = _all_day_anchor(raw_start)
+    return raw_start == start
 
 
 def _previous_event(
     msg: MailMessage,
     thread: list[MailMessage],
-    extracted: ExtractedEvent,
-    user_tz: ZoneInfo,
+    all_day: bool,
+    start: datetime,
 ) -> tuple[bool, Event | None]:
-    """Whether `extracted` was already reported, and the event that stands
-    for it when that event still exists.
+    """Whether the event starting at `start` was already reported, and the
+    event that stands for it when that event still exists.
 
     The thread's own extractions come first: when the user deleted or
     dismissed what an earlier mail produced, or moved it to another time,
@@ -221,14 +217,15 @@ def _previous_event(
         mail_message__in=thread, kind=MailExtraction.Kind.EVENT
     ).order_by("created_at")
     for extraction in thread_extractions:
-        if _is_same_moment(extraction.raw_output or {}, extracted, user_tz):
+        if _is_same_moment(extraction.raw_output or {}, all_day, start):
             alive = extraction.status != MailExtraction.Status.DISMISSED
             return True, extraction.target if alive else None
 
     existing = (
         Event.objects.filter(
-            _same_moment_q(extracted, user_tz),
             owner=msg.account.owner,
+            all_day=all_day,
+            start=start,
             source__in=(Event.Source.LLM, Event.Source.ICS),
             is_cancelled=False,
             recurrence_parent__isnull=True,

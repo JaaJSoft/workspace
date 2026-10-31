@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -584,6 +586,21 @@ class GetUserLanguagesTests(TestCase):
     def test_no_user_costs_no_query(self):
         with self.assertNumQueries(0):
             self.assertEqual(get_user_languages([]), {})
+
+    def test_splits_a_large_fan_out_into_bounded_queries(self):
+        # SQLite caps the parameters of one query (32766): a fan-out to every
+        # active user must not put them all in a single IN list.
+        set_setting(self.users[0], "core", "language", "fr")
+        set_setting(self.users[2], "core", "language", "fr")
+        with (
+            patch("workspace.users.services.settings._LANGUAGE_BATCH_SIZE", 2),
+            self.assertNumQueries(2),
+        ):
+            languages = get_user_languages([u.pk for u in self.users])
+        self.assertEqual(
+            languages,
+            {self.users[0].pk: "fr", self.users[1].pk: "en", self.users[2].pk: "fr"},
+        )
 
 
 class InRecipientLanguagesTests(TestCase):

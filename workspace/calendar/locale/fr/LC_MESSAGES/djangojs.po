@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 12:20+0000\n"
+"POT-Creation-Date: 2026-10-31 16:05+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -217,22 +217,34 @@ msgstr "Impossible de mettre à jour le sondage."
 #: ui/static/calendar/ui/js/calendar_recurrence.js
 msgctxt "recurrence interval in weeks"
 msgid "Every"
-msgstr "Toutes les"
+msgid_plural "Every"
+msgstr[0] "Chaque"
+msgstr[1] "Toutes les"
+msgstr[2] "Toutes les"
 
 #: ui/static/calendar/ui/js/calendar_recurrence.js
 msgctxt "recurrence interval in months"
 msgid "Every"
-msgstr "Tous les"
+msgid_plural "Every"
+msgstr[0] "Chaque"
+msgstr[1] "Tous les"
+msgstr[2] "Tous les"
 
 #: ui/static/calendar/ui/js/calendar_recurrence.js
 msgctxt "recurrence interval in years"
 msgid "Every"
-msgstr "Tous les"
+msgid_plural "Every"
+msgstr[0] "Chaque"
+msgstr[1] "Tous les"
+msgstr[2] "Tous les"
 
 #: ui/static/calendar/ui/js/calendar_recurrence.js
 msgctxt "recurrence interval in days"
 msgid "Every"
-msgstr "Tous les"
+msgid_plural "Every"
+msgstr[0] "Chaque"
+msgstr[1] "Tous les"
+msgstr[2] "Tous les"
 
 #: ui/static/calendar/ui/js/calendar_recurrence.js
 msgid "day"

@@ -79,8 +79,16 @@ class EventNotificationLanguageTests(CalendarTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(_title(self.member), "Invitation à « Planning »")
-        self.assertEqual(_title(self.outsider), 'Invited to "Planning"')
+        member_notif = Notification.objects.get(
+            recipient=self.member, origin="calendar"
+        )
+        self.assertEqual(member_notif.title, "Invitation à « Planning »")
+        self.assertEqual(member_notif.body, "owner vous invite à un événement.")
+        outsider_notif = Notification.objects.get(
+            recipient=self.outsider, origin="calendar"
+        )
+        self.assertEqual(outsider_notif.title, 'Invited to "Planning"')
+        self.assertEqual(outsider_notif.body, "owner invited you to an event.")
 
     def test_answer_reaches_the_organiser_in_their_language(self):
         set_setting(self.owner, "core", "language", "fr")

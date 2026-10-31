@@ -7,7 +7,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
 // The mixin is spread into the component, so its methods run with `this`
 // bound to an object carrying `form`. Building that directly keeps the test
 // on buildRecurrenceRule rather than on Alpine.
-function makeMixin(form) {
+function makeMixin(form, extraGlobals = {}) {
   const ctx = loadScript(
     'workspace/calendar/ui/static/calendar/ui/js/calendar_recurrence.js',
     {
@@ -15,6 +15,7 @@ function makeMixin(form) {
         assert.equal(tz, 'Europe/Paris');
         return `${wallClock}+02:00`;
       },
+      ...extraGlobals,
     },
   );
   const mixin = ctx.calendarRecurrenceMixin();
@@ -68,16 +69,30 @@ test('the interval unit follows the plural form of the interval', () => {
   assert.equal(mixin.recurrenceUnitLabel('yearly'), 'years');
 });
 
-test('the "Every" label is one message per frequency, so it can agree with the unit', () => {
-  const contexts = [];
-  const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar_recurrence.js', {
-    pgettext: (context, msgid) => { contexts.push(context); return msgid; },
-  });
-  const mixin = ctx.calendarRecurrenceMixin();
-  mixin.form = { ...SIMPLE };
-  for (const frequency of ['daily', 'weekly', 'monthly', 'yearly']) {
+test('the interval unit is the translated plural form of the interval', () => {
+  const fr = { week: 'semaine', weeks: 'semaines' };
+  const ngettext = (singular, plural, count) => fr[count === 1 ? singular : plural];
+  const mixin = makeMixin({ ...SIMPLE, recurrence_interval: 1 }, { ngettext });
+  assert.equal(mixin.recurrenceUnitLabel('weekly'), 'semaine');
+  mixin.form.recurrence_interval = 3;
+  assert.equal(mixin.recurrenceUnitLabel('weekly'), 'semaines');
+});
+
+test('the "Every" label is one message per frequency and count, so it can agree with the unit', () => {
+  const npgettext = (context, singular, plural, count) =>
+    `${context}|${count === 1 ? 'one' : 'many'}`;
+  const mixin = makeMixin({ ...SIMPLE }, { npgettext });
+  const expected = {
+    daily: 'recurrence interval in days',
+    weekly: 'recurrence interval in weeks',
+    monthly: 'recurrence interval in months',
+    yearly: 'recurrence interval in years',
+  };
+  for (const [frequency, context] of Object.entries(expected)) {
     mixin.form.recurrence_frequency = frequency;
-    assert.equal(mixin.recurrenceEveryLabel(), 'Every');
+    mixin.form.recurrence_interval = 1;
+    assert.equal(mixin.recurrenceEveryLabel(), `${context}|one`);
+    mixin.form.recurrence_interval = 2;
+    assert.equal(mixin.recurrenceEveryLabel(), `${context}|many`);
   }
-  assert.equal(new Set(contexts).size, 4);
 });

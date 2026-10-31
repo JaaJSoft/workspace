@@ -46,13 +46,15 @@ class NotifyTests(TestCase):
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_triggers_push_for_normal_priority(self, mock_sse, mock_push):
-        notify(recipient=self.alice, origin="chat", title="Test")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify(recipient=self.alice, origin="chat", title="Test")
         mock_push.delay.assert_called_once()
 
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_skips_push_for_low_priority(self, mock_sse, mock_push):
-        notify(recipient=self.alice, origin="chat", title="Test", priority="low")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify(recipient=self.alice, origin="chat", title="Test", priority="low")
         mock_push.delay.assert_not_called()
 
     @patch("workspace.notifications.services.notifications.send_push_notification")
@@ -105,12 +107,13 @@ class NotifyManyTests(TestCase):
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_skips_push_for_low_priority(self, mock_sse, mock_push):
-        notify_many(
-            recipients=[self.alice, self.bob],
-            origin="files",
-            title="Shared",
-            priority="low",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_many(
+                recipients=[self.alice, self.bob],
+                origin="files",
+                title="Shared",
+                priority="low",
+            )
         mock_push.delay.assert_not_called()
 
 

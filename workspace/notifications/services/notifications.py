@@ -51,6 +51,24 @@ def _resolve_module_icon(origin, icon):
     return icon
 
 
+def _queue_pushes(notifs):
+    """Queue one push per notification once the surrounding transaction commits.
+
+    Inside an open transaction the worker could run before the rows are
+    visible, hit ``Notification.DoesNotExist`` and silently drop the push.
+    Outside one, ``on_commit`` runs the callback immediately. One robust
+    callback per notification, so a broker error on one dispatch neither
+    swallows the others nor blocks unrelated on_commit callbacks.
+    """
+    for notif in notifs:
+        # A lambda rather than functools.partial: Django's robust-callback
+        # error logging reads callback.__qualname__, which partials lack.
+        transaction.on_commit(
+            lambda uuid=str(notif.uuid): send_push_notification.delay(uuid),
+            robust=True,
+        )
+
+
 def notify(
     *,
     recipient,
@@ -80,7 +98,7 @@ def notify(
     invalidate_tags(_user_tag(recipient.id))
     notify_sse("notifications", recipient.id)
     if priority != "low":
-        send_push_notification.delay(str(notif.uuid))
+        _queue_pushes([notif])
     return notif
 
 
@@ -119,8 +137,7 @@ def notify_many(
         invalidate_tags(_user_tag(user.id))
         notify_sse("notifications", user.id)
     if priority != "low":
-        for notif in notifs:
-            send_push_notification.delay(str(notif.uuid))
+        _queue_pushes(notifs)
     return notifs
 
 
@@ -213,17 +230,7 @@ def notify_stream(
     for uid in recipient_ids:
         invalidate_tags(_user_tag(uid))
         notify_sse("notifications", uid)
-    # Dispatch after commit: inside an open transaction the worker could run
-    # before the rows are visible and silently drop the push. One robust
-    # callback per notification, so a broker error on one dispatch neither
-    # swallows the others nor blocks unrelated on_commit callbacks.
-    # A lambda rather than functools.partial: Django's robust-callback error
-    # logging reads callback.__qualname__, which partial objects lack.
-    for notif in [n for n in to_create if n.priority != "low"] + merged_to_push:
-        transaction.on_commit(
-            lambda uuid=str(notif.uuid): send_push_notification.delay(uuid),
-            robust=True,
-        )
+    _queue_pushes([n for n in to_create if n.priority != "low"] + merged_to_push)
     return to_update + to_create
 
 

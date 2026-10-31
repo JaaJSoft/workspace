@@ -1,6 +1,7 @@
 """Notifying the people a file share reaches."""
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import translation
 
 from workspace.users.services.settings import get_user_language, in_recipient_languages
@@ -50,12 +51,13 @@ def notify_share_targets(
             .objects.filter(groups=target_group, is_active=True)
             .exclude(pk=actor.pk)
         )
-    for users in in_recipient_languages(recipients):
-        notify_many(
-            recipients=users,
-            origin="files",
-            title=title(),
-            url=url,
-            actor=actor,
-            source=file_obj,
-        )
+    with transaction.atomic():
+        for users in in_recipient_languages(recipients):
+            notify_many(
+                recipients=users,
+                origin="files",
+                title=title(),
+                url=url,
+                actor=actor,
+                source=file_obj,
+            )

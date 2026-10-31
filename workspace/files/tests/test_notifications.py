@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
@@ -8,7 +10,10 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileComment, FileShare
 from workspace.files.services.comments import notify_comment_added
+from workspace.files.services.share_notifications import notify_share_targets
 from workspace.notifications.models import Notification
+from workspace.notifications.services import notifications as notif_services
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -252,6 +257,42 @@ class CommentNotificationTests(FileNotificationTestBase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         notif.refresh_from_db()
         self.assertIsNotNone(notif.read_at)
+
+
+class ShareTargetNotificationAtomicityTests(FileNotificationTestBase):
+    """A group share notifies every language group, or none of them."""
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_failing_language_group_rolls_back_the_earlier_ones(self):
+        group = Group.objects.create(name="Team")
+        other = User.objects.create_user(username="other", password="pass123")
+        group.user_set.add(self.recipient, other)
+        set_setting(self.recipient, "core", "language", "fr")
+
+        real_notify_many = notif_services.notify_many
+        calls = []
+
+        def notify_then_fail(**kwargs):
+            calls.append(kwargs["recipients"])
+            if len(calls) == 2:
+                raise RuntimeError("second language group failed")
+            return real_notify_many(**kwargs)
+
+        with (
+            patch.object(notif_services, "notify_many", notify_then_fail),
+            self.assertRaises(RuntimeError),
+        ):
+            notify_share_targets(
+                self.file,
+                target_group=group,
+                title=lambda: "shared",
+                actor=self.owner,
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertFalse(Notification.objects.exists())
 
 
 class SharedEditNotificationTests(FileNotificationTestBase):

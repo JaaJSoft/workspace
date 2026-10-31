@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.http import Http404
@@ -882,11 +883,12 @@ class FileViewSet(
             )
             | Q(groups__projects__received_file_shares__file=instance)
         ).distinct()
-        for users in in_recipient_languages(shared_users):
-            notify_many(
-                recipients=users,
-                origin="files",
-                title=_('%(actor)s deleted "%(name)s"')
-                % {"actor": self.request.user.username, "name": instance.name},
-                actor=self.request.user,
-            )
+        with transaction.atomic():
+            for users in in_recipient_languages(shared_users):
+                notify_many(
+                    recipients=users,
+                    origin="files",
+                    title=_('%(actor)s deleted "%(name)s"')
+                    % {"actor": self.request.user.username, "name": instance.name},
+                    actor=self.request.user,
+                )

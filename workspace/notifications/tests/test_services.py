@@ -2,14 +2,17 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import transaction
 from django.test import TestCase
 
 from workspace.chat.models import Conversation
 from workspace.notifications.models import Notification
 from workspace.notifications.services.notifications import (
     get_unread_count,
+    mark_source_read,
     notify,
     notify_many,
+    settle_sources,
 )
 
 User = get_user_model()
@@ -40,19 +43,22 @@ class NotifyTests(TestCase):
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_triggers_sse(self, mock_sse, mock_push):
-        notify(recipient=self.alice, origin="chat", title="Test")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify(recipient=self.alice, origin="chat", title="Test")
         mock_sse.assert_called_with("notifications", self.alice.id)
 
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_triggers_push_for_normal_priority(self, mock_sse, mock_push):
-        notify(recipient=self.alice, origin="chat", title="Test")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify(recipient=self.alice, origin="chat", title="Test")
         mock_push.delay.assert_called_once()
 
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_skips_push_for_low_priority(self, mock_sse, mock_push):
-        notify(recipient=self.alice, origin="chat", title="Test", priority="low")
+        with self.captureOnCommitCallbacks(execute=True):
+            notify(recipient=self.alice, origin="chat", title="Test", priority="low")
         mock_push.delay.assert_not_called()
 
     @patch("workspace.notifications.services.notifications.send_push_notification")
@@ -95,22 +101,24 @@ class NotifyManyTests(TestCase):
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_triggers_sse_for_each_recipient(self, mock_sse, mock_push):
-        notify_many(
-            recipients=[self.alice, self.bob],
-            origin="files",
-            title="Shared",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_many(
+                recipients=[self.alice, self.bob],
+                origin="files",
+                title="Shared",
+            )
         self.assertEqual(mock_sse.call_count, 2)
 
     @patch("workspace.notifications.services.notifications.send_push_notification")
     @patch("workspace.notifications.services.notifications.notify_sse")
     def test_skips_push_for_low_priority(self, mock_sse, mock_push):
-        notify_many(
-            recipients=[self.alice, self.bob],
-            origin="files",
-            title="Shared",
-            priority="low",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_many(
+                recipients=[self.alice, self.bob],
+                origin="files",
+                title="Shared",
+                priority="low",
+            )
         mock_push.delay.assert_not_called()
 
 
@@ -243,3 +251,72 @@ class MarkSourcesReadTests(TestCase):
         from workspace.notifications.services.notifications import mark_sources_read
 
         self.assertEqual(mark_sources_read(self.alice, []), 0)
+
+
+@patch("workspace.notifications.services.notifications.send_push_notification")
+@patch("workspace.notifications.services.notifications.notify_sse")
+class AnnounceAfterCommitTests(TestCase):
+    """The stream wake-up and the unread cache wait for the rows to commit.
+
+    A client woken, or a count read, before the commit sees the old rows; the
+    count would then be cached under the new version and served until the TTL.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.alice = User.objects.create_user(username="alice", password="pass")
+        self.conv = Conversation.objects.create(created_by=self.alice)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_notify_wakes_the_stream_after_commit(self, mock_sse, mock_push):
+        with self.captureOnCommitCallbacks(execute=True):
+            notify(recipient=self.alice, origin="chat", title="Test")
+            mock_sse.assert_not_called()
+        mock_sse.assert_called_once_with("notifications", self.alice.id)
+
+    def test_rolled_back_notify_wakes_nobody(self, mock_sse, mock_push):
+        with self.captureOnCommitCallbacks(execute=True):
+            try:
+                with transaction.atomic():
+                    notify(recipient=self.alice, origin="chat", title="Test")
+                    raise RuntimeError
+            except RuntimeError:
+                pass
+        mock_sse.assert_not_called()
+
+    def test_count_cached_before_commit_is_evicted_on_commit(self, mock_sse, mock_push):
+        with self.captureOnCommitCallbacks(execute=True):
+            notify(recipient=self.alice, origin="chat", title="Test")
+            # A concurrent request does not see the uncommitted row yet and
+            # caches the count it does see. Hiding the row for that one read
+            # stands in for the other connection's isolation.
+            Notification.objects.update(read_at="2026-01-01T00:00:00Z")
+            self.assertEqual(get_unread_count(self.alice), 0)
+            Notification.objects.update(read_at=None)
+        self.assertEqual(get_unread_count(self.alice), 1)
+
+    def test_read_in_the_same_transaction_sees_the_new_row(self, mock_sse, mock_push):
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(get_unread_count(self.alice), 0)
+            notify(recipient=self.alice, origin="chat", title="Test")
+            self.assertEqual(get_unread_count(self.alice), 1)
+
+    def test_mark_source_read_wakes_the_stream_after_commit(self, mock_sse, mock_push):
+        Notification.objects.create(
+            recipient=self.alice, origin="chat", title="t", conversation=self.conv
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            mark_source_read(self.alice, self.conv)
+            mock_sse.assert_not_called()
+        mock_sse.assert_called_once_with("notifications", self.alice.pk)
+
+    def test_settle_sources_wakes_the_stream_after_commit(self, mock_sse, mock_push):
+        Notification.objects.create(
+            recipient=self.alice, origin="chat", title="t", conversation=self.conv
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            settle_sources([self.conv])
+            mock_sse.assert_not_called()
+        mock_sse.assert_called_once_with("notifications", self.alice.pk)

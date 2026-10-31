@@ -51,6 +51,48 @@ def _resolve_module_icon(origin, icon):
     return icon
 
 
+def _announce(user_ids):
+    """Refresh the unread caches of *user_ids* and wake their streams.
+
+    Both wait for the commit: a client woken by the stream, or any request
+    reading the count, before the rows are visible would cache the old count
+    under the new version and serve it until the TTL runs out. Inside a
+    transaction the caches are also evicted right away, so a read later in
+    that same transaction sees its own writes.
+    """
+    user_ids = list(dict.fromkeys(user_ids))
+    if not user_ids:
+        return
+    tags = [_user_tag(uid) for uid in user_ids]
+    if transaction.get_connection().in_atomic_block:
+        invalidate_tags(*tags)
+
+    def publish():
+        invalidate_tags(*tags)
+        for uid in user_ids:
+            notify_sse("notifications", uid)
+
+    transaction.on_commit(publish, robust=True)
+
+
+def _queue_pushes(notifs):
+    """Queue one push per notification once the surrounding transaction commits.
+
+    Inside an open transaction the worker could run before the rows are
+    visible, hit ``Notification.DoesNotExist`` and silently drop the push.
+    Outside one, ``on_commit`` runs the callback immediately. One robust
+    callback per notification, so a broker error on one dispatch neither
+    swallows the others nor blocks unrelated on_commit callbacks.
+    """
+    for notif in notifs:
+        # A lambda rather than functools.partial: Django's robust-callback
+        # error logging reads callback.__qualname__, which partials lack.
+        transaction.on_commit(
+            lambda uuid=str(notif.uuid): send_push_notification.delay(uuid),
+            robust=True,
+        )
+
+
 def notify(
     *,
     recipient,
@@ -63,7 +105,7 @@ def notify(
     priority="normal",
     source=None,
 ):
-    """Create a single notification and trigger SSE push."""
+    """Create a single notification, then wake the recipient and push it."""
     icon = _resolve_module_icon(origin, icon)
     source_kwargs = {source_field(source): source} if source is not None else {}
     notif = Notification.objects.create(
@@ -77,10 +119,9 @@ def notify(
         priority=priority,
         **source_kwargs,
     )
-    invalidate_tags(_user_tag(recipient.id))
-    notify_sse("notifications", recipient.id)
+    _announce([recipient.id])
     if priority != "low":
-        send_push_notification.delay(str(notif.uuid))
+        _queue_pushes([notif])
     return notif
 
 
@@ -96,7 +137,7 @@ def notify_many(
     priority="normal",
     source=None,
 ):
-    """Create notifications for multiple recipients and trigger SSE for each."""
+    """Create one notification per recipient, then wake and push each one."""
     icon = _resolve_module_icon(origin, icon)
     source_kwargs = {source_field(source): source} if source is not None else {}
     notifs = Notification.objects.bulk_create(
@@ -115,12 +156,9 @@ def notify_many(
             for user in recipients
         ]
     )
-    for user in recipients:
-        invalidate_tags(_user_tag(user.id))
-        notify_sse("notifications", user.id)
+    _announce(user.id for user in recipients)
     if priority != "low":
-        for notif in notifs:
-            send_push_notification.delay(str(notif.uuid))
+        _queue_pushes(notifs)
     return notifs
 
 
@@ -210,20 +248,8 @@ def notify_stream(
         # uuid_v7_or_v4 runs at __init__, so pks exist before bulk_create.
         Notification.objects.bulk_create(to_create)
 
-    for uid in recipient_ids:
-        invalidate_tags(_user_tag(uid))
-        notify_sse("notifications", uid)
-    # Dispatch after commit: inside an open transaction the worker could run
-    # before the rows are visible and silently drop the push. One robust
-    # callback per notification, so a broker error on one dispatch neither
-    # swallows the others nor blocks unrelated on_commit callbacks.
-    # A lambda rather than functools.partial: Django's robust-callback error
-    # logging reads callback.__qualname__, which partial objects lack.
-    for notif in [n for n in to_create if n.priority != "low"] + merged_to_push:
-        transaction.on_commit(
-            lambda uuid=str(notif.uuid): send_push_notification.delay(uuid),
-            robust=True,
-        )
+    _announce(recipient_ids)
+    _queue_pushes([n for n in to_create if n.priority != "low"] + merged_to_push)
     return to_update + to_create
 
 
@@ -241,8 +267,7 @@ def mark_source_read(user, source):
         **{field: source},
     ).update(read_at=timezone.now())
     if marked:
-        invalidate_tags(_user_tag(user.pk))
-        notify_sse("notifications", user.pk)
+        _announce([user.pk])
     return marked
 
 
@@ -263,8 +288,7 @@ def mark_sources_read(user, sources):
         **{f"{field}__in": [s.pk for s in sources]},
     ).update(read_at=timezone.now())
     if marked:
-        invalidate_tags(_user_tag(user.pk))
-        notify_sse("notifications", user.pk)
+        _announce([user.pk])
     return marked
 
 
@@ -301,9 +325,7 @@ def settle_sources(sources, *, max_priority=None):
     if not recipient_ids:
         return 0
     marked = qs.update(read_at=timezone.now())
-    for uid in recipient_ids:
-        invalidate_tags(_user_tag(uid))
-        notify_sse("notifications", uid)
+    _announce(recipient_ids)
     return marked
 
 

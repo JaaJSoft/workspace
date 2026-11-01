@@ -55,6 +55,7 @@ function makePage({ folder = 'folder-a', nameCollision = 'keep_both', existing =
           if (value !== undefined) stores[name] = value;
           return stores[name];
         },
+        effect: (fn) => fn(),
       },
       location: { pathname: '/files', search: '' },
       getCSRFToken: () => 'token',

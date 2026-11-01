@@ -19,6 +19,13 @@
  * picks), which retries a failed chunk on its own and resumes from what the
  * server holds; the queue only sees a request that takes longer.
  *
+ * A phone suspends a page it no longer shows and drops its connections, so
+ * the queue holds a screen wake lock while it transfers (the screen locking
+ * is what sends the page to the background most often), and *wake()* - run
+ * when the page is shown again or the network comes back - cuts short the
+ * waits of the chunked uploads and starts again the files that failed on the
+ * network.
+ *
  * `uploads-changed` is dispatched on window once the queue drains with new
  * files on the server, and after a discarded duplicate.
  */
@@ -64,6 +71,12 @@ window.createUploadQueue = function createUploadQueue({
 
     get failedCount() {
       return this.items.filter((item) => item.status === 'failed').length;
+    },
+
+    // Whether bytes are going up, or will as soon as a slot frees up: what
+    // keeps the screen awake.
+    get transferring() {
+      return this.items.some((item) => item.status === 'uploading' || (item.status === 'queued' && !this.paused));
     },
 
     // Bytes of everything that is, or will be, on the server.
@@ -127,6 +140,8 @@ window.createUploadQueue = function createUploadQueue({
           status: skipped ? 'skipped' : 'queued',
           loaded: 0,
           error: skipped ? gettext('A file with this name already exists') : '',
+          // Failed on the network rather than refused: worth sending again by itself.
+          transient: false,
           retrying: false,
           outcome: '',
           savedName: '',
@@ -238,6 +253,22 @@ window.createUploadQueue = function createUploadQueue({
       this._pump();
     },
 
+    // The page is shown again, or the network is back: what was waiting on
+    // the connection goes now instead of at the end of its wait, and what
+    // gave up on it starts again.
+    wake() {
+      for (const request of inFlight.values()) {
+        if (request.wake) request.wake();
+      }
+      for (const item of this.items) {
+        if (item.status !== 'failed' || !item.transient) continue;
+        item.status = 'queued';
+        item.error = '';
+        item.transient = false;
+      }
+      this._pump();
+    },
+
     // Closing the panel empties it, cancelling what has not gone up yet.
     async close() {
       const pending = this.pendingCount;
@@ -338,6 +369,7 @@ window.createUploadQueue = function createUploadQueue({
       item.status = 'uploading';
       item.loaded = 0;
       item.retrying = false;
+      item.transient = false;
       const request = send(
         files.get(item.id),
         item,
@@ -382,6 +414,7 @@ window.createUploadQueue = function createUploadQueue({
           } else {
             item.status = 'failed';
             item.error = error.message || gettext('Upload failed');
+            item.transient = Boolean(error.transient);
           }
           this._pump();
         },
@@ -421,7 +454,7 @@ window.sendFileUpload = function sendFileUpload(file, options, onProgress, onRet
       error.nameCollision = xhr.status === 400 && Array.isArray(body.name);
       reject(error);
     };
-    xhr.onerror = () => reject(new Error(gettext('Network error')));
+    xhr.onerror = () => reject(networkError());
     xhr.onabort = () => reject(new Error(gettext('Cancelled')));
 
     xhr.open('POST', '/api/v1/files');
@@ -437,6 +470,18 @@ window.sendFileUpload = function sendFileUpload(file, options, onProgress, onRet
 const resumableSessions = new WeakMap();
 
 const uploadSessionUrl = (uuid) => `/api/v1/files/uploads/${uuid}`;
+
+// A failure the connection is to blame for, not the server's refusal.
+function networkError() {
+  return Object.assign(new Error(gettext('Network error')), { transient: true });
+}
+
+// A page the browser no longer shows, or that knows it is offline, cannot
+// reach the server whatever it tries: failing then says nothing about the
+// server, and the attempt is not counted.
+function connectionUnavailable() {
+  return window.document.visibilityState === 'hidden' || window.navigator?.onLine === false;
+}
 
 function uploadFailure(status, body) {
   const error = new Error(window.fileActions.firstErrorMessage(body));
@@ -464,13 +509,16 @@ window.releaseFileUpload = function releaseFileUpload(file) {
  * a wait, *onRetrying(true)* saying so meanwhile; a chunk tried again after
  * landing in part is answered with where the server stands, and continues
  * from there. When the waits run out the upload fails, keeping its session
- * for a retry from the queue.
+ * for a retry from the queue. A connection lost while the page is hidden or
+ * offline does not count against the waits, and *wake()* ends the current
+ * one early.
  */
 window.sendResumableUpload = function sendResumableUpload(
   file, { folderId, onConflict }, onProgress, onRetrying = () => {},
 ) {
   let xhr = null;
   let cancelWait = null;
+  let endWait = null;
   let aborted = false;
 
   const cancelled = () => Object.assign(new Error(gettext('Cancelled')), { cancelled: true });
@@ -492,25 +540,27 @@ window.sendResumableUpload = function sendResumableUpload(
       } catch (_) {}
       resolve({ status: xhr.status, body: data });
     };
-    xhr.onerror = () => reject(new Error(gettext('Network error')));
+    xhr.onerror = () => reject(networkError());
     xhr.onabort = () => reject(cancelled());
     xhr.send(body);
   });
 
   const wait = (ms) => new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cancelWait = null;
-      resolve();
-    }, ms);
-    cancelWait = () => {
+    const settle = (outcome) => {
       clearTimeout(timer);
-      reject(cancelled());
+      cancelWait = null;
+      endWait = null;
+      outcome();
     };
+    const timer = setTimeout(() => settle(resolve), ms);
+    cancelWait = () => settle(() => reject(cancelled()));
+    endWait = () => settle(resolve);
   });
 
   // *send* again while the answer says to wait: a lost connection, a server
   // error, or *busy* - the server still writing what an earlier attempt sent.
   const persist = async (send, busy = () => false) => {
+    let counted = 0;
     for (let attempt = 0; ; attempt++) {
       let response = null;
       let failure = null;
@@ -526,12 +576,13 @@ window.sendResumableUpload = function sendResumableUpload(
         onRetrying(false);
         return response;
       }
-      if (attempt >= RETRY_DELAYS.length) {
+      if (!(failure && connectionUnavailable())) counted++;
+      if (counted > RETRY_DELAYS.length) {
         if (failure) throw failure;
         return response;
       }
       onRetrying(true);
-      await wait(RETRY_DELAYS[attempt]);
+      await wait(RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]);
     }
   };
 
@@ -605,7 +656,7 @@ window.sendResumableUpload = function sendResumableUpload(
           onProgress(offset);
           continue;
         }
-        if (status >= 500 || status === 409) throw new Error(gettext('Network error'));
+        if (status >= 500 || status === 409) throw networkError();
         throw fail(status, body);
       }
 
@@ -621,7 +672,7 @@ window.sendResumableUpload = function sendResumableUpload(
         offset = body.offset;
         continue;
       }
-      if (status >= 500 || status === 409) throw new Error(gettext('Network error'));
+      if (status >= 500 || status === 409) throw networkError();
       throw fail(status, body);
     }
   })();
@@ -633,6 +684,9 @@ window.sendResumableUpload = function sendResumableUpload(
       if (cancelWait) cancelWait();
       if (xhr) xhr.abort();
       window.releaseFileUpload(file);
+    },
+    wake: () => {
+      if (endWait) endWait();
     },
   };
 };
@@ -658,6 +712,54 @@ window.discardFileUpload = async function discardFileUpload(uuid, name) {
   }
 };
 
+/**
+ * Keeps the screen on while *hold(true)* says so. The browser lets go of the
+ * lock whenever the page is hidden, so *refresh()* takes it again once the
+ * page is shown. A browser without the API, or one that refuses (battery
+ * saver, a frame not allowed to), leaves the screen to its own timeout.
+ */
+window.createScreenWakeLock = function createScreenWakeLock(wakeLock, isVisible) {
+  let wanted = false;
+  let lock = null;
+  let requesting = false;
+
+  const acquire = () => {
+    if (!wakeLock || !wanted || lock || requesting || !isVisible()) return;
+    requesting = true;
+    wakeLock.request('screen').then(
+      (granted) => {
+        requesting = false;
+        if (!wanted) {
+          granted.release().catch(() => {});
+          return;
+        }
+        lock = granted;
+        granted.addEventListener('release', () => {
+          if (lock === granted) lock = null;
+        });
+      },
+      () => {
+        requesting = false;
+      },
+    );
+  };
+
+  return {
+    hold(active) {
+      wanted = active;
+      if (active) {
+        acquire();
+        return;
+      }
+      if (!lock) return;
+      const held = lock;
+      lock = null;
+      held.release().catch(() => {});
+    },
+    refresh: acquire,
+  };
+};
+
 document.addEventListener('alpine:init', () => {
   Alpine.store('uploads', window.createUploadQueue({
     send: window.sendFileUpload,
@@ -666,6 +768,19 @@ document.addEventListener('alpine:init', () => {
     confirm: (options) => window.AppDialog.confirm(options),
     release: window.releaseFileUpload,
   }));
+
+  const screenLock = window.createScreenWakeLock(
+    window.navigator?.wakeLock,
+    () => document.visibilityState === 'visible',
+  );
+  Alpine.effect(() => screenLock.hold(Alpine.store('uploads').transferring));
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    screenLock.refresh();
+    Alpine.store('uploads').wake();
+  });
+  window.addEventListener('online', () => Alpine.store('uploads').wake());
 
   // Leaving the page aborts every request still in flight.
   window.addEventListener('beforeunload', (e) => {

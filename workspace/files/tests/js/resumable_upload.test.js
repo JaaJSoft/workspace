@@ -22,8 +22,11 @@ const bigFile = (size = 100 * MB, name = 'video.mp4') => ({
 
 // *answer(xhr)* returns [status, body] or 'network' for a lost connection;
 // answers arrive on the next macrotask, as a network's would.
-function makeEnv(answer) {
+// *timers: 'held'* keeps each wait pending until *fireTimers()* runs it,
+// so a test can act while an upload waits.
+function makeEnv(answer, { document = {}, timers = 'immediate' } = {}) {
   const sent = [];
+  const held = [];
   const fetched = [];
   const waits = [];
 
@@ -61,17 +64,23 @@ function makeEnv(answer) {
       'workspace/files/ui/static/files/ui/js/upload_queue.js',
     ],
     {
-      document: { addEventListener: () => {} },
+      document: { addEventListener: () => {}, ...document },
       XMLHttpRequest: FakeXhr,
       FormData: class { append() {} },
       getCSRFToken: () => 'token',
       fetch: async (url, options) => { fetched.push(`${options.method} ${url}`); return { ok: true }; },
-      setTimeout: (fn, ms) => { waits.push(ms); setImmediate(fn); return waits.length; },
+      setTimeout: (fn, ms) => {
+        waits.push(ms);
+        if (timers === 'held') held.push(fn);
+        else setImmediate(fn);
+        return waits.length;
+      },
       clearTimeout: () => {},
       crypto: { randomUUID: () => SESSION },
     },
   );
-  return { ctx, sent, fetched, waits };
+  const fireTimers = () => held.splice(0).forEach((fn) => fn());
+  return { ctx, sent, fetched, waits, held, fireTimers };
 }
 
 // A server holding one session with *chunk* bytes per chunk, storing
@@ -256,4 +265,73 @@ test('an open whose answer was lost is retried under the same uuid', async () =>
 
   assert.equal(result.status, 201);
   assert.deepEqual(opened, [SESSION, SESSION], 'both attempts name the same session');
+});
+
+test('a connection lost while the page is hidden does not use up the waits', async () => {
+  const file = bigFile(60 * MB);
+  let cuts = 20; // more than the waits allow while the page is shown
+  const page = { visibilityState: 'hidden' };
+  const server = sessionServer(file, {
+    override: (xhr) => {
+      if (xhr.method !== 'PATCH' || cuts <= 0) return null;
+      cuts -= 1;
+      if (cuts === 0) page.visibilityState = 'visible';
+      return 'network';
+    },
+  });
+  const { ctx, waits } = makeEnv(server.answer, { document: page });
+
+  const result = await ctx.sendFileUpload(file, {}, () => {}).promise;
+
+  assert.equal(result.status, 201);
+  assert.equal(waits.length, 20);
+  assert.ok(waits.every((ms) => ms <= 30000), 'the waits stop growing at their longest');
+});
+
+test('the waits run out as usual while the page is shown', async () => {
+  const file = bigFile(60 * MB);
+  const server = sessionServer(file, {
+    override: (xhr) => (xhr.method === 'PATCH' ? 'network' : null),
+  });
+  const { ctx, waits } = makeEnv(server.answer, { document: { visibilityState: 'visible' } });
+
+  await assert.rejects(ctx.sendFileUpload(file, {}, () => {}).promise, (error) => error.transient === true);
+  assert.equal(waits.length, 8);
+});
+
+test('waking an upload that waits on the connection sends it now', async () => {
+  const file = bigFile(60 * MB);
+  let cut = false;
+  const server = sessionServer(file, {
+    override: (xhr) => {
+      if (xhr.method !== 'PATCH' || cut) return null;
+      cut = true;
+      return 'network';
+    },
+  });
+  const { ctx, sent, held } = makeEnv(server.answer, { timers: 'held' });
+
+  const upload = ctx.sendFileUpload(file, {}, () => {});
+  while (!held.length) await new Promise((resolve) => setImmediate(resolve));
+  upload.wake();
+
+  const result = await upload.promise;
+  assert.equal(result.status, 201);
+  assert.equal(ranges(sent).length, 3, 'the cut chunk went again, then the last one');
+});
+
+test('a refusal is not mistaken for a lost connection', async () => {
+  const file = bigFile(60 * MB);
+  const server = sessionServer(file, {
+    override: (xhr) => (xhr.method === 'POST' && !xhr.url.endsWith('/finalize') ? [400, { detail: 'Storage quota exceeded' }] : null),
+  });
+  const { ctx } = makeEnv(server.answer);
+
+  await assert.rejects(ctx.sendFileUpload(file, {}, () => {}).promise, (error) => !error.transient);
+});
+
+test('a small file cut by the network fails as a lost connection', async () => {
+  const { ctx } = makeEnv(() => 'network');
+
+  await assert.rejects(ctx.sendFileUpload(bigFile(MB, 'note.txt'), {}, () => {}).promise, (error) => error.transient === true);
 });

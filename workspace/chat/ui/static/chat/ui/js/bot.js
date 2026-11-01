@@ -80,21 +80,20 @@ window.chatBotMixin = function chatBotMixin() {
       }
     },
 
-    // The datetime-local inputs produce naive local strings; convert to ISO
-    // with offset so the backend doesn't have to guess the user's timezone.
+    // The datetime-local inputs hold wall-clock times in the user's
+    // configured timezone - the one every date in the panel is shown in -
+    // whatever zone the browser itself is in.
     localInputToIso(value) {
       if (!value) return null;
-      const d = new Date(value);
-      return isNaN(d.getTime()) ? null : d.toISOString();
+      try {
+        return window.wallClockToIso(value, window.getUserTimeZone());
+      } catch {
+        return null; // RangeError: not a date
+      }
     },
 
     isoToLocalInput(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return '';
-      const pad = n => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-        + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return window.isoToWallClock(iso, window.getUserTimeZone());
     },
 
     _goalDraftPayload() {

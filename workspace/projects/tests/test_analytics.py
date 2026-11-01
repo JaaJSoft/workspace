@@ -84,6 +84,21 @@ class WeeklyFlowTests(ProjectTestMixin, TestCase):
         self._event(TaskEvent.Type.COMPLETED)
         self.assertEqual(weekly_flow(self.project, weeks=4)[-1]["completed"], 2)
 
+    def test_current_week_is_the_viewers_week(self):
+        # Monday 09:00 in Auckland is still Sunday in UTC: the week the
+        # viewer is in started a few hours ago, not six days ago.
+        from datetime import UTC, date, datetime
+        from unittest.mock import patch
+
+        monday_morning = datetime(2026, 11, 1, 20, 0, tzinfo=UTC)
+        with patch("django.utils.timezone.now", return_value=monday_morning):
+            self._event(TaskEvent.Type.CREATED)
+            with timezone.override("Pacific/Auckland"):
+                current = weekly_flow(self.project, weeks=4)[-1]
+
+        self.assertEqual(current["week_start"], date(2026, 11, 2))
+        self.assertEqual(current["created"], 1)
+
 
 class FlowSummaryTests(TestCase):
     def test_totals_net_and_average(self):

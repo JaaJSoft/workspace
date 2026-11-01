@@ -135,6 +135,12 @@ def _eval_leaf(node: LeafCondition, message) -> bool:
             target = datetime.fromisoformat(node.value)
         except ValueError:
             return False
+        if target.tzinfo is None:
+            # "2026-01-01" typed in the rules dialog is the rule owner's
+            # midnight; left naive it cannot even be compared to the date.
+            from workspace.users.services.settings import get_user_timezone
+
+            target = target.replace(tzinfo=get_user_timezone(message.account.owner))
         if node.op == "greater_than":
             return actual > target
         if node.op == "less_than":

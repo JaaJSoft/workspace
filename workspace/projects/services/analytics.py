@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.db.models import Count
 from django.db.models.functions import TruncWeek
@@ -33,7 +33,8 @@ def weekly_flow(project, weeks=DEFAULT_WEEKS):
     completion. Deduplicating with Count(task_id, distinct=True) would
     instead drop every deleted task, since TaskEvent.task is SET_NULL.
     """
-    starts = _week_starts(weeks)
+    tz = timezone.get_current_timezone()
+    starts = _week_starts(weeks, tz)
     counts = {start.date(): {"created": 0, "completed": 0} for start in starts}
     rows = (
         TaskEvent.objects.filter(
@@ -41,7 +42,7 @@ def weekly_flow(project, weeks=DEFAULT_WEEKS):
             type__in=(TaskEvent.Type.CREATED, TaskEvent.Type.COMPLETED),
             created_at__gte=starts[0],
         )
-        .annotate(week=TruncWeek("created_at"))
+        .annotate(week=TruncWeek("created_at", tzinfo=tz))
         .values("week", "type")
         .annotate(n=Count("uuid"))
     )
@@ -75,17 +76,19 @@ def open_task_distribution(project):
     }
 
 
-def _week_starts(weeks):
-    """Aware UTC midnights on the Monday of each bucket, oldest first.
+def _week_starts(weeks, tz):
+    """Aware midnights in *tz* on the Monday of each bucket, oldest first.
 
-    TIME_ZONE is UTC and TruncWeek truncates to Monday, so these line up
-    with the values the database returns.
+    In the same zone TruncWeek truncates in, so these line up with the
+    values the database returns: Monday starts at a different UTC instant
+    for each viewer.
     """
-    now = timezone.now()
-    monday = (now - timedelta(days=now.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    return [monday - timedelta(weeks=i) for i in reversed(range(weeks))]
+    today = timezone.localdate(timezone=tz)
+    monday = today - timedelta(days=today.weekday())
+    return [
+        timezone.make_aware(datetime.combine(monday - timedelta(weeks=i), time.min), tz)
+        for i in reversed(range(weeks))
+    ]
 
 
 def _as_date(value):

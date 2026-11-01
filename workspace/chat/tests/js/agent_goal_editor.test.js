@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 const GOAL = {
   uuid: 'goal-1',
@@ -18,10 +18,27 @@ const GOAL = {
   last_checked_at: '2026-08-30T08:30:00Z',
 };
 
+// localtime.js shares the page with bot.js; its helpers convert the
+// datetime-local values (in the configured zone, Paris here).
+const localtime = loadScripts([
+  'workspace/common/static/ui/js/zoned_formatter.js',
+  'workspace/common/static/ui/js/localtime.js',
+], {
+  document: {
+    documentElement: { getAttribute: (name) => (name === 'data-timezone' ? 'Europe/Paris' : null) },
+    body: {},
+    querySelectorAll: () => [],
+  },
+  MutationObserver: class { observe() {} },
+});
+
 function buildApp() {
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/bot.js', {
     document: { getElementById: () => null },
   });
+  ctx.wallClockToIso = localtime.wallClockToIso;
+  ctx.isoToWallClock = localtime.isoToWallClock;
+  ctx.getUserTimeZone = localtime.getUserTimeZone;
   return { ...ctx.chatBotMixin() };
 }
 

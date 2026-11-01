@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 
+from workspace.common.datetimes import earliest_local_date
 from workspace.notifications.services.notifications import settle_sources
 
 from ..models import Project, Sprint, Task, TaskEvent, TaskStatus
@@ -10,6 +11,18 @@ from .estimates import format_estimate
 from .events import move_event_type, record_task_event
 from .references import allocate_task_number
 from .watchers import auto_watch, notify_status_changed
+
+
+def due_move_settles(due_date):
+    """Whether moving a deadline to *due_date* makes its reminder moot.
+
+    True once the new date is in the future for at least one recipient,
+    judged at the latest timezone rather than the editor's: the settle
+    clears every recipient's reminder, and the hourly cron re-sends it to
+    whoever the new date is still due or overdue for (its reminder rows
+    are keyed on the old date).
+    """
+    return due_date is None or due_date > earliest_local_date()
 
 
 def settle_task_notifications(tasks):

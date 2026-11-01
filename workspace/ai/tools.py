@@ -56,6 +56,13 @@ WEB_SEARCH_DEFAULT_RESULTS = 5
 WEB_SEARCH_MAX_RESULTS = 20
 WEB_SEARCH_MAX_QUERIES = 4
 
+# Goals and schedules run with their creator's identity, so in a group the
+# bot lists every member's but may change only those of the user it answers.
+READ_ONLY_TASK_NOTE = (
+    "Set by another member: only its creator can change it - "
+    "ask them to, do not try on their behalf."
+)
+
 
 class WebSearchParams(BaseModel):
     queries: list[str] = Field(
@@ -911,16 +918,22 @@ class AgentGoalToolProvider(ToolProvider):
     """Long-horizon autonomous goal tools for bots."""
 
     @staticmethod
-    def _open_goal(goal_id, conversation_id, bot):
-        """Fetch an open (active or paused) goal scoped to this conversation+bot."""
+    def _open_goal(goal_id, conversation_id, bot, user):
+        """The open (active or paused) goal of this conversation+bot that *user*
+        may change, or None - another member's goal reads as nonexistent."""
+        from workspace.chat.services.bot_tasks import can_manage_bot_task
+
         from .models import AgentGoal
 
-        return AgentGoal.objects.filter(
+        goal = AgentGoal.objects.filter(
             uuid=goal_id,
             conversation_id=conversation_id,
             bot=bot,
             status__in=[AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED],
         ).first()
+        if goal is None or not can_manage_bot_task(user, goal):
+            return None
+        return goal
 
     @tool(
         badge_icon="\U0001f3af",
@@ -1038,7 +1051,9 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
 their private notes, next check-in and deadline, plus the ones closed in the last 30 days with \
 their closing date and outcome. Call this before creating a goal (to avoid duplicates or \
 re-opening something already finished) and whenever the user asks what you are working on \
-autonomously."""
+autonomously. In a group, goals another member set are listed too, but only their creator can \
+update or close them."""
+        from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 
         from .models import AgentGoal
@@ -1076,6 +1091,8 @@ autonomously."""
                     f"{g.deadline.astimezone(user_tz).strftime('%Y-%m-%d %H:%M')}"
                     f"{overdue}"
                 )
+            if not can_manage_bot_task(user, g):
+                line += f"\n  {READ_ONLY_TASK_NOTE}"
             line += f"\n  Objective: {g.goal[:200]}"
             if g.success_criteria:
                 line += f"\n  Definition of done: {g.success_criteria[:200]}"
@@ -1105,7 +1122,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
 
         from .models import AgentGoal
 
-        goal = self._open_goal(args.goal_id, conversation_id, bot)
+        goal = self._open_goal(args.goal_id, conversation_id, bot, user)
         if goal is None:
             raise ToolError(f"no open goal found with id {args.goal_id}")
 
@@ -1191,7 +1208,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
 Call this when the goal is reached, has become irrelevant, or the user asks you to stop pursuing it."""
         from .models import AgentGoal
 
-        goal = self._open_goal(args.goal_id, conversation_id, bot)
+        goal = self._open_goal(args.goal_id, conversation_id, bot, user)
         if goal is None:
             raise ToolError(f"no open goal found with id {args.goal_id}")
 
@@ -1426,19 +1443,19 @@ schedules with a similar prompt — update or cancel the old one instead of crea
     def cancel_schedule(self, args, user, bot, conversation_id, context):
         """Cancel an active scheduled message by its ID. \
 Call this when the user wants to stop or remove a previously scheduled message."""
+        from workspace.chat.services.bot_tasks import can_manage_bot_task
+
         from .models import ScheduledMessage
 
-        try:
-            schedule = ScheduledMessage.objects.get(
-                uuid=args.schedule_id,
-                conversation_id=conversation_id,
-                bot=bot,
-                is_active=True,
-            )
-        except ScheduledMessage.DoesNotExist:
-            raise ToolError(
-                f"no active schedule found with id {args.schedule_id}"
-            ) from None
+        schedule = ScheduledMessage.objects.filter(
+            uuid=args.schedule_id,
+            conversation_id=conversation_id,
+            bot=bot,
+            is_active=True,
+        ).first()
+        # Another member's schedule answers like a missing one.
+        if schedule is None or not can_manage_bot_task(user, schedule):
+            raise ToolError(f"no active schedule found with id {args.schedule_id}")
 
         schedule.is_active = False
         schedule.save(update_fields=["is_active", "updated_at"])
@@ -1452,7 +1469,9 @@ Call this when the user wants to stop or remove a previously scheduled message."
     )
     def list_schedules(self, args, user, bot, conversation_id, context):
         """List all active scheduled messages in this conversation. \
-Call this when the user wants to see what messages are scheduled or pending."""
+Call this when the user wants to see what messages are scheduled or pending. \
+In a group, schedules another member set are listed too, but only their creator can cancel them."""
+        from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 
         from .models import ScheduledMessage
@@ -1493,6 +1512,9 @@ Call this when the user wants to see what messages are scheduled or pending."""
                 timing += (
                     f", next run: {next_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})"
                 )
-            lines.append(f'- {s.uuid}: "{s.prompt[:60]}" — {timing}')
+            line = f'- {s.uuid}: "{s.prompt[:60]}" — {timing}'
+            if not can_manage_bot_task(user, s):
+                line += f"\n  {READ_ONLY_TASK_NOTE}"
+            lines.append(line)
 
         return f"Active schedules ({len(lines)}):\n" + "\n".join(lines)

@@ -84,9 +84,20 @@ def _stored_rows(user):
 
 
 class FormatMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
-    def _seed_format_1(self):
+    def _seed_format_1(self, names=("Old one", "Old two")):
+        """Open the vault, then write `names` under format 1 behind its back.
+
+        The onboarding unlock schedules a pass of its own a few seconds out,
+        and on a slow runner it is still running while the rows go in: it
+        would migrate the first few and its request would be counted as one
+        the next unlock made. Leaving the page cancels it; the vault page is
+        then loaded again locked, where nothing runs until an unlock.
+        """
         self._open_vault()
-        self._write_entries_as_reference(["Old one", "Old two"], format_version=1)
+        vault_url = self.page.url
+        self.page.goto("about:blank")
+        self._write_entries_as_reference(list(names), format_version=1)
+        self.page.goto(vault_url)
 
     def _reload_and_unlock(self):
         self.page.reload()
@@ -145,9 +156,8 @@ class FormatMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
         """Cut for real: more stale rows than one request carries, the first
         request let through and the second dropped on the wire, so the first
         unlock leaves the vault half migrated."""
-        self._open_vault()
         names = [f"Old {index:03d}" for index in range(MORE_THAN_A_BATCH)]
-        self._write_entries_as_reference(names, format_version=1)
+        self._seed_format_1(names)
         vault = Vault.objects.get(uuid=self.vault_uuid)
         posts = []
 

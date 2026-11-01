@@ -203,3 +203,41 @@ class RecurrenceSummaryLanguageTests(TestCase):
         for rule, expected in cases.items():
             with self.subTest(rule=rule), translation.override("fr"):
                 self.assertEqual(describe(rule), expected)
+
+
+class NotifyInLanguagesAtomicityTests(TestCase):
+    """One notification per language group, written all-or-nothing."""
+
+    def setUp(self):
+        self.camille = User.objects.create_user(username="camille", password="pass")
+        self.alex = User.objects.create_user(username="alex", password="pass")
+        set_setting(self.camille, "core", "language", "fr")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_failing_language_group_rolls_back_the_earlier_ones(self):
+        from unittest.mock import patch
+
+        from workspace.calendar.services import notifications as calendar_notifications
+        from workspace.notifications.services.notifications import notify_many
+
+        calls = []
+
+        def notify_then_fail(**kwargs):
+            calls.append(kwargs["recipients"])
+            if len(calls) == 2:
+                raise RuntimeError("second language group failed")
+            return notify_many(**kwargs)
+
+        with (
+            patch.object(calendar_notifications, "notify_many", notify_then_fail),
+            self.assertRaises(RuntimeError),
+        ):
+            calendar_notifications.notify_in_languages(
+                recipients=[self.camille, self.alex],
+                message=lambda: ("title", ""),
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertFalse(Notification.objects.exists())

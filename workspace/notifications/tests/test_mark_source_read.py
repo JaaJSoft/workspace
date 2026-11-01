@@ -34,7 +34,8 @@ class MarkSourceReadTests(TestCase):
 
     def test_marks_unread_for_user_and_source(self, mock_sse):
         n = self._notif(self.alice, self.conv)
-        marked = mark_source_read(self.alice, self.conv)
+        with self.captureOnCommitCallbacks(execute=True):
+            marked = mark_source_read(self.alice, self.conv)
         self.assertEqual(marked, 1)
         n.refresh_from_db()
         self.assertIsNotNone(n.read_at)
@@ -57,6 +58,7 @@ class MarkSourceReadTests(TestCase):
         self.assertIsNotNone(n.read_at)
 
     def test_nothing_to_mark_skips_sse(self, mock_sse):
-        marked = mark_source_read(self.alice, self.conv)
+        with self.captureOnCommitCallbacks(execute=True):
+            marked = mark_source_read(self.alice, self.conv)
         self.assertEqual(marked, 0)
         mock_sse.assert_not_called()

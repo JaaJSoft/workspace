@@ -164,21 +164,27 @@ def sync_all_external_calendars():
     ).as_dict()
 
 
+# Local hour at which each user hears about their day. The cron runs hourly
+# and picks, on each run, the users whose wall clock is in that hour.
+TODAY_EVENTS_HOUR = 7
+
+
 @shared_task(
     name="calendar.notify_today_events", priority=NORMAL_PRIORITY, ignore_result=True
 )
 def notify_today_events():
-    """Notify each user of their remaining events today.
+    """Notify each user of their remaining events today, in their morning.
 
-    Runs every morning. Keyed per event through ``notify_stream`` (a
-    recurring occurrence keys on its master row), so a rerun merges into the
-    existing unread notification instead of stacking a duplicate. Priority
-    "low": the badge and the bell are the point - a push per calendar entry
-    every morning would be noise. Deleting an event CASCADEs its rows away;
-    displaying it in the calendar or the event detail marks them read.
+    Runs hourly: a run handles the users whose local time is in
+    ``TODAY_EVENTS_HOUR``, so everyone is notified once a day at the same
+    wall-clock hour and about their own local day, whatever their zone.
+    Keyed per event through ``notify_stream`` (a recurring occurrence keys
+    on its master row), so a rerun merges into the existing unread
+    notification instead of stacking a duplicate. Priority "low": the badge
+    and the bell are the point - a push per calendar entry every morning
+    would be noise. Deleting an event CASCADEs its rows away; displaying it
+    in the calendar or the event detail marks them read.
     """
-    from datetime import datetime, time
-
     from django.contrib.auth import get_user_model
     from django.utils import timezone as dj_timezone
     from django.utils import translation
@@ -186,26 +192,27 @@ def notify_today_events():
 
     from workspace.calendar.upcoming import VirtualOccurrence, get_upcoming_for_user
     from workspace.notifications.services.notifications import notify_stream
-    from workspace.users.services.settings import get_user_languages
-
-    now = dj_timezone.now()
-    end_of_today = dj_timezone.make_aware(
-        datetime.combine(dj_timezone.localdate(), time.max),
-        dj_timezone.get_current_timezone(),
+    from workspace.users.services.settings import (
+        get_user_languages,
+        get_user_timezones,
     )
 
+    now = dj_timezone.now()
     users = list(get_user_model().objects.filter(is_active=True).only("pk"))
+    zones = get_user_timezones([user.pk for user in users])
+    users = [u for u in users if now.astimezone(zones[u.pk]).hour == TODAY_EVENTS_HOUR]
     languages = get_user_languages([user.pk for user in users])
     notified = 0
     for user in users:
-        for event in get_upcoming_for_user(user, now, end_of_today):
+        tz = zones[user.pk]
+        for event in get_upcoming_for_user(user, now, tz):
             source = event.master if isinstance(event, VirtualOccurrence) else event
             with translation.override(languages[user.pk]):
                 if event.all_day:
                     body = _("All day today")
                 else:
                     body = _("Today at %(time)s") % {
-                        "time": f"{dj_timezone.localtime(event.start):%H:%M}"
+                        "time": f"{event.start.astimezone(tz):%H:%M}"
                     }
             url = ""
             if not isinstance(event, VirtualOccurrence):

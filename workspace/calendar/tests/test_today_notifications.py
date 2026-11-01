@@ -1,6 +1,7 @@
 """Tests for the today's-events notification cron and its read-on-display path."""
 
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
+from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import TestCase
@@ -14,9 +15,15 @@ from workspace.notifications.models import Notification
 
 from .test_calendar import CalendarTestMixin
 
+# Inside the cron's morning hour for a UTC user (no timezone setting).
+MORNING = datetime(2026, 3, 10, 7, 20, tzinfo=UTC)
+
 
 class TodayEventNotificationMixin(CalendarTestMixin):
     def setUp(self):
+        clock = patch("django.utils.timezone.now", return_value=MORNING)
+        clock.start()
+        self.addCleanup(clock.stop)
         super().setUp()
         # The mixin's event is tomorrow; today's tests create their own.
 

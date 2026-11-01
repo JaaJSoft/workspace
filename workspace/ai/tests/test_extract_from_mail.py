@@ -117,6 +117,51 @@ class ExtractFromMailTests(TestCase):
         self.assertEqual(MailExtraction.objects.count(), 0)
         self.assertEqual(Event.objects.count(), 0)
 
+    def _extract(self, mock_llm, **event):
+        from workspace.ai.tasks.calendar import extract_from_mail_messages
+
+        mock_llm.return_value = _llm_payload(
+            [
+                {
+                    "title": "Train",
+                    "end": None,
+                    "all_day": False,
+                    "location": "",
+                    "description": "",
+                    "confidence": "high",
+                    "reasoning": "ticket",
+                    **event,
+                }
+            ]
+        )
+        extract_from_mail_messages(str(self.ai_task.uuid))
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_offsetless_time_is_the_owners_wall_clock(self, mock_llm):
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        self.addCleanup(cache.clear)
+        local = (dj_tz.now() + timedelta(days=2)).astimezone(ZoneInfo("Europe/Paris"))
+        wall_clock = local.replace(hour=8, minute=0, second=0, microsecond=0)
+
+        self._extract(mock_llm, start=wall_clock.replace(tzinfo=None).isoformat())
+
+        self.assertEqual(Event.objects.get().start, wall_clock)
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_todays_all_day_event_is_not_past(self, mock_llm):
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        self.addCleanup(cache.clear)
+        paris = ZoneInfo("Europe/Paris")
+        today = dj_tz.now().astimezone(paris).date()
+        # Local midnight, already behind "now" for most of the day.
+        midnight = datetime.combine(today, time.min, tzinfo=paris)
+
+        self._extract(mock_llm, start=midnight.isoformat(), all_day=True)
+
+        self.assertEqual(
+            Event.objects.get().start, datetime.combine(today, time.min, tzinfo=UTC)
+        )
+
     @patch("workspace.ai.services.llm.call_llm")
     def test_drops_past_events(self, mock_llm):
         past = (dj_tz.now() - timedelta(days=1)).isoformat()

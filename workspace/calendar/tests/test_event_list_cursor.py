@@ -2,8 +2,8 @@
 
 The endpoint supports two modes:
 - Range mode (existing): ?start=&end=&calendar_ids= → flat JSON array.
-- Cursor mode (new): ?after=&limit=&calendar_ids=&show_declined= →
-    {events: [...], next_after: "<iso>" | null}.
+- Cursor mode (new): ?after=&after_id=&limit=&calendar_ids=&show_declined= →
+    {events: [...], next_after: "<iso>" | null, next_after_id: "<id>" | null}.
 Mode is selected by the presence of the `after` query param.
 """
 
@@ -72,7 +72,9 @@ class CursorModeEmptyTests(CursorModeMixin, APITestCase):
         now = timezone.now()
         resp = self._get_cursor(after=now)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data, {"events": [], "next_after": None})
+        self.assertEqual(
+            resp.data, {"events": [], "next_after": None, "next_after_id": None}
+        )
 
     def test_cursor_mode_selected_when_after_param_present(self):
         """Response shape must be {events, next_after}, not a flat list."""
@@ -594,6 +596,35 @@ class CursorModeStabilityTests(CursorModeMixin, APITestCase):
         # Expected set
         expected = {f"E{i:02d}" for i in range(30)}
         self.assertEqual(unique_titles, expected)
+
+    def test_tied_events_beyond_a_page_are_reached_with_after_id(self):
+        """More events share one start than a page holds: next_after alone
+        would serve the same ones again, next_after_id moves past them."""
+        now = timezone.now().replace(microsecond=0)
+        tied = now + timedelta(days=1)
+        for title in ("A", "B", "C"):
+            self._make_event(title, tied)
+        self._make_event("D", tied + timedelta(hours=1))
+
+        titles, params = [], {"after": self._iso(now), "limit": 1}
+        for _ in range(10):
+            resp = self.client.get(self.url, params)
+            titles += [e["title"] for e in resp.data["events"]]
+            if resp.data["next_after"] is None:
+                break
+            params = {
+                "after": resp.data["next_after"],
+                "after_id": resp.data["next_after_id"],
+                "limit": 1,
+            }
+
+        self.assertEqual(sorted(titles[:3]), ["A", "B", "C"])
+        self.assertEqual(titles[3:], ["D"])
+
+    def test_malformed_after_id_is_rejected(self):
+        now = timezone.now()
+        resp = self._get_cursor(after=now, after_id="not-an-id")
+        self.assertEqual(resp.status_code, 400)
 
     def test_cursor_tie_within_page(self):
         """Three events sharing the same start → all appear in the same page."""

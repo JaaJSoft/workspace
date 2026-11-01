@@ -101,6 +101,7 @@ from ..services.tasks import (
     apply_status_change,
     create_task,
     delete_task,
+    due_move_settles,
     has_field_updates,
     move_tasks,
     reorder_tasks,
@@ -815,9 +816,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 from_ref=old_sprint.pk if old_sprint else None,
                 to_ref=task.sprint_id,
             )
-        if task.due_date != old_due_date and (
-            task.due_date is None or task.due_date > timezone.localdate()
-        ):
+        if task.due_date != old_due_date and due_move_settles(task.due_date):
             settle_task_notifications([task])
 
     def destroy(self, request, *args, **kwargs):

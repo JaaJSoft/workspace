@@ -136,7 +136,11 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
         if extracted.confidence != "high":
             logger.debug("Extract: dropping non-high confidence event")
             continue
-        if extracted.start <= now:
+        # The schema asks for an offset, but not every backend enforces it:
+        # a bare "2026-06-01T08:00" is the mail owner's wall clock.
+        extracted.start = _in_zone(extracted.start, user_tz)
+        extracted.end = extracted.end and _in_zone(extracted.end, user_tz)
+        if _is_past(extracted, now, user_tz):
             logger.debug("Extract: dropping past-dated event")
             continue
 
@@ -177,6 +181,17 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
         created += 1
 
     return {"count": created, **usage}
+
+
+def _in_zone(value: datetime, tz) -> datetime:
+    return value.replace(tzinfo=tz) if value.tzinfo is None else value
+
+
+def _is_past(extracted: ExtractedEvent, now: datetime, tz) -> bool:
+    """An all-day event is past once its day is; a timed one once it started."""
+    if extracted.all_day:
+        return extracted.start.date() < now.astimezone(tz).date()
+    return extracted.start <= now
 
 
 def _all_day_anchor(value: datetime) -> datetime:

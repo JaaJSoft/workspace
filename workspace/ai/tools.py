@@ -1480,7 +1480,7 @@ In a group, schedules another member set are listed too, but only their creator 
             conversation_id=conversation_id,
             bot=bot,
             is_active=True,
-        )
+        ).select_related("created_by")
 
         if not schedules.exists():
             return "No active schedules in this conversation."
@@ -1493,8 +1493,14 @@ In a group, schedules another member set are listed too, but only their creator 
                 timing = f"once at {next_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})"
             else:
                 timing = f"every {s.recurrence_interval} {s.recurrence_unit}"
-                if s.recurrence_time:
-                    timing += f" at {s.recurrence_time.strftime('%H:%M')}"
+                # Hourly schedules ignore their time of day.
+                if s.recurrence_time and s.recurrence_unit != "hours":
+                    # The creator's wall clock, which is what the dispatcher
+                    # keeps it on - not necessarily the reader's.
+                    creator_tz = get_user_timezone(s.created_by)
+                    timing += (
+                        f" at {s.recurrence_time.strftime('%H:%M')} ({creator_tz})"
+                    )
                 if s.recurrence_day is not None:
                     if s.recurrence_unit == "weeks":
                         day_names = [

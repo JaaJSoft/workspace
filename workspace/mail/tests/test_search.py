@@ -1,24 +1,45 @@
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
-from django.utils import timezone as dj_timezone
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.search import _format_date, search_contacts
+from workspace.mail.search import search_contacts, search_mail
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
 
 class FormatDateTimezoneTests(TestCase):
     def tearDown(self):
-        dj_timezone.deactivate()
+        cache.clear()
 
-    def test_old_date_formats_in_active_timezone(self):
-        # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
-        dt = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
-        dj_timezone.activate("Europe/Paris")
-        self.assertEqual(_format_date(dt), "01 Feb")
+    def test_hit_date_is_the_searchers_day_without_an_active_zone(self):
+        # search_everything calls this from a worker, where the active zone
+        # is UTC; 23:30 UTC on Jan 31 is already Feb 1 in Paris.
+        user = User.objects.create_user(username="paris", password="pass123")
+        set_setting(user, "core", "timezone", "Europe/Paris")
+        account = MailAccount.objects.create(
+            owner=user, email="p@example.com", imap_host="i", smtp_host="s"
+        )
+        folder = MailFolder.objects.create(account=account, name="INBOX")
+        MailMessage.objects.create(
+            account=account,
+            folder=folder,
+            imap_uid=1,
+            subject="quarterly invoice",
+            date=datetime(2026, 1, 31, 23, 30, tzinfo=UTC),
+        )
+
+        with patch(
+            "django.utils.timezone.now",
+            return_value=datetime(2026, 6, 1, tzinfo=UTC),
+        ):
+            results = search_mail("invoice", user, 10)
+
+        self.assertEqual(results[0].date, "01 Feb")
 
 
 class MergedFolderSearchTests(TestCase):
@@ -56,8 +77,6 @@ class MergedFolderSearchTests(TestCase):
         )
 
     def test_result_is_tagged_with_the_canonical_name(self):
-        from workspace.mail.search import search_mail
-
         results = search_mail("invoice", self.user, 10)
 
         self.assertEqual(len(results), 1)

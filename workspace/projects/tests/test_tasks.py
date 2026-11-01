@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 from django.core.cache import cache
 from django.test import TestCase
@@ -299,6 +300,28 @@ class SettleOnDueDateChangeTests(NotifyDueTasksMixin, APITestCase):
         self._run_cron()
 
         resp = self._patch_task(task, {"due_date": None})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(self._unread(task, self.member).exists())
+
+    def test_a_date_still_ahead_for_someone_settles_whatever_the_editors_zone(self):
+        # At 20:15 UTC it is already tomorrow in Auckland, where the editor
+        # is, and still today in Los Angeles. Moved to Auckland's today, the
+        # task is due tomorrow for a Los Angeles member: their "overdue"
+        # reminder is moot.
+        task = self._task(due_days=-1)
+        self._run_cron()
+        set_setting(self.admin, "core", "timezone", "Pacific/Auckland")
+        set_setting(self.member, "core", "timezone", "America/Los_Angeles")
+
+        # A session login, so the timezone middleware sees the editor.
+        self.client.force_login(self.admin)
+        url = f"/api/v1/projects/{self.project.uuid}/tasks/{task.uuid}"
+        with _frozen(hour=20):
+            editor_today = timezone.now().astimezone(ZoneInfo("Pacific/Auckland"))
+            resp = self.client.patch(
+                url, {"due_date": editor_today.date().isoformat()}, format="json"
+            )
 
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(self._unread(task, self.member).exists())

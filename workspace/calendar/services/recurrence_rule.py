@@ -27,6 +27,7 @@ from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import rrulestr
+from django.utils import timezone
 from django.utils.dates import WEEKDAYS, WEEKDAYS_ABBR
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -202,16 +203,21 @@ def _until_instant(value, zone):
     return datetime.combine(value, time(23, 59, 59), tzinfo=zone).astimezone(UTC)
 
 
-def _until_datetime(value):
-    """An ``UNTIL`` value as an aware UTC datetime, midnight for a bare DATE.
+def _until_label(value):
+    """An ``UNTIL`` value as the picker and the summary show it.
+
+    A bare DATE (the form a bounded all-day series uses) and a floating
+    DATE-TIME (no zone, the series' own wall clock) name a calendar day,
+    which no reader's timezone may shift: the first stays a ``date``, the
+    second keeps its naive wall-clock time. A UTC DATE-TIME becomes an
+    aware UTC datetime, an instant each reader localizes.
 
     Deliberately not ``_until_instant``, which stretches a DATE to the last
-    second of its day because it is computing a bound. This one feeds the
-    picker and the English summary, where 00:00 is the honest reading.
+    second of its day because it is computing a bound.
     """
-    if isinstance(value, datetime):
-        return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
-    return datetime.combine(value, time(), tzinfo=UTC)
+    if isinstance(value, datetime) and value.tzinfo:
+        return value.astimezone(UTC)
+    return value
 
 
 def _value_instant(value, zone):
@@ -489,7 +495,7 @@ def to_simple(rule_text):
     return {
         "frequency": frequency,
         "interval": int(_single(parts, "INTERVAL", 1)),
-        "until": _until_datetime(until) if until is not None else None,
+        "until": _until_label(until) if until is not None else None,
     }
 
 
@@ -506,16 +512,31 @@ def to_simple_json(rule_text):
     return {
         "frequency": simple["frequency"],
         "interval": simple["interval"],
-        "until": simple["until"].isoformat() if simple["until"] else None,
+        "until": _until_json(simple["until"]),
     }
 
 
-def _until_phrase(until):
-    """ ", until 1 March 2026" for an aware UTC datetime.
+def _until_json(until):
+    """The picker's ``until``: an ISO instant, or a bare day it shows as is."""
+    if until is None:
+        return None
+    if isinstance(until, datetime) and until.tzinfo is None:
+        return until.date().isoformat()
+    return until.isoformat()
 
-    Shared by the FREQ/INTERVAL/UNTIL branch and the BY-qualified branch so
-    the two never drift into two different UNTIL phrasings.
+
+def _until_phrase(until):
+    """ ", until 1 March 2026" for an ``_until_label`` value.
+
+    A UTC DATE-TIME is read on the reader's local day (the active
+    timezone): the picker writes "until 1 March" from New York as 04:59 UTC
+    on 2 March, which a UTC reading would hand back to its author as
+    2 March. A date or a floating DATE-TIME is already a day. Shared by the
+    FREQ/INTERVAL/UNTIL branch and the BY-qualified branch so the two never
+    drift into two different UNTIL phrasings.
     """
+    if isinstance(until, datetime) and until.tzinfo:
+        until = timezone.localtime(until)
     return _(", until %(date)s") % {"date": date_format(until, "j F Y")}
 
 
@@ -538,7 +559,7 @@ def _by_qualified_tail(parts):
     if "COUNT" in parts:
         return _count_phrase(_single(parts, "COUNT"))
     if "UNTIL" in parts:
-        return _until_phrase(_until_datetime(_single(parts, "UNTIL")))
+        return _until_phrase(_until_label(_single(parts, "UNTIL")))
     return ""
 
 

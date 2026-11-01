@@ -15,7 +15,12 @@ User = get_user_model()
 
 def _make_zip(entries):
     """Build an in-memory ZIP. ``entries`` is a list of (name, bytes_or_None) tuples;
-    None means create a directory entry."""
+    None means create a directory entry.
+
+    Entries carry ZipInfo's fixed default timestamp rather than the current
+    time, so the bytes - and what the type detection model makes of them -
+    do not change from one run to the next.
+    """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in entries:
@@ -23,7 +28,9 @@ def _make_zip(entries):
                 zi = zipfile.ZipInfo(name if name.endswith("/") else name + "/")
                 zf.writestr(zi, b"")
             else:
-                zf.writestr(name, data)
+                zi = zipfile.ZipInfo(name)
+                zi.compress_type = zipfile.ZIP_DEFLATED
+                zf.writestr(zi, data)
     buf.seek(0)
     return buf.read()
 

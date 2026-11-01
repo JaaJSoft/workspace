@@ -67,7 +67,13 @@ function settingsWith(extraGlobals) {
       'workspace/common/static/ui/js/tag_chip.js',
       'workspace/projects/ui/static/projects/ui/js/settings.js',
     ],
-    { ...CUSTOM_ELEMENT_STUBS, getCSRFToken: () => 'test-token', ...extraGlobals }
+    {
+      ...CUSTOM_ELEMENT_STUBS,
+      getCSRFToken: () => 'test-token',
+      // localtime.js, loaded by base.html: the day in the configured zone.
+      userTzDayKey: (d) => d.toISOString().slice(0, 10),
+      ...extraGlobals,
+    }
   );
 }
 
@@ -534,6 +540,14 @@ test('suggestSprintDates defaults to today and two weeks', () => {
     start_date: '2026-12-28',
     end_date: '2027-01-11',
   });
+});
+
+test('projectSprints.toggleAdd starts the suggestion on the configured timezone day', () => {
+  // The browser may sit in another zone than the user's setting.
+  const c = settingsWith({ userTzDayKey: () => '2026-03-02' }).projectSprints({ apiBase: '/x' });
+  c.items = [];
+  c.toggleAdd();
+  assert.equal(c.addForm.start_date, '2026-03-02');
 });
 
 test('projectSprints.toggleAdd prefills the add form and clears on reopen', () => {

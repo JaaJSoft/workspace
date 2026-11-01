@@ -8,7 +8,7 @@ finished. That covers three buckets:
 * recurring occurrences matching either of the above
 """
 
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -52,7 +52,7 @@ class GetUpcomingForUserTests(TestCase):
             start=self.now - timedelta(minutes=30),
             end=self.now + timedelta(hours=1),
         )
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "Ongoing meeting")
 
@@ -63,7 +63,7 @@ class GetUpcomingForUserTests(TestCase):
             start=self.now - timedelta(days=1),
             end=self.now + timedelta(days=1),
         )
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(len(result), 1)
 
     # ── upcoming today ─────────────────────────────────────────────
@@ -74,12 +74,12 @@ class GetUpcomingForUserTests(TestCase):
             start=self.now + timedelta(hours=2),
             end=self.now + timedelta(hours=3),
         )
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(len(result), 1)
 
     def test_event_without_end_in_future_included(self):
         self._make("Reminder", start=self.now + timedelta(hours=1), end=None)
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(len(result), 1)
 
     # ── excluded ───────────────────────────────────────────────────
@@ -91,12 +91,12 @@ class GetUpcomingForUserTests(TestCase):
             start=self.now - timedelta(hours=3),
             end=self.now - timedelta(hours=1),
         )
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(result, [])
 
     def test_event_without_end_in_past_excluded(self):
         self._make("Past reminder", start=self.now - timedelta(hours=1), end=None)
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(result, [])
 
     def test_event_starting_tomorrow_excluded(self):
@@ -105,7 +105,7 @@ class GetUpcomingForUserTests(TestCase):
             start=self.now + timedelta(days=1),
             end=self.now + timedelta(days=1, hours=1),
         )
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(result, [])
 
     def test_cancelled_event_excluded(self):
@@ -115,7 +115,7 @@ class GetUpcomingForUserTests(TestCase):
             end=self.now + timedelta(hours=2),
             is_cancelled=True,
         )
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(result, [])
 
     # ── all-day ────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ class GetUpcomingForUserTests(TestCase):
         """All-day event of today (start at 00:00, no end) must show all day."""
         start_of_today = self.now.replace(hour=0, minute=0, second=0, microsecond=0)
         self._make("Holiday", start=start_of_today, end=None, all_day=True)
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "Holiday")
 
@@ -133,7 +133,7 @@ class GetUpcomingForUserTests(TestCase):
             hour=0, minute=0, second=0, microsecond=0
         ) - timedelta(days=1)
         self._make("Yesterday", start=start_of_yesterday, end=None, all_day=True)
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(result, [])
 
     # ── recurring ──────────────────────────────────────────────────
@@ -151,7 +151,7 @@ class GetUpcomingForUserTests(TestCase):
         )
         apply_rule(master, "RRULE:FREQ=DAILY")
         master.save()
-        result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
+        result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "Daily standup")
 
@@ -168,10 +168,6 @@ class AllDayTimezoneWindowTests(TestCase):
         timezone.activate("Europe/Paris")
         # 23:30 UTC on Jan 31 is 00:30 Feb 1 in Paris: the user's day is Feb 1.
         now = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
-        end_of_today = timezone.make_aware(
-            datetime.combine(date(2026, 2, 1), time.max),
-            timezone.get_current_timezone(),
-        )
         Event.objects.create(
             calendar=self.calendar,
             owner=self.user,
@@ -186,7 +182,7 @@ class AllDayTimezoneWindowTests(TestCase):
             start=datetime(2026, 2, 1, 0, 0, tzinfo=UTC),
             all_day=True,
         )
-        titles = [e.title for e in get_upcoming_for_user(self.user, now, end_of_today)]
+        titles = [e.title for e in get_upcoming_for_user(self.user, now)]
         self.assertIn("today all-day", titles)
         self.assertNotIn("yesterday all-day", titles)
 

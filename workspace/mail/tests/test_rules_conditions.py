@@ -153,6 +153,23 @@ class BooleanDateConditionTests(_BaseConditionTests):
             )
         )
 
+    def test_date_without_offset_is_the_owners_midnight(self):
+        from django.core.cache import cache
+
+        from workspace.users.services.settings import set_setting
+
+        self.addCleanup(cache.clear)
+        # 23:30 UTC on Apr 30 is already May 1 in Paris.
+        self.msg.date = datetime(2026, 4, 30, 23, 30, tzinfo=UTC)
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+
+        self.assertTrue(
+            evaluate_node(_node("date", "greater_than", "2026-05-01"), self.msg)
+        )
+        self.assertFalse(
+            evaluate_node(_node("date", "less_than", "2026-05-01"), self.msg)
+        )
+
     def test_date_invalid_value_rejected_at_parse(self):
         # Schema validation rejects invalid ISO 8601 strings at parse
         # time, so a malformed date never reaches the evaluator.

@@ -618,6 +618,59 @@ class MyTests(TestCase):
         cache.clear()
 ```
 
+### Dates and timezones - every user has their own
+
+Users of the same instance live in different timezones (`core` / `timezone`, read with `get_user_timezone(user)`), and the server runs in UTC. A date computed in the wrong zone is off by one day for part of the world and right for the rest, so it passes every test written in UTC and every manual check made from Paris. An audit found some twenty of these across calendar, AI, projects, mail and chat; each rule below is one of them.
+
+**Which zone is active.** `TimezoneMiddleware` activates the user's zone for an HTTP request, so `localdate()`, `localtime()`, `|date`, `__date` and `TruncDate` are the viewer's there - and only there. Celery tasks, AI tools (the bot runs in a worker), SSE generators, push and mail texts run in **UTC**. Anything that reads "today", formats a time or cuts a day outside a request takes the zone explicitly: `get_user_timezone(user)`, or `get_user_timezones(user_ids)` for a fan-out.
+
+```python
+today = timezone.localdate(timezone=get_user_timezone(user))   # ✅ in a task or a tool
+when = event.start.astimezone(tz).strftime("%Y-%m-%d %H:%M")   # ✅ what the model reads
+today = timezone.localdate()                                   # ❌ UTC in a worker
+```
+
+**Rules:**
+
+- **Never `now().date()`, `date.today()`, `datetime.now()`.** The first two are the UTC date, the last a naive server time.
+- **A computation for user B uses B's zone, not the actor's.** A reminder, a notification text, a settle that clears every recipient's rows: the active zone is the actor's. When one decision has to hold for several users at once, judge it where it is safe for all of them - `earliest_local_date()` (`common/datetimes.py`) is the oldest date anyone has today.
+- **A cron "every morning" is hourly and per user.** A single `crontab(hour=7)` is 7:00 UTC: the afternoon in Tokyo, the night before in Los Angeles. Run hourly and pick the users whose local hour it is (`calendar.notify_today_events`, `projects.notify_due_tasks`).
+- **Naive values are anchored in the user's zone, never assumed UTC and never left naive.** A naive and an aware datetime do not even compare (`TypeError`), and the `except` around it turns the bug into silence. Typed or model-written strings go through `parse_local_datetime(value, tz)`; an LLM structured output or a stored rule value that may lack an offset gets `replace(tzinfo=user_tz)`.
+- **Day windows are built in the zone the database truncates in.** `local_date_range(date_from, date_to, tz)` for `[start, end)` bounds; buckets compared to `TruncDate`/`TruncWeek` values are built from `localdate()` in the same zone, with that `tzinfo=` passed to the truncation.
+- **Weekdays and month days of a recurrence are the user's**, with or without a time of day: "every Monday" from Tokyo starts on Sunday in UTC.
+- **A `DateField` is a calendar day, not an instant.** Compare it with the local date of whoever it is for (`due_date > localdate(timezone=tz)`), never with a UTC date.
+- **Text for a model or a user names the zone or is local.** A bare `dt.strftime(...)` or `dt.isoformat()` of a stored value is UTC, which the model presents as local time.
+
+#### All-day events are day labels, not instants
+
+`Event.start`/`end` of an all-day event are stored at **UTC midnight of the day they name** (`calendar/services/timezones.py`). The UTC date *is* the day, for every reader. Treating that value as an instant is the most common bug in the module:
+
+```python
+label = all_day_label(local_today)                    # ✅ the stored value of that day
+day = event.start.astimezone(UTC).date()              # ✅ the day an all-day event is on
+timezone.localtime(event.start).date()                # ❌ the previous day west of UTC
+Event.objects.filter(start__lt=local_end, end__gt=local_start)  # ❌ yesterday's all-day
+                                                      #    event overlaps 00:30 in Paris
+```
+
+- **Reading:** an all-day value is shown as its UTC date - `EventSerializer` sends it date-only (`"2026-08-05"`), the frontend formats date-only values in `'UTC'`, Python reads `.astimezone(UTC).date()`. Never `localtime()`, `|date` or `astimezone(user_tz)` on it.
+- **Comparing with someone's day:** match the label of their local date (`all_day_label(today)`), not the instants of their local day. Timed and all-day rows take two separate conditions; `get_upcoming_for_user`, `get_upcoming_page` and `check_availability` are the worked examples.
+- **Writing:** a date typed or extracted for an all-day event is anchored on **its own date** (`all_day_label(value.date())`), never through `normalize_all_day`, which takes the UTC date - local midnight east of UTC is the previous UTC day.
+- **Ordering:** an all-day event sorts at the start of its day *in the reader's zone*, not at its storage instant, or a west-of-UTC reader sees tomorrow's all-day event among tonight's.
+- A bare-date `UNTIL` (bounded all-day series) stays a `date` end to end; it is not midnight UTC.
+
+#### Frontend
+
+- The user's zone is the configured one (`<html data-timezone>`), not the browser's: a laptop travelling with its owner keeps the setting. `window.getUserTimeZone()`, `window.userTzDayKey(date)` for "today", `window.wallClockToIso(value, tz)` / `window.isoToWallClock(iso, tz)` for every `datetime-local` input. Never `new Date(value)` on an input value, `getHours()`/`getDate()`, `toISOString().slice(0, 10)` for "today", or `toLocaleDateString` without `timeZone`.
+- A date-only string (`'YYYY-MM-DD'`) parses as UTC midnight: format it with `timeZone: 'UTC'`.
+
+#### Tests
+
+A timezone bug only shows outside UTC, so its regression test pins a zone on the side where the naive code breaks: east of UTC (Paris, Tokyo, Auckland) for "yesterday leaks into today", west (New York, Los Angeles) for "today ends early". Freeze the clock (`patch("django.utils.timezone.now", ...)`, set before any DB write) at an hour where the local and UTC dates differ, and set the user's zone with `set_setting(user, "core", "timezone", ...)`. Two gotchas:
+
+- A stored datetime is **UTC when loaded from the database**. A test that hands a model a `tzinfo=TOKYO` value directly exercises a path production never takes - convert with `.astimezone(UTC)` first.
+- `APIClient.force_authenticate` sets the user after the middleware ran, so the request runs in **UTC**, not the user's zone. A test about the request's active zone logs in with `force_login`.
+
 ### Logging - sanitize user-controlled values with `scrub()`
 
 Any value taken from request data, request headers, URL path/query, filenames, DB rows that originated in user input (a stored push-subscription endpoint, a free-text title, an email/domain, etc.), or third-party API responses **must** pass through `scrub()` before reaching a `logger.X(...)` call. This prevents log injection (CWE-117): without it, `\r\n` in user input forges fake log lines and breaks SIEM parsers.

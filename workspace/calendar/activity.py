@@ -1,3 +1,5 @@
+from datetime import UTC
+
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import formats, timezone
@@ -92,13 +94,17 @@ class CalendarActivityProvider(ActivityProvider):
             # Surface when the event actually takes place (evt.start), distinct
             # from the activity timestamp (evt.updated_at, used for time_ago).
             # All-day events show the date only; timed events add the hour.
-            local_start = timezone.localtime(evt.start)
+            # All-day starts are UTC-midnight day labels: read the label
+            # itself, not its local time, which is the previous evening
+            # west of UTC.
             if evt.all_day:
                 meta_icon = "calendar"
-                meta_text = formats.date_format(local_start, "D j M")
+                meta_text = formats.date_format(evt.start.astimezone(UTC), "D j M")
             else:
                 meta_icon = "calendar-clock"
-                meta_text = formats.date_format(local_start, "D j M H:i")
+                meta_text = formats.date_format(
+                    timezone.localtime(evt.start), "D j M H:i"
+                )
 
             events.append(
                 {

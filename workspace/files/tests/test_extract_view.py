@@ -14,10 +14,20 @@ User = get_user_model()
 
 
 def _make_zip(entries):
+    """A zip whose bytes do not depend on when the test runs.
+
+    ``writestr`` with a bare name stamps each entry with the current time,
+    and the type detection (an ML model) files a few of those byte layouts
+    as ``unknown`` rather than ``zip``: the extract endpoint then refuses
+    the archive before reaching the check under test. A fixed timestamp
+    keeps every run on bytes that detect as a zip.
+    """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in entries:
-            zf.writestr(name, data)
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, data)
     buf.seek(0)
     return buf.read()
 

@@ -11,6 +11,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.utils import timezone
 
+# The last zone on Earth to reach a given date (UTC-12; the POSIX name has
+# the sign inverted).
+_LATEST_ZONE = ZoneInfo("Etc/GMT+12")
+
 # "2026-10-04 00:30 (Europe/Paris)": the shape the AI tools print times in,
 # which models copy verbatim into their next tool call.
 _TRAILING_ZONE = re.compile(r"^(?P<dt>.+?)\s*\((?P<zone>[A-Za-z0-9_+\-/]+)\)$")
@@ -55,3 +59,13 @@ def local_date_range(date_from: date, date_to: date, tz=None):
         datetime.combine(date_to + timedelta(days=1), time.min), tz
     )
     return start, end
+
+
+def earliest_local_date():
+    """Today's date where it is earliest: the oldest date anyone has today.
+
+    A date later than this is still in the future for somebody. For work
+    that has to hold for every user at once whatever their zone, where the
+    acting user's own ``localdate()`` would be one opinion among several.
+    """
+    return timezone.now().astimezone(_LATEST_ZONE).date()

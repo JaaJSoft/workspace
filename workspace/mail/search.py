@@ -36,7 +36,10 @@ def fts_messages(qs, query):
 
 
 def search_mail(query, user, limit):
+    from workspace.users.services.settings import get_user_timezone
+
     account_ids = user_account_ids(user)
+    tz = get_user_timezone(user)
 
     base = (
         MailMessage.objects.select_related("folder__alias_of")
@@ -54,7 +57,7 @@ def search_mail(query, user, limit):
             match_type="subject",
             type_icon="mail",
             module_slug="mail",
-            date=_format_date(m.date),
+            date=_format_date(m.date, tz),
             tags=(
                 (SearchTag(canonical_folder(m.folder).display_name, "warning"),)
                 if m.folder
@@ -65,13 +68,18 @@ def search_mail(query, user, limit):
     ]
 
 
-def _format_date(dt):
+def _format_date(dt, tz):
+    """Short date of a hit in *tz*, the searcher's zone.
+
+    Explicit rather than the active timezone: the AI's search_everything
+    runs this from a worker, where the active zone is UTC.
+    """
     if not dt:
         return None
     from django.utils import timezone
 
-    local = timezone.localtime(dt)
-    now = timezone.localtime(timezone.now())
+    local = dt.astimezone(tz)
+    now = timezone.now().astimezone(tz)
     diff = now - local
     if diff.days == 0 and local.date() == now.date():
         return local.strftime("%H:%M")

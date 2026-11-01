@@ -80,6 +80,35 @@ class EngineTests(TestCase):
         self.assertEqual(rule.match_count, 1)
         self.assertIsNotNone(rule.last_matched_at)
 
+    def test_naive_date_rule_costs_no_query_per_message(self):
+        # A date without an offset is read in the account owner's zone; the
+        # owner comes with the messages instead of one query each.
+        from django.core.cache import cache
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.addCleanup(cache.clear)
+        rule = self._rule(
+            conditions={"field": "date", "op": "greater_than", "value": "2000-01-01"}
+        )
+
+        from datetime import UTC, datetime
+
+        sent = datetime(2026, 5, 1, tzinfo=UTC)
+        MailMessage.objects.filter(pk=self.msg.pk).update(date=sent)
+
+        def queries_for(count):
+            for uid in range(MailMessage.objects.count() + 1, count + 1):
+                MailMessage.objects.create(
+                    account=self.account, folder=self.folder, imap_uid=uid, date=sent
+                )
+            cache.clear()
+            with CaptureQueriesContext(connection) as ctx:
+                apply_rule_to_folder(rule, self.folder, dry_run=True)
+            return len(ctx.captured_queries)
+
+        self.assertEqual(queries_for(1), queries_for(4))
+
     def test_disabled_rule_skipped(self):
         self._rule(is_enabled=False)
         summary = run_rules_for_messages(self.account, [str(self.msg.uuid)])

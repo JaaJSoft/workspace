@@ -775,9 +775,10 @@ function projectEpics(config) {
     },
 
     // ISO dates compare as strings; config.today is injected for tests and
-    // defaults to the browser's local date.
+    // defaults to today in the user's configured timezone, the one the
+    // server judges overdue tasks in.
     isOverdue(epic) {
-      const today = config.today || new Date().toLocaleDateString('sv');
+      const today = config.today || window.userTzDayKey(new Date());
       return !epic.closed && !!epic.target_date && epic.target_date < today;
     },
 
@@ -1059,10 +1060,7 @@ function projectSprints(config) {
         this.adding = false;
         return;
       }
-      const now = new Date();
-      const pad2 = (x) => String(x).padStart(2, '0');
-      const today =
-        now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+      const today = window.userTzDayKey(new Date());
       const dates = suggestSprintDates(this.items, today);
       this.addForm = {
         name: nextSprintName(this.items),

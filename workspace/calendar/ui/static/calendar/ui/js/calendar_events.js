@@ -272,6 +272,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       const now = new Date();
       this.agenda.events = [];
       this.agenda.nextAfter = now.toISOString();
+      this.agenda.nextAfterId = null;
       this.agenda.initialLoaded = false;
       this.agenda.seenIds = new Set();
       // Release the loading lock so a still-in-flight stale call can't keep
@@ -296,6 +297,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           calendar_ids: calIds,
           show_declined: this.prefs.showDeclined ? 'true' : 'false',
         });
+        if (this.agenda.nextAfterId) params.set('after_id', this.agenda.nextAfterId);
         const resp = await fetch(`/api/v1/events?${params}`, {
           credentials: 'same-origin',
         });
@@ -310,6 +312,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         fresh.forEach(e => this.agenda.seenIds.add(e.uuid));
         this.agenda.events = [...this.agenda.events, ...fresh];
         this.agenda.nextAfter = data.next_after;
+        this.agenda.nextAfterId = data.next_after_id;
       } finally {
         if (requestId === this.agenda.requestId) {
           this.agenda.loading = false;

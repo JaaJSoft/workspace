@@ -371,3 +371,167 @@ test('closing the panel releases what failed uploads kept for a retry', async ()
 
   assert.deepEqual(released, ['a.mp4']);
 });
+
+const networkError = () => Object.assign(new Error('Network error'), { transient: true });
+
+test('waking the queue starts again what failed on the network, not what was refused', async () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('cut.jpg'), folderId: 'f' }, { file: file('refused.jpg') }]);
+  requests[0].reject(networkError());
+  requests[1].reject(new Error('Storage quota exceeded'));
+  await settle();
+  assert.deepEqual(statuses(queue), ['cut.jpg:failed', 'refused.jpg:failed']);
+
+  queue.wake();
+
+  assert.deepEqual(statuses(queue), ['cut.jpg:uploading', 'refused.jpg:failed']);
+  assert.equal(requests.length, 3);
+  assert.equal(requests[2].folderId, 'f');
+  assert.equal(queue.items[0].error, '');
+});
+
+test('a file started again by a wake that fails on a refusal stays failed', async () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('a.jpg') }]);
+  requests[0].reject(networkError());
+  await settle();
+  queue.wake();
+  requests[1].reject(new Error('Storage quota exceeded'));
+  await settle();
+
+  queue.wake();
+
+  assert.deepEqual(statuses(queue), ['a.jpg:failed']);
+  assert.equal(requests.length, 2);
+});
+
+test('waking the queue wakes the uploads in flight', () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('a.mp4') }, { file: file('b.mp4') }]);
+  let woken = 0;
+  requests[0].wake = () => { woken += 1; };
+
+  queue.wake();
+
+  assert.equal(woken, 1, 'a request without wake() is left alone');
+  assert.equal(requests.length, 2);
+});
+
+test('a paused queue woken up holds what it paused', async () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('a.jpg') }]);
+  queue.pause();
+  requests[0].reject(networkError());
+  await settle();
+
+  queue.wake();
+
+  assert.deepEqual(statuses(queue), ['a.jpg:queued']);
+  assert.equal(requests.length, 1);
+});
+
+test('the queue is transferring while a file goes up or waits for a slot', async () => {
+  const { queue, requests } = makeQueue();
+  assert.equal(queue.transferring, false);
+
+  queue.add([{ file: file('a.jpg') }, { file: file('b.jpg') }, { file: file('c.jpg') }, { file: file('d.jpg') }]);
+  assert.equal(queue.transferring, true);
+
+  queue.pause();
+  for (const request of requests) request.resolve({ status: 201, body: {} });
+  await settle();
+  assert.equal(queue.transferring, false, 'a paused queue sends nothing');
+
+  queue.resume();
+  assert.equal(queue.transferring, true);
+  requests[3].resolve({ status: 201, body: {} });
+  await settle();
+  assert.equal(queue.transferring, false);
+});
+
+function makeWakeLock({ visible = true, refuse = false } = {}) {
+  const page = { visible };
+  const locks = [];
+  const api = {
+    request: (type) => {
+      if (refuse) return Promise.reject(new Error('NotAllowedError'));
+      const listeners = [];
+      const lock = {
+        type,
+        released: false,
+        addEventListener: (name, fn) => { if (name === 'release') listeners.push(fn); },
+        release: async () => { lock.released = true; },
+        // What the browser does when the page is hidden.
+        drop: () => { lock.released = true; listeners.forEach((fn) => fn()); },
+      };
+      locks.push(lock);
+      return Promise.resolve(lock);
+    },
+  };
+  const ctx = loadScripts(
+    ['workspace/common/static/ui/js/filesize.js', 'workspace/files/ui/static/files/ui/js/upload_queue.js'],
+    { document: { addEventListener: () => {} } },
+  );
+  return { ctx, api, page, locks, isVisible: () => page.visible };
+}
+
+test('the screen is kept on while held, and let go after', async () => {
+  const { ctx, api, locks, isVisible } = makeWakeLock();
+  const screen = ctx.createScreenWakeLock(api, isVisible);
+
+  screen.hold(true);
+  screen.hold(true);
+  await settle();
+  assert.equal(locks.length, 1);
+  assert.equal(locks[0].type, 'screen');
+
+  screen.hold(false);
+  assert.equal(locks[0].released, true);
+});
+
+test('a screen lock the browser dropped is taken again once the page is shown', async () => {
+  const { ctx, api, page, locks, isVisible } = makeWakeLock();
+  const screen = ctx.createScreenWakeLock(api, isVisible);
+  screen.hold(true);
+  await settle();
+
+  page.visible = false;
+  locks[0].drop();
+  screen.refresh();
+  await settle();
+  assert.equal(locks.length, 1, 'a hidden page cannot take one');
+
+  page.visible = true;
+  screen.refresh();
+  await settle();
+  assert.equal(locks.length, 2);
+  assert.equal(locks[1].released, false);
+});
+
+test('a screen lock granted after it stopped being wanted is let go', async () => {
+  const { ctx, api, locks, isVisible } = makeWakeLock();
+  const screen = ctx.createScreenWakeLock(api, isVisible);
+
+  screen.hold(true);
+  screen.hold(false);
+  await settle();
+
+  assert.equal(locks.length, 1);
+  assert.equal(locks[0].released, true);
+});
+
+test('nothing is taken when not wanted, refused, or unsupported', async () => {
+  const visible = () => true;
+  const { ctx, api, locks } = makeWakeLock();
+  ctx.createScreenWakeLock(api, visible).refresh();
+  await settle();
+  assert.equal(locks.length, 0);
+
+  const refused = makeWakeLock({ refuse: true });
+  const screen = refused.ctx.createScreenWakeLock(refused.api, visible);
+  screen.hold(true);
+  await settle();
+  screen.hold(false);
+
+  ctx.createScreenWakeLock(undefined, visible).hold(true);
+});

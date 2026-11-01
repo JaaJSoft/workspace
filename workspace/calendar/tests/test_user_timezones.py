@@ -145,9 +145,11 @@ class AgendaCursorAllDayTests(_CalendarUser):
             page, cursor = self._page(after, tz, limit=limit, after_id=after_id)
             seen += [e["title"] for e in page]
             if cursor is None:
-                return seen
+                break
             after, after_id = cursor
-        self.fail(f"the cursor never reached the end: {seen}")
+        else:
+            self.fail(f"the cursor never reached the end: {seen}")
+        return seen
 
     def test_todays_all_day_event_stays_listed_after_utc_midnight(self):
         self._all_day("Holiday", label(2026, 2, 1))

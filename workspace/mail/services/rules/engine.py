@@ -102,7 +102,7 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
     messages = list(
         MailMessage.objects.filter(
             account=account, uuid__in=uuids, deleted_at__isnull=True
-        ).select_related("account", "folder")
+        ).select_related("account__owner", "folder")
     )
 
     summary: dict = {}
@@ -191,7 +191,7 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
     # nulls_last keeps the "most recent" cap deterministic across backends
     # (Postgres sorts NULLs first on DESC, SQLite sorts them last by default).
     messages = list(
-        base.select_related("account", "folder").order_by(
+        base.select_related("account__owner", "folder").order_by(
             F("date").desc(nulls_last=True)
         )[:limit]
     )

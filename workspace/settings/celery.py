@@ -172,10 +172,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "projects.notify_due_tasks",
         "schedule": crontab(minute=15),  # Every hour at :15
     },
-    # Merges into any still-unread notification (notify_stream keys on the
-    # event row), so replaying it is safe.
+    # Hourly, not daily: each run notifies the users whose local morning it
+    # is. Merges into any still-unread notification (notify_stream keys on
+    # the event row), so replaying it is safe.
     "notify-today-events": {
         "task": "calendar.notify_today_events",
-        "schedule": crontab(hour=7, minute=15),  # Every day at 7:15 AM
+        "schedule": crontab(minute=15),  # Every hour at :15
     },
 }

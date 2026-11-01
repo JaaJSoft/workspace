@@ -1,5 +1,3 @@
-from datetime import datetime, time
-
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.urls import reverse
@@ -32,12 +30,7 @@ MY_TASKS_LIMIT = 5
 
 def _get_upcoming_events(user):
     """Return today's upcoming events for the user, including recurring."""
-    now = timezone.now()
-    end_of_today = timezone.make_aware(
-        datetime.combine(timezone.localdate(), time.max),
-        timezone.get_current_timezone(),
-    )
-    return get_upcoming_for_user(user, now, end_of_today)
+    return get_upcoming_for_user(user, timezone.now())
 
 
 def _get_activity_context(user, source=None, offset=0, search=None):

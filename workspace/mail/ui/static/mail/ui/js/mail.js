@@ -441,6 +441,16 @@ function mailApp() {
       return d.toLocaleDateString([], opts);
     },
 
+    // An all-day event's start is a bare 'YYYY-MM-DD' day label: it names a
+    // calendar day, so it is shown in UTC (where it parses) with no time.
+    formatEventDate(event) {
+      if (!event?.start) return '';
+      if (!event.all_day) return this.formatFullDate(event.start);
+      return new Date(event.start).toLocaleDateString(window.getUserLocale(), {
+        timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+    },
+
     formatFullDate(dateStr) {
       if (!dateStr) return '';
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;

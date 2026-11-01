@@ -1,3 +1,5 @@
+from datetime import UTC
+
 import mistune
 from rest_framework import serializers
 
@@ -246,6 +248,17 @@ class _ExtractionTargetEventSerializer(serializers.Serializer):
     end = serializers.DateTimeField(read_only=True, allow_null=True)
     all_day = serializers.BooleanField(read_only=True)
     location = serializers.CharField(read_only=True)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.all_day:
+            # Same contract as calendar's EventSerializer: an all-day value
+            # is a UTC-midnight day label, sent date-only so no reader's
+            # zone can move it to the previous day.
+            data["start"] = instance.start.astimezone(UTC).date().isoformat()
+            if instance.end:
+                data["end"] = instance.end.astimezone(UTC).date().isoformat()
+        return data
 
 
 class MailExtractionSerializer(serializers.ModelSerializer):

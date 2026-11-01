@@ -25,7 +25,7 @@ UTC = ZoneInfo("UTC")
 
 _CACHE_TTL = 300  # 5 minutes
 
-# Users per query in get_user_languages. SQLite, the default database in
+# Users per query in get_user_languages / get_user_timezones. SQLite, the default database in
 # production too, refuses a query with more than 32766 parameters, and a fan-out
 # to every active user would otherwise put them all in one IN list.
 _LANGUAGE_BATCH_SIZE = 5000
@@ -35,15 +35,40 @@ def _module_tag(user_id: int, module: str) -> str:
     return f"usetting_mod:{user_id}:{module}"
 
 
-def get_user_timezone(user) -> ZoneInfo:
-    """Return the user's configured timezone, or UTC if unset/invalid."""
-    tz_name = get_setting(user, "core", "timezone")
+def _zone_or_utc(tz_name) -> ZoneInfo:
     if not tz_name:
         return UTC
     try:
         return ZoneInfo(tz_name)
-    except ZoneInfoNotFoundError, KeyError, ValueError:
+    except ZoneInfoNotFoundError, KeyError, ValueError, TypeError:
         return UTC
+
+
+def get_user_timezone(user) -> ZoneInfo:
+    """Return the user's configured timezone, or UTC if unset/invalid."""
+    return _zone_or_utc(get_setting(user, "core", "timezone"))
+
+
+def _stored_core_values(user_ids, key) -> dict:
+    stored = {}
+    for batch in batched(user_ids, _LANGUAGE_BATCH_SIZE, strict=False):
+        stored.update(
+            UserSetting.objects.filter(
+                user_id__in=batch, module="core", key=key
+            ).values_list("user_id", "value")
+        )
+    return stored
+
+
+def get_user_timezones(user_ids) -> dict[int, ZoneInfo]:
+    """Timezone of each of *user_ids*, in one query per batch.
+
+    The fan-out counterpart of :func:`get_user_timezone`, for work that runs
+    for every user at once (a cron judging each user's local day), with the
+    same cache trade-off as :func:`get_user_languages`.
+    """
+    stored = _stored_core_values(user_ids, "timezone")
+    return {user_id: _zone_or_utc(stored.get(user_id)) for user_id in user_ids}
 
 
 def get_user_language(user) -> str:
@@ -67,13 +92,7 @@ def get_user_languages(user_ids) -> dict[int, str]:
     write by its TTL, and the rows are what the cache is built from.
     """
     offered = dict(settings.LANGUAGES)
-    stored = {}
-    for batch in batched(user_ids, _LANGUAGE_BATCH_SIZE, strict=False):
-        stored.update(
-            UserSetting.objects.filter(
-                user_id__in=batch, module="core", key="language"
-            ).values_list("user_id", "value")
-        )
+    stored = _stored_core_values(user_ids, "language")
     return {
         user_id: stored[user_id]
         if stored.get(user_id) in offered

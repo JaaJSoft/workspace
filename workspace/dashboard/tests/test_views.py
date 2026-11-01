@@ -640,43 +640,30 @@ class GetUpcomingEventsTests(TestCase):
             password="pass123",
         )
 
-    @patch("workspace.dashboard.views.get_upcoming_for_user")
-    def test_calls_upstream_with_correct_range(self, mock_upcoming):
-        mock_upcoming.return_value = []
-
-        result = _get_upcoming_events(self.user)
-
-        self.assertEqual(result, [])
-        mock_upcoming.assert_called_once()
-        args = mock_upcoming.call_args
-        self.assertEqual(args[0][0], self.user)
-        now_arg = args[0][1]
-        end_arg = args[0][2]
-        # End of day should be after now
-        self.assertGreaterEqual(end_arg, now_arg)
-        # Same date
-        self.assertEqual(now_arg.date(), end_arg.date())
-
-    @patch("workspace.dashboard.views.get_upcoming_for_user")
-    def test_window_ends_at_user_local_end_of_day(self, mock_upcoming):
+    def test_today_is_the_users_local_day(self):
         from datetime import datetime
-        from zoneinfo import ZoneInfo
 
         from django.utils import timezone as dj_timezone
 
-        mock_upcoming.return_value = []
-        # 23:30 UTC on Jan 31 is already Feb 1 in Paris: the window must
-        # cover the user's Feb 1, not stop at UTC Jan 31 23:59.
+        from workspace.calendar.models import Calendar, Event
+
+        calendar = Calendar.objects.create(name="Work", owner=self.user)
+        for day in (31, 1):
+            Event.objects.create(
+                calendar=calendar,
+                owner=self.user,
+                title=f"all-day {day}",
+                start=datetime(2026, 2 if day == 1 else 1, day, tzinfo=UTC),
+                all_day=True,
+            )
+        # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
         fixed_now = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
         dj_timezone.activate("Europe/Paris")
         self.addCleanup(dj_timezone.deactivate)
         with patch("django.utils.timezone.now", return_value=fixed_now):
-            _get_upcoming_events(self.user)
+            titles = [e.title for e in _get_upcoming_events(self.user)]
 
-        end_arg = mock_upcoming.call_args[0][2]
-        local_end = end_arg.astimezone(ZoneInfo("Europe/Paris"))
-        self.assertEqual(local_end.date().isoformat(), "2026-02-01")
-        self.assertGreaterEqual(end_arg, fixed_now)
+        self.assertEqual(titles, ["all-day 1"])
 
 
 # ── index view ──────────────────────────────────────────────────

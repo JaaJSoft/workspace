@@ -3,11 +3,13 @@
 import json
 import logging
 import uuid as uuid_mod
+from datetime import UTC
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from workspace.ai.tool_registry import ToolError, ToolProvider, tool
+from workspace.calendar.services.timezones import all_day_label
 from workspace.common.datetimes import parse_local_datetime
 from workspace.common.logging import scrub
 
@@ -212,6 +214,8 @@ def _resolve_occurrence(event, scope, raw, user_tz):
             f'could not parse original_start "{raw}". '
             "Use ISO format like 2026-07-05T14:00"
         )
+    if event.all_day:
+        occurrence = _typed_day_label(occurrence)
     # An instant that is not on the series grid would materialize an
     # exception nothing ever matches: the write succeeds and changes nothing
     # the user can see.
@@ -272,6 +276,55 @@ def _local_clock(value, tz):
     return event_instant(value).astimezone(tz).strftime("%Y-%m-%d %H:%M")
 
 
+def _event_time_text(value, all_day, tz):
+    """A stored start/end as the model should read it.
+
+    Timed values are wall-clock times in the user's zone. All-day values are
+    the bare day label: shifting their UTC midnight into the zone would name
+    the previous day west of UTC.
+    """
+    if value is None:
+        return ""
+    if all_day:
+        return value.astimezone(UTC).date().isoformat()
+    return value.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+
+def _typed_day_label(value):
+    """The all-day label for a date the model typed, on the day it wrote.
+
+    ``parse_local_datetime("2026-07-05", tz)`` is local midnight, which
+    ``normalize_all_day`` would move to the UTC date - 4 July east of UTC.
+    """
+    return all_day_label(value.date()) if value is not None else None
+
+
+def _all_day_overlap_q(start, end, tz):
+    """Q for all-day rows covering a local day the ``[start, end)`` range touches.
+
+    All-day rows are day labels, not instants: an all-day event on 21 March
+    does not overlap 22 March 08:00 in Tokyo even though its UTC span
+    reaches 23:00 UTC on the 21st, and it does cover 21 March 20:00 in New
+    York although that is already the 22nd in UTC.
+    """
+    from django.db.models import Q
+
+    first, after_last = _all_day_window(start, end, tz)
+    return Q(all_day=True, start__lt=after_last) & (
+        Q(start__gte=first) | Q(end__gt=first)
+    )
+
+
+def _all_day_window(start, end, tz):
+    """UTC-midnight labels bounding the local days ``[start, end)`` touches."""
+    from datetime import timedelta
+
+    last_moment = end - timedelta(microseconds=1)
+    first = all_day_label(start.astimezone(tz).date())
+    after_last = all_day_label(last_moment.astimezone(tz).date()) + timedelta(days=1)
+    return first, after_last
+
+
 class CalendarToolProvider(ToolProvider):
     @tool(
         badge_icon="🔍",
@@ -292,6 +345,9 @@ scheduling polls."""
 
         from workspace.calendar.models import Poll
         from workspace.calendar.services.event_search import search_events_qs
+        from workspace.users.services.settings import get_user_timezone
+
+        user_tz = get_user_timezone(user)
 
         # Cap the combined event+poll payload at the documented 20 matches,
         # giving events priority and letting polls fill the remaining budget.
@@ -309,8 +365,8 @@ scheduling polls."""
                 "uuid": str(e.uuid),
                 "title": e.title,
                 "calendar": e.calendar.name if e.calendar else "",
-                "start": e.start.strftime("%Y-%m-%d %H:%M") if e.start else "",
-                "end": e.end.strftime("%Y-%m-%d %H:%M") if e.end else "",
+                "start": _event_time_text(e.start, e.all_day, user_tz),
+                "end": _event_time_text(e.end, e.all_day, user_tz),
                 "all_day": e.all_day,
             }
             if e.location:
@@ -324,7 +380,9 @@ scheduling polls."""
                     "uuid": str(p.uuid),
                     "title": p.title,
                     "status": p.status,
-                    "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "created_at": p.created_at.astimezone(user_tz).strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
                 }
             )
 
@@ -342,6 +400,8 @@ scheduling polls."""
     def check_availability(self, args, user, bot, conversation_id, context):
         """Check whether the user is available (free) during a given time range. \
 Call this when the user asks if they are free, available, or have any events during a specific period."""
+        from datetime import datetime, time
+
         from django.db.models import Q
 
         from workspace.calendar.models import Event
@@ -376,10 +436,11 @@ Call this when the user asks if they are free, available, or have any events dur
                 }
             )
 
-        # Non-recurring events overlapping the range
-        time_overlap = Q(start__lt=end) & (
+        # Non-recurring events overlapping the range: timed rows by instant,
+        # all-day rows by the local days the range covers.
+        time_overlap = Q(all_day=False, start__lt=end) & (
             Q(end__gt=start) | Q(end__isnull=True, start__gte=start)
-        )
+        ) | _all_day_overlap_q(start, end, user_tz)
         non_recurring_qs = (
             Event.objects.filter(
                 calendar_id__in=cal_ids,
@@ -392,16 +453,26 @@ Call this when the user asks if they are free, available, or have any events dur
             .order_by("start")
         )
 
+        def conflict(title, ev_start, ev_end, all_day, calendar):
+            return {
+                "title": title,
+                "start": _event_time_text(ev_start, all_day, user_tz),
+                "end": _event_time_text(ev_end, all_day, user_tz) or None,
+                "all_day": all_day,
+                "calendar": calendar.name,
+                # Sort key only, dropped before returning.
+                "_at": all_day_window_start(ev_start) if all_day else ev_start,
+            }
+
+        def all_day_window_start(label):
+            return datetime.combine(
+                label.astimezone(UTC).date(), time.min, tzinfo=user_tz
+            )
+
         conflicts = []
         for ev in non_recurring_qs:
             conflicts.append(
-                {
-                    "title": ev.title,
-                    "start": ev.start.isoformat(),
-                    "end": ev.end.isoformat() if ev.end else None,
-                    "all_day": ev.all_day,
-                    "calendar": ev.calendar.name,
-                }
+                conflict(ev.title, ev.start, ev.end, ev.all_day, ev.calendar)
             )
 
         # Recurring masters — expand occurrences in range
@@ -435,33 +506,31 @@ Call this when the user asks if they are free, available, or have any events dur
                 .select_related("calendar")
             ):
                 conflicts.append(
-                    {
-                        "title": exc.title,
-                        "start": exc.start.isoformat(),
-                        "end": exc.end.isoformat() if exc.end else None,
-                        "all_day": exc.all_day,
-                        "calendar": exc.calendar.name,
-                    }
+                    conflict(exc.title, exc.start, exc.end, exc.all_day, exc.calendar)
                 )
 
+        all_day_window = _all_day_window(start, end, user_tz)
         for master in masters_qs:
-            for occ_start in occurrences_in_range(master, start, end):
+            window = all_day_window if master.all_day else (start, end)
+            for occ_start in occurrences_in_range(master, *window):
                 key = (str(master.uuid), occ_start.isoformat())
                 if key in exc_cancelled:
                     continue
                 duration = (master.end - master.start) if master.end else None
                 occ_end = (occ_start + duration) if duration else None
                 conflicts.append(
-                    {
-                        "title": master.title,
-                        "start": occ_start.isoformat(),
-                        "end": occ_end.isoformat() if occ_end else None,
-                        "all_day": master.all_day,
-                        "calendar": master.calendar.name,
-                    }
+                    conflict(
+                        master.title,
+                        occ_start,
+                        occ_end,
+                        master.all_day,
+                        master.calendar,
+                    )
                 )
 
-        conflicts.sort(key=lambda e: e["start"])
+        conflicts.sort(key=lambda e: e["_at"])
+        for entry in conflicts:
+            del entry["_at"]
 
         if not conflicts:
             start_str = start.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
@@ -528,12 +597,13 @@ that update_event and cancel_event take."""
         days_ahead = max(1, args.days_ahead)
         cutoff = now + timedelta(days=days_ahead)
 
-        events, _ = get_upcoming_page(user, after=now, limit=limit)
+        # Tools run in a worker where the active zone is UTC, not the user's:
+        # the zone decides which all-day events still count as today.
+        user_tz = get_user_timezone(user)
+        events, _ = get_upcoming_page(user, after=now, limit=limit, tz=user_tz)
 
         owned, subscribed = visible_calendars(user)
         cal_names = {str(c.uuid): c.name for c in list(owned) + list(subscribed)}
-
-        user_tz = get_user_timezone(user)
         results = []
         for e in events:
             if event_instant(e["start"]) > cutoff:
@@ -608,7 +678,9 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
             if end <= start:
                 raise ToolError("end must be after start")
 
-        if not args.all_day and start <= dj_tz.now():
+        if args.all_day:
+            start, end = _typed_day_label(start), _typed_day_label(end)
+        elif start <= dj_tz.now():
             raise ToolError("start must be in the future")
 
         owned, _ = visible_calendars(user)
@@ -646,10 +718,10 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
             scrub(calendar.name),
             scrub(user.username),
         )
-        start_local = start.astimezone(user_tz)
+        when = _event_time_text(start, args.all_day, user_tz)
         return (
             f'Created event "{title}" in calendar "{calendar.name}" '
-            f"on {start_local.strftime('%Y-%m-%d %H:%M')} (id: {event.uuid})."
+            f"on {when} (id: {event.uuid})."
         )
 
     @tool(
@@ -721,6 +793,11 @@ whole series before choosing. Only the owner can edit, and events from an extern
         if not data:
             raise ToolError("nothing to change — pass at least one field to update.")
 
+        if event.all_day:
+            for field in ("start", "end"):
+                if data.get(field) is not None:
+                    data[field] = _typed_day_label(data[field])
+
         # The new end must beat the new start, and either side may be the one
         # already stored. A scoped edit writes a row anchored on
         # original_start, not on the master's own start, and rebuilds its end
@@ -759,10 +836,10 @@ whole series before choosing. Only the owner can edit, and events from an extern
             scrub(user.username),
             args.scope,
         )
-        start_local = written.start.astimezone(user_tz)
+        when = _event_time_text(written.start, written.all_day, user_tz)
         return (
             f'Updated "{written.title}"{_describe_scope(event, args.scope)} — '
-            f"now on {start_local.strftime('%Y-%m-%d %H:%M')} (id: {written.uuid})."
+            f"now on {when} (id: {written.uuid})."
         )
 
     @tool(
@@ -785,8 +862,9 @@ be cancelled at all."""
 
         event = _writable_event(user, args.event_id)
 
+        user_tz = get_user_timezone(user)
         original_start = _resolve_occurrence(
-            event, args.scope, args.original_start, get_user_timezone(user)
+            event, args.scope, args.original_start, user_tz
         )
 
         if not args.confirm:
@@ -809,10 +887,12 @@ be cancelled at all."""
             scrub(user.username),
             args.scope,
         )
+        if original_start:
+            day = _event_time_text(original_start, event.all_day, user_tz)[:10]
         if args.scope == "this" and original_start:
-            return f'Cancelled the occurrence of "{title}" on {original_start.date()}.'
+            return f'Cancelled the occurrence of "{title}" on {day}.'
         if args.scope == "future" and original_start:
-            return f'Ended the "{title}" series from {original_start.date()} onwards.'
+            return f'Ended the "{title}" series from {day} onwards.'
         return f'Cancelled "{title}". Any guests have been notified.'
 
     @tool(

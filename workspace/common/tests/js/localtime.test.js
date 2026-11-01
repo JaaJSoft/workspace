@@ -148,6 +148,12 @@ test('wallClockToIso resolves the DST spring-forward gap forward', () => {
   assert.equal(ctx.wallClockToIso('2026-03-29T02:30', 'Europe/Paris'), '2026-03-29T01:30:00.000Z');
 });
 
+test('wallClockToIso resolves the spring-forward gap forward west of UTC too', () => {
+  const ctx = load('America/New_York');
+  // 02:30 does not exist on 2026-03-08 in New York; it is 03:30 EDT.
+  assert.equal(ctx.wallClockToIso('2026-03-08T02:30', 'America/New_York'), '2026-03-08T07:30:00.000Z');
+});
+
 test('wallClockToIso date-only means midnight in the zone', () => {
   const ctx = load('Europe/Paris');
   assert.equal(ctx.wallClockToIso('2026-08-05', 'Europe/Paris'), '2026-08-04T22:00:00.000Z');

@@ -1093,6 +1093,23 @@ class ScheduleToolTests(TestCase):
 
         self.assertIn("at 09:00 (Asia/Tokyo)", result)
 
+    def test_list_schedules_gives_no_time_of_day_to_an_hourly_schedule(self):
+        ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt="Check the build",
+            kind=ScheduledMessage.Kind.RECURRING,
+            recurrence_unit="hours",
+            recurrence_interval=2,
+            recurrence_time=time(9, 0),
+            next_run_at=timezone.now() + timedelta(hours=2),
+        )
+
+        result = self._call("list_schedules", {})
+
+        self.assertNotIn("at 09:00", result)
+
 
 class ScheduledRunContextTests(TestCase):
     def setUp(self):

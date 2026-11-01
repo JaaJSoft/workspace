@@ -150,6 +150,13 @@ class EventListView(CacheControlMixin, APIView):
                 description="Cursor mode: return events starting at or after this datetime",
             ),
             OpenApiParameter(
+                name="after_id",
+                type=str,
+                required=False,
+                description="Cursor mode: next_after_id of the previous page, "
+                "sent with its next_after",
+            ),
+            OpenApiParameter(
                 name="limit",
                 type=int,
                 required=False,
@@ -202,15 +209,33 @@ class EventListView(CacheControlMixin, APIView):
             "yes",
         )
 
-        events, next_after = get_upcoming_page(
+        after_id = request.query_params.get("after_id") or None
+        if (
+            after_id is not None
+            and parse_uuid_or_none(after_id.split(":", 1)[0]) is None
+        ):
+            return Response(
+                {"detail": 'Invalid "after_id": expected an event id.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        events, cursor = get_upcoming_page(
             user=request.user,
             after=after,
             limit=limit,
             calendar_ids=calendar_ids,
             show_declined=show_declined,
+            after_id=after_id,
         )
         _mark_displayed_events_read(request.user, [e.get("uuid") for e in events])
-        return Response({"events": events, "next_after": next_after})
+        return Response(
+            {
+                "events": events,
+                # Pass both back as after / after_id for the next page.
+                "next_after": cursor.after.isoformat() if cursor else None,
+                "next_after_id": cursor.event_id if cursor else None,
+            }
+        )
 
     def _get_range(self, request):
         start = request.query_params.get("start")

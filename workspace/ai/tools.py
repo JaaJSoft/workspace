@@ -1474,7 +1474,8 @@ Call this when the user wants to see what messages are scheduled or pending."""
                 timing = f"once at {next_local.strftime('%Y-%m-%d %H:%M')} ({user_tz})"
             else:
                 timing = f"every {s.recurrence_interval} {s.recurrence_unit}"
-                if s.recurrence_time:
+                # Hourly schedules ignore their time of day.
+                if s.recurrence_time and s.recurrence_unit != "hours":
                     # The creator's wall clock, which is what the dispatcher
                     # keeps it on - not necessarily the reader's.
                     creator_tz = get_user_timezone(s.created_by)

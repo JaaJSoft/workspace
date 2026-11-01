@@ -104,6 +104,7 @@ window.calendarApp = function calendarApp() {
     agenda: {
       events: [],
       nextAfter: null,
+      nextAfterId: null,
       loading: false,
       initialLoaded: false,
       seenIds: new Set(),

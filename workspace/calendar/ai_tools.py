@@ -3,7 +3,7 @@
 import json
 import logging
 import uuid as uuid_mod
-from datetime import UTC
+from datetime import UTC, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -197,7 +197,6 @@ def _resolve_occurrence(event, scope, raw, user_tz):
     ``None`` means the scope does not need one (a whole-series
     edit, or a non-recurring event where scope is moot).
     """
-    from datetime import timedelta
 
     from workspace.calendar.recurrence import occurrences_in_range
 
@@ -317,7 +316,6 @@ def _all_day_overlap_q(start, end, tz):
 
 def _all_day_window(start, end, tz):
     """UTC-midnight labels bounding the local days ``[start, end)`` touches."""
-    from datetime import timedelta
 
     last_moment = end - timedelta(microseconds=1)
     first = all_day_label(start.astimezone(tz).date())
@@ -483,16 +481,16 @@ Call this when the user asks if they are free, available, or have any events dur
             is_cancelled=False,
         ).select_related("calendar")
 
-        # Build exception index for cancelled occurrences
+        # Occurrences an exception replaces: cancelled ones, and moved ones,
+        # which the loop below reports at their new time instead.
         master_ids = [m.uuid for m in masters_qs]
-        exc_cancelled = set()
+        exc_replaced = set()
         if master_ids:
             for exc in Event.objects.filter(
                 recurrence_parent_id__in=master_ids,
-                is_cancelled=True,
                 original_start__isnull=False,
             ):
-                exc_cancelled.add(
+                exc_replaced.add(
                     (str(exc.recurrence_parent_id), exc.original_start.isoformat())
                 )
 
@@ -514,7 +512,7 @@ Call this when the user asks if they are free, available, or have any events dur
             window = all_day_window if master.all_day else (start, end)
             for occ_start in occurrences_in_range(master, *window):
                 key = (str(master.uuid), occ_start.isoformat())
-                if key in exc_cancelled:
+                if key in exc_replaced:
                     continue
                 duration = (master.end - master.start) if master.end else None
                 occ_end = (occ_start + duration) if duration else None
@@ -584,7 +582,6 @@ about their next events. For a keyword lookup use search_events; to check \
 whether a specific time range is free use check_availability. Each entry \
 carries the event_id (and, for a recurring occurrence, its original_start) \
 that update_event and cancel_event take."""
-        from datetime import timedelta
 
         from django.utils import timezone
 
@@ -680,6 +677,9 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
 
         if args.all_day:
             start, end = _typed_day_label(start), _typed_day_label(end)
+            if end is not None and end <= start:
+                # Two times on one day ("09:00 to 17:00"): that day.
+                end = start + timedelta(days=1)
         elif start <= dj_tz.now():
             raise ToolError("start must be in the future")
 
@@ -953,7 +953,6 @@ than book one — "when can we all meet", "propose a few slots to the team". Use
 check_availability first to pick candidate slots the user is actually free for. \
 Once the votes are in, get_poll_results reports the winner and the user turns it \
 into an event."""
-        from datetime import timedelta
 
         from django.contrib.auth import get_user_model
         from django.db import transaction

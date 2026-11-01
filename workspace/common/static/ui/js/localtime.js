@@ -97,11 +97,17 @@
     const [y, mo, d] = datePart.split('-').map(Number);
     const [h = 0, mi = 0, s = 0] = (timePart || '00:00').split(':').map(Number);
     const guess = Date.UTC(y, mo - 1, d, h, mi, s);
-    let ts = guess - _tzOffsetMs(tz, new Date(guess));
     // Second pass fixes instants near DST transitions where the first
-    // offset was read on the wrong side of the switch; nonexistent times
-    // resolve forward, ambiguous ones to the later (post-switch) instant.
-    ts = guess - _tzOffsetMs(tz, new Date(ts));
+    // offset was read on the wrong side of the switch.
+    const first = _tzOffsetMs(tz, new Date(guess));
+    const second = _tzOffsetMs(tz, new Date(guess - first));
+    let ts = guess - second;
+    if (_tzOffsetMs(tz, new Date(ts)) !== second) {
+      // No instant has this wall clock: it falls in a spring-forward gap.
+      // Read it with the offset from before the switch, the smaller one,
+      // which lands it after the gap (02:30 -> 03:30) on either side of UTC.
+      ts = guess - Math.min(first, second);
+    }
     return new Date(ts).toISOString();
   }
 

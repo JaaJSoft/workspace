@@ -4,6 +4,7 @@ Used by the dashboard event list and the today's-events notification cron.
 """
 
 from datetime import UTC, date, datetime, time, timedelta
+from typing import NamedTuple
 
 from dateutil.parser import parse as _parse_dt
 from django.db.models import Q
@@ -155,22 +156,61 @@ def _agenda_key(item, tz):
     return event_instant(item["start"])
 
 
-def get_upcoming_page(
-    user, after, limit, calendar_ids=None, show_declined=False, tz=None
-):
-    """Cursor-paginated agenda: events at or after *after*, in agenda order.
+class AgendaCursor(NamedTuple):
+    """Where the next agenda page starts: the first event it holds.
 
-    A timed event qualifies when it starts at or after *after*; an all-day
-    event when its day is on or after the local day of *after* in *tz* (the
-    active timezone by default), so today's all-day events stay listed all
-    day long. Returns ``(events_dicts, next_after)`` where ``next_after`` is
-    the ISO instant of the next page's first event, or None at the end.
+    ``after`` is that event's ``_agenda_key``, ``event_id`` its serialized
+    uuid. Both are needed: every all-day event of a day shares one key, so
+    a cursor without the id would serve the same rows again once more of
+    them than a page holds fall on one day.
+    """
+
+    after: datetime
+    event_id: str
+
+
+def _tie_q(event_id):
+    """Rows sharing the cursor's key that sort at or after *event_id*.
+
+    Rows tie-break on their uuid string; a recurring occurrence's id is
+    ``<master uuid>:<start>``, which sorts just past its master's uuid.
+    """
+    head, separator, _ = event_id.partition(":")
+    return Q(uuid__gt=head) if separator else Q(uuid__gte=head)
+
+
+def get_upcoming_page(
+    user, after, limit, calendar_ids=None, show_declined=False, tz=None, after_id=None
+):
+    """Cursor-paginated agenda, in agenda order (see ``_agenda_key``).
+
+    The first page (no *after_id*) holds the timed events starting at or
+    after *after* and the all-day events of the local day of *after* in
+    *tz* (the active timezone by default) onwards, so today's all-day
+    events stay listed all day long. A later page resumes at the cursor the
+    previous one returned: *after* and *after_id* from its ``AgendaCursor``.
+
+    Returns ``(events_dicts, next_cursor)``, ``next_cursor`` None at the end.
     """
     from workspace.calendar.serializers import EventSerializer
 
     if tz is None:
         tz = timezone.get_current_timezone()
-    first_label = all_day_label(after.astimezone(tz).date())
+    after_day = after.astimezone(tz).date()
+    first_label = all_day_label(after_day)
+    resume = None if after_id is None else (after, after_id)
+
+    if resume is None:
+        timed_q = Q(start__gte=after)
+        all_day_q = Q(start__gte=first_label)
+    else:
+        tie_q = _tie_q(after_id)
+        timed_q = Q(start__gt=after) | (Q(start=after) & tie_q)
+        all_day_q = Q(start__gt=first_label)
+        if datetime.combine(after_day, time.min, tzinfo=tz) == after:
+            # The cursor sits at the start of that day: its all-day events
+            # share the cursor's key.
+            all_day_q |= Q(start=first_label) & tie_q
 
     user_q = visible_events_q(user)
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
@@ -196,10 +236,10 @@ def get_upcoming_page(
     # by storage instant, and its LIMIT could cut an all-day row that the
     # merge below places before a timed one it kept.
     one_off = [
-        *one_off_qs.filter(all_day=False, start__gte=after).order_by("start")[
+        *one_off_qs.filter(timed_q, all_day=False).order_by("start", "uuid")[
             : limit + 1
         ],
-        *one_off_qs.filter(all_day=True, start__gte=first_label).order_by("start")[
+        *one_off_qs.filter(all_day_q, all_day=True).order_by("start", "uuid")[
             : limit + 1
         ],
     ]
@@ -264,7 +304,10 @@ def get_upcoming_page(
             key = (str(master.uuid), occ_start.isoformat())
             if key in exception_keys:
                 continue  # exception or cancellation handled separately
-            recurring_data.append(make_virtual_occurrence(master, occ_start))
+            occurrence = make_virtual_occurrence(master, occ_start)
+            if resume and (_agenda_key(occurrence, tz), occurrence["uuid"]) < resume:
+                continue  # served by an earlier page
+            recurring_data.append(occurrence)
             collected += 1
 
     # ---- Merge, sort, slice ----
@@ -274,9 +317,7 @@ def get_upcoming_page(
     merged.sort(key=lambda e: (_agenda_key(e, tz), e["uuid"]))
 
     page = merged[:limit]
-    # Re-emitted as an aware instant: a bare date would be re-read in the
-    # server timezone on the next page and could skip the event itself.
-    next_after = (
-        _agenda_key(merged[limit], tz).isoformat() if len(merged) > limit else None
-    )
-    return page, next_after
+    if len(merged) <= limit:
+        return page, None
+    first_next = merged[limit]
+    return page, AgendaCursor(_agenda_key(first_next, tz), first_next["uuid"])

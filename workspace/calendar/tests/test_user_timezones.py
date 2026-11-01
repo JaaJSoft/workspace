@@ -133,8 +133,21 @@ class UpcomingTodayAllDayTests(_CalendarUser):
 class AgendaCursorAllDayTests(_CalendarUser):
     """``GET /api/v1/events?after=now`` - the agenda view."""
 
-    def _page(self, after, tz, limit=20):
-        return get_upcoming_page(self.user, after=after, limit=limit, tz=tz)
+    def _page(self, after, tz, limit=20, after_id=None):
+        return get_upcoming_page(
+            self.user, after=after, limit=limit, tz=tz, after_id=after_id
+        )
+
+    def _walk(self, after, tz, limit):
+        """Every title the agenda serves, page after page, as served."""
+        seen, after_id = [], None
+        for _ in range(20):
+            page, cursor = self._page(after, tz, limit=limit, after_id=after_id)
+            seen += [e["title"] for e in page]
+            if cursor is None:
+                return seen
+            after, after_id = cursor
+        self.fail(f"the cursor never reached the end: {seen}")
 
     def test_todays_all_day_event_stays_listed_after_utc_midnight(self):
         self._all_day("Holiday", label(2026, 2, 1))
@@ -158,16 +171,23 @@ class AgendaCursorAllDayTests(_CalendarUser):
             self._timed(f"evening {day}", datetime(2026, 2, day, 21, 0, tzinfo=tz))
         after = datetime(2026, 2, 1, 12, 0, tzinfo=tz)
 
-        seen = []
-        while after is not None:
-            page, next_after = self._page(after, tz, limit=3)
-            seen += [e["title"] for e in page if e["title"] not in seen]
-            after = datetime.fromisoformat(next_after) if next_after else None
-
         self.assertEqual(
-            seen,
+            self._walk(after, tz, limit=3),
             [f"{kind} {day}" for day in range(2, 6) for kind in ("all-day", "evening")],
         )
+
+    def test_cursor_gets_past_a_day_with_more_all_day_events_than_a_page(self):
+        # Every all-day event of a day shares one position in the agenda,
+        # so only the event id can tell the cursor which of them it served.
+        tz = PARIS
+        for name in ("A", "B", "C"):
+            self._all_day(f"all-day {name}", label(2026, 2, 2))
+        self._timed("dinner", datetime(2026, 2, 2, 20, 0, tzinfo=tz))
+
+        walked = self._walk(datetime(2026, 2, 1, 12, 0, tzinfo=tz), tz, limit=1)
+
+        self.assertEqual(sorted(walked[:3]), ["all-day A", "all-day B", "all-day C"])
+        self.assertEqual(walked[3:], ["dinner"])
 
 
 @patch("django.utils.timezone.now")
@@ -245,6 +265,26 @@ class RecurrenceUntilTimezoneTests(SimpleTestCase):
         )
 
 
+class FloatingUntilTests(SimpleTestCase):
+    """A floating UNTIL (no zone) is the series' own wall clock: a day."""
+
+    def tearDown(self):
+        timezone.deactivate()
+
+    def test_summary_keeps_its_day_for_every_reader(self):
+        timezone.activate(NEW_YORK)
+
+        self.assertEqual(
+            rr.describe("RRULE:FREQ=DAILY;UNTIL=20260301T000000"),
+            "Every day, until 1 March 2026",
+        )
+
+    def test_picker_receives_its_day(self):
+        simple = rr.to_simple_json("RRULE:FREQ=DAILY;UNTIL=20260301T000000")
+
+        self.assertEqual(simple["until"], "2026-03-01")
+
+
 class MailExtractionAllDayTests(_CalendarUser):
     def test_all_day_target_is_sent_as_its_day_label(self):
         from workspace.mail.models import MailExtraction
@@ -300,6 +340,59 @@ class CalendarAiToolTimezoneTests(_CalendarUser):
             (event.start, event.end), (label(2030, 7, 10), label(2030, 7, 11))
         )
         self.assertIn("now on 2030-07-10 ", result)
+
+    def test_create_all_day_event_with_two_times_on_one_day_lasts_that_day(self):
+        self._zone("Europe/Paris")
+
+        self._call(
+            "create_event",
+            CreateEventParams(
+                title="Offsite",
+                start="2030-07-05T09:00",
+                end="2030-07-05T17:00",
+                all_day=True,
+            ),
+        )
+
+        event = Event.objects.get(title="Offsite")
+        self.assertEqual(
+            (event.start, event.end), (label(2030, 7, 5), label(2030, 7, 6))
+        )
+
+    def test_availability_reports_a_moved_occurrence_only_at_its_new_time(self):
+        self._zone("Europe/Paris")
+        start = datetime(2030, 7, 1, 9, 0, tzinfo=PARIS)
+        master = Event(
+            calendar=self.calendar,
+            owner=self.user,
+            title="Weekly sync",
+            start=start,
+            end=start + timedelta(hours=1),
+            timezone="Europe/Paris",
+        )
+        apply_rule(master, "RRULE:FREQ=WEEKLY")
+        master.save()
+        moved_from = start + timedelta(weeks=1)
+        Event.objects.create(
+            calendar=self.calendar,
+            owner=self.user,
+            title="Weekly sync",
+            start=moved_from + timedelta(hours=3),
+            end=moved_from + timedelta(hours=4),
+            recurrence_parent=master,
+            original_start=moved_from,
+        )
+
+        result = json.loads(
+            self._call(
+                "check_availability",
+                CheckAvailabilityParams(
+                    start="2030-07-08T09:00", end="2030-07-08T10:00"
+                ),
+            )
+        )
+
+        self.assertTrue(result["available"])
 
     def test_cancel_occurrence_reply_names_the_local_day(self):
         self._zone("Europe/Paris")

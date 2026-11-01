@@ -75,6 +75,21 @@ class BuildEventExtractionMessagesTests(TestCase):
         self.assertIn("Europe/Paris", content)
         self.assertIn("interpret it in Europe/Paris", content)
 
+    def test_each_message_date_is_in_the_user_timezone(self):
+        # 23:30 UTC on May 14 is already May 15 in Paris: "demain" in that
+        # message is May 16, which a UTC header would make May 15.
+        from zoneinfo import ZoneInfo
+
+        late = self._msg("Hi", "Rendez-vous demain")
+        late.date = datetime(2026, 5, 14, 23, 30, tzinfo=UTC)
+        messages = build_event_extraction_messages(
+            [late, self._msg("Re: Hi", "ok")], user_tz=ZoneInfo("Europe/Paris")
+        )
+
+        self.assertIn(
+            "[Message 1 | 2026-05-15T01:30:00+02:00 |", messages[1]["content"]
+        )
+
     @patch("workspace.ai.prompts.calendar.timezone.now")
     def test_relative_time_anchors_on_most_recent_message_date(self, mock_now):
         """Regression: an old email saying 'demain a 8h' must be anchored

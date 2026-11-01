@@ -103,6 +103,51 @@ class ScheduledMessageModelTests(TestCase):
         self.assertEqual(schedule.next_run_at.minute, 0)
         self.assertTrue(schedule.is_active)
 
+    def _weekdayless_schedule(self, unit, last_run_at, **kwargs):
+        # As loaded from the database: aware UTC, whatever zone it was set in.
+        last_run_at = last_run_at.astimezone(ZoneInfo("UTC"))
+        return ScheduledMessage(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt="Weekly digest",
+            kind=ScheduledMessage.Kind.RECURRING,
+            recurrence_unit=unit,
+            recurrence_interval=1,
+            next_run_at=last_run_at,
+            last_run_at=last_run_at,
+            **kwargs,
+        )
+
+    def test_weekly_day_without_time_is_the_users_weekday(self):
+        # Monday 08:00 in Tokyo is Sunday 23:00 UTC: read in UTC, "Monday"
+        # would land on a Tokyo Tuesday from then on.
+        tokyo = ZoneInfo("Asia/Tokyo")
+        monday = timezone.datetime(2026, 3, 9, 8, 0, tzinfo=tokyo)
+        schedule = self._weekdayless_schedule(
+            ScheduledMessage.RecurrenceUnit.WEEKS, monday, recurrence_day=0
+        )
+
+        schedule.compute_next_run(user_tz=tokyo)
+
+        self.assertEqual(schedule.next_run_at, monday + timedelta(weeks=1))
+
+    def test_monthly_day_without_time_is_the_users_day(self):
+        # The 1st at 08:00 in Tokyo is the last day of the previous month
+        # in UTC.
+        tokyo = ZoneInfo("Asia/Tokyo")
+        first = timezone.datetime(2026, 3, 1, 8, 0, tzinfo=tokyo)
+        schedule = self._weekdayless_schedule(
+            ScheduledMessage.RecurrenceUnit.MONTHS, first, recurrence_day=1
+        )
+
+        schedule.compute_next_run(user_tz=tokyo)
+
+        self.assertEqual(
+            schedule.next_run_at,
+            timezone.datetime(2026, 4, 1, 8, 0, tzinfo=tokyo),
+        )
+
     def test_str(self):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -1024,6 +1069,29 @@ class ScheduleToolTests(TestCase):
         self.assertIn("Active schedules (2)", result)
         self.assertIn("First schedule", result)
         self.assertIn("Second schedule", result)
+
+    def test_list_schedules_labels_the_creators_wall_clock(self):
+        from django.core.cache import cache
+
+        from workspace.users.services.settings import set_setting
+
+        self.addCleanup(cache.clear)
+        set_setting(self.user, "core", "timezone", "Asia/Tokyo")
+        ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt="Morning digest",
+            kind=ScheduledMessage.Kind.RECURRING,
+            recurrence_unit="days",
+            recurrence_interval=1,
+            recurrence_time=time(9, 0),
+            next_run_at=timezone.now() + timedelta(days=1),
+        )
+
+        result = self._call("list_schedules", {})
+
+        self.assertIn("at 09:00 (Asia/Tokyo)", result)
 
 
 class ScheduledRunContextTests(TestCase):

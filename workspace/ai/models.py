@@ -474,103 +474,38 @@ class ScheduledMessage(models.Model):
         now = timezone.now()
         base = self.last_run_at or self.next_run_at or now
 
-        has_local_time = self.recurrence_time is not None and user_tz is not None
-
         if self.recurrence_unit == self.RecurrenceUnit.HOURS:
-            delta = timezone.timedelta(hours=self.recurrence_interval)
-            self.next_run_at = base + delta
+            self.next_run_at = base + timezone.timedelta(hours=self.recurrence_interval)
+            return
 
-        elif self.recurrence_unit == self.RecurrenceUnit.DAYS:
-            if has_local_time:
-                base_local = base.astimezone(user_tz)
-                candidate = base_local + timezone.timedelta(
-                    days=self.recurrence_interval
-                )
-                candidate = candidate.replace(
-                    hour=self.recurrence_time.hour,
-                    minute=self.recurrence_time.minute,
-                    second=0,
-                    microsecond=0,
-                )
-                self.next_run_at = candidate.astimezone(utc)
-            else:
-                delta = timezone.timedelta(days=self.recurrence_interval)
-                candidate = base + delta
-                if self.recurrence_time is not None:
-                    candidate = candidate.replace(
-                        hour=self.recurrence_time.hour,
-                        minute=self.recurrence_time.minute,
-                        second=self.recurrence_time.second,
-                        microsecond=0,
-                    )
-                self.next_run_at = candidate
-
+        # Days, weekdays and month days are the user's, with or without a
+        # time of day: "every Monday" from Tokyo is a Tokyo Monday, which
+        # starts on Sunday in UTC.
+        base_local = base.astimezone(user_tz or utc)
+        if self.recurrence_unit == self.RecurrenceUnit.DAYS:
+            candidate = base_local + timezone.timedelta(days=self.recurrence_interval)
         elif self.recurrence_unit == self.RecurrenceUnit.WEEKS:
-            if has_local_time:
-                base_local = base.astimezone(user_tz)
-                candidate = base_local + timezone.timedelta(
-                    weeks=self.recurrence_interval
-                )
-                if self.recurrence_day is not None:
-                    current_weekday = candidate.weekday()
-                    day_offset = (self.recurrence_day - current_weekday) % 7
-                    candidate = candidate + timezone.timedelta(days=day_offset)
-                candidate = candidate.replace(
-                    hour=self.recurrence_time.hour,
-                    minute=self.recurrence_time.minute,
-                    second=0,
-                    microsecond=0,
-                )
-                self.next_run_at = candidate.astimezone(utc)
-            else:
-                delta = timezone.timedelta(weeks=self.recurrence_interval)
-                candidate = base + delta
-                if self.recurrence_day is not None:
-                    current_weekday = candidate.weekday()
-                    day_offset = (self.recurrence_day - current_weekday) % 7
-                    candidate = candidate + timezone.timedelta(days=day_offset)
-                if self.recurrence_time is not None:
-                    candidate = candidate.replace(
-                        hour=self.recurrence_time.hour,
-                        minute=self.recurrence_time.minute,
-                        second=self.recurrence_time.second,
-                        microsecond=0,
-                    )
-                self.next_run_at = candidate
-
+            candidate = base_local + timezone.timedelta(weeks=self.recurrence_interval)
+            if self.recurrence_day is not None:
+                day_offset = (self.recurrence_day - candidate.weekday()) % 7
+                candidate = candidate + timezone.timedelta(days=day_offset)
         elif self.recurrence_unit == self.RecurrenceUnit.MONTHS:
             import calendar
 
-            if has_local_time:
-                base_local = base.astimezone(user_tz)
-                year = base_local.year
-                month = base_local.month + self.recurrence_interval
-            else:
-                year = base.year
-                month = base.month + self.recurrence_interval
-            year += (month - 1) // 12
+            month = base_local.month + self.recurrence_interval
+            year = base_local.year + (month - 1) // 12
             month = (month - 1) % 12 + 1
-            day = (base.astimezone(user_tz) if has_local_time else base).day
-            if self.recurrence_day is not None:
-                day = self.recurrence_day
-            max_day = calendar.monthrange(year, month)[1]
-            day = min(day, max_day)
-            if has_local_time:
-                candidate = base_local.replace(year=year, month=month, day=day)
-                candidate = candidate.replace(
-                    hour=self.recurrence_time.hour,
-                    minute=self.recurrence_time.minute,
-                    second=0,
-                    microsecond=0,
-                )
-                self.next_run_at = candidate.astimezone(utc)
-            else:
-                candidate = base.replace(year=year, month=month, day=day)
-                if self.recurrence_time is not None:
-                    candidate = candidate.replace(
-                        hour=self.recurrence_time.hour,
-                        minute=self.recurrence_time.minute,
-                        second=self.recurrence_time.second,
-                        microsecond=0,
-                    )
-                self.next_run_at = candidate
+            day = base_local.day if self.recurrence_day is None else self.recurrence_day
+            day = min(day, calendar.monthrange(year, month)[1])
+            candidate = base_local.replace(year=year, month=month, day=day)
+        else:
+            return
+
+        if self.recurrence_time is not None:
+            candidate = candidate.replace(
+                hour=self.recurrence_time.hour,
+                minute=self.recurrence_time.minute,
+                second=0 if user_tz is not None else self.recurrence_time.second,
+                microsecond=0,
+            )
+        self.next_run_at = candidate.astimezone(utc)

@@ -60,18 +60,20 @@ def build_event_extraction_messages(
     "rdv demain a 8h" but processed in May would be interpreted as
     May+1 instead of March+1.
     """
+    tz = user_tz or _UTC
     rendered = []
     for i, m in enumerate(thread_messages, 1):
         body = (m.body_text or m.body_html or "").strip()
         if len(body) > MAX_BODY_CHARS:
             body = body[:MAX_BODY_CHARS] + "... [truncated]"
         sender = m.from_email or "(unknown)"
-        date_str = m.date.isoformat() if m.date else ""
+        # In the recipient's zone: "demain" in a mail sent at 23:30 Paris
+        # time means the day after the Paris date, not the UTC one.
+        date_str = m.date.astimezone(tz).isoformat() if m.date else ""
         rendered.append(
             f"[Message {i} | {date_str} | From: {sender} | Subject: {m.subject}]\n{body}"
         )
     thread_block = "\n\n---\n\n".join(rendered)
-    tz = user_tz or _UTC
     anchor_dt = (
         next((m.date for m in reversed(thread_messages) if m.date), None)
         or timezone.now()

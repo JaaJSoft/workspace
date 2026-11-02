@@ -70,6 +70,8 @@ function makePage({ folder = 'folder-a', nameCollision = 'keep_both', existing =
       CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
       XMLHttpRequest: FakeXhr,
       FormData: FakeFormData,
+      setTimeout: () => 0,
+      clearTimeout: () => {},
     },
   );
   alpineInit.forEach((fn) => fn());

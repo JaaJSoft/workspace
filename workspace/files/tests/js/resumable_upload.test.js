@@ -107,9 +107,13 @@ function makeEnv(answer, { document = {}, timers = 'immediate' } = {}) {
       fn();
     }
   };
-  // Lets the upload run until a request left pending is in flight.
+  // Lets the upload run until a request left pending is in flight, failing
+  // the test rather than hanging when none ever is.
   const inFlight = async () => {
-    while (!pending.length) await new Promise((resolve) => setImmediate(resolve));
+    for (let turn = 0; !pending.length; turn++) {
+      if (turn > 1000) throw new Error('no request left in flight');
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     return pending.shift();
   };
   return { ctx, sent, fetched, waits, held, fireTimers, advance, watchdogs, inFlight };
@@ -484,6 +488,18 @@ test('a small file whose bytes stop going up fails as a lost connection', async 
   assert.equal(watchdogs.size, 0);
 });
 
+test('a small file that never sends a byte fails as a lost connection', async () => {
+  const { ctx, advance, watchdogs, inFlight } = makeEnv(() => 'pending');
+
+  const upload = ctx.sendFileUpload({ name: 'note.txt', size: 10 * MB }, {}, () => {});
+  const xhr = await inFlight();
+  advance(ctx.UPLOAD_STALL_TIMEOUT);
+
+  await assert.rejects(upload.promise, (error) => error.transient === true && error.message === 'Network error');
+  assert.equal(xhr.aborted, true);
+  assert.equal(watchdogs.size, 0);
+});
+
 test('a small file all sent waits for the server as long as it takes', async () => {
   const { ctx, advance, inFlight } = makeEnv(() => 'pending');
 
@@ -508,7 +524,8 @@ test('a cancelled upload leaves no watchdog behind', async () => {
   assert.equal(watchdogs.size, 0);
 });
 
-test('a slow mobile link is never mistaken for a dead one', () => {
+test('the stall timeout spares a slow link and still catches a dead one', () => {
   const { ctx } = makeEnv(() => 'pending');
   assert.ok(ctx.UPLOAD_STALL_TIMEOUT >= 30000);
+  assert.ok(ctx.UPLOAD_STALL_TIMEOUT <= 60000, 'nor left hanging much longer than a minute');
 });

@@ -333,7 +333,7 @@ wheels = [
 
 [[package]]
 name = "caldav"
-version = "3.6.0"
+version = "3.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "calendaring-config" },
@@ -346,9 +346,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "recurring-ical-events" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/ee/e2d82d0ddc9c5b0efad8dbb3c9f27bd392fd9f2261c93772e7a7bfaa30fa/caldav-3.6.0.tar.gz", hash = "sha256:f74deecf1b7f1a56ffc20a739f28d2c02e7ddbc40bb59bf9f65a3af58e8aef1d", size = 765150, upload-time = "2026-10-22T19:58:10.881Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0c/04/d083c70cbdf6a201fd4a9c6184b3470bda55f14b13979ade80a5909fa623/caldav-3.7.0.tar.gz", hash = "sha256:e121600e858e62c3631b9460167a099685f78f4ffda98b1a96e460c7b252fb45", size = 804207, upload-time = "2026-10-29T21:32:39.587Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/09/2a433c98919635dbd793ad74fe7921c2595624a269b2948a62348aa6342a/caldav-3.6.0-py3-none-any.whl", hash = "sha256:a16b433229c66ec4241acc67ca3f3774b8d93f1834c9bb5062d768dedbec6494", size = 259213, upload-time = "2026-10-22T19:58:09.173Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/55/152109585ebb2779e864db486a7d750bcd9af5c23fec82b0af0f778a9b46/caldav-3.7.0-py3-none-any.whl", hash = "sha256:41d052f535e3f3e733b84cc455b2f62145aa70097eb7e345697fbe451b5e3db7", size = 292739, upload-time = "2026-10-29T21:32:37.237Z" },
 ]
 
 [[package]]
@@ -3689,7 +3689,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
-    { name = "caldav", specifier = ">=3.6.0" },
+    { name = "caldav", specifier = ">=3.7.0" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.17.0" },
     { name = "django-debug-toolbar", specifier = "==8.0.0" },
     { name = "djlint", specifier = ">=1.47.1" },

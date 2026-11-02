@@ -17,7 +17,9 @@
  *
  * Large files go up in chunks through an upload session (sendFileUpload
  * picks), which retries a failed chunk on its own and resumes from what the
- * server holds; the queue only sees a request that takes longer.
+ * server holds; the queue only sees a request that takes longer. A request
+ * whose bytes stop going up without it failing is cut after a minute and
+ * counts as a lost connection.
  *
  * A phone suspends a page it no longer shows and drops its connections, so
  * the queue holds a screen wake lock while it transfers (the screen locking
@@ -40,6 +42,13 @@ const RESUMABLE_THRESHOLD = 50 * 1024 * 1024;
 // Waits between attempts at one step of a chunked upload: about two minutes
 // in all, which outlasts a network switch or a laptop waking up.
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000, 30000, 30000];
+
+// A connection that dies without the browser noticing (a network switch, a
+// NAT mapping dropped by a carrier) or a proxy that stops reading fails no
+// request: TCP keeps it open for as long as the far end acknowledges, which
+// can be forever. Progress events come every ~50 ms while bytes move, so a
+// request this long without one is dead, not slow.
+window.UPLOAD_STALL_TIMEOUT = 60 * 1000;
 
 window.createUploadQueue = function createUploadQueue({
   send, discard, notify, confirm, release = () => {},
@@ -438,10 +447,11 @@ window.sendFileUpload = function sendFileUpload(file, options, onProgress, onRet
     if (onConflict) form.append('on_conflict', onConflict);
 
     // The request total counts the multipart envelope; scale to the file.
-    xhr.upload.onprogress = (e) => {
+    const stopWatching = watchUploadProgress(xhr, () => reject(networkError()), (e) => {
       if (e.lengthComputable && e.total) onProgress(Math.floor((e.loaded / e.total) * file.size));
-    };
+    });
     xhr.onload = () => {
+      stopWatching();
       let body = {};
       try {
         body = JSON.parse(xhr.responseText);
@@ -454,8 +464,14 @@ window.sendFileUpload = function sendFileUpload(file, options, onProgress, onRet
       error.nameCollision = xhr.status === 400 && Array.isArray(body.name);
       reject(error);
     };
-    xhr.onerror = () => reject(networkError());
-    xhr.onabort = () => reject(new Error(gettext('Cancelled')));
+    xhr.onerror = () => {
+      stopWatching();
+      reject(networkError());
+    };
+    xhr.onabort = () => {
+      stopWatching();
+      reject(new Error(gettext('Cancelled')));
+    };
 
     xhr.open('POST', '/api/v1/files');
     xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
@@ -474,6 +490,38 @@ const uploadSessionUrl = (uuid) => `/api/v1/files/uploads/${uuid}`;
 // A failure the connection is to blame for, not the server's refusal.
 function networkError() {
   return Object.assign(new Error(gettext('Network error')), { transient: true });
+}
+
+// Aborts *xhr* through *onStall()* - which settles the request first, so the
+// abort reads as a lost connection rather than a cancel - once its body has
+// gone UPLOAD_STALL_TIMEOUT without progress. It stands down once every byte
+// is sent: the server then stores, hashes and may scan the file, a wait with
+// no progress events that can rightly be long. Set up before send(); the
+// returned function stops it when the request ends.
+function watchUploadProgress(xhr, onStall, onProgress = () => {}) {
+  let timer = null;
+  let ended = false;
+  const stop = () => {
+    ended = true;
+    clearTimeout(timer);
+  };
+  const arm = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      stop();
+      onStall();
+      xhr.abort();
+    }, window.UPLOAD_STALL_TIMEOUT);
+  };
+  xhr.upload.onprogress = (e) => {
+    onProgress(e);
+    if (ended) return;
+    if (e.lengthComputable && e.loaded >= e.total) stop();
+    else arm();
+  };
+  xhr.upload.onload = stop;
+  arm();
+  return stop;
 }
 
 // A page the browser no longer shows, or that knows it is offline, cannot
@@ -532,16 +580,26 @@ window.sendResumableUpload = function sendResumableUpload(
     xhr.open(method, url);
     xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
     for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
-    if (onSent) xhr.upload.onprogress = (e) => onSent(e.loaded);
+    // Without a body there is nothing to send: the whole wait is the server's.
+    const stopWatching = body === null
+      ? () => {}
+      : watchUploadProgress(xhr, () => reject(networkError()), (e) => onSent && onSent(e.loaded));
     xhr.onload = () => {
+      stopWatching();
       let data = {};
       try {
         data = JSON.parse(xhr.responseText);
       } catch (_) {}
       resolve({ status: xhr.status, body: data });
     };
-    xhr.onerror = () => reject(networkError());
-    xhr.onabort = () => reject(cancelled());
+    xhr.onerror = () => {
+      stopWatching();
+      reject(networkError());
+    };
+    xhr.onabort = () => {
+      stopWatching();
+      reject(cancelled());
+    };
     xhr.send(body);
   });
 

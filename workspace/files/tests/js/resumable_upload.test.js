@@ -21,14 +21,21 @@ const bigFile = (size = 100 * MB, name = 'video.mp4') => ({
 });
 
 // *answer(xhr)* returns [status, body] or 'network' for a lost connection;
-// answers arrive on the next macrotask, as a network's would.
+// answers arrive on the next macrotask, as a network's would. 'pending'
+// leaves the request in flight, for the test to drive with *sending()* and
+// *respond()*.
 // *timers: 'held'* keeps each wait pending until *fireTimers()* runs it,
 // so a test can act while an upload waits.
+// The stall watchdog runs on a clock of its own, moved by *advance(ms)*.
 function makeEnv(answer, { document = {}, timers = 'immediate' } = {}) {
   const sent = [];
   const held = [];
   const fetched = [];
   const waits = [];
+  const pending = [];
+  const watchdogs = new Map();
+  let clock = 0;
+  let lastTimer = 0;
 
   class FakeXhr {
     constructor() {
@@ -43,16 +50,23 @@ function makeEnv(answer, { document = {}, timers = 'immediate' } = {}) {
       setImmediate(() => {
         if (this.aborted) return;
         const reply = answer(this, sent);
-        if (reply === 'pending') return;
-        if (reply === 'network') {
-          this.onerror();
-          return;
-        }
-        const [status, data] = reply;
-        this.status = status;
-        this.responseText = JSON.stringify(data);
-        this.onload();
+        if (reply === 'pending') pending.push(this);
+        else this.respond(reply);
       });
+    }
+    respond(reply) {
+      if (reply === 'network') {
+        this.onerror();
+        return;
+      }
+      const [status, data] = reply;
+      this.status = status;
+      this.responseText = JSON.stringify(data);
+      this.onload();
+    }
+    // Bytes of the body handed to the network so far.
+    sending(loaded, total = this.body.end - this.body.start) {
+      this.upload.onprogress({ lengthComputable: true, loaded, total });
     }
     abort() { this.aborted = true; if (this.onabort) this.onabort(); }
   }
@@ -70,18 +84,37 @@ function makeEnv(answer, { document = {}, timers = 'immediate' } = {}) {
       getCSRFToken: () => 'token',
       fetch: async (url, options) => { fetched.push(`${options.method} ${url}`); return { ok: true }; },
       setTimeout: (fn, ms) => {
+        lastTimer += 1;
+        if (ms === ctx.UPLOAD_STALL_TIMEOUT) {
+          watchdogs.set(lastTimer, { at: clock + ms, fn });
+          return lastTimer;
+        }
         waits.push(ms);
         if (timers === 'held') held.push(fn);
         else setImmediate(fn);
-        return waits.length;
+        return lastTimer;
       },
-      clearTimeout: () => {},
+      clearTimeout: (id) => watchdogs.delete(id),
       crypto: { randomUUID: () => SESSION },
     },
   );
   const fireTimers = () => held.splice(0).forEach((fn) => fn());
-  return { ctx, sent, fetched, waits, held, fireTimers };
+  const advance = (ms) => {
+    clock += ms;
+    for (const [id, { at, fn }] of [...watchdogs]) {
+      if (at > clock || !watchdogs.has(id)) continue;
+      watchdogs.delete(id);
+      fn();
+    }
+  };
+  // Lets the upload run until a request left pending is in flight.
+  const inFlight = async () => {
+    while (!pending.length) await new Promise((resolve) => setImmediate(resolve));
+    return pending.shift();
+  };
+  return { ctx, sent, fetched, waits, held, fireTimers, advance, watchdogs, inFlight };
 }
+
 
 // A server holding one session with *chunk* bytes per chunk, storing
 // whatever each PATCH sends unless *override* answers first.
@@ -334,4 +367,148 @@ test('a small file cut by the network fails as a lost connection', async () => {
   const { ctx } = makeEnv(() => 'network');
 
   await assert.rejects(ctx.sendFileUpload(bigFile(MB, 'note.txt'), {}, () => {}).promise, (error) => error.transient === true);
+});
+
+test('a chunk whose bytes stop going up is cut, and sent again from where the server stands', async () => {
+  const file = bigFile();
+  let stalled = false;
+  const server = sessionServer(file, {
+    override: (xhr, state) => {
+      // The second chunk gets 10 MB to the server, then nothing more moves.
+      if (xhr.method === 'PATCH' && state.offset === 40 * MB && !stalled) {
+        stalled = true;
+        state.offset = 50 * MB;
+        return 'pending';
+      }
+      return null;
+    },
+  });
+  const { ctx, sent, waits, advance, watchdogs, inFlight } = makeEnv(server.answer);
+  const retrying = [];
+
+  const upload = ctx.sendFileUpload(file, {}, () => {}, (flag) => retrying.push(flag));
+  const chunk = await inFlight();
+  chunk.sending(10 * MB);
+  advance(ctx.UPLOAD_STALL_TIMEOUT - 1);
+  assert.equal(chunk.aborted, undefined, 'not cut a moment too soon');
+  advance(1);
+  assert.equal(chunk.aborted, true);
+
+  const result = await upload.promise;
+  assert.equal(result.status, 201);
+  assert.deepEqual(waits, [1000], 'retried as a lost connection');
+  assert.ok(retrying.includes(true));
+  assert.deepEqual(ranges(sent), [
+    `bytes 0-${40 * MB - 1}/${file.size}`,
+    `bytes ${40 * MB}-${80 * MB - 1}/${file.size}`, // cut
+    `bytes ${40 * MB}-${80 * MB - 1}/${file.size}`, // answered 409: the server holds 50 MB
+    `bytes ${50 * MB}-${90 * MB - 1}/${file.size}`,
+    `bytes ${90 * MB}-${file.size - 1}/${file.size}`,
+  ]);
+  assert.equal(watchdogs.size, 0, 'no watchdog outlives its request');
+});
+
+test('a chunk that keeps moving is never cut, however slowly', async () => {
+  const file = bigFile(60 * MB);
+  const server = sessionServer(file, {
+    override: (xhr) => (xhr.method === 'PATCH' ? 'pending' : null),
+  });
+  const { ctx, advance, inFlight } = makeEnv(server.answer);
+
+  const upload = ctx.sendFileUpload(file, {}, () => {});
+  const chunk = await inFlight();
+  for (let kb = 1; kb <= 20; kb++) {
+    advance(ctx.UPLOAD_STALL_TIMEOUT - 1000);
+    chunk.sending(kb * 1024);
+  }
+  assert.equal(chunk.aborted, undefined);
+
+  upload.abort();
+  await assert.rejects(upload.promise, /Cancelled/);
+});
+
+test('a chunk whose every byte is sent waits for the answer as long as it takes', async () => {
+  const file = bigFile(60 * MB);
+  let held = true;
+  const server = sessionServer(file, {
+    override: (xhr) => {
+      if (xhr.method !== 'PATCH' || !held) return null;
+      held = false;
+      return 'pending';
+    },
+  });
+  const { ctx, advance, inFlight } = makeEnv(server.answer);
+
+  const upload = ctx.sendFileUpload(file, {}, () => {});
+  const chunk = await inFlight();
+  chunk.sending(40 * MB);
+  advance(10 * ctx.UPLOAD_STALL_TIMEOUT);
+  assert.equal(chunk.aborted, undefined);
+
+  chunk.respond(server.answer(chunk));
+  assert.equal((await upload.promise).status, 201);
+});
+
+test('the finalize sends no body, so storing and scanning the file is never cut', async () => {
+  const file = bigFile(60 * MB);
+  let held = true;
+  const server = sessionServer(file, {
+    override: (xhr) => {
+      if (!xhr.url.endsWith('/finalize') || !held) return null;
+      held = false;
+      return 'pending';
+    },
+  });
+  const { ctx, advance, watchdogs, inFlight } = makeEnv(server.answer);
+
+  const upload = ctx.sendFileUpload(file, {}, () => {});
+  const finalize = await inFlight();
+  assert.equal(watchdogs.size, 0);
+  advance(10 * ctx.UPLOAD_STALL_TIMEOUT);
+  assert.equal(finalize.aborted, undefined);
+
+  finalize.respond(server.answer(finalize));
+  assert.equal((await upload.promise).status, 201);
+});
+
+test('a small file whose bytes stop going up fails as a lost connection', async () => {
+  const { ctx, advance, watchdogs, inFlight } = makeEnv(() => 'pending');
+
+  const upload = ctx.sendFileUpload({ name: 'note.txt', size: 10 * MB }, {}, () => {});
+  const xhr = await inFlight();
+  xhr.sending(MB, 10 * MB);
+  advance(ctx.UPLOAD_STALL_TIMEOUT);
+
+  await assert.rejects(upload.promise, (error) => error.transient === true && error.message === 'Network error');
+  assert.equal(xhr.aborted, true);
+  assert.equal(watchdogs.size, 0);
+});
+
+test('a small file all sent waits for the server as long as it takes', async () => {
+  const { ctx, advance, inFlight } = makeEnv(() => 'pending');
+
+  const upload = ctx.sendFileUpload({ name: 'note.txt', size: 10 * MB }, {}, () => {});
+  const xhr = await inFlight();
+  xhr.sending(10 * MB, 10 * MB);
+  advance(10 * ctx.UPLOAD_STALL_TIMEOUT);
+  assert.equal(xhr.aborted, undefined);
+
+  xhr.respond([201, { uuid: 'f1', name: 'note.txt' }]);
+  assert.equal((await upload.promise).status, 201);
+});
+
+test('a cancelled upload leaves no watchdog behind', async () => {
+  const { ctx, watchdogs, inFlight } = makeEnv(() => 'pending');
+
+  const upload = ctx.sendFileUpload({ name: 'note.txt', size: 10 * MB }, {}, () => {});
+  await inFlight();
+  upload.abort();
+
+  await assert.rejects(upload.promise, /Cancelled/);
+  assert.equal(watchdogs.size, 0);
+});
+
+test('a slow mobile link is never mistaken for a dead one', () => {
+  const { ctx } = makeEnv(() => 'pending');
+  assert.ok(ctx.UPLOAD_STALL_TIMEOUT >= 30000);
 });

@@ -143,12 +143,6 @@ dev = [
     "polib>=1.2.0",
 ]
 
-[tool.uv]
-# fastembed 0.9.0 caps pillow below 13, which would hold back the Pillow
-# security fixes. It only uses Image.Resampling, resize and fromarray on uint8
-# RGB arrays, none of which 13.0 changed. Drop once fastembed lifts the cap.
-override-dependencies = ["pillow>=13.0.0"]
-
 [tool.djlint]
 profile = "django"
 extension = "html"

@@ -40,7 +40,7 @@ class NotificationListView(CacheControlMixin, APIView):
 
         search = request.query_params.get("search", "").strip()
         if search:
-            qs = qs.filter(Q(title__icontains=search) | Q(body__icontains=search))
+            qs = qs.filter(Q(title__ficontains=search) | Q(body__ficontains=search))
 
         # Simple cursor pagination via ?before=<uuid>. A malformed cursor
         # falls back to "no cursor" instead of letting UUIDField.to_python

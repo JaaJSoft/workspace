@@ -23,7 +23,7 @@ test('the editor entry is an ESM module exporting the crepe surface', () => {
   for (const name of [
     'Crepe', 'SlashProvider', 'slashFactory', '$nodeSchema', '$prose', '$remark', '$view', 'Plugin',
   ]) {
-    const escaped = name.replace(/[$]/g, '\\$&');
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(exports, new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`), `${name} is not exported`);
   }
 });

@@ -5,11 +5,11 @@ from datetime import UTC, date, datetime, timedelta
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
-from workspace.files.models import File
+from workspace.files.models import File, FileScan
 from workspace.files.services.sharing import share_file
 from workspace.photos.activity import PhotosActivityProvider
 from workspace.photos.models import Album, AlbumItem
@@ -79,6 +79,20 @@ class PhotosActivityTests(TestCase):
         add_items(self.album, [theirs], added_by=self.owner)
         File.objects.filter(pk=self.album.items.first().file_id).update(
             deleted_at=timezone.now()
+        )
+
+        events = self.provider.get_recent_events(self.owner.pk, viewer_id=self.bob.pk)
+
+        self.assertEqual(events[1]["description"], "2 photos to Trip")
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=True)
+    def test_quarantined_photos_are_not_counted(self):
+        quarantined = File.objects.get(pk=self.album.items.first().file_id)
+        FileScan.objects.create(
+            file=quarantined,
+            status=FileScan.Status.INFECTED,
+            content_hash=quarantined.content_hash,
+            scanned_at=timezone.now(),
         )
 
         events = self.provider.get_recent_events(self.owner.pk, viewer_id=self.bob.pk)

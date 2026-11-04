@@ -62,15 +62,22 @@ class PhotosActivityProvider(ActivityProvider):
     def _additions(self, user_id, viewer_id, exclude_actor_id=None):
         """The album items, grouped by album, contributor and day.
 
-        Only the items every member sees (live, and vouched for by their
-        contributor): a count must not reveal photos the reader cannot open.
+        Only the items every member sees (live, out of quarantine, and
+        vouched for by their contributor): a count must not reveal photos the
+        reader cannot open.
         """
+        from workspace.files.services.scanning.policy import (
+            blocked_scans_qs,
+            blocked_statuses,
+        )
         from workspace.photos.models import AlbumItem
         from workspace.photos.queries import vouched_items_q
 
         items = AlbumItem.objects.filter(
             vouched_items_q(), file__deleted_at__isnull=True
         )
+        if blocked_statuses():
+            items = items.exclude(file_id__in=blocked_scans_qs().values("file_id"))
         if user_id is not None:
             items = items.filter(added_by_id=user_id)
         if exclude_actor_id is not None:

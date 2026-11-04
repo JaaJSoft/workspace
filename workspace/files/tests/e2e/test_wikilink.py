@@ -29,6 +29,7 @@ class WikilinkHelperTests(PlaywrightTestCase):
                 const m = await import(base + modPath);
                 return {
                     typed: m.matchTrigger('see [[meet'),
+                    embed: m.matchTrigger('see ![[rep'),
                     closed: m.matchTrigger('[[done]]'),
                     none: m.matchTrigger('no trigger here'),
                     empty: m.matchTrigger('start [['),
@@ -37,10 +38,13 @@ class WikilinkHelperTests(PlaywrightTestCase):
             }""",
             [self.live_server_url, HELPER_MODULE_URL],
         )
-        self.assertEqual(result["typed"], {"query": "meet", "length": 6})
+        self.assertEqual(
+            result["typed"], {"query": "meet", "length": 6, "embed": False}
+        )
+        self.assertEqual(result["embed"], {"query": "rep", "length": 6, "embed": True})
         self.assertIsNone(result["closed"])
         self.assertIsNone(result["none"])
-        self.assertEqual(result["empty"], {"query": "", "length": 2})
+        self.assertEqual(result["empty"], {"query": "", "length": 2, "embed": False})
         self.assertEqual(result["range"], {"from": 4, "to": 10})
 
 

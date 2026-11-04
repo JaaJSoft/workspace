@@ -14,10 +14,17 @@ const NODE_REL = 4;
 // canvas; large graphs still zoom out below 1 to fit. Tune here if needed.
 const MAX_ZOOM = 2;
 
-// Color "type" of a node, by precedence favorite > journal > regular.
-// journalUuid is the user's Journal folder UUID (notes preference); a node is a
-// journal note when its parent folder is that journal folder.
+// A file a note embeds or links to, drawn next to the notes (the graph asks
+// for them with attachments=1): anything that is not a note.
+function isAttachment(node) {
+  return !!(node && node.type && node.type !== 'markdown');
+}
+
+// Color "type" of a node, by precedence attachment > favorite > journal >
+// regular. journalUuid is the user's Journal folder UUID (notes preference); a
+// node is a journal note when its parent folder is that journal folder.
 function nodeColorKey(node, journalUuid) {
+  if (isAttachment(node)) return 'attachment';
   if (node && node.is_favorite) return 'favorite';
   if (journalUuid && node && node.parent === journalUuid) return 'journal';
   return 'regular';
@@ -43,6 +50,7 @@ function themePalette() {
   const pal = {
     favorite: read('text-warning', '#f59e0b'),
     journal: read('text-module', '#22c55e'),
+    attachment: read('text-info', '#0ea5e9'),
     regular: baseContent,
     text: baseContent, // node labels drawn on the canvas
     // Thin outline drawn in the background colour, so nodes stay crisp where
@@ -247,7 +255,7 @@ async function _load() {
   // fetch resolves, the gen checks below discard this now-stale response.
   const gen = ++_openGen;
   _setLoading(true);
-  const params = ['type=markdown'];
+  const params = ['type=markdown', 'attachments=1'];
   if (_state.scope === 'all') params.push('scope=all');
   // "mine" scope = the Notes folder subtree (under=); the "journal" kind narrows
   // it to the Journal subtree instead. Other kinds map to generic favorite /
@@ -348,6 +356,12 @@ async function open(container, opts) {
       // Faint dot grid behind everything, panning/zooming with the scene.
       .onRenderFramePre((ctx, globalScale) => _drawGrid(ctx, globalScale))
       .onNodeClick((n) => {
+        // An embedded file has no place in the notes app: it opens on its own,
+        // through the content endpoint, which checks the access again.
+        if (isAttachment(n)) {
+          window.open('/api/v1/files/' + encodeURIComponent(n.uuid) + '/content', '_blank', 'noopener');
+          return;
+        }
         if (_state.onNodeClick) _state.onNodeClick(n.uuid);
       })
       .onNodeHover((n) => {
@@ -464,4 +478,4 @@ function destroy() {
   };
 }
 
-window.notesGraph = { nodeColorKey, fitZoom, linkActive, makeFitLatch, open, setScope, setKind, setSearch, setTags, fitView, destroy };
+window.notesGraph = { isAttachment, nodeColorKey, fitZoom, linkActive, makeFitLatch, open, setScope, setKind, setSearch, setTags, fitView, destroy };

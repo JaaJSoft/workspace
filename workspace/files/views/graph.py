@@ -54,6 +54,14 @@ _VALID_SCOPES = {"mine", "all"}
             description="true -> only favorites; false -> only non-favorites.",
         ),
         OpenApiParameter(
+            name="attachments",
+            type=OpenApiTypes.BOOL,
+            description=(
+                "With type: also return the files of another type that the "
+                "nodes link to or embed, when the user can open them."
+            ),
+        ),
+        OpenApiParameter(
             name="tags",
             type=OpenApiTypes.STR,
             description=(
@@ -111,5 +119,6 @@ class FileGraphView(APIView):
             favorites=is_truthy(fav_raw) if fav_raw else None,
             search=request.query_params.get("search") or None,
             tags=self._tags_param(request),
+            attachments=is_truthy(request.query_params.get("attachments")),
         )
         return Response(data)

@@ -102,6 +102,37 @@ class ExtractLinkTargetsTests(TestCase):
         text = "[bad](/notes?file=" + ("-" * 36) + ")"
         self.assertEqual(extract_link_targets(text), set())
 
+    def test_finds_embed(self):
+        u = uuid.uuid4()
+        text = f"Intro\n\n![report.pdf](/api/v1/files/{u}/content)\n"
+        self.assertEqual(extract_link_targets(text), {str(u)})
+
+    def test_finds_embed_with_escaped_alt_and_title(self):
+        u = uuid.uuid4()
+        text = f'![a \\] b](</api/v1/files/{u}/content> "caption")'
+        self.assertEqual(extract_link_targets(text), {str(u)})
+
+    def test_finds_links_and_embeds_in_one_pass(self):
+        note, image = uuid.uuid4(), uuid.uuid4()
+        text = (
+            f"[Note](/notes?file={note})\n\n![photo.jpg](/api/v1/files/{image}/content)"
+        )
+        self.assertEqual(extract_link_targets(text), {str(note), str(image)})
+
+    def test_ignores_content_url_outside_a_destination(self):
+        # Prose quoting the endpoint is not a reference to the file.
+        u = uuid.uuid4()
+        self.assertEqual(
+            extract_link_targets(f"The API serves /api/v1/files/{u}/content."),
+            set(),
+        )
+
+    def test_ignores_longer_paths_under_the_content_endpoint(self):
+        u = uuid.uuid4()
+        self.assertEqual(
+            extract_link_targets(f"![x](/api/v1/files/{u}/contents)"), set()
+        )
+
     def test_empty_and_no_links(self):
         self.assertEqual(extract_link_targets(""), set())
         self.assertEqual(extract_link_targets(None), set())
@@ -151,6 +182,22 @@ class ReconcileFileLinksTests(TestCase):
         ):
             self.assertIsNone(reconcile_file_links(a))
         self.assertEqual(FileLink.objects.filter(source=a).count(), 1)
+
+    def test_embed_creates_edge_to_any_file_type(self):
+        pdf = FileService.create_file(
+            owner=self.user,
+            name="report.pdf",
+            content=ContentFile(b"%PDF-1.4\n", name="report.pdf"),
+            mime_type="application/pdf",
+        )
+        a = _make_markdown(
+            self.user, "A.md", f"![report.pdf](/api/v1/files/{pdf.uuid}/content)"
+        )
+        self.assertEqual(reconcile_file_links(a), {pdf.uuid})
+        self.assertEqual(
+            list(FileLink.objects.filter(source=a).values_list("target_id", flat=True)),
+            [pdf.uuid],
+        )
 
     def test_self_link_skipped(self):
         a = _make_markdown(self.user, "A.md", "placeholder")

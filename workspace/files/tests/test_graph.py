@@ -277,6 +277,86 @@ class BuildFileGraphTests(TestCase):
         self.assertTrue(expected.issubset(node.keys()))
 
 
+class GraphAttachmentsTests(TestCase):
+    """The files a note embeds appear next to it in the notes graph."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="ga", password="p")
+        cls.other = User.objects.create_user(username="go", password="p")
+        cls.notes = File.objects.create(
+            owner=cls.user, name="Notes", node_type=File.NodeType.FOLDER
+        )
+        cls.note = _note(cls.user, "a.md", parent=cls.notes)
+        cls.lonely = _note(cls.user, "b.md", parent=cls.notes)
+        # Embedded files live outside the Notes folder.
+        cls.photo = _note(cls.user, "photo.png", type="png")
+        cls.pdf = _note(cls.user, "report.pdf", type="pdf")
+        cls.unrelated = _note(cls.user, "other.png", type="png")
+        cls.foreign = _note(cls.other, "secret.png", type="png")
+        cls.trashed = _note(cls.user, "gone.png", type="png", deleted=True)
+        # A note outside the Notes folder stays out, even when linked.
+        cls.outside = _note(cls.user, "outside.md")
+        for target in (cls.photo, cls.pdf, cls.foreign, cls.trashed, cls.outside):
+            FileLink.objects.create(source=cls.note, target=target)
+        FileLink.objects.create(source=cls.lonely, target=cls.pdf)
+
+    def _graph(self, **kwargs):
+        return build_file_graph(
+            self.user,
+            scope="mine",
+            file_type="markdown",
+            under=self.notes.uuid,
+            **kwargs,
+        )
+
+    def test_off_by_default(self):
+        ids = {n["uuid"] for n in self._graph()["nodes"]}
+        self.assertEqual(ids, {str(self.note.uuid), str(self.lonely.uuid)})
+
+    def test_adds_the_files_the_notes_embed_that_the_user_can_open(self):
+        g = self._graph(attachments=True)
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(
+            ids,
+            {
+                str(self.note.uuid),
+                str(self.lonely.uuid),
+                str(self.photo.uuid),
+                str(self.pdf.uuid),
+            },
+        )
+        # Embedded by two notes, listed once.
+        self.assertEqual(len(g["nodes"]), len(ids))
+        edges = {(e["source"], e["target"]) for e in g["edges"]}
+        self.assertEqual(
+            edges,
+            {
+                (str(self.note.uuid), str(self.photo.uuid)),
+                (str(self.note.uuid), str(self.pdf.uuid)),
+                (str(self.lonely.uuid), str(self.pdf.uuid)),
+            },
+        )
+
+    def test_attachment_nodes_carry_their_type(self):
+        g = self._graph(attachments=True)
+        by_id = {n["uuid"]: n for n in g["nodes"]}
+        self.assertEqual(by_id[str(self.photo.uuid)]["type"], "png")
+
+    def test_only_attachments_of_the_nodes_left_by_the_filters(self):
+        g = self._graph(attachments=True, search="b")
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.lonely.uuid), str(self.pdf.uuid)})
+
+    def test_needs_a_type_filter(self):
+        # Without a type every file is already a node, subject to the filters.
+        g = build_file_graph(
+            self.user, scope="mine", under=self.notes.uuid, attachments=True
+        )
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.note.uuid), str(self.lonely.uuid)})
+
+
 class FileGraphEndpointTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="ge", password="p")
@@ -367,6 +447,19 @@ class FileGraphEndpointTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         ids = {n["uuid"] for n in resp.data["nodes"]}
         self.assertEqual(ids, {str(self.a.uuid), str(self.b.uuid)})
+
+    def test_attachments_param(self):
+        photo = _note(self.user, "photo.png", type="png")
+        FileLink.objects.create(source=self.a, target=photo)
+        url = "/api/v1/files/graph?type=markdown"
+        without = {n["uuid"] for n in self.client.get(url).json()["nodes"]}
+        self.assertNotIn(str(photo.uuid), without)
+        with_attachments = self.client.get(url + "&attachments=1").json()
+        self.assertIn(str(photo.uuid), {n["uuid"] for n in with_attachments["nodes"]})
+        self.assertIn(
+            {"source": str(self.a.uuid), "target": str(photo.uuid)},
+            with_attachments["edges"],
+        )
 
     def test_invalid_tags_400(self):
         resp = self.client.get("/api/v1/files/graph?tags=bogus")

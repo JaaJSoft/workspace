@@ -2,7 +2,8 @@
 
 Generic over file type: ``build_file_graph`` returns the files a user can see
 (within a scope) as nodes, and the FileLink rows whose endpoints are BOTH in
-that node set as edges. The notes "graph view" calls it with file_type="markdown";
+that node set as edges. The notes "graph view" calls it with file_type="markdown"
+and attachments=True, so the files its notes embed show up next to them;
 journal coloring is computed by the notes frontend, not here.
 """
 
@@ -35,6 +36,7 @@ def build_file_graph(
     favorites=None,
     search=None,
     tags=None,
+    attachments=False,
 ) -> dict:
     """Return ``{"nodes": [...], "edges": [...]}`` for *user* in *scope*.
 
@@ -52,6 +54,11 @@ def build_file_graph(
     - ``tags`` (iterable of tag UUIDs): keep only nodes carrying at least one of
       those tags (OR semantics, mirroring the file-list ``?tags=`` filter). An
       empty/None iterable applies no tag filter.
+
+    ``attachments`` (with ``file_type``): also add, as nodes, the files of
+    another type the surviving nodes link to or embed - the images and PDFs of
+    the notes graph - provided the user can open them, whatever their scope
+    or folder. Files of ``file_type`` stay subject to every filter above.
 
     Edges are restricted to the surviving nodes, so a node linked only to
     filtered-out nodes appears isolated. The notes kind filters map onto these
@@ -95,6 +102,19 @@ def build_file_graph(
         # The join to file_tags fans out one row per matching tag, so distinct()
         # collapses a node tagged with several of the selected tags back to one.
         base = base.filter(file_tags__tag__uuid__in=list(tags)).distinct()
+    linked = None
+    if attachments and file_type:
+        # A subquery rather than the node uuids: a large notes library would
+        # exceed SQLite's bound-parameter limit as a list.
+        linked = (
+            File.objects.filter(
+                pk__in=FileService.accessible_file_ids(user, include_deleted=False),
+                node_type=File.NodeType.FILE,
+                incoming_links__source__in=base.values("pk"),
+            )
+            .exclude(type=file_type)
+            .distinct()
+        )
     base = FileService.annotate_for_serializer(base, user)
 
     # Serialize nodes with the canonical FileSerializer so a graph node is the
@@ -106,6 +126,8 @@ def build_file_graph(
     from ..serializers import FileSerializer
 
     files = list(base)
+    if linked is not None:
+        files += FileService.annotate_for_serializer(linked, user)
     nodes = FileSerializer(files, many=True).data
 
     node_uuids = [f.uuid for f in files]

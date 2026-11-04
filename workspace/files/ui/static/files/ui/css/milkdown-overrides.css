@@ -405,3 +405,165 @@
       max-width: 294px;
       font-family: var(--crepe-font-code);
     }
+
+/* ========================================================
+   File embeds (files/ui/js/file_embed.js) - a file of the
+   Files module shown inside a note.
+   ======================================================== */
+
+.milkdown .file-embed {
+  margin: 0.75rem 0;
+  max-width: 100%;
+}
+
+.milkdown .file-embed.ProseMirror-selectednode {
+  outline: 2px solid var(--crepe-color-primary);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.milkdown .file-embed-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* The frame clips the blur of a sensitive preview (input.css). */
+.milkdown .file-embed-media {
+  overflow: hidden;
+  border-radius: 0.5rem;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.milkdown .file-embed-image {
+  display: block;
+  max-width: 100%;
+  max-height: 32rem;
+  border-radius: 0.5rem;
+}
+
+.milkdown .file-embed-video {
+  display: block;
+  max-width: 100%;
+  max-height: 32rem;
+  background: #000;
+}
+
+.milkdown .file-embed-audio {
+  width: 100%;
+  max-width: 32rem;
+}
+
+.milkdown .file-embed-pdf {
+  width: 100%;
+  height: 32rem;
+  border: 1px solid var(--crepe-color-outline);
+  border-radius: 0.5rem;
+  background: var(--crepe-color-surface);
+}
+
+.milkdown .file-embed-caption,
+.milkdown .file-embed-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.milkdown .file-embed-caption {
+  color: oklch(var(--bc) / 0.7);
+}
+
+.milkdown .file-embed-card {
+  max-width: 28rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--crepe-color-outline);
+  border-radius: 0.5rem;
+  background: var(--crepe-color-surface);
+}
+
+.milkdown .file-embed-card > .file-embed-caption {
+  flex: 1;
+  color: inherit;
+}
+
+/* Scoped under .ProseMirror to outrank the editor's link styles, which
+   would underline the whole card and tint its actions. */
+.milkdown .ProseMirror a.file-embed-note-link,
+.milkdown .ProseMirror a.file-embed-action {
+  color: inherit;
+  text-decoration: none;
+}
+
+.milkdown .file-embed-note-link:hover .file-embed-name {
+  text-decoration: underline;
+}
+
+.milkdown .file-embed-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+}
+
+.milkdown .file-embed-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.milkdown .file-embed-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.milkdown .file-embed-meta {
+  color: oklch(var(--bc) / 0.6);
+  font-size: 0.75rem;
+}
+
+.milkdown .ProseMirror .file-embed-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.375rem;
+  border-radius: 0.375rem;
+  color: oklch(var(--bc) / 0.7);
+  font-size: 0.75rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.milkdown .ProseMirror .file-embed-action:hover {
+  background: var(--crepe-color-hover);
+  color: oklch(var(--bc));
+}
+
+.milkdown .file-embed-action .file-embed-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.milkdown .file-embed-placeholder {
+  color: oklch(var(--bc) / 0.75);
+  border-style: dashed;
+}
+
+.milkdown .file-embed-unavailable .file-embed-icon,
+.milkdown .file-embed-trashed .file-embed-icon {
+  color: oklch(var(--bc) / 0.5);
+}
+
+.milkdown .file-embed-blocked .file-embed-icon,
+.milkdown .file-embed-error .file-embed-icon {
+  color: oklch(var(--er));
+}

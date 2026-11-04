@@ -295,6 +295,11 @@ class ContentMixin:
         except Http404:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        if file_obj.node_type == File.NodeType.SHORTCUT:
+            return Response(
+                {"detail": "Not a file or folder."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         blocked = self._quarantine_response(file_obj)
         if blocked is not None:
             return blocked
@@ -437,8 +442,8 @@ class ContentMixin:
                 if obj.node_type == File.NodeType.FILE:
                     if obj.content and obj.uuid not in blocked_uuids:
                         yield obj, obj.name
-                else:
-                    # Folder: add all descendant files under <folder name>/
+                elif obj.node_type == File.NodeType.FOLDER:
+                    # Add all descendant files under <folder name>/
                     folder_path = obj.path or obj.get_path()
                     prefix = f"{folder_path}/"
                     descendants = exclude_blocked(

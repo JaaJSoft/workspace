@@ -114,6 +114,7 @@ class File(models.Model):
     class NodeType(models.TextChoices):
         FILE = "file", "File"
         FOLDER = "folder", "Folder"
+        SHORTCUT = "shortcut", "Shortcut"
 
     uuid = models.UUIDField(
         primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
@@ -126,6 +127,18 @@ class File(models.Model):
     node_type = models.CharField(max_length=10, choices=NodeType.choices)
     parent = models.ForeignKey(
         "self", on_delete=models.CASCADE, null=True, blank=True, related_name="children"
+    )
+    # What a shortcut opens (services/shortcuts.py). Never followed on the
+    # server: every endpoint acts on the node it was given, so a shortcut
+    # grants no access to its target - the client opens the target by its own
+    # uuid, under the viewer's own permission on it. Purging the target purges
+    # its shortcuts, wherever they live.
+    shortcut_target = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="shortcuts",
     )
 
     # File-specific fields
@@ -348,8 +361,23 @@ class File(models.Model):
                         & (models.Q(content__isnull=True) | models.Q(content=""))
                     )
                     | models.Q(node_type="file")
+                    | models.Q(node_type="shortcut")
                 ),
                 name="folder_has_no_content",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        node_type="shortcut",
+                        shortcut_target__isnull=False,
+                    )
+                    & (models.Q(content__isnull=True) | models.Q(content=""))
+                )
+                | (
+                    ~models.Q(node_type="shortcut")
+                    & models.Q(shortcut_target__isnull=True)
+                ),
+                name="shortcut_has_target_and_no_content",
             ),
             models.UniqueConstraint(
                 fields=["group"],

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 11:55+0000\n"
+"POT-Creation-Date: 2026-11-04 19:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -197,6 +197,10 @@ msgstr ""
 "Les noms de fichiers et de dossiers ne doivent pas être « . » ou « .. »."
 
 #: serializers.py
+msgid "A shortcut has no content."
+msgstr "Un raccourci n’a pas de contenu."
+
+#: serializers.py
 msgid "Content is required to replace the existing file."
 msgstr "Un contenu est requis pour remplacer le fichier existant."
 
@@ -207,6 +211,22 @@ msgstr "Ce fichier n’a aucun contenu pour remplacer le fichier existant."
 #: serializers.py services/_names.py viewsets/copy.py
 msgid "A file with the same name already exists in this folder."
 msgstr "Un fichier portant le même nom existe déjà dans ce dossier."
+
+#: serializers.py
+msgid "Only a shortcut has a target."
+msgstr "Seul un raccourci a une cible."
+
+#: serializers.py
+msgid "A shortcut needs a target."
+msgstr "Un raccourci doit avoir une cible."
+
+#: serializers.py
+msgid "A shortcut cannot replace a file."
+msgstr "Un raccourci ne peut pas remplacer un fichier."
+
+#: serializers.py
+msgid "A shortcut goes in a folder of the group."
+msgstr "Un raccourci se place dans un dossier du groupe."
 
 #: serializers_tags.py
 msgid "A tag with this name already exists."
@@ -290,6 +310,10 @@ msgstr "Le fichier n’a pas pu être analysé"
 #: services/sharing.py
 msgid "Invalid share link parameters."
 msgstr "Paramètres de lien de partage non valides."
+
+#: services/sharing.py
+msgid "A shortcut cannot be shared, only what it opens."
+msgstr "Un raccourci ne se partage pas, seul ce qu’il ouvre peut l’être."
 
 #: services/sharing.py
 msgid "A cap must be a positive number."

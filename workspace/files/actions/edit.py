@@ -14,7 +14,7 @@ class RenameAction(BaseFileAction):
     label = _("Rename")
     icon = "pencil"
     category = ActionCategory.EDIT
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     keyboard_shortcut = "F2"
 
     def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
@@ -40,7 +40,7 @@ class CutAction(BaseFileAction):
     label = _("Cut")
     icon = "scissors"
     category = ActionCategory.EDIT
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     keyboard_shortcut = "Ctrl+X"
     supports_bulk = True
 
@@ -59,7 +59,7 @@ class CopyAction(BaseFileAction):
     label = _("Copy")
     icon = "copy"
     category = ActionCategory.EDIT
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     keyboard_shortcut = "Ctrl+C"
     supports_bulk = True
 

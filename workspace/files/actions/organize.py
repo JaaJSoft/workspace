@@ -13,7 +13,7 @@ class ToggleFavoriteAction(BaseFileAction):
     label = gettext_lazy("Add to favorites")
     icon = "star"
     category = ActionCategory.ORGANIZE
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     keyboard_shortcut = "F"
     supports_bulk = True
 
@@ -116,7 +116,7 @@ class ManageTagsAction(BaseFileAction):
     label = gettext_lazy("Tags")
     icon = "tag"
     category = ActionCategory.ORGANIZE
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
 
     def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:

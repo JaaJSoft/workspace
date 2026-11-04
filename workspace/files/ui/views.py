@@ -1008,7 +1008,7 @@ def _shared_folder_listing_context(link, current, request, access_token, view_mo
             with_sensitivity(
                 File.objects.filter(
                     scope_q(link.file), parent=current, deleted_at__isnull=True
-                )
+                ).exclude(node_type=File.NodeType.SHORTCUT)
             ).name_ordered("-node_type")
         )[: SHARED_FOLDER_PAGE_SIZE + 1]
     )

@@ -1,5 +1,6 @@
 from django.utils.translation import gettext_lazy as _
 
+from workspace.files.models import File
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
@@ -56,3 +57,39 @@ class OpenNewTabAction(BaseFileAction):
         if is_blocked(file_obj):
             return False
         return permission is not None
+
+
+@ActionRegistry.register
+class OpenShortcutTargetAction(BaseFileAction):
+    """Open what a shortcut points at, on the target's own terms.
+
+    Offered when the target's own open action would be offered to this user
+    on the target itself - the shortcut adds no access. Reads the
+    ``shortcut_resolution`` the caller attached (``services.shortcuts``), and
+    offers nothing without one.
+    """
+
+    id = "open_target"
+    label = _("Open")
+    icon = "square-arrow-out-up-right"
+    category = ActionCategory.OPEN
+    node_types = ("shortcut",)
+    keyboard_shortcut = "Enter"
+
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
+        from workspace.files.services.shortcuts import ShortcutState
+
+        if file_obj.deleted_at is not None or permission is None:
+            return False
+        resolution = getattr(file_obj, "shortcut_resolution", None)
+        if resolution is None or resolution.state != ShortcutState.OK:
+            return False
+        target = resolution.target
+        target_action = "open" if target.node_type == File.NodeType.FOLDER else "view"
+        return ActionRegistry.is_action_available(
+            target_action,
+            user,
+            target,
+            permission=resolution.permission,
+            journal_folder=journal_folder,
+        )

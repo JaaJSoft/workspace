@@ -20,6 +20,7 @@ localStorage: { getItem: () => null, setItem: () => {} },
     calendarTasksMixin: () => ({}),
     calendarRecurrenceMixin: () => ({}),
     calendarPollsMixin: () => ({}),
+    calendarBookingPagesMixin: () => ({}),
     // Pinned so the English assertions hold whatever the host's default is.
     getUserLocale: () => 'en-US',
     ...extraGlobals,

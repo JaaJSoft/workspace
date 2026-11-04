@@ -52,6 +52,7 @@ localStorage: { getItem: () => null, setItem: () => {} },
     calendarTasksMixin: mixinStub,
     calendarRecurrenceMixin: mixinStub,
     calendarPollsMixin: mixinStub,
+    calendarBookingPagesMixin: mixinStub,
   });
   ctx.getUserTimeZone = () => userTz;
   injectTzHelpers(ctx);

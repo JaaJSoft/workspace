@@ -3,13 +3,37 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-31 16:05+0000\n"
+"POT-Creation-Date: 2026-11-04 19:07+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/calendar/ui/js/booking_public.js
+msgid "This time is no longer available. Pick another one."
+msgstr "Ce créneau n’est plus disponible. Choisissez-en un autre."
+
+#: ui/static/calendar/ui/js/booking_public.js
+msgid "Too many attempts. Please try again later."
+msgstr "Trop de tentatives. Réessayez plus tard."
+
+#: ui/static/calendar/ui/js/booking_public.js
+msgid "Enter a valid email address."
+msgstr "Saisissez une adresse e-mail valide."
+
+#: ui/static/calendar/ui/js/booking_public.js
+msgid "The booking failed. Please try again."
+msgstr "La réservation a échoué. Réessayez."
+
+#: ui/static/calendar/ui/js/booking_public.js
+msgid "A confirmation is on its way to %(email)s."
+msgstr "Une confirmation a été envoyée à %(email)s."
+
+#: ui/static/calendar/ui/js/booking_public.js
+msgid "The cancellation failed. Please try again."
+msgstr "L’annulation a échoué. Réessayez."
 
 #: ui/static/calendar/ui/js/calendar.js
 msgctxt "calendar view"
@@ -23,6 +47,47 @@ msgstr "Aujourd’hui — %(date)s"
 #: ui/static/calendar/ui/js/calendar.js
 msgid "Tomorrow — %(date)s"
 msgstr "Demain — %(date)s"
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid "The booking page could not be saved."
+msgstr "La page de réservation n’a pas pu être enregistrée."
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid "Delete booking page"
+msgstr "Supprimer la page de réservation"
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid ""
+"Its link stops working. Appointments already booked stay on your calendar."
+msgstr ""
+"Son lien cessera de fonctionner. Les rendez-vous déjà réservés restent dans "
+"votre agenda."
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid "Link copied"
+msgstr "Lien copié"
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid "Cancel appointment"
+msgstr "Annuler le rendez-vous"
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid "Cancel the appointment with %(name)s? It is removed from your calendar."
+msgstr "Annuler le rendez-vous avec %(name)s ? Il sera retiré de votre agenda."
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid "%(count)s minute"
+msgid_plural "%(count)s minutes"
+msgstr[0] "%(count)s minute"
+msgstr[1] "%(count)s minutes"
+msgstr[2] "%(count)s minutes"
+
+#: ui/static/calendar/ui/js/calendar_booking_pages.js
+msgid "%(count)s upcoming"
+msgid_plural "%(count)s upcoming"
+msgstr[0] "%(count)s à venir"
+msgstr[1] "%(count)s à venir"
+msgstr[2] "%(count)s à venir"
 
 #: ui/static/calendar/ui/js/calendar_calendars.js
 msgid "Replace the link"

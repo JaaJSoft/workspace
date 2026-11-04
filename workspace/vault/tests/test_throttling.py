@@ -20,8 +20,8 @@ from rest_framework.settings import api_settings
 from rest_framework.test import APIRequestFactory
 from rest_framework.throttling import SimpleRateThrottle
 
+from workspace.common.throttling import IpRateThrottle
 from workspace.vault import throttling
-from workspace.vault.throttling import IpRateThrottle
 
 User = get_user_model()
 

@@ -73,6 +73,32 @@ def send_ics_reply(event_id, user_id, response_status):
 
 
 @shared_task(
+    name="calendar.send_booking_mail",
+    priority=NORMAL_PRIORITY,
+    ignore_result=True,
+    soft_time_limit=30,
+)
+def send_booking_mail(booking_id, kind, base_url=""):
+    """Mail a booking's confirmation or cancellation to its guest."""
+    from workspace.calendar.services.booking_mail import (
+        booking_for_mail,
+        build_message,
+    )
+    from workspace.mail.services.smtp import connect_smtp
+
+    booking = booking_for_mail(booking_id, kind)
+    if booking is None:
+        return
+    account = booking.page.mail_account
+    msg = build_message(booking, kind, base_url)
+    server = connect_smtp(account)
+    try:
+        server.sendmail(account.email, [booking.guest_email], msg.as_string())
+    finally:
+        server.quit()
+
+
+@shared_task(
     name="calendar.sync_external_calendar",
     priority=LOW_PRIORITY,
     ignore_result=True,

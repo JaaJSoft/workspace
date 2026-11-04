@@ -229,6 +229,8 @@
 
   {% include "calendar/ui/partials/_poll_modals.html" %}
 
+  {% include "calendar/ui/partials/_booking_modals.html" %}
+
   {% include "ui/partials/context_menu_panel.html" with items="calendar/ui/partials/event_context_menu.html" open="ctxMenu.open" close="ctxMenu.open = false" x="ctxMenu.x" y="ctxMenu.y" %}
   {% include "calendar/ui/partials/help_dialog.html" %}
 
@@ -265,6 +267,7 @@
   <script src="{% static 'calendar/ui/js/calendar_tasks.js' %}"></script>
   <script src="{% static 'calendar/ui/js/calendar_recurrence.js' %}"></script>
   <script src="{% static 'calendar/ui/js/calendar_polls.js' %}"></script>
+  <script src="{% static 'calendar/ui/js/calendar_booking_pages.js' %}"></script>
   <script src="{% static 'calendar/ui/js/calendar.js' %}"></script>
   <script>
     document.body.dataset.userId = '{{ request.user.id }}';

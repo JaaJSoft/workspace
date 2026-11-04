@@ -1,0 +1,51 @@
+{% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}{% endblock %} — Workspace</title>
+    <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    <link
+      rel="icon"
+      href="{% static 'icons/favicon.svg' %}"
+      type="image/svg+xml"
+    />
+    {# Ahead of every script that calls gettext(), at load time or later. #}
+    <script
+      src="{% url 'javascript-catalog' LANGUAGE_CODE %}?v={{ APP_VERSION|urlencode }}"
+    ></script>
+    <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
+    <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
+    <script src="{% static 'ui/js/lucide.js' %}"></script>
+  </head>
+  <body class="min-h-screen bg-base-200 flex flex-col">
+    {% block content %}{% endblock %}
+    <footer class="mt-auto pt-6 pb-6 text-center">
+      <div
+        class="flex items-center justify-center gap-2 text-base-content/40 text-sm"
+      >
+        <div
+          class="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center"
+        >
+          <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-white"></i>
+        </div>
+        <span>{% translate "Scheduling by" %}</span>
+        <a
+          href="/"
+          class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"
+        >Workspace</a>
+      </div>
+    </footer>
+    {# At the end of the body, as in base.html: localtime.js observes it. Alpine is deferred, so the components are defined before it starts. #}
+    <script src="{% static 'ui/js/zoned_formatter.js' %}"></script>
+    <script src="{% static 'ui/js/localtime.js' %}"></script>
+    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+    <script src="{% static 'calendar/ui/js/booking_public.js' %}"></script>
+    <script>
+      initLucideIcons();
+      observeLucideIcons();
+    </script>
+  </body>
+</html>

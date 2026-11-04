@@ -23,6 +23,7 @@ localStorage: { getItem: () => null, setItem: () => {} },
     calendarTasksMixin: () => ({}),
     calendarRecurrenceMixin: () => ({}),
     calendarPollsMixin: () => ({}),
+    calendarBookingPagesMixin: () => ({}),
   });
 
   const calls = { refetchEvents: 0, refetchAgenda: 0 };

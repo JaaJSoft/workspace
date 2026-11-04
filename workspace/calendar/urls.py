@@ -1,6 +1,16 @@
 from django.urls import path, re_path
 
-from .views import caldav, calendars, events, external, feeds, invitees, polls
+from .views import (
+    booking_pages,
+    booking_public,
+    caldav,
+    calendars,
+    events,
+    external,
+    feeds,
+    invitees,
+    polls,
+)
 
 urlpatterns = [
     path(
@@ -66,6 +76,40 @@ urlpatterns = [
         "api/v1/polls/<uuid:poll_id>/finalize",
         polls.PollFinalizeView.as_view(),
         name="poll-finalize",
+    ),
+    # Booking pages
+    path(
+        "api/v1/booking-pages",
+        booking_pages.BookingPageListView.as_view(),
+        name="booking-page-list",
+    ),
+    path(
+        "api/v1/booking-pages/shared/<str:token>/slots",
+        booking_public.SharedBookingSlotsView.as_view(),
+        name="booking-page-shared-slots",
+    ),
+    path(
+        "api/v1/booking-pages/shared/<str:token>/book",
+        booking_public.SharedBookingBookView.as_view(),
+        name="booking-page-shared-book",
+    ),
+    path(
+        "api/v1/booking-pages/<uuid:page_id>",
+        booking_pages.BookingPageDetailView.as_view(),
+        name="booking-page-detail",
+    ),
+    path(
+        "api/v1/bookings", booking_pages.BookingListView.as_view(), name="booking-list"
+    ),
+    path(
+        "api/v1/bookings/shared/<str:token>/cancel",
+        booking_public.SharedBookingCancelView.as_view(),
+        name="booking-shared-cancel",
+    ),
+    path(
+        "api/v1/bookings/<uuid:booking_id>/cancel",
+        booking_pages.BookingCancelView.as_view(),
+        name="booking-cancel",
     ),
     # External calendars
     path(

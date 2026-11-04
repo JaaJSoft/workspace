@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from .models import Calendar, CalendarSubscription, EventMember
+from .models import BookingPage, Calendar, CalendarSubscription, EventMember
 
 
 def owned_calendar_ids(user):
@@ -84,3 +84,12 @@ def visible_events_q(user, calendar_ids=None):
         requested = set(calendar_ids)
         cal_ids = [cal_id for cal_id in cal_ids if cal_id in requested]
     return Q(calendar_id__in=cal_ids) | Q(uuid__in=member_event_ids(user))
+
+
+def bookable_pages():
+    """Booking pages anyone holding their link may book.
+
+    A deactivated page, or the page of a deactivated account, answers as if
+    it did not exist.
+    """
+    return BookingPage.objects.filter(is_active=True, owner__is_active=True)

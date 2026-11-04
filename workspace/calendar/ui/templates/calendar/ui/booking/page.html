@@ -1,0 +1,289 @@
+{% extends "calendar/ui/booking/_base.html" %}
+{% load i18n %}
+
+{% block title %}{{ booking_page.title }}{% endblock %}
+
+{% block content %}
+  {{ booking_page|json_script:"booking-page-data" }}
+  <div
+    class="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-6"
+    x-data="bookingPage()"
+  >
+    <div class="card bg-base-100 shadow-lg overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0"
+          >
+            <i data-lucide="calendar-check" class="w-5 h-5 text-white"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="text-white/80 text-sm">{{ booking_page.owner_name }}</p>
+            <h1 class="text-xl sm:text-2xl font-bold text-white">{{ booking_page.title }}</h1>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body pt-5">
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="badge badge-ghost gap-1.5">
+            <i data-lucide="clock" class="w-3 h-3"></i>
+            {% blocktranslate trimmed count minutes=booking_page.duration_minutes %}
+              {{ minutes }} minute
+            {% plural %}
+              {{ minutes }} minutes
+            {% endblocktranslate %}
+          </div>
+          {% if booking_page.location %}
+            <div class="badge badge-ghost gap-1.5">
+              <i data-lucide="map-pin" class="w-3 h-3"></i>
+              {{ booking_page.location }}
+            </div>
+          {% endif %}
+        </div>
+        {% if booking_page.description %}
+          <p class="text-sm text-base-content/70 whitespace-pre-line mt-2">{{ booking_page.description }}</p>
+        {% endif %}
+
+        <!-- Step 1: pick a day and a time -->
+        <div x-show="step === 'pick'" class="mt-4">
+          <template x-if="error">
+            <inline-alert type="warning" class="mb-4"><span x-text="error"></span></inline-alert>
+          </template>
+          <div class="grid gap-8 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+            <!-- Month -->
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm btn-square"
+                  @click="changeMonth(-1)"
+                  :disabled="!canGoBack()"
+                  aria-label="{% translate "Previous month" %}"
+                >
+                  <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </button>
+                <h2 class="font-semibold capitalize" x-text="monthLabel()"></h2>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm btn-square"
+                  @click="changeMonth(1)"
+                  :disabled="!canGoForward()"
+                  aria-label="{% translate "Next month" %}"
+                >
+                  <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <div
+                class="grid grid-cols-7 gap-1 text-center text-xs text-base-content/50 mb-1"
+              >
+                <template x-for="label in weekdays" :key="label">
+                  <div class="py-1 capitalize" x-text="label"></div>
+                </template>
+              </div>
+              <div class="relative">
+                <div class="grid grid-cols-7 gap-1" :class="loading && 'opacity-40'">
+                  <template x-for="(week, w) in weeks()" :key="w">
+                    <template x-for="(key, d) in week" :key="w + '-' + d">
+                      <div class="h-10">
+                        <template x-if="key">
+                          <button
+                            type="button"
+                            class="w-full h-full rounded-lg text-sm transition-colors"
+                            :class="{
+                              'bg-primary text-primary-content font-semibold': selectedDay === key,
+                              'bg-primary/10 text-primary font-semibold hover:bg-primary/20': hasSlots(key) && selectedDay !== key,
+                              'text-base-content/30 cursor-default': !hasSlots(key),
+                              'ring-1 ring-base-content/30': isToday(key) && selectedDay !== key,
+                            }"
+                            :disabled="!hasSlots(key)"
+                            @click="selectedDay = key"
+                            x-text="dayNumber(key)"
+                          ></button>
+                        </template>
+                      </div>
+                    </template>
+                  </template>
+                </div>
+                <div
+                  x-show="loading"
+                  class="absolute inset-0 flex items-center justify-center"
+                >
+                  <span class="loading loading-spinner loading-md text-primary"></span>
+                </div>
+              </div>
+              <div class="mt-4 flex items-center gap-2 text-xs text-base-content/60">
+                <i data-lucide="globe" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                <label for="booking-zone" class="flex-shrink-0">{% translate "Time zone" %}</label>
+                <select
+                  id="booking-zone"
+                  class="select select-bordered select-xs min-w-0 flex-1 max-w-xs"
+                  x-model="zone"
+                  @change="changeZone()"
+                >
+                  <template x-for="name in zones" :key="name">
+                    <option :value="name" x-text="name" :selected="name === zone"></option>
+                  </template>
+                </select>
+              </div>
+            </div>
+
+            <!-- Times of the selected day -->
+            <div>
+              <template x-if="selectedDay">
+                <div>
+                  <h3
+                    class="font-medium mb-3 first-letter:uppercase"
+                    x-text="selectedDayLabel()"
+                  ></h3>
+                  <div
+                    class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[22rem] overflow-y-auto pr-1"
+                  >
+                    <template x-for="slot in daySlots()" :key="slot">
+                      <button
+                        type="button"
+                        class="btn btn-outline btn-primary btn-sm"
+                        @click="pickSlot(slot)"
+                        x-text="time(slot)"
+                      ></button>
+                    </template>
+                  </div>
+                </div>
+              </template>
+              <template x-if="!selectedDay && noSlotsThisMonth()">
+                <div class="text-center py-8 text-sm text-base-content/60">
+                  <i data-lucide="calendar-x" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
+                  <p>{% translate "No time available this month." %}</p>
+                  <button
+                    type="button"
+                    class="btn btn-link btn-sm"
+                    x-show="canGoForward()"
+                    @click="changeMonth(1)"
+                  >
+                    {% translate "See next month" %}
+                  </button>
+                </div>
+              </template>
+              <template x-if="loadError">
+                <inline-alert type="error" message="{% translate "The available times could not be loaded." %}"></inline-alert>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: who is booking -->
+        <template x-if="step === 'form'">
+          <form class="mt-4 max-w-lg" @submit.prevent="submit()">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm gap-1 -ml-2 mb-2"
+              @click="backToSlots()"
+            >
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+              {% translate "Other times" %}
+            </button>
+            <div
+              class="rounded-xl bg-primary/10 text-primary px-4 py-3 flex items-center gap-2 mb-4"
+            >
+              <i data-lucide="calendar-clock" class="w-4 h-4 flex-shrink-0"></i>
+              <span
+                class="font-medium first-letter:uppercase"
+                x-text="when(selectedSlot)"
+              ></span>
+            </div>
+            <template x-if="error">
+              <inline-alert type="error" class="mb-4"><span x-text="error"></span></inline-alert>
+            </template>
+            <div class="space-y-3">
+              <label class="form-control w-full">
+                <div class="label"><span class="label-text">{% translate "Your name" %}</span></div>
+                <input
+                  type="text"
+                  class="input input-bordered w-full"
+                  x-model="form.name"
+                  maxlength="100"
+                  autocomplete="name"
+                  required
+                />
+              </label>
+              <label class="form-control w-full">
+                <div class="label"><span class="label-text">{% translate "Your email" %}</span></div>
+                <input
+                  type="email"
+                  class="input input-bordered w-full"
+                  x-model="form.email"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <label class="form-control w-full">
+                <div class="label">
+                  <span class="label-text">{% translate "Anything to prepare? (optional)" %}</span>
+                </div>
+                <textarea
+                  class="textarea textarea-bordered w-full"
+                  rows="3"
+                  maxlength="2000"
+                  x-model="form.note"
+                ></textarea>
+              </label>
+            </div>
+            <button
+              type="submit"
+              class="btn btn-primary mt-5 gap-2"
+              :disabled="!canSubmit()"
+            >
+              <span x-show="submitting" class="loading loading-spinner loading-sm"></span>
+              <i x-show="!submitting" data-lucide="check" class="w-4 h-4"></i>
+              {% translate "Confirm the booking" %}
+            </button>
+          </form>
+        </template>
+
+        <!-- Step 3: booked -->
+        <template x-if="step === 'done' && result">
+          <div class="mt-4 text-center max-w-lg mx-auto">
+            <div
+              class="w-14 h-14 rounded-full bg-success/15 flex items-center justify-center mx-auto mb-3"
+            >
+              <i data-lucide="check" class="w-7 h-7 text-success"></i>
+            </div>
+            <h2 class="text-xl font-semibold">{% translate "You are booked" %}</h2>
+            <p class="mt-1 first-letter:uppercase" x-text="when(result.start)"></p>
+            <p class="text-sm text-base-content/60 mt-1" x-text="result.owner_name"></p>
+            <template x-if="result.mail_sent">
+              <p
+                class="text-sm text-base-content/70 mt-4"
+                x-text="confirmationSentLabel()"
+              ></p>
+            </template>
+            <div class="mt-5 rounded-xl bg-base-200 p-4 text-left text-sm">
+              {% translate "Keep this link: it lets you cancel the appointment." as keep_link_label %}
+              <p class="text-base-content/70 mb-2">{{ keep_link_label }}</p>
+              <div class="join w-full">
+                <input
+                  type="text"
+                  class="input input-bordered input-sm join-item w-full"
+                  :value="result.manage_url"
+                  readonly
+                />
+                <button type="button" class="btn btn-sm join-item" @click="copyManageLink()">
+                  <i data-lucide="copy" class="w-3.5 h-3.5" x-show="!copied"></i>
+                  <i data-lucide="check" class="w-3.5 h-3.5" x-show="copied"></i>
+                </button>
+              </div>
+            </div>
+            <a
+              class="btn btn-ghost btn-sm gap-2 mt-4"
+              :href="result.manage_url + '/event.ics'"
+            >
+              <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+              {% translate "Add to my calendar" %}
+            </a>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+{% endblock %}

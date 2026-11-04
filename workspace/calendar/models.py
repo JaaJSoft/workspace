@@ -78,6 +78,7 @@ class Event(models.Model):
         ICS = "ics", "ICS invitation"
         LLM = "llm", "Extracted by AI"
         CALDAV = "caldav", "Synced from a device"
+        BOOKING = "booking", "Booked from a booking page"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     calendar = models.ForeignKey(
@@ -442,4 +443,5 @@ class PollInvitee(models.Model):
 
 
 # Import models from sub-modules so Django's migration framework discovers them.
+from workspace.calendar.models_booking import Booking, BookingPage  # noqa: E402, F401
 from workspace.calendar.models_external import ExternalCalendar  # noqa: E402, F401

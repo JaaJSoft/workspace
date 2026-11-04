@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
-from workspace.vault.throttling import IpRateThrottle
+from workspace.common.throttling import IpRateThrottle
 
 logger = logging.getLogger("workspace.core.csp_report")
 

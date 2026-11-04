@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 12:18+0000\n"
+"POT-Creation-Date: 2026-11-04 19:07+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -32,6 +32,101 @@ msgstr "Invitation au sondage « %(title)s »"
 #, python-format
 msgid "%(user)s invited you to vote on a poll."
 msgstr "%(user)s vous invite à répondre à un sondage."
+
+#: serializers_booking.py
+msgid "Unknown time zone."
+msgstr "Fuseau horaire inconnu."
+
+#: serializers_booking.py
+msgid "Give the hours of all seven days."
+msgstr "Indiquez les horaires des sept jours."
+
+#: serializers_booking.py
+#, python-format
+msgid "A day has at most %(count)d time ranges."
+msgstr "Une journée compte au plus %(count)d plages horaires."
+
+#: serializers_booking.py
+msgid "Times are written HH:MM, in 24-hour format."
+msgstr "Les heures s’écrivent HH:MM, au format 24 heures."
+
+#: serializers_booking.py
+msgid "A time range must end after it starts."
+msgstr "Une plage horaire doit finir après avoir commencé."
+
+#: serializers_booking.py
+msgid "The time ranges of a day must not overlap."
+msgstr "Les plages horaires d’une journée ne doivent pas se chevaucher."
+
+#: services/booking_mail.py
+#, python-format
+msgid "Hello %(name)s,"
+msgstr "Bonjour %(name)s,"
+
+#: services/booking_mail.py
+#, python-format
+msgid "Your appointment on %(when)s has been cancelled."
+msgstr "Votre rendez-vous du %(when)s a été annulé."
+
+#: services/booking_mail.py
+msgid "Your appointment is confirmed."
+msgstr "Votre rendez-vous est confirmé."
+
+#: services/booking_mail.py
+#, python-format
+msgid "When: %(when)s (%(zone)s)"
+msgstr "Quand : %(when)s (%(zone)s)"
+
+#: services/booking_mail.py
+#, python-format
+msgid "With: %(name)s"
+msgstr "Avec : %(name)s"
+
+#: services/booking_mail.py
+#, python-format
+msgid "Where: %(location)s"
+msgstr "Où : %(location)s"
+
+#: services/booking_mail.py
+#, python-format
+msgid "To cancel it, open this link: %(url)s"
+msgstr "Pour l’annuler, ouvrez ce lien : %(url)s"
+
+#: services/booking_mail.py
+#, python-format
+msgid "Cancelled: %(title)s, %(when)s"
+msgstr "Annulé : %(title)s, %(when)s"
+
+#: services/booking_mail.py
+#, python-format
+msgid "Confirmed: %(title)s, %(when)s"
+msgstr "Confirmé : %(title)s, %(when)s"
+
+#. Translators: Django date format of a booked appointment, e.g. "Monday, March 2, 2026, 14:30".
+#: services/bookings.py
+msgctxt "booking date format"
+msgid "l, F j, Y, H:i"
+msgstr "l j F Y, H:i"
+
+#: services/bookings.py
+#, python-format
+msgid "New booking: \"%(title)s\""
+msgstr "Nouvelle réservation : « %(title)s »"
+
+#: services/bookings.py
+#, python-format
+msgid "%(guest)s booked %(when)s."
+msgstr "%(guest)s a réservé le %(when)s."
+
+#: services/bookings.py
+#, python-format
+msgid "Booking cancelled: \"%(title)s\""
+msgstr "Réservation annulée : « %(title)s »"
+
+#: services/bookings.py
+#, python-format
+msgid "%(guest)s cancelled %(when)s."
+msgstr "%(guest)s a annulé le rendez-vous du %(when)s."
 
 #: services/event_scope.py
 #, python-format
@@ -239,6 +334,100 @@ msgstr "Toute la journée aujourd’hui"
 msgid "Today at %(time)s"
 msgstr "Aujourd’hui à %(time)s"
 
+#: ui/templates/calendar/ui/booking/_base.html
+msgid "Scheduling by"
+msgstr "Prise de rendez-vous avec"
+
+#: ui/templates/calendar/ui/booking/manage.html
+msgid "This appointment has been cancelled."
+msgstr "Ce rendez-vous a été annulé."
+
+#: ui/templates/calendar/ui/booking/manage.html
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Add to my calendar"
+msgstr "Ajouter à mon agenda"
+
+#: ui/templates/calendar/ui/booking/manage.html
+msgid "Cancel the appointment"
+msgstr "Annuler le rendez-vous"
+
+#: ui/templates/calendar/ui/booking/manage.html
+msgid "Cancel this appointment?"
+msgstr "Annuler ce rendez-vous ?"
+
+#: ui/templates/calendar/ui/booking/manage.html
+msgid "The time goes back to being available to others."
+msgstr "Le créneau redevient disponible pour d’autres personnes."
+
+#: ui/templates/calendar/ui/booking/manage.html
+msgid "Yes, cancel it"
+msgstr "Oui, l’annuler"
+
+#: ui/templates/calendar/ui/booking/manage.html
+msgid "Keep it"
+msgstr "Le garder"
+
+#: ui/templates/calendar/ui/booking/page.html
+#, python-format
+msgid "%(minutes)s minute"
+msgid_plural "%(minutes)s minutes"
+msgstr[0] "%(minutes)s minute"
+msgstr[1] "%(minutes)s minutes"
+msgstr[2] "%(minutes)s minutes"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Previous month"
+msgstr "Mois précédent"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Next month"
+msgstr "Mois suivant"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Time zone"
+msgstr "Fuseau horaire"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "No time available this month."
+msgstr "Aucun créneau disponible ce mois-ci."
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "See next month"
+msgstr "Voir le mois suivant"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "The available times could not be loaded."
+msgstr "Les créneaux disponibles n’ont pas pu être chargés."
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Other times"
+msgstr "Autres créneaux"
+
+#: ui/templates/calendar/ui/booking/page.html
+#: ui/templates/calendar/ui/polls/shared.html
+msgid "Your name"
+msgstr "Votre nom"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Your email"
+msgstr "Votre adresse e-mail"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Anything to prepare? (optional)"
+msgstr "Quelque chose à préparer ? (facultatif)"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Confirm the booking"
+msgstr "Confirmer la réservation"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "You are booked"
+msgstr "Votre rendez-vous est réservé"
+
+#: ui/templates/calendar/ui/booking/page.html
+msgid "Keep this link: it lets you cancel the appointment."
+msgstr "Gardez ce lien : il vous permet d’annuler le rendez-vous."
+
 #: ui/templates/calendar/ui/index.html
 msgctxt "page title"
 msgid "Calendar"
@@ -289,6 +478,160 @@ msgstr "Aucun événement à venir"
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "New event"
 msgstr "Nouvel événement"
+
+#: ui/templates/calendar/ui/partials/_booking_list_header_actions.html
+msgctxt "booking page"
+msgid "New"
+msgstr "Nouvelle"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+#: ui/templates/calendar/ui/partials/_sidebar.html
+msgid "Booking pages"
+msgstr "Pages de réservation"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Links where people pick a time in your calendar"
+msgstr "Des liens pour que l’on choisisse un créneau dans votre agenda"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "booking pages tab"
+msgid "Pages"
+msgstr "Pages"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Upcoming appointments"
+msgstr "Rendez-vous à venir"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "No booking page yet"
+msgstr "Aucune page de réservation"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Share a link and let people book a time that suits you"
+msgstr "Partagez un lien et laissez réserver un créneau qui vous convient"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Create a booking page"
+msgstr "Créer une page de réservation"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "booking page status"
+msgid "off"
+msgstr "désactivée"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Open the page"
+msgstr "Ouvrir la page"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Accept bookings"
+msgstr "Accepter les réservations"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "No upcoming appointment"
+msgstr "Aucun rendez-vous à venir"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "cancel an appointment"
+msgid "Cancel"
+msgstr "Annuler"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Booking page"
+msgstr "Page de réservation"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "booking page"
+msgid "Title"
+msgstr "Titre"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "e.g. 30-minute call"
+msgstr "ex. Appel de 30 minutes"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "booking page"
+msgid "Description"
+msgstr "Description"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "What the appointment is about, shown on the page"
+msgstr "L’objet du rendez-vous, affiché sur la page"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "booking page"
+msgid "Location"
+msgstr "Lieu"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Address, phone or video link"
+msgstr "Adresse, téléphone ou lien de visio"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "booking page"
+msgid "Duration"
+msgstr "Durée"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Weekly hours"
+msgstr "Horaires de la semaine"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "booking day"
+msgid "Unavailable"
+msgstr "Indisponible"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+#: ui/templates/calendar/ui/partials/_poll_modals.html
+msgctxt "time range"
+msgid "to"
+msgstr "à"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgctxt "time range"
+msgid "Remove"
+msgstr "Retirer"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Add hours"
+msgstr "Ajouter une plage"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Minimum notice (hours)"
+msgstr "Délai de prévenance (heures)"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Bookable up to (days ahead)"
+msgstr "Réservable jusqu’à (jours à l’avance)"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Break around (minutes)"
+msgstr "Pause autour (minutes)"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Add appointments to"
+msgstr "Ajouter les rendez-vous à"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Send confirmations from"
+msgstr "Envoyer les confirmations depuis"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "No email (confirmation screen only)"
+msgstr "Pas d’e-mail (écran de confirmation seulement)"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid "Check for conflicts"
+msgstr "Vérifier les conflits"
+
+#: ui/templates/calendar/ui/partials/_booking_modals.html
+msgid ""
+"Any event on these calendars, all-day ones included, makes the time "
+"unavailable. So do the invitations you have not declined."
+msgstr ""
+"Tout événement de ces calendriers, y compris sur la journée entière, rend le "
+"créneau indisponible. De même pour les invitations que vous n’avez pas "
+"déclinées."
 
 #: ui/templates/calendar/ui/partials/_calendar_modals.html
 #: ui/templates/calendar/ui/partials/_sidebar.html
@@ -639,11 +982,6 @@ msgstr "Créneaux"
 #: ui/templates/calendar/ui/partials/_poll_modals.html
 msgid "Add slot"
 msgstr "Ajouter un créneau"
-
-#: ui/templates/calendar/ui/partials/_poll_modals.html
-msgctxt "time range"
-msgid "to"
-msgstr "à"
 
 #: ui/templates/calendar/ui/partials/_poll_modals.html
 msgid "Remove end time"
@@ -1086,10 +1424,6 @@ msgid "Name *"
 msgstr "Nom *"
 
 #: ui/templates/calendar/ui/polls/shared.html
-msgid "Your name"
-msgstr "Votre nom"
-
-#: ui/templates/calendar/ui/polls/shared.html
 msgid "Email (optional)"
 msgstr "E-mail (facultatif)"
 
@@ -1127,6 +1461,30 @@ msgstr "Sondage créé avec"
 msgctxt "default calendar name"
 msgid "Personal"
 msgstr "Personnel"
+
+#: views/booking_pages.py
+msgid "Not a valid UUID."
+msgstr "UUID invalide."
+
+#: views/booking_pages.py
+msgid "This booking is already cancelled."
+msgstr "Cette réservation est déjà annulée."
+
+#: views/booking_public.py
+msgid "Give a time range, from and to, with their offset."
+msgstr "Indiquez une plage horaire, from et to, avec leur décalage horaire."
+
+#: views/booking_public.py
+msgid "The range is too wide."
+msgstr "La plage est trop large."
+
+#: views/booking_public.py
+msgid "This time is no longer available. Pick another one."
+msgstr "Ce créneau n’est plus disponible. Choisissez-en un autre."
+
+#: views/booking_public.py
+msgid "This appointment has already started."
+msgstr "Ce rendez-vous a déjà commencé."
 
 #: views/polls.py
 #, python-format

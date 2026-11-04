@@ -48,6 +48,7 @@ function makeApp(search = '?view=month') {
     calendarTasksMixin: () => ({}),
     calendarRecurrenceMixin: () => ({}),
     calendarPollsMixin: () => ({}),
+    calendarBookingPagesMixin: () => ({}),
     location,
     navHistory,
     URLSearchParams,

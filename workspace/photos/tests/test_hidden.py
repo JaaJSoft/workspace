@@ -377,7 +377,7 @@ class HiddenApiTests(TestCase):
         bob.groups.add(family)
         group_root = FileService.create_folder(owner=bob, name="Family", group=family)
         picnic = make_photo(bob, "picnic.jpg", _at(2024, 5, 5), parent=group_root)
-        hide_files(self.user, [group_root])
+        hide_files(self.user, [group_root, picnic])
         self.user.groups.remove(family)
 
         answers = [

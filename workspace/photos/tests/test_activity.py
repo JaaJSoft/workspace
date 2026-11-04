@@ -99,6 +99,22 @@ class PhotosActivityTests(TestCase):
 
         self.assertEqual(events[1]["description"], "2 photos to Trip")
 
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=True)
+    def test_a_burst_of_quarantined_photos_counts_for_no_day(self):
+        for item in self.album.items.select_related("file"):
+            FileScan.objects.create(
+                file=item.file,
+                status=FileScan.Status.INFECTED,
+                content_hash=item.file.content_hash,
+                scanned_at=timezone.now(),
+            )
+        today = timezone.localdate()
+
+        counts = self.provider.get_daily_counts(self.owner.pk, today, today)
+
+        # The share is left, the additions are gone.
+        self.assertEqual(sum(counts.values()), 1)
+
     def test_limit_offset_and_excluded_actor(self):
         events = self.provider.get_recent_events(self.owner.pk, limit=1, offset=1)
         self.assertEqual([e["label"] for e in events], ["Photos added"])

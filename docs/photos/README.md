@@ -1,7 +1,7 @@
 # Photos
 
 The Photos module shows the photos and videos stored in Files as a timeline, by
-the day they were taken. It is a preview module.
+the day they were taken.
 
 ## Adding photos
 

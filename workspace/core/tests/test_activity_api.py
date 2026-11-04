@@ -1,4 +1,5 @@
 from contextlib import ExitStack
+from dataclasses import replace
 from datetime import date
 from unittest.mock import patch
 
@@ -8,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from workspace.core.module_registry import registry
 from workspace.photos.activity import PhotosActivityProvider
 
 User = get_user_model()
@@ -98,6 +100,13 @@ class ActivityApiPreviewModuleVisibilityTests(TestCase):
         event = {"label": "photo-event", "timestamp": timezone.now()}
         stack = ExitStack()
         self.addCleanup(stack.close)
+        # No module in preview has an activity provider: put Photos back there.
+        stack.enter_context(
+            patch.dict(
+                registry._modules,
+                {"photos": replace(registry.get("photos"), preview=True)},
+            )
+        )
         stack.enter_context(
             patch.object(
                 PhotosActivityProvider,

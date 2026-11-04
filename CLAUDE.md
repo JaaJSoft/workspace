@@ -66,7 +66,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `notes` | Markdown notes built on the files module |
 | `notifications` | Web push, in-app notifications |
 | `people` | Address book: persons and contact lists per user or group, linked workspace accounts, section registry for other modules |
-| `photos` | Photo and video library built on the files module: capture-date timeline, EXIF and ffprobe metadata read off-request (preview) |
+| `photos` | Photo and video library built on the files module: capture-date timeline, EXIF and ffprobe metadata read off-request |
 | `projects` | Projects and kanban boards: tasks, statuses, members, comments, task references |
 | `users` | User model, settings, profile, activity feed |
 | `vault` | End-to-end encrypted password vault (preview) |

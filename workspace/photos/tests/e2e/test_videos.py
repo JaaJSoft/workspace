@@ -17,7 +17,7 @@ TILES = "#timeline-grid [data-uuid]"
 class PhotosVideoTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = self.create_user(username="filmmaker", is_staff=True)
+        self.user = self.create_user(username="filmmaker")
         self.photo = make_photo(
             self.user, "beach.jpg", datetime(2024, 7, 14, 12, tzinfo=UTC)
         )

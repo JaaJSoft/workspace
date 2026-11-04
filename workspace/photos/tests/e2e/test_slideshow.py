@@ -25,8 +25,7 @@ TOGGLE = "[data-viewer-slideshow-toggle]"
 class AlbumSlideshowTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        # Photos is a preview module: staff see it.
-        self.user = self.create_user(username="owner", is_staff=True)
+        self.user = self.create_user(username="owner")
         self.photos = [
             make_photo(
                 self.user, f"day{day}.jpg", datetime(2024, 7, day, 12, tzinfo=UTC)

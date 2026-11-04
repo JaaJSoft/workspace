@@ -45,6 +45,9 @@ An address book for the people around your data. Personal contacts and shared gr
 
 ![People](docs/images/people_1.png)
 
+### [Photos](docs/photos/)
+A timeline of the photos and videos you already keep in Files, ordered by the day they were taken. Albums shared with your groups or through a link, a map of where each photo was taken, search by description and similar photos, slideshows, phone backup over WebDAV, and opt-in face detection and grouping.
+
 ### [AI Assistants](docs/ai/)
 Configurable chat bots with system prompts, vision, function calling, extended thinking, image generation, and bot memory. Works with OpenAI API or any compatible provider (Ollama, LM Studio, etc.).
 
@@ -215,7 +218,6 @@ Your module automatically appears in the sidebar, dashboard, and search results.
 See [IDEAS.md](IDEAS.md) for the full roadmap. Planned modules include:
 
 - **Bookmarks** - Save and organize links with automatic previews
-- **Photos & Gallery** - Timeline and albums on top of your files, from capture dates
 
 ## Contributing
 

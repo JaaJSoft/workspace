@@ -20,10 +20,9 @@ def find_link(token):
     """The link *token* names, expired or not, or None.
 
     None too for a link whose maker may no longer share the album. Losing
-    that right revokes their links (``album_revocation``), but not on every
-    path: a group or a project deleted outright takes its memberships along
-    without a signal. Asking here keeps such a link from handing the album
-    out all the same.
+    that right revokes their links (``album_revocation``), but only on the
+    paths a hook watches: a share row deleted in bulk runs none. Asking here
+    keeps such a link from handing the album out all the same.
     """
     link = (
         AlbumLink.objects.select_related("album", "album__owner", "created_by")

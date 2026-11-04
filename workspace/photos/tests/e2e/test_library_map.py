@@ -50,8 +50,7 @@ COUNT_LIVE_MAPS = """() => {
 class LibraryMapTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        # Photos is a preview module: staff see it in the navigation.
-        self.user = self.create_user(username="traveller", is_staff=True)
+        self.user = self.create_user(username="traveller")
         # Two photos a street apart, one across town, one in Rome.
         self.louvre = make_photo(
             self.user,

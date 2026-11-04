@@ -12,7 +12,10 @@ Run it before a release so the screenshots track the current UI:
 
 Requirements: the ``dev`` dependency group (Playwright) and a Chromium
 install (``uv run playwright install chromium``, or set
-``SCREENSHOTS_CHROMIUM`` to an existing Chromium binary).
+``SCREENSHOTS_CHROMIUM`` to an existing Chromium binary). The demo photo
+library is downloaded from Open Images on the first run (about 15 MB, cached
+with the photo datasets), and its credits are rewritten to
+``docs/images/CREDITS.md``.
 """
 
 import argparse
@@ -30,6 +33,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = REPO_ROOT / "docs" / "images"
+CREDITS_PATH = OUTPUT_DIR / "CREDITS.md"
 
 VIEWPORT = {"width": 1280, "height": 900}
 USERNAME = "alex"
@@ -155,6 +159,33 @@ def capture(base_url, context, only=None):
         browser.close()
 
 
+def write_credits():
+    """Name the author of every photo the captures show, as their CC BY
+    licence asks of any copy, next to the images in docs/images/."""
+    from scripts._screenshot_seed import (
+        LIBRARY_LICENSE,
+        LIBRARY_LICENSE_URL,
+        load_library,
+    )
+
+    lines = [
+        "# Screenshot credits",
+        "",
+        "The photos in the screenshots come from the Open Images dataset and are",
+        f"licensed [{LIBRARY_LICENSE}]({LIBRARY_LICENSE_URL}) by their authors.",
+        "They are shown downscaled, with capture dates set by the demo seed.",
+        "This file is written by `scripts/screenshots.py`.",
+        "",
+    ]
+    for photo in sorted(load_library(), key=lambda p: p["name"]):
+        title = photo["title"] or photo["name"]
+        lines.append(
+            f"- `{photo['name']}`: [{title}]({photo['url']}) "
+            f"by [{photo['author']}]({photo['author_url']})"
+        )
+    CREDITS_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _dismiss_overlays(page):
     # The seed marks onboarding/changelog as seen; closing the dialogs
     # here is just a safety net (a click would be flaky - the buttons
@@ -191,6 +222,7 @@ def main():
     with demo_environment() as (base_url, context):
         print(f"Capturing to {OUTPUT_DIR}/ ...")
         capture(base_url, context, only=set(args.only) if args.only else None)
+    write_credits()
     print("Done.")
 
 

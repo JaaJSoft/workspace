@@ -272,7 +272,7 @@ class LosingAProjectTests(RevocationTestCase):
 
 class LinkCheckTests(RevocationTestCase):
     """A link is refused once its maker may no longer share the album, even
-    when no hook revoked it (a group or a project deleted outright)."""
+    when no hook revoked it (a share row deleted in bulk)."""
 
     def test_a_link_whose_maker_lost_the_role_without_a_hook(self):
         self.share()
@@ -306,3 +306,60 @@ class LinkCheckTests(RevocationTestCase):
         self.assertEqual(
             self.client.get(f"/photos/shared/{link.token}").status_code, 404
         )
+
+
+class DeletingAGroupOrAProjectTests(RevocationTestCase):
+    """A group or a project deleted outright takes its memberships along
+    without an ``m2m_changed`` or a ``left_at``: the shares its members made
+    on the albums it let them manage go all the same."""
+
+    def test_a_deleted_project_revokes_the_shares_its_managers_made(self):
+        project = Project.objects.create(
+            name="Website", created_by=self.owner, key="P7"
+        )
+        ProjectMember.objects.create(project=project, user=self.bob)
+        self.share(MANAGER, project=project)
+        self.share(VIEWER, by=self.bob, user=self.carol)
+        link = self.link(self.bob)
+
+        project.delete()
+
+        self.assertIsNone(get_album_role(self.bob, self.album))
+        self.assertIsNone(get_album_role(self.carol, self.album))
+        self.assertFalse(AlbumLink.objects.filter(pk=link.pk).exists())
+
+    def test_a_deleted_group_revokes_the_shares_its_managers_made(self):
+        team = Group.objects.create(name="Team")
+        self.bob.groups.add(team)
+        self.share(MANAGER, group=team)
+        self.share(VIEWER, by=self.bob, user=self.carol)
+
+        team.delete()
+
+        self.assertIsNone(get_album_role(self.bob, self.album))
+        self.assertIsNone(get_album_role(self.carol, self.album))
+
+    def test_a_group_deleted_off_a_project_revokes_its_members_shares(self):
+        team = Group.objects.create(name="Team")
+        self.bob.groups.add(team)
+        project = Project.objects.create(
+            name="Website", created_by=self.owner, key="P8"
+        )
+        project.groups.add(team)
+        self.share(MANAGER, project=project)
+        self.share(VIEWER, by=self.bob, user=self.carol)
+
+        team.delete()
+
+        self.assertIsNone(get_album_role(self.bob, self.album))
+        self.assertIsNone(get_album_role(self.carol, self.album))
+
+    def test_the_owners_shares_outlive_the_deleted_group(self):
+        team = Group.objects.create(name="Team")
+        self.bob.groups.add(team)
+        self.share(MANAGER, group=team)
+        self.share(VIEWER, user=self.carol)
+
+        team.delete()
+
+        self.assertEqual(get_album_role(self.carol, self.album), VIEWER)

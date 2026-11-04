@@ -223,9 +223,11 @@ def hidden_folders(user):
 
 def still_hidden(user, file_uuids):
     """The uuids among *file_uuids* that *user* still hides: on their own,
-    or through a folder they hid around them."""
+    or through a folder they hid around them. A file out of their reach is
+    never named, so the answer cannot confirm it exists."""
     return set(
-        File.objects.filter(pk__in=file_uuids)
+        hideable_files(user)
+        .filter(pk__in=file_uuids)
         .filter(_hidden_q(user))
         .values_list("pk", flat=True)
     )
@@ -393,6 +395,19 @@ def visible_album_items(user, albums):
     ).filter(
         vouched_items_q()
         | Q(file_id__in=FileService.accessible_file_ids(user, include_deleted=False))
+    )
+
+
+def visible_item_ids(user, album, file_ids):
+    """The ids among *file_ids* of the items of *album* that *user* sees.
+
+    What a write on items works from: an item out of sight must answer like
+    a file the album does not hold, or the answer would confirm it is there.
+    """
+    return set(
+        visible_album_items(user, [album])
+        .filter(file_id__in=file_ids)
+        .values_list("file_id", flat=True)
     )
 
 

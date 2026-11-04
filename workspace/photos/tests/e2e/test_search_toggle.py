@@ -14,7 +14,7 @@ from workspace.photos.tests.embeddings import RED, embeddings_on, library_photo
 class MobileSearchToggleTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = self.create_user(username="photographer", is_staff=True)
+        self.user = self.create_user(username="photographer")
         self.red = library_photo(self.user, "red.jpg", RED)
         self.login_as(self.user)
         self.page.set_viewport_size({"width": 390, "height": 844})

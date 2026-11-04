@@ -154,10 +154,10 @@ class UnifiedSearchTests(TestCase):
 
 
 class RegistrationTests(TestCase):
-    def test_module_is_a_preview(self):
+    def test_module_is_out_of_preview(self):
         module = registry.get("photos")
 
-        self.assertTrue(module.preview)
+        self.assertFalse(module.preview)
         self.assertEqual(module.url, "/photos")
 
     def test_search_provider_refines_files(self):

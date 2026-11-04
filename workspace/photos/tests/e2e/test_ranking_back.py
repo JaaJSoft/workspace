@@ -29,7 +29,7 @@ TILES = "#timeline-grid [data-uuid]"
 class RankingBackTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = self.create_user(username="photographer", is_staff=True)
+        self.user = self.create_user(username="photographer")
         self.red = library_photo(self.user, "red.jpg", RED)
         library_photo(self.user, "dark.jpg", DARK_RED)
         library_photo(self.user, "blue.jpg", BLUE)

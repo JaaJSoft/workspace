@@ -15,7 +15,7 @@ TILES = "#timeline-grid [data-uuid]"
 class PhotosImportTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = self.create_user(username="importer", is_staff=True)
+        self.user = self.create_user(username="importer")
         self.login_as(self.user)
 
     def tearDown(self):

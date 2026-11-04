@@ -1,7 +1,14 @@
 # Photos
 
 The Photos module shows the photos and videos stored in Files as a timeline, by
-the day they were taken. It is a preview module.
+the day they were taken.
+
+![Timeline](../images/photos_1.png)
+
+![Album](../images/photos_2.png)
+
+The photos in these screenshots are licensed CC BY 2.0 by their authors: see
+[the credits](../images/CREDITS.md).
 
 ## Adding photos
 

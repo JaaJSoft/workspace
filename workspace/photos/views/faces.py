@@ -342,7 +342,7 @@ class FaceViewSet(
         with transaction.atomic():
             person = create_person(owner=self.request.user, display_name=name)
             face_people.assign_face_to_person(face, person)
-        face_people.give_default_avatar(person, face.pk)
+        face_people.give_default_avatar(self.request.user, person, face.pk)
 
 
 @extend_schema(tags=["Photos - Faces"])

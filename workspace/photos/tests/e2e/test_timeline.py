@@ -28,9 +28,7 @@ VIEWER = "[data-file-viewer-inline]"
 class PhotosTimelineTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        # Photos is a preview module: staff see it in the navigation, which
-        # is what gives the page its module and its sidebar preference.
-        self.user = self.create_user(username="photographer", is_staff=True)
+        self.user = self.create_user(username="photographer")
         self.photos = [
             make_photo(
                 self.user, f"day{day}.jpg", datetime(2024, 7, day, 12, tzinfo=UTC)

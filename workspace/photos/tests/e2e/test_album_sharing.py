@@ -37,9 +37,8 @@ def _thumbnail(file_obj):
 class SharedAlbumTestCase(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        # Photos is a preview module: staff see it.
-        self.owner = self.create_user(username="owner", is_staff=True)
-        self.bob = self.create_user(username="bob", is_staff=True)
+        self.owner = self.create_user(username="owner")
+        self.bob = self.create_user(username="bob")
         self.photos = [
             make_photo(
                 self.owner, f"day{day}.jpg", datetime(2024, 7, day, 12, tzinfo=UTC)

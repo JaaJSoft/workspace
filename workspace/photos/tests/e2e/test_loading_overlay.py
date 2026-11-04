@@ -26,7 +26,7 @@ TILES = "#timeline-grid [data-uuid]"
 class PhotosLoadingOverlayTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = self.create_user(username="photographer", is_staff=True)
+        self.user = self.create_user(username="photographer")
         make_photo(self.user, "mine.jpg", datetime(2024, 7, 10, 12, tzinfo=UTC))
         # A photo and a video, or the media type tabs are not offered.
         make_video(self.user, "surf.webm", datetime(2024, 7, 10, 15, tzinfo=UTC))

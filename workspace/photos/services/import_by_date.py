@@ -50,8 +50,11 @@ def file_by_date(user, file_uuids):
     A file that fails for an unexpected reason stays where it is and the
     batch goes on; the failures are raised together at the end, as an
     ExceptionGroup, so the task still reports them.
+
+    Runs after the request that asked for it: a user deactivated since has
+    nothing filed, in their own folders or in a group's.
     """
-    if not import_by_date(user):
+    if not user.is_active or not import_by_date(user):
         return 0
     tz = get_user_timezone(user)
     moved = 0

@@ -293,7 +293,9 @@
       if (!_listenerAttached) {
         _listenerAttached = true;
         _crepe.on(function(listener) {
-          listener.markdownUpdated(function(md) {
+          // The listener's first argument is the editor ctx, the markdown
+          // comes second.
+          listener.markdownUpdated(function(ctx, md) {
             const dirty = md !== self.originalContent;
             self.isDirty = dirty;
             if (dirty) {

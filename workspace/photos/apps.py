@@ -13,6 +13,7 @@ class PhotosConfig(AppConfig):
             SearchProviderInfo,
             registry,
         )
+        from workspace.files.content_filters import register_content_filter
         from workspace.files.properties_sections import (
             PropertiesSection,
             properties_section_registry,
@@ -50,6 +51,7 @@ class PhotosConfig(AppConfig):
             mark_sensitive,
             sensitive_level_expression,
         )
+        from workspace.photos.services.shared_location import strip_location
 
         register_vector_index(FACE_EMBEDDINGS)
         register_vector_index(PHOTO_EMBEDDINGS)
@@ -109,6 +111,9 @@ class PhotosConfig(AppConfig):
         register_sensitivity_provider(
             SensitivityProvider(level=sensitive_level_expression, mark=mark_sensitive)
         )
+
+        # What files serves to someone else leaves the owner's position out.
+        register_content_filter(strip_location)
 
         properties_section_registry.register(
             PropertiesSection(

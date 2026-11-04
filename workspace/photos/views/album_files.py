@@ -24,6 +24,7 @@ from workspace.common.uuids import (
     UuidBatchError,
     parse_uuid_batch,
 )
+from workspace.files.content_filters import open_served
 from workspace.files.services.image_edits import downloads_edited
 from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_SIZES,
@@ -71,9 +72,10 @@ def thumbnail_response(request, file_obj, *, cache_control):
     return response
 
 
-def content_response(request, file_obj, *, attachment=False):
-    """*file_obj*'s bytes, inline or as a download, with Range support so a
-    video can seek and a download resume."""
+def content_response(request, file_obj, *, reader, attachment=False):
+    """*file_obj*'s bytes as *reader* (None for a public link) gets to read
+    them, inline or as a download, with Range support so a video can seek
+    and a download resume."""
     if not file_obj.content:
         return Response(status=status.HTTP_404_NOT_FOUND)
     # A download is the photo as everyone sees it; inline, the viewer applies
@@ -81,11 +83,11 @@ def content_response(request, file_obj, *, attachment=False):
     if attachment and downloads_edited(file_obj):
         from workspace.files.viewsets.content import edited_download_response
 
-        response = edited_download_response(file_obj)
+        response = edited_download_response(file_obj, reader)
         if response is not None:
             return response
     try:
-        handle = file_obj.content.open("rb")
+        handle = open_served(file_obj, reader)
     except OSError:
         return Response(status=status.HTTP_404_NOT_FOUND)
     name = {"attachment_filename" if attachment else "inline_filename": file_obj.name}
@@ -140,8 +142,9 @@ def _arcnames(files):
         yield file_obj, name
 
 
-def archive_response(files, title):
-    """A zip of *files* streamed as it is built, named after *title*.
+def archive_response(files, title, *, reader):
+    """A zip of *files* streamed as it is built, named after *title*, each
+    read as *reader* (None for a public link) gets to read it.
 
     Ordered as the album reads by capture date; a file whose blob is gone is
     left out rather than failing the whole archive.
@@ -152,9 +155,9 @@ def archive_response(files, title):
         files.exclude(content="")
         .exclude(content__isnull=True)
         .order_by(F("media_item__taken_at").asc(nulls_last=True), "created_at", "uuid")
-        .only("uuid", "name", "content", "size")
+        .only("uuid", "name", "content", "size", "owner_id", "group_id")
     )
-    stream = _build_zip_stream(_arcnames(ordered.iterator()))
+    stream = _build_zip_stream(_arcnames(ordered.iterator()), reader=reader)
     response = StreamingHttpResponse(stream, content_type="application/zip")
     response["Content-Disposition"] = (
         f'attachment; filename="{safe_filename(title or "album")}.zip"'
@@ -215,7 +218,7 @@ class AlbumFileContentView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         if not _may_download(request.user, album):
             return rendition_response(request, file_obj)
-        return content_response(request, file_obj)
+        return content_response(request, file_obj, reader=request.user)
 
 
 @extend_schema(tags=["Photos - Album files"])
@@ -231,7 +234,7 @@ class AlbumFileDownloadView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         if not _may_download(request.user, album):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        return content_response(request, file_obj, attachment=True)
+        return content_response(request, file_obj, reader=request.user, attachment=True)
 
 
 @extend_schema(tags=["Photos - Album files"])
@@ -247,7 +250,9 @@ class AlbumDownloadView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         if not _may_download(request.user, album):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        return archive_response(album_files(request.user, album), album.title)
+        return archive_response(
+            album_files(request.user, album), album.title, reader=request.user
+        )
 
     @extend_schema(
         summary="Download photos of an album as a zip",
@@ -286,5 +291,5 @@ class AlbumDownloadView(APIView):
             files = album_files(request.user, album).filter(uuid__in=uuids)
             if files.count() != len(uuids):
                 return Response(status=status.HTTP_404_NOT_FOUND)
-            return archive_response(files, album.title)
+            return archive_response(files, album.title, reader=request.user)
         return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)

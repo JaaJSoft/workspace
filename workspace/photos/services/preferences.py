@@ -28,6 +28,7 @@ IMPORT_BY_DATE = "import_by_date"
 SHOW_HIDDEN = "show_hidden"
 AUTO_TAGS = "auto_tags"
 SHOW_MAP = "show_map"
+STRIP_LOCATION_ON_SHARE = "strip_location_on_share"
 
 SQUARE = "square"
 ORIGINAL = "original"
@@ -114,6 +115,13 @@ def show_map(user):
     return _flag(user, SHOW_MAP, False)
 
 
+def strip_location_on_share(user):
+    """Whether *user*'s photos reach anyone else without the place they were
+    taken (services/shared_location.py). On by default: most people do not
+    know a phone writes it into every picture."""
+    return _flag(user, STRIP_LOCATION_ON_SHARE, True)
+
+
 def sensitive_blur_choices():
     """The steps of the panel's sensitive-blur slider, strictest first: the
     ``core/sensitive_blur`` setting (files/sensitivity.py) it writes, shown in
@@ -164,6 +172,7 @@ def display_preferences(user):
         "show_hidden": show_hidden(user),
         "auto_tags": auto_tags(user),
         "show_map": show_map(user),
+        "strip_location_on_share": strip_location_on_share(user),
         "sensitive_blur": blur_preference(user).value,
         "reveal_sensitive_on_hover": reveal_sensitive_on_hover(user),
         "reveal_sensitive_in_viewer": reveal_sensitive_in_viewer(user),

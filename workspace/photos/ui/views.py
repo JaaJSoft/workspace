@@ -1010,7 +1010,9 @@ def library_map(request):
         period = _map_period(request)
     except ValueError:
         period = None
-    counts = media_type_counts(located(library_files(request.user, scope)))
+    counts = media_type_counts(
+        located(library_files(request.user, scope), request.user)
+    )
     scope_params = _scope_params(scope, defaults)
     type_params = _type_params(media_type, defaults)
     query = urlencode(_map_query(scope, media_type))
@@ -1086,7 +1088,9 @@ def library_map_photos(request):
     except ValueError:
         return HttpResponseBadRequest("Invalid area, period or cursor.")
     tz = get_user_timezone(request.user)
-    files = in_area(_of_type(library_files(request.user, scope), media_type), area)
+    files = in_area(
+        _of_type(library_files(request.user, scope), media_type), area, request.user
+    )
     if period is not None:
         files = in_period(files, *period, tz)
     view_params = _map_query(scope, media_type, period) | {

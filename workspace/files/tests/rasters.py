@@ -31,7 +31,7 @@ def ftyp_box(major, *compatible):
     return (8 + len(body)).to_bytes(4, "big") + b"ftyp" + body
 
 
-_BYTE, _ASCII, _SHORT, _LONG, _SRATIONAL = 1, 2, 3, 4, 10
+_BYTE, _ASCII, _SHORT, _LONG, _RATIONAL, _SRATIONAL = 1, 2, 3, 4, 5, 10
 _FORMATS = {_BYTE: "B", _SHORT: "H", _LONG: "I"}
 
 
@@ -44,9 +44,10 @@ def _ifd(entries, offset):
     for tag, kind, value in sorted(entries):
         if kind == _ASCII:
             raw, count = value.encode() + b"\0", len(value) + 1
-        elif kind == _SRATIONAL:
+        elif kind in (_RATIONAL, _SRATIONAL):
+            pack = "<II" if kind == _RATIONAL else "<ii"
             raw, count = (
-                b"".join(struct.pack("<ii", *pair) for pair in value),
+                b"".join(struct.pack(pack, *pair) for pair in value),
                 len(value),
             )
         else:
@@ -72,10 +73,14 @@ def dng_bytes(
     taken_at="2021:05:12 12:21:21",
     preview_size=(96, 64),
     color=(200, 60, 40),
+    gps=None,
 ):
     """The smallest DNG LibRaw opens: a 64x64 blank sensor mosaic in a
     sub-IFD, and a JPEG preview of *preview_size* in IFD0 naming the camera.
-    Real RAWs weigh megabytes; this one a few kilobytes."""
+    Real RAWs weigh megabytes; this one a few kilobytes.
+
+    *gps* is ``(latitude, longitude)`` in whole degrees, north and east, for
+    a GPS IFD."""
     buffer = io.BytesIO()
     Image.new("RGB", preview_size, color).save(buffer, format="JPEG")
     preview = buffer.getvalue() + b"\0" * (len(buffer.getvalue()) % 2)
@@ -106,6 +111,19 @@ def dng_bytes(
     )
     exif_at = len(out)
     out += _ifd([(36867, _ASCII, taken_at)], exif_at)  # DateTimeOriginal
+    located = []
+    if gps is not None:
+        gps_at = len(out)
+        out += _ifd(
+            [
+                (1, _ASCII, "N"),
+                (2, _RATIONAL, [(gps[0], 1), (0, 1), (0, 1)]),
+                (3, _ASCII, "E"),
+                (4, _RATIONAL, [(gps[1], 1), (0, 1), (0, 1)]),
+            ],
+            gps_at,
+        )
+        located = [(34853, _LONG, [gps_at])]  # GPSInfo
     ifd0_at = len(out)
     identity = [(1, 1), (0, 1), (0, 1), (0, 1), (1, 1), (0, 1), (0, 1), (0, 1), (1, 1)]
     out += _ifd(
@@ -130,6 +148,7 @@ def dng_bytes(
             (50708, _ASCII, f"{make} {model}"),  # UniqueCameraModel
             (50721, _SRATIONAL, identity),  # ColorMatrix1
             (50778, _SHORT, [21]),  # CalibrationIlluminant1: D65
+            *located,
         ],
         ifd0_at,
     )

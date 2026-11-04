@@ -285,6 +285,8 @@ class ShortcutReadApiTests(ShortcutApiFixtures, APITestCase):
                 self.assertEqual(self.client.get(url).status_code, 200)
             return len(queries)
 
+        # The first request fills process-wide caches; measure past it.
+        listing_queries(0)
         self.assertEqual(listing_queries(2), listing_queries(10))
 
     def test_content_and_download_refuse_a_shortcut(self):

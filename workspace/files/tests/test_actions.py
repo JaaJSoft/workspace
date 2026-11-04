@@ -56,6 +56,7 @@ class ActionRegistryTests(TestCase):
             "view",
             "open",
             "open_new_tab",
+            "open_target",
             "download",
             "copy_link",
             "toggle_favorite",

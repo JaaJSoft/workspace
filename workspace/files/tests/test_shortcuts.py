@@ -225,6 +225,8 @@ class ResolveShortcutsTests(ShortcutFixtures, TestCase):
                 resolve_shortcuts(self.bob, shortcuts)
             return len(queries)
 
+        # The first resolution fills process-wide caches; measure past it.
+        resolve_count(2)
         self.assertEqual(resolve_count(2), resolve_count(12))
 
     def test_other_nodes_are_left_out(self):

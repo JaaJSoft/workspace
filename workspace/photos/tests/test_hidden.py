@@ -3,6 +3,7 @@ import re
 from datetime import UTC, datetime
 from unittest import skipUnless
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -368,6 +369,25 @@ class HiddenApiTests(TestCase):
             response.json(), {"unhidden": 2, "still_hidden": [str(inside.uuid)]}
         )
         self.assertNotIn(inside, library_files(self.user))
+
+    def test_unhiding_names_nothing_from_a_group_the_user_left(self):
+        bob = User.objects.create_user(username="bob", password="p")
+        family = Group.objects.create(name="Family")
+        self.user.groups.add(family)
+        bob.groups.add(family)
+        group_root = FileService.create_folder(owner=bob, name="Family", group=family)
+        picnic = make_photo(bob, "picnic.jpg", _at(2024, 5, 5), parent=group_root)
+        hide_files(self.user, [group_root])
+        self.user.groups.remove(family)
+
+        answers = [
+            self.client.post(
+                UNHIDE_URL, {"files": [uuid]}, content_type="application/json"
+            ).json()
+            for uuid in (str(picnic.uuid), str(uuid4()))
+        ]
+
+        self.assertEqual(answers[0], answers[1])
 
     def test_unhiding_never_touches_another_users_rows(self):
         bob = User.objects.create_user(username="bob", password="p")

@@ -1,11 +1,13 @@
+import uuid
 from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
-from workspace.files.models import FileShare
+from workspace.files.models import File, FileShare
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import Album, AlbumItem
 from workspace.photos.services.album_sharing import share_album
@@ -298,6 +300,73 @@ class AlbumItemsApiTests(AlbumApiTestCase):
         ):
             self.assertEqual(self._post("/reorder", body).status_code, 400, body)
         self.assertEqual(self._order(self.album), [self.a.pk, self.b.pk])
+
+
+class InvisibleItemsAnswerLikeAbsentOnesTests(AlbumApiTestCase):
+    """An item a member cannot see gets the answer a uuid that names nothing
+    gets, so an album never confirms what it holds out of sight."""
+
+    def setUp(self):
+        super().setUp()
+        self.album = create_album(
+            self.user,
+            "Summer",
+            sort_mode=Album.SortMode.MANUAL,
+            files=[self.a, self.b, self.c],
+        )
+        File.objects.filter(pk=self.c.pk).update(deleted_at=timezone.now())
+        self.client.force_login(self.bob)
+
+    def _as(self, role):
+        share_album(self.album, role=role, acting_user=self.user, user=self.bob)
+
+    def _post(self, path, data):
+        return self.client.post(
+            f"{API}/{self.album.uuid}{path}", data, content_type="application/json"
+        )
+
+    def _answers(self, path, body_for):
+        hidden = self._post(path, body_for(str(self.c.uuid)))
+        absent = self._post(path, body_for(str(uuid.uuid4())))
+        return (hidden.status_code, hidden.content), (
+            absent.status_code,
+            absent.content,
+        )
+
+    def test_a_manager_removing_an_item_out_of_sight(self):
+        self._as("manager")
+
+        hidden, absent = self._answers("/items/remove", lambda f: {"files": [f]})
+
+        self.assertEqual(hidden, absent)
+        self.assertTrue(
+            AlbumItem.objects.filter(album=self.album, file=self.c).exists()
+        )
+
+    def test_a_contributor_removing_an_item_out_of_sight(self):
+        self._as("contributor")
+
+        hidden, absent = self._answers("/items/remove", lambda f: {"files": [f]})
+
+        self.assertEqual(hidden, absent)
+
+    def test_moving_an_item_out_of_sight(self):
+        self._as("manager")
+
+        hidden, absent = self._answers("/reorder", lambda f: {"files": [f]})
+
+        self.assertEqual(hidden, absent)
+        self.assertEqual(self._order(self.album), [self.a.pk, self.b.pk, self.c.pk])
+
+    def test_moving_next_to_an_item_out_of_sight(self):
+        self._as("manager")
+
+        hidden, absent = self._answers(
+            "/reorder", lambda f: {"files": [str(self.a.uuid)], "after": f}
+        )
+
+        self.assertEqual(hidden, absent)
+        self.assertEqual(self._order(self.album), [self.a.pk, self.b.pk, self.c.pk])
 
 
 class AlbumActionsApiTests(AlbumApiTestCase):

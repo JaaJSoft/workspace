@@ -236,6 +236,15 @@ class ImportByDateApiTests(ImportByDateTestCase):
                 response = self.client.post(API, body, content_type="application/json")
                 self.assertEqual(response.status_code, 400)
 
+    def test_rejects_a_body_that_is_not_an_object(self):
+        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=self.folder)
+
+        for body in ([str(photo.uuid)], str(photo.uuid), 1):
+            with self.subTest(body=body):
+                response = self.client.post(API, body, content_type="application/json")
+
+                self.assertEqual(response.status_code, 400)
+
     def test_login_required(self):
         self.client.logout()
 

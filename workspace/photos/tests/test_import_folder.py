@@ -135,6 +135,16 @@ class ImportFolderApiTests(ImportFolderTestCase):
                 self.assertEqual(response.status_code, 400)
         self.assertIsNone(get_setting(self.user, "photos", "import_folder"))
 
+    def test_put_refuses_a_body_that_is_not_an_object(self):
+        folder = FileService.create_folder(self.user, "Camera")
+
+        for body in ([str(folder.pk)], "Camera", 1):
+            with self.subTest(body=body):
+                response = self.client.put(API, body, content_type="application/json")
+
+                self.assertEqual(response.status_code, 400)
+        self.assertIsNone(get_setting(self.user, "photos", "import_folder"))
+
 
 class ImportFolderPageTests(ImportFolderTestCase):
     def test_the_page_embeds_the_import_folder_without_creating_it(self):

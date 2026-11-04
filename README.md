@@ -48,6 +48,9 @@ An address book for the people around your data. Personal contacts and shared gr
 ### [Photos](docs/photos/)
 A timeline of the photos and videos you already keep in Files, ordered by the day they were taken. Albums shared with your groups or through a link, a map of where each photo was taken, search by description and similar photos, slideshows, phone backup over WebDAV, and opt-in face detection and grouping.
 
+![Photos](docs/images/photos_1.png)
+<sub>Screenshot photos licensed CC BY 2.0 by their authors: see the [credits](docs/images/CREDITS.md).</sub>
+
 ### [AI Assistants](docs/ai/)
 Configurable chat bots with system prompts, vision, function calling, extended thinking, image generation, and bot memory. Works with OpenAI API or any compatible provider (Ollama, LM Studio, etc.).
 

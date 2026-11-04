@@ -10,7 +10,9 @@ importable before ``django.setup()`` (``screenshots.py --list``).
 """
 
 import io
+import json
 from datetime import timedelta
+from pathlib import Path
 
 AVATAR_SIZE = 256
 AVATAR_COLORS = {
@@ -66,6 +68,57 @@ def _photo_png(start, end):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+# The demo user's photo library: photos hand-picked from Open Images V7's
+# validation set (Flickr photos licensed CC BY 2.0 by their authors), with
+# when each was taken and the album it belongs to. The credits travel with the
+# captures: screenshots.py writes them to docs/images/CREDITS.md.
+LIBRARY_MANIFEST = Path(__file__).resolve().parent / "data" / "screenshot-photos.json"
+LIBRARY_IMAGE_URL = "https://open-images-dataset.s3.amazonaws.com/validation/{}.jpg"
+LIBRARY_LICENSE = "CC BY 2.0"
+LIBRARY_LICENSE_URL = "https://creativecommons.org/licenses/by/2.0/"
+# Big enough for the viewer at a 1280px viewport, a fraction of the originals.
+LIBRARY_MAX_SIDE = 2048
+
+
+def load_library():
+    return json.loads(LIBRARY_MANIFEST.read_text(encoding="utf-8"))
+
+
+def _library_jpegs(library, now):
+    """{name: JPEG bytes} of every photo of *library*, carrying its capture
+    date in EXIF the way a camera would: the timeline orders by it.
+
+    The originals are downloaded once into the dataset cache and checked
+    against the manifest's sha256, so every run captures the same pixels.
+    """
+    from PIL import ExifTags, Image, ImageOps
+
+    from scripts import photo_dataset
+
+    cache = photo_dataset.default_cache_dir().parent / "screenshot-photos"
+    jpegs = {}
+    for n, photo in enumerate(library):
+        path = cache / f"{photo['id']}.jpg"
+        photo_dataset._ensure(
+            path, LIBRARY_IMAGE_URL.format(photo["id"]), photo["sha256"]
+        )
+        taken = (now - timedelta(days=photo["days_ago"])).replace(
+            hour=photo["hour"], minute=(n * 7) % 60, second=0, microsecond=0
+        )
+        with Image.open(path) as original:
+            img = ImageOps.exif_transpose(original).convert("RGB")
+        img.thumbnail((LIBRARY_MAX_SIDE, LIBRARY_MAX_SIDE), Image.Resampling.LANCZOS)
+        exif = Image.Exif()
+        exif_ifd = exif.get_ifd(ExifTags.IFD.Exif)
+        exif_ifd[ExifTags.Base.DateTimeOriginal] = taken.strftime("%Y:%m:%d %H:%M:%S")
+        offset = taken.strftime("%z")  # +HHMM; EXIF writes it +HH:MM
+        exif_ifd[ExifTags.Base.OffsetTimeOriginal] = f"{offset[:3]}:{offset[3:]}"
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=88, exif=exif)
+        jpegs[photo["name"]] = buf.getvalue()
+    return jpegs
 
 
 _MINIMAL_PDF = (
@@ -134,7 +187,8 @@ def seed(username, password):
         user.groups.add(design_team)
 
     context = {}
-    context["photos_uuid"] = _seed_files(alex, sam, design_team, now)
+    context["photos_uuid"], photos = _seed_files(alex, sam, design_team, now)
+    context["album_uuid"] = _seed_albums(alex, design_team, photos)
     _seed_notes(alex, now)
     context["conversation_uuid"] = _seed_chat(alex, sam, jordan, now)
     context["bot_conversation_uuid"] = _seed_ai(alex, now)
@@ -181,22 +235,12 @@ def _seed_files(alex, sam, group, now):
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
         '<circle cx="32" cy="32" r="28" fill="#6366f1"/></svg>'
     )
-    # The mosaic shot is taken inside Photos: a thumbnail grid is what the
-    # view exists for, so it needs enough images to actually fill a grid.
-    pictures = [
-        ("product-shot.png", (16, 185, 129), (5, 150, 105), 2),
-        ("team-offsite.png", (59, 130, 246), (14, 165, 233), 3),
-        ("keynote-stage.png", (99, 102, 241), (139, 92, 246), 4),
-        ("office-tour.png", (245, 158, 11), (249, 115, 22), 6),
-        ("conference-booth.png", (236, 72, 153), (219, 39, 119), 7),
-        ("workshop.png", (20, 184, 166), (6, 182, 212), 9),
-        ("launch-party.png", (168, 85, 247), (217, 70, 239), 11),
-        ("hero-banner.png", (239, 68, 68), (249, 115, 22), 13),
-        ("city-skyline.png", (30, 64, 175), (67, 56, 202), 15),
-        ("desk-setup.png", (100, 116, 139), (71, 85, 105), 17),
-        ("whiteboard.png", (34, 197, 94), (132, 204, 22), 19),
-        ("meetup-crowd.png", (2, 132, 199), (56, 189, 248), 22),
-    ]
+    # The demo user's photo library lives in Photos: the Files mosaic shot
+    # is taken there, and the Photos module shows the same pictures, on
+    # tiles one step larger than the default so the shots show the photos.
+    library = load_library()
+    set_setting(alex, "photos", "tile_size", 4)
+    jpegs = _library_jpegs(library, now)
     files = [
         (documents, "Quarterly report.pdf", _MINIMAL_PDF, "application/pdf", 26),
         (documents, "budget-2026.csv", csv.encode(), "text/csv", 20),
@@ -209,8 +253,8 @@ def _seed_files(alex, sam, group, now):
         ),
         (None, "logo.svg", svg.encode(), "image/svg+xml", 5),
     ] + [
-        (photos, name, _photo_png(start, end), "image/png", days_ago)
-        for name, start, end, days_ago in pictures
+        (photos, photo["name"], jpegs[photo["name"]], "image/jpeg", photo["days_ago"])
+        for photo in library
     ]
     created = {}
     for parent, name, data, mime, days_ago in files:
@@ -223,6 +267,8 @@ def _seed_files(alex, sam, group, now):
 
     FileFavorite.objects.create(owner=alex, file=report)
     FileFavorite.objects.create(owner=alex, file=photos)
+    for name in ("quiraing.jpg", "pier.jpg", "ginger-cat.jpg"):
+        FileFavorite.objects.create(owner=alex, file=created[name])
     PinnedFolder.objects.create(owner=alex, folder=photos, position=0)
 
     # Tags fill the list view's Tags column and the sidebar's pinned
@@ -240,8 +286,8 @@ def _seed_files(alex, sam, group, now):
         ("budget-2026.csv", ["2026"]),
         ("Roadmap.md", ["draft"]),
         ("logo.svg", ["client"]),
-        ("hero-banner.png", ["draft"]),
-        ("product-shot.png", ["client"]),
+        ("pier.jpg", ["client"]),
+        ("white-beach.jpg", ["2026"]),
     ]:
         for tag_name in tag_names:
             FileTag.objects.create(file=created[name], tag=tags[tag_name])
@@ -268,7 +314,29 @@ def _seed_files(alex, sam, group, now):
         )
         backdate_file(f, now - timedelta(hours=hours_ago))
 
-    return str(photos.uuid)
+    return str(photos.uuid), {
+        photo["name"]: created[photo["name"]] for photo in library
+    }
+
+
+def _seed_albums(alex, group, photos):
+    """The albums of the library manifest, filled in its order. One is shared
+    with the group, so the album shot shows its members. Returns that one."""
+    from workspace.photos.services.album_sharing import share_album
+    from workspace.photos.services.albums import create_album
+
+    albums = {}
+    for photo in load_library():
+        if photo["album"]:
+            albums.setdefault(photo["album"], []).append(photos[photo["name"]])
+    created = {
+        title: create_album(alex, title, files=files) for title, files in albums.items()
+    }
+    shared = created["Summer by the sea"]
+    shared.cover = photos["pier.jpg"]
+    shared.save(update_fields=["cover"])
+    share_album(shared, role="viewer", acting_user=alex, group=group)
+    return str(shared.uuid)
 
 
 def _seed_tags(owner, specs):
@@ -1093,6 +1161,22 @@ def _files_view(mode):
     return prep
 
 
+def _photos_loaded(page):
+    # Park the cursor first: a hovered tile starts its preview. Tiles are lazy
+    # images, and those below the fold never load: wait for the ones on screen.
+    page.mouse.move(5, 5)
+    page.wait_for_function(
+        """[...document.images]
+               .filter(img => {
+                   const r = img.getBoundingClientRect();
+                   return r.width && r.bottom > 0 && r.top < innerHeight;
+               })
+               .every(img => img.complete && img.naturalWidth > 0)""",
+        timeout=15000,
+    )
+    page.wait_for_timeout(500)
+
+
 def _calendar_agenda(page):
     # Several responsive variants of the switcher exist; click the
     # visible one (offsetParent is null for hidden elements).
@@ -1143,6 +1227,8 @@ SHOTS = [
         "prep": _files_view("Mosaic"),
     },
     {"name": "files_2", "path": "/files", "prep": _files_view("List")},
+    {"name": "photos_1", "path": "/photos", "prep": _photos_loaded},
+    {"name": "photos_2", "path": "/photos/albums/{album_uuid}", "prep": _photos_loaded},
     {"name": "chat_1", "path": "/chat/{conversation_uuid}"},
     {"name": "calendar_1", "path": "/calendar", "settle_ms": 3000},
     {

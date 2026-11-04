@@ -62,6 +62,25 @@ class NotificationListTests(NotifViewMixin, APITestCase):
         resp = self.client.get(self.URL, {"search": "deploy"})
         self.assertEqual(len(resp.data["notifications"]), 1)
 
+    def test_search_title_ignores_accents_and_case(self):
+        self._make_notif(title="Événement annulé")
+        self._make_notif(title="New message")
+        resp = self.client.get(self.URL, {"search": "evenement"})
+        self.assertEqual(
+            [n["title"] for n in resp.data["notifications"]], ["Événement annulé"]
+        )
+
+    def test_search_body_ignores_accents_and_case(self):
+        self._make_notif(title="Reminder", body="Réunion à 14h")
+        self._make_notif(title="Other", body="Nothing here")
+        resp = self.client.get(self.URL, {"search": "REUNION"})
+        self.assertEqual([n["title"] for n in resp.data["notifications"]], ["Reminder"])
+
+    def test_search_accented_query_matches_unaccented_text(self):
+        self._make_notif(title="Elodie shared a file")
+        resp = self.client.get(self.URL, {"search": "élodie"})
+        self.assertEqual(len(resp.data["notifications"]), 1)
+
     def test_includes_unread_count(self):
         self._make_notif()
         resp = self.client.get(self.URL)

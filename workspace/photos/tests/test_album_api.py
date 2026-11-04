@@ -76,6 +76,17 @@ class AlbumListCreateTests(AlbumApiTestCase):
         self.assertEqual(self._order(album), [self.b.pk, self.a.pk])
         self.assertEqual(response.json()["count"], 2)
 
+    def test_create_with_the_download_setting(self):
+        response = self.client.post(
+            API,
+            {"title": "Private", "allow_download": False},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.json()["allow_download"])
+        self.assertFalse(Album.objects.get(uuid=response.json()["uuid"]).allow_download)
+
     def test_create_refuses_a_photo_the_user_cannot_open(self):
         bobs = make_photo(self.bob, "bob.jpg", _at(2024, 7, 14))
 

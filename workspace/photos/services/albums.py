@@ -34,7 +34,9 @@ def _touch(album):
     Album.objects.filter(pk=album.pk).update(updated_at=timezone.now())
 
 
-def create_album(owner, title, *, description="", sort_mode=None, files=()):
+def create_album(
+    owner, title, *, description="", sort_mode=None, allow_download=True, files=()
+):
     """A new personal album of *owner*, holding *files* in that order."""
     with transaction.atomic():
         album = Album.objects.create(
@@ -42,6 +44,7 @@ def create_album(owner, title, *, description="", sort_mode=None, files=()):
             title=title,
             description=description,
             sort_mode=sort_mode or Album.SortMode.CAPTURE_DATE,
+            allow_download=allow_download,
         )
         if files:
             add_items(album, files, added_by=owner)

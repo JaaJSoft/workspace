@@ -14,6 +14,7 @@ from workspace.files.services._names import (
     FILE_NAME_TAKEN,
     FOLDER_NAME_TAKEN,
     NameTaken,
+    find_node_conflict,
 )
 from workspace.files.services.files import GroupMismatch
 from workspace.files.services.image_edits import (
@@ -179,6 +180,25 @@ def _viewer(serializer):
     return getattr(request, "user", None)
 
 
+class ReachableNodeField(serializers.PrimaryKeyRelatedField):
+    """A live node the requesting user can reach.
+
+    Any other uuid fails as a missing one, before any rule looks at the node:
+    whatever answer a rule gave on a node out of reach would tell the caller
+    that it exists.
+    """
+
+    def get_queryset(self):
+        user = _viewer(self)
+        if user is None:
+            return File.objects.none()
+        # distinct: the share branches of the access filter join one row per
+        # share, and get() would find a node shared twice two times.
+        return File.objects.filter(
+            FileService.accessible_files_q(user), deleted_at__isnull=True
+        ).distinct()
+
+
 class FileListSerializer(serializers.ListSerializer):
     """Resolves every shortcut of the page in one batch before serializing.
 
@@ -250,8 +270,7 @@ class FileSerializer(serializers.ModelSerializer):
     type_color = serializers.SerializerMethodField(
         help_text="Tailwind text color class that goes with type_icon."
     )
-    shortcut_target = serializers.PrimaryKeyRelatedField(
-        queryset=File.objects.all(),
+    shortcut_target = ReachableNodeField(
         required=False,
         write_only=True,
         help_text=(
@@ -611,6 +630,14 @@ class FileSerializer(serializers.ModelSerializer):
             except ValueError as e:
                 raise serializers.ValidationError({"parent": e.args[0]}) from e
 
+        if (
+            node_type == File.NodeType.SHORTCUT
+            and instance is not None
+            and "parent" in attrs
+            and on_conflict == "rename"
+        ):
+            self._rename_moved_shortcut(instance, attrs)
+
         # Validate file name uniqueness via FileService
         if node_type == File.NodeType.FILE:
             name = attrs.get("name") or (instance.name if instance else None)
@@ -665,6 +692,22 @@ class FileSerializer(serializers.ModelSerializer):
                         )
 
         return super().validate(attrs)
+
+    @staticmethod
+    def _rename_moved_shortcut(shortcut, attrs):
+        """Pick a free name in the destination for a shortcut moved there.
+
+        Any node holding the name counts, not only a file: nothing a shortcut
+        lands on can be replaced, so the only other way out is the move's
+        refusal. Like a moved file, the new name must fit the current folder
+        too, which it is renamed in before it leaves.
+        """
+        name = attrs.get("name") or shortcut.name
+        parent = attrs["parent"]
+        if find_node_conflict(shortcut.owner, parent, name, exclude_pk=shortcut.pk):
+            attrs["name"] = FileService.available_file_name(
+                shortcut.owner, parent, name, avoiding=(shortcut.parent,)
+            )
 
     @staticmethod
     def _validate_shortcut_shape(node_type, attrs, on_conflict):

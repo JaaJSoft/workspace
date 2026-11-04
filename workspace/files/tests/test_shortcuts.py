@@ -5,10 +5,12 @@ import os
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileEvent, FileShare
@@ -210,27 +212,81 @@ class ResolveShortcutsTests(ShortcutFixtures, TestCase):
         self.assertEqual(self._resolve(self.bob, received).state, ShortcutState.OK)
 
     def test_a_batch_resolves_in_a_bounded_number_of_queries(self):
-        # Both permission paths: a group target and a personal one, which
-        # Bob could only reach through a share.
-        targets = [self.team_root, self.report]
+        # A target of its own per shortcut, across every permission path: a
+        # group node, a personal one Bob could only reach through a share,
+        # and a trashed group node, which the trash rule answers.
+        batches = iter(range(100))
 
         def resolve_count(count):
-            shortcuts = [
-                create_shortcut(
-                    self.alice, targets[i % 2], self.alice_docs, keep_both=True
-                )
-                for i in range(count)
-            ]
+            batch = next(batches)
+            shortcuts = []
+            for i in range(count):
+                name = f"{batch}-{i}"
+                if i % 3 == 1:
+                    target = FileService.create_file(self.alice, f"{name}.txt")
+                else:
+                    target = FileService.create_file(
+                        self.alice, f"{name}.txt", parent=self.team_root
+                    )
+                shortcuts.append(create_shortcut(self.alice, target, self.alice_docs))
+                if i % 3 == 2:
+                    FileService.soft_delete(target, acting_user=self.alice)
             with CaptureQueriesContext(connection) as queries:
                 resolve_shortcuts(self.bob, shortcuts)
             return len(queries)
 
         # The first resolution fills process-wide caches; measure past it.
-        resolve_count(2)
-        self.assertEqual(resolve_count(2), resolve_count(12))
+        resolve_count(3)
+        self.assertEqual(resolve_count(3), resolve_count(12))
 
     def test_other_nodes_are_left_out(self):
         self.assertEqual(resolve_shortcuts(self.alice, [self.report]), {})
+
+
+class ShortcutModelValidationTests(ShortcutFixtures, TestCase):
+    """What a form (the admin) checks before writing a shortcut."""
+
+    def _shortcut(self, target):
+        return File(
+            owner=self.alice,
+            name="link",
+            node_type=File.NodeType.SHORTCUT,
+            shortcut_target=target,
+        )
+
+    def test_a_shortcut_to_a_file_or_folder_is_valid(self):
+        self._shortcut(self.report).full_clean()
+        self._shortcut(self.alice_docs).full_clean()
+
+    def test_a_shortcut_to_a_shortcut_is_refused(self):
+        first = create_shortcut(self.alice, self.report, None, name="first")
+
+        with self.assertRaises(ValidationError) as caught:
+            self._shortcut(first).full_clean()
+        self.assertIn("shortcut_target", caught.exception.message_dict)
+
+    def test_a_shortcut_to_itself_is_refused(self):
+        shortcut = create_shortcut(self.alice, self.report, None, name="loop")
+        shortcut.shortcut_target = shortcut
+
+        with self.assertRaises(ValidationError) as caught:
+            shortcut.full_clean()
+        self.assertIn("shortcut_target", caught.exception.message_dict)
+
+
+class ShortcutAdminTests(ShortcutFixtures, TestCase):
+    def test_the_change_page_does_not_list_every_node_as_a_target(self):
+        root = User.objects.create_superuser(username="root", password="x")
+        unrelated = FileService.create_file(self.bob, "unrelated.txt")
+        shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
+        self.client.force_login(root)
+
+        response = self.client.get(
+            reverse("admin:files_file_change", args=[shortcut.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, str(unrelated.pk))
 
 
 class ShortcutTreeTests(ShortcutFixtures, TestCase):

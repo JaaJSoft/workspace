@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 19:10+0000\n"
+"POT-Creation-Date: 2026-11-04 21:02+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -66,6 +66,10 @@ msgstr "Retirer la marque sensible"
 #: actions/transfer.py
 msgid "Download as ZIP"
 msgstr "Télécharger en ZIP"
+
+#: models.py
+msgid "A shortcut opens a file or a folder."
+msgstr "Un raccourci ouvre un fichier ou un dossier."
 
 #: models.py ui/templates/files/ui/partials/share_modal.html ui/views.py
 msgid "Read only"

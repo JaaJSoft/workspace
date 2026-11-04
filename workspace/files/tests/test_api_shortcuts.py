@@ -1,6 +1,8 @@
 """Shortcuts through every entry point: REST, actions, WebDAV, public links, search."""
 
+import io
 import uuid
+import zipfile
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -97,6 +99,28 @@ class CreateShortcutApiTests(ShortcutApiFixtures, APITestCase):
         self.assertIsNone(target["parent"])
         self.assertEqual(target["path"], "report.pdf")
 
+    def test_a_shared_file_keeps_its_owners_folders_to_itself(self):
+        plan = FileService.create_file(
+            self.alice,
+            "plan.pdf",
+            parent=self.alice_docs,
+            content=ContentFile(b"%PDF-1.4 plan", name="plan.pdf"),
+        )
+        share_file(
+            plan,
+            target_user=self.bob,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=self.alice,
+        )
+
+        response = self._post_shortcut(self.bob, plan, self.bob_inbox)
+
+        self.assertEqual(response.status_code, 201, response.content)
+        target = response.json()["shortcut"]["target"]
+        self.assertIsNone(target["parent"])
+        self.assertEqual(target["path"], "plan.pdf")
+        self.assertNotIn(str(self.alice_docs.uuid), response.content.decode())
+
     def test_an_unreachable_target_answers_like_a_missing_one(self):
         unreachable = self._post_shortcut(self.bob, self.report, self.bob_inbox)
         missing_uuid = uuid.uuid4()
@@ -112,6 +136,28 @@ class CreateShortcutApiTests(ShortcutApiFixtures, APITestCase):
             ],
         )
         self.assertFalse(File.objects.filter(parent=self.bob_inbox).exists())
+
+    def test_any_node_type_answers_alike_for_an_unreachable_target(self):
+        # A folder naming a target is refused whatever the target is; the
+        # refusal must not say whether the uuid exists.
+        self.client.force_authenticate(user=self.bob)
+
+        def refusal(target_uuid):
+            response = self.client.post(
+                "/api/v1/files",
+                {
+                    "name": "Sub",
+                    "node_type": "folder",
+                    "shortcut_target": str(target_uuid),
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, 400)
+            return response.json()["shortcut_target"][0].replace(
+                str(target_uuid), "<uuid>"
+            )
+
+        self.assertEqual(refusal(self.report.uuid), refusal(uuid.uuid4()))
 
     def test_a_shortcut_needs_a_target(self):
         self.client.force_authenticate(user=self.alice)
@@ -199,6 +245,20 @@ class ShortcutUpdateApiTests(ShortcutApiFixtures, APITestCase):
         self.assertEqual(self.shortcut.group_id, self.team.pk)
         self.assertEqual(self.shortcut.shortcut_target_id, self.report.pk)
 
+    def test_a_move_onto_a_taken_name_renames_when_asked(self):
+        # The report itself holds "report.pdf" at the root.
+        refused = self.client.patch(self.url, {"parent": None}, format="json")
+        renamed = self.client.patch(
+            self.url, {"parent": None, "on_conflict": "rename"}, format="json"
+        )
+
+        self.assertEqual(refused.status_code, 400)
+        self.assertEqual(renamed.status_code, 200, renamed.content)
+        self.shortcut.refresh_from_db()
+        self.assertEqual(
+            (self.shortcut.name, self.shortcut.parent_id), ("report (Copy).pdf", None)
+        )
+
     def test_its_target_is_fixed(self):
         response = self.client.patch(
             self.url, {"shortcut_target": str(self.alice_docs.uuid)}, format="json"
@@ -272,22 +332,34 @@ class ShortcutReadApiTests(ShortcutApiFixtures, APITestCase):
         self.assertEqual(row["shortcut"]["target"]["uuid"], str(self.report.uuid))
 
     def test_a_listing_resolves_its_shortcuts_in_constant_queries(self):
+        # Bob lists the team folder. Each shortcut has a target of its own:
+        # a group file he can open, a private file of Alice's he cannot, or
+        # a group file in the trash.
         self.client.force_authenticate(user=self.bob)
-        url = f"/api/v1/files?parent={self.team_root.uuid}"
-        targets = [self.report, self.team_root]
+        listed = FileService.create_folder(self.alice, "Links", parent=self.team_root)
+        url = f"/api/v1/files?parent={listed.uuid}"
+        batches = iter(range(100))
 
         def listing_queries(count):
+            batch = next(batches)
             for i in range(count):
-                create_shortcut(
-                    self.alice, targets[i % 2], self.team_root, keep_both=True
-                )
+                name = f"{batch}-{i}.txt"
+                if i % 3 == 1:
+                    target = FileService.create_file(self.alice, name)
+                else:
+                    target = FileService.create_file(
+                        self.alice, name, parent=self.team_root
+                    )
+                create_shortcut(self.alice, target, listed)
+                if i % 3 == 2:
+                    FileService.soft_delete(target, acting_user=self.alice)
             with CaptureQueriesContext(connection) as queries:
                 self.assertEqual(self.client.get(url).status_code, 200)
             return len(queries)
 
         # The first request fills process-wide caches; measure past it.
         listing_queries(0)
-        self.assertEqual(listing_queries(2), listing_queries(10))
+        self.assertEqual(listing_queries(3), listing_queries(12))
 
     def test_content_and_download_refuse_a_shortcut(self):
         shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
@@ -298,6 +370,26 @@ class ShortcutReadApiTests(ShortcutApiFixtures, APITestCase):
 
         self.assertEqual(content.status_code, 400)
         self.assertEqual(download.status_code, 400)
+
+    def test_a_bulk_download_leaves_shortcuts_out(self):
+        # A zip holds bytes, and a shortcut has none: it is skipped, like the
+        # shortcuts inside a downloaded folder, rather than failing the rest.
+        shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
+        self.client.force_authenticate(user=self.alice)
+
+        def archive(*nodes):
+            response = self.client.post(
+                "/api/v1/files/bulk-download",
+                {"uuids": [str(node.uuid) for node in nodes]},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200)
+            body = b"".join(response.streaming_content)
+            return zipfile.ZipFile(io.BytesIO(body)).namelist()
+
+        self.assertEqual(archive(self.report, shortcut), ["report.pdf"])
+        self.assertEqual(archive(shortcut), [])
+        self.assertEqual(archive(self.alice_docs), [])
 
     def test_a_shortcut_is_not_shared(self):
         shortcut = create_shortcut(self.alice, self.report, self.alice_docs)

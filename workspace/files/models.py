@@ -2,6 +2,7 @@ import posixpath
 import secrets
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.storage import FileSystemStorage
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
@@ -486,6 +487,22 @@ class File(models.Model):
                 return
 
         super().save(*args, **kwargs)
+
+    def clean(self):
+        # The one shortcut rule no constraint can state, since it spans two
+        # rows. services.shortcuts never writes a chain; this keeps a form
+        # (the admin) from writing one either.
+        super().clean()
+        target = self.shortcut_target if self.shortcut_target_id else None
+        if self.node_type == self.NodeType.SHORTCUT and target is not None:
+            if target.pk == self.pk or target.node_type == self.NodeType.SHORTCUT:
+                raise ValidationError(
+                    {
+                        "shortcut_target": gettext_lazy(
+                            "A shortcut opens a file or a folder."
+                        )
+                    }
+                )
 
     @classmethod
     def _update_descendant_paths(cls, old_path, new_path, namespace):

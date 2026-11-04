@@ -6,9 +6,12 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.storage import default_storage
 from django.db import connection
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from workspace.files.models import FileScan
+from workspace.files.services import FileService
 from workspace.people.models import Person
 from workspace.people.services.avatar import avatar_path
 from workspace.people.services.persons import (
@@ -639,3 +642,61 @@ class UnreachableContactTests(FaceApiTestCase):
         self.user.groups.add(self.team)
 
         self.assertEqual(self._cluster_json()["person_name"], "Shared contact")
+
+
+class CoverOutOfLibraryTests(FaceApiTestCase):
+    """A cover the user picked stays the cover when its photo goes to the
+    trash or into quarantine, but its crop no longer leaves the library:
+    "Use as contact photo" would otherwise hand it to every member of the
+    group holding the contact."""
+
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Team")
+        self.user.groups.add(self.team)
+        self.contact = create_person(group=self.team, display_name="Shared contact")
+        self.cover = self.face("alice-1.png")
+        response = _patch(
+            self.client,
+            f"{CLUSTERS}/{self.alice.pk}",
+            {"person": str(self.contact.pk), "cover": str(self.cover.pk)},
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def _assert_refused(self):
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cover_id, self.cover.pk)
+
+        response = self.client.post(f"{CLUSTERS}/{self.alice.pk}/avatar")
+
+        self.assertEqual(response.status_code, 400)
+        self.contact.refresh_from_db()
+        self.assertFalse(self.contact.has_avatar)
+        self.assertFalse(default_storage.exists(avatar_path(self.contact)))
+
+    def test_the_avatar_action_refuses_a_trashed_cover(self):
+        FileService.soft_delete(self.photos["alice-1.png"], acting_user=self.user)
+
+        self._assert_refused()
+
+    @override_settings(FILES_MALWARE_SCAN_ENABLED=True)
+    def test_the_avatar_action_refuses_a_quarantined_cover(self):
+        photo = self.photos["alice-1.png"]
+        FileScan.objects.create(
+            file=photo,
+            status=FileScan.Status.INFECTED,
+            content_hash=photo.content_hash,
+            scanned_at=timezone.now(),
+        )
+
+        self._assert_refused()
+
+    def test_a_contact_created_from_a_cluster_skips_a_trashed_cover(self):
+        FileService.soft_delete(self.photos["alice-1.png"], acting_user=self.user)
+
+        response = _patch(
+            self.client, f"{CLUSTERS}/{self.alice.pk}", {"new_person": "Ann"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Person.objects.get(display_name="Ann").has_avatar)

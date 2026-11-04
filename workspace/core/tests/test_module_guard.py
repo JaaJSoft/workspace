@@ -61,7 +61,7 @@ class _GuardTestCase(TestCase):
 class PageGuardTests(_GuardTestCase):
     def test_a_hidden_page_answers_exactly_like_an_absent_one(self):
         self.client.force_login(self.regular)
-        self.assertAnswersLikeAnAbsentPath("/vault", "/vault/does-not-exist")
+        self.assertAnswersLikeAnAbsentPath("/imports", "/imports/does-not-exist")
 
     def test_a_post_without_a_csrf_token_cannot_tell_them_apart_either(self):
         """The CSRF check would answer 403 before any view ran - and an
@@ -69,26 +69,25 @@ class PageGuardTests(_GuardTestCase):
         client = Client(enforce_csrf_checks=True)
         client.force_login(self.regular)
         self.assertAnswersLikeAnAbsentPath(
-            "/vault/onboarding", "/vault/does-not-exist", method="post", client=client
+            "/imports", "/imports/does-not-exist", method="post", client=client
         )
 
     def test_every_page_of_a_preview_module_is_refused(self):
         self.client.force_login(self.regular)
         for path in (
-            "/vault",
-            "/vault/onboarding",
-            f"/vault/{uuid.uuid4()}",
             "/imports",
+            "/photos",
+            f"/photos/albums/{uuid.uuid4()}",
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 404)
 
     def test_the_audience_still_reaches_the_page(self):
         self.client.force_login(self.staff)
-        self.assertNotEqual(self.client.get("/vault").status_code, 404)
+        self.assertNotEqual(self.client.get("/imports").status_code, 404)
 
     def test_an_anonymous_visitor_is_still_sent_to_the_login_page(self):
-        response = self.client.get("/vault")
+        response = self.client.get("/imports")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login", response["Location"])
 
@@ -103,7 +102,7 @@ class ApiGuardTests(_GuardTestCase):
     def test_a_hidden_endpoint_answers_exactly_like_an_absent_one(self):
         self.client.force_login(self.regular)
         self.assertAnswersLikeAnAbsentPath(
-            "/api/v1/vault/vaults", "/api/v1/vault/does-not-exist"
+            "/api/v1/imports/jobs", "/api/v1/imports/does-not-exist"
         )
 
     def test_a_token_client_cannot_tell_them_apart_either(self):
@@ -112,14 +111,14 @@ class ApiGuardTests(_GuardTestCase):
         URL - which never reaches DRF - renders for an anonymous visitor."""
         _, token = AuthToken.objects.create(self.regular)
         self.assertAnswersLikeAnAbsentPath(
-            "/api/v1/vault/vaults",
-            "/api/v1/vault/does-not-exist",
+            "/api/v1/imports/jobs",
+            "/api/v1/imports/does-not-exist",
             HTTP_AUTHORIZATION=f"Token {token}",
         )
 
     def test_another_preview_module_is_refused_too(self):
         self.client.force_login(self.regular)
-        self.assertEqual(self.client.get("/api/v1/imports/jobs").status_code, 404)
+        self.assertEqual(self.client.get("/api/v1/photos/albums").status_code, 404)
 
     def test_a_session_write_without_a_csrf_token_cannot_tell_them_apart(self):
         """DRF's session authentication enforces CSRF before any permission
@@ -127,25 +126,25 @@ class ApiGuardTests(_GuardTestCase):
         client = Client(enforce_csrf_checks=True)
         client.force_login(self.regular)
         self.assertAnswersLikeAnAbsentPath(
-            "/api/v1/vault/account/init",
-            "/api/v1/vault/does-not-exist",
+            "/api/v1/imports/connections",
+            "/api/v1/imports/does-not-exist",
             method="post",
             client=client,
         )
 
     def test_a_write_is_refused_before_it_is_read(self):
         self.client.force_login(self.regular)
-        init = self.client.post(
-            "/api/v1/vault/account/init", {}, content_type="application/json"
+        created = self.client.post(
+            "/api/v1/imports/connections", {}, content_type="application/json"
         )
-        self.assertEqual(init.status_code, 404)
+        self.assertEqual(created.status_code, 404)
 
     def test_the_audience_reaches_the_endpoint(self):
         self.client.force_login(self.staff)
-        self.assertEqual(self.client.get("/api/v1/vault/vaults").status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/imports/jobs").status_code, 200)
 
     def test_an_anonymous_caller_still_gets_a_403(self):
-        self.assertEqual(self.client.get("/api/v1/vault/vaults").status_code, 403)
+        self.assertEqual(self.client.get("/api/v1/imports/jobs").status_code, 403)
 
     def test_each_audience_level_admits_exactly_its_users(self):
         users = {
@@ -166,7 +165,7 @@ class ApiGuardTests(_GuardTestCase):
                     override_settings(PREVIEW_VISIBILITY=level),
                 ):
                     self.client.force_login(user)
-                    response = self.client.get("/api/v1/vault/vaults")
+                    response = self.client.get("/api/v1/imports/jobs")
                     self.assertEqual(
                         response.status_code, 200 if name in names else 404
                     )
@@ -201,8 +200,8 @@ class GuardCoverageTests(SimpleTestCase):
     def test_the_walk_reaches_the_preview_routes(self):
         # A walk that finds nothing would let every route through.
         routes = {(owner.slug, route) for route, owner, _ in self._preview_routes()}
-        self.assertIn(("vault", ""), routes)
-        self.assertIn(("vault", "api/v1/vault/vaults"), routes)
+        self.assertIn(("imports", ""), routes)
+        self.assertIn(("imports", "api/v1/imports/jobs"), routes)
 
     def test_every_preview_route_is_attributed_to_its_module(self):
         for route, owner, callback in self._preview_routes():

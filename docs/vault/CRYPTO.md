@@ -116,10 +116,10 @@ The walk stages its output beside the published versions, hashes it into
 `SHA256SUMS` and publishes it with a single rename, and it refuses to start
 when the target directory already exists.
 
-The corpus carries an entry's notes and a `custom:` field, which the UI does not
-expose yet. It freezes the format, not the screen: both derive associated-data
-strings of their own, and a corpus that stopped at what the form can write would
-leave those two unguarded.
+The corpus carries a `custom:` field, which the UI does not expose yet, next to
+an entry's notes. It freezes the format, not the screen: both derive
+associated-data strings of their own, and a corpus that stopped at what the form
+can write would leave the custom field unguarded.
 
 ## The suite manifest
 

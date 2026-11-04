@@ -30,8 +30,11 @@
   >
     <h1 class="text-2xl font-semibold mb-6">Set up your master password</h1>
 
+    {% include "vault/ui/partials/insecure_context.html" %}
+
     <div
       class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden"
+      x-show="secureContext"
     >
       <div class="flex flex-col md:flex-row">
         {% comment %}

@@ -1,0 +1,9 @@
+{% comment %}
+  In place of the whole page on a plain-HTTP origin other than localhost. The
+  browser withholds WebCrypto there, so no master password could ever be set
+  or typed: without this, each attempt fails with an error that invites a
+  retry. Renders against any component carrying secureContext.
+{% endcomment %}
+<template x-if="!secureContext">
+  <inline-alert type="error" icon="shield-off" title="The vault needs a secure connection" message="This page is served over plain HTTP, and the browser only allows the encryption the vault relies on over HTTPS. Nothing can be unlocked or created here. Ask your administrator to serve Workspace over HTTPS."></inline-alert>
+</template>

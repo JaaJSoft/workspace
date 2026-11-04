@@ -14,20 +14,18 @@ User = get_user_model()
 
 
 class VaultModuleRegistrationTests(TestCase):
-    def test_registered_as_an_active_preview_module(self):
+    def test_registered_as_an_active_module(self):
         module = registry.get("vault")
         self.assertIsNotNone(module)
-        self.assertTrue(module.preview)
+        self.assertFalse(module.preview)
         self.assertTrue(module.active)
         self.assertEqual(module.url, "/vault")
 
-    @override_settings(PREVIEW_VISIBILITY="staff")
-    def test_hidden_from_regular_users(self):
+    @override_settings(PREVIEW_VISIBILITY="none")
+    def test_visible_to_every_user_whatever_the_preview_audience(self):
         module = registry.get("vault")
         regular = User.objects.create_user(username="regular", password="pw")
-        staff = User.objects.create_user(username="staff", password="pw", is_staff=True)
-        self.assertFalse(user_can_see_module(regular, module))
-        self.assertTrue(user_can_see_module(staff, module))
+        self.assertTrue(user_can_see_module(regular, module))
 
 
 class VaultCommandTests(TestCase):
@@ -66,8 +64,8 @@ class VaultCommandTests(TestCase):
                     resolve(urlparse(command.url).path).view_name, "vault_ui:index"
                 )
 
-    @override_settings(PREVIEW_VISIBILITY="staff")
-    def test_commands_are_hidden_from_regular_users(self):
+    @override_settings(PREVIEW_VISIBILITY="none")
+    def test_commands_are_offered_to_every_user(self):
         regular = User.objects.create_user(username="nobody", password="pw")
         visible = filter_visible_commands(regular, registry.get_active_commands())
-        self.assertNotIn("vault", {cmd.module_slug for cmd in visible})
+        self.assertIn("vault", {cmd.module_slug for cmd in visible})

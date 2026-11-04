@@ -29,11 +29,9 @@ class VaultIndexViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "vault/ui/index.html")
 
-    @override_settings(PREVIEW_VISIBILITY="staff")
-    def test_a_user_outside_the_preview_audience_is_refused(self):
-        """The preview flag gates the request, not only the navigation: a
-        regular user who types the URL gets the 404 an absent page gets."""
+    @override_settings(PREVIEW_VISIBILITY="none")
+    def test_the_preview_audience_does_not_gate_the_page(self):
         self._finish_onboarding()
         self.client.force_login(self.user)
         self.assertFalse(self.user.is_staff)
-        self.assertEqual(self.client.get("/vault").status_code, 404)
+        self.assertEqual(self.client.get("/vault").status_code, 200)

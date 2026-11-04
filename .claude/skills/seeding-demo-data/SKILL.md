@@ -108,8 +108,10 @@ next to the photos, and face grouping is turned on for those users.
   downloaded on the first analysis). With `DEBUG` on, the analysis runs during
   the seed itself, one photo at a time; otherwise the hourly catch-up picks
   the photos up.
-- Photos is a preview module: start the server with `PREVIEW_VISIBILITY=all`
-  to see it as `demo`, as for the vault below.
+- Photos is a preview module, and `demo` is not staff: under the default
+  `PREVIEW_VISIBILITY=staff` it answers 404. Start the server with
+  `PREVIEW_VISIBILITY=all` (in `.env`, or in front of the `runserver` command)
+  to see it as `demo` - the same goes for `/imports`.
 
 ## The vault
 
@@ -118,11 +120,6 @@ coloured tags, favourites and a trashed entry. Every row is really sealed and
 really signed - through `scripts/seed_vault.py`, which drives the same reference
 implementation the crypto vectors come from - so the browser opens them instead
 of showing the tamper banner.
-
-**The vault is a preview module, and `demo` is not staff.** Under the default
-`PREVIEW_VISIBILITY=staff`, `/vault` and `/api/v1/vault/*` answer 404 to it.
-Start the server with `PREVIEW_VISIBILITY=all` (in `.env`, or in front of the
-`runserver` command) to open it - the same goes for `/imports`.
 
 **Opening one needs both halves, and the seeder output is the only copy:**
 

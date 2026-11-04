@@ -189,6 +189,21 @@ class FileByDateTests(ImportByDateTestCase):
         self.assertEqual(file_imports_by_date(self.user.pk, [str(photo.uuid)]), 1)
         self.assertEqual(file_imports_by_date(987654, [str(photo.uuid)]), 0)
 
+    def test_the_task_files_nothing_for_a_user_deactivated_since(self):
+        family = Group.objects.create(name="Family")
+        self.user.groups.add(family)
+        root = FileService.create_folder(self.user, "Family", group=family)
+        choose_import_folder(self.user, root)
+        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=root)
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+
+        self.assertEqual(file_imports_by_date(self.user.pk, [str(photo.uuid)]), 0)
+
+        photo.refresh_from_db()
+        self.assertEqual(photo.parent, root)
+        self.assertFalse(File.objects.filter(parent=root, node_type="folder").exists())
+
 
 class ImportByDateApiTests(ImportByDateTestCase):
     def test_queues_the_files_at_the_top_of_the_import_folder(self):

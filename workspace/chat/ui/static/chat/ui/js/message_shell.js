@@ -139,7 +139,7 @@
     // ── Group chrome ─────────────────────────────────────────
 
     _avatarColumn() {
-      const wrap = el('div', 'flex-shrink-0 mt-auto');
+      const wrap = el('div', 'shrink-0 mt-auto');
       wrap.setAttribute(':class', "chatPrefs.compactMessageView ? 'w-6' : 'w-8'");
       const userId = this.getAttribute('author-id') || '';
       const username = this.getAttribute('author-username') || '';
@@ -332,7 +332,7 @@
       } else {
         root = el('div', `${base} ${surface}`);
       }
-      root.appendChild(el('div', 'w-0.5 flex-shrink-0 rounded-full bg-module'));
+      root.appendChild(el('div', 'w-0.5 shrink-0 rounded-full bg-module'));
       const text = el('div', 'min-w-0 flex-1');
       if (deleted) {
         const span = el('span', 'text-xs italic opacity-50');
@@ -382,7 +382,7 @@
 
     _saveButton(item, { grid = false, chip = false } = {}) {
       const btn = el('button', chip
-        ? 'btn btn-ghost btn-xs btn-square opacity-0 group-hover/att:opacity-100 transition-opacity flex-shrink-0'
+        ? 'btn btn-ghost btn-xs btn-square opacity-0 group-hover/att:opacity-100 transition-opacity shrink-0'
         : 'absolute top-1 right-1 btn btn-xs btn-square bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm opacity-0 group-hover/att:opacity-100 transition-opacity');
       // .stop inside the mosaic: the whole cell opens the viewer on click.
       // x-on:, not the @ shorthand: setAttribute rejects '@' in a name.
@@ -474,12 +474,12 @@
         preview.className = 'flex-1 min-w-0';
         body.appendChild(preview);
       } else {
-        body.appendChild(icon('file', 'w-4 h-4 flex-shrink-0'));
+        body.appendChild(icon('file', 'w-4 h-4 shrink-0'));
         const name = el('span', 'truncate text-xs font-medium');
         name.textContent = item.name || '';
         body.appendChild(name);
         if (item.size) {
-          const size = el('span', 'text-[0.65rem] opacity-60 flex-shrink-0');
+          const size = el('span', 'text-[0.65rem] opacity-60 shrink-0');
           size.textContent = formatFileSize(item.size);
           body.appendChild(size);
         }

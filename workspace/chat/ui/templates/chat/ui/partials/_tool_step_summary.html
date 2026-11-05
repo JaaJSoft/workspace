@@ -9,11 +9,11 @@ A live step carries both tenses: which one shows is decided in CSS from an
 x-html, where Alpine directives are never initialised. The finished timeline
 passes no running label and renders the past tense alone.
 {% endcomment %}
-<span class="flex-shrink-0">{{ call.icon }}</span>
+<span class="shrink-0">{{ call.icon }}</span>
 {% if call.running_label %}
-  <span class="ai-step-label-running flex-shrink-0">{{ call.running_label }}</span>
+  <span class="ai-step-label-running shrink-0">{{ call.running_label }}</span>
 {% endif %}
-<span class="ai-step-label-done flex-shrink-0">{{ call.label }}</span>
+<span class="ai-step-label-done shrink-0">{{ call.label }}</span>
 {% if call.detail %}
   <span class="truncate min-w-0 opacity-80">{{ call.detail }}</span>
 {% endif %}

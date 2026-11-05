@@ -24,7 +24,7 @@
     >
       <div
         :class="`module-${cmd.color || 'slate'}`"
-        class="bg-module/15 {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg flex items-center justify-center flex-shrink-0"
+        class="bg-module/15 {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg flex items-center justify-center shrink-0"
       >
         <i
           :data-lucide="cmd.icon"
@@ -37,7 +37,7 @@
           x-text="cmd.name"
         ></div>
       </div>
-      <div class="flex-shrink-0">
+      <div class="shrink-0">
         <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-base-content/30"></i>
       </div>
     </a>

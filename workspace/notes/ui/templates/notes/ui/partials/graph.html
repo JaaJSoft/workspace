@@ -2,7 +2,7 @@
 <div class="flex flex-col h-full w-full bg-base-100">
   <!-- Toolbar: controls live here (not floating over the canvas), so the graph
        gets the full area below. Two rows, like the note-list header + filters. -->
-  <div class="flex-shrink-0 border-b border-base-300">
+  <div class="shrink-0 border-b border-base-300">
     <!-- Row 1: mobile menu toggle + title + scope -->
     <div class="flex items-center gap-2 px-3 pt-3 pb-2">
       {% include "ui/partials/drawer_toggle.html" with drawer_id="notes-drawer" class="lg:hidden" %}
@@ -10,7 +10,7 @@
         class="text-sm font-semibold text-base-content/60 truncate flex-1"
         x-text="viewTitle"
       ></h3>
-      <div class="join w-36 flex-shrink-0">
+      <div class="join w-36 shrink-0">
         <button
           type="button"
           class="btn btn-xs join-item flex-1"
@@ -48,7 +48,7 @@
           />
         </div>
         <select
-          class="select select-sm select-bordered flex-shrink-0"
+          class="select select-sm select-bordered shrink-0"
           x-model="graphKind"
           @change="setGraphKind($event.target.value)"
         >
@@ -60,7 +60,7 @@
         <!-- Tag multi-select dropdown: keep only nodes carrying a selected tag.
              Mirrors the note-list tag filter (toggleGraphTag / graphTags). -->
         <div
-          class="relative flex-shrink-0"
+          class="relative shrink-0"
           x-show="allTags.length > 0"
           @click.outside="showGraphTagDropdown = false"
         >
@@ -127,14 +127,14 @@
       </div>
       <button
         type="button"
-        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        class="btn btn-ghost btn-sm btn-square shrink-0"
         @click="resetGraphView()"
         aria-label="Reset view"
         title="Reset view"
       >
         <i data-lucide="maximize" class="w-4 h-4"></i>
       </button>
-      <div class="dropdown dropdown-end flex-shrink-0">
+      <div class="dropdown dropdown-end shrink-0">
         <button
           type="button"
           tabindex="0"

@@ -10,7 +10,7 @@
     href="/files"
     class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-[3.25rem] hover:bg-base-200 transition-colors group"
   >
-    <div class="rounded-lg bg-primary/10 p-2 flex-shrink-0">
+    <div class="rounded-lg bg-primary/10 p-2 shrink-0">
       <i data-lucide="hard-drive" class="w-4 h-4 text-primary"></i>
     </div>
     <div class="flex-1 min-w-0">
@@ -31,7 +31,7 @@
       </div>
     </div>
     <div
-      class="font-semibold text-sm flex-shrink-0"
+      class="font-semibold text-sm shrink-0"
       x-ref="countFiles"
       data-target="{{ usage_stats.files.total_files|default:"0" }}"
     >
@@ -43,14 +43,14 @@
     href="/chat"
     class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-[3.25rem] hover:bg-base-200 transition-colors group"
   >
-    <div class="rounded-lg bg-info/10 p-2 flex-shrink-0">
+    <div class="rounded-lg bg-info/10 p-2 shrink-0">
       <i data-lucide="message-circle" class="w-4 h-4 text-info"></i>
     </div>
     <div class="flex-1 min-w-0">
       <div class="text-sm font-medium group-hover:text-info transition-colors">{% translate "Messages" %}</div>
     </div>
     <div
-      class="font-semibold text-sm flex-shrink-0"
+      class="font-semibold text-sm shrink-0"
       x-ref="countMessages"
       data-target="{{ usage_stats.chat.total_messages|default:"0" }}"
     >
@@ -62,7 +62,7 @@
     href="/mail"
     class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-[3.25rem] hover:bg-base-200 transition-colors group"
   >
-    <div class="rounded-lg bg-warning/10 p-2 flex-shrink-0">
+    <div class="rounded-lg bg-warning/10 p-2 shrink-0">
       <i data-lucide="mail" class="w-4 h-4 text-warning"></i>
     </div>
     <div class="flex-1 min-w-0">
@@ -82,7 +82,7 @@
       {% endif %}
     </div>
     <div
-      class="font-semibold text-sm flex-shrink-0"
+      class="font-semibold text-sm shrink-0"
       x-ref="countMail"
       data-target="{{ usage_stats.mail.total_messages|default:"0" }}"
     >
@@ -94,14 +94,14 @@
     href="/calendar"
     class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-[3.25rem] hover:bg-base-200 transition-colors group"
   >
-    <div class="rounded-lg bg-accent/10 p-2 flex-shrink-0">
+    <div class="rounded-lg bg-accent/10 p-2 shrink-0">
       <i data-lucide="calendar" class="w-4 h-4 text-accent"></i>
     </div>
     <div class="flex-1 min-w-0">
       <div class="text-sm font-medium group-hover:text-accent transition-colors">{% translate "Events" %}</div>
     </div>
     <div
-      class="font-semibold text-sm flex-shrink-0"
+      class="font-semibold text-sm shrink-0"
       x-ref="countEvents"
       data-target="{{ usage_stats.calendar.total_events|default:"0" }}"
     >

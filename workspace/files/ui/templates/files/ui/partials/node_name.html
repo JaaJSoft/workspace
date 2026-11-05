@@ -26,13 +26,13 @@
   {% if is_quarantined %}
     <i
       data-lucide="shield-alert"
-      class="w-3.5 h-3.5 flex-shrink-0 text-error"
+      class="w-3.5 h-3.5 shrink-0 text-error"
       title="{% translate 'Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded.' %}"
     ></i>
   {% elif is_processing %}
     <i
       data-lucide="loader-circle"
-      class="w-3.5 h-3.5 flex-shrink-0 text-base-content/40 animate-spin"
+      class="w-3.5 h-3.5 shrink-0 text-base-content/40 animate-spin"
       title="{% translate 'Processing: the file is being scanned and its preview prepared.' %}"
     ></i>
   {% endif %}

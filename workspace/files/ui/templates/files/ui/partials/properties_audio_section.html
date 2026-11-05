@@ -11,7 +11,7 @@ Context: media, the file's current files.models.MediaInfo.
       class="flex items-center gap-2 text-base-content/60"
       data-media-detail="duration"
     >
-      <i data-lucide="timer" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <i data-lucide="timer" class="w-3.5 h-3.5 shrink-0"></i>
       <span>{{ media.duration|media_duration }}</span>
     </div>
   {% endif %}
@@ -20,7 +20,7 @@ Context: media, the file's current files.models.MediaInfo.
       class="flex items-center gap-2 text-base-content/60"
       data-media-detail="codecs"
     >
-      <i data-lucide="audio-lines" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <i data-lucide="audio-lines" class="w-3.5 h-3.5 shrink-0"></i>
       <span>{{ media.audio_codec|codec_name }}</span>
     </div>
   {% endif %}

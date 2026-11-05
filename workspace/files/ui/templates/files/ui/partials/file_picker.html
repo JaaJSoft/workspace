@@ -267,7 +267,7 @@
     <div class="flex items-center gap-3 mb-4">
       <div
         :class="options.iconClass || defaultIconClass"
-        class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
+        class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
       >
         <i :data-lucide="options.icon || defaultIcon" class="w-5 h-5"></i>
       </div>
@@ -402,19 +402,19 @@
               <i
                 :data-lucide="item.type_icon"
                 :class="item.type_color"
-                class="w-4 h-4 flex-shrink-0"
+                class="w-4 h-4 shrink-0"
               ></i>
 
               <span class="text-sm truncate flex-1" x-text="item.name"></span>
               <span
                 x-show="isFileMode && item.node_type === 'file' && item.size"
-                class="text-xs text-base-content/40 flex-shrink-0"
+                class="text-xs text-base-content/40 shrink-0"
                 x-text="formatFileSize(item.size)"
               ></span>
               <i
                 data-lucide="chevron-right"
                 x-show="item.node_type === 'folder'"
-                class="w-4 h-4 text-base-content/30 ml-auto flex-shrink-0"
+                class="w-4 h-4 text-base-content/30 ml-auto shrink-0"
               ></i>
               {# The checkbox only mirrors the row's selection state: the button is the control. #}
               {# djlint:off H054 #}

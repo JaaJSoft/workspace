@@ -41,7 +41,7 @@
                 ></div>
               </div>
               <!-- Reorder arrows: hidden during search so positions are unambiguous -->
-              <div x-show="!rulesSearch.trim()" class="join join-vertical flex-shrink-0">
+              <div x-show="!rulesSearch.trim()" class="join join-vertical shrink-0">
                 <button
                   type="button"
                   x-show="rulesCanMoveUp(rule)"
@@ -65,14 +65,14 @@
               </div>
               <input
                 type="checkbox"
-                class="toggle toggle-sm toggle-module flex-shrink-0"
+                class="toggle toggle-sm toggle-module shrink-0"
                 :checked="rule.is_enabled"
                 :aria-label="rule.is_enabled ? 'Disable rule ' + rule.name : 'Enable rule ' + rule.name"
                 @change="rulesToggle(rule, $event.target.checked)"
               />
               <button
                 type="button"
-                class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                class="btn btn-ghost btn-xs btn-square shrink-0"
                 @click="rulesOpenApply(rule)"
                 title="Apply to a folder"
                 aria-label="Apply rule to a folder"
@@ -81,7 +81,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                class="btn btn-ghost btn-xs btn-square shrink-0"
                 @click="rulesOpenForm(rule)"
                 title="Edit"
                 aria-label="Edit rule"
@@ -90,7 +90,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-ghost btn-xs btn-square text-error flex-shrink-0"
+                class="btn btn-ghost btn-xs btn-square text-error shrink-0"
                 @click="rulesDelete(rule)"
                 title="Delete"
                 aria-label="Delete rule"
@@ -260,7 +260,7 @@
           <div class="text-sm font-semibold mt-3">Then</div>
           <div class="flex flex-wrap gap-2 items-stretch">
             <select
-              class="select select-bordered select-sm w-full sm:w-44 sm:flex-shrink-0"
+              class="select select-bordered select-sm w-full sm:w-44 sm:shrink-0"
               x-model="rulesForm.simpleAction.type"
             >
               <option value="mark_read">Mark as read</option>

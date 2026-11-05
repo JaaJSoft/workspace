@@ -19,13 +19,13 @@
           <label class="gap-3 rounded flex items-center cursor-pointer">
             <input
               type="checkbox"
-              class="checkbox checkbox-xs flex-shrink-0"
+              class="checkbox checkbox-xs shrink-0"
               :checked="fileHasTag(tag.uuid)"
               @change="toggleFileTag(tag)"
             />
             <i
               :data-lucide="tag.icon || 'tag'"
-              class="w-4 h-4 flex-shrink-0"
+              class="w-4 h-4 shrink-0"
               :class="tag.color ? '' : 'text-base-content/50'"
               :style="tag.color ? 'color: ' + tag.color : ''"
             ></i>

@@ -17,22 +17,21 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 
 from ..models import File, FileLink, FileLinkState
 from ._content import read_text_content
 from .scanning.policy import exclude_blocked
 
 # Matches the ``?file=<uuid>`` / ``&file=<uuid>`` token the autocomplete emits.
-# 36 chars covers the canonical hyphenated UUID form Django serializes.
-_LINK_RE = re.compile(r"[?&]file=([0-9a-fA-F-]{36})")
+_LINK_RE = re.compile(rf"[?&]file=({UUID_PATTERN})")
 
 # Matches a markdown destination pointing at a file's content endpoint: the
 # embed ``![name](/api/v1/files/<uuid>/content)``, or a plain link to the same
 # URL. Anchored on ``](`` so a URL quoted in prose is not a reference, and on
 # what may follow the path so a longer path is not mistaken for it.
 _CONTENT_REF_RE = re.compile(
-    r"\]\(\s*<?/api/v1/files/([0-9a-fA-F-]{36})/content(?=[\s?#>)])"
+    rf"\]\(\s*<?/api/v1/files/({UUID_PATTERN})/content(?=[\s?#>)])"
 )
 
 # Raise when extract_link_targets() starts finding links it did not before:
@@ -44,9 +43,9 @@ EXTRACTOR_VERSION = 2
 def extract_link_targets(markdown_text) -> set[str]:
     """Return the distinct, validated link and embed target UUIDs as canonical strings.
 
-    Pure: no DB access. Captures are validated with ``parse_uuid_or_none`` so a
-    36-character token that is not a real UUID is dropped. A captured UUID that
-    does not resolve to an existing File is dropped later, in reconcile.
+    Pure: no DB access. Captures go through ``parse_uuid_or_none`` for their
+    canonical spelling. A captured UUID that does not resolve to an existing
+    File is dropped later, in reconcile.
     """
     if not markdown_text:
         return set()

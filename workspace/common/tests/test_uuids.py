@@ -1,9 +1,11 @@
+import re
 import uuid
 from unittest import mock
 
 from django.test import SimpleTestCase
 
 from workspace.common.uuids import (
+    UUID_PATTERN,
     BatchTooLarge,
     MalformedBatch,
     MalformedUuid,
@@ -70,6 +72,23 @@ class UuidV7OrV4Tests(SimpleTestCase):
         failing.assert_called_once()
         mocked_uuid.uuid4.assert_called_once()
         self.assertEqual(result, fallback)
+
+
+class UuidPatternTests(SimpleTestCase):
+    def test_finds_a_canonical_uuid_inside_a_string(self):
+        value = uuid_v7_or_v4()
+        match = re.search(
+            rf"/files/({UUID_PATTERN})/content", f"/files/{value}/content"
+        )
+        self.assertEqual(match.group(1), str(value))
+        upper = str(value).upper()
+        self.assertTrue(re.fullmatch(UUID_PATTERN, upper))
+
+    def test_rejects_other_spellings(self):
+        value = uuid.uuid4()
+        for text in (value.hex, f"{{{value}}}", str(value)[:-1], "-" * 36):
+            with self.subTest(text=text):
+                self.assertIsNone(re.fullmatch(UUID_PATTERN, text))
 
 
 class ParseUuidOrNoneTests(SimpleTestCase):

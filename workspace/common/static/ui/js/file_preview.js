@@ -177,6 +177,10 @@
       // a button around it would nest one control in another.
       this._setOperable(this._openable && !this.querySelector(INTERACTIVE));
       this.setAttribute('state', 'ready');
+      if (this._openWhenReady) {
+        this._openWhenReady = false;
+        this._open();
+      }
       // A format the browser cannot draw falls back to the server thumbnail.
       this.querySelectorAll('img[data-fallback-src]').forEach((img) => {
         const fallback = () => {
@@ -205,6 +209,7 @@
 
     _fail() {
       this._openable = false;
+      this._openWhenReady = false;
       this._setOperable(false);
       this.setAttribute('state', 'unavailable');
       const slot = el('div', SLOT_CLASS);
@@ -231,11 +236,21 @@
     }
 
     _onClick(event) {
-      if (!this._openable || event.target.closest(INTERACTIVE)) return;
+      if (event.target.closest(INTERACTIVE)) return;
+      if (this.getAttribute('state') === 'loading') {
+        // Clicked before the preview arrived: whether the file opens is not
+        // known yet, so the click waits for the answer instead of being lost.
+        this._openWhenReady = true;
+        return;
+      }
+      if (this._open()) event.preventDefault();
+    }
+
+    _open() {
       const name = this._openEvent();
-      if (!name) return;
-      event.preventDefault();
+      if (!this._openable || !name) return false;
       window.dispatchEvent(new CustomEvent(name, { detail: this.openerDetail() }));
+      return true;
     }
 
     // What the file viewer is opened with (file_viewer.js).

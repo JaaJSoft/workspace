@@ -190,6 +190,27 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         self.page.keyboard.type(" v2")
         self._save(note, "# Report v2")
 
+    def test_click_before_the_preview_arrives_opens_it_once_it_does(self):
+        held = []
+        self.page.route("**/files/previews?*", lambda route: held.append(route))
+        note = self._note(f"# Report\n\n{_embed(self.photo)}\n")
+        self._open(note)
+        preview = self._preview_of(self.photo)
+        expect(preview).to_have_attribute("state", "loading", timeout=10000)
+        deadline = time.monotonic() + 10
+        while not held and time.monotonic() < deadline:
+            self.page.wait_for_timeout(50)
+        self.assertTrue(held, "the preview batch must be in flight")
+
+        preview.click()
+        dialog = self.page.locator("[data-file-viewer-modal] dialog")
+        self.assertIsNone(dialog.get_attribute("open"))
+
+        held[0].continue_()
+        expect(preview).to_have_attribute("state", "ready", timeout=10000)
+        expect(dialog).to_have_attribute("open", "", timeout=10000)
+        expect(dialog).to_contain_text("photo.png")
+
     def test_keyboard_opens_the_viewer(self):
         note = self._note(f"# Report\n\n{_embed(self.photo)}\n")
         self._open(note)

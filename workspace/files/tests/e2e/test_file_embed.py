@@ -211,6 +211,40 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         expect(dialog).to_have_attribute("open", "", timeout=10000)
         expect(dialog).to_contain_text("photo.png")
 
+    def test_a_preview_away_when_its_answer_came_asks_again_on_return(self):
+        held = []
+        self.page.route("**/files/previews?*", lambda route: held.append(route))
+        self.page.goto(f"{self.live_server_url}/notes")
+        self.page.evaluate(
+            """([uuid, src]) => {
+                const preview = document.createElement('file-preview');
+                preview.id = 'probe';
+                preview.setAttribute('src', src);
+                preview.setAttribute('uuid', uuid);
+                preview.setAttribute('name', 'photo.png');
+                document.body.appendChild(preview);
+            }""",
+            [str(self.photo.uuid), "/files/previews"],
+        )
+        deadline = time.monotonic() + 10
+        while not held and time.monotonic() < deadline:
+            self.page.wait_for_timeout(50)
+        self.assertTrue(held, "the preview batch must be in flight")
+
+        # Away from the page while the answer is merged, back afterwards.
+        self.page.evaluate(
+            "window.__probe = document.getElementById('probe'); __probe.remove()"
+        )
+        with self.page.expect_response("**/files/previews?*"):
+            held.pop().continue_()
+        self.page.wait_for_timeout(200)
+        self.page.unroute("**/files/previews?*")
+        self.page.evaluate("document.body.appendChild(window.__probe)")
+
+        expect(self.page.locator("#probe")).to_have_attribute(
+            "state", "ready", timeout=10000
+        )
+
     def test_keyboard_opens_the_viewer(self):
         note = self._note(f"# Report\n\n{_embed(self.photo)}\n")
         self._open(note)

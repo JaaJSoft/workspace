@@ -105,13 +105,24 @@
     // back. The first element anchors the request's events.
     const ajax = window.Alpine.evaluate(elements[0], '{ send: $ajax }').send;
     ajax(batchUrl(src, pairs), { targets: pairs.map((pair) => pair.slot), focus: false })
-      .catch(() => {
-        // A network failure merges nothing: whatever is still waiting
-        // shows the placeholder rather than spin forever.
-        for (const element of elements) {
-          if (element.getAttribute('state') === 'loading') element._fail();
-        }
-      });
+      .then(
+        () => {
+          // alpine-ajax skips a target that is out of the document when the
+          // answer comes: such a preview asks again once it is back.
+          for (const element of elements) {
+            if (element.getAttribute('state') === 'loading' && !element.isConnected) {
+              element._requested = false;
+            }
+          }
+        },
+        () => {
+          // A network failure merges nothing: whatever is still waiting
+          // shows the placeholder rather than spin forever.
+          for (const element of elements) {
+            if (element.getAttribute('state') === 'loading') element._fail();
+          }
+        },
+      );
   }
 
   function el(tag, className, text) {

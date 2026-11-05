@@ -81,8 +81,8 @@ window.storageAnalysis = function storageAnalysis() {
     // browsing the analysis adds nothing to the history.
     syncUrl(analysisUrl) {
       const source = new URL(analysisUrl, window.location.origin);
-      const match = source.pathname.match(/^\/files\/storage(?:\/([0-9a-f-]{36}))?$/);
-      if (!match) return;
+      const match = source.pathname.match(/^\/files\/storage(?:\/([^/]+))?$/);
+      if (!match || (match[1] && !window.isValidUuid(match[1]))) return;
       const url = new URL(window.location.href);
       url.searchParams.set('storage', match[1] || 'root');
       const category = source.searchParams.get('category');

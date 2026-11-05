@@ -99,6 +99,19 @@ def safe_filename(name):
     )
 
 
+def serve_inline(response, filename):
+    """Mark *response* as a file to view in the page, not to download.
+
+    A viewer may show it in a frame (the PDF viewer hands it to the
+    browser's own reader in an <iframe>), so this app's pages may frame it;
+    other origins still may not. Everything else keeps the project-wide
+    ``X-Frame-Options: DENY``.
+    """
+    response["Content-Disposition"] = f'inline; filename="{safe_filename(filename)}"'
+    response["X-Frame-Options"] = "SAMEORIGIN"
+    return response
+
+
 def serve_with_ranges(
     request,
     file_handle,
@@ -154,9 +167,7 @@ def serve_with_ranges(
         response["Content-Length"] = str(end - start + 1)
         response["Accept-Ranges"] = "bytes"
         if inline_filename:
-            response["Content-Disposition"] = (
-                f'inline; filename="{safe_filename(inline_filename)}"'
-            )
+            serve_inline(response, inline_filename)
         elif attachment_filename:
             response["Content-Disposition"] = (
                 f'attachment; filename="{safe_filename(attachment_filename)}"'
@@ -174,9 +185,7 @@ def serve_with_ranges(
         filename=attachment_filename or inline_filename,
     )
     if inline_filename and not attachment_filename:
-        response["Content-Disposition"] = (
-            f'inline; filename="{safe_filename(inline_filename)}"'
-        )
+        serve_inline(response, inline_filename)
     response["Accept-Ranges"] = "bytes"
     if cache_control:
         response["Cache-Control"] = cache_control

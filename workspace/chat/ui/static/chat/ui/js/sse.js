@@ -212,9 +212,11 @@ window.chatSseMixin = function chatSseMixin() {
     },
 
     // Snapshot of the conversations with a generation under way, sent every
-    // time a connection opens. A reload learns to raise the indicator without
-    // waiting for the next tool; arms the same failsafe as a step, because a
-    // cancelled generation ends without posting anything. The reverse matters
+    // time a connection opens and then every minute while one runs. A reload
+    // learns to raise the indicator without waiting for the next tool; arms
+    // the same failsafe as a step, because a cancelled generation ends without
+    // posting anything - the repeats are what keep that failsafe from firing
+    // while the model composes a long reply with no tool to report. The reverse matters
     // just as much: a reconnect (mobile resume) opens a fresh EventSource
     // that replays no message events, so a bubble raised before the stream
     // dropped is lowered here when its conversation left the snapshot - the

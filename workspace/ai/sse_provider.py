@@ -1,14 +1,24 @@
+import time
+
 from workspace.ai.models import AITask
 from workspace.core.sse_registry import SSEProvider
+
+# How often a connection re-announces the generations still under way. The
+# chat page drops its typing bubble when nothing has kept it alive for a few
+# minutes (a cancelled generation ends without posting anything), so this has
+# to be well under that failsafe, or a reply that takes long to compose loses
+# its bubble while the model is still working.
+GENERATING_HEARTBEAT_SECONDS = 60
 
 
 class AIStreamSSEProvider(SSEProvider):
     """Streams ephemeral bot progress steps.
 
-    ``poll`` reads the cache and never touches the database, so waking this
-    provider on every tool execution stays cheap. ``get_initial_events``
-    does query, once per connection, to hand a fresh page the state it
-    could not have witnessed.
+    ``poll`` reads the cache, so waking this provider on every tool
+    execution stays cheap; it queries the database only once per
+    ``GENERATING_HEARTBEAT_SECONDS``, to re-announce the generations still
+    under way. ``get_initial_events`` queries once per connection, to hand a
+    fresh page the state it could not have witnessed.
 
     Events carry no SSE id on purpose: Last-Event-Id is shared by all
     providers on the stream and the chat provider resolves it as a message
@@ -23,6 +33,8 @@ class AIStreamSSEProvider(SSEProvider):
         # not witness; replaying them would raise a phantom typing bubble on
         # a page load. Start from the tail and only stream what comes next.
         self._cursor = latest_step_id(user.id)
+        self._announced_generating = set()
+        self._last_generating_check = time.monotonic()
 
     def _conversations_generating(self):
         """Ids of the user's conversations with a bot response under way.
@@ -65,7 +77,7 @@ class AIStreamSSEProvider(SSEProvider):
         from workspace.ai.services.stream_steps import read_steps
 
         running = self._conversations_generating()
-        events = [("bot_generating", {"conversation_ids": sorted(running)}, None)]
+        events = [self._generating_event(running)]
         if running:
             envelopes, self._cursor = read_steps(self.user.id, None)
             events.extend(
@@ -75,11 +87,38 @@ class AIStreamSSEProvider(SSEProvider):
             )
         return events
 
+    def _generating_event(self, running):
+        self._announced_generating = running
+        self._last_generating_check = time.monotonic()
+        return ("bot_generating", {"conversation_ids": sorted(running)}, None)
+
+    def _generating_heartbeat(self):
+        """The snapshot again, while a generation runs or right after it ends.
+
+        A tool step is the only other thing that keeps the bubble up, and a
+        model can compose for minutes after its last tool - or call none at
+        all. Once nothing runs and the client was told so, the heartbeat goes
+        quiet: an empty snapshot repeated every minute would only cost a
+        query and a frame per idle tab.
+        """
+        if (
+            time.monotonic() - self._last_generating_check
+            < GENERATING_HEARTBEAT_SECONDS
+        ):
+            return []
+        running = self._conversations_generating()
+        if not running and not self._announced_generating:
+            self._last_generating_check = time.monotonic()
+            return []
+        return [self._generating_event(running)]
+
     def poll(self, cache_value):
         from workspace.ai.services.stream_steps import read_steps
 
+        events = self._generating_heartbeat()
         envelopes, self._cursor = read_steps(self.user.id, self._cursor)
-        return [("bot_step", envelope["data"], None) for envelope in envelopes]
+        events.extend(("bot_step", envelope["data"], None) for envelope in envelopes)
+        return events
 
 
 class AISSEProvider(SSEProvider):

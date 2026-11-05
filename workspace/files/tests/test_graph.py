@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -355,6 +357,31 @@ class GraphAttachmentsTests(TestCase):
         )
         ids = {n["uuid"] for n in g["nodes"]}
         self.assertEqual(ids, {str(self.note.uuid), str(self.lonely.uuid)})
+
+
+class GraphEdgeQueryTests(TestCase):
+    """The edge query names the node set as a subquery: as a list of uuids it
+    would bind two parameters per node, past SQLite's limit on a large
+    library."""
+
+    def test_edge_query_does_not_grow_with_the_nodes(self):
+        user = User.objects.create_user(username="ge-params", password="p")
+        _note(user, "a.md")
+        with CaptureQueriesContext(connection) as small:
+            build_file_graph(user, scope="mine", file_type="markdown", attachments=True)
+        for i in range(20):
+            _note(user, f"n{i}.md")
+        with CaptureQueriesContext(connection) as large:
+            build_file_graph(user, scope="mine", file_type="markdown", attachments=True)
+
+        def edge_sql(captured):
+            return [
+                q["sql"]
+                for q in captured.captured_queries
+                if q["sql"].startswith('SELECT "files_filelink"."source_id"')
+            ][-1]
+
+        self.assertEqual(len(edge_sql(small)), len(edge_sql(large)))
 
 
 class FileGraphEndpointTests(APITestCase):

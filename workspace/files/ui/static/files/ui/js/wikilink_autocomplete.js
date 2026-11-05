@@ -64,7 +64,14 @@ export function createWikilinkSlash({ search, searchFiles, insertEmbeds, slashFa
 
   async function runSearch(query, embed) {
     const g = ++generation;
-    embedding = embed && canEmbed;
+    const nextEmbedding = !!(embed && canEmbed);
+    // Rows of the other mode must not stay pickable while this search runs:
+    // a note would be embedded, or a file linked as a note.
+    if (nextEmbedding !== embedding) {
+      items = [];
+      clearMenu();
+    }
+    embedding = nextEmbedding;
     let results = [];
     try {
       results = await (embedding ? searchFiles : search)(query);

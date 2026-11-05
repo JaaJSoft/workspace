@@ -207,6 +207,33 @@ class WikilinkEditorTests(PlaywrightTestCase):
         )
         expect(item).to_be_visible(timeout=5000)
 
+    def test_switching_to_embed_mode_drops_the_note_rows(self):
+        # Regression: going from "[[" to "![[" kept the note rows pickable
+        # until the file search answered, so Enter embedded a note (or the
+        # other way round linked a file as a note).
+        editor = self._open_editor()
+        editor.click()
+        self.page.keyboard.press("Control+End")
+        self._type_awaiting_search("[[beta", "beta")
+        expect(
+            self.page.locator('[data-testid="wikilink-item"]', has_text="Beta Target")
+        ).to_be_visible(timeout=5000)
+
+        # The file search "![[" starts never answers.
+        held = []
+        self.page.route(
+            lambda url: "node_type=file" in url, lambda route: held.append(route)
+        )
+        for _ in range(len("[[beta")):
+            self.page.keyboard.press("Backspace")
+        self.page.keyboard.type("![[beta")
+        self.page.wait_for_timeout(500)
+
+        expect(self.page.locator('[data-testid="wikilink-item"]')).to_have_count(0)
+        self.page.keyboard.press("Enter")
+        expect(self.page.locator(".ProseMirror .file-embed")).to_have_count(0)
+        expect(self.page.locator('.ProseMirror a[href*="file="]')).to_have_count(0)
+
     def test_search_error_clears_stale_results(self):
         editor = self._open_editor()
         editor.click()

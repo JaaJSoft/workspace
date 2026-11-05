@@ -356,10 +356,13 @@ async function open(container, opts) {
       // Faint dot grid behind everything, panning/zooming with the scene.
       .onRenderFramePre((ctx, globalScale) => _drawGrid(ctx, globalScale))
       .onNodeClick((n) => {
-        // An embedded file has no place in the notes app: it opens on its own,
-        // through the content endpoint, which checks the access again.
+        // An embedded file opens in the viewer over the page
+        // (files/ui/partials/file_embed_viewer.html), as a click on the embed
+        // itself does.
         if (isAttachment(n)) {
-          window.open('/api/v1/files/' + encodeURIComponent(n.uuid) + '/content', '_blank', 'noopener');
+          window.dispatchEvent(new CustomEvent('open-note-file-viewer', {
+            detail: { uuid: n.uuid, name: n.name, type: n.type, isFile: true },
+          }));
           return;
         }
         if (_state.onNodeClick) _state.onNodeClick(n.uuid);

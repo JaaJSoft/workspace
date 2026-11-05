@@ -350,14 +350,7 @@
             class="group/media relative aspect-square rounded overflow-hidden bg-base-300"
             :title="item.original_name"
           >
-            <file-preview
-              src="{% url 'chat_ui:attachment_previews' %}"
-              :uuid="item.uuid"
-              :name="item.original_name"
-              fit="cover"
-              bare
-              open-event="open-chat-attachment-viewer"
-            ></file-preview>
+            <file-preview src="{% url 'chat_ui:attachment_previews' %}" :uuid="item.uuid" :name="item.original_name" fit="cover" bare open-event="open-chat-attachment-viewer"></file-preview>
             <div
               class="absolute inset-0 pointer-events-none bg-black/0 group-hover/media:bg-black/30 transition-colors flex items-end"
             >

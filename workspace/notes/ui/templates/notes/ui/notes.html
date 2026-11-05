@@ -246,6 +246,7 @@
   {% include "files/ui/partials/rename_dialog.html" %}
   {% include "ui/partials/context_menu_panel.html" with items="notes/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" width="w-52" %}
   {% include "notes/ui/partials/help_dialog.html" %}
+  {% include "files/ui/partials/file_embed_viewer.html" %}
 
   <!-- Create Group Folder Dialog -->
   <dialog id="notes-create-group-folder-dialog" class="modal">
@@ -335,6 +336,7 @@
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/tags.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/file_viewer.js' %}"></script>
   <script src="{% static 'files/ui/js/file_refs_drag.js' %}"></script>
   <script src="{% static 'notes/ui/js/notes.js' %}"></script>
   <script src="{% static 'notes/ui/js/notes_graph.js' %}"></script>

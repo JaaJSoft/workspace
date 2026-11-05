@@ -1,7 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views.embeds import FileEmbedsView
 from .views.files import FileViewSet
 from .views.graph import FileGraphView
 from .views.sensitive import SensitiveFilesView
@@ -31,11 +30,6 @@ urlpatterns = [
         "api/v1/files/sensitive",
         SensitiveFilesView.as_view(),
         name="files-sensitive",
-    ),
-    path(
-        "api/v1/files/embeds",
-        FileEmbedsView.as_view(),
-        name="file-embeds",
     ),
     # Ahead of the router, whose file detail route would take "uploads" for
     # a file's id.

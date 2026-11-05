@@ -1227,11 +1227,12 @@ def album_viewer(request, uuid, file_uuid):
     if not html:
         return HttpResponse(
             render_viewer_panel(
-                '<div class="p-8 text-center text-error">No preview for this file</div>'
+                '<div class="p-8 text-center text-error">No preview for this file</div>',
+                request,
             ),
             status=400,
         )
-    return HttpResponse(render_viewer_panel(html))
+    return HttpResponse(render_viewer_panel(html, request))
 
 
 def _link_url(name, link, access_token, *args, **params):

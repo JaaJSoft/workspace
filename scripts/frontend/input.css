@@ -411,6 +411,47 @@ html:has(> body.overflow-hidden.h-dvh) {
   display: none !important;
 }
 
+/* <file-preview> (common/static/ui/js/file_preview.js): a file shown inside
+   a note, a message or a task. Its media take the room the host gives them,
+   up to --file-preview-max-height; fit="cover" fills a fixed box (a grid
+   cell) and bare drops the caption under the media. */
+file-preview {
+  display: block;
+  max-width: 100%;
+  --file-preview-max-height: 32rem;
+}
+
+file-preview .file-preview-img {
+  max-height: var(--file-preview-max-height);
+}
+
+file-preview .file-preview-body[data-preview-openable] {
+  cursor: pointer;
+}
+
+file-preview[bare] .file-preview-caption {
+  display: none;
+}
+
+file-preview[fit="cover"],
+file-preview[fit="cover"] .file-preview-slot,
+file-preview[fit="cover"] .file-preview-body,
+file-preview[fit="cover"] .file-preview-frame {
+  width: 100%;
+  height: 100%;
+}
+
+file-preview[fit="cover"] .file-preview-frame {
+  border-radius: 0;
+}
+
+file-preview[fit="cover"] .file-preview-img {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+}
+
 /* The photo location map (photos/ui/js/photo_map.js) and the library map
    (photos/ui/js/library_map.js): Leaflet's chrome in the theme's colours, so
    its controls do not glare white in a dark theme. Scoped under the map's

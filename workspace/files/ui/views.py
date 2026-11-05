@@ -44,7 +44,17 @@ from ..models import (
     PinnedFolder,
     Tag,
 )
-from .viewers import ViewerRegistry, render_viewer_panel, veil_sensitive
+from .viewers import (
+    CARD_PREVIEW_TEMPLATE,
+    ViewerRegistry,
+    preview_context,
+    preview_targets,
+    previews_response,
+    render_file_preview,
+    render_preview_placeholder,
+    render_viewer_panel,
+    veil_sensitive,
+)
 
 RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 INITIAL_EVENTS_LIMIT = 15
@@ -760,7 +770,8 @@ def view_file(request, uuid):
                         "The malware scanner flagged this file, so its "
                         "contents cannot be shown."
                     ),
-                )
+                ),
+                request,
             ),
             status=403,
         )
@@ -769,7 +780,8 @@ def view_file(request, uuid):
     if file_obj.node_type != File.NodeType.FILE:
         return HttpResponse(
             render_viewer_panel(
-                '<div class="p-8 text-center text-error">This is a folder, not a file.</div>'
+                '<div class="p-8 text-center text-error">This is a folder, not a file.</div>',
+                request,
             ),
             status=400,
         )
@@ -778,7 +790,8 @@ def view_file(request, uuid):
     if not file_obj.is_viewable():
         return HttpResponse(
             render_viewer_panel(
-                f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>'
+                f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>',
+                request,
             ),
             status=400,
         )
@@ -792,7 +805,8 @@ def view_file(request, uuid):
     if not ViewerClass:
         return HttpResponse(
             render_viewer_panel(
-                f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>'
+                f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>',
+                request,
             ),
             status=400,
         )
@@ -820,7 +834,7 @@ def view_file(request, uuid):
 
     return HttpResponse(
         render_viewer_panel(
-            _viewer_location_marker(request.user, file_obj, perm) + html
+            _viewer_location_marker(request.user, file_obj, perm) + html, request
         )
     )
 
@@ -852,6 +866,67 @@ def _viewer_location_marker(user, file_obj, permission):
         url,
         space,
     )
+
+
+@login_required
+def file_previews(request):
+    """A batch of <file-preview> slots for Files files, as the user sees them.
+
+    ``?uuids=<uuid>,...&targets=<id>,...``: each preview comes back wrapped
+    in the slot id it was asked for. A file the user may not reach comes
+    back as nothing at all, like one that does not exist.
+    """
+    from django.http import HttpResponseBadRequest
+    from django.template.loader import render_to_string
+
+    from workspace.files.services import previews
+
+    pairs = preview_targets(request)
+    if pairs is None:
+        return HttpResponseBadRequest()
+    found = previews.previewable_files(request.user, [uuid for _, uuid in pairs])
+    rendered = {}
+    for target, file_uuid in pairs:
+        if file_uuid not in found:
+            continue
+        state, file_obj = found[file_uuid]
+        if state == previews.TRASHED:
+            html = render_preview_placeholder(
+                request,
+                icon="trash-2",
+                name=file_obj.name,
+                message=_("This file is in the trash."),
+                variant="trashed",
+            )
+        elif state == previews.QUARANTINED:
+            html = render_preview_placeholder(
+                request,
+                icon="shield-alert",
+                name=file_obj.name,
+                message=_("The malware scanner blocked this file."),
+                variant="blocked",
+            )
+        elif file_obj.node_type == File.NodeType.FOLDER:
+            html = render_to_string(
+                CARD_PREVIEW_TEMPLATE,
+                preview_context(
+                    file_obj,
+                    content_url=None,
+                    icon=file_obj.icon or "folder",
+                    openable=False,
+                ),
+                request=request,
+            )
+        else:
+            html = render_file_preview(
+                request,
+                file_obj,
+                content_url=previews.content_url(file_obj),
+                thumbnail_url=previews.thumbnail_url(file_obj),
+                sensitive_level=file_obj.sensitive_level,
+            )
+        rendered[target] = html
+    return previews_response(rendered)
 
 
 @login_required

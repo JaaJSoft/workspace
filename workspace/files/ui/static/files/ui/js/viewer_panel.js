@@ -28,9 +28,11 @@ window.viewerPanelMixin = function viewerPanelMixin() {
 
     // Empty the panel after letting the mounted viewer dispose (Monaco and
     // Crepe listen for viewer-cleanup). The panel element itself stays in
-    // the DOM: it is the id anchor the next merge replaces.
+    // the DOM: it is the id anchor the next merge replaces. The event names
+    // the panel, so a viewer mounted in another one - the note under a
+    // modal - stays up.
     clearViewerPanel() {
-      window.dispatchEvent(new CustomEvent('viewer-cleanup'));
+      window.dispatchEvent(new CustomEvent('viewer-cleanup', { detail: { panel: this._viewerPanelId() } }));
       const panel = document.getElementById(this._viewerPanelId());
       if (panel) panel.replaceChildren();
     },

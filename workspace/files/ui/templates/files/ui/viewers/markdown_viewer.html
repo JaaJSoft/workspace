@@ -43,11 +43,13 @@
     display: none !important;
   }
 </style>
+{# A click on an embedded file opens files/ui/partials/file_embed_viewer.html, on the pages that include it. #}
 <div
   class="flex flex-col h-full"
+  data-file-preview-event="open-note-file-viewer"
   x-data="markdownViewerCrepe()"
   x-init="initEditor()"
-  @viewer-cleanup.window="dispose()"
+  @viewer-cleanup.window="if (!$event.detail || $el.closest('#' + $event.detail.panel)) dispose()"
 >
 
   <!-- Toolbar -->
@@ -380,12 +382,9 @@
             $view: mod.$view,
             $prose: mod.$prose,
             Plugin: mod.Plugin,
-            // Embeds are resolved for whoever reads the note; a visitor of
-            // a public link has no session to resolve them with.
-            resolver: fileEmbed.createEmbedResolver({
-              enabled: {{ user.is_authenticated|yesno:"true,false" }},
-              csrfToken: getCSRFToken,
-            }),
+            // Embeds are previewed for whoever reads the note; a visitor of
+            // a public link has no session to preview them with.
+            previewSrc: '{% if user.is_authenticated %}{% url "files_ui:file_previews" %}{% endif %}' || null,
             dropped: window.fileRefsDrag || null,
           })(_crepe.editor);
           wikilink.createWikilinkSlash({

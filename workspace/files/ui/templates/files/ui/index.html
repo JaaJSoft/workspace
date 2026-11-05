@@ -396,6 +396,8 @@
       <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
+  {# Outside #files-main: the inline viewer makes what it covers inert, and a note it shows opens embedded files here. #}
+  {% include "files/ui/partials/file_embed_viewer.html" %}
 {% endblock %}
 
 {% block extra_scripts %}

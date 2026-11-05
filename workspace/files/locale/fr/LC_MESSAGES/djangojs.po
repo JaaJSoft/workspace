@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-04 19:30+0000\n"
+"POT-Creation-Date: 2026-11-05 11:25+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -396,30 +396,6 @@ msgstr[2] "Préparation d’une archive de %(count)s éléments..."
 #: ui/static/files/ui/js/file_actions.js
 msgid "Failed to download selected files"
 msgstr "Impossible de télécharger les fichiers sélectionnés"
-
-#: ui/static/files/ui/js/file_embed.js
-msgid "Open in a new tab"
-msgstr "Ouvrir dans un nouvel onglet"
-
-#: ui/static/files/ui/js/file_embed.js
-msgid "Note"
-msgstr "Note"
-
-#: ui/static/files/ui/js/file_embed.js
-msgid "Couldn't load this file."
-msgstr "Impossible de charger ce fichier."
-
-#: ui/static/files/ui/js/file_embed.js
-msgid "This file is in the trash."
-msgstr "Ce fichier est dans la corbeille."
-
-#: ui/static/files/ui/js/file_embed.js
-msgid "The malware scanner blocked this file."
-msgstr "L’analyseur antivirus a bloqué ce fichier."
-
-#: ui/static/files/ui/js/file_embed.js
-msgid "This file was deleted, or you don't have access to it."
-msgstr "Ce fichier a été supprimé, ou vous n’y avez pas accès."
 
 #: ui/static/files/ui/js/file_lock.js
 msgid "Another user"

@@ -1,8 +1,9 @@
 """E2E tests for files embedded in a note (files/ui/js/file_embed.js).
 
-The editor draws an embed from what POST /api/v1/files/embeds answers for
-the person reading the note: the file inline by type, or a placeholder that
-shows nothing of it.
+An embed is a <file-preview> (common/static/ui/js/file_preview.js): the server
+draws it for the person reading the note (/files/previews), as the file
+inline or a placeholder that shows nothing of it, and a click opens the file
+in a viewer over the note.
 """
 
 from __future__ import annotations
@@ -110,6 +111,9 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
     def _embed_of(self, f):
         return self.page.locator(f'.file-embed[data-file-embed="{f.uuid}"]')
 
+    def _preview_of(self, f):
+        return self._embed_of(f).locator("file-preview")
+
     def _saved_markdown(self, note):
         note.refresh_from_db()
         with note.content.open("rb") as fh:
@@ -129,12 +133,12 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
                 self.fail(f"never saved {fragments!r}; stored: {saved!r}")
             self.page.wait_for_timeout(200)
 
-    def test_image_and_pdf_render_inline(self):
+    def test_image_renders_inline_and_pdf_as_a_card(self):
         note = self._note(f"# Report\n\n{_embed(self.photo)}\n\n{_embed(self.pdf)}\n")
         self._open(note)
 
-        image = self._embed_of(self.photo)
-        expect(image).to_have_attribute("data-embed-kind", "image", timeout=10000)
+        image = self._preview_of(self.photo)
+        expect(image).to_have_attribute("state", "ready", timeout=10000)
         img = image.locator("img")
         expect(img).to_be_visible()
         self.page.wait_for_function(
@@ -142,19 +146,56 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         )
         expect(image).to_contain_text("photo.png")
 
-        pdf = self._embed_of(self.pdf)
-        expect(pdf).to_have_attribute("data-embed-kind", "pdf", timeout=10000)
-        expect(pdf.locator("iframe")).to_have_attribute(
-            "src",
-            f"/api/v1/files/{self.pdf.uuid}/content?v={self.pdf.content_hash[:16]}",
+        pdf = self._preview_of(self.pdf)
+        expect(pdf).to_have_attribute("state", "ready", timeout=10000)
+        expect(pdf.locator(".file-preview-card")).to_contain_text("report.pdf")
+
+    def test_one_request_previews_every_embed(self):
+        previews = []
+        self.page.on(
+            "request",
+            lambda r: previews.append(r.url) if "/files/previews" in r.url else None,
         )
+        note = self._note(f"{_embed(self.photo)}\n\n{_embed(self.pdf)}\n")
+        self._open(note)
+        expect(self._preview_of(self.pdf)).to_have_attribute(
+            "state", "ready", timeout=10000
+        )
+        self.assertEqual(len(previews), 1, previews)
+
+    def test_click_opens_the_viewer_over_the_note(self):
+        note = self._note(f"# Report\n\n{_embed(self.photo)}\n")
+        editor = self._open(note)
+        preview = self._preview_of(self.photo)
+        expect(preview).to_have_attribute("state", "ready", timeout=10000)
+
+        preview.locator("img").click()
+        # daisyUI's .modal keeps a closed dialog displayed (at opacity 0), so
+        # Playwright's visibility says nothing: the open attribute does.
+        dialog = self.page.locator("[data-file-viewer-modal] dialog")
+        expect(dialog).to_have_attribute("open", "", timeout=10000)
+        expect(dialog).to_contain_text("photo.png")
+        expect(dialog.locator("#viewer-panel-embed img").first).to_be_visible(
+            timeout=10000
+        )
+
+        # The note under the modal stays mounted and editable.
+        dialog.locator('button[aria-label="Close"]').click()
+        self.page.wait_for_function(
+            "() => !document.querySelector('[data-file-viewer-modal] dialog').open"
+        )
+        expect(editor).to_be_visible()
+        editor.locator("h1").click()
+        self.page.keyboard.press("End")
+        self.page.keyboard.type(" v2")
+        self._save(note, "# Report v2")
 
     def test_embed_survives_an_edit_round_trip(self):
         body = f"# Report\n\n{_embed(self.photo)}\n"
         note = self._note(body)
         editor = self._open(note)
-        expect(self._embed_of(self.photo)).to_have_attribute(
-            "data-embed-status", "ok", timeout=10000
+        expect(self._preview_of(self.photo)).to_have_attribute(
+            "state", "ready", timeout=10000
         )
 
         editor.locator("h1").click()
@@ -167,7 +208,9 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         note = self._note(f"{_embed(self.pdf)}\n")
         FileService.rename(self.pdf, "final.pdf")
         self._open(note)
-        expect(self._embed_of(self.pdf)).to_contain_text("final.pdf", timeout=10000)
+        preview = self._preview_of(self.pdf)
+        expect(preview).to_have_attribute("state", "ready", timeout=10000)
+        expect(preview).to_contain_text("final.pdf")
 
     def test_reader_without_access_sees_a_placeholder(self):
         note = self._note(f"{_embed(self.photo)}\n")
@@ -178,7 +221,7 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
             "request",
             lambda r: (
                 content_requests.append(r.url)
-                if str(self.photo.uuid) in r.url and "/embeds" not in r.url
+                if f"/api/v1/files/{self.photo.uuid}" in r.url
                 else None
             ),
         )
@@ -186,32 +229,30 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         # A share recipient opens the note from "Shared with me".
         self.page.goto(f"{self.live_server_url}/files?shared=1&open={note.uuid}")
 
-        embed = self._embed_of(self.photo)
-        expect(embed).to_have_attribute(
-            "data-embed-status", "unavailable", timeout=20000
-        )
-        expect(embed).to_contain_text("you don't have access")
-        self.assertEqual(embed.locator("img, iframe, video, audio").count(), 0)
+        preview = self._preview_of(self.photo)
+        expect(preview).to_have_attribute("state", "unavailable", timeout=20000)
+        expect(preview).to_contain_text("you don't have access")
+        self.assertEqual(preview.locator("img, iframe, video, audio").count(), 0)
         self.assertEqual(content_requests, [])
 
     def test_trashed_target_renders_a_fallback(self):
         note = self._note(f"{_embed(self.pdf)}\n")
         self.pdf.soft_delete()
         self._open(note)
-        embed = self._embed_of(self.pdf)
-        expect(embed).to_have_attribute("data-embed-status", "trashed", timeout=10000)
-        expect(embed).to_contain_text("in the trash")
+        preview = self._preview_of(self.pdf)
+        expect(preview).to_have_attribute("state", "ready", timeout=10000)
+        expect(preview.locator(".file-preview-trashed")).to_contain_text("in the trash")
 
     def test_purged_target_renders_a_fallback(self):
         note = self._note(f"{_embed(self.pdf)}\n")
         target = self.pdf.uuid
         self.pdf.delete(hard=True)
         self._open(note)
-        embed = self.page.locator(f'.file-embed[data-file-embed="{target}"]')
-        expect(embed).to_have_attribute(
-            "data-embed-status", "unavailable", timeout=10000
+        preview = self.page.locator(
+            f'.file-embed[data-file-embed="{target}"] file-preview'
         )
-        expect(embed).to_contain_text("report.pdf")
+        expect(preview).to_have_attribute("state", "unavailable", timeout=10000)
+        expect(preview).to_contain_text("report.pdf")
 
     def test_bang_double_bracket_embeds_a_file(self):
         body = "# Notes\n\nStart here.\n"
@@ -229,8 +270,8 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         expect(item).to_be_visible(timeout=5000)
         item.click()
 
-        expect(self._embed_of(self.pdf)).to_have_attribute(
-            "data-embed-kind", "pdf", timeout=10000
+        expect(self._preview_of(self.pdf)).to_have_attribute(
+            "state", "ready", timeout=10000
         )
         expect(editor).not_to_contain_text("![[report")
         self._save(note, _embed(self.pdf))
@@ -263,10 +304,8 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         )
         self.assertTrue(accepted)
 
-        expect(self._embed_of(self.photo)).to_have_attribute(
-            "data-embed-kind", "image", timeout=10000
-        )
-        expect(self._embed_of(self.pdf)).to_have_attribute("data-embed-kind", "pdf")
+        expect(self._preview_of(self.photo).locator("img")).to_be_visible(timeout=10000)
+        expect(self._preview_of(self.pdf)).to_have_attribute("state", "ready")
         saved = self._save(note, _embed(self.photo), _embed(self.pdf))
         first = saved.index("First paragraph.")
         self.assertLess(first, saved.index(_embed(self.photo)))
@@ -287,11 +326,9 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         box = editor.locator("p", has_text="Drop below.").bounding_box()
         self.drag(row, box["x"] + box["width"] - 2, box["y"] + box["height"] / 2)
 
-        embed = self._embed_of(dragged)
-        expect(embed).to_have_attribute("data-embed-kind", "note", timeout=10000)
-        expect(embed.locator("a")).to_have_attribute(
-            "href", f"/notes?file={dragged.uuid}"
-        )
+        preview = self._preview_of(dragged)
+        expect(preview).to_have_attribute("state", "ready", timeout=10000)
+        expect(preview).to_contain_text("Dragged.md")
         result = negotiated()
         self.assertEqual(result["effectAllowed"], "copy")
         self.assertEqual(result["dropEffect"], "copy")
@@ -346,7 +383,7 @@ class FileEmbedPublicLinkTests(PlaywrightTestCase):
             "request",
             lambda r: (
                 asked.append(r.url)
-                if "/embeds" in r.url or str(photo.uuid) in r.url
+                if "/previews" in r.url or str(photo.uuid) in r.url
                 else None
             ),
         )
@@ -356,9 +393,9 @@ class FileEmbedPublicLinkTests(PlaywrightTestCase):
             f"?node={self.readme.uuid}"
         )
 
-        embed = self.page.locator(f'.file-embed[data-file-embed="{photo.uuid}"]')
-        expect(embed).to_have_attribute(
-            "data-embed-status", "unavailable", timeout=20000
+        preview = self.page.locator(
+            f'.file-embed[data-file-embed="{photo.uuid}"] file-preview'
         )
-        self.assertEqual(embed.locator("img").count(), 0)
+        expect(preview).to_have_attribute("state", "unavailable", timeout=20000)
+        self.assertEqual(preview.locator("img").count(), 0)
         self.assertEqual(asked, [])

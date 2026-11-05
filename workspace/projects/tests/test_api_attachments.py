@@ -208,6 +208,22 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(b"".join(resp.streaming_content), b"minutes")
 
+    def test_an_html_attachment_downloads_behind_the_sandbox(self):
+        # Opened directly, the page would run with the viewer's session.
+        self._upload(
+            self.member,
+            name="page.html",
+            content=b"<html><script>alert(1)</script></html>",
+        )
+        att = TaskAttachment.objects.get()
+        self.assertEqual(att.mime_type, "text/html")
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get(f"{self.url}/{att.uuid}/download")
+        b"".join(resp.streaming_content)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp["Content-Disposition"].startswith("attachment"))
+        self.assertIn("sandbox", resp["Content-Security-Policy"])
+
     def test_outsider_cannot_download(self):
         self._upload(self.member)
         att = TaskAttachment.objects.get()

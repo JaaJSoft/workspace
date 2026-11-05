@@ -27,6 +27,8 @@ Typical usage:
 
 import re
 
+from .stored_content import is_active_content, protect_stored_content
+
 # bytes=start-end, bytes=start-, bytes=-N. Multi-range is rejected.
 # No internal `\s*` matches: outer whitespace is handled by .strip()
 # at the call site, internal whitespace inside the directive is not
@@ -140,13 +142,18 @@ def serve_with_ranges(
     when the function exits early with a 416.
 
     Pass `inline_filename` for in-browser viewing (video/audio/images),
-    `attachment_filename` to force a download. Pass one, not both.
+    `attachment_filename` to force a download. Pass one, not both. A type a
+    browser would run as a page downloads even when asked inline, and every
+    response carrying the bytes gets `stored_content.stored_content_headers`.
 
     `download_metric` is an optional Prometheus counter (anything with
     an `inc(n)` method) that gets incremented with the number of bytes
     written to the response.
     """
     from django.http import FileResponse, HttpResponse, StreamingHttpResponse
+
+    filename = attachment_filename or inline_filename
+    as_attachment = bool(attachment_filename) or is_active_content(content_type)
 
     range_header = request.META.get("HTTP_RANGE")
     if range_header:
@@ -166,12 +173,15 @@ def serve_with_ranges(
         response["Content-Range"] = f"bytes {start}-{end}/{file_size}"
         response["Content-Length"] = str(end - start + 1)
         response["Accept-Ranges"] = "bytes"
-        if inline_filename:
-            serve_inline(response, inline_filename)
-        elif attachment_filename:
+        if as_attachment:
             response["Content-Disposition"] = (
-                f'attachment; filename="{safe_filename(attachment_filename)}"'
+                f'attachment; filename="{safe_filename(filename)}"'
+                if filename
+                else "attachment"
             )
+        elif inline_filename:
+            serve_inline(response, inline_filename)
+        protect_stored_content(response, content_type)
         if cache_control:
             response["Cache-Control"] = cache_control
         if download_metric is not None:
@@ -181,11 +191,12 @@ def serve_with_ranges(
     response = FileResponse(
         file_handle,
         content_type=content_type,
-        as_attachment=bool(attachment_filename),
-        filename=attachment_filename or inline_filename,
+        as_attachment=as_attachment,
+        filename=filename,
     )
-    if inline_filename and not attachment_filename:
+    if inline_filename and not as_attachment:
         serve_inline(response, inline_filename)
+    protect_stored_content(response, content_type)
     response["Accept-Ranges"] = "bytes"
     if cache_control:
         response["Cache-Control"] = cache_control

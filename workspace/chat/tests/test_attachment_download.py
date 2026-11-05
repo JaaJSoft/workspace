@@ -215,3 +215,28 @@ class AttachmentDownloadTests(APITestCase):
         from django.core.cache import cache
 
         cache.clear()
+
+    def test_an_svg_attachment_downloads_behind_the_sandbox(self):
+        # Opened directly, a scripted SVG would run with the viewer's session.
+        svg = MessageAttachment.objects.create(
+            message=self.message,
+            file=SimpleUploadedFile(
+                "logo.svg", b"<svg><script>alert(1)</script></svg>"
+            ),
+            original_name="logo.svg",
+            mime_type="image/svg+xml",
+            size=37,
+        )
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(svg.uuid))
+        self._consume(resp)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp["Content-Disposition"].startswith("attachment"))
+        self.assertIn("sandbox", resp["Content-Security-Policy"])
+
+    def test_a_pdf_attachment_stays_inline_for_the_pdf_viewer(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.attachment.uuid))
+        self._consume(resp)
+        self.assertTrue(resp["Content-Disposition"].startswith("inline"))
+        self.assertEqual(resp["X-Frame-Options"], "SAMEORIGIN")

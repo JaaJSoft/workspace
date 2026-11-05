@@ -481,6 +481,10 @@ class FileGraphEndpointTests(APITestCase):
         url = "/api/v1/files/graph?type=markdown"
         without = {n["uuid"] for n in self.client.get(url).json()["nodes"]}
         self.assertNotIn(str(photo.uuid), without)
+        for raw in ("false", "0"):
+            with self.subTest(attachments=raw):
+                nodes = self.client.get(f"{url}&attachments={raw}").json()["nodes"]
+                self.assertNotIn(str(photo.uuid), {n["uuid"] for n in nodes})
         with_attachments = self.client.get(url + "&attachments=1").json()
         self.assertIn(str(photo.uuid), {n["uuid"] for n in with_attachments["nodes"]})
         self.assertIn(

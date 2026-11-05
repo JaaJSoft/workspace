@@ -419,6 +419,9 @@ file-preview {
   display: block;
   max-width: 100%;
   --file-preview-max-height: 32rem;
+  /* A host that keeps whitespace (an editor's pre-wrap) would draw the
+     server template's line breaks as blank lines. */
+  white-space: normal;
 }
 
 file-preview .file-preview-img {

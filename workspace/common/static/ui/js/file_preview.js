@@ -136,7 +136,12 @@
         if (event.target.id === this._slotId) this._ready();
       });
       this.addEventListener('click', (event) => this._onClick(event));
+      // An Alpine x-for inserts the element first and binds :uuid and
+      // :name right after, in the same task.
+      queueMicrotask(() => this._start());
+    }
 
+    _start() {
       const src = this.getAttribute('src');
       if (!src || !this.getAttribute('uuid')) {
         this._fail();

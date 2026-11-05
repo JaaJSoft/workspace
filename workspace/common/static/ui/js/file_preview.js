@@ -136,6 +136,11 @@
         if (event.target.id === this._slotId) this._ready();
       });
       this.addEventListener('click', (event) => this._onClick(event));
+      this.addEventListener('keydown', (event) => {
+        // Only the element itself: keys inside its own controls are theirs.
+        if (event.target !== this || (event.key !== 'Enter' && event.key !== ' ')) return;
+        this._onClick(event);
+      });
       // An Alpine x-for inserts the element first and binds :uuid and
       // :name right after, in the same task.
       queueMicrotask(() => this._start());
@@ -168,6 +173,9 @@
       this._openable = !!(body && body.hasAttribute('data-preview-openable'));
       this._name = (body && body.dataset.previewName) || this.getAttribute('name') || '';
       this._type = (body && body.dataset.previewType) || '';
+      // A preview holding its own player keeps that player as its control:
+      // a button around it would nest one control in another.
+      this._setOperable(this._openable && !this.querySelector(INTERACTIVE));
       this.setAttribute('state', 'ready');
       // A format the browser cannot draw falls back to the server thumbnail.
       this.querySelectorAll('img[data-fallback-src]').forEach((img) => {
@@ -182,8 +190,22 @@
       });
     }
 
+    // Reachable and operable from the keyboard, as the click is with a mouse.
+    _setOperable(operable) {
+      if (operable) {
+        this.tabIndex = 0;
+        this.setAttribute('role', 'button');
+        this.setAttribute('aria-label', this._name);
+      } else {
+        this.removeAttribute('tabindex');
+        this.removeAttribute('role');
+        this.removeAttribute('aria-label');
+      }
+    }
+
     _fail() {
       this._openable = false;
+      this._setOperable(false);
       this.setAttribute('state', 'unavailable');
       const slot = el('div', SLOT_CLASS);
       const body = el('div', 'file-preview-body file-preview-placeholder file-preview-unavailable flex items-center gap-2 min-w-0');

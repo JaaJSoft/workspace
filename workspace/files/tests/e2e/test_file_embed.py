@@ -190,6 +190,24 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         self.page.keyboard.type(" v2")
         self._save(note, "# Report v2")
 
+    def test_keyboard_opens_the_viewer(self):
+        note = self._note(f"# Report\n\n{_embed(self.photo)}\n")
+        self._open(note)
+        preview = self._preview_of(self.photo)
+        expect(preview).to_have_attribute("state", "ready", timeout=10000)
+        expect(preview).to_have_attribute("role", "button")
+        expect(preview).to_have_attribute("aria-label", "photo.png")
+
+        editor = self.page.locator(".ProseMirror").first
+        blocks = editor.locator(":scope > *").count()
+        preview.focus()
+        self.page.keyboard.press("Enter")
+        dialog = self.page.locator("[data-file-viewer-modal] dialog")
+        expect(dialog).to_have_attribute("open", "", timeout=10000)
+        expect(dialog).to_contain_text("photo.png")
+        # The key went to the preview, not to the editor around it.
+        self.assertEqual(editor.locator(":scope > *").count(), blocks)
+
     def test_embed_survives_an_edit_round_trip(self):
         body = f"# Report\n\n{_embed(self.photo)}\n"
         note = self._note(body)

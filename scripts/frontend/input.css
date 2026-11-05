@@ -432,6 +432,10 @@ file-preview .file-preview-body[data-preview-openable] {
   cursor: pointer;
 }
 
+file-preview[role="button"]:focus-visible {
+  @apply outline outline-2 outline-offset-2 outline-primary rounded-btn;
+}
+
 file-preview[bare] .file-preview-caption {
   display: none;
 }

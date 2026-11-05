@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { loadScript } = require('../../../common/tests/js/loader');
 
 const MODULE = pathToFileURL(
   path.join(__dirname, '..', '..', 'ui', 'static', 'files', 'ui', 'js', 'file_embed_markdown.js')
@@ -15,6 +16,9 @@ const OTHER = '01929b6e-5c3a-7d4e-8f00-ba9876543210';
 
 let md;
 test.before(async () => {
+  // The page provides isValidUuid (common/static/ui/js/uuid.js).
+  const { isValidUuid } = loadScript('workspace/common/static/ui/js/uuid.js');
+  globalThis.window = { isValidUuid };
   md = await import(MODULE);
 });
 

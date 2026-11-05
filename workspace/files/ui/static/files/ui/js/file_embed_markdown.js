@@ -12,14 +12,14 @@
 
 export const EMBED_NODE = 'file-embed';
 
-const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const EMBED_SRC_RE = new RegExp('^/api/v1/files/(' + UUID + ')/content(?:[?#].*)?$', 'i');
+const EMBED_SRC_RE = /^\/api\/v1\/files\/([^/?#]+)\/content(?:[?#].*)?$/;
 
 // The file an embed source points at, as a lowercase UUID; null for any other
-// URL.
+// URL. The id is checked by isValidUuid (common/static/ui/js/uuid.js), which
+// every page that hosts the editor loads.
 export function embedUuidFromSrc(src) {
   const m = EMBED_SRC_RE.exec(String(src || '').trim());
-  return m ? m[1].toLowerCase() : null;
+  return m && window.isValidUuid(m[1]) ? m[1].toLowerCase() : null;
 }
 
 export function embedSrc(uuid) {

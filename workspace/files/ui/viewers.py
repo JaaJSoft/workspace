@@ -9,6 +9,7 @@ import re
 from abc import ABC, abstractmethod
 
 from django.conf import settings
+from django.utils.html import escape
 
 # Default id the viewer panel hosts (files inline viewer, chat attachment
 # viewer modal, notes editor pane) target with alpine-ajax. The client keeps an
@@ -43,7 +44,7 @@ def render_viewer_panel(html: str, request=None) -> str:
     container's flex/overflow semantics apply to the viewer markup directly -
     the wrapper exists only as a merge anchor.
     """
-    panel_id = requested_target(request) or VIEWER_PANEL_ID
+    panel_id = escape(requested_target(request) or VIEWER_PANEL_ID)
     return f'<div id="{panel_id}" style="display: contents">{html}</div>'
 
 
@@ -191,7 +192,7 @@ def previews_response(rendered):
     from django.http import HttpResponse
 
     body = "".join(
-        f'<div id="{target}" class="file-preview-slot">{html}</div>'
+        f'<div id="{escape(target)}" class="file-preview-slot">{html}</div>'
         for target, html in rendered.items()
     )
     return HttpResponse(body)

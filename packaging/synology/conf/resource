@@ -1,0 +1,25 @@
+{
+    "data-share": {
+        "shares": [
+            {
+                "name": "workspace",
+                "permission": {
+                    "rw": ["docker-workspace"]
+                }
+            }
+        ]
+    },
+    "docker-project": {
+        "projects": [
+            {
+                "name": "workspace",
+                "path": "app",
+                "build_params": {
+                    "force_pull": false,
+                    "force_recreate": true,
+                    "build": false
+                }
+            }
+        ]
+    }
+}

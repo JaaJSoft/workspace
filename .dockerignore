@@ -48,6 +48,9 @@ htmlcov/
 
 workspace/**/tests
 
+# Packaging for other platforms (built by their own workflow)
+packaging/
+
 # Documentation
 *.md
 !CHANGELOG.md

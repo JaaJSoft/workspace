@@ -124,3 +124,28 @@ class DispatchTests(TestCase):
                     _enqueue_worker(ai_task)
                 except ValueError as e:
                     self.fail(f"TaskType {task_type!r} has no worker mapping: {e}")
+
+
+class DispatchEnqueueFailureTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="enqueue_user", password="pw")
+
+    @patch("workspace.ai.tasks.mail.summarize.delay", side_effect=ConnectionError)
+    def test_a_task_that_cannot_be_enqueued_is_closed(self, _delay):
+        # No worker would ever close it: left PENDING it reads as work under way.
+        with self.assertRaises(ConnectionError):
+            dispatch(owner=self.user, task_type=AITask.TaskType.SUMMARIZE)
+
+        task = AITask.objects.get(owner=self.user)
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        self.assertIsNotNone(task.completed_at)
+
+    @patch("workspace.ai.tasks.chat.generate_chat_response.delay")
+    def test_chat_replies_go_to_their_worker(self, mock_delay):
+        ai_task = dispatch(
+            owner=self.user,
+            task_type=AITask.TaskType.CHAT,
+            input_data={"conversation_id": "c", "message_id": "m"},
+        )
+
+        mock_delay.assert_called_once_with(str(ai_task.uuid))

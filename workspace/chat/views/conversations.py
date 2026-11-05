@@ -58,13 +58,20 @@ def _trigger_bot_response(conversation_id, message, sender):
         .first()
     )
     if bot_member:
+        # Dispatched rather than enqueued: the AITask exists from this point,
+        # so a stream that reconnects while the job still waits in the queue
+        # keeps showing the typing bubble the sender just raised.
         try:
-            from workspace.ai.tasks.chat import generate_chat_response
+            from workspace.ai.models import AITask
+            from workspace.ai.services.dispatch import dispatch
 
-            generate_chat_response.delay(
-                str(conversation_id),
-                str(message.uuid),
-                bot_member.user_id,
+            dispatch(
+                owner=bot_member.user,
+                task_type=AITask.TaskType.CHAT,
+                input_data={
+                    "conversation_id": str(conversation_id),
+                    "message_id": str(message.uuid),
+                },
             )
         except Exception:
             logger.exception(

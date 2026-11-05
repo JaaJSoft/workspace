@@ -42,13 +42,11 @@ class AIStreamSSEProvider(SSEProvider):
         The chat AITask is owned by the bot, not by the human reading this
         stream, so ownership cannot be the filter here - membership is.
         """
+        from workspace.ai.services.chat_generations import active_chat_tasks
         from workspace.chat.services.conversations import user_conversation_ids
 
         candidates = set()
-        for data in AITask.objects.filter(
-            task_type=AITask.TaskType.CHAT,
-            status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
-        ).values_list("input_data", flat=True):
+        for data in active_chat_tasks().values_list("input_data", flat=True):
             conversation_id = (data or {}).get("conversation_id")
             if conversation_id:
                 candidates.add(str(conversation_id))

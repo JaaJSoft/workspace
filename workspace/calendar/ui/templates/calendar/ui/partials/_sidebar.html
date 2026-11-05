@@ -388,6 +388,14 @@
       </ul>
     </div>
 
+    <!-- Booking pages button -->
+    <div class="px-3 pb-2">
+      {% translate "Booking pages" as booking_pages_label %}
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="calendar-check" label=booking_pages_label color="module" onclick="openBookingPages()" tooltip=booking_pages_label collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      </ul>
+    </div>
+
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">

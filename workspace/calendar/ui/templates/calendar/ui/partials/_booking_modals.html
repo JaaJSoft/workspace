@@ -1,0 +1,481 @@
+{# Booking page modals: the list (pages and upcoming appointments) and the page form. #}
+{# Included from index.html inside the main content block. #}
+{% load i18n %}
+<!-- Booking Pages Modal -->
+<dialog
+  class="modal"
+  :class="showBookingListModal && 'modal-open'"
+  @click.self="showBookingListModal = false"
+  @keydown.escape.window="showBookingListModal && !showBookingFormModal && (showBookingListModal = false)"
+>
+  <div class="modal-box w-11/12 max-w-2xl h-[75vh] flex flex-col p-0">
+    {% translate "Booking pages" as booking_pages_title %}
+    {% translate "Links where people pick a time in your calendar" as booking_pages_subtitle %}
+    {% include "ui/partials/dialog_header.html" with icon="calendar-check" title=booking_pages_title subtitle=booking_pages_subtitle actions_template="calendar/ui/partials/_booking_list_header_actions.html" close_expr="showBookingListModal = false" class="px-5 pt-5 pb-3 flex-shrink-0" only %}
+
+    <div class="px-5 pb-3 flex-shrink-0">
+      <div class="join">
+        <button
+          type="button"
+          class="join-item btn btn-sm"
+          :class="bookingTab === 'pages' ? 'btn-active' : ''"
+          @click="setBookingTab('pages')"
+        >
+          {% translate "Pages" context "booking pages tab" %}
+        </button>
+        <button
+          type="button"
+          class="join-item btn btn-sm"
+          :class="bookingTab === 'bookings' ? 'btn-active' : ''"
+          @click="setBookingTab('bookings')"
+        >
+          {% translate "Upcoming appointments" %}
+        </button>
+      </div>
+    </div>
+
+    <div class="divider my-0"></div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-3">
+      <!-- Pages -->
+      <template x-if="bookingTab === 'pages'">
+        <div>
+          <div
+            x-show="bookingPagesLoading && bookingPages.length === 0"
+            class="flex justify-center py-12"
+          >
+            <span class="loading loading-spinner loading-md"></span>
+          </div>
+          <div
+            x-show="!bookingPagesLoading && bookingPages.length === 0"
+            class="text-center py-12"
+          >
+            <div
+              class="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center mx-auto mb-3"
+            >
+              <i data-lucide="calendar-check" class="w-5 h-5 opacity-40"></i>
+            </div>
+            <p class="font-medium text-base-content/70">{% translate "No booking page yet" %}</p>
+            <p
+              class="text-sm text-base-content/40 mt-1"
+            >{% translate "Share a link and let people book a time that suits you" %}</p>
+            <button
+              type="button"
+              class="btn btn-sm btn-module mt-4 gap-1.5"
+              @click="newBookingPage()"
+            >
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> {% translate "Create a booking page" %}
+            </button>
+          </div>
+          <div class="space-y-1.5">
+            <template x-for="page in bookingPages" :key="page.uuid">
+              <div
+                class="group flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-base-200/60"
+              >
+                <div
+                  class="flex-shrink-0 w-2.5 h-2.5 rounded-full"
+                  :class="page.is_active ? 'bg-success' : 'bg-base-content/20'"
+                ></div>
+                <button
+                  type="button"
+                  class="flex-1 min-w-0 text-left"
+                  @click="editBookingPage(page)"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-sm truncate" x-text="page.title"></span>
+                    <span
+                      x-show="!page.is_active"
+                      class="badge badge-xs badge-ghost"
+                    >{% translate "off" context "booking page status" %}</span>
+                  </div>
+                  <div class="flex items-center gap-3 mt-0.5 text-xs text-base-content/50">
+                    <span class="flex items-center gap-1">
+                      <i data-lucide="clock" class="w-3 h-3"></i>
+                      <span x-text="bookingDurationLabel(page.duration_minutes)"></span>
+                    </span>
+                    <span class="flex items-center gap-1">
+                      <i data-lucide="users" class="w-3 h-3"></i>
+                      <span x-text="bookingUpcomingLabel(page.upcoming_count)"></span>
+                    </span>
+                  </div>
+                </button>
+                <div class="flex-shrink-0 flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs btn-square"
+                    @click="copyBookingLink(page)"
+                    title="{% translate "Copy link" %}"
+                    :disabled="!page.is_active"
+                  >
+                    <i data-lucide="link" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <a
+                    class="btn btn-ghost btn-xs btn-square"
+                    :href="page.share_url"
+                    target="_blank"
+                    rel="noopener"
+                    title="{% translate "Open the page" %}"
+                    x-show="page.is_active"
+                  >
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                  </a>
+                  <input
+                    type="checkbox"
+                    class="toggle toggle-xs toggle-success mx-1"
+                    :checked="page.is_active"
+                    @change="toggleBookingPageActive(page)"
+                    title="{% translate "Accept bookings" %}"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    @click="deleteBookingPage(page)"
+                    title="{% translate "Delete" %}"
+                  >
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- Upcoming appointments -->
+      <template x-if="bookingTab === 'bookings'">
+        <div>
+          <div
+            x-show="upcomingBookingsLoading && upcomingBookings.length === 0"
+            class="flex justify-center py-12"
+          >
+            <span class="loading loading-spinner loading-md"></span>
+          </div>
+          <div
+            x-show="!upcomingBookingsLoading && upcomingBookings.length === 0"
+            class="text-center py-12"
+          >
+            <div
+              class="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center mx-auto mb-3"
+            >
+              <i data-lucide="calendar-clock" class="w-5 h-5 opacity-40"></i>
+            </div>
+            <p class="font-medium text-base-content/70">{% translate "No upcoming appointment" %}</p>
+          </div>
+          <div class="space-y-1.5">
+            <template x-for="booking in upcomingBookings" :key="booking.uuid">
+              <div
+                class="group flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-base-200/60"
+              >
+                <button
+                  type="button"
+                  class="flex-1 min-w-0 text-left"
+                  @click="openBookedEvent(booking)"
+                >
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="font-medium capitalize" x-text="bookingWhen(booking)"></span>
+                    <span class="text-base-content/40">·</span>
+                    <span class="truncate" x-text="booking.guest_name"></span>
+                  </div>
+                  <div
+                    class="flex items-center gap-3 mt-0.5 text-xs text-base-content/50 min-w-0"
+                  >
+                    <span class="truncate" x-text="booking.page.title"></span>
+                    <span class="truncate" x-text="booking.guest_email"></span>
+                  </div>
+                  <p
+                    class="text-xs text-base-content/60 mt-1 line-clamp-2"
+                    x-show="booking.note"
+                    x-text="booking.note"
+                  ></p>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs gap-1 text-error opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  @click="cancelUpcomingBooking(booking)"
+                >
+                  <i data-lucide="calendar-x" class="w-3.5 h-3.5"></i>
+                  {% translate "Cancel" context "cancel an appointment" %}
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</dialog>
+
+<!-- Booking Page Form Modal -->
+<dialog
+  class="modal"
+  :class="showBookingFormModal && 'modal-open'"
+  @click.self="showBookingFormModal = false"
+  @keydown.escape.window="showBookingFormModal && (showBookingFormModal = false)"
+>
+  <div class="modal-box w-11/12 max-w-3xl h-[85vh] flex flex-col">
+    {% translate "Booking page" as booking_page_title %}
+    {% include "ui/partials/dialog_header.html" with icon="calendar-check" title=booking_page_title close_expr="showBookingFormModal = false" class="mb-4 flex-shrink-0" only %}
+
+    <template x-if="bookingForm">
+      <form
+        @submit.prevent="submitBookingPage()"
+        class="flex-1 flex flex-col min-h-0"
+      >
+        <div class="flex-1 overflow-y-auto space-y-5 pr-1">
+          <template x-if="bookingFormError">
+            <inline-alert type="error"><span x-text="bookingFormError"></span></inline-alert>
+          </template>
+
+          <!-- What -->
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="form-control w-full sm:col-span-2">
+              <div class="label"><span class="label-text">{% translate "Title" context "booking page" %}</span></div>
+              <input
+                type="text"
+                class="input input-bordered input-sm w-full"
+                x-model="bookingForm.title"
+                maxlength="255"
+                placeholder="{% translate "e.g. 30-minute call" %}"
+                required
+              />
+            </label>
+            <label class="form-control w-full sm:col-span-2">
+              <div class="label">
+                <span class="label-text">{% translate "Description" context "booking page" %}</span>
+              </div>
+              <textarea
+                class="textarea textarea-bordered textarea-sm w-full"
+                rows="2"
+                x-model="bookingForm.description"
+                placeholder="{% translate "What the appointment is about, shown on the page" %}"
+              ></textarea>
+            </label>
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">{% translate "Location" context "booking page" %}</span></div>
+              <input
+                type="text"
+                class="input input-bordered input-sm w-full"
+                x-model="bookingForm.location"
+                maxlength="255"
+                placeholder="{% translate "Address, phone or video link" %}"
+              />
+            </label>
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">{% translate "Duration" context "booking page" %}</span></div>
+              <select
+                class="select select-bordered select-sm w-full"
+                x-model.number="bookingForm.duration_minutes"
+              >
+                <template x-for="minutes in bookingDurationChoices()" :key="minutes">
+                  <option
+                    :value="minutes"
+                    x-text="bookingDurationLabel(minutes)"
+                    :selected="minutes === bookingForm.duration_minutes"
+                  ></option>
+                </template>
+              </select>
+            </label>
+          </div>
+
+          <!-- When -->
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="label-text font-medium">{% translate "Weekly hours" %}</span>
+              <label class="flex items-center gap-2 text-xs text-base-content/60">
+                <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                <select
+                  class="select select-bordered select-xs max-w-[14rem]"
+                  x-model="bookingForm.timezone"
+                >
+                  <template x-for="name in bookingZones" :key="name">
+                    <option :value="name" x-text="name" :selected="name === bookingForm.timezone"></option>
+                  </template>
+                </select>
+              </label>
+            </div>
+            <div class="rounded-lg border border-base-300 divide-y divide-base-300">
+              <template x-for="(ranges, day) in bookingForm.weekly_hours" :key="day">
+                <div class="flex flex-wrap items-start gap-3 px-3 py-2">
+                  <label class="flex items-center gap-2 w-32 pt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-xs checkbox-module"
+                      :checked="ranges.length > 0"
+                      @change="toggleBookingDay(day)"
+                    />
+                    <span class="text-sm capitalize" x-text="bookingWeekdays[day]"></span>
+                  </label>
+                  <div class="flex-1 min-w-[14rem] space-y-1.5">
+                    <template x-if="ranges.length === 0">
+                      <p
+                        class="text-sm text-base-content/40 pt-1"
+                      >{% translate "Unavailable" context "booking day" %}</p>
+                    </template>
+                    <template x-for="(range, i) in ranges" :key="i">
+                      <div class="flex items-center gap-2">
+                        <input
+                          type="time"
+                          class="input input-bordered input-xs w-28"
+                          x-model="range[0]"
+                          required
+                        />
+                        <span class="text-base-content/40 text-xs">{% translate "to" context "time range" %}</span>
+                        <input
+                          type="time"
+                          class="input input-bordered input-xs w-28"
+                          x-model="range[1]"
+                          required
+                        />
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-xs btn-square"
+                          @click="removeBookingRange(day, i)"
+                          title="{% translate "Remove" context "time range" %}"
+                        >
+                          <i data-lucide="x" class="w-3 h-3"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-xs btn-square"
+                          x-show="i === ranges.length - 1 && canAddBookingRange(day)"
+                          @click="addBookingRange(day)"
+                          title="{% translate "Add hours" %}"
+                        >
+                          <i data-lucide="plus" class="w-3 h-3"></i>
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Rules -->
+          <div class="grid gap-3 sm:grid-cols-3">
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">{% translate "Minimum notice (hours)" %}</span></div>
+              <input
+                type="number"
+                min="0"
+                max="720"
+                class="input input-bordered input-sm w-full"
+                x-model.number="bookingForm.min_notice_hours"
+              />
+            </label>
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">{% translate "Bookable up to (days ahead)" %}</span></div>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                class="input input-bordered input-sm w-full"
+                x-model.number="bookingForm.days_ahead"
+              />
+            </label>
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">{% translate "Break around (minutes)" %}</span></div>
+              <input
+                type="number"
+                min="0"
+                max="240"
+                class="input input-bordered input-sm w-full"
+                x-model.number="bookingForm.buffer_minutes"
+              />
+            </label>
+          </div>
+
+          <!-- Calendars -->
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="form-control w-full">
+                <div class="label">
+                  <span class="label-text font-medium">{% translate "Add appointments to" %}</span>
+                </div>
+                <select
+                  class="select select-bordered select-sm w-full"
+                  x-model="bookingForm.calendar"
+                  required
+                >
+                  <template x-for="cal in ownedCalendars" :key="cal.uuid">
+                    <option
+                      :value="cal.uuid"
+                      x-text="cal.name"
+                      :selected="cal.uuid === bookingForm.calendar"
+                    ></option>
+                  </template>
+                </select>
+              </label>
+              <label class="form-control w-full mt-3">
+                <div class="label">
+                  <span class="label-text font-medium">{% translate "Send confirmations from" %}</span>
+                </div>
+                <select
+                  class="select select-bordered select-sm w-full"
+                  x-model="bookingForm.mail_account"
+                >
+                  <option value="">{% translate "No email (confirmation screen only)" %}</option>
+                  <template x-for="account in bookingMailAccounts" :key="account.uuid">
+                    <option
+                      :value="account.uuid"
+                      x-text="account.email"
+                      :selected="account.uuid === bookingForm.mail_account"
+                    ></option>
+                  </template>
+                </select>
+              </label>
+            </div>
+            <div>
+              <div class="label"><span class="label-text font-medium">{% translate "Check for conflicts" %}</span></div>
+              <div class="space-y-1 max-h-40 overflow-y-auto">
+                <template x-for="cal in bookingBusyCalendarChoices()" :key="cal.uuid">
+                  <label class="flex items-center gap-2 text-sm cursor-pointer py-0.5">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-xs"
+                      :class="'checkbox-' + cal.color"
+                      :checked="cal.uuid === bookingForm.calendar || bookingForm.busy_calendars.includes(cal.uuid)"
+                      :disabled="cal.uuid === bookingForm.calendar"
+                      @change="toggleBookingBusyCalendar(cal.uuid)"
+                    />
+                    <span class="truncate" x-text="cal.name"></span>
+                  </label>
+                </template>
+              </div>
+              <p class="text-xs text-base-content/50 mt-1">
+                {% translate "Any event on these calendars, all-day ones included, makes the time unavailable. So do the invitations you have not declined." %}
+              </p>
+            </div>
+          </div>
+
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              class="toggle toggle-sm toggle-success"
+              x-model="bookingForm.is_active"
+            />
+            <span class="text-sm">{% translate "Accept bookings" %}</span>
+          </label>
+        </div>
+
+        <div class="modal-action flex-shrink-0">
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost"
+            @click="showBookingFormModal = false"
+          >
+            {% translate "Cancel" %}
+          </button>
+          <button
+            type="submit"
+            class="btn btn-sm btn-module"
+            :disabled="bookingFormSaving || !bookingForm.title.trim() || !bookingForm.calendar"
+          >
+            <span x-show="bookingFormSaving" class="loading loading-spinner loading-xs"></span>
+            {% translate "Save" %}
+          </button>
+        </div>
+      </form>
+    </template>
+  </div>
+</dialog>

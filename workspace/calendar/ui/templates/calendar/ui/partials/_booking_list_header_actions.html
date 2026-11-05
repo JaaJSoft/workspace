@@ -1,0 +1,9 @@
+{# Header buttons of the booking pages modal, rendered by ui/partials/dialog_header.html. #}
+{% load i18n %}
+<button
+  type="button"
+  class="btn btn-sm btn-module gap-1.5"
+  @click="newBookingPage()"
+>
+  <i data-lucide="plus" class="w-3.5 h-3.5"></i> {% translate "New" context "booking page" %}
+</button>

@@ -70,6 +70,11 @@ REST_FRAMEWORK = {
         # The value is a v1 starting point like the ones above - retune it
         # on telemetry from a real deployment rather than on a guess here.
         "core.csp_report.ip": "30/min",
+        # Public booking pages. Reading slots is a month view at a time;
+        # booking and cancelling write rows and send mail from the page
+        # owner's account, so they are held far lower.
+        "calendar.booking.slots.ip": "60/min",
+        "calendar.booking.write.ip": "20/hour",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",
@@ -120,6 +125,14 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Calendar - Polls (Public)",
             "description": "Public endpoints for guest poll participation.",
+        },
+        {
+            "name": "Calendar - Booking pages",
+            "description": "Booking pages and the appointments booked through them, for their owner.",
+        },
+        {
+            "name": "Calendar - Booking pages (Public)",
+            "description": "Public endpoints for picking and cancelling a slot of a booking page.",
         },
         {
             "name": "Chat - Conversations",

@@ -1,11 +1,13 @@
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import render
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.translation import pgettext
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.calendar.models import (
+    Booking,
     Calendar,
     Event,
     EventMember,
@@ -14,11 +16,14 @@ from workspace.calendar.models import (
     PollVote,
 )
 from workspace.calendar.queries import (
+    bookable_pages,
     visible_calendar_ids,
     visible_calendars,
     visible_events_q,
 )
 from workspace.calendar.serializers import CalendarSerializer
+from workspace.calendar.serializers_booking import public_page_data
+from workspace.calendar.views.booking_public import booking_summary, owner_language
 from workspace.users.services.settings import get_setting
 
 
@@ -147,3 +152,52 @@ def polls_shared(request, token):
             "share_token": token,
         },
     )
+
+
+@ensure_csrf_cookie
+def booking_page(request, token):
+    page = bookable_pages().select_related("owner").filter(token=token).first()
+    if not page:
+        raise Http404
+    with owner_language(page.owner):
+        return render(
+            request,
+            "calendar/ui/booking/page.html",
+            {"booking_page": public_page_data(page)},
+        )
+
+
+@ensure_csrf_cookie
+def booking_manage(request, token):
+    booking = Booking.objects.select_related("page__owner").filter(token=token).first()
+    if not booking:
+        raise Http404
+    with owner_language(booking.page.owner):
+        return render(
+            request,
+            "calendar/ui/booking/manage.html",
+            {
+                "booking": booking_summary(booking),
+                "booking_token": booking.token,
+                "can_cancel": booking.status == Booking.Status.CONFIRMED
+                and booking.start > timezone.now(),
+            },
+        )
+
+
+def booking_ics(request, token):
+    """The guest's appointment, to add to their own calendar."""
+    from workspace.calendar.services.booking_mail import PUBLISHED, build_ics
+
+    booking = (
+        Booking.objects.select_related("page__owner")
+        .filter(token=token, status=Booking.Status.CONFIRMED)
+        .first()
+    )
+    if not booking:
+        raise Http404
+    response = HttpResponse(
+        build_ics(booking, PUBLISHED), content_type="text/calendar; charset=utf-8"
+    )
+    response["Content-Disposition"] = 'attachment; filename="appointment.ics"'
+    return response

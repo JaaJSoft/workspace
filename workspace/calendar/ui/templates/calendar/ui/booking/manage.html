@@ -1,0 +1,107 @@
+{% extends "calendar/ui/booking/_base.html" %}
+{% load i18n %}
+
+{% block title %}{{ booking.title }}{% endblock %}
+
+{% block content %}
+  {{ booking|json_script:"booking-data" }}
+  {{ can_cancel|json_script:"booking-can-cancel" }}
+  <div
+    class="flex-1 max-w-lg mx-auto w-full p-4 sm:p-6"
+    x-data="bookingManage('{{ booking_token|escapejs }}')"
+  >
+    <div class="card bg-base-100 shadow-lg overflow-hidden">
+      <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+        <p class="text-white/80 text-sm">{{ booking.owner_name }}</p>
+        <h1 class="text-xl sm:text-2xl font-bold text-white">{{ booking.title }}</h1>
+      </div>
+      <div class="card-body pt-5 gap-4">
+        <template x-if="booking.status === 'cancelled'">
+          <inline-alert type="warning" message="{% translate "This appointment has been cancelled." %}"></inline-alert>
+        </template>
+
+        <div class="space-y-2 text-sm">
+          <div class="flex items-start gap-2">
+            <i
+              data-lucide="calendar-clock"
+              class="w-4 h-4 mt-0.5 text-primary flex-shrink-0"
+            ></i>
+            <span
+              class="first-letter:uppercase"
+              :class="booking.status === 'cancelled' && 'line-through opacity-60'"
+              x-text="when(booking.start) + ' – ' + endTime()"
+            ></span>
+          </div>
+          <div class="flex items-start gap-2" x-show="booking.location">
+            <i
+              data-lucide="map-pin"
+              class="w-4 h-4 mt-0.5 text-primary flex-shrink-0"
+            ></i>
+            <span x-text="booking.location"></span>
+          </div>
+          <div class="flex items-start gap-2">
+            <i
+              data-lucide="user-round"
+              class="w-4 h-4 mt-0.5 text-primary flex-shrink-0"
+            ></i>
+            <span x-text="booking.guest_name"></span>
+          </div>
+          <p class="text-xs text-base-content/50 flex items-center gap-1.5">
+            <i data-lucide="globe" class="w-3 h-3"></i>
+            <span x-text="zone"></span>
+          </p>
+        </div>
+
+        <template x-if="error">
+          <inline-alert type="error"><span x-text="error"></span></inline-alert>
+        </template>
+
+        <div class="flex flex-wrap gap-2" x-show="booking.status === 'confirmed'">
+          <a
+            class="btn btn-sm gap-2"
+            href="{% url 'calendar_ui:booking-ics' booking_token %}"
+          >
+            <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+            {% translate "Add to my calendar" %}
+          </a>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost text-error gap-2"
+            x-show="canCancel && !confirming"
+            @click="confirming = true"
+          >
+            <i data-lucide="calendar-x" class="w-4 h-4"></i>
+            {% translate "Cancel the appointment" %}
+          </button>
+        </div>
+
+        <template x-if="confirming">
+          <div class="rounded-xl border border-error/30 bg-error/5 p-4">
+            <p class="text-sm font-medium">{% translate "Cancel this appointment?" %}</p>
+            <p
+              class="text-sm text-base-content/60 mt-1"
+            >{% translate "The time goes back to being available to others." %}</p>
+            <div class="flex gap-2 mt-3">
+              <button
+                type="button"
+                class="btn btn-sm btn-error gap-2"
+                @click="cancel()"
+                :disabled="cancelling"
+              >
+                <span x-show="cancelling" class="loading loading-spinner loading-xs"></span>
+                {% translate "Yes, cancel it" %}
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-ghost"
+                @click="confirming = false"
+              >
+                {% translate "Keep it" %}
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+{% endblock %}

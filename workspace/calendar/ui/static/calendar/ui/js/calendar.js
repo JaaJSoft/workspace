@@ -122,6 +122,7 @@ window.calendarApp = function calendarApp() {
     ...calendarTasksMixin(),
     ...calendarRecurrenceMixin(),
     ...calendarPollsMixin(),
+    ...calendarBookingPagesMixin(),
 
     // ── Init: orchestrates first paint and global listeners ─
     init() {

@@ -1,0 +1,17 @@
+{% comment %}
+  An audio file plays in place; its caption opens the full viewer.
+{% endcomment %}
+<div
+  class="file-preview-body file-preview-audio flex flex-col gap-1"
+  data-preview-name="{{ name }}"
+  data-preview-type="{{ type }}"
+  data-preview-openable
+>
+  <audio
+    class="w-full max-w-md"
+    src="{{ content_url }}"
+    controls
+    preload="metadata"
+  ></audio>
+  {% include "files/ui/viewers/previews/_caption.html" %}
+</div>

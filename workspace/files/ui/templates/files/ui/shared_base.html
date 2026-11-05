@@ -41,6 +41,10 @@
     <script src="{% static 'files/ui/js/folder_nav.js' %}"></script>
     {# The image viewer's rotation and crop geometry: any page may open the viewer. #}
     <script src="{% static 'files/ui/js/image_edit.js' %}"></script>
+    {# A shared note may embed files: their <file-preview> shows a placeholder here. #}
+    <script src="{% static 'ui/js/file_preview.js' %}"></script>
+    {# The note editor recognises an embed by its file's uuid. #}
+    <script src="{% static 'ui/js/uuid.js' %}"></script>
     {% comment %}
       This page does not extend base.html, so nothing base.html loads globally
       is present. Anything a child page needs, including <inline-alert>, is

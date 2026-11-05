@@ -78,7 +78,6 @@ class PhotosConfig(AppConfig):
                 color="lime",
                 url="/photos",
                 order=12,
-                preview=True,
             )
         )
 

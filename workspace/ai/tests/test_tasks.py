@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.services.conversation_history import ConversationHistory
+from workspace.ai.tests.chat_tasks import queue_chat_task
 from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import EditImageParams, GenerateImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
@@ -63,9 +64,7 @@ class GenerateChatResponseTests(TestCase):
         from workspace.ai.tasks.chat import generate_chat_response
 
         result = generate_chat_response(
-            str(self.conversation.uuid),
-            str(self.message.uuid),
-            self.bot_user.id,
+            queue_chat_task(self.conversation, self.message, self.bot_user)
         )
 
         self.assertEqual(result["status"], "ok")
@@ -82,14 +81,58 @@ class GenerateChatResponseTests(TestCase):
         from workspace.ai.tasks.chat import generate_chat_response
 
         result = generate_chat_response(
-            str(self.conversation.uuid),
-            str(self.message.uuid),
-            self.bot_user.id,
+            queue_chat_task(self.conversation, self.message, self.bot_user)
         )
 
         self.assertEqual(result["status"], "error")
         task = AITask.objects.filter(task_type="chat").first()
         self.assertEqual(task.status, AITask.Status.FAILED)
+
+    @patch("workspace.ai.client.get_ai_client")
+    def test_a_reply_cancelled_while_queued_never_runs(self, mock_get_client):
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        task_id = queue_chat_task(self.conversation, self.message, self.bot_user)
+        AITask.objects.filter(pk=task_id).update(
+            status=AITask.Status.FAILED, error="Cancelled by user"
+        )
+
+        result = generate_chat_response(task_id)
+
+        self.assertEqual(result, {"status": "cancelled"})
+        mock_get_client.assert_not_called()
+        self.assertFalse(Message.objects.filter(author=self.bot_user).exists())
+        task = AITask.objects.get(pk=task_id)
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        self.assertEqual(task.error, "Cancelled by user")
+
+    @patch("workspace.ai.client.get_ai_client")
+    def test_the_run_claims_the_task(self, mock_get_client):
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        seen = []
+        task_id = queue_chat_task(self.conversation, self.message, self.bot_user)
+
+        def create(**kwargs):
+            seen.append(AITask.objects.get(pk=task_id).status)
+            raise RuntimeError("stop here")
+
+        mock_get_client.return_value.chat.completions.create.side_effect = create
+
+        generate_chat_response(task_id)
+
+        self.assertEqual(seen[0], AITask.Status.PROCESSING)
+
+    def test_a_reply_to_a_vanished_conversation_is_closed(self):
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        task_id = queue_chat_task(self.conversation, self.message, self.bot_user)
+        self.conversation.delete()
+
+        result = generate_chat_response(task_id)
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(AITask.objects.get(pk=task_id).status, AITask.Status.FAILED)
 
 
 @override_settings(
@@ -262,9 +305,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         from workspace.ai.tasks.chat import generate_chat_response
 
         result = generate_chat_response(
-            str(self.conversation.uuid),
-            str(self.message.uuid),
-            self.bot_user.id,
+            queue_chat_task(self.conversation, self.message, self.bot_user)
         )
 
         self.assertEqual(result["status"], "ok")
@@ -332,9 +373,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         from workspace.ai.tasks.chat import generate_chat_response
 
         generate_chat_response(
-            str(self.conversation.uuid),
-            str(self.message.uuid),
-            self.bot_user.id,
+            queue_chat_task(self.conversation, self.message, self.bot_user)
         )
 
         self.assertTrue(seen["in_flight"])
@@ -396,9 +435,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         from workspace.ai.tasks.chat import generate_chat_response
 
         result = generate_chat_response(
-            str(self.conversation.uuid),
-            str(self.message.uuid),
-            self.bot_user.id,
+            queue_chat_task(self.conversation, self.message, self.bot_user)
         )
 
         self.assertEqual(result["status"], "cancelled")
@@ -478,9 +515,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         from workspace.ai.tasks.chat import generate_chat_response
 
         generate_chat_response(
-            str(self.conversation.uuid),
-            str(self.message.uuid),
-            self.bot_user.id,
+            queue_chat_task(self.conversation, self.message, self.bot_user)
         )
 
         # The tool was executed exactly once: a retry re-entering

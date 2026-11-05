@@ -4,9 +4,9 @@ Wraps the boilerplate "load AITask + set PROCESSING + try/except + set
 COMPLETED/FAILED + notify_sse" that 4 of the AI tasks duplicate identically.
 Used by the standard-pattern tasks (summarize, editor_action, compose_email,
 classify_mail). Tasks with custom lifecycles (generate_chat_response,
-generate_scheduled_response) keep their own state management because they
-also create their AITask inside the task body and use post_bot_message
-for response posting.
+generate_scheduled_response) keep their own state management: they post
+their result through post_bot_message, and the scheduled one creates its
+AITask inside the task body.
 """
 
 import logging

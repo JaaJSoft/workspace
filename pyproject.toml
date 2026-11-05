@@ -17,7 +17,7 @@ dependencies = [
     "django-rest-knox>=5.1.0",
     "whitenoise>=6.11.0",
     "django-redis>=7.0.0",
-    "django-unfold>=0.110.0",
+    "django-unfold>=0.110.1",
     # celery
     "celery>=5.6.2",
     "redis>=8.1.0",
@@ -54,7 +54,7 @@ dependencies = [
     "gunicorn>=26.2.0",
     "django-http-compression[brotli]>=1.4.0",
     "gevent>=26.9.0",
-    "django-prometheus>=2.6.0.dev22",
+    "django-prometheus>=2.6.0.dev23",
     # push notifications
     "pywebpush>=2.5.0",
     # oauth2
@@ -65,7 +65,7 @@ dependencies = [
     # and the feature is off by default)
     "clamav-client>=0.7.2",
     # ai
-    "openai>=3.42.0",
+    "openai>=3.42.1",
     "ollama>=0.6.3",
     # web search & scraping
     "httpx2>=2.16.0",

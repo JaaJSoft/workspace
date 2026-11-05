@@ -1,0 +1,35 @@
+{% comment %}
+  A video as its first frame (or the server's poster) under a play button;
+  it plays in the full viewer a click opens.
+{% endcomment %}
+<div
+  class="file-preview-body file-preview-media file-preview-video"
+  data-preview-name="{{ name }}"
+  data-preview-type="{{ type }}"
+  data-preview-openable
+>
+  <div
+    class="file-preview-frame relative overflow-hidden rounded-lg bg-black"
+    data-sensitive="{{ sensitive }}"
+  >
+    <video
+      class="file-preview-img block max-w-full"
+      src="{{ content_url }}"
+      {% if thumbnail_url %}poster="{{ thumbnail_url }}"{% endif %}
+      preload="metadata"
+      muted
+      playsinline
+    >
+    </video>
+    <div
+      class="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors hover:bg-black/30"
+    >
+      <div
+        class="file-preview-play flex items-center justify-center w-12 h-12 rounded-full bg-base-100/80 text-base-content"
+      >
+        <i data-lucide="play" class="w-6 h-6"></i>
+      </div>
+    </div>
+  </div>
+  {% include "files/ui/viewers/previews/_caption.html" %}
+</div>

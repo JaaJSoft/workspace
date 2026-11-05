@@ -43,11 +43,13 @@
     display: none !important;
   }
 </style>
+{# A click on an embedded file opens files/ui/partials/file_embed_viewer.html, on the pages that include it. #}
 <div
   class="flex flex-col h-full"
+  data-file-preview-event="open-note-file-viewer"
   x-data="markdownViewerCrepe()"
   x-init="initEditor()"
-  @viewer-cleanup.window="dispose()"
+  @viewer-cleanup.window="if (!$event.detail || $el.closest('#' + $event.detail.panel)) dispose()"
 >
 
   <!-- Toolbar -->
@@ -236,6 +238,26 @@
       });
     }
 
+    // "![[": any file, by name or content; the recent ones before a query.
+    async function _searchFiles(query) {
+      const base = '/api/v1/files?node_type=file';
+      const url = query ?
+        base + '&search=' + encodeURIComponent(query) :
+        base + '&recent=1&recent_limit=8';
+      const resp = await fetch(url, {
+        credentials: 'same-origin'
+      });
+      if (!resp.ok) throw new Error('search failed: ' + resp.status);
+      const data = await resp.json();
+      return (Array.isArray(data) ? data : []).slice(0, 8).map(function(f) {
+        return {
+          uuid: f.uuid,
+          name: f.name || '',
+          path: f.path || '',
+        };
+      });
+    }
+
     function _clearAutosave() {
       if (_debounceTimer) {
         clearTimeout(_debounceTimer);
@@ -273,7 +295,9 @@
       if (!_listenerAttached) {
         _listenerAttached = true;
         _crepe.on(function(listener) {
-          listener.markdownUpdated(function(md) {
+          // The listener's first argument is the editor ctx, the markdown
+          // comes second.
+          listener.markdownUpdated(function(ctx, md) {
             const dirty = md !== self.originalContent;
             self.isDirty = dirty;
             if (dirty) {
@@ -340,18 +364,33 @@
 
         try {
           // Vendored bundle (scripts/frontend/): imported exactly once, here.
-          // wikilink gets slashFactory/SlashProvider injected from the same
-          // module instance so Milkdown/ProseMirror internals stay shared.
+          // wikilink and the file embed node get the Milkdown pieces they
+          // build on injected from the same module instance so
+          // Milkdown/ProseMirror internals stay shared.
           const mod = await import('{% static "files/ui/js/vendor/milkdown/milkdown-editor.js" %}');
           const Crepe = mod.Crepe;
           const wikilink = await import('{% static "files/ui/js/wikilink_autocomplete.js" %}');
+          const fileEmbed = await import('{% static "files/ui/js/file_embed.js" %}');
 
           _crepe = new Crepe({
             root: container,
             defaultValue: self.originalContent
           });
+          fileEmbed.createFileEmbed({
+            $nodeSchema: mod.$nodeSchema,
+            $remark: mod.$remark,
+            $view: mod.$view,
+            $prose: mod.$prose,
+            Plugin: mod.Plugin,
+            // Embeds are previewed for whoever reads the note; a visitor of
+            // a public link has no session to preview them with.
+            previewSrc: '{% if user.is_authenticated %}{% url "files_ui:file_previews" %}{% endif %}' || null,
+            dropped: window.fileRefsDrag || null,
+          })(_crepe.editor);
           wikilink.createWikilinkSlash({
             search: _searchNotes,
+            searchFiles: _searchFiles,
+            insertEmbeds: fileEmbed.insertEmbeds,
             slashFactory: mod.slashFactory,
             SlashProvider: mod.SlashProvider,
           })(_crepe.editor);

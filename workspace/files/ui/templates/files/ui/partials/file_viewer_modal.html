@@ -11,13 +11,15 @@
                  an item's endpoints, {uuid} standing for its uuid
   files=True     the items are Files files
   history=True   opening adds a ?open entry, so back closes the modal
+  panel_id=      the id of the modal's viewer panel, for a page that
+                 already holds a viewer-panel (the notes editor)
   actions=       a template rendered in the header, in the modal's scope,
                  for the module's own buttons: fileUuid names the item shown
 {% endcomment %}
 {% translate "Remove from favorites" as remove_favorite_label %}
 {% translate "Add to favorites" as add_favorite_label %}
 <div
-  x-data="fileViewerModal({ event: '{{ event|escapejs }}', gallery: '{{ gallery|escapejs }}', viewerUrl: '{{ viewer_url|escapejs }}', downloadUrl: '{{ download_url|escapejs }}', files: {{ files|yesno:'true,false' }}, history: {{ history|yesno:'true,false' }} })"
+  x-data="fileViewerModal({ event: '{{ event|escapejs }}', gallery: '{{ gallery|escapejs }}', viewerUrl: '{{ viewer_url|escapejs }}', downloadUrl: '{{ download_url|escapejs }}', files: {{ files|yesno:'true,false' }}, history: {{ history|yesno:'true,false' }}, panel: '{{ panel_id|default:"viewer-panel"|escapejs }}' })"
   data-file-viewer-modal
   @ajax:missing="_viewerMissing($event)"
   @viewer-editing="panelEditing = $event.detail"
@@ -100,7 +102,7 @@
         class="flex-1 overflow-auto bg-base-200"
         x-show="!viewerLoading && !viewerError"
       >
-        <div id="viewer-panel" style="display: contents"></div>
+        <div id="{{ panel_id|default:'viewer-panel' }}" style="display: contents"></div>
       </div>
 
       <!-- Loading State -->

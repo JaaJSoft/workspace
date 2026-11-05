@@ -1,0 +1,43 @@
+# Screenshot credits
+
+The photos in the screenshots come from the Open Images dataset and are
+licensed [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) by their authors.
+They are shown downscaled, with capture dates set by the demo seed.
+This file is written by `scripts/screenshots.py`.
+
+- `alpine-ridge.jpg`: [Alps with Matterhorn in the middle](https://www.flickr.com/photos/sbardella/1816420428) by [Luca Sbardella](https://www.flickr.com/people/sbardella/)
+- `aracari.jpg`: [Green Aracari - Adult Male (Pteroglossus viridis)](https://www.flickr.com/photos/jcapaldi/5780920465) by [Jim, the Photographer](https://www.flickr.com/people/jcapaldi/)
+- `beagle.jpg`: [Content](https://www.flickr.com/photos/johanl/245337186) by [Johan Larsson](https://www.flickr.com/people/johanl/)
+- `black-cat.jpg`: [d6Hmomoy](https://www.flickr.com/photos/53807034@N05/5467599251) by [hmomoy](https://www.flickr.com/people/53807034@N05/)
+- `butterfly.jpg`: [_MG_3734](https://www.flickr.com/photos/bootbearwdc/2284869200) by [David](https://www.flickr.com/people/bootbearwdc/)
+- `cinnamon-rolls.jpg`: [IMG_8209](https://www.flickr.com/photos/leighannkopans/5366307333) by [Leigh Ann Kopans](https://www.flickr.com/people/leighannkopans/)
+- `cosmos.jpg`: [IMG_5914(1200x800)](https://www.flickr.com/photos/photographyplayers/18754860679) by [photographyplayers](https://www.flickr.com/people/photographyplayers/)
+- `dandelion.jpg`: [Cipsela de Diente de león](https://www.flickr.com/photos/jonathanrh/5749815755) by [Jonathan Rubio H.](https://www.flickr.com/people/jonathanrh/)
+- `egret.jpg`: [Snowy Egret in Flight](https://www.flickr.com/photos/tylerkaraszewski/6518152427) by [Tyler Karaszewski](https://www.flickr.com/people/tylerkaraszewski/)
+- `falls-panorama.jpg`: [Waterfall](https://www.flickr.com/photos/takoyaki_king/15383320203) by [George Alexander Ishida Newman](https://www.flickr.com/people/takoyaki_king/)
+- `falls.jpg`: [Iguazu Falls, Misiones, Argentina, 7th. Jan. 2011](https://www.flickr.com/photos/flissphil/5334992589) by [Phillip Capper](https://www.flickr.com/people/flissphil/)
+- `flamingos.jpg`: [Flamingos -African Safari](https://www.flickr.com/photos/kushalshah84/5247038676/) by [Kushal Shah](https://www.flickr.com/people/kushalshah84/)
+- `forest-falls.jpg`: [10062007 115658 MDP 0020](https://www.flickr.com/photos/10352740@N03/11015144294/) by [Turol Jones, un artista de cojones](https://www.flickr.com/people/10352740@N03/)
+- `ginger-cat.jpg`: [lueanglueang](https://www.flickr.com/photos/vscript/11403844353) by [Vee Satayamas](https://www.flickr.com/people/vscript/)
+- `glacier-lagoon.jpg`: [Iceland Winter photos, 2015](https://www.flickr.com/photos/jamesseithphotography/16164700374) by [Jim](https://www.flickr.com/people/jamesseithphotography/)
+- `grand-canyon.jpg`: [2004-06-19 07-12 USA 265](https://www.flickr.com/photos/wm_archiv/2754903322) by [Allie_Caulfield](https://www.flickr.com/people/wm_archiv/)
+- `husky-pup.jpg`: [CIMG0114](https://www.flickr.com/photos/cptspock/136226185) by [Jasen Miller](https://www.flickr.com/people/cptspock/)
+- `kitten.jpg`: [Odd up Close](https://www.flickr.com/photos/ardyiii/358649008) by [Arden](https://www.flickr.com/people/ardyiii/)
+- `latte.jpg`: [Blue Bottle](https://www.flickr.com/photos/neilconway/5052854336) by [Neil Conway](https://www.flickr.com/people/neilconway/)
+- `lotus.jpg`: [Nymphaea](https://www.flickr.com/photos/paleo_bear/8732866604/) by [the paleobear](https://www.flickr.com/people/paleo_bear/)
+- `mountain-pass.jpg`: [IMG_6902](https://www.flickr.com/photos/gsec/14295232638/) by [The Greater Southwestern Exploration Company](https://www.flickr.com/people/gsec/)
+- `paddle-steamer.jpg`: [Canandaigua Lady at Steamboat Landing Resort](https://www.flickr.com/photos/visitfingerlakes/4773984755) by [Visit Finger Lakes](https://www.flickr.com/people/visitfingerlakes/)
+- `pancakes.jpg`: [Pancake Tower, Family Pancake House](https://www.flickr.com/photos/raybouk/14787564283) by [Ray Bouknight](https://www.flickr.com/people/raybouk/)
+- `penguins.jpg`: [Pingüinos emperadores](https://www.flickr.com/photos/draxus/6144987501) by [Manuel Martín](https://www.flickr.com/people/draxus/)
+- `pier.jpg`: [Dive boat Club Med Bahamas](https://www.flickr.com/photos/javajoba/493549230) by [Jack Kennard](https://www.flickr.com/people/javajoba/)
+- `puppy-in-snow.jpg`: [IMG_5279.jpg](https://www.flickr.com/photos/aveldina/8505340708/in/set-72157632850432360) by [Sadie Swanson](https://www.flickr.com/people/aveldina/)
+- `quiraing.jpg`: [Shark](https://www.flickr.com/photos/127130111@N06/16789909464) by [john mcsporran](https://www.flickr.com/people/127130111@N06/)
+- `red-dune.jpg`: ['Big Daddy'](https://www.flickr.com/photos/asx999888/3667981139) by [Alex Smith](https://www.flickr.com/people/asx999888/)
+- `sandbar.jpg`: [Fihalhohi malè sud](https://www.flickr.com/photos/24641143@N03/2343099654) by [nadia &amp; massimo](https://www.flickr.com/people/24641143@N03/)
+- `shoebill.jpg`: [Shoebill {balaeniceps rex)](https://www.flickr.com/photos/33590535@N06/3712985590) by [Drew Avery](https://www.flickr.com/people/33590535@N06/)
+- `snow-peak.jpg`: [Peak near Denali, in front of the Ruth Glacier](https://www.flickr.com/photos/pete_k_1948/3804591717) by [Pete Klosterman](https://www.flickr.com/people/pete_k_1948/)
+- `sushi.jpg`: [omakase!](https://www.flickr.com/photos/judemasti/6618064887) by [smalljude](https://www.flickr.com/people/judemasti/)
+- `tea-cup.jpg`: [The teacup galaxy: N310-B](https://www.flickr.com/photos/botheredbybees/239161832) by [Peter Shanks](https://www.flickr.com/people/botheredbybees/)
+- `terraced-falls.jpg`: [white flow](https://www.flickr.com/photos/36938798@N00/473312418) by [ranjith k r](https://www.flickr.com/people/eenthappana/)
+- `white-beach.jpg`: [Calaguas](https://www.flickr.com/photos/allan_the_colorblind/8763464643) by [Allan Ascaño](https://www.flickr.com/people/allan_the_colorblind/)
+- `zinnia.jpg`: [Argynnis cybele (= Spyerera cybele) Great Spangled  Fritillary 6](https://www.flickr.com/photos/135089388@N08/19993678382) by [Mary Ellen St. John](https://www.flickr.com/people/135089388@N08/)

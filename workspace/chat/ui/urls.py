@@ -38,4 +38,9 @@ urlpatterns = [
         views.view_attachment,
         name="view_attachment",
     ),
+    path(
+        "/attachment-previews",
+        views.attachment_previews,
+        name="attachment_previews",
+    ),
 ]

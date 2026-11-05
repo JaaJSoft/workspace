@@ -1,11 +1,12 @@
 """Extract and persist the links between files (note graph edges).
 
-Today the only producer of links is the ``[[`` wikilink autocomplete in the
-markdown editor, which inserts ``[Title](/notes?file=UUID)`` into a note's
-content. ``extract_link_targets`` parses those references and
-``reconcile_file_links`` syncs them into FileLink rows for a source file, and
-records what it read in FileLinkState so the hourly catch-up
-(services/processors.py) can tell which notes still need it.
+A note references another file in two ways, both written by the markdown
+editor: a link, ``[Title](/notes?file=UUID)`` (the ``[[`` autocomplete), and an
+embed, ``![name](/api/v1/files/UUID/content)`` (the ``![[`` autocomplete or a
+file dropped into the note, drawn by services/previews.py). ``extract_link_targets``
+parses both in one pass, ``reconcile_file_links`` syncs them into FileLink rows
+for a source file, and records what it read in FileLinkState so the hourly
+catch-up (services/processors.py) can tell which notes still need it.
 """
 
 from __future__ import annotations
@@ -16,33 +17,43 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 
 from ..models import File, FileLink, FileLinkState
 from ._content import read_text_content
 from .scanning.policy import exclude_blocked
 
 # Matches the ``?file=<uuid>`` / ``&file=<uuid>`` token the autocomplete emits.
-# 36 chars covers the canonical hyphenated UUID form Django serializes.
-_LINK_RE = re.compile(r"[?&]file=([0-9a-fA-F-]{36})")
+_LINK_RE = re.compile(rf"[?&]file=({UUID_PATTERN})")
+
+# Matches a markdown destination pointing at a file's content endpoint: the
+# embed ``![name](/api/v1/files/<uuid>/content)``, or a plain link to the same
+# URL. Anchored on ``](`` so a URL quoted in prose is not a reference, and on
+# what may follow the path so a longer path is not mistaken for it.
+_CONTENT_REF_RE = re.compile(
+    rf"\]\(\s*<?/api/v1/files/({UUID_PATTERN})/content(?=[\s?#>)])"
+)
 
 # Raise when extract_link_targets() starts finding links it did not before:
 # every note reconciled by an older version becomes pending, and the catch-up
 # re-reads them on its own.
-EXTRACTOR_VERSION = 1
+EXTRACTOR_VERSION = 2
 
 
 def extract_link_targets(markdown_text) -> set[str]:
-    """Return the distinct, validated note-link target UUIDs as canonical strings.
+    """Return the distinct, validated link and embed target UUIDs as canonical strings.
 
-    Pure: no DB access. Captures are validated with ``parse_uuid_or_none`` so a
-    36-character token that is not a real UUID is dropped. A captured UUID that
-    does not resolve to an existing File is dropped later, in reconcile.
+    Pure: no DB access. Captures go through ``parse_uuid_or_none`` for their
+    canonical spelling. A captured UUID that does not resolve to an existing
+    File is dropped later, in reconcile.
     """
     if not markdown_text:
         return set()
     targets = set()
-    for raw in _LINK_RE.findall(markdown_text):
+    for raw in (
+        *_LINK_RE.findall(markdown_text),
+        *_CONTENT_REF_RE.findall(markdown_text),
+    ):
         parsed = parse_uuid_or_none(raw)
         if parsed is not None:
             targets.add(str(parsed))
@@ -57,7 +68,7 @@ LINK_SCAN_MAX_BYTES = 1_048_576  # 1 MiB
 def reconcile_file_links(file):
     """Sync FileLink rows for ``source=file`` with the links in its content.
 
-    Markdown-only today (the only content type with parseable note links).
+    Markdown-only today (the only content type with parseable links and embeds).
     Idempotent. Returns the set of resolved target UUIDs, or ``None`` when the
     file is skipped (folder / non-markdown). Emptying a note's content clears
     its outgoing edges. Best-effort: callers run it off-request.

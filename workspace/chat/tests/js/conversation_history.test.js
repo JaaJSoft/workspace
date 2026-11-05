@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 const A = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
 const B = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c';
@@ -12,7 +12,7 @@ const B = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c';
 function buildApp({ pathname = '/chat', returnToStepsBack = false, fetch = null } = {}) {
   const writes = [];
   const location = { pathname };
-  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/conversations.js', {
+  const ctx = loadScripts(['workspace/common/static/ui/js/uuid.js', 'workspace/chat/ui/static/chat/ui/js/conversations.js'], {
     document: { getElementById: () => null },
     localStorage: { getItem: () => '', setItem() {}, removeItem() {} },
     location,

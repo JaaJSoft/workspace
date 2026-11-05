@@ -23,6 +23,7 @@ from workspace.common.mixins import CacheControlMixin
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.text import fold_text
 from workspace.common.uuids import (
+    UUID_PATTERN,
     BatchTooLarge,
     MalformedUuid,
     UuidBatchError,
@@ -105,7 +106,7 @@ class FaceClusterViewSet(
 
     serializer_class = FaceClusterSerializer
     pagination_class = OptInLimitOffsetPagination
-    lookup_value_regex = "[0-9a-fA-F-]{36}"
+    lookup_value_regex = UUID_PATTERN
     http_method_names = ["get", "patch", "post", "delete"]
 
     def get_queryset(self):
@@ -300,7 +301,7 @@ class FaceViewSet(
     """One face found in one of the user's photos, and its corrections."""
 
     serializer_class = FaceSerializer
-    lookup_value_regex = "[0-9a-fA-F-]{36}"
+    lookup_value_regex = UUID_PATTERN
     http_method_names = ["get", "patch"]
 
     def get_queryset(self):
@@ -342,7 +343,7 @@ class FaceViewSet(
         with transaction.atomic():
             person = create_person(owner=self.request.user, display_name=name)
             face_people.assign_face_to_person(face, person)
-        face_people.give_default_avatar(person, face.pk)
+        face_people.give_default_avatar(self.request.user, person, face.pk)
 
 
 @extend_schema(tags=["Photos - Faces"])

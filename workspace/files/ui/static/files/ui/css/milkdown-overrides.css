@@ -405,3 +405,39 @@
       max-width: 294px;
       font-family: var(--crepe-font-code);
     }
+
+/* ========================================================
+   File embeds (files/ui/js/file_embed.js) - a <file-preview>
+   of a Files file inside a note.
+   ======================================================== */
+
+.milkdown .file-embed {
+  margin: 0.75rem 0;
+  max-width: 100%;
+}
+
+.milkdown .file-embed.ProseMirror-selectednode {
+  outline: 2px solid var(--crepe-color-primary);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+/* A file without media to show, or that cannot be shown, reads as a card
+   in the flow of the text. */
+.milkdown .file-embed :is(.file-preview-card, .file-preview-placeholder, .file-preview-loading) {
+  max-width: 28rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--crepe-color-outline);
+  border-radius: 0.5rem;
+  background: var(--crepe-color-surface);
+}
+
+.milkdown .file-embed .file-preview-placeholder {
+  border-style: dashed;
+}
+
+.milkdown .file-embed .file-preview-frame {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}

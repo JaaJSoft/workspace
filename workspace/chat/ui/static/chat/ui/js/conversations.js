@@ -168,8 +168,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     },
 
     async restoreConversationFromUrl() {
-      const match = window.location.pathname.match(/^\/chat\/([0-9a-f-]{36})\/?$/i);
-      const uuid = match ? match[1] : null;
+      const match = window.location.pathname.match(/^\/chat\/([^/]+)\/?$/);
+      const uuid = match && window.isValidUuid(match[1]) ? match[1] : null;
       if (!uuid) {
         this._hideConversation();
       } else if (uuid !== this.activeConversation?.uuid) {

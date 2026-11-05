@@ -30,6 +30,7 @@ from ..queries import (
     get_album_role,
     library_files,
     reachable_album,
+    visible_item_ids,
 )
 from ..serializers import AlbumSerializer, AlbumWriteSerializer
 from ..services.album_cards import album_cards, user_album_cards
@@ -269,12 +270,13 @@ class AlbumItemsRemoveView(APIView):
         uuids = _parse_files(request.data)
         if isinstance(uuids, Response):
             return uuids
-        present = set(
-            album.items.filter(file_id__in=uuids).values_list("file_id", flat=True)
-        )
+        present = visible_item_ids(request.user, album, uuids)
         if not present <= removable(album, present, user=request.user, role=role):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        return Response({"removed": remove_items(album, uuids)})
+        return Response({"removed": remove_items(album, present)})
+
+
+NOT_MOVABLE = "Only photos of the album can be moved, next to another."
 
 
 @extend_schema(tags=["Photos - Albums"])
@@ -318,8 +320,11 @@ class AlbumReorderView(APIView):
                 return _refused(f"Malformed UUID in {key}.")
         if len(anchors) > 1:
             return _refused("Give either before or after, not both.")
+        named = {*uuids, *anchors.values()}
+        if visible_item_ids(request.user, album, named) != named:
+            return _refused(NOT_MOVABLE)
         try:
             move_items(album, uuids, **anchors)
         except ValueError:
-            return _refused("Only photos of the album can be moved, next to another.")
+            return _refused(NOT_MOVABLE)
         return Response(status=status.HTTP_204_NO_CONTENT)

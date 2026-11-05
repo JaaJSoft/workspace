@@ -16,10 +16,15 @@ const THEME = path.join(THEME_DIR, 'theme.css');
 test('the editor entry is an ESM module exporting the crepe surface', () => {
   assert.ok(fs.existsSync(ENTRY), `missing artifact: ${ENTRY}`);
   const src = fs.readFileSync(ENTRY, 'utf8');
-  // markdown_viewer.html reads exactly these three names off the dynamic import.
+  // markdown_viewer.html reads exactly these names off the dynamic import:
+  // the editor, the slash plugin of the "[[" autocomplete, and what the file
+  // embed node (file_embed.js) is built from.
   const exports = src.match(/export\{([^}]*)\}/g)?.join(' ') ?? '';
-  for (const name of ['Crepe', 'SlashProvider', 'slashFactory']) {
-    assert.match(exports, new RegExp(`\\b${name}\\b`), `${name} is not exported`);
+  for (const name of [
+    'Crepe', 'SlashProvider', 'slashFactory', '$nodeSchema', '$prose', '$remark', '$view', 'Plugin',
+  ]) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(exports, new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`), `${name} is not exported`);
   }
 });
 

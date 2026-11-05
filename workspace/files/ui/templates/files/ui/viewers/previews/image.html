@@ -1,0 +1,27 @@
+{% comment %}
+  An image, at its own size up to the frame the host allows. A format the
+  browser cannot draw (HEIC, RAW, TIFF) falls back to the server thumbnail,
+  which <file-preview> swaps in from data-fallback-src. data-sensitive lets
+  the page's blur rules (input.css) apply.
+{% endcomment %}
+<div
+  class="file-preview-body file-preview-media file-preview-image"
+  data-preview-name="{{ name }}"
+  data-preview-type="{{ type }}"
+  data-preview-openable
+>
+  <div
+    class="file-preview-frame overflow-hidden rounded-lg"
+    data-sensitive="{{ sensitive }}"
+  >
+    <img
+      class="file-preview-img block max-w-full"
+      src="{{ content_url }}"
+      {% if thumbnail_url %}data-fallback-src="{{ thumbnail_url }}"{% endif %}
+      alt="{{ name }}"
+      loading="lazy"
+      decoding="async"
+    />
+  </div>
+  {% include "files/ui/viewers/previews/_caption.html" %}
+</div>

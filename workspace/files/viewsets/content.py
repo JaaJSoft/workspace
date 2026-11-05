@@ -14,9 +14,14 @@ from workspace.common.http_ranges import (
 )
 from workspace.common.http_ranges import (
     safe_filename,
+    serve_inline,
 )
 from workspace.common.http_ranges import (
     stream_range as _stream_range,
+)
+from workspace.common.stored_content import (
+    is_active_content,
+    protect_stored_content,
 )
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
@@ -103,6 +108,18 @@ class ContentMixin:
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    @staticmethod
+    def _present_content(response, file_obj, content_type):
+        """*response*, carrying the bytes of *file_obj*, to view in the page,
+        or to download when its type would run as a page of the app."""
+        if is_active_content(content_type):
+            response["Content-Disposition"] = (
+                f'attachment; filename="{safe_filename(file_obj.name)}"'
+            )
+        else:
+            serve_inline(response, file_obj.name)
+        return protect_stored_content(response, content_type)
+
     @extend_schema(
         summary="Get file content",
         description="Serve file content with proper headers for inline viewing in browser.",
@@ -160,9 +177,7 @@ class ContentMixin:
             response["Content-Range"] = f"bytes {start}-{end}/{file_size}"
             response["Content-Length"] = str(end - start + 1)
             response["Accept-Ranges"] = "bytes"
-            response["Content-Disposition"] = (
-                f'inline; filename="{safe_filename(file_obj.name)}"'
-            )
+            self._present_content(response, file_obj, content_type)
             # Intentionally no ETag on 206: ConditionalGetMiddleware would
             # turn the 206 into a 304 whenever the client sends both Range
             # and If-None-Match (common from Chrome), starving the player.
@@ -173,7 +188,9 @@ class ContentMixin:
         # Short-circuit: return 304 if ETag matches (avoids reading file from storage)
         not_modified = self._check_etag_304(request, file_obj)
         if not_modified:
-            return not_modified
+            # A browser replaces the headers of its cached copy with those of
+            # the 304, so a copy cached under other headers picks these up.
+            return self._present_content(not_modified, file_obj, content_type)
 
         # Streamed whatever the type, text included: FileResponse closes the
         # handle once the body is sent.
@@ -181,9 +198,7 @@ class ContentMixin:
         response = FileResponse(
             file_handle, content_type=content_type, as_attachment=False
         )
-        response["Content-Disposition"] = (
-            f'inline; filename="{safe_filename(file_obj.name)}"'
-        )
+        self._present_content(response, file_obj, content_type)
         response["Accept-Ranges"] = "bytes"
         self._set_file_cache_headers(response, file_obj)
 

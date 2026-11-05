@@ -29,6 +29,7 @@ class WikilinkHelperTests(PlaywrightTestCase):
                 const m = await import(base + modPath);
                 return {
                     typed: m.matchTrigger('see [[meet'),
+                    embed: m.matchTrigger('see ![[rep'),
                     closed: m.matchTrigger('[[done]]'),
                     none: m.matchTrigger('no trigger here'),
                     empty: m.matchTrigger('start [['),
@@ -37,10 +38,13 @@ class WikilinkHelperTests(PlaywrightTestCase):
             }""",
             [self.live_server_url, HELPER_MODULE_URL],
         )
-        self.assertEqual(result["typed"], {"query": "meet", "length": 6})
+        self.assertEqual(
+            result["typed"], {"query": "meet", "length": 6, "embed": False}
+        )
+        self.assertEqual(result["embed"], {"query": "rep", "length": 6, "embed": True})
         self.assertIsNone(result["closed"])
         self.assertIsNone(result["none"])
-        self.assertEqual(result["empty"], {"query": "", "length": 2})
+        self.assertEqual(result["empty"], {"query": "", "length": 2, "embed": False})
         self.assertEqual(result["range"], {"from": 4, "to": 10})
 
 
@@ -202,6 +206,33 @@ class WikilinkEditorTests(PlaywrightTestCase):
             '[data-testid="wikilink-item"]', has_text="Beta Target"
         )
         expect(item).to_be_visible(timeout=5000)
+
+    def test_switching_to_embed_mode_drops_the_note_rows(self):
+        # Regression: going from "[[" to "![[" kept the note rows pickable
+        # until the file search answered, so Enter embedded a note (or the
+        # other way round linked a file as a note).
+        editor = self._open_editor()
+        editor.click()
+        self.page.keyboard.press("Control+End")
+        self._type_awaiting_search("[[beta", "beta")
+        expect(
+            self.page.locator('[data-testid="wikilink-item"]', has_text="Beta Target")
+        ).to_be_visible(timeout=5000)
+
+        # The file search "![[" starts never answers.
+        held = []
+        self.page.route(
+            lambda url: "node_type=file" in url, lambda route: held.append(route)
+        )
+        for _ in range(len("[[beta")):
+            self.page.keyboard.press("Backspace")
+        self.page.keyboard.type("![[beta")
+        self.page.wait_for_timeout(500)
+
+        expect(self.page.locator('[data-testid="wikilink-item"]')).to_have_count(0)
+        self.page.keyboard.press("Enter")
+        expect(self.page.locator(".ProseMirror .file-embed")).to_have_count(0)
+        expect(self.page.locator('.ProseMirror a[href*="file="]')).to_have_count(0)
 
     def test_search_error_clears_stale_results(self):
         editor = self._open_editor()

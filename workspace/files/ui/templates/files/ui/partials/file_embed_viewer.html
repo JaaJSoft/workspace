@@ -1,0 +1,7 @@
+{% comment %}
+  The viewer a click on a file embedded in a note opens (files/ui/js/file_embed.js):
+  the markdown viewer's <file-preview> elements dispatch open-note-file-viewer.
+  A modal with its own panel id, so the note under it stays mounted. Included
+  by the pages that host the markdown editor and load file_viewer.js.
+{% endcomment %}
+{% include "files/ui/partials/file_viewer_modal.html" with event="open-note-file-viewer" panel_id="viewer-panel-embed" viewer_url="/files/view/{uuid}" download_url="/api/v1/files/{uuid}/download" files=True %}

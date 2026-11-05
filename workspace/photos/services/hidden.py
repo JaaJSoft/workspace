@@ -20,8 +20,13 @@ def hide_files(user, files):
 
 def unhide_files(user, file_uuids):
     """Bring the files *file_uuids* names back into *user*'s library;
-    returns how many were hidden. Uuids hidden by nobody are ignored."""
-    deleted, _ = HiddenFile.objects.filter(owner=user, file_id__in=file_uuids).delete()
+    returns how many were hidden. Uuids hidden by nobody are ignored, and so
+    are files out of *user*'s reach: their rows stay, so the count cannot
+    confirm such a file exists."""
+    from ..queries import hideable_files
+
+    reachable = hideable_files(user).filter(pk__in=file_uuids).values("pk")
+    deleted, _ = HiddenFile.objects.filter(owner=user, file_id__in=reachable).delete()
     return deleted
 
 

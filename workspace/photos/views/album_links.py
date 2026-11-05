@@ -59,7 +59,7 @@ def _link_file(request, token, file_uuid):
 
 class _PublicView(APIView):
     # No authentication, so ModuleVisible lets every visitor through; it is
-    # kept for the preview audience a signed-in caller still answers to.
+    # kept so a signed-in caller meets the same module guard as everywhere else.
     permission_classes = [ModuleVisible, AllowAny]
     authentication_classes = []
 

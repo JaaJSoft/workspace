@@ -347,32 +347,12 @@
           :key="item.uuid"
         >
           <div
-            class="group/media relative aspect-square rounded overflow-hidden cursor-pointer bg-base-300"
-            @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })"
+            class="group/media relative aspect-square rounded overflow-hidden bg-base-300"
             :title="item.original_name"
           >
-            <template x-if="item.is_image">
-              <img
-                :src="item.url"
-                alt=""
-                :alt="item.original_name"
-                class="w-full h-full object-cover"
-                loading="lazy"
-              />
-            </template>
-            <template x-if="item.is_video">
-              <div class="w-full h-full relative">
-                <video :src="item.url" class="w-full h-full object-cover" preload="metadata">
-                </video>
-                <div
-                  class="absolute inset-0 flex items-center justify-center pointer-events-none"
-                >
-                  <i data-lucide="play" class="w-6 h-6 text-white drop-shadow-lg"></i>
-                </div>
-              </div>
-            </template>
+            <file-preview src="{% url 'chat_ui:attachment_previews' %}" :uuid="item.uuid" :name="item.original_name" fit="cover" bare open-event="open-chat-attachment-viewer"></file-preview>
             <div
-              class="absolute inset-0 bg-black/0 group-hover/media:bg-black/30 transition-colors flex items-end"
+              class="absolute inset-0 pointer-events-none bg-black/0 group-hover/media:bg-black/30 transition-colors flex items-end"
             >
               <div
                 class="p-1 text-white text-[0.6rem] opacity-0 group-hover/media:opacity-100 transition-opacity truncate w-full"

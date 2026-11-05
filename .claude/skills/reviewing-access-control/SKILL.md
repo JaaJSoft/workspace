@@ -62,7 +62,7 @@ For each finding:
 
 1. Write the regression test first in the module's `tests/` (an `APITestCase` with two users is usually enough: the owner sets up, the other one attacks) and **watch it fail** against the current code.
 2. Put the rule in the module's `services/` or `queries.py`; views, serializers, WebDAV and tools only call it.
-3. Answer an unreachable row the way the module already does (404, or the same 400 a nonexistent UUID gets) so the response does not reveal it exists; return fixed messages, never `str(exception)`.
+3. Answer an unreachable row exactly like a nonexistent one (rule 7 in CLAUDE.md): same status, same body, same side effect, batches included. Narrow the request to the visible set before deciding anything. Prove it by asserting the response to the hidden UUID equals the response to a fresh `uuid4()`. Return fixed messages, never `str(exception)`.
 4. Run the module suite and the suites of the modules built on it (files changes reach notes, photos, chat, mail, projects, imports).
 
 Never use `git stash` to switch between the fixed and unfixed code when several worktrees share the repository - the stash list is shared. Save the source change as a patch, `git checkout -- <paths>`, run the test, `git apply` it back.

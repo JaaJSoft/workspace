@@ -7,14 +7,16 @@ Connected in PhotosConfig.ready().
 import logging
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.db.models.signals import m2m_changed, post_delete, post_save
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
 from workspace.common.logging import scrub
 from workspace.common.vectors.indexing import drop_vector
 from workspace.projects.models import Project, ProjectMember
+from workspace.projects.queries import project_users
 from workspace.users.models import UserSetting
 
 from .indexes import FACE_EMBEDDINGS, PHOTO_EMBEDDINGS
@@ -190,3 +192,43 @@ def revoke_album_sharing_on_project_leave(sender, instance, **kwargs):
     shared with it."""
     if instance.left_at is not None:
         _revoke_for([instance.user_id])
+
+
+# Deleting a group or a project takes its memberships along in SQL, with no
+# ``m2m_changed`` and no ``left_at``: ``pre_delete`` writes down who stands
+# to lose one, for ``post_delete`` to check once the rows are gone.
+_PENDING_DELETE = "_photos_album_sharing_pending_delete"
+
+
+@receiver(
+    pre_delete,
+    sender=Group,
+    dispatch_uid="photos_album_sharing_group_members_before_delete",
+)
+def note_group_members_before_delete(sender, instance, **kwargs):
+    setattr(instance, _PENDING_DELETE, _members_of([instance.pk]))
+
+
+@receiver(
+    pre_delete,
+    sender=Project,
+    dispatch_uid="photos_album_sharing_project_users_before_delete",
+)
+def note_project_users_before_delete(sender, instance, **kwargs):
+    setattr(instance, _PENDING_DELETE, [user.pk for user in project_users(instance)])
+
+
+@receiver(
+    post_delete,
+    sender=Group,
+    dispatch_uid="photos_revoke_album_sharing_on_group_delete",
+)
+@receiver(
+    post_delete,
+    sender=Project,
+    dispatch_uid="photos_revoke_album_sharing_on_project_delete",
+)
+def revoke_album_sharing_on_delete(sender, instance, **kwargs):
+    """A deleted group or project may have been what let its members share
+    an album: the links and shares they made there are revoked."""
+    _revoke_for(instance.__dict__.pop(_PENDING_DELETE, None))

@@ -58,6 +58,26 @@ The API is `POST /api/v1/files/uploads` (open), `PATCH .../uploads/<uuid>` with
 `Content-Range` (append), `GET` (offset to resume from), `POST .../finalize`
 and `DELETE` (abort); the OpenAPI schema documents each of them.
 
+## Opening a file in a tab
+
+A file's content is served from Workspace's own address, with the type the file
+was stored with. Opened directly (the viewer's *New tab* link, a URL someone
+pasted), a web page, an SVG drawing or an XML document would run its scripts as
+part of Workspace, with the session of whoever opened it. So:
+
+- HTML, XHTML, SVG and every XML type download instead of opening. The viewer
+  still previews them: the image viewer draws an SVG, the code viewer shows
+  HTML and XML source.
+- Every other type opens in the tab inside a sandbox that runs no script and
+  loads nothing, except PDF, video and audio, which the browser shows in its
+  own viewer.
+
+The same holds for public links, chat and task attachments, album photos and
+WebDAV. A reverse proxy in front of Workspace must leave the
+`Content-Security-Policy` and `X-Frame-Options` of these responses as they are:
+replacing the first lifts the sandbox, and `DENY` in the second blanks the PDF
+viewer, which shows the file in a frame.
+
 ## Content search
 
 Files are searchable by name and, for text formats and documents, by what is written

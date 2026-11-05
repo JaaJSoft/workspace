@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 15:16+0000\n"
+"POT-Creation-Date: 2026-11-05 15:34+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -2368,6 +2368,14 @@ msgid "The malware scanner flagged this file, so its contents cannot be shown."
 msgstr ""
 "L’analyseur antivirus a signalé ce fichier : son contenu ne peut pas être "
 "affiché."
+
+#: ui/views.py
+msgid "This file is in the trash."
+msgstr "Ce fichier est dans la corbeille."
+
+#: ui/views.py
+msgid "The malware scanner blocked this file."
+msgstr "L’analyseur antivirus a bloqué ce fichier."
 
 #: views/files.py
 #, python-format

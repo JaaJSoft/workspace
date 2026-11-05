@@ -30,7 +30,6 @@ from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.dates import time_ago
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.files.ui.viewers import ViewerRegistry
 from workspace.users.services.settings import get_setting
 
 
@@ -478,14 +477,15 @@ def conversation_messages_view(request, conversation_uuid):
         )
     )
 
-    # Check if there's an active AI task for this conversation
-    from workspace.ai.models import AITask
+    from workspace.ai.services.chat_generations import active_chat_tasks
 
-    bot_processing = AITask.objects.filter(
-        task_type=AITask.TaskType.CHAT,
-        status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
-        input_data__conversation_id=str(conversation_uuid),
-    ).exists()
+    bot_processing = (
+        active_chat_tasks()
+        .filter(
+            input_data__conversation_id=str(conversation_uuid),
+        )
+        .exists()
+    )
 
     return render(
         request,
@@ -645,6 +645,12 @@ def message_readers_view(request, conversation_uuid, message_uuid):
 @login_required
 def view_attachment(request, attachment_uuid):
     """Render viewer HTML for a chat attachment (read-only)."""
+    from workspace.files.ui.viewers import (
+        AttachmentItem,
+        render_viewer_panel,
+        viewer_class_for,
+    )
+
     attachment = (
         MessageAttachment.objects.select_related("message__conversation")
         .filter(
@@ -654,48 +660,67 @@ def view_attachment(request, attachment_uuid):
     )
 
     if not attachment:
-        from django.http import Http404
-
         raise Http404
 
     # Check user is member of the conversation
     if not get_active_membership(request.user, attachment.message.conversation_id):
-        from django.http import Http404
-
         raise Http404
 
-    from workspace.files.services.filetype import get_viewer_by_slug
-    from workspace.files.ui.viewers import render_viewer_panel
-
+    item = AttachmentItem(attachment)
     # A pinned viewer wins; an unknown pin degrades to content-based
     # resolution rather than breaking the modal.
-    ViewerClass = get_viewer_by_slug(attachment.viewer) or ViewerRegistry.get_viewer(
-        attachment.type, attachment.original_name
-    )
+    ViewerClass = viewer_class_for(item)
     if not ViewerClass:
         return HttpResponse(
             render_viewer_panel(
-                f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>'
+                f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>',
+                request,
             ),
             status=400,
         )
 
-    class AttachmentAdapter:
-        def __init__(self, att):
-            self.uuid = att.uuid
-            self.name = att.original_name
-            self.mime_type = att.mime_type
-            self.type = att.type
-            self.category = att.category
-            self.content = att.file
-
-        def is_viewable(self):
-            return True
-
-    adapter = AttachmentAdapter(attachment)
-    viewer = ViewerClass(adapter)
+    viewer = ViewerClass(item)
     viewer._user_can_edit = False
     viewer._content_url = f"/api/v1/chat/attachments/{attachment.uuid}"
     html = viewer.render(request)
 
-    return HttpResponse(render_viewer_panel(html))
+    return HttpResponse(render_viewer_panel(html, request))
+
+
+@login_required
+def attachment_previews(request):
+    """A batch of <file-preview> slots for chat attachments.
+
+    Same contract as Files' (``?uuids=...&targets=...``): an attachment of a
+    conversation the user is not an active member of comes back as nothing.
+    """
+    from django.http import HttpResponseBadRequest
+
+    from workspace.files.ui.viewers import (
+        AttachmentItem,
+        preview_targets,
+        previews_response,
+        render_file_preview,
+    )
+
+    pairs = preview_targets(request)
+    if pairs is None:
+        return HttpResponseBadRequest()
+    attachments = {
+        attachment.uuid: attachment
+        for attachment in MessageAttachment.objects.filter(
+            uuid__in={uuid for _, uuid in pairs},
+            message__conversation_id__in=user_conversation_ids(request.user),
+        )
+    }
+    rendered = {}
+    for target, attachment_uuid in pairs:
+        attachment = attachments.get(attachment_uuid)
+        if attachment is None:
+            continue
+        rendered[target] = render_file_preview(
+            request,
+            AttachmentItem(attachment),
+            content_url=f"/api/v1/chat/attachments/{attachment.uuid}",
+        )
+    return previews_response(rendered)

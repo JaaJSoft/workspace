@@ -1,0 +1,18 @@
+{% comment %}
+  The generic preview: an icon, the name and the size. Every preview's root
+  carries the data-preview-* attributes <file-preview> reads once merged
+  (common/static/ui/js/file_preview.js); data-preview-openable makes a click
+  open the full viewer.
+{% endcomment %}
+<div
+  class="file-preview-body file-preview-card flex items-center gap-2 min-w-0"
+  data-preview-name="{{ name }}"
+  data-preview-type="{{ type }}"
+  {% if openable %}data-preview-openable{% endif %}
+>
+  <i data-lucide="{{ icon }}" class="w-4 h-4 shrink-0 opacity-70"></i>
+  <span class="file-preview-name truncate min-w-0 text-sm font-medium">{{ name }}</span>
+  {% if size %}
+    <span class="file-preview-meta shrink-0 text-xs opacity-60">{{ size|filesizeformat }}</span>
+  {% endif %}
+</div>

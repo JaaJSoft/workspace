@@ -21,6 +21,12 @@ from ..services.preferences import import_by_date
 from ..tasks import file_imports_by_date
 
 
+def _body(request):
+    """The request's JSON object, or an empty one when the body is a list,
+    a number or a string: reading a key off those is a 500, not a 400."""
+    return request.data if isinstance(request.data, dict) else {}
+
+
 @extend_schema(tags=["Photos - Import"])
 class ImportFolderView(APIView):
     @extend_schema(
@@ -58,7 +64,7 @@ class ImportFolderView(APIView):
         },
     )
     def put(self, request):
-        folder = writable_folder(request.user, request.data.get("folder"))
+        folder = writable_folder(request.user, _body(request).get("folder"))
         if folder is None:
             return Response(
                 {"folder": "Choose a folder you can add files to."},
@@ -98,7 +104,7 @@ class ImportByDateView(APIView):
         },
     )
     def post(self, request):
-        raw = request.data.get("files")
+        raw = _body(request).get("files")
         if not isinstance(raw, list) or not raw or len(raw) > MAX_FILES:
             return Response(
                 {"files": f"Send a list of 1 to {MAX_FILES} file uuids."},

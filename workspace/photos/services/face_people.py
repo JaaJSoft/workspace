@@ -91,7 +91,7 @@ def link_new_person(cluster, user, name):
     with transaction.atomic():
         person = create_person(owner=user, display_name=name)
         link_cluster(cluster, person)
-    give_default_avatar(person, cluster.cover_id)
+    give_default_avatar(user, person, cluster.cover_id)
     return person
 
 
@@ -183,16 +183,21 @@ def use_cover_as_avatar(user, cluster):
     )
     if person is None:
         raise Unnamed
-    if not save_face_as_avatar(person, cluster.cover_id):
+    if not save_face_as_avatar(user, person, cluster.cover_id):
         raise NoCover
 
 
-def save_face_as_avatar(person, face_id):
+def save_face_as_avatar(user, person, face_id):
     """Give *person* the crop of face *face_id* as their contact photo.
 
-    False, the person left as they were, when the face has no crop on disk.
+    False, the person left as they were, when the face has no crop on disk or
+    is not one of ``user_faces``: a cover the user picked stays the cover
+    when its photo is trashed, hidden or quarantined, but its crop must not
+    leave the library through a contact other people see.
     """
-    crop = Face.objects.filter(pk=face_id).values_list("crop", flat=True).first()
+    from ..queries import user_faces
+
+    crop = user_faces(user).filter(pk=face_id).values_list("crop", flat=True).first()
     if not crop:
         return False
     try:
@@ -207,12 +212,12 @@ def save_face_as_avatar(person, face_id):
     return True
 
 
-def give_default_avatar(person, face_id):
+def give_default_avatar(user, person, face_id):
     """A new contact's first photo: best effort, a failure never costs the
     contact its creation (a savepoint keeps the caller's transaction usable)."""
     try:
         with transaction.atomic():
-            save_face_as_avatar(person, face_id)
+            save_face_as_avatar(user, person, face_id)
     except Exception:
         logger.exception(
             "Could not give contact %s face %s as photo", person.pk, face_id

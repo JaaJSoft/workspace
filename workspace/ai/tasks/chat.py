@@ -42,33 +42,47 @@ logger = logging.getLogger(__name__)
     bind=True,
     max_retries=0,
 )
-def generate_chat_response(
-    self, conversation_id: str, message_id: str, bot_user_id: int
-):
-    """Generate a bot response in *conversation_id* triggered by *message_id*.
+def generate_chat_response(self, ai_task_id: str):
+    """Generate the bot reply that the PENDING AITask *ai_task_id* stands for.
 
-    Creates an AITask to track progress, runs the harness with one
-    auto-retry on empty response, then posts the bot message via
-    ``post_bot_message``. Failures route to ``handle_generation_error``.
+    The row is created at dispatch, owned by the bot, with the conversation
+    and the triggering message in ``input_data``. The run has one auto-retry
+    on empty response, then posts the bot message via ``post_bot_message``.
+    Failures route to ``handle_generation_error``.
     """
-    from django.contrib.auth import get_user_model
-
     from workspace.ai.models import AITask, BotProfile
     from workspace.ai.prompts.chat import build_chat_messages
     from workspace.chat.models import Conversation, Message
 
-    User = get_user_model()
+    ai_task = AITask.objects.select_related("owner").filter(pk=ai_task_id).first()
+    if ai_task is None:
+        logger.error("Bot response failed: AITask %s not found", scrub(ai_task_id))
+        return {"status": "error", "error": "Not found"}
+
+    # Claimed with a conditional write: a cancel that landed while the job
+    # waited in the queue has already closed the row, and must win.
+    claimed = AITask.objects.filter(pk=ai_task.pk, status=AITask.Status.PENDING).update(
+        status=AITask.Status.PROCESSING
+    )
+    if not claimed:
+        logger.info("Bot response cancelled while queued: task=%s", ai_task.pk)
+        return {"status": "cancelled"}
+    ai_task.status = AITask.Status.PROCESSING
+
+    conversation_id = ai_task.input_data.get("conversation_id")
+    message_id = ai_task.input_data.get("message_id")
+    bot_user = ai_task.owner
 
     try:
-        bot_user = User.objects.get(pk=bot_user_id)
         bot_profile = BotProfile.objects.get(user=bot_user)
         conversation = Conversation.objects.get(pk=conversation_id)
-    except User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist:
+    except BotProfile.DoesNotExist, Conversation.DoesNotExist:
         logger.error(
             "Bot response failed: conversation=%s bot=%s not found",
             scrub(conversation_id),
-            scrub(bot_user_id),
+            bot_user.pk,
         )
+        _close_without_reply(ai_task, "Not found")
         return {"status": "error", "error": "Not found"}
 
     trigger_message = (
@@ -85,20 +99,10 @@ def generate_chat_response(
             "Bot response refused (%s): conversation=%s bot=%s",
             refusal,
             scrub(conversation_id),
-            scrub(bot_user_id),
+            bot_user.pk,
         )
+        _close_without_reply(ai_task, f"Refused: {refusal}")
         return {"status": "skipped", "reason": refusal}
-
-    # Created before the history is assembled, not after: that step reads
-    # every attachment in the conversation and takes minutes on an
-    # image-heavy one. This row is what tells the UI a response is under
-    # way, so recording it late leaves a reload with nothing to show.
-    ai_task = AITask.objects.create(
-        owner=bot_user,
-        task_type=AITask.TaskType.CHAT,
-        status=AITask.Status.PROCESSING,
-        input_data={"conversation_id": conversation_id, "message_id": message_id},
-    )
 
     try:
         history = build_conversation_history(conversation_id, bot_profile, human_user)
@@ -193,6 +197,16 @@ def generate_chat_response(
         logger.exception("Bot response failed: conversation=%s", scrub(conversation_id))
         handle_generation_error(conversation, bot_user, ai_task, e)
         return {"status": "error", "error": str(e)}
+
+
+def _close_without_reply(ai_task, reason):
+    """End a run that posts nothing, so the chat stops showing it as under way."""
+    from django.utils import timezone
+
+    ai_task.status = ai_task.Status.FAILED
+    ai_task.error = reason
+    ai_task.completed_at = timezone.now()
+    ai_task.save(update_fields=["status", "error", "completed_at"])
 
 
 @shared_task(

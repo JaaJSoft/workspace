@@ -63,7 +63,7 @@ A single-node deployment can do without the `beat` container: `CELERY_WORKER_BEA
 
 ### Worker
 
-Celery reads every option of `celery worker` from an environment variable: `CELERY_WORKER_` followed by the option's long name in upper case, dashes turned into underscores. `--max-tasks-per-child 100` is `CELERY_WORKER_MAX_TASKS_PER_CHILD=100`. The ones worth knowing:
+Celery reads every option of `celery worker` from an environment variable: `CELERY_WORKER_` followed by the option's long name in upper case, dashes turned into underscores. `--max-tasks-per-child 100` is `CELERY_WORKER_MAX_TASKS_PER_CHILD=100`. The exception is `--beat`, which Celery never reads from the environment: `run.sh` turns `CELERY_WORKER_BEAT` into that flag itself. The ones worth knowing:
 
 | Variable                             | Default                       | Effect |
 |--------------------------------------|-------------------------------|--------|
@@ -71,7 +71,7 @@ Celery reads every option of `celery worker` from an environment variable: `CELE
 | `CELERY_WORKER_AUTOSCALE`            | *(unset)*                     | `max,min`, e.g. `6,1`: up to *max* children under load, back down to *min* when idle, which hands an idle child's memory back. Replaces the concurrency |
 | `CELERY_WORKER_MAX_MEMORY_PER_CHILD` | `524288`                      | KiB of resident memory after which a child is replaced, once its current task ends. `0` disables |
 | `CELERY_WORKER_MAX_TASKS_PER_CHILD`  | *(unset)*                     | Replace a child after that many tasks |
-| `CELERY_WORKER_BEAT`                 | *(unset)*                     | `1` runs the scheduler in this worker (single node, one worker only) |
+| `CELERY_WORKER_BEAT`                 | *(unset)*                     | `1` (or `true`, `yes`, `on`) runs the scheduler in this worker (single node, one worker only). Read by `run.sh`: a worker started with another command needs `--beat` |
 | `CELERY_WORKER_LOGLEVEL`             | `info`                        | Worker log level |
 | `CELERY_WORKER_WITHOUT_GOSSIP`, `CELERY_WORKER_WITHOUT_MINGLE`, `CELERY_WORKER_WITHOUT_HEARTBEAT` | *(unset)* | `1` turns off what workers broadcast to each other and to monitors such as Flower. A lone worker with no monitor needs none of it |
 

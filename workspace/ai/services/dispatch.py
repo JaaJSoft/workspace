@@ -9,6 +9,8 @@ single spot so adding a new AI feature is one entry instead of a grep
 across views.
 """
 
+from django.utils import timezone
+
 from workspace.ai.models import AITask
 
 
@@ -25,7 +27,17 @@ def dispatch(*, owner, task_type: str, input_data: dict | None = None) -> AITask
         task_type=task_type,
         input_data=input_data or {},
     )
-    _enqueue_worker(ai_task)
+    try:
+        _enqueue_worker(ai_task)
+    except Exception as exc:
+        # No worker will ever close this row: left PENDING, it would read as
+        # work under way (a chat keeps its typing bubble up for it).
+        AITask.objects.filter(pk=ai_task.pk).update(
+            status=AITask.Status.FAILED,
+            error=f"Could not enqueue the worker: {exc}",
+            completed_at=timezone.now(),
+        )
+        raise
     return ai_task
 
 
@@ -35,6 +47,7 @@ def _enqueue_worker(ai_task: AITask) -> None:
     # (e.g. ``ai_task_lifecycle``), so importing tasks at module
     # load time would form a loop.
     from workspace.ai.tasks.calendar import extract_from_mail_messages
+    from workspace.ai.tasks.chat import generate_chat_response
     from workspace.ai.tasks.editor import editor_action
     from workspace.ai.tasks.mail import (
         classify_mail_messages,
@@ -43,6 +56,7 @@ def _enqueue_worker(ai_task: AITask) -> None:
     )
 
     mapping = {
+        AITask.TaskType.CHAT: generate_chat_response,
         AITask.TaskType.SUMMARIZE: summarize,
         AITask.TaskType.COMPOSE: compose_email,
         AITask.TaskType.REPLY: compose_email,

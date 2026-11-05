@@ -10,7 +10,7 @@ from django.utils import timezone
 from workspace.ai.harness.model import ToolCall
 from workspace.ai.models import AITask
 from workspace.ai.services import stream_steps
-from workspace.ai.sse_provider import AIStreamSSEProvider
+from workspace.ai.sse_provider import GENERATING_HEARTBEAT_SECONDS, AIStreamSSEProvider
 from workspace.chat.models import Conversation, ConversationMember
 
 User = get_user_model()
@@ -485,3 +485,104 @@ class AIStreamSSEProviderTests(TestCase):
         provider = AIStreamSSEProvider(self.user, None)
 
         self.assertEqual(provider.poll(None), [])
+
+
+class GeneratingHeartbeatTests(TestCase):
+    """The snapshot repeats while a generation runs.
+
+    The chat page lowers its bubble once nothing has kept it alive for three
+    minutes. Steps alone did that, so a model composing for longer after its
+    last tool - or calling none - lost its bubble while still working.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            username="dave", email="d@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="bot6", email="b6@test.com", password="pw"
+        )
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        ConversationMember.objects.create(
+            conversation=self.conversation, user=self.user
+        )
+        self.clock = 1000.0
+        patcher = patch(
+            "workspace.ai.sse_provider.time.monotonic", side_effect=lambda: self.clock
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _start_generation(self):
+        return AITask.objects.create(
+            owner=self.bot,
+            task_type=AITask.TaskType.CHAT,
+            status=AITask.Status.PROCESSING,
+            input_data={"conversation_id": str(self.conversation.pk)},
+        )
+
+    def _snapshots(self, events):
+        return [
+            data["conversation_ids"]
+            for name, data, _ in events
+            if name == "bot_generating"
+        ]
+
+    def _connect(self):
+        provider = AIStreamSSEProvider(self.user, None)
+        provider.get_initial_events()
+        return provider
+
+    def test_a_running_generation_is_announced_again_every_heartbeat(self):
+        self._start_generation()
+        provider = self._connect()
+
+        for _ in range(5):
+            self.clock += GENERATING_HEARTBEAT_SECONDS
+            self.assertEqual(
+                self._snapshots(provider.poll(None)), [[str(self.conversation.pk)]]
+            )
+
+    def test_nothing_is_announced_between_heartbeats(self):
+        self._start_generation()
+        provider = self._connect()
+
+        self.clock += GENERATING_HEARTBEAT_SECONDS - 1
+
+        self.assertEqual(provider.poll(None), [])
+
+    def test_a_generation_that_ends_silently_is_announced_once_as_over(self):
+        # A cancelled generation posts nothing: the empty snapshot is what
+        # lowers the bubble, and one is enough.
+        task = self._start_generation()
+        provider = self._connect()
+        task.status = AITask.Status.FAILED
+        task.save(update_fields=["status"])
+
+        self.clock += GENERATING_HEARTBEAT_SECONDS
+        self.assertEqual(self._snapshots(provider.poll(None)), [[]])
+        self.clock += GENERATING_HEARTBEAT_SECONDS
+        self.assertEqual(provider.poll(None), [])
+
+    def test_an_idle_connection_stays_quiet(self):
+        provider = self._connect()
+
+        self.clock += GENERATING_HEARTBEAT_SECONDS
+        with self.assertNumQueries(1):
+            self.assertEqual(provider.poll(None), [])
+
+    def test_a_generation_started_after_the_connection_is_announced(self):
+        provider = self._connect()
+        self._start_generation()
+
+        self.clock += GENERATING_HEARTBEAT_SECONDS
+
+        self.assertEqual(
+            self._snapshots(provider.poll(None)), [[str(self.conversation.pk)]]
+        )

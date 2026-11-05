@@ -477,14 +477,15 @@ def conversation_messages_view(request, conversation_uuid):
         )
     )
 
-    # Check if there's an active AI task for this conversation
-    from workspace.ai.models import AITask
+    from workspace.ai.services.chat_generations import active_chat_tasks
 
-    bot_processing = AITask.objects.filter(
-        task_type=AITask.TaskType.CHAT,
-        status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
-        input_data__conversation_id=str(conversation_uuid),
-    ).exists()
+    bot_processing = (
+        active_chat_tasks()
+        .filter(
+            input_data__conversation_id=str(conversation_uuid),
+        )
+        .exists()
+    )
 
     return render(
         request,

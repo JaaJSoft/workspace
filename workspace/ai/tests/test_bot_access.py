@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from workspace.ai.models import AgentGoal, AITask, BotProfile, ScheduledMessage
 from workspace.ai.services.bot_access import run_refusal
+from workspace.ai.tests.chat_tasks import queue_chat_task
 from workspace.chat.models import Conversation, ConversationMember, Message
 
 User = get_user_model()
@@ -216,7 +217,7 @@ class ChatResponseAccessTests(BotAccessFixture):
             conversation=self.conversation, author=author, body="@privbot my mail?"
         )
         return generate_chat_response(
-            str(self.conversation.pk), str(message.uuid), self.bot_user.id
+            queue_chat_task(self.conversation, message, self.bot_user)
         )
 
     def test_a_group_gets_no_run_even_for_a_member_allowed_to_use_the_bot(
@@ -233,7 +234,15 @@ class ChatResponseAccessTests(BotAccessFixture):
         )
         mock_llm.assert_not_called()
         self.assertFalse(self.bot_messages().exists())
-        self.assertFalse(AITask.objects.filter(owner=self.bot_user).exists())
+        # Closed, or the chat would keep showing the refused reply as under way.
+        self.assertEqual(
+            list(
+                AITask.objects.filter(owner=self.bot_user).values_list(
+                    "status", flat=True
+                )
+            ),
+            [AITask.Status.FAILED],
+        )
 
     def test_access_revoked_after_the_conversation_was_set_up(self, mock_llm):
         self.revoke_bot(self.creator)

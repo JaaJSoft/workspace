@@ -114,7 +114,7 @@
               :aria-pressed="tagFilter === tag.uuid ? 'true' : 'false'"
               @click="setTagFilter(tag.uuid)"
             >
-              <span class="inline-flex flex-shrink-0" :style="{ color: tag.color || '' }">
+              <span class="inline-flex shrink-0" :style="{ color: tag.color || '' }">
                 <i data-lucide="tag" class="w-5 h-5"></i>
               </span>
               <span class="truncate flex-1" x-text="tag.name"></span>

@@ -75,7 +75,7 @@ Parameters:
           >
             <i
               :data-lucide="tag.icon || 'tag'"
-              class="w-5 h-5 flex-shrink-0"
+              class="w-5 h-5 shrink-0"
               :style="{ color: tag.color || '' }"
             ></i>
             <span x-show="!({{ ce }})" class="truncate flex-1" x-text="tag.name"></span>
@@ -100,7 +100,7 @@ Parameters:
           title="{% translate 'Manage tags' %}"
           aria-label="{% translate 'Manage tags' %}"
         >
-          <i data-lucide="settings-2" class="w-5 h-5 flex-shrink-0"></i>
+          <i data-lucide="settings-2" class="w-5 h-5 shrink-0"></i>
         </button>
       </li>
     </ul>

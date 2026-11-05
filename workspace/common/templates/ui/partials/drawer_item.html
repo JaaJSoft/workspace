@@ -78,21 +78,21 @@ Usage Examples:
             above it. Same reason refresh_button.html wraps its spinner.
           {% endcomment %}
           <span
-            class="inline-flex flex-shrink-0{% if icon_initial is False %} hidden{% endif %}"
+            class="inline-flex shrink-0{% if icon_initial is False %} hidden{% endif %}"
             :class="{ hidden: !({{ icon_expr|safe }}) }"
             x-show="{{ icon_expr|safe }}"
           >
             <i data-lucide="{{ icon_true }}" class="w-5 h-5"></i>
           </span>
           <span
-            class="inline-flex flex-shrink-0{% if icon_initial is True %} hidden{% endif %}"
+            class="inline-flex shrink-0{% if icon_initial is True %} hidden{% endif %}"
             :class="{ hidden: ({{ icon_expr|safe }}) }"
             x-show="!({{ icon_expr|safe }})"
           >
             <i data-lucide="{{ icon_false }}" class="w-5 h-5"></i>
           </span>
         {% else %}
-          <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+          <i data-lucide="{{ icon }}" class="w-5 h-5 shrink-0"></i>
         {% endif %}
         <span
           x-show="!{{ collapse_expr|default:"collapsed" }}"
@@ -122,21 +122,21 @@ Usage Examples:
             above it. Same reason refresh_button.html wraps its spinner.
           {% endcomment %}
           <span
-            class="inline-flex flex-shrink-0{% if icon_initial is False %} hidden{% endif %}"
+            class="inline-flex shrink-0{% if icon_initial is False %} hidden{% endif %}"
             :class="{ hidden: !({{ icon_expr|safe }}) }"
             x-show="{{ icon_expr|safe }}"
           >
             <i data-lucide="{{ icon_true }}" class="w-5 h-5"></i>
           </span>
           <span
-            class="inline-flex flex-shrink-0{% if icon_initial is True %} hidden{% endif %}"
+            class="inline-flex shrink-0{% if icon_initial is True %} hidden{% endif %}"
             :class="{ hidden: ({{ icon_expr|safe }}) }"
             x-show="!({{ icon_expr|safe }})"
           >
             <i data-lucide="{{ icon_false }}" class="w-5 h-5"></i>
           </span>
         {% else %}
-          <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+          <i data-lucide="{{ icon }}" class="w-5 h-5 shrink-0"></i>
         {% endif %}
         <span
           x-show="!{{ collapse_expr|default:"collapsed" }}"
@@ -168,21 +168,21 @@ Usage Examples:
             above it. Same reason refresh_button.html wraps its spinner.
           {% endcomment %}
           <span
-            class="inline-flex flex-shrink-0{% if icon_initial is False %} hidden{% endif %}"
+            class="inline-flex shrink-0{% if icon_initial is False %} hidden{% endif %}"
             :class="{ hidden: !({{ icon_expr|safe }}) }"
             x-show="{{ icon_expr|safe }}"
           >
             <i data-lucide="{{ icon_true }}" class="w-5 h-5"></i>
           </span>
           <span
-            class="inline-flex flex-shrink-0{% if icon_initial is True %} hidden{% endif %}"
+            class="inline-flex shrink-0{% if icon_initial is True %} hidden{% endif %}"
             :class="{ hidden: ({{ icon_expr|safe }}) }"
             x-show="!({{ icon_expr|safe }})"
           >
             <i data-lucide="{{ icon_false }}" class="w-5 h-5"></i>
           </span>
         {% else %}
-          <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+          <i data-lucide="{{ icon }}" class="w-5 h-5 shrink-0"></i>
         {% endif %}
         <span
           x-show="!{{ collapse_expr|default:"collapsed" }}"

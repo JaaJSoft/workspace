@@ -30,14 +30,14 @@
         <!-- People section placeholder -->
         <div class="border-t border-base-200 pt-3 space-y-3">
           <div class="flex items-center gap-2.5">
-            <div class="w-7 h-7 rounded-full bg-base-300 flex-shrink-0"></div>
+            <div class="w-7 h-7 rounded-full bg-base-300 shrink-0"></div>
             <div class="flex-1 space-y-1">
               <div class="h-4 bg-base-300 rounded w-1/2"></div>
               <div class="h-3 bg-base-300 rounded w-1/4"></div>
             </div>
           </div>
           <div class="flex items-center gap-2.5">
-            <div class="w-7 h-7 rounded-full bg-base-300 flex-shrink-0"></div>
+            <div class="w-7 h-7 rounded-full bg-base-300 shrink-0"></div>
             <div class="h-4 bg-base-300 rounded w-2/5"></div>
           </div>
         </div>
@@ -55,7 +55,7 @@
         <div class="flex items-start justify-between p-4 pb-3 gap-2">
           <button
             type="button"
-            class="btn btn-sm btn-square btn-ghost flex-shrink-0 -mt-1 -ml-1 lg:hidden"
+            class="btn btn-sm btn-square btn-ghost shrink-0 -mt-1 -ml-1 lg:hidden"
             @click="closePanel()"
             aria-label="{% translate "Back to calendar" %}"
           >
@@ -66,7 +66,7 @@
             <!-- Calendar indicator -->
             <div class="flex items-center gap-1.5 mt-1.5" x-show="eventCalendarObj()">
               <span
-                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                class="w-2.5 h-2.5 rounded-full shrink-0"
                 :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[eventCalendarColor()]) + '))'"
               ></span>
               <span
@@ -77,7 +77,7 @@
           </div>
           <button
             type="button"
-            class="btn btn-sm btn-square btn-ghost flex-shrink-0 -mt-1 -mr-1 hidden lg:inline-flex"
+            class="btn btn-sm btn-square btn-ghost shrink-0 -mt-1 -mr-1 hidden lg:inline-flex"
             @click="closePanel()"
             aria-label="{% translate "Close" %}"
           >
@@ -91,11 +91,11 @@
         <!-- Date & time card -->
         <div class="bg-base-200/50 rounded-lg p-3 space-y-1">
           <div class="flex items-center gap-2 text-sm font-medium">
-            <i data-lucide="calendar-days" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <i data-lucide="calendar-days" class="w-4 h-4 opacity-50 shrink-0"></i>
             <span x-text="panelDateDisplay()"></span>
           </div>
           <div class="flex items-center gap-2 text-xs text-base-content/60">
-            <i data-lucide="clock" class="w-3.5 h-3.5 opacity-40 flex-shrink-0"></i>
+            <i data-lucide="clock" class="w-3.5 h-3.5 opacity-40 shrink-0"></i>
             <span x-text="panelTimeLabel()"></span>
           </div>
         </div>
@@ -103,7 +103,7 @@
         <!-- Recurrence indicator -->
         <template x-if="_panelRaw?.is_recurring">
           <div class="flex items-center gap-2 text-sm">
-            <i data-lucide="repeat" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <i data-lucide="repeat" class="w-4 h-4 opacity-50 shrink-0"></i>
             <span class="text-base-content/70" x-text="recurrenceLabel()"></span>
           </div>
         </template>
@@ -111,7 +111,7 @@
         <!-- Location -->
         <template x-if="form.location">
           <div class="flex items-center gap-2.5 text-sm">
-            <i data-lucide="map-pin" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <i data-lucide="map-pin" class="w-4 h-4 opacity-50 shrink-0"></i>
             <span class="break-words min-w-0" x-text="form.location"></span>
           </div>
         </template>
@@ -121,7 +121,7 @@
           <div class="flex items-start gap-2.5 text-sm">
             <i
               data-lucide="align-left"
-              class="w-4 h-4 opacity-50 mt-0.5 flex-shrink-0"
+              class="w-4 h-4 opacity-50 mt-0.5 shrink-0"
             ></i>
             <p
               class="text-base-content/70 whitespace-pre-wrap break-words min-w-0"
@@ -133,7 +133,7 @@
         <!-- Poll link -->
         <template x-if="_panelRaw?.poll_id">
           <div class="flex items-center gap-2.5 text-sm">
-            <i data-lucide="bar-chart-3" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <i data-lucide="bar-chart-3" class="w-4 h-4 opacity-50 shrink-0"></i>
             <button
               type="button"
               class="link link-module"
@@ -151,7 +151,7 @@
           <template x-if="isExternalEvent()">
             <div class="flex items-center gap-2.5 text-sm">
               <div
-                class="w-7 h-7 rounded-full bg-base-200 flex items-center justify-center flex-shrink-0"
+                class="w-7 h-7 rounded-full bg-base-200 flex items-center justify-center shrink-0"
               >
                 <i data-lucide="globe" class="w-3.5 h-3.5 opacity-60"></i>
               </div>

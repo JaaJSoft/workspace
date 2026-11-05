@@ -33,7 +33,7 @@
         >
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </button>
-        <i data-lucide="contact" class="w-4 h-4 text-module flex-shrink-0"></i>
+        <i data-lucide="contact" class="w-4 h-4 text-module shrink-0"></i>
         <input
           type="text"
           class="input input-ghost input-sm font-semibold flex-1 min-w-0"
@@ -45,7 +45,7 @@
       </div>
       {# A plain download link, offered by the registry like every other action: the menu shows the same row. #}
       <a
-        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        class="btn btn-ghost btn-sm btn-square shrink-0"
         title="{% translate "Export vCard" %}"
         aria-label="{% translate "Export vCard" %}"
         x-show="can('export')"
@@ -57,7 +57,7 @@
       {# Nested x-data: the dialog and its state live on the page shell, and a bare name resolves up to it. #}
       <button
         type="button"
-        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        class="btn btn-ghost btn-sm btn-square shrink-0"
         title="{% translate "Show QR code" %}"
         aria-label="{% translate "Show QR code" %}"
         x-show="can('qrcode')"
@@ -67,7 +67,7 @@
       </button>
       <button
         type="button"
-        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        class="btn btn-ghost btn-sm btn-square shrink-0"
         title="{% translate "Actions" %}"
         aria-label="{% translate "Actions" %}"
         @click="openCtxMenu($event, 'person', { uuid: person.uuid, name: person.display_name, scope: person.scope })"

@@ -26,7 +26,7 @@
   <div class="flex items-center gap-1.5 min-w-0">
     <button
       type="button"
-      class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+      class="btn btn-ghost btn-xs btn-circle shrink-0"
       @click="toggle()"
       :title="playing ? 'Pause' : 'Play'"
       :aria-label="playing ? 'Pause' : 'Play'"
@@ -47,13 +47,13 @@
     />
 
     <span
-      class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
+      class="text-[0.65rem] opacity-70 tabular-nums shrink-0"
       x-text="elapsedLabel() + ' / ' + durationLabel()"
     ></span>
 
     <button
       type="button"
-      class="btn btn-ghost btn-xs px-1 tabular-nums flex-shrink-0"
+      class="btn btn-ghost btn-xs px-1 tabular-nums shrink-0"
       @click="cycleSpeed()"
       x-text="speedLabel()"
       title="Playback speed"
@@ -61,7 +61,7 @@
 
     <button
       type="button"
-      class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+      class="btn btn-ghost btn-xs btn-square shrink-0"
       @click="detailsOpen = !detailsOpen"
       title="File details"
       :aria-expanded="detailsOpen"
@@ -79,20 +79,20 @@
     x-cloak
     class="flex items-center gap-1.5 min-w-0 pl-1"
   >
-    <i data-lucide="music" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
+    <i data-lucide="music" class="w-3.5 h-3.5 shrink-0 opacity-60"></i>
     <span class="truncate text-xs font-medium flex-1 min-w-0">{{ att.original_name }}</span>
-    <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesizeformat }}</span>
+    <span class="text-[0.65rem] opacity-60 shrink-0">{{ att.size|filesizeformat }}</span>
     <a
       href="/api/v1/chat/attachments/{{ att.uuid }}"
       download="{{ att.original_name }}"
-      class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+      class="btn btn-ghost btn-xs btn-square shrink-0"
       title="Download"
     >
       <i data-lucide="download" class="w-3.5 h-3.5"></i>
     </a>
     <button
       type="button"
-      class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+      class="btn btn-ghost btn-xs btn-square shrink-0"
       @click="saveAttachmentToFiles('{{ att.uuid|escapejs }}')"
       title="Save to Files"
     >

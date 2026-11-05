@@ -67,14 +67,14 @@
   <!-- Details -->
   <div class="space-y-2 text-sm">
     <div class="flex items-center gap-2 text-base-content/60">
-      <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <i data-lucide="calendar" class="w-3.5 h-3.5 shrink-0"></i>
       <span>Created <span x-text="formatDate(activeConversation.created_at)"></span></span>
     </div>
     <div
       class="flex items-center gap-2 text-base-content/60"
       x-show="activeConversation.kind === 'group' && activeConversation.title"
     >
-      <i data-lucide="tag" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <i data-lucide="tag" class="w-3.5 h-3.5 shrink-0"></i>
       <span x-text="activeConversation.title" class="truncate"></span>
     </div>
     <!-- Attached groups (membership follows these groups; read-only) -->
@@ -82,7 +82,7 @@
       class="flex items-center gap-2 text-base-content/60"
       x-show="activeConversation.groups?.length"
     >
-      <i data-lucide="users" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <i data-lucide="users" class="w-3.5 h-3.5 shrink-0"></i>
       <span
         x-text="'Linked to ' + (activeConversation.groups || []).map(g => g.name).join(', ')"
         class="truncate"
@@ -93,7 +93,7 @@
       x-show="activeConversation.description"
       class="flex items-start gap-2 text-base-content/60"
     >
-      <i data-lucide="align-left" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <i data-lucide="align-left" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
       <span
         x-text="activeConversation.description"
         class="whitespace-pre-line break-words flex-1"
@@ -101,7 +101,7 @@
       <button
         type="button"
         x-show="canEditConversationDetails()"
-        class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100 flex-shrink-0"
+        class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100 shrink-0"
         @click="editDescription()"
         title="Edit description"
       >
@@ -168,7 +168,7 @@
       @click="addMembersToConversation()"
     >
       <div
-        class="w-8 h-8 rounded-full border-2 border-dashed border-base-content/20 flex items-center justify-center flex-shrink-0"
+        class="w-8 h-8 rounded-full border-2 border-dashed border-base-content/20 flex items-center justify-center shrink-0"
       >
         <i data-lucide="plus" class="w-3.5 h-3.5 text-base-content/40"></i>
       </div>
@@ -254,7 +254,7 @@
         >
           <i
             data-lucide="pin"
-            class="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5"
+            class="w-3.5 h-3.5 text-warning shrink-0 mt-0.5"
           ></i>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1">
@@ -274,7 +274,7 @@
           </div>
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity flex-shrink-0"
+            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity shrink-0"
             @click.stop="unpinMessage(pin.message_uuid)"
             title="Unpin"
           >
@@ -379,7 +379,7 @@
             >
               <i
                 data-lucide="file"
-                class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"
+                class="w-3.5 h-3.5 text-base-content/40 shrink-0"
               ></i>
               <div class="flex-1 min-w-0">
                 <p class="text-xs truncate" x-text="item.original_name"></p>
@@ -407,7 +407,7 @@
         >
           <i
             data-lucide="file"
-            class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"
+            class="w-3.5 h-3.5 text-base-content/40 shrink-0"
           ></i>
           <div class="flex-1 min-w-0">
             <p class="text-xs truncate" x-text="item.original_name"></p>
@@ -476,11 +476,11 @@
 
       <div class="space-y-1.5" x-show="conversationStats.first_message_at">
         <div class="flex items-center gap-2 text-base-content/60">
-          <i data-lucide="message-square" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <i data-lucide="message-square" class="w-3.5 h-3.5 shrink-0"></i>
           <span>First message: <span x-text="formatDateTime(conversationStats.first_message_at)"></span></span>
         </div>
         <div class="flex items-center gap-2 text-base-content/60">
-          <i data-lucide="clock" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <i data-lucide="clock" class="w-3.5 h-3.5 shrink-0"></i>
           <span>Last message: <span x-text="formatDateTime(conversationStats.last_message_at)"></span></span>
         </div>
       </div>
@@ -585,7 +585,7 @@
             >
               <i
                 data-lucide="brain"
-                class="w-3.5 h-3.5 text-secondary flex-shrink-0 mt-0.5"
+                class="w-3.5 h-3.5 text-secondary shrink-0 mt-0.5"
               ></i>
               <div class="flex-1 min-w-0">
                 <div class="text-xs font-semibold truncate" x-text="mem.key"></div>
@@ -593,7 +593,7 @@
               </div>
               <!-- Actions -->
               <div
-                class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
               >
                 <button
                   type="button"
@@ -650,7 +650,7 @@
             >
               <i
                 data-lucide="target"
-                class="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5"
+                class="w-3.5 h-3.5 text-warning shrink-0 mt-0.5"
               ></i>
               <div class="flex-1 min-w-0">
                 <div class="text-xs font-semibold truncate" x-text="goal.title"></div>
@@ -703,7 +703,7 @@
               <!-- Actions -->
               <div
                 x-show="goal.can_manage"
-                class="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0"
+                class="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0"
               >
                 <button
                   type="button"
@@ -774,7 +774,7 @@
             >
               <i
                 :data-lucide="sched.kind === 'once' ? 'clock' : 'repeat'"
-                class="w-3.5 h-3.5 text-module flex-shrink-0 mt-0.5"
+                class="w-3.5 h-3.5 text-module shrink-0 mt-0.5"
               ></i>
               <div class="flex-1 min-w-0">
                 <p
@@ -795,7 +795,7 @@
               <!-- Actions -->
               <div
                 x-show="sched.can_manage"
-                class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
               >
                 <button
                   type="button"

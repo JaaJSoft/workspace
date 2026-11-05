@@ -76,7 +76,7 @@
           >
             <i
               :data-lucide="crumb.root ? 'vault' : 'folder'"
-              class="w-3.5 h-3.5 flex-shrink-0"
+              class="w-3.5 h-3.5 shrink-0"
             ></i>
             <span class="truncate max-w-[140px]" x-text="crumb.name"></span>
           </button>
@@ -92,7 +92,7 @@
   <div class="flex items-center gap-3">
     <h1 class="text-2xl font-bold truncate" x-text="heading()"></h1>
     <span
-      class="badge badge-success badge-outline gap-1 hidden sm:inline-flex flex-shrink-0"
+      class="badge badge-success badge-outline gap-1 hidden sm:inline-flex shrink-0"
       title="Every field of this vault is encrypted before it leaves this page"
     >
       <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
@@ -108,7 +108,7 @@
     <button
       type="button"
       aria-label="Empty trash"
-      class="btn btn-error btn-outline btn-sm gap-2 flex-shrink-0"
+      class="btn btn-error btn-outline btn-sm gap-2 shrink-0"
       x-show="view === 'trash' && !!openVault"
       :disabled="busy || !canEmptyTrash()"
       @click="emptyTrash()"
@@ -118,7 +118,7 @@
     </button>
 
     <div
-      class="dropdown dropdown-end flex-shrink-0"
+      class="dropdown dropdown-end shrink-0"
       x-show="view !== 'trash' && !!openVault"
     >
       <button

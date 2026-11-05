@@ -87,7 +87,7 @@
             <button
               type="button"
               @click="mobileSearchOpen = false"
-              class="btn btn-ghost btn-circle btn-sm flex-shrink-0"
+              class="btn btn-ghost btn-circle btn-sm shrink-0"
               aria-label="{% translate 'Close search' %}"
             >
               <i data-lucide="x" class="w-5 h-5"></i>
@@ -196,7 +196,7 @@
                   class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
                   @click="open = !open"
                 >
-                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="currentDot()"></span>
+                  <span class="w-2.5 h-2.5 rounded-full shrink-0" :class="currentDot()"></span>
                   <span class="font-medium" x-text="currentLabel()"></span>
                   <i
                     data-lucide="chevron-down"
@@ -213,7 +213,7 @@
                     :class="isActive(s.value) ? 'bg-base-200 font-semibold' : 'hover:bg-base-200/60 opacity-70 hover:opacity-100'"
                     @click="setStatus(s.value)"
                   >
-                    <span class="w-2 h-2 rounded-full flex-shrink-0" :class="s.dot"></span>
+                    <span class="w-2 h-2 rounded-full shrink-0" :class="s.dot"></span>
                     <span x-text="s.label"></span>
                   </button>
                 </template>
@@ -438,7 +438,7 @@
         class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0"
       >
         <div
-          class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center bg-warning/10 text-warning"
+          class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center bg-warning/10 text-warning"
         >
           <i data-lucide="sparkles" class="w-5 h-5"></i>
         </div>

@@ -28,7 +28,7 @@
     x-transition
     class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-module/15 rounded-lg text-sm"
   >
-    <i data-lucide="reply" class="w-4 h-4 text-module flex-shrink-0"></i>
+    <i data-lucide="reply" class="w-4 h-4 text-module shrink-0"></i>
     <div class="flex-1 min-w-0">
       <span
         class="text-module font-semibold text-xs"
@@ -41,7 +41,7 @@
     </div>
     <button
       type="button"
-      class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+      class="btn btn-ghost btn-xs btn-square shrink-0"
       @click="cancelReply()"
       title="Cancel reply (Esc)"
     >
@@ -117,7 +117,7 @@
     x-show="recorderState === 'idle'"
     x-cloak
   >
-    {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top flex-shrink-0" button_class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" icon_class="w-5 h-5" %}
+    {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top shrink-0" button_class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" icon_class="w-5 h-5" %}
     <div
       class="flex-1 flex items-center border border-base-300 rounded-btn transition-colors focus-within:border-module/50 min-h-[2.375rem]"
     >
@@ -138,7 +138,7 @@
     </div>
     <button
       type="button"
-      class="btn btn-ghost btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
+      class="btn btn-ghost btn-square shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
       x-show="recorderSupported && !hasComposerContent()"
       x-cloak
       @click="startRecording()"
@@ -148,7 +148,7 @@
     </button>
     <button
       type="button"
-      class="btn btn-module btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
+      class="btn btn-module btn-square shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
       x-show="!recorderSupported || hasComposerContent()"
       @click="sendOrEdit()"
       title="Send"
@@ -170,13 +170,13 @@
       class="flex-1 flex items-center gap-2 min-h-[2.375rem] px-3 border border-error/40 rounded-btn sm:min-h-0 sm:px-0 sm:border-0"
     >
       <span
-        class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse flex-shrink-0"
+        class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse shrink-0"
       ></span>
       <span class="text-sm tabular-nums flex-1" x-text="recordLabel()"></span>
     </div>
     <button
       type="button"
-      class="btn btn-ghost btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+      class="btn btn-ghost btn-square shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
       @click="cancelRecording()"
       title="Discard"
     >
@@ -184,7 +184,7 @@
     </button>
     <button
       type="button"
-      class="btn btn-error btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+      class="btn btn-error btn-square shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
       @click="stopRecording()"
       title="Stop"
     >
@@ -215,7 +215,7 @@
         <div class="flex-1 min-w-0 flex items-center gap-1.5">
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+            class="btn btn-ghost btn-xs btn-circle shrink-0"
             @click="toggle()"
           >
             <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
@@ -232,14 +232,14 @@
             aria-label="Seek"
           />
           <span
-            class="text-[0.65rem] opacity-70 tabular-nums flex-shrink-0"
+            class="text-[0.65rem] opacity-70 tabular-nums shrink-0"
             x-text="elapsedLabel() + ' / ' + durationLabel()"
           ></span>
         </div>
       </div>
       <button
         type="button"
-        class="btn btn-ghost btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+        class="btn btn-ghost btn-square shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
         @click="cancelRecording()"
         :disabled="sendingRecording"
         title="Discard"
@@ -248,7 +248,7 @@
       </button>
       <button
         type="button"
-        class="btn btn-module btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+        class="btn btn-module btn-square shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
         @click="sendRecording()"
         :disabled="sendingRecording"
         title="Send"

@@ -15,7 +15,7 @@
     :class="unifiedInbox ? 'bg-module/15 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
     @click="selectUnifiedInbox()"
   >
-    <span class="flex-shrink-0 text-module">
+    <span class="shrink-0 text-module">
       <i data-lucide="inbox" class="w-4 h-4"></i>
     </span>
     <span class="flex-1 text-left truncate">All Inboxes</span>
@@ -54,11 +54,11 @@
     >
       <i
         :data-lucide="expandedAccounts[account.uuid] ? 'chevron-down' : 'chevron-right'"
-        class="w-3.5 h-3.5 text-base-content/50 flex-shrink-0"
+        class="w-3.5 h-3.5 text-base-content/50 shrink-0"
         x-show="!syncingAccounts[account.uuid]"
       ></i>
       <span
-        class="loading loading-spinner loading-xs text-module flex-shrink-0"
+        class="loading loading-spinner loading-xs text-module shrink-0"
         x-show="syncingAccounts[account.uuid]"
         x-cloak
       ></span>
@@ -112,7 +112,7 @@
           @dragleave="onFolderDragLeave($event, node.folder)"
           @drop.prevent="onFolderDrop($event, node.folder)"
         >
-          <span class="flex-shrink-0" :class="node.folder.color || ''">
+          <span class="shrink-0" :class="node.folder.color || ''">
             <i
               :data-lucide="node.folder.icon || folderIcon(node.folder.folder_type)"
               class="w-4 h-4"
@@ -121,7 +121,7 @@
           <span class="flex-1 text-left truncate" x-text="node.folder.display_name"></span>
           <span
             x-show="(node.folder.aliases || []).length > 0"
-            class="flex-shrink-0 text-base-content/40"
+            class="shrink-0 text-base-content/40"
             :title="'Merged: ' + (node.folder.aliases || []).map(a => a.display_name).join(', ')"
           >
             <i data-lucide="git-merge" class="w-3 h-3"></i>
@@ -133,7 +133,7 @@
           ></span>
           <!-- Expand/collapse toggle for parents -->
           <span
-            class="flex-shrink-0 w-4 h-4 flex items-center justify-center"
+            class="shrink-0 w-4 h-4 flex items-center justify-center"
             x-show="node.children.length > 0"
             @click.stop="toggleFolderExpanded(node.folder.name)"
           >
@@ -180,7 +180,7 @@
             @drop.prevent="onLabelDrop($event, label)"
           >
             <span
-              class="flex-shrink-0"
+              class="shrink-0"
               :class="label.color && label.color !== 'ghost' ? 'text-' + label.color : 'text-base-content/50'"
             >
               <i :data-lucide="label.icon || 'tag'" class="w-4 h-4"></i>

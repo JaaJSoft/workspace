@@ -83,7 +83,7 @@
             class="flex items-center justify-between p-3 rounded-lg border border-base-300 bg-base-200/30 group/token"
           >
             <div class="flex items-center gap-3 min-w-0">
-              <div class="rounded-lg bg-primary/10 p-2 flex-shrink-0">
+              <div class="rounded-lg bg-primary/10 p-2 shrink-0">
                 <i data-lucide="key-round" class="w-4 h-4 text-primary"></i>
               </div>
               <div class="min-w-0">
@@ -229,7 +229,7 @@
         <button
           type="button"
           @click="copyToken()"
-          class="btn btn-sm flex-shrink-0 gap-1"
+          class="btn btn-sm shrink-0 gap-1"
           :class="copied ? 'btn-success btn-outline' : 'btn-ghost'"
         >
           <i x-show="!copied" data-lucide="copy" class="w-4 h-4"></i>

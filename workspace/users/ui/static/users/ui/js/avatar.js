@@ -43,7 +43,7 @@ function _patchCardStatus(container) {
   const ago = el.querySelector('[data-status-ago]');
 
   if (dot) {
-    dot.className = 'w-2 h-2 rounded-full flex-shrink-0 ' + cfg.dot;
+    dot.className = 'w-2 h-2 rounded-full shrink-0 ' + cfg.dot;
   }
   if (label) {
     label.className = 'font-medium ' + cfg.label;

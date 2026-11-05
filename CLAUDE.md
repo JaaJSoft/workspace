@@ -757,6 +757,14 @@ Accepted true values: `true`, `1`, `yes`, `on`, `t`, `y` (case-insensitive). Eve
 - Every `if request.query_params.get('<flag>'):` that gates a filter or feature must use `is_truthy(...)` instead.
 - For Pydantic-backed AI tool args, type the field as `uuid.UUID` rather than `str` so Pydantic rejects garbage at the tool-call boundary with a diagnostic error.
 
+### UUID patterns - the shared helpers, never a hand-written regex
+
+Each language has one definition of what a UUID looks like. Never spell the format into a regex (`[0-9a-f-]{36}`, `[0-9a-f]{8}-...`): every copy accepts a slightly different set of strings, so the same id parses in one place and not in the next.
+
+- **Python, a value on its own** (a query param, a body field): `parse_uuid_or_none` from `workspace/common/uuids.py` - see the section above.
+- **Python, a UUID inside a longer string** (a URL, a note's text, a cursor, a DRF `lookup_value_regex`): `UUID_PATTERN` from the same module, interpolated into the regex - `re.compile(rf"/files/({UUID_PATTERN})/content")`, `lookup_value_regex = UUID_PATTERN`.
+- **JS**: `isValidUuid(s)` from `common/static/ui/js/uuid.js`. Capture the segment loosely, then check it: `/^\/chat\/([^/]+)\/?$/` and `window.isValidUuid(match[1])`. `base.html` loads `uuid.js` on every page; a page that does not extend it (`files/ui/shared_base.html`) loads it itself, and a JS test loads it next to the script under test (`loadScripts([...uuid.js, ...])`).
+
 ### Copying file content between rows - never assign a `FieldFile` directly
 
 When duplicating an existing file/attachment into a new row (chat `save-to-files`, mail `save-to-files`, files `copy_node`, anything similar), **never** assign the source `FieldFile` straight to the destination model's `FileField`. Doing so makes both rows point at the same blob in storage, so deleting the source later silently breaks the destination.

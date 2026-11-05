@@ -3,7 +3,7 @@
 A note references another file in two ways, both written by the markdown
 editor: a link, ``[Title](/notes?file=UUID)`` (the ``[[`` autocomplete), and an
 embed, ``![name](/api/v1/files/UUID/content)`` (the ``![[`` autocomplete or a
-file dropped into the note, see services/embeds.py). ``extract_link_targets``
+file dropped into the note, drawn by services/previews.py). ``extract_link_targets``
 parses both in one pass, ``reconcile_file_links`` syncs them into FileLink rows
 for a source file, and records what it read in FileLinkState so the hourly
 catch-up (services/processors.py) can tell which notes still need it.

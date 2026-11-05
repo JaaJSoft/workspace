@@ -64,6 +64,7 @@ class ActionRegistryTests(TestCase):
             "toggle_sensitive",
             "manage_tags",
             "share",
+            "create_shortcut",
             "rename",
             "cut",
             "copy",

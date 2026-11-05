@@ -17,12 +17,23 @@
     {% if not target %}
       <i data-lucide="link-2-off" class="w-full h-full text-base-content/40"></i>
     {% elif target.node_type == "folder" %}
-      <i data-lucide="{{ target.icon|default:'folder' }}" class="w-full h-full {{ target.color|default:'text-warning' }}{% if node.shortcut_state != 'ok' %} opacity-50{% endif %}"></i>
+      <i
+        data-lucide="{{ target.icon|default:'folder' }}"
+        class="w-full h-full {{ target.color|default:'text-warning' }}{% if node.shortcut_state != 'ok' %} opacity-50{% endif %}"
+      ></i>
     {% else %}
-      <i data-lucide="{{ target.type|type_to_icon }}" class="w-full h-full {{ target.type|type_to_color }}{% if node.shortcut_state != 'ok' %} opacity-50{% endif %}"></i>
+      <i
+        data-lucide="{{ target.type|type_to_icon }}"
+        class="w-full h-full {{ target.type|type_to_color }}{% if node.shortcut_state != 'ok' %} opacity-50{% endif %}"
+      ></i>
     {% endif %}
-    <span class="absolute -bottom-1 -right-1 inline-flex rounded-sm bg-base-100 ring-1 ring-base-300 text-base-content/70">
-      <i data-lucide="arrow-up-right" class="{{ badge_class|default:'w-3 h-3' }}"></i>
+    <span
+      class="absolute -bottom-1 -right-1 inline-flex rounded-sm bg-base-100 ring-1 ring-base-300 text-base-content/70"
+    >
+      <i
+        data-lucide="arrow-up-right"
+        class="{{ badge_class|default:'w-3 h-3' }}"
+      ></i>
     </span>
   </span>
 {% endwith %}

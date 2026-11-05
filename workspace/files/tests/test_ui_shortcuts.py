@@ -12,7 +12,7 @@ from django.test.utils import CaptureQueriesContext
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.ai_tools import FilesToolProvider
-from workspace.files.models import File, FileShare
+from workspace.files.models import FileShare
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.files.services.shortcuts import create_shortcut
@@ -53,7 +53,9 @@ class ShortcutBrowserFixtures:
     @staticmethod
     def row(html, name):
         """The opening tag of the listing row whose display name is *name*."""
-        match = re.search(rf'<tr\b[^>]*data-display-name="{re.escape(name)}"[^>]*>', html)
+        match = re.search(
+            rf'<tr\b[^>]*data-display-name="{re.escape(name)}"[^>]*>', html
+        )
         assert match, f"no row for {name}"
         return match.group(0)
 

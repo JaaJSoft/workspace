@@ -21,6 +21,17 @@ test('regular otherwise', () => {
   assert.equal(nodeColorKey({ is_favorite: false, parent: null }, 'J'), 'regular');
 });
 
+test('a file a note embeds is an attachment, whatever its flags', () => {
+  assert.equal(nodeColorKey({ type: 'png', is_favorite: true, parent: 'J' }, 'J'), 'attachment');
+  assert.equal(ctx.notesGraph.isAttachment({ type: 'pdf' }), true);
+});
+
+test('a note is never an attachment', () => {
+  assert.equal(nodeColorKey({ type: 'markdown', is_favorite: false, parent: 'X' }, 'J'), 'regular');
+  assert.equal(ctx.notesGraph.isAttachment({ type: 'markdown' }), false);
+  assert.equal(ctx.notesGraph.isAttachment({}), false);
+});
+
 test('no journal folder configured -> never journal', () => {
   assert.equal(nodeColorKey({ is_favorite: false, parent: 'J' }, null), 'regular');
 });

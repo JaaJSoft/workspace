@@ -396,6 +396,8 @@
       <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
+  {# Outside #files-main: the inline viewer makes what it covers inert, and a note it shows opens embedded files here. #}
+  {% include "files/ui/partials/file_embed_viewer.html" %}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -424,6 +426,7 @@
   <script src="{% static 'files/ui/js/browser.js' %}"></script>
   <script src="{% static 'files/ui/js/table.js' %}"></script>
   <script src="{% static 'files/ui/js/drag_move.js' %}"></script>
+  <script src="{% static 'files/ui/js/file_refs_drag.js' %}"></script>
   <script src="{% static 'files/ui/js/pinned.js' %}"></script>
   <script src="{% static 'files/ui/js/context_menu.js' %}"></script>
   {# The share-link password generator; neither script is in base.html, so only this page pays for them. #}

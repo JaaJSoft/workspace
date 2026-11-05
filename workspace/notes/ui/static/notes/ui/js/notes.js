@@ -695,6 +695,14 @@ window.notesApp = function notesApp(config) {
             return this.selectedNoteActionIds.indexOf(actionId) !== -1;
         },
 
+        // A note dragged from the list onto the open note is embedded there
+        // (file_embed.js), which asks for this 'copy'.
+        onNoteDragStart(event, note) {
+            if (!window.fileRefsDrag) return;
+            event.dataTransfer.effectAllowed = 'copy';
+            window.fileRefsDrag.write(event.dataTransfer, [{ uuid: note.uuid, name: note.name }]);
+        },
+
         // Build the "Open in Files" URL: land in the note's parent folder
         // (path segment) with the file viewer opened (?open=). Falls back to
         // the files root when the note lives at the top level.

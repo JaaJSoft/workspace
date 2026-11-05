@@ -3,7 +3,7 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 
 from workspace.common.text import fold_text
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 
 from ..queries import user_persons
 from ..serializers import PersonSerializer, parse_scope
@@ -28,7 +28,7 @@ from ..services.persons import delete_person
 class PersonViewSet(viewsets.ModelViewSet):
     serializer_class = PersonSerializer
     lookup_field = "uuid"
-    lookup_value_regex = "[0-9a-fA-F-]{36}"
+    lookup_value_regex = UUID_PATTERN
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):

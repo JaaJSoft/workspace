@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 11:55+0000\n"
+"POT-Creation-Date: 2026-11-05 11:25+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -46,6 +46,10 @@ msgstr "Erreur"
 #: static/ui/js/dialogs.js
 msgid "An error occurred."
 msgstr "Une erreur s’est produite."
+
+#: static/ui/js/file_preview.js
+msgid "This file was deleted, or you don't have access to it."
+msgstr "Ce fichier a été supprimé, ou vous n’y avez pas accès."
 
 #: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
 msgid "Yellow"

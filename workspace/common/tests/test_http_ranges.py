@@ -219,6 +219,30 @@ class ServeWithRangesTests(SimpleTestCase):
         self.assertIn("attachment", resp["Content-Disposition"])
         self.assertIn("report.pdf", resp["Content-Disposition"])
 
+    def test_inline_file_may_be_framed_by_this_app(self):
+        for range_header in (None, "bytes=0-9"):
+            with self.subTest(range=range_header):
+                resp = serve_with_ranges(
+                    self._request(range_header),
+                    file_handle=_make_handle(self.payload),
+                    file_size=len(self.payload),
+                    content_type="application/pdf",
+                    inline_filename="report.pdf",
+                )
+                self.assertEqual(resp["X-Frame-Options"], "SAMEORIGIN")
+
+    def test_download_leaves_framing_to_the_project_default(self):
+        for range_header in (None, "bytes=0-9"):
+            with self.subTest(range=range_header):
+                resp = serve_with_ranges(
+                    self._request(range_header),
+                    file_handle=_make_handle(self.payload),
+                    file_size=len(self.payload),
+                    content_type="application/pdf",
+                    attachment_filename="report.pdf",
+                )
+                self.assertNotIn("X-Frame-Options", resp)
+
     def test_attachment_filename_in_206(self):
         resp = serve_with_ranges(
             self._request("bytes=0-9"),

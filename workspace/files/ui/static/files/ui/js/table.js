@@ -515,6 +515,14 @@ window.fileTableControls = function fileTableControls() {
           items.map(({ uuid, name, nodeType }) => ({ uuid, name, nodeType })),
           { sourceFolder: this.listingFolder(), sources: items.map((item) => item.element) }
         );
+        // The files of the drag also embed into a note they are dropped on,
+        // which asks for the 'copy' declared above.
+        if (window.fileRefsDrag) {
+          window.fileRefsDrag.write(
+            dt,
+            items.filter((item) => item.nodeType === 'file').map(({ uuid, name }) => ({ uuid, name }))
+          );
+        }
       }
     },
 

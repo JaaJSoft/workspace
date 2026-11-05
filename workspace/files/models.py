@@ -1226,9 +1226,11 @@ class FileLink(models.Model):
     """A content reference (link) from one file to another - a graph edge.
 
     Generic: any file may reference any file. Today only the markdown extractor
-    (services/links.py) populates it, from resolved ``[[`` wikilinks of the form
-    ``[Title](/notes?file=UUID)``. Distinct from FileShare / FileShareLink,
-    which model sharing rather than content references.
+    (services/links.py) populates it, from a note's links
+    (``[Title](/notes?file=UUID)``) and embeds
+    (``![name](/api/v1/files/UUID/content)``) alike: the edge does not say which
+    one it came from. Distinct from FileShare / FileShareLink, which model
+    sharing rather than content references.
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)

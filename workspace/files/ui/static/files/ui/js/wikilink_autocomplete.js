@@ -1,4 +1,5 @@
-// "[[" note-link popup for the Milkdown Crepe editor.
+// "[[" note-link popup for the Milkdown Crepe editor, and its "![[" twin that
+// embeds a file of any type (file_embed.js).
 // Built on @milkdown/plugin-slash's SlashProvider with a "[[" trigger.
 // slashFactory/SlashProvider are injected by the caller (from the vendored
 // milkdown bundle) rather than imported here: the bundle must be imported
@@ -7,8 +8,12 @@
 import { matchTrigger, replacementRange } from './wikilink_match.js';
 
 // Returns an applier: call it with the Crepe editor to register the plugin.
-//   createWikilinkSlash({ search, slashFactory, SlashProvider })(crepe.editor)
-export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}) {
+//   createWikilinkSlash({ search, searchFiles, insertEmbeds, slashFactory, SlashProvider })(crepe.editor)
+// search(query) lists notes for "[[", searchFiles(query) any file for "![[";
+// both resolve to [{uuid, name, path}]. insertEmbeds is file_embed.js's;
+// without it (or searchFiles), "![[" links like "[[" does.
+export function createWikilinkSlash({ search, searchFiles, insertEmbeds, slashFactory, SlashProvider } = {}) {
+  const canEmbed = !!(searchFiles && insertEmbeds);
   const slash = slashFactory('wikilink');
   const menu = document.createElement('div');
   menu.className = 'wikilink-menu';
@@ -23,6 +28,8 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
   let items = [];
   let activeIndex = 0;
   let generation = 0;
+  // Whether the open popup lists files to embed rather than notes to link.
+  let embedding = false;
 
   function clearMenu() {
     while (menu.firstChild) menu.removeChild(menu.firstChild);
@@ -40,7 +47,7 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
 
   function render() {
     if (!items.length) {
-      setMessage('wikilink-empty', gettext('No notes found'));
+      setMessage('wikilink-empty', embedding ? gettext('No files found') : gettext('No notes found'));
       return;
     }
     clearMenu();
@@ -55,15 +62,26 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
     });
   }
 
-  async function runSearch(query) {
+  async function runSearch(query, embed) {
     const g = ++generation;
+    const nextEmbedding = !!(embed && canEmbed);
+    // Rows of the other mode must not stay pickable while this search runs:
+    // a note would be embedded, or a file linked as a note.
+    if (nextEmbedding !== embedding) {
+      items = [];
+      clearMenu();
+    }
+    embedding = nextEmbedding;
     let results = [];
     try {
-      results = await search(query);
+      results = await (embedding ? searchFiles : search)(query);
     } catch (e) {
       if (g === generation) {
         items = [];  // drop stale results so Arrow/Enter can't resurrect them
-        setMessage('wikilink-error', gettext("Couldn't load notes"));
+        setMessage(
+          'wikilink-error',
+          embedding ? gettext("Couldn't load files") : gettext("Couldn't load notes")
+        );
       }
       return;
     }
@@ -80,8 +98,17 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
     if (!m) { provider.hide(); return; }
     const caret = state.selection.from;
     const range = replacementRange(caret, m.length);
+    if (m.embed && canEmbed && insertEmbeds(view, [item], range.from, range.to)) {
+      provider.hide();
+      view.focus();
+      return;
+    }
     const linkMark = state.schema.marks.link;
-    const href = '/notes?file=' + item.uuid;
+    // A file "![[" could not embed here is linked to: a note in the notes
+    // app, anything else through its content.
+    const href = embedding
+      ? '/api/v1/files/' + item.uuid + '/content'
+      : '/notes?file=' + item.uuid;
     const node = state.schema.text(
       item.name,
       linkMark ? [linkMark.create({ href: href })] : []
@@ -138,7 +165,7 @@ export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}
         if (!innerView.editable) return false;
         const m = matchTrigger(provider.getContent(innerView) || '');
         if (!m) return false;
-        runSearch(m.query);
+        runSearch(m.query, m.embed);
         return true;
       },
     });

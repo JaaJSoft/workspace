@@ -4,12 +4,14 @@
 // editor dependency.
 
 // Matches an open "[[" followed by a query containing no "]" / "[" / newline,
-// anchored to the END of the text before the caret. Returns { query, length }
-// where length spans "[[" + query, or null when the trigger is not active.
+// anchored to the END of the text before the caret. Returns
+// { query, length, embed } where length spans "[[" + query, or null when the
+// trigger is not active. "![[" (embed: true) picks a file to embed rather
+// than a note to link, and its length takes in the "!".
 export function matchTrigger(textBeforeCaret) {
-  const m = /\[\[([^\[\]\n]*)$/.exec(textBeforeCaret || '');
+  const m = /(!?)\[\[([^\[\]\n]*)$/.exec(textBeforeCaret || '');
   if (!m) return null;
-  return { query: m[1], length: m[0].length };
+  return { query: m[2], length: m[0].length, embed: m[1] === '!' };
 }
 
 // Given the caret's absolute document position and the matched length from

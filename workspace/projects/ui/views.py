@@ -949,6 +949,17 @@ def settings_view(request, project_uuid):
     return _render_project_view(request, context)
 
 
+def _attachment_content_url(attachment):
+    return reverse(
+        "project-task-attachment-download",
+        kwargs={
+            "project_uuid": attachment.task.project_id,
+            "task_uuid": attachment.task_id,
+            "uuid": attachment.uuid,
+        },
+    )
+
+
 @login_required
 def view_attachment(request, attachment_uuid):
     """Render viewer HTML for a task attachment (read-only)."""
@@ -964,43 +975,27 @@ def view_attachment(request, attachment_uuid):
 
     from django.http import HttpResponse
 
-    from workspace.files.services.filetype import get_viewer_by_slug
-    from workspace.files.ui.viewers import ViewerRegistry, render_viewer_panel
+    from workspace.files.ui.viewers import (
+        AttachmentItem,
+        render_viewer_panel,
+        viewer_class_for,
+    )
 
+    item = AttachmentItem(attachment)
     # A pinned viewer wins; an unknown pin degrades to content-based
     # resolution rather than breaking the modal.
-    ViewerClass = get_viewer_by_slug(attachment.viewer) or ViewerRegistry.get_viewer(
-        attachment.type, attachment.original_name
-    )
+    ViewerClass = viewer_class_for(item)
     if not ViewerClass:
         return HttpResponse(
             render_viewer_panel(
                 '<div class="p-8 text-center text-error">'
-                f"No viewer available for {attachment.type}</div>"
+                f"No viewer available for {attachment.type}</div>",
+                request,
             ),
             status=400,
         )
 
-    class AttachmentAdapter:
-        def __init__(self, att):
-            self.uuid = att.uuid
-            self.name = att.original_name
-            self.mime_type = att.mime_type
-            self.type = att.type
-            self.category = att.category
-            self.content = att.file
-
-        def is_viewable(self):
-            return True
-
-    viewer = ViewerClass(AttachmentAdapter(attachment))
+    viewer = ViewerClass(item)
     viewer._user_can_edit = False
-    viewer._content_url = reverse(
-        "project-task-attachment-download",
-        kwargs={
-            "project_uuid": attachment.task.project_id,
-            "task_uuid": attachment.task_id,
-            "uuid": attachment.uuid,
-        },
-    )
-    return HttpResponse(render_viewer_panel(viewer.render(request)))
+    viewer._content_url = _attachment_content_url(attachment)
+    return HttpResponse(render_viewer_panel(viewer.render(request), request))

@@ -39,6 +39,7 @@ from django.db.models.functions import ExtractYear
 from django.urls import reverse
 from django.utils import timezone
 
+from workspace.common.uuids import UUID_PATTERN
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileFavorite
 from workspace.files.services import FileService
@@ -53,9 +54,11 @@ UNDATED = "undated"
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _CURSOR_RE = re.compile(
-    r"^(?P<bucket>[du])(?P<micros>-?\d{1,20})\.(?P<uuid>[0-9a-f-]{36})$"
+    rf"^(?P<bucket>[du])(?P<micros>-?\d{{1,20}})\.(?P<uuid>{UUID_PATTERN})$"
 )
-_MANUAL_CURSOR_RE = re.compile(r"^m(?P<position>-?\d{1,20})\.(?P<uuid>[0-9a-f-]{36})$")
+_MANUAL_CURSOR_RE = re.compile(
+    rf"^m(?P<position>-?\d{{1,20}})\.(?P<uuid>{UUID_PATTERN})$"
+)
 _DATE_RE = re.compile(r"^(?P<year>\d{4})(?:-(?P<month>\d{2})(?:-(?P<day>\d{2}))?)?$")
 
 

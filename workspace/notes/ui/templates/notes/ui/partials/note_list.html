@@ -134,6 +134,8 @@
         selectedNote?.uuid === note.uuid ? 'bg-module/10 border-l-2 border-l-module' : ''
       ]"
       :data-note-uuid="note.uuid"
+      draggable="true"
+      @dragstart="onNoteDragStart($event, note)"
       @click="selectNote(note)"
       @contextmenu="openCtxMenu($event, 'note', { uuid: note.uuid, name: note.name, is_favorite: note.is_favorite, parent: note.parent })"
     >

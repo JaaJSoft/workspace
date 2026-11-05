@@ -33,8 +33,8 @@ let _noteCardFetchingUuid = null;
  */
 function noteCardFileUuidFromHref(href) {
   if (!href) return null;
-  const m = /[?&]file=([0-9a-fA-F-]{36})/.exec(href);
-  return m ? m[1] : null;
+  const m = /[?&]file=([^&#]+)/.exec(href);
+  return m && window.isValidUuid(m[1]) ? m[1] : null;
 }
 window.noteCardFileUuidFromHref = noteCardFileUuidFromHref;
 

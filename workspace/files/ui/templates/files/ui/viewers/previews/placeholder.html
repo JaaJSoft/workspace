@@ -1,0 +1,16 @@
+{% comment %}
+  Stands in for a file that cannot be shown: in the trash, or blocked by the
+  malware scanner. Not openable. A file the user may not reach gets no
+  preview at all, and <file-preview> draws its own placeholder: the answer
+  must not tell it apart from a file that does not exist.
+{% endcomment %}
+<div
+  class="file-preview-body file-preview-placeholder{% if variant %} file-preview-{{ variant }}{% endif %} flex items-center gap-2 min-w-0"
+  data-preview-name="{{ name }}"
+>
+  <i data-lucide="{{ icon }}" class="w-4 h-4 shrink-0 opacity-60"></i>
+  <div class="flex flex-col min-w-0">
+    {% if name %}<span class="file-preview-name truncate text-sm font-medium">{{ name }}</span>{% endif %}
+    <span class="file-preview-meta text-xs opacity-70">{{ message }}</span>
+  </div>
+</div>

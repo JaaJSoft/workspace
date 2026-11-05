@@ -11,6 +11,13 @@ from __future__ import annotations
 
 import uuid
 
+# A UUID in its canonical hyphenated form, as Django serializes one: for
+# finding a UUID inside a longer string (a URL, a note's text). Validating a
+# value on its own is parse_uuid_or_none's job.
+UUID_PATTERN = (
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+
 
 def uuid_v7_or_v4() -> uuid.UUID:
     """Return a UUIDv7 if available in the stdlib, otherwise a UUIDv4.

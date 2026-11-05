@@ -5,24 +5,47 @@ Each viewer class is responsible for generating the HTML to display
 a specific type of file in the browser.
 """
 
+import re
 from abc import ABC, abstractmethod
 
 from django.conf import settings
+from django.utils.html import escape
 
-# Stable id the viewer panel hosts (files inline viewer, chat attachment
+# Default id the viewer panel hosts (files inline viewer, chat attachment
 # viewer modal, notes editor pane) target with alpine-ajax. The client keeps an
 # element with this id mounted at all times; every viewer response replaces it.
 VIEWER_PANEL_ID = "viewer-panel"
 
+# What an alpine-ajax target id may look like before it is written back into
+# markup: the response wraps the viewer in the id the request names.
+_TARGET_ID_RE = re.compile(r"[A-Za-z][\w-]{0,63}")
 
-def render_viewer_panel(html: str) -> str:
+
+def requested_target(request):
+    """The one element id an alpine-ajax request merges into, or None.
+
+    alpine-ajax names its targets in ``X-Alpine-Target``. A page holding two
+    viewer panels (the notes editor and a modal over it) gives each its own
+    id, and the response has to carry the id of the one that asked.
+    """
+    if request is None:
+        return None
+    ids = request.headers.get("X-Alpine-Target", "").split()
+    if len(ids) == 1 and _TARGET_ID_RE.fullmatch(ids[0]):
+        return ids[0]
+    return None
+
+
+def render_viewer_panel(html: str, request=None) -> str:
     """Wrap viewer markup in the id-bearing element alpine-ajax merges by.
 
+    The id is the one the request asked for, ``VIEWER_PANEL_ID`` otherwise.
     ``display: contents`` keeps the wrapper out of layout, so the host
     container's flex/overflow semantics apply to the viewer markup directly -
     the wrapper exists only as a merge anchor.
     """
-    return f'<div id="{VIEWER_PANEL_ID}" style="display: contents">{html}</div>'
+    panel_id = escape(requested_target(request) or VIEWER_PANEL_ID)
+    return f'<div id="{panel_id}" style="display: contents">{html}</div>'
 
 
 def veil_sensitive(html: str, level, preference) -> str:
@@ -39,6 +62,140 @@ def veil_sensitive(html: str, level, preference) -> str:
     return render_to_string(
         "files/ui/partials/sensitive_viewer.html", {"viewer_html": mark_safe(html)}
     )
+
+
+# The preview every file falls back to: an icon, its name and its size.
+CARD_PREVIEW_TEMPLATE = "files/ui/viewers/previews/card.html"
+PLACEHOLDER_PREVIEW_TEMPLATE = "files/ui/viewers/previews/placeholder.html"
+
+# How many previews one <file-preview> batch may ask for.
+MAX_PREVIEWS = 100
+
+
+class AttachmentItem:
+    """A chat message or task attachment, seen through the attributes the
+    viewers read off a File."""
+
+    def __init__(self, attachment):
+        self.uuid = attachment.uuid
+        self.name = attachment.original_name
+        self.mime_type = attachment.mime_type
+        self.type = attachment.type
+        self.category = attachment.category
+        self.size = attachment.size
+        self.viewer = attachment.viewer
+        self.content = attachment.file
+
+    def is_viewable(self):
+        return True
+
+
+def viewer_class_for(item):
+    """The viewer that opens *item*: its pinned one, else the one its content
+    calls for; None when no viewer takes it."""
+    from workspace.files.services.filetype import get_viewer_by_slug
+
+    return get_viewer_by_slug(getattr(item, "viewer", "")) or ViewerRegistry.get_viewer(
+        item.type, item.name
+    )
+
+
+def preview_context(
+    item,
+    *,
+    content_url,
+    thumbnail_url=None,
+    sensitive_level=None,
+    icon=None,
+    openable=True,
+):
+    """What every preview template reads."""
+    from workspace.files.services.filetype import get_icon
+
+    item_type = getattr(item, "type", "") or ""
+    return {
+        "name": item.name,
+        "type": item_type,
+        "icon": icon or get_icon(item_type),
+        "size": getattr(item, "size", None),
+        "content_url": content_url,
+        "thumbnail_url": thumbnail_url,
+        "sensitive": sensitive_level or 0,
+        "openable": openable,
+    }
+
+
+def render_file_preview(
+    request, item, *, content_url, thumbnail_url=None, sensitive_level=None
+):
+    """*item* (a File or an AttachmentItem) as its viewer previews it, or as
+    the generic card when no viewer takes it.
+
+    The host has already decided the user may open *item*; it hands in the
+    URLs its own endpoints serve the bytes from.
+    """
+    from django.template.loader import render_to_string
+
+    viewer_class = viewer_class_for(item)
+    if viewer_class is None:
+        return render_to_string(
+            CARD_PREVIEW_TEMPLATE,
+            preview_context(item, content_url=content_url),
+            request=request,
+        )
+    viewer = viewer_class(item)
+    viewer._content_url = content_url
+    viewer._thumbnail_url = thumbnail_url
+    viewer._sensitive_level = sensitive_level
+    return viewer.render_preview(request)
+
+
+def render_preview_placeholder(request, *, icon, message, name="", variant=""):
+    """A preview standing in for a file that cannot be shown."""
+    from django.template.loader import render_to_string
+
+    return render_to_string(
+        PLACEHOLDER_PREVIEW_TEMPLATE,
+        {"icon": icon, "message": message, "name": name, "variant": variant},
+        request=request,
+    )
+
+
+def preview_targets(request):
+    """The ``(target id, uuid)`` pairs a <file-preview> batch asks for, in
+    order, or None when the query is malformed.
+
+    The batch names its slots in the query (``targets``) rather than through
+    ``X-Alpine-Target`` alone: alpine-ajax shares one in-flight GET between
+    identical URLs, so two batches with the same files must not look alike.
+    """
+    from workspace.common.uuids import parse_uuid_or_none
+
+    uuids = [value for value in request.GET.get("uuids", "").split(",") if value]
+    targets = [value for value in request.GET.get("targets", "").split(",") if value]
+    if not uuids or len(uuids) != len(targets) or len(uuids) > MAX_PREVIEWS:
+        return None
+    pairs = []
+    for target, raw in zip(targets, uuids, strict=True):
+        parsed = parse_uuid_or_none(raw)
+        if parsed is None or not _TARGET_ID_RE.fullmatch(target):
+            return None
+        pairs.append((target, parsed))
+    return pairs
+
+
+def previews_response(rendered):
+    """The response to a <file-preview> batch: each preview in the slot it
+    was asked for. A slot left out is a file the user may not open; the
+    element shows its own placeholder there, the same as for one that does
+    not exist."""
+    from django.http import HttpResponse
+
+    body = "".join(
+        f'<div id="{escape(target)}" class="file-preview-slot">{html}</div>'
+        for target, html in rendered.items()
+    )
+    return HttpResponse(body)
 
 
 class ViewerRegistry:
@@ -132,6 +289,34 @@ class BaseViewer(ABC):
             "lock_info": lock_info,
             "content_url": content_url,
         }
+
+    # What render_preview draws: the generic card, unless the viewer shows
+    # something of the file itself.
+    preview_template = CARD_PREVIEW_TEMPLATE
+
+    def render_preview(self, request) -> str:
+        """A small, static rendering of the file, for a note, a message or a
+        list; clicking it opens the full viewer (``render``).
+
+        Reads the URLs the host set: ``_content_url``, ``_thumbnail_url``
+        and ``_sensitive_level`` (see render_file_preview).
+        """
+        from django.template.loader import render_to_string
+
+        content_url = (
+            getattr(self, "_content_url", None)
+            or f"/api/v1/files/{self.file.uuid}/content"
+        )
+        return render_to_string(
+            self.preview_template,
+            preview_context(
+                self.file,
+                content_url=content_url,
+                thumbnail_url=getattr(self, "_thumbnail_url", None),
+                sensitive_level=getattr(self, "_sensitive_level", None),
+            ),
+            request=request,
+        )
 
 
 def _too_large_to_embed(file_obj) -> bool:
@@ -237,6 +422,7 @@ class ImageViewer(BaseViewer):
     handles_groups = frozenset({"image"})
     weight = 100
     slug = "image"
+    preview_template = "files/ui/viewers/previews/image.html"
 
     def get_context(self, request) -> dict:
         from django.conf import settings
@@ -373,6 +559,7 @@ class AudioViewer(BaseViewer):
     handles_groups = frozenset({"audio"})
     weight = 100
     slug = "audio"
+    preview_template = "files/ui/viewers/previews/audio.html"
 
     def render(self, request) -> str:
         return _render_media(self, request, is_audio=True)
@@ -384,6 +571,7 @@ class VideoViewer(BaseViewer):
     handles_groups = frozenset({"video"})
     weight = 100
     slug = "video"
+    preview_template = "files/ui/viewers/previews/video.html"
 
     def render(self, request) -> str:
         return _render_media(self, request, is_audio=False)

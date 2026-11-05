@@ -14,6 +14,7 @@ from workspace.common.http_ranges import (
 )
 from workspace.common.http_ranges import (
     safe_filename,
+    serve_inline,
 )
 from workspace.common.http_ranges import (
     stream_range as _stream_range,
@@ -160,9 +161,7 @@ class ContentMixin:
             response["Content-Range"] = f"bytes {start}-{end}/{file_size}"
             response["Content-Length"] = str(end - start + 1)
             response["Accept-Ranges"] = "bytes"
-            response["Content-Disposition"] = (
-                f'inline; filename="{safe_filename(file_obj.name)}"'
-            )
+            serve_inline(response, file_obj.name)
             # Intentionally no ETag on 206: ConditionalGetMiddleware would
             # turn the 206 into a 304 whenever the client sends both Range
             # and If-None-Match (common from Chrome), starving the player.
@@ -181,9 +180,7 @@ class ContentMixin:
         response = FileResponse(
             file_handle, content_type=content_type, as_attachment=False
         )
-        response["Content-Disposition"] = (
-            f'inline; filename="{safe_filename(file_obj.name)}"'
-        )
+        serve_inline(response, file_obj.name)
         response["Accept-Ranges"] = "bytes"
         self._set_file_cache_headers(response, file_obj)
 

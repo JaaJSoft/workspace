@@ -14,6 +14,7 @@ urlpatterns = [
     path("/storage/<uuid:uuid>", views.storage, name="storage_folder"),
     path("/<uuid:uuid>/events", views.events, name="events"),
     path("/<uuid:uuid>/card", views.file_card, name="file_card"),
+    path("/previews", views.file_previews, name="file_previews"),
     path("/view/<uuid:uuid>", views.view_file, name="view_file"),
     path("/shared/<str:token>", views.shared_file_view, name="shared_file"),
     path("/<uuid:folder>", views.index, name="folder"),

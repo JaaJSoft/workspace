@@ -66,6 +66,10 @@
 (function defineChatMessageGroup() {
   const COMPACT_BUBBLE_PAD = "chatPrefs.compactMessageView ? 'px-2.5 py-1' : 'px-3 py-1.5'";
   const ATTACHMENT_URL = '/api/v1/chat/attachments/';
+  // A sent attachment is a <file-preview> (common/static/ui/js/file_preview.js)
+  // the server draws from the Files viewers; a click opens the modal viewer.
+  const PREVIEWS_URL = '/chat/attachment-previews';
+  const VIEWER_EVENT = 'open-chat-attachment-viewer';
 
   function el(tag, className) {
     const node = document.createElement(tag);
@@ -360,17 +364,14 @@
       return frag;
     }
 
-    _viewerOpener(node, item) {
-      node.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {
-          detail: {
-            uuid: item.uuid,
-            name: item.name,
-            type: item.type,
-            galleryId: node.closest('[data-attachment-gallery]')?.id,
-          },
-        }));
-      });
+    _preview(item, attributes = {}) {
+      const preview = document.createElement('file-preview');
+      preview.setAttribute('src', PREVIEWS_URL);
+      preview.setAttribute('uuid', item.uuid);
+      preview.setAttribute('name', item.name || '');
+      preview.setAttribute('open-event', VIEWER_EVENT);
+      for (const [name, value] of Object.entries(attributes)) preview.setAttribute(name, value);
+      return preview;
     }
 
     _stampAttachment(node, item) {
@@ -414,19 +415,25 @@
     _singleMedia(item) {
       const interactive = !this._pending && safeUuid(item.uuid);
       const wrap = el('div', 'relative group/att inline-block');
-      if (interactive) this._stampAttachment(wrap, item);
-      const zone = el('div', interactive ? 'block cursor-pointer' : 'block');
-      if (interactive) this._viewerOpener(zone, item);
+      if (interactive) {
+        this._stampAttachment(wrap, item);
+        const preview = this._preview(item, { bare: '' });
+        preview.style.setProperty('--file-preview-max-height', '16rem');
+        wrap.appendChild(preview);
+        wrap.appendChild(this._saveButton(item));
+        return wrap;
+      }
+      // Still uploading: the local file, not yet anything to preview.
+      const zone = el('div', 'block');
       if (item.isImage) {
         zone.appendChild(this._mediaImg(item,
-          `max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity${this._pending ? ' opacity-60' : ''}`));
+          `max-h-64 max-w-full rounded-lg object-contain${this._pending ? ' opacity-60' : ''}`));
       } else {
         const box = el('div', `relative max-h-64 max-w-full rounded-lg overflow-hidden${this._pending ? ' opacity-60' : ''}`);
         box.append(...this._mediaVideo(item, { grid: false }));
         zone.appendChild(box);
       }
       wrap.appendChild(zone);
-      if (interactive) wrap.appendChild(this._saveButton(item));
       return wrap;
     }
 
@@ -436,17 +443,16 @@
         const interactive = !this._pending && safeUuid(item.uuid);
         // Three items: the first spans the full row, the two others share it.
         const shape = media.length === 3 && index === 0 ? 'col-span-2 aspect-[2/1]' : 'aspect-square';
-        const cell = el('div', `relative group/att overflow-hidden ${shape}${interactive ? ' cursor-pointer' : ''}${this._pending ? ' opacity-60' : ''}`);
+        const cell = el('div', `relative group/att overflow-hidden ${shape}${this._pending ? ' opacity-60' : ''}`);
         if (interactive) {
           this._stampAttachment(cell, item);
-          this._viewerOpener(cell, item);
-        }
-        if (item.isImage) {
-          cell.appendChild(this._mediaImg(item, 'w-full h-full object-cover hover:opacity-90 transition-opacity'));
+          cell.appendChild(this._preview(item, { fit: 'cover', bare: '' }));
+          cell.appendChild(this._saveButton(item, { grid: true }));
+        } else if (item.isImage) {
+          cell.appendChild(this._mediaImg(item, 'w-full h-full object-cover'));
         } else {
           cell.append(...this._mediaVideo(item, { grid: true }));
         }
-        if (interactive) cell.appendChild(this._saveButton(item, { grid: true }));
         grid.appendChild(cell);
       });
       return grid;
@@ -462,19 +468,22 @@
         own ? 'bg-module/15' : 'bg-base-300/50',
         interactive ? `${own ? 'hover:bg-module/25' : 'hover:bg-base-300'} transition-colors` : '',
         'min-w-0 flex-1',
-        interactive ? 'cursor-pointer' : '',
       ].filter(Boolean).join(' '));
-      if (interactive) this._viewerOpener(body, item);
-      body.appendChild(icon('file', 'w-4 h-4 flex-shrink-0'));
-      const name = el('span', 'truncate text-xs font-medium');
-      name.textContent = item.name || '';
-      body.appendChild(name);
-      if (item.size) {
-        const size = el('span', 'text-[0.65rem] opacity-60 flex-shrink-0');
-        size.textContent = formatFileSize(item.size);
-        body.appendChild(size);
+      if (interactive) {
+        const preview = this._preview(item);
+        preview.className = 'flex-1 min-w-0';
+        body.appendChild(preview);
+      } else {
+        body.appendChild(icon('file', 'w-4 h-4 flex-shrink-0'));
+        const name = el('span', 'truncate text-xs font-medium');
+        name.textContent = item.name || '';
+        body.appendChild(name);
+        if (item.size) {
+          const size = el('span', 'text-[0.65rem] opacity-60 flex-shrink-0');
+          size.textContent = formatFileSize(item.size);
+          body.appendChild(size);
+        }
       }
-      if (interactive) body.appendChild(icon('eye', 'w-3.5 h-3.5 flex-shrink-0 opacity-60'));
       row.appendChild(body);
       if (interactive) row.appendChild(this._saveButton(item, { chip: true }));
       return row;

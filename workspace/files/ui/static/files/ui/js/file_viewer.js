@@ -665,6 +665,12 @@ window.fileViewerModal = function fileViewerModal(options) {
       return id ? document.getElementById(id) : null;
     },
 
+    // A page that already holds a viewer panel (the notes editor) gives
+    // the modal's its own id.
+    _viewerPanelId() {
+      return opts.panel || 'viewer-panel';
+    },
+
     // Gallery steps open over the open dialog: the current spec makes
     // showModal() a no-op there, but older engines throw.
     _present() {

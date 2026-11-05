@@ -11,7 +11,7 @@
 {% endcomment %}
 {% with target=node.resolved_target %}
   <span
-    class="relative inline-flex flex-shrink-0 {{ size_class }}"
+    class="relative inline-flex shrink-0 {{ size_class }}"
     {% if size_style_expr %}:style="{{ size_style_expr }}"{% endif %}
   >
     {% if not target %}

@@ -189,6 +189,60 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         expect(settled).to_be_visible()
         expect(self.page.locator("chat-message-group[pending]")).to_have_count(0)
 
+    def test_a_sent_message_leaves_the_attachments_above_it_drawn(self):
+        media_msg = self._message(self.user, "with a picture")
+        image = MessageAttachment.objects.create(
+            message=media_msg,
+            file=SimpleUploadedFile("photo.png", b"fakepng", content_type="image/png"),
+            original_name="photo.png",
+            mime_type="image/png",
+            type="png",
+            category="image",
+            size=7,
+        )
+        self._open_conversation()
+        preview = self.page.locator(
+            f'#msg-{media_msg.uuid} file-preview[uuid="{image.uuid}"]'
+        )
+        expect(preview).to_have_attribute("state", "ready")
+
+        # The list reloads after a send and every message is drawn again:
+        # a preview already on the page must not go back to its spinner,
+        # nor ask the server again.
+        requests = []
+        self.page.on(
+            "request",
+            lambda r: (
+                requests.append(r.url) if "attachment-previews" in r.url else None
+            ),
+        )
+        self.page.evaluate(
+            """() => {
+              window.__reloaded = [];
+              new MutationObserver((records) => {
+                for (const r of records) {
+                  if (r.target.getAttribute('state') === 'loading') {
+                    window.__reloaded.push(r.target.getAttribute('uuid'));
+                  }
+                }
+              }).observe(document.body, {
+                subtree: true, attributes: true, attributeFilter: ['state'],
+              });
+            }"""
+        )
+        composer = self.page.locator(".chat-rich-input")
+        composer.fill("a message under the picture")
+        composer.press("Enter")
+        expect(
+            self.page.locator(
+                '#message-list-items .msg-bubble[data-body="a message under the picture"]'
+            )
+        ).to_be_visible()
+
+        expect(preview).to_have_attribute("state", "ready")
+        self.assertEqual(self.page.evaluate("window.__reloaded"), [])
+        self.assertEqual(requests, [])
+
     def test_compact_mode_restyles_the_shell_reactively(self):
         self._open_conversation()
 

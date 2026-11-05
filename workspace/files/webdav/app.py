@@ -15,6 +15,11 @@ from wsgidav.lock_man.lock_storage import LockStorageDict
 from wsgidav.mw.base_mw import BaseMiddleware
 from wsgidav.wsgidav_app import WsgiDAVApp
 
+from workspace.common.stored_content import (
+    is_active_content,
+    stored_content_headers,
+)
+
 from .dc import DjangoBasicDomainController
 from .provider import WorkspaceDAVProvider
 
@@ -107,6 +112,41 @@ class _LockContentTypeFix:
         return getattr(self._app, name)
 
 
+class _StoredContentHeaders:
+    """Send a file's bytes with the headers the content endpoints send.
+
+    WebDAV serves them on the app's origin too, outside Django's middleware,
+    and a browser that once sent the Basic credentials keeps sending them: an
+    HTML file opened under /dav/ would otherwise run as a page of the app.
+    """
+
+    def __init__(self, app):
+        self._app = app
+
+    def __call__(self, environ, start_response):
+        if environ.get("REQUEST_METHOD") not in ("GET", "HEAD"):
+            return self._app(environ, start_response)
+
+        def secured_start_response(status, headers, exc_info=None):
+            if status.startswith(("200", "206")):
+                content_type = next(
+                    (v for h, v in headers if h.lower() == "content-type"), ""
+                )
+                added = stored_content_headers(content_type)
+                if is_active_content(content_type):
+                    added.append(("Content-Disposition", "attachment"))
+                replaced = {name.lower() for name, _ in added}
+                headers = [
+                    (h, v) for h, v in headers if h.lower() not in replaced
+                ] + added
+            return start_response(status, headers, exc_info)
+
+        return self._app(environ, secured_start_response)
+
+    def __getattr__(self, name):
+        return getattr(self._app, name)
+
+
 class _FiniteDepthPropfind(BaseMiddleware):
     """Refuse PROPFIND at Depth: infinity, as RFC 4918 9.1 allows.
 
@@ -161,7 +201,7 @@ def create_webdav_app():
     }
     app = WsgiDAVApp(config)
     _install_app_lock_manager(app, _build_lock_storage())
-    return _LockContentTypeFix(app)
+    return _LockContentTypeFix(_StoredContentHeaders(app))
 
 
 def _install_app_lock_manager(app, storage):

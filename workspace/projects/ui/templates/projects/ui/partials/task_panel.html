@@ -683,7 +683,7 @@
             >
               <i
                 :data-lucide="link.type_icon || 'file'"
-                class="w-4 h-4 flex-shrink-0"
+                class="w-4 h-4 shrink-0"
                 :class="link.type_color || 'text-base-content/60'"
               ></i>
               <button
@@ -705,18 +705,18 @@
                 x-show="link.in_trash"
                 x-cloak
                 data-lucide="trash-2"
-                class="w-3.5 h-3.5 flex-shrink-0 text-warning"
+                class="w-3.5 h-3.5 shrink-0 text-warning"
                 title="In trash"
               ></i>
               <i
                 x-show="!link.in_trash && link.permission === 'rw'"
                 x-cloak
                 data-lucide="pencil"
-                class="w-3.5 h-3.5 flex-shrink-0 text-base-content/40"
+                class="w-3.5 h-3.5 shrink-0 text-base-content/40"
                 title="Members can edit"
               ></i>
               <span
-                class="text-xs text-base-content/50 flex-shrink-0"
+                class="text-xs text-base-content/50 shrink-0"
                 x-text="formatFileSize(link.size)"
               ></span>
               <a
@@ -854,7 +854,7 @@
             <li
               class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200/50 text-sm"
             >
-              <i data-lucide="file" class="w-4 h-4 flex-shrink-0 text-base-content/60"></i>
+              <i data-lucide="file" class="w-4 h-4 shrink-0 text-base-content/60"></i>
               <button
                 type="button"
                 class="flex-1 min-w-0 text-left truncate hover:underline"
@@ -863,7 +863,7 @@
                 @click="openAttachment(att)"
               ></button>
               <span
-                class="text-xs text-base-content/50 flex-shrink-0"
+                class="text-xs text-base-content/50 shrink-0"
                 x-text="formatFileSize(att.size)"
               ></span>
               <a

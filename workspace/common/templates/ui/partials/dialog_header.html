@@ -32,7 +32,7 @@
 >
   <div class="flex items-center gap-3 min-w-0">
     <div
-      class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center{% if not icon_class_expr %} {{ icon_class|default:'bg-module/15 text-module' }}{% endif %}"
+      class="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center{% if not icon_class_expr %} {{ icon_class|default:'bg-module/15 text-module' }}{% endif %}"
       {% if icon_class_expr %}:class="{{ icon_class_expr }}"{% endif %}
       {% if icon_style_expr %}:style="{{ icon_style_expr }}"{% endif %}
     >

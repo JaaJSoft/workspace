@@ -93,7 +93,7 @@
                 :data-scope="'group:' + group.id"
                 @click="setScope('group:' + group.id)"
               >
-                <i data-lucide="users-round" class="w-5 h-5 flex-shrink-0"></i>
+                <i data-lucide="users-round" class="w-5 h-5 shrink-0"></i>
                 <span
                   x-show="!sidebarCollapsed()"
                   class="flex-1 truncate"
@@ -151,7 +151,7 @@
                 @click="setList(list.uuid)"
                 @contextmenu="openCtxMenu($event, 'list', list)"
               >
-                <i data-lucide="list" class="w-5 h-5 flex-shrink-0"></i>
+                <i data-lucide="list" class="w-5 h-5 shrink-0"></i>
                 <span
                   x-show="!sidebarCollapsed()"
                   class="flex items-center gap-2 flex-1 min-w-0 pr-6"

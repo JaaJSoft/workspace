@@ -16,7 +16,7 @@
           data-picker-new
         >
           <span
-            class="w-10 h-10 rounded-lg border border-dashed border-base-content/30 flex items-center justify-center flex-shrink-0"
+            class="w-10 h-10 rounded-lg border border-dashed border-base-content/30 flex items-center justify-center shrink-0"
           >
             <i data-lucide="plus" class="w-5 h-5"></i>
           </span>
@@ -40,7 +40,7 @@
           >
             <template x-if="album.cover_url">
               <span
-                class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"
+                class="w-10 h-10 rounded-lg overflow-hidden shrink-0"
                 :data-sensitive="album.cover_sensitive_level"
               >
                 <img
@@ -53,7 +53,7 @@
             </template>
             <template x-if="!album.cover_url">
               <span
-                class="w-10 h-10 rounded-lg bg-base-300 flex items-center justify-center flex-shrink-0"
+                class="w-10 h-10 rounded-lg bg-base-300 flex items-center justify-center shrink-0"
               >
                 <i data-lucide="book-image" class="w-5 h-5 opacity-60"></i>
               </span>

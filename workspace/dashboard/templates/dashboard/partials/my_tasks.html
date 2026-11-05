@@ -31,7 +31,7 @@
                   class="flex items-center gap-3 py-1.5 group"
                 >
                   <span
-                    class="text-xs font-mono text-base-content/50 flex-shrink-0 w-14 truncate"
+                    class="text-xs font-mono text-base-content/50 shrink-0 w-14 truncate"
                   >{{ task.reference }}</span>
                   <span
                     class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline"
@@ -42,10 +42,10 @@
                   {% include "projects/ui/partials/_priority_badge.html" %}
                   {% if task.due_date %}
                     <span
-                      class="text-xs tabular-nums flex-shrink-0 w-12 text-right {% if task.due_date < today %}text-error font-medium{% elif task.due_date == today %}text-warning font-medium{% else %}text-base-content/50{% endif %}"
+                      class="text-xs tabular-nums shrink-0 w-12 text-right {% if task.due_date < today %}text-error font-medium{% elif task.due_date == today %}text-warning font-medium{% else %}text-base-content/50{% endif %}"
                     >{{ task.due_date|date:due_date_format }}</span>
                   {% else %}
-                    <span class="w-12 flex-shrink-0 hidden sm:block"></span>
+                    <span class="w-12 shrink-0 hidden sm:block"></span>
                   {% endif %}
                 </a>
               </li>

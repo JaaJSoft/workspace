@@ -16,7 +16,7 @@
   >
     {% if item.card.cover_url %}
       <span
-        class="w-6 h-6 rounded overflow-hidden flex-shrink-0"
+        class="w-6 h-6 rounded overflow-hidden shrink-0"
         data-sensitive="{{ item.card.cover_sensitive_level }}"
       >
         <img
@@ -29,7 +29,7 @@
       </span>
     {% else %}
       <span
-        class="w-6 h-6 rounded bg-base-300 flex items-center justify-center flex-shrink-0"
+        class="w-6 h-6 rounded bg-base-300 flex items-center justify-center shrink-0"
       >
         <i data-lucide="book-image" class="w-3.5 h-3.5 opacity-60"></i>
       </span>

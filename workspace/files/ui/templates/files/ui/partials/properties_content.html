@@ -69,22 +69,22 @@ Context:
     <!-- Details -->
     <div class="space-y-2 text-sm">
       <div class="flex items-center gap-2 text-base-content/60">
-        <i data-lucide="map-pin" class="w-3.5 h-3.5 flex-shrink-0"></i>
+        <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0"></i>
         <span class="font-mono text-xs truncate">/{{ file_path }}</span>
       </div>
       {% if file.node_type == "file" %}
         <div class="flex items-center gap-2 text-base-content/60">
-          <i data-lucide="hard-drive" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <i data-lucide="hard-drive" class="w-3.5 h-3.5 shrink-0"></i>
           <span>{{ file.size|filesizeformat }}</span>
         </div>
         <div class="flex items-center gap-2 text-base-content/60">
-          <i data-lucide="file-type" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <i data-lucide="file-type" class="w-3.5 h-3.5 shrink-0"></i>
           <span class="font-mono text-xs">{{ file.type|default:"-" }}</span>
         </div>
       {% endif %}
       {% if file.node_type == "folder" %}
         <div class="flex items-center gap-2 text-base-content/60">
-          <i data-lucide="layers" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <i data-lucide="layers" class="w-3.5 h-3.5 shrink-0"></i>
           <span>
             {% blocktranslate trimmed count counter=children_count %}
               {{ counter }} item
@@ -107,7 +107,7 @@ Context:
         </div>
       {% endif %}
       <div class="flex items-center gap-2 text-base-content/60">
-        <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0"></i>
+        <i data-lucide="calendar" class="w-3.5 h-3.5 shrink-0"></i>
         <span>
           {% blocktranslate trimmed with date=file.created_at|date:"DATE_FORMAT" %}
             Created {{ date }}
@@ -115,7 +115,7 @@ Context:
         </span>
       </div>
       <div class="flex items-center gap-2 text-base-content/60">
-        <i data-lucide="clock" class="w-3.5 h-3.5 flex-shrink-0"></i>
+        <i data-lucide="clock" class="w-3.5 h-3.5 shrink-0"></i>
         <span>
           {% blocktranslate trimmed with date=file.updated_at|date:"DATE_FORMAT" %}
             Modified {{ date }}
@@ -249,7 +249,7 @@ Context:
           {% for link in share_links %}
             <div class="p-2 rounded-lg bg-base-200/50 text-sm">
               <div class="flex items-center gap-2 mb-1">
-                <i data-lucide="link" class="w-3.5 h-3.5 text-module flex-shrink-0"></i>
+                <i data-lucide="link" class="w-3.5 h-3.5 text-module shrink-0"></i>
                 <span class="font-mono text-xs truncate flex-1">…{{ link.token|truncatechars:24 }}</span>
                 {% if file.node_type == "folder" %}
                   <span class="badge badge-ghost badge-xs">{{ link.get_mode_display }}</span>
@@ -263,7 +263,7 @@ Context:
                 {% endif %}
                 <button
                   type="button"
-                  class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                  class="btn btn-ghost btn-xs btn-square shrink-0"
                   title="{% translate 'Copy link' %}"
                   onclick="navigator.clipboard.writeText(window.location.origin + '/files/shared/{{ link.token }}').then(() => { if (window.AppAlert) window.AppAlert.success('{{ link_copied_message|escapejs }}'); })"
                 >
@@ -334,7 +334,7 @@ Context:
         <ul class="space-y-2.5 animate-pulse">
           {% for _ in "1234" %}
             <li class="flex items-start gap-2.5">
-              <div class="w-3.5 h-3.5 mt-1 rounded-full bg-base-300 flex-shrink-0"></div>
+              <div class="w-3.5 h-3.5 mt-1 rounded-full bg-base-300 shrink-0"></div>
               <div class="flex-1 space-y-1.5">
                 <div class="h-3.5 bg-base-300 rounded w-3/4"></div>
                 <div class="h-3 bg-base-300 rounded w-1/3"></div>

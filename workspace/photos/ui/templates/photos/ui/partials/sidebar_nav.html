@@ -54,7 +54,7 @@
           @click="createAlbum()"
         >
           <span
-            class="w-6 h-6 rounded border border-dashed border-base-content/30 flex items-center justify-center flex-shrink-0"
+            class="w-6 h-6 rounded border border-dashed border-base-content/30 flex items-center justify-center shrink-0"
           >
             <i data-lucide="plus" class="w-3.5 h-3.5"></i>
           </span>
@@ -112,7 +112,7 @@
               {# The tag color is free text: bound as a style property, never written into the attribute. #}
               <i
                 data-lucide="{{ item.tag.icon|default:'tag' }}"
-                class="w-5 h-5 flex-shrink-0"
+                class="w-5 h-5 shrink-0"
                 :style="{ color: '{{ item.tag.color|escapejs }}' }"
               ></i>
               <span class="flex-1 truncate">{{ item.tag.name }}</span>

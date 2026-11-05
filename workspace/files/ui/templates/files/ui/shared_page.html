@@ -110,7 +110,7 @@
           <div
             class="flex items-center gap-3 p-2 min-h-12 border-b border-base-300 bg-base-100"
           >
-            <div class="join flex-shrink-0" x-data="navButtons('shared-content')">
+            <div class="join shrink-0" x-data="navButtons('shared-content')">
               <button
                 type="button"
                 class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
@@ -155,7 +155,7 @@
               {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="shared-content" x_target_history="push" %}
             </div>
             {% if show_listing and entries %}
-              <div class="flex flex-shrink-0 gap-1">
+              <div class="flex shrink-0 gap-1">
                 <a
                   href="{{ list_view_url }}"
                   x-target.push="shared-content"

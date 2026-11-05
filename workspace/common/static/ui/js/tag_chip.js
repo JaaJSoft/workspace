@@ -191,7 +191,7 @@ window.tagChipColor = function tagChipColor(value) {
       if (icon) {
         const iconEl = document.createElement('i');
         iconEl.setAttribute('data-lucide', icon);
-        iconEl.className = 'w-3 h-3 flex-shrink-0';
+        iconEl.className = 'w-3 h-3 shrink-0';
         children.push(iconEl);
       }
       children.push(this._label);
@@ -214,7 +214,7 @@ window.tagChipColor = function tagChipColor(value) {
     _trailingMark(icon, label) {
       // Wrapped: lucide replaces the <i> with an svg, the span keeps the name.
       const mark = document.createElement('span');
-      mark.className = 'inline-flex flex-shrink-0 opacity-60';
+      mark.className = 'inline-flex shrink-0 opacity-60';
       if (label) {
         mark.setAttribute('role', 'img');
         mark.setAttribute('aria-label', label);

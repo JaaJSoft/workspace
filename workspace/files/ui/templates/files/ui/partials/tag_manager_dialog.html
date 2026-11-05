@@ -41,7 +41,7 @@ and the tag_dialog partial on the same page for create/edit.
         >
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+            class="btn btn-ghost btn-xs btn-square shrink-0"
             :class="tag.is_favorite ? 'text-warning' : 'text-base-content/30 hover:text-warning'"
             @click="toggleTagFavorite(tag)"
             :title="tag.is_favorite ? '{{ remove_from_sidebar_label|escapejs }}' : '{{ show_in_sidebar_label|escapejs }}'"
@@ -62,12 +62,12 @@ and the tag_dialog partial on the same page for create/edit.
             <tag-chip :name="tag.name" :color="tag.color" :icon="tag.icon" size="sm"></tag-chip>
           </a>
           <span
-            class="text-xs text-base-content/50 tabular-nums w-8 text-right flex-shrink-0"
+            class="text-xs text-base-content/50 tabular-nums w-8 text-right shrink-0"
             x-text="tag.file_count"
             :title="interpolate(tag.file_count === 1 ? '{{ file_count_one|escapejs }}' : '{{ file_count_other|escapejs }}', { count: tag.file_count }, true)"
           ></span>
           <div
-            class="flex items-center flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            class="flex items-center shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
           >
             <button
               type="button"

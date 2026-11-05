@@ -86,7 +86,7 @@
         ></h2>
 
         <!-- Actions -->
-        <div class="flex items-center gap-0.5 flex-shrink-0">
+        <div class="flex items-center gap-0.5 shrink-0">
           <span
             class="loading loading-spinner loading-xs text-module mr-1"
             x-show="actionInProgress"
@@ -215,7 +215,7 @@
       <!-- From/To details -->
       <div class="text-sm space-y-1">
         <div class="flex items-center gap-2">
-          <span class="text-base-content/50 w-10 text-right flex-shrink-0">From</span>
+          <span class="text-base-content/50 w-10 text-right shrink-0">From</span>
           <span
             class="inline-flex cursor-pointer hover:text-module transition-colors"
             @mouseenter="window._mailCardShow($el, messageDetail.from_address)"
@@ -233,7 +233,7 @@
           </span>
         </div>
         <div class="flex items-start gap-2">
-          <span class="text-base-content/50 w-10 text-right flex-shrink-0">To</span>
+          <span class="text-base-content/50 w-10 text-right shrink-0">To</span>
           <span class="flex-1 flex flex-wrap gap-x-1 text-base-content/80">
             <template x-for="(addr, i) in (messageDetail.to_addresses || [])" :key="i">
               <span>
@@ -249,7 +249,7 @@
         </div>
         <template x-if="messageDetail.cc_addresses?.length">
           <div class="flex items-start gap-2">
-            <span class="text-base-content/50 w-10 text-right flex-shrink-0">Cc</span>
+            <span class="text-base-content/50 w-10 text-right shrink-0">Cc</span>
             <span class="flex-1 flex flex-wrap gap-x-1 text-base-content/80">
               <template x-for="(addr, i) in messageDetail.cc_addresses" :key="i">
                 <span>
@@ -265,7 +265,7 @@
           </div>
         </template>
         <div class="flex items-center gap-2">
-          <span class="text-base-content/50 w-10 text-right flex-shrink-0">Date</span>
+          <span class="text-base-content/50 w-10 text-right shrink-0">Date</span>
           <span
             class="text-base-content/80"
             x-text="formatFullDate(messageDetail.date)"
@@ -287,10 +287,10 @@
             class="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-base-300 bg-base-200 text-xs hover:bg-base-300 transition-colors"
             download
           >
-            <i data-lucide="paperclip" class="w-3 h-3 flex-shrink-0"></i>
+            <i data-lucide="paperclip" class="w-3 h-3 shrink-0"></i>
             <span class="truncate max-w-[10rem]" x-text="att.filename"></span>
             <span
-              class="text-base-content/50 flex-shrink-0"
+              class="text-base-content/50 shrink-0"
               x-text="formatFileSize(att.size)"
             ></span>
           </a>
@@ -330,10 +330,7 @@
         <div
           class="flex items-center gap-2 px-3 py-2 border-b border-secondary/10 bg-secondary/5"
         >
-          <i
-            data-lucide="sparkles"
-            class="w-3.5 h-3.5 text-secondary flex-shrink-0"
-          ></i>
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-secondary shrink-0"></i>
           <span
             class="text-xs font-semibold text-secondary tracking-wide uppercase flex-1"
           >Summary</span>
@@ -365,10 +362,7 @@
           <div
             class="flex items-center gap-2 px-3 py-2 border-b border-accent/10 bg-accent/5"
           >
-            <i
-              data-lucide="calendar-plus"
-              class="w-3.5 h-3.5 text-accent flex-shrink-0"
-            ></i>
+            <i data-lucide="calendar-plus" class="w-3.5 h-3.5 text-accent shrink-0"></i>
             <span
               class="text-xs font-semibold text-accent tracking-wide uppercase flex-1"
             >Suggested event</span>

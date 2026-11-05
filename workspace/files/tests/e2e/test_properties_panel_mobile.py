@@ -5,7 +5,7 @@ Two bugs are pinned here, both visible only in a real browser:
 1. The original report: the panel was an inline 320 px column in the
    flex row with no responsive logic, so on a < md viewport opening it
    squeezed the folder-browser column to ~55 px and the "+" dropdown
-   (``flex-shrink-0``) overflowed visually over the sidebar.
+   (``shrink-0``) overflowed visually over the sidebar.
 
 2. The follow-up report: even after the panel was made ``absolute`` on
    mobile, the fixed 320 px width left a dimmed strip of folder-browser

@@ -139,7 +139,7 @@
             :class="sidebarCollapsed() ? 'justify-center' : ''"
           >
             <span
-              class="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+              class="shrink-0 w-5 h-5 flex items-center justify-center"
               :class="'text-' + cal.color"
               :title="sidebarCollapsed() ? cal.name : ''"
             >
@@ -224,7 +224,7 @@
                 :class="sidebarCollapsed() ? 'justify-center' : ''"
               >
                 <span
-                  class="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+                  class="shrink-0 w-5 h-5 flex items-center justify-center"
                   :class="'text-' + ext.color"
                   :title="sidebarCollapsed() ? ext.name : ''"
                 >
@@ -305,7 +305,7 @@
             :class="{ 'justify-center': sidebarCollapsed() }"
           >
             <span
-              class="flex-shrink-0 w-5 h-5 flex items-center justify-center text-secondary"
+              class="shrink-0 w-5 h-5 flex items-center justify-center text-secondary"
               :title="sidebarCollapsed() ? '{{ task_due_dates_label|escapejs }}' : ''"
             >
               <i data-lucide="square-check-big" class="w-4 h-4"></i>
@@ -319,7 +319,7 @@
             <input
               x-show="!sidebarCollapsed()"
               type="checkbox"
-              class="checkbox checkbox-xs checkbox-module flex-shrink-0{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+              class="checkbox checkbox-xs checkbox-module shrink-0{% if workspace_sidebar_collapsed %} hidden{% endif %}"
               :class="{ hidden: sidebarCollapsed() }"
               :checked="prefs.showTasks"
               @change="updatePref('showTasks', !prefs.showTasks)"
@@ -351,7 +351,7 @@
                 :class="sidebarCollapsed() ? 'justify-center' : ''"
               >
                 <span
-                  class="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+                  class="shrink-0 w-5 h-5 flex items-center justify-center"
                   :class="'text-' + cal.color"
                   :title="sidebarCollapsed() ? cal.name : ''"
                 >
@@ -364,7 +364,7 @@
                 <input
                   x-show="!sidebarCollapsed()"
                   type="checkbox"
-                  class="checkbox checkbox-xs flex-shrink-0"
+                  class="checkbox checkbox-xs shrink-0"
                   :class="'checkbox-' + cal.color"
                   :checked="visibleCalendars[cal.uuid]"
                   @change="toggleCalendarVisibility(cal.uuid)"

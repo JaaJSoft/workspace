@@ -935,15 +935,15 @@ brotli = [
 
 [[package]]
 name = "django-prometheus"
-version = "2.6.0.dev22"
+version = "2.6.0.dev23"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "prometheus-client" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/04/16/35ec2a48ba9f85e93c87811ccd67cf105e57a874ab2616841683fd56d559/django_prometheus-2.6.0.dev22.tar.gz", hash = "sha256:b1279df40eee865e85eefb99dd01aa5886ad7c93ff04eb361d4d929888231767", size = 27228, upload-time = "2026-09-19T15:58:38.999Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/37/ba/436e4ae99c094e92e9ad9693d1e40fbb0176b6b86aa7d243a1104e16039c/django_prometheus-2.6.0.dev23.tar.gz", hash = "sha256:0e3925ee0aa069f4920056d747cd6f052f3492a335e5a74f88791df7b3a7f4f5", size = 27247, upload-time = "2026-11-02T00:15:58.008Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/09/8e/25f7e85932ca8811ab0f9cda29b740020862595dca0eb414cc815b238d9f/django_prometheus-2.6.0.dev22-py3-none-any.whl", hash = "sha256:02503f6b89f323489e618de3694830307347d1c8db5a987d4c3635a6409b3359", size = 32824, upload-time = "2026-09-19T15:58:37.598Z" },
+    { url = "https://files.pythonhosted.org/packages/cc/5c/ea379461762b32512c210fbe63e6fc55bf3142ebd2809f54cbff45a7553f/django_prometheus-2.6.0.dev23-py3-none-any.whl", hash = "sha256:ae398a226eb26f50beed2847ad3b458e57b4299eb4515c60fc4d35cff4ed0c42", size = 32825, upload-time = "2026-11-02T00:15:56.53Z" },
 ]
 
 [[package]]
@@ -3639,7 +3639,7 @@ requires-dist = [
     { name = "django-csp", specifier = ">=4.0" },
     { name = "django-filter", specifier = "==26.2" },
     { name = "django-http-compression", extras = ["brotli"], specifier = ">=1.4.0" },
-    { name = "django-prometheus", specifier = ">=2.6.0.dev22" },
+    { name = "django-prometheus", specifier = ">=2.6.0.dev23" },
     { name = "django-redis", specifier = ">=7.0.0" },
     { name = "django-rest-knox", specifier = ">=5.1.0" },
     { name = "django-unfold", specifier = ">=0.110.1" },

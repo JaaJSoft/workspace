@@ -182,6 +182,11 @@ window.fileTableControls = function fileTableControls() {
         nodeType: item.dataset.nodeType || 'file',
         fileType: item.dataset.fileType || '',
         actions: this.actionsMap[uuid] || [],
+        // A shortcut's target, rendered only when the shortcut opens it.
+        opens: item.dataset.opens || '',
+        targetUuid: item.dataset.targetUuid || '',
+        targetName: item.dataset.targetName || '',
+        targetFileType: item.dataset.targetFileType || '',
       };
     },
 
@@ -212,6 +217,10 @@ window.fileTableControls = function fileTableControls() {
       // whether or not the item could be opened.
       if (this.selectedUuids.size > 0) {
         this.toggleRowSelection(uuid, event.shiftKey);
+        return;
+      }
+      if (item.dataset.nodeType === 'shortcut') {
+        if (!inTrash) window.fileActions.openShortcutTarget(this._itemData(item));
         return;
       }
       const isFolder = item.dataset.nodeType === 'folder';
@@ -867,6 +876,8 @@ window.fileTableControls = function fileTableControls() {
           window.dispatchEvent(new CustomEvent('open-file-viewer', {
             detail: { uuid: data.uuid, name: data.name, type: data.fileType }
           }));
+        } else if (this._nodeHasAction(data, 'open_target')) {
+          window.fileActions.openShortcutTarget(data);
         }
         return;
       }

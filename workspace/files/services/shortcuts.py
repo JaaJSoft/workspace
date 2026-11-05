@@ -18,6 +18,7 @@ all otherwise - not its name, not its uuid.
 from dataclasses import dataclass
 from enum import StrEnum
 
+from ..actions.base import UNRESOLVED
 from ..models import File, FileEvent
 from . import _names as _name_helpers
 from .events import record_event
@@ -166,3 +167,35 @@ def resolution_of(user, shortcut):
         resolution = resolve_shortcuts(user, [shortcut]).get(shortcut.pk, UNAVAILABLE)
         shortcut.shortcut_resolution = resolution
     return resolution
+
+
+class Opens(StrEnum):
+    """What opening a shortcut does for its viewer."""
+
+    FOLDER = "folder"
+    VIEWER = "viewer"
+
+
+def opens_as(user, resolution, *, journal_folder=UNRESOLVED):
+    """How *user* opens the target of *resolution*: an ``Opens``, or None.
+
+    The target's own open rule decides (``open`` for a folder, ``view`` for a
+    file), asked on the target under the viewer's permission on it, so a
+    shortcut opens exactly what its viewer could open without it.
+    """
+    # The registry's action modules import the services package.
+    from workspace.files.actions import ActionRegistry
+
+    if resolution.state != ShortcutState.OK:
+        return None
+    target = resolution.target
+    is_folder = target.node_type == File.NodeType.FOLDER
+    if not ActionRegistry.is_action_available(
+        "open" if is_folder else "view",
+        user,
+        target,
+        permission=resolution.permission,
+        journal_folder=journal_folder,
+    ):
+        return None
+    return Opens.FOLDER if is_folder else Opens.VIEWER

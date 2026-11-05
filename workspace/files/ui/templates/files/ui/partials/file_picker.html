@@ -110,7 +110,11 @@
         const res = await fetch(url, { credentials: 'same-origin' });
         if (res.ok) {
           const data = await res.json();
-          const all = (data.results || data);
+          // Once per node: a folder can hold a file and shortcuts to it.
+          const seen = new Set();
+          const all = (data.results || data)
+            .map((item) => this.throughShortcut(item))
+            .filter((item) => item && !seen.has(item.uuid) && seen.add(item.uuid));
           this.items = all.sort((a, b) => {
             if (a.node_type !== b.node_type) return a.node_type === 'folder' ? -1 : 1;
             return a.name.localeCompare(b.name);
@@ -132,6 +136,14 @@
         }
       } catch (e) { /* ignore */ }
       this.loading = false;
+    },
+
+    // A shortcut stands for its target, name included: picking one picks
+    // the file it opens, entering one enters the folder, and what comes back
+    // is always a real node. One the viewer cannot open is left out.
+    throughShortcut(item) {
+      if (item.node_type !== 'shortcut') return item;
+      return item.shortcut && item.shortcut.state === 'ok' ? item.shortcut.target : null;
     },
 
     handleSearch() {

@@ -27,6 +27,11 @@ from workspace.files.services.pins import visible_pins
 from workspace.files.services.public_links import resolve_within, scope_q
 from workspace.files.services.quota import usage_percent
 from workspace.files.services.scanning.policy import with_scan
+from workspace.files.services.shortcuts import (
+    ShortcutState,
+    attach_resolutions,
+    opens_as,
+)
 from workspace.files.services.storage_analysis import (
     CATEGORY_META,
     QUERY_MAX_LENGTH,
@@ -52,6 +57,39 @@ MAX_EVENTS_LIMIT = 200
 # A public share link has no authentication behind it, so an unbounded
 # listing would let anyone turn one link into a folder-dump DoS.
 SHARED_FOLDER_PAGE_SIZE = 200
+
+
+def present_shortcuts(user, nodes):
+    """Resolve the shortcuts among *nodes* once, for their rows to render.
+
+    Each shortcut gets ``shortcut_state``; ``resolved_target``, the target or
+    None when the viewer may not know it; ``shortcut_target_path``, the
+    target's path as that viewer may read it; ``shortcut_title``, the line
+    its row shows on hover; and ``shortcut_opens``, what clicking it does (an
+    ``Opens`` value, empty when nothing). Rows must read these, never
+    ``shortcut_target``, which would load the target for every row and hand
+    the template a node its viewer may have no access to.
+    """
+    shortcuts = [node for node in nodes if node.node_type == File.NodeType.SHORTCUT]
+    attach_resolutions(user, shortcuts)
+    for node in shortcuts:
+        resolution = node.shortcut_resolution
+        target = resolution.target
+        node.shortcut_state = resolution.state
+        node.resolved_target = target
+        node.shortcut_target_path = (
+            FileService.visible_path(target, resolution.permission) if target else ""
+        )
+        node.shortcut_opens = opens_as(user, resolution) or ""
+        if resolution.state == ShortcutState.OK:
+            node.shortcut_title = _("Shortcut to /%(path)s") % {
+                "path": node.shortcut_target_path
+            }
+        elif resolution.state == ShortcutState.TRASHED:
+            node.shortcut_title = _("The original is in the trash.")
+        else:
+            node.shortcut_title = _("The original is no longer available.")
+    return nodes
 
 
 def build_breadcrumbs(folder, user=None):
@@ -166,7 +204,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         nodes = (
             FileService.user_files_qs(request.user)
             .filter(file_tags__tag=active_tag)
-            .name_ordered("-node_type")
+            .folders_first()
         )
     elif is_shared_view:
         shared_file_ids = FileShare.objects.reaching(request.user).values_list(
@@ -192,7 +230,7 @@ def _build_context(request, folder=None, is_trash_view=False):
                 favorites__owner=request.user,
             )
             .distinct()
-            .name_ordered("-node_type")
+            .folders_first()
         )
     elif is_recent_view:
         nodes = (
@@ -206,14 +244,14 @@ def _build_context(request, folder=None, is_trash_view=False):
                 group=current_folder.group,
                 deleted_at__isnull=True,
                 parent=current_folder,
-            ).name_ordered("-node_type")
+            ).folders_first()
         else:
             nodes = (
                 FileService.user_files_qs(request.user)
                 .filter(
                     parent=current_folder,
                 )
-                .name_ordered("-node_type")
+                .folders_first()
             )
     else:
         nodes = (
@@ -221,7 +259,7 @@ def _build_context(request, folder=None, is_trash_view=False):
             .filter(
                 parent__isnull=True,
             )
-            .name_ordered("-node_type")
+            .folders_first()
         )
 
     favorite_subquery = FileFavorite.objects.filter(
@@ -250,6 +288,7 @@ def _build_context(request, folder=None, is_trash_view=False):
     folder_stats = {
         "file_count": 0,
         "folder_count": 0,
+        "shortcut_count": 0,
         "total_size": 0,
     }
     # Tags actually present in this listing — the toolbar filter offers only
@@ -262,10 +301,13 @@ def _build_context(request, folder=None, is_trash_view=False):
         if node.node_type == File.NodeType.FILE:
             folder_stats["file_count"] += 1
             folder_stats["total_size"] += node.size or 0
-        else:
+        elif node.node_type == File.NodeType.FOLDER:
             folder_stats["folder_count"] += 1
+        else:
+            folder_stats["shortcut_count"] += 1
         for file_tag in node.file_tags.all():
             listing_tags[file_tag.tag.uuid] = file_tag.tag
+    present_shortcuts(request.user, nodes)
 
     VIEW_META = {
         "shared": (
@@ -514,6 +556,8 @@ def properties(request, uuid):
                 Lower("tag__name")
             )
         ]
+
+    present_shortcuts(request.user, [file_obj])
 
     PERMISSION_LABELS = {
         FilePermission.VIEW: (_("Read only"), False),

@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.storage import FileSystemStorage
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
-from django.db.models import F, Q, Value
+from django.db.models import Case, F, Q, Value, When
 from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
@@ -93,6 +93,17 @@ class FileQuerySet(models.QuerySet):
             qs.name_ordered('-deleted_at')        # ORDER BY deleted_at DESC, LOWER(name)
         """
         return self.order_by(*prefix_fields, Lower("name"))
+
+    def folders_first(self):
+        """Folders, then everything else, each set by name.
+
+        Not ``-node_type``: shortcut sorts after folder in that order, and a
+        shortcut belongs with the files, whatever it opens.
+        """
+        return self.order_by(
+            Case(When(node_type=File.NodeType.FOLDER, then=Value(0)), default=Value(1)),
+            Lower("name"),
+        )
 
     def alive(self):
         """Rows not in the trash."""

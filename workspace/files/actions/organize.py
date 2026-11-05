@@ -147,3 +147,30 @@ class ShareAction(BaseFileAction):
         if file_obj.node_type == File.NodeType.FOLDER:
             return file_obj.owner_id == user.id
         return True
+
+
+@ActionRegistry.register
+class CreateShortcutAction(BaseFileAction):
+    """File a shortcut to this node in a folder of the user's choosing.
+
+    Offered on anything the user can open, a file shared with them included:
+    the shortcut grants nothing, so reaching the node is all it takes.
+    """
+
+    id = "create_shortcut"
+    label = gettext_lazy("Create shortcut")
+    icon = "file-symlink"
+    category = ActionCategory.ORGANIZE
+    node_types = ("file", "folder")
+
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
+        from workspace.files.services.scanning.policy import is_blocked
+
+        if file_obj.deleted_at is not None or permission is None:
+            return False
+        return not is_blocked(file_obj)
+
+    def get_icon(self, file_obj):
+        if file_obj.node_type == File.NodeType.FOLDER:
+            return "folder-symlink"
+        return self.icon

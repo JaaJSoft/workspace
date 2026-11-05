@@ -57,6 +57,29 @@ window.fileActions = {
         return gettext('Unknown error');
     },
 
+    // ── Shortcuts ────────────────────────────────────────
+
+    // Open what a shortcut points at, by the target's own uuid: the server
+    // never follows a shortcut, so the target answers under the viewer's own
+    // access to it. `node` carries what its row rendered - `opens` ('folder'
+    // or 'viewer'), `targetUuid`, `targetName`, `targetFileType` - and the
+    // row renders none of it for a shortcut that opens nothing. Returns
+    // whether something was opened.
+    openShortcutTarget: function(node) {
+        if (!node || !node.targetUuid) return false;
+        if (node.opens === 'folder') {
+            window.folderNav.navigateTo('/files/' + node.targetUuid);
+            return true;
+        }
+        if (node.opens === 'viewer') {
+            window.dispatchEvent(new CustomEvent('open-file-viewer', {
+                detail: { uuid: node.targetUuid, name: node.targetName || '', type: node.targetFileType || '' },
+            }));
+            return true;
+        }
+        return false;
+    },
+
     // ── Dialog helpers ───────────────────────────────────
 
     showCreateFolderDialog: function() {

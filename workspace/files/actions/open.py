@@ -1,6 +1,5 @@
 from django.utils.translation import gettext_lazy as _
 
-from workspace.files.models import File
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
@@ -77,19 +76,11 @@ class OpenShortcutTargetAction(BaseFileAction):
     keyboard_shortcut = "Enter"
 
     def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
-        from workspace.files.services.shortcuts import ShortcutState
+        from workspace.files.services.shortcuts import opens_as
 
         if file_obj.deleted_at is not None or permission is None:
             return False
         resolution = getattr(file_obj, "shortcut_resolution", None)
-        if resolution is None or resolution.state != ShortcutState.OK:
+        if resolution is None:
             return False
-        target = resolution.target
-        target_action = "open" if target.node_type == File.NodeType.FOLDER else "view"
-        return ActionRegistry.is_action_available(
-            target_action,
-            user,
-            target,
-            permission=resolution.permission,
-            journal_folder=journal_folder,
-        )
+        return opens_as(user, resolution, journal_folder=journal_folder) is not None

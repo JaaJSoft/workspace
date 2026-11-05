@@ -158,7 +158,10 @@ class PdfViewerFramingTests(_UploadsMixin, PlaywrightTestCase):
         # A frame refused by X-Frame-Options shows the browser's error page.
         frame = frame_element.element_handle().content_frame()
         self.assertEqual(frame.url, self._content_url(pdf))
-        self.assertTrue(
-            any(f.url.startswith("chrome-extension://") for f in self.page.frames),
-            "the PDF viewer did not load in the frame",
-        )
+        # The PDF viewer attaches its own frame after the iframe's load event.
+        for _ in range(100):
+            if any(f.url.startswith("chrome-extension://") for f in self.page.frames):
+                break
+            self.page.wait_for_timeout(100)
+        else:
+            self.fail("the PDF viewer did not load in the frame")

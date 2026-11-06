@@ -17,8 +17,8 @@
       </inline-alert>
 
       <form @submit.prevent="createVault()">
-        <label class="form-control mb-3">
-          <span class="label-text font-medium">Name</span>
+        <label class="fieldset mb-3">
+          <span class="text-sm font-medium">Name</span>
           <input
             type="text"
             class="input input-sm w-full"
@@ -29,8 +29,8 @@
           />
         </label>
 
-        <label class="form-control mb-3">
-          <span class="label-text font-medium">
+        <label class="fieldset mb-3">
+          <span class="text-sm font-medium">
             Description <span class="text-base-content/40">(optional)</span>
           </span>
           <input
@@ -49,7 +49,7 @@
           directly, and a vault needs a re-signed body.
         {% endcomment %}
         <div class="mb-3">
-          <span class="label-text font-medium block mb-2">Icon and colour</span>
+          <span class="text-sm font-medium block mb-2">Icon and colour</span>
           {% include "ui/partials/icon_picker.html" %}
         </div>
 
@@ -59,7 +59,7 @@
             class="checkbox checkbox-sm"
             x-model="newVault.favorite"
           />
-          <span class="label-text">Add to favourites</span>
+          <span>Add to favourites</span>
         </label>
 
         <div class="modal-action">

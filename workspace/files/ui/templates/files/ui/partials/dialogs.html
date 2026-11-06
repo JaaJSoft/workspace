@@ -9,9 +9,9 @@
     <form
       @submit.prevent="$dispatch('create-file', { name: $refs.fileName.value, fileType, customExt: $refs.customExt ? $refs.customExt.value : '' })"
     >
-      <div class="form-control mb-3">
-        <label class="label">
-          <span class="label-text">{% translate "File name" %}</span>
+      <div class="fieldset mb-3">
+        <label class="fieldset-legend">
+          <span>{% translate "File name" %}</span>
         </label>
         <input
           x-ref="fileName"
@@ -20,13 +20,13 @@
           class="input w-full"
           required
         />
-        <label class="label">
-          <span class="label-text-alt">{% translate "Extension added if missing" %}</span>
+        <label class="label whitespace-normal">
+          <span>{% translate "Extension added if missing" %}</span>
         </label>
       </div>
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text">{% translate "Type" %}</span>
+      <div class="fieldset">
+        <label class="fieldset-legend">
+          <span>{% translate "Type" %}</span>
         </label>
         <select x-model="fileType" class="select w-full">
           <option value="txt">{% translate "Text (.txt)" %}</option>
@@ -36,9 +36,9 @@
           <option value="custom">{% translate "Custom extension" %}</option>
         </select>
       </div>
-      <div class="form-control mt-3" x-show="fileType === 'custom'" x-cloak>
-        <label class="label">
-          <span class="label-text">{% translate "Extension" %}</span>
+      <div class="fieldset mt-3" x-show="fileType === 'custom'" x-cloak>
+        <label class="fieldset-legend">
+          <span>{% translate "Extension" %}</span>
         </label>
         <input x-ref="customExt" type="text" placeholder="log" class="input w-full" />
       </div>

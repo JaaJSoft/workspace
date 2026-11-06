@@ -18,8 +18,8 @@
     {% endwith %}
 
     <form @submit.prevent="saveCalendar()" class="space-y-4">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           id="calendar-form-name"
           type="text"
@@ -30,8 +30,8 @@
         />
       </label>
 
-      <div>
-        <div class="label"><span class="label-text">{% translate "Color" %}</span></div>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><span>{% translate "Color" %}</span></legend>
         <div class="flex flex-wrap gap-2">
           <template x-for="c in calendarColors" :key="c">
             <button
@@ -52,7 +52,7 @@
             </button>
           </template>
         </div>
-      </div>
+      </fieldset>
 
       <div
         x-show="calendarModalMode === 'edit'"
@@ -159,8 +159,8 @@
     {% include "ui/partials/dialog_header.html" with icon="globe" icon_class="bg-info/10 text-info" title=_("Add external calendar") close_expr="showExternalModal = false" only %}
 
     <form @submit.prevent="saveExternalCalendar()" class="space-y-4">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "ICS URL" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "ICS URL" %}</span></div>
         <input
           id="external-form-url"
           type="url"
@@ -171,8 +171,8 @@
         />
       </label>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
           class="input input-sm w-full"
@@ -181,8 +181,8 @@
         />
       </label>
 
-      <div>
-        <div class="label"><span class="label-text">{% translate "Color" %}</span></div>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><span>{% translate "Color" %}</span></legend>
         <div class="flex flex-wrap gap-2">
           <template x-for="c in calendarColors" :key="c">
             <button
@@ -203,7 +203,7 @@
             </button>
           </template>
         </div>
-      </div>
+      </fieldset>
 
       <div class="modal-action">
         <button

@@ -7,8 +7,8 @@
       </div>
     </template>
     <form @submit.prevent="saveTask()">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">Title</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>Title</span></div>
         <input
           type="text"
           class="input w-full"
@@ -17,8 +17,8 @@
           maxlength="255"
         />
       </label>
-      <label class="form-control w-full mt-2">
-        <div class="label"><span class="label-text">Description</span></div>
+      <label class="fieldset w-full mt-2">
+        <div class="fieldset-legend"><span>Description</span></div>
         <textarea
           class="textarea w-full"
           rows="4"
@@ -27,40 +27,40 @@
         ></textarea>
       </label>
       <div class="grid grid-cols-2 gap-2 mt-2">
-        <div class="form-control">
-          <div class="label"><span class="label-text">Status</span></div>
+        <div class="fieldset">
+          <div class="fieldset-legend"><span>Status</span></div>
           {% include "projects/ui/partials/_status_selector.html" with model_expr="form.status" label="Status" %}
         </div>
-        <div class="form-control">
-          <div class="label"><span class="label-text">Priority</span></div>
+        <div class="fieldset">
+          <div class="fieldset-legend"><span>Priority</span></div>
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="form.priority" label="Priority" %}
         </div>
-        <label class="form-control">
-          <div class="label"><span class="label-text">Start date</span></div>
+        <label class="fieldset">
+          <div class="fieldset-legend"><span>Start date</span></div>
           <input
             type="date"
-            class="input input-sm"
+            class="input input-sm w-full"
             x-model="form.start_date"
             :max="form.due_date || null"
           />
         </label>
-        <label class="form-control">
-          <div class="label"><span class="label-text">Due date</span></div>
+        <label class="fieldset">
+          <div class="fieldset-legend"><span>Due date</span></div>
           <input
             type="date"
-            class="input input-sm"
+            class="input input-sm w-full"
             x-model="form.due_date"
             :min="form.start_date || null"
           />
         </label>
         {% if project.estimate_unit %}
-          <label class="form-control">
-            <div class="label">
-              <span class="label-text">Estimate ({{ project.get_estimate_unit_display|lower }})</span>
+          <label class="fieldset">
+            <div class="fieldset-legend">
+              <span>Estimate ({{ project.get_estimate_unit_display|lower }})</span>
             </div>
             <input
               type="number"
-              class="input input-sm"
+              class="input input-sm w-full"
               min="0"
               step="0.5"
               inputmode="decimal"
@@ -70,19 +70,19 @@
         {% endif %}
         {# Reactive gate: an epic created in the settings surfaces the field without a reload; admins always get it (inline create lives in the menu). #}
         <div
-          class="form-control col-span-2"
+          class="fieldset col-span-2"
           {% if role != "admin" %}x-show="openEpics().length" x-cloak{% endif %}
         >
-          <div class="label"><span class="label-text">Epic</span></div>
+          <div class="fieldset-legend"><span>Epic</span></div>
           {% include "projects/ui/partials/_epic_selector.html" with model_expr="form.epic" label="Epic" %}
         </div>
       </div>
-      <div
-        class="mt-2"
+      <fieldset
+        class="fieldset mt-2"
         x-show="members.length"
         @modal-assignee-selected.window="addFormAssignee($event.detail.user)"
       >
-        <div class="label"><span class="label-text">Assignees</span></div>
+        <legend class="fieldset-legend"><span>Assignees</span></legend>
         <div
           class="flex flex-wrap gap-1.5 mb-1"
           x-show="form.assignees.length"
@@ -95,13 +95,13 @@
         <div x-show="formUnassignedUsers().length">
           {% include "users/ui/partials/user_selector.html" with on_select_event="modal-assignee-selected" placeholder="Add assignee..." local_source="formUnassignedUsers()" %}
         </div>
-      </div>
-      <div
-        class="mt-2"
+      </fieldset>
+      <fieldset
+        class="fieldset mt-2"
         {% if role != "admin" %}x-show="labels.length"{% endif %}
         @modal-label-selected.window="addFormLabel($event.detail.label)"
       >
-        <div class="label"><span class="label-text">Labels</span></div>
+        <legend class="fieldset-legend"><span>Labels</span></legend>
         <div
           class="flex flex-wrap gap-1.5 mb-1.5"
           x-show="form.labels.length"
@@ -112,7 +112,7 @@
           </template>
         </div>
         {% include "projects/ui/partials/_label_selector.html" with on_select_event="modal-label-selected" all_source="labels" selected_source="form.labels" %}
-      </div>
+      </fieldset>
       <div class="modal-action">
         <button
           type="button"

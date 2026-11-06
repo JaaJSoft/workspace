@@ -165,8 +165,8 @@
     <div class="modal-box max-w-md">
       {% include "ui/partials/dialog_header.html" with icon_expr="labelModal.icon || 'tag'" icon_class_expr="labelModal.color && labelModal.color !== 'ghost' ? 'bg-base-200 text-' + labelModal.color : 'bg-module/15 text-module'" title_expr="labelModal.uuid ? 'Edit Label' : 'New Label'" only %}
       <form @submit.prevent="saveLabelModal()">
-        <label class="form-control w-full mb-3">
-          <div class="label"><span class="label-text">Name</span></div>
+        <label class="fieldset w-full mb-3">
+          <div class="fieldset-legend"><span>Name</span></div>
           <input
             type="text"
             class="input w-full input-sm"
@@ -176,10 +176,10 @@
             @keydown.escape="closeLabelModal()"
           />
         </label>
-        <label class="form-control w-full mb-3">
-          <div class="label">
-            <span class="label-text">What belongs here</span>
-            <span class="label-text-alt text-base-content/50">Optional</span>
+        <label class="fieldset w-full mb-3">
+          <div class="fieldset-legend">
+            <span>What belongs here</span>
+            <span class="text-base-content/50">Optional</span>
           </div>
           <textarea
             class="textarea w-full textarea-sm leading-snug"
@@ -189,10 +189,8 @@
             placeholder="e.g. Client follow-ups I still owe an answer"
             @keydown.escape="closeLabelModal()"
           ></textarea>
-          <div class="label">
-            <span class="label-text-alt text-base-content/50">
-              The AI classifier reads this to decide what lands in this label.
-            </span>
+          <div class="label whitespace-normal">
+            <span class="text-base-content/50">The AI classifier reads this to decide what lands in this label.</span>
           </div>
         </label>
         <!-- Icon & color picker (shared component) -->
@@ -394,8 +392,8 @@
 
       <form @submit.prevent="addAccount()">
         <div class="grid grid-cols-1 gap-3">
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Email address</span></div>
+          <label class="fieldset w-full">
+            <div class="fieldset-legend"><span>Email address</span></div>
             <div class="flex gap-2">
               <input
                 type="email"
@@ -417,8 +415,8 @@
               </button>
             </div>
           </label>
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Display name</span></div>
+          <label class="fieldset w-full">
+            <div class="fieldset-legend"><span>Display name</span></div>
             <input
               type="text"
               x-model="newAccount.display_name"
@@ -427,8 +425,8 @@
           </label>
           <div class="divider text-xs my-1">IMAP (Incoming)</div>
           <div class="grid grid-cols-3 gap-2">
-            <label class="form-control col-span-2">
-              <div class="label"><span class="label-text">Host</span></div>
+            <label class="fieldset col-span-2">
+              <div class="fieldset-legend"><span>Host</span></div>
               <input
                 type="text"
                 x-model="newAccount.imap_host"
@@ -436,8 +434,8 @@
                 required
               />
             </label>
-            <label class="form-control">
-              <div class="label"><span class="label-text">Port</span></div>
+            <label class="fieldset">
+              <div class="fieldset-legend"><span>Port</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.imap_port"
@@ -451,12 +449,12 @@
               x-model="newAccount.imap_use_ssl"
               class="toggle toggle-sm toggle-module"
             />
-            <span class="label-text">Use SSL</span>
+            <span class="text-sm">Use SSL</span>
           </label>
           <div class="divider text-xs my-1">SMTP (Outgoing)</div>
           <div class="grid grid-cols-3 gap-2">
-            <label class="form-control col-span-2">
-              <div class="label"><span class="label-text">Host</span></div>
+            <label class="fieldset col-span-2">
+              <div class="fieldset-legend"><span>Host</span></div>
               <input
                 type="text"
                 x-model="newAccount.smtp_host"
@@ -464,8 +462,8 @@
                 required
               />
             </label>
-            <label class="form-control">
-              <div class="label"><span class="label-text">Port</span></div>
+            <label class="fieldset">
+              <div class="fieldset-legend"><span>Port</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.smtp_port"
@@ -479,11 +477,11 @@
               x-model="newAccount.smtp_use_tls"
               class="toggle toggle-sm toggle-module"
             />
-            <span class="label-text">Use STARTTLS</span>
+            <span class="text-sm">Use STARTTLS</span>
           </label>
           <div class="divider text-xs my-1">Authentication</div>
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Username</span></div>
+          <label class="fieldset w-full">
+            <div class="fieldset-legend"><span>Username</span></div>
             <input
               type="text"
               x-model="newAccount.username"
@@ -491,8 +489,8 @@
               required
             />
           </label>
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Password</span></div>
+          <label class="fieldset w-full">
+            <div class="fieldset-legend"><span>Password</span></div>
             <input
               type="password"
               x-model="newAccount.password"
@@ -528,8 +526,8 @@
         {% include "ui/partials/dialog_header.html" with icon="mail-pen" title="Edit Account" subtitle_expr="editAccount?.email" only %}
         <form @submit.prevent="saveAccount()">
           <div class="grid grid-cols-1 gap-3">
-            <label class="form-control w-full">
-              <div class="label"><span class="label-text">Display name</span></div>
+            <label class="fieldset w-full">
+              <div class="fieldset-legend"><span>Display name</span></div>
               <input
                 type="text"
                 x-model="editAccount.display_name"
@@ -538,8 +536,8 @@
             </label>
             <div class="divider text-xs my-1">IMAP (Incoming)</div>
             <div class="grid grid-cols-3 gap-2">
-              <label class="form-control col-span-2">
-                <div class="label"><span class="label-text">Host</span></div>
+              <label class="fieldset col-span-2">
+                <div class="fieldset-legend"><span>Host</span></div>
                 <input
                   type="text"
                   x-model="editAccount.imap_host"
@@ -547,8 +545,8 @@
                   required
                 />
               </label>
-              <label class="form-control">
-                <div class="label"><span class="label-text">Port</span></div>
+              <label class="fieldset">
+                <div class="fieldset-legend"><span>Port</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.imap_port"
@@ -562,12 +560,12 @@
                 x-model="editAccount.imap_use_ssl"
                 class="toggle toggle-sm toggle-module"
               />
-              <span class="label-text">Use SSL</span>
+              <span class="text-sm">Use SSL</span>
             </label>
             <div class="divider text-xs my-1">SMTP (Outgoing)</div>
             <div class="grid grid-cols-3 gap-2">
-              <label class="form-control col-span-2">
-                <div class="label"><span class="label-text">Host</span></div>
+              <label class="fieldset col-span-2">
+                <div class="fieldset-legend"><span>Host</span></div>
                 <input
                   type="text"
                   x-model="editAccount.smtp_host"
@@ -575,8 +573,8 @@
                   required
                 />
               </label>
-              <label class="form-control">
-                <div class="label"><span class="label-text">Port</span></div>
+              <label class="fieldset">
+                <div class="fieldset-legend"><span>Port</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.smtp_port"
@@ -590,11 +588,11 @@
                 x-model="editAccount.smtp_use_tls"
                 class="toggle toggle-sm toggle-module"
               />
-              <span class="label-text">Use STARTTLS</span>
+              <span class="text-sm">Use STARTTLS</span>
             </label>
             <div class="divider text-xs my-1">Authentication</div>
-            <label class="form-control w-full">
-              <div class="label"><span class="label-text">Username</span></div>
+            <label class="fieldset w-full">
+              <div class="fieldset-legend"><span>Username</span></div>
               <input
                 type="text"
                 x-model="editAccount.username"
@@ -602,10 +600,10 @@
                 required
               />
             </label>
-            <label class="form-control w-full">
-              <div class="label">
-                <span class="label-text">Password</span>
-                <span class="label-text-alt text-base-content/40">Leave empty to keep current</span>
+            <label class="fieldset w-full">
+              <div class="fieldset-legend">
+                <span>Password</span>
+                <span class="text-base-content/40">Leave empty to keep current</span>
               </div>
               <input
                 type="password"
@@ -647,9 +645,9 @@
     <div class="modal-box max-w-lg">
       {% include "ui/partials/dialog_header.html" with icon="signature" title="Signature" subtitle_expr="signatureEdit.email" only %}
       <form @submit.prevent="saveSignature()">
-        <label class="form-control w-full">
-          <div class="label">
-            <span class="label-text">This signature is added to new messages, replies and forwards.</span>
+        <label class="fieldset w-full">
+          <div class="fieldset-legend">
+            <span>This signature is added to new messages, replies and forwards.</span>
           </div>
           <textarea
             x-model="signatureEdit.text"

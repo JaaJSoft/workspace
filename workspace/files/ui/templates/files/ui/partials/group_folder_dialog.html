@@ -8,9 +8,9 @@
       <form
         @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.groupSelect.options[$refs.groupSelect.selectedIndex].text } })); }"
       >
-        <div class="form-control">
-          <label class="label">
-            <span class="label-text">{% translate "Group" %}</span>
+        <div class="fieldset">
+          <label class="fieldset-legend">
+            <span>{% translate "Group" %}</span>
           </label>
           <select
             x-model="selectedGroup"
@@ -23,8 +23,8 @@
               <option value="{{ g.id }}">{{ g.name }}</option>
             {% endfor %}
           </select>
-          <label class="label">
-            <span class="label-text-alt">{% translate "The folder will be named after the group" %}</span>
+          <label class="label whitespace-normal">
+            <span>{% translate "The folder will be named after the group" %}</span>
           </label>
         </div>
         <div class="modal-action">

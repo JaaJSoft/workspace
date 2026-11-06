@@ -140,8 +140,8 @@
       {% include "ui/partials/dialog_header.html" with icon="key-round" icon_class="bg-primary/10 text-primary" title=create_title subtitle=create_subtitle close_expr="closeCreateDialog()" class="mb-5" only %}
 
       <form @submit.prevent="createToken()" class="space-y-4">
-        <label class="form-control w-full">
-          <div class="label"><span class="label-text font-medium">{% translate "Name" %}</span></div>
+        <label class="fieldset w-full">
+          <div class="fieldset-legend"><span class="font-medium">{% translate "Name" %}</span></div>
           <label class="input input-sm flex items-center gap-2 w-full">
             <i data-lucide="tag" class="w-4 h-4 text-base-content/40"></i>
             <input
@@ -154,14 +154,14 @@
               autofocus
             />
           </label>
-          <div class="label">
+          <div class="label whitespace-normal">
             {% translate "Helps you recognize where the token is used." as name_hint %}
-            <span class="label-text-alt text-base-content/50">{{ name_hint }}</span>
+            <span class="text-base-content/50">{{ name_hint }}</span>
           </div>
         </label>
 
-        <label class="form-control w-full">
-          <div class="label"><span class="label-text font-medium">{% translate "Expiration" %}</span></div>
+        <label class="fieldset w-full">
+          <div class="fieldset-legend"><span class="font-medium">{% translate "Expiration" %}</span></div>
           <select x-model="newExpiry" class="select select-sm w-full">
             <option value="">{% translate "No expiration" %}</option>
             <option value="7">{% blocktranslate count counter=7 %}{{ counter }} day{% plural %}{{ counter }} days{% endblocktranslate %}</option>
@@ -170,9 +170,9 @@
             <option value="180">{% blocktranslate count counter=180 %}{{ counter }} day{% plural %}{{ counter }} days{% endblocktranslate %}</option>
             <option value="365">{% translate "1 year" %}</option>
           </select>
-          <div class="label">
+          <div class="label whitespace-normal">
             <span
-              class="label-text-alt flex items-center gap-1"
+              class="flex items-center gap-1"
               :class="newExpiry ? 'text-base-content/50' : 'text-warning'"
             >
               <i

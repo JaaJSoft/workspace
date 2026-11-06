@@ -11,9 +11,9 @@
     <form
       @submit.prevent="window.dispatchEvent(new CustomEvent('rename-item', { detail: { uuid: uuid, name: name } }))"
     >
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text">{% translate "New name" %}</span>
+      <div class="fieldset">
+        <label class="fieldset-legend">
+          <span>{% translate "New name" %}</span>
         </label>
         <input x-model="name" type="text" class="input w-full" required />
       </div>

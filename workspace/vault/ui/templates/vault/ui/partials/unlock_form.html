@@ -27,11 +27,11 @@
     <span x-text="error"></span>
     </inline-alert>
     <form @submit.prevent="unlock()">
-      <label class="form-control">
-        <span class="label-text">Master password</span>
+      <label class="fieldset">
+        <span class="text-sm">Master password</span>
         <input
           type="password"
-          class="input"
+          class="input w-full"
           autocomplete="current-password"
           x-model="password"
           :disabled="state === 'deriving'"

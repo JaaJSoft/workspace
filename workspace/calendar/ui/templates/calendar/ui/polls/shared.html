@@ -84,25 +84,25 @@
                     <span class="text-sm font-medium">{% translate "Your identity" %}</span>
                   </div>
                   <div class="flex gap-4">
-                    <div class="form-control flex-1">
-                      <label class="label py-0.5">
-                        <span class="label-text text-xs">{% translate "Name *" %}</span>
+                    <div class="fieldset flex-1">
+                      <label class="fieldset-legend">
+                        <span class="text-xs">{% translate "Name *" %}</span>
                       </label>
                       <input
                         type="text"
-                        class="input input-sm"
+                        class="input input-sm w-full"
                         x-model="guestName"
                         placeholder="{% translate 'Your name' %}"
                         maxlength="100"
                       />
                     </div>
-                    <div class="form-control flex-1">
-                      <label class="label py-0.5">
-                        <span class="label-text text-xs">{% translate "Email (optional)" %}</span>
+                    <div class="fieldset flex-1">
+                      <label class="fieldset-legend">
+                        <span class="text-xs">{% translate "Email (optional)" %}</span>
                       </label>
                       <input
                         type="email"
-                        class="input input-sm"
+                        class="input input-sm w-full"
                         x-model="guestEmail"
                         placeholder="{% translate 'your@email.com' %}"
                       />

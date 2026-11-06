@@ -15,8 +15,8 @@
       {% endwith %}
     {% endwith %}
     <form @submit.prevent="createPerson()" class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
           name="display_name"
@@ -27,9 +27,9 @@
           required
         />
       </label>
-      <label class="form-control w-full">
-        <div class="label">
-          <span class="label-text">
+      <label class="fieldset w-full">
+        <div class="fieldset-legend">
+          <span>
             {% blocktranslate trimmed %}
               Email <span class="opacity-60">(optional)</span>
             {% endblocktranslate %}
@@ -43,8 +43,8 @@
           x-model="personForm.email"
         />
       </label>
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
         <select
           name="scope"
           class="select select-sm w-full"
@@ -98,8 +98,8 @@
       class="space-y-3"
       x-show="!importResult"
     >
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "vCard file" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "vCard file" %}</span></div>
         <input
           type="file"
           name="file"
@@ -109,8 +109,8 @@
           @change="importForm.file = $event.target.files[0] || null"
         />
       </label>
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
         <select
           name="scope"
           class="select select-sm w-full"
@@ -199,8 +199,8 @@
       {% endwith %}
     {% endwith %}
     <form @submit.prevent class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "What to export" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "What to export" %}</span></div>
         {% translate "Contact: %(name)s" as contact_target %}
         {% translate "List: %(name)s" as list_target %}
         <select
@@ -274,8 +274,8 @@
       {% endwith %}
     {% endwith %}
     <form @submit.prevent="saveList()" class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
           name="name"
@@ -287,8 +287,8 @@
         />
       </label>
       <div x-show="!listForm.uuid">
-        <label class="form-control w-full">
-          <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
+        <label class="fieldset w-full">
+          <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
           <select name="scope" class="select select-sm w-full" x-model="listForm.scope">
             <option value="mine">{% translate "My contacts" %}</option>
             <template x-for="group in groups" :key="group.id">

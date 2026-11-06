@@ -178,9 +178,9 @@
         <template x-if="showLinkForm">
           <div class="mt-2 p-3 bg-base-200 rounded-lg space-y-2">
             <template x-if="canChooseMode()">
-              <div class="form-control">
-                <label class="label py-0.5"><span class="label-text text-xs">{% translate "Access" %}</span></label>
-                <select class="select select-sm" x-model="newLinkMode">
+              <div class="fieldset">
+                <label class="fieldset-legend"><span class="text-xs">{% translate "Access" %}</span></label>
+                <select class="select select-sm w-full" x-model="newLinkMode">
                   <template x-for="option in availableModes()" :key="option.value">
                     <option :value="option.value" x-text="option.label"></option>
                   </template>
@@ -189,41 +189,41 @@
             </template>
             <template x-if="showsCaps()">
               <div class="grid grid-cols-2 gap-2">
-                <div class="form-control">
-                  <label class="label py-0.5">
-                    <span class="label-text text-xs">{% translate "Max file size (bytes)" %}</span>
+                <div class="fieldset">
+                  <label class="fieldset-legend">
+                    <span class="text-xs">{% translate "Max file size (bytes)" %}</span>
                   </label>
                   <input
                     type="number"
                     min="1"
-                    class="input input-sm"
+                    class="input input-sm w-full"
                     x-model="newLinkMaxBytes"
                     placeholder="{% translate 'No limit' %}"
                   />
                 </div>
-                <div class="form-control">
-                  <label class="label py-0.5">
-                    <span class="label-text text-xs">{% translate "Max uploads" %}</span>
+                <div class="fieldset">
+                  <label class="fieldset-legend">
+                    <span class="text-xs">{% translate "Max uploads" %}</span>
                   </label>
                   <input
                     type="number"
                     min="1"
-                    class="input input-sm"
+                    class="input input-sm w-full"
                     x-model="newLinkMaxCount"
                     placeholder="{% translate 'No limit' %}"
                   />
                 </div>
               </div>
             </template>
-            <div class="form-control">
-              <label class="label py-0.5">
-                <span class="label-text text-xs">{% translate "Expiration (optional)" %}</span>
+            <div class="fieldset">
+              <label class="fieldset-legend">
+                <span class="text-xs">{% translate "Expiration (optional)" %}</span>
               </label>
-              <input type="date" class="input input-sm" x-model="newLinkExpiry" />
+              <input type="date" class="input input-sm w-full" x-model="newLinkExpiry" />
             </div>
-            <div class="form-control">
-              <label class="label py-0.5">
-                <span class="label-text text-xs">{% translate "Password (optional)" %}</span>
+            <div class="fieldset">
+              <label class="fieldset-legend">
+                <span class="text-xs">{% translate "Password (optional)" %}</span>
               </label>
               <div class="flex items-center gap-1.5">
                 <input

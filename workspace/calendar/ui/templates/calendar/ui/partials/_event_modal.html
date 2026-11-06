@@ -18,8 +18,8 @@
     {% endwith %}
 
     <form @submit.prevent="saveEvent()" class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Title" context "event field" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Title" context "event field" %}</span></div>
         <input
           type="text"
           class="input input-sm w-full"
@@ -29,8 +29,8 @@
         />
       </label>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Calendar" context "event field" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Calendar" context "event field" %}</span></div>
         <select class="select select-sm w-full" x-model="form.calendar_id">
           <template
             x-for="cal in ownedCalendars.filter(c => !c.is_synced && !c.is_external)"
@@ -48,12 +48,12 @@
           :checked="form.all_day"
           @change="toggleAllDay()"
         />
-        <span class="label-text">{% translate "All day" %}</span>
+        <span class="text-sm">{% translate "All day" %}</span>
       </label>
 
       <div class="grid grid-cols-2 gap-2">
-        <label class="form-control">
-          <div class="label"><span class="label-text">{% translate "Start" context "event field" %}</span></div>
+        <label class="fieldset">
+          <div class="fieldset-legend"><span>{% translate "Start" context "event field" %}</span></div>
           <input
             :type="form.all_day ? 'date' : 'datetime-local'"
             class="input input-sm w-full"
@@ -61,8 +61,8 @@
             required
           />
         </label>
-        <label class="form-control">
-          <div class="label"><span class="label-text">{% translate "End" context "event field" %}</span></div>
+        <label class="fieldset">
+          <div class="fieldset-legend"><span>{% translate "End" context "event field" %}</span></div>
           <input
             :type="form.all_day ? 'date' : 'datetime-local'"
             class="input input-sm w-full"
@@ -122,7 +122,7 @@
       <!-- Recurrence -->
       <div class="border border-base-300 rounded-lg p-3 space-y-3">
         <label class="flex items-center justify-between cursor-pointer">
-          <span class="label-text flex items-center gap-2 text-sm font-medium">
+          <span class="text-sm flex items-center gap-2 text-sm font-medium">
             <i data-lucide="repeat" class="w-4 h-4 opacity-60"></i> {% translate "Repeat" %}
           </span>
           <input
@@ -172,8 +172,8 @@
         </div>
       </div>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Location" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Location" %}</span></div>
         <input
           type="text"
           class="input input-sm w-full"
@@ -182,8 +182,8 @@
         />
       </label>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Description" context "event field" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Description" context "event field" %}</span></div>
         <textarea
           class="textarea textarea-sm w-full"
           rows="2"
@@ -192,8 +192,8 @@
         ></textarea>
       </label>
 
-      <div>
-        <div class="label"><span class="label-text">{% translate "Invite guests" %}</span></div>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><span>{% translate "Invite guests" %}</span></legend>
         {% include "calendar/ui/partials/_invitee_selector.html" with on_select_event="calendar-invitee-selected" %}
         <template x-if="inviteeNotice">
           <inline-alert type="warning" class="mt-2" data-testid="invitee-notice">
@@ -259,7 +259,7 @@
             </span>
           </template>
         </div>
-      </div>
+      </fieldset>
 
       <div class="modal-action">
         <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">{% translate "Cancel" %}</button>

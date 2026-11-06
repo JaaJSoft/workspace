@@ -12,12 +12,14 @@ FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/node:26-bookworm-slim AS cs
 
 WORKDIR /build
 
-# Install npm deps first (cache layer that survives template edits)
+# Install npm deps first (cache layer that survives template edits).
+# Optional dependencies stay in: Tailwind's scanner and CSS compiler ship
+# their native binaries as per-platform optional packages.
 COPY scripts/frontend/package.json scripts/frontend/package-lock.json ./scripts/frontend/
-RUN cd scripts/frontend && npm ci --omit=optional --ignore-scripts
+RUN cd scripts/frontend && npm ci --ignore-scripts
 
-# Then copy the inputs Tailwind scans (entry CSS, config, templates, JS)
-COPY scripts/frontend/input.css scripts/frontend/tailwind.config.js ./scripts/frontend/
+# Then copy the inputs Tailwind scans (entry CSS, plugin, templates, JS)
+COPY scripts/frontend/input.css scripts/frontend/module-hues.js ./scripts/frontend/
 COPY workspace/ ./workspace/
 RUN cd scripts/frontend && npm run build:css
 

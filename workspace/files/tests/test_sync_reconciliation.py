@@ -452,9 +452,10 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
 
     def _write_clashing(self, *names, contents=None):
         contents = contents or [b"data"] * len(names)
+        before = len(os.listdir(self._root())) if os.path.isdir(self._root()) else 0
         for name, data in zip(names, contents, strict=True):
             self._write(name, contents=data)
-        if len(os.listdir(self._root())) < len(names):
+        if len(os.listdir(self._root())) < before + len(names):
             self.skipTest("this file system folds the names into one")
 
     def _on_disk(self):
@@ -749,6 +750,89 @@ class FollowedRenameTests(SyncReconciliationTestCase):
         self.assertEqual(result.files_created, 0)
         self.assertEqual(result.disk_entries_renamed, 0)
         self.assertIsNotNone(self._live("Report.txt"))
+
+
+class RenameOnDiskTests(SyncReconciliationTestCase):
+    """Renaming a disk entry aside never replaces what holds the new name.
+
+    The name is picked from a scan that is already stale when the rename
+    runs: a writer can put a file there in between.
+    """
+
+    def _rename(self, old, new, *, is_dir=False):
+        FileSyncService._rename_on_disk(self._root(), old, new, is_dir=is_dir)
+
+    def _read(self, name):
+        with open(os.path.join(self._root(), name), "rb") as handle:
+            return handle.read()
+
+    def test_a_file_written_after_the_check_is_not_replaced(self):
+        self._write("a.txt", contents=b"newcomer")
+        self._write("a (Copy).txt", contents=b"theirs")
+
+        # The writer lands between any existence check and the rename.
+        with patch("os.path.lexists", return_value=False):
+            with self.assertRaises(FileExistsError):
+                self._rename("a.txt", "a (Copy).txt")
+
+        self.assertEqual(self._read("a (Copy).txt"), b"theirs")
+        self.assertEqual(self._read("a.txt"), b"newcomer")
+
+    def test_a_free_name_is_taken_and_the_old_one_released(self):
+        self._write("a.txt", contents=b"newcomer")
+
+        self._rename("a.txt", "a (Copy).txt")
+
+        self.assertEqual(sorted(os.listdir(self._root())), ["a (Copy).txt"])
+        self.assertEqual(self._read("a (Copy).txt"), b"newcomer")
+
+    def test_without_hard_links_a_free_name_is_still_taken(self):
+        self._write("a.txt", contents=b"newcomer")
+
+        with patch("os.link", side_effect=PermissionError("no hard links")):
+            self._rename("a.txt", "a (Copy).txt")
+
+        self.assertEqual(sorted(os.listdir(self._root())), ["a (Copy).txt"])
+
+    def test_without_hard_links_a_taken_name_is_refused(self):
+        self._write("a.txt", contents=b"newcomer")
+        self._write("a (Copy).txt", contents=b"theirs")
+
+        with patch("os.link", side_effect=PermissionError("no hard links")):
+            with self.assertRaises(FileExistsError):
+                self._rename("a.txt", "a (Copy).txt")
+
+        self.assertEqual(self._read("a (Copy).txt"), b"theirs")
+
+    def test_a_directory_is_not_renamed_onto_an_existing_entry(self):
+        self._write("d", "inside.txt")
+        self._write("d (Copy)", contents=b"theirs")
+
+        with self.assertRaises(FileExistsError):
+            self._rename("d", "d (Copy)", is_dir=True)
+
+        self.assertEqual(self._read("d (Copy)"), b"theirs")
+        self.assertTrue(os.path.isfile(os.path.join(self._root(), "d", "inside.txt")))
+
+
+class SyncEndpointTests(SyncReconciliationTestCase):
+    def test_the_response_reports_every_counter(self):
+        target = FileService.create_file(
+            self.user, "target.txt", content=ContentFile(b"target", name="t.txt")
+        )
+        create_shortcut(self.user, target, None, name="report.pdf")
+        self._write("report.pdf")
+        self.client.force_login(self.user)
+
+        response = self.client.post("/api/v1/files/sync")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["files_created"], 1)
+        self.assertEqual(body["shortcuts_renamed"], 1)
+        self.assertEqual(body["disk_entries_renamed"], 0)
+        self.assertEqual(body["renames_followed"], 0)
+        self.assertEqual(body["error_count"], 0)
 
 
 class SyncQueryBudgetTests(SyncReconciliationTestCase):

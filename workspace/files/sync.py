@@ -3,7 +3,7 @@
 import errno
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 from django.core.files.storage import default_storage
 from django.utils import timezone
@@ -28,6 +28,12 @@ class SyncResult:
     disk_entries_renamed: int = 0
     renames_followed: int = 0
     errors: list[str] = field(default_factory=list)
+
+    def counts(self):
+        """Every counter by name, as each report of a sync shows them."""
+        return {
+            f.name: getattr(self, f.name) for f in fields(self) if f.name != "errors"
+        }
 
 
 # Columns the walk actually touches. ``path`` is required by
@@ -129,7 +135,7 @@ class _NodeIndex:
         )
         self._holders.get(file_obj.parent_id, {}).pop(caseless(file_obj.name), None)
 
-    def renamed(self, file_obj, old_name, old_path=None):
+    def renamed(self, file_obj, old_name):
         """Re-key a row the walk just renamed.
 
         A folder's rename rewrote the paths below it in the database, and the
@@ -139,12 +145,14 @@ class _NodeIndex:
         self._live.get(file_obj.parent_id, {}).pop((old_name, file_obj.node_type), None)
         self._holders[file_obj.parent_id].pop(caseless(old_name))
         self._hold(file_obj)
-        if old_path and file_obj.node_type == File.NodeType.FOLDER:
-            prefix = f"{old_path}/"
-            for bucket in self._holders.values():
-                for record in bucket.values():
-                    if record.path and record.path.startswith(prefix):
-                        record.path = f"{file_obj.path}/{record.path[len(prefix) :]}"
+        if file_obj.node_type == File.NodeType.FOLDER:
+            folders = [file_obj]
+            while folders:
+                folder = folders.pop()
+                for child in self._holders.get(folder.pk, {}).values():
+                    child.path = f"{folder.path}/{child.name}"
+                    if child.node_type == File.NodeType.FOLDER:
+                        folders.append(child)
 
     def _hold(self, record):
         self._holders.setdefault(record.parent_id, {})[caseless(record.name)] = record
@@ -430,7 +438,7 @@ class FileSyncService:
                         user, shortcut, keep_free, index, result
                     )
                 if name != entry_name:
-                    self._rename_on_disk(disk_path, entry_name, name)
+                    self._rename_on_disk(disk_path, entry_name, name, is_dir=is_dir)
                     renamed[entry_name] = name
                     result.disk_entries_renamed += 1
                     self.log.info(
@@ -470,7 +478,7 @@ class FileSyncService:
         return renamed
 
     def _follow_rename(self, user, db_record, new_name, index, result):
-        old_name, old_path = db_record.name, db_record.path
+        old_name = db_record.name
         if self.dry_run:
             self.log.info(
                 "[DRY-RUN] Would follow rename: %s -> %s",
@@ -487,7 +495,7 @@ class FileSyncService:
             result.errors.append(f"Error renaming {old_name}: {e}")
             self.log.warning("Error renaming %s: %s", scrub(old_name), scrub(e))
             return
-        index.renamed(db_record, old_name, old_path)
+        index.renamed(db_record, old_name)
         result.renames_followed += 1
         self.log.info("Followed rename: %s -> %s", scrub(old_name), scrub(new_name))
 
@@ -503,11 +511,34 @@ class FileSyncService:
         )
 
     @staticmethod
-    def _rename_on_disk(disk_path, old_name, new_name):
+    def _rename_on_disk(disk_path, old_name, new_name, *, is_dir):
+        """Rename a disk entry, never replacing what holds *new_name*.
+
+        Raises ``FileExistsError`` when something does, even something that
+        appeared after the walk scanned the folder.
+        """
         source = os.path.join(disk_path, old_name)
         destination = os.path.join(disk_path, new_name)
-        # os.rename replaces an existing file on POSIX without a word, and the
-        # walk never writes over what someone put on the disk.
+        if not is_dir:
+            # rename(2) replaces a file without a word, however recently it
+            # was checked for; a hard link refuses an existing name in the
+            # same atomic step.
+            try:
+                os.link(source, destination)
+            except FileExistsError:
+                raise
+            except OSError:
+                pass  # no hard links on this file system
+            else:
+                try:
+                    os.unlink(source)
+                except OSError:
+                    os.unlink(destination)
+                    raise
+                return
+        # What is left can lose nothing to the gap after the check: a
+        # directory rename only ever replaces an empty directory, and Windows
+        # refuses any existing destination.
         if os.path.lexists(destination):
             raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), new_name)
         os.rename(source, destination)

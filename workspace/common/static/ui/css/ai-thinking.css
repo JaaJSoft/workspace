@@ -13,8 +13,8 @@
 }
 
 .ai-thinking-bubble {
-  border: 1px solid oklch(var(--bc) / .08);
-  background: oklch(var(--b2));
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
+  background: var(--color-base-200);
 }
 
 .ai-thinking-dots {
@@ -29,7 +29,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: oklch(var(--bc) / .6);
+  background: color-mix(in oklab, var(--color-base-content) 60%, transparent);
   animation: ai-dot-pulse 1.4s ease-in-out infinite;
   will-change: transform, opacity;
 }
@@ -43,8 +43,8 @@
   height: 10px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 1.5px solid oklch(var(--bc) / .2);
-  border-top-color: oklch(var(--s) / .9);
+  border: 1.5px solid color-mix(in oklab, var(--color-base-content) 20%, transparent);
+  border-top-color: color-mix(in oklab, var(--color-secondary) 90%, transparent);
   animation: ai-step-spin .7s linear infinite;
 }
 

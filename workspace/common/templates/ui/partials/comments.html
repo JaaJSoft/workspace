@@ -42,7 +42,7 @@ Params:
           <template x-if="editingId !== comment.uuid">
             <div>
               <p
-                class="text-sm mt-0.5 whitespace-pre-wrap break-words"
+                class="text-sm mt-0.5 whitespace-pre-wrap wrap-break-word"
                 x-html="comment.body_html"
               ></p>
               <template x-if="canComment && comment.author.id === currentUserId">
@@ -73,7 +73,7 @@ Params:
               <div class="relative">
                 {% include "ui/partials/mention_dropdown.html" with field="edit" %}
                 <textarea
-                  class="textarea textarea-bordered textarea-sm w-full leading-snug"
+                  class="textarea textarea-sm w-full leading-snug"
                   rows="2"
                   x-model="editBody"
                   x-init="$nextTick(() => autoGrow($el))"
@@ -109,7 +109,7 @@ Params:
       <div class="relative">
         {% include "ui/partials/mention_dropdown.html" with field="new" %}
         <textarea
-          class="textarea textarea-bordered textarea-sm w-full leading-snug transition-[min-height] duration-150"
+          class="textarea textarea-sm w-full leading-snug transition-[min-height] duration-150"
           :class="composerFocused || newBody.trim() ? 'min-h-20' : 'min-h-0'"
           rows="1"
           placeholder="{% translate 'Add a comment...' %}"

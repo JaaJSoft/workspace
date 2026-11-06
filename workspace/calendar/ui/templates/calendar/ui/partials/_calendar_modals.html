@@ -23,7 +23,7 @@
         <input
           id="calendar-form-name"
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="calendarForm.name"
           placeholder="{% translate "Calendar name" %}"
           required
@@ -40,14 +40,14 @@
               :class="calendarForm.color === c
                       ? 'border-base-content scale-110 ring-2 ring-base-content/20'
                       : 'border-transparent hover:scale-105'"
-              :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+              :style="{ backgroundColor: 'var(--color-' + c + ')' }"
               @click="calendarForm.color = c"
             >
               <i
                 data-lucide="check"
                 class="w-4 h-4"
                 x-show="calendarForm.color === c"
-                :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"
+                :style="{ color: 'var(--color-' + c + '-content)' }"
               ></i>
             </button>
           </template>
@@ -84,7 +84,7 @@
             <div class="join w-full">
               <input
                 type="text"
-                class="input input-bordered input-sm join-item w-full font-mono text-xs"
+                class="input input-sm join-item w-full font-mono text-xs"
                 :value="calendarFeed.url"
                 readonly
                 @focus="$event.target.select()"
@@ -164,7 +164,7 @@
         <input
           id="external-form-url"
           type="url"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="externalForm.url"
           placeholder="https://calendar.google.com/...ical"
           required
@@ -175,7 +175,7 @@
         <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="externalForm.name"
           placeholder="{% translate "My external calendar" %}"
         />
@@ -191,14 +191,14 @@
               :class="externalForm.color === c
                       ? 'border-base-content scale-110 ring-2 ring-base-content/20'
                       : 'border-transparent hover:scale-105'"
-              :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+              :style="{ backgroundColor: 'var(--color-' + c + ')' }"
               @click="externalForm.color = c"
             >
               <i
                 data-lucide="check"
                 class="w-4 h-4"
                 x-show="externalForm.color === c"
-                :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"
+                :style="{ color: 'var(--color-' + c + '-content)' }"
               ></i>
             </button>
           </template>

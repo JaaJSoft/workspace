@@ -11,7 +11,7 @@
         <div class="label"><span class="label-text">Title</span></div>
         <input
           type="text"
-          class="input input-bordered w-full"
+          class="input w-full"
           x-model="form.title"
           required
           maxlength="255"
@@ -20,7 +20,7 @@
       <label class="form-control w-full mt-2">
         <div class="label"><span class="label-text">Description</span></div>
         <textarea
-          class="textarea textarea-bordered w-full"
+          class="textarea w-full"
           rows="4"
           x-model="form.description"
           placeholder="Markdown supported"
@@ -39,7 +39,7 @@
           <div class="label"><span class="label-text">Start date</span></div>
           <input
             type="date"
-            class="input input-bordered input-sm"
+            class="input input-sm"
             x-model="form.start_date"
             :max="form.due_date || null"
           />
@@ -48,7 +48,7 @@
           <div class="label"><span class="label-text">Due date</span></div>
           <input
             type="date"
-            class="input input-bordered input-sm"
+            class="input input-sm"
             x-model="form.due_date"
             :min="form.start_date || null"
           />
@@ -60,7 +60,7 @@
             </div>
             <input
               type="number"
-              class="input input-bordered input-sm"
+              class="input input-sm"
               min="0"
               step="0.5"
               inputmode="decimal"

@@ -2,7 +2,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Due-date reminder time</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.reminder_hour"
       @change="update('reminder_hour', parseInt($event.target.value))"
     >
@@ -13,7 +13,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Notifications</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.notify_level"
       @change="update('notify_level', $event.target.value)"
     >

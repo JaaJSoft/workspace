@@ -4,7 +4,7 @@
 <!-- Language & region Tab -->
 <div x-show="tab === 'region'" x-cloak class="space-y-6">
   <div
-    class="card bg-base-100 border border-base-300 shadow-sm"
+    class="card bg-base-100 border border-base-300 shadow-xs"
     x-data="languagePickerForm()"
   >
     <div class="card-body">
@@ -17,7 +17,7 @@
       >{% translate "The language of the interface. The page reloads to apply it." %}</p>
       <div class="mt-4">
         <select
-          class="select select-bordered w-full max-w-xs"
+          class="select w-full max-w-xs"
           x-model="language"
           @change="save()"
           :disabled="saving"
@@ -36,7 +36,7 @@
   </div>
 
   <div
-    class="card bg-base-100 border border-base-300 shadow-sm"
+    class="card bg-base-100 border border-base-300 shadow-xs"
     x-data="timezonePickerForm()"
   >
     <div class="card-body">
@@ -49,7 +49,7 @@
       >{% translate "Dates and times across the app are shown in this timezone." %}</p>
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <select
-          class="select select-bordered w-full max-w-xs"
+          class="select w-full max-w-xs"
           x-model="tz"
           @change="save()"
           aria-label="{% translate 'Timezone' %}"

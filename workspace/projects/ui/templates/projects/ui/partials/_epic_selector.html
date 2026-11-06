@@ -31,7 +31,7 @@ Params:
 >
   <button
     type="button"
-    class="input input-sm input-bordered flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
+    class="input input-sm flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
     x-ref="trigger"
     aria-haspopup="menu"
     :aria-expanded="open"
@@ -78,8 +78,8 @@ Params:
       <li role="none">
         <button
           type="button"
-          class="flex items-center gap-2 rounded"
-          :class="!{{ model_expr }} ? 'active' : ''"
+          class="flex items-center gap-2 rounded-sm"
+          :class="!{{ model_expr }} ? 'menu-active' : ''"
           role="menuitemradio"
           :aria-checked="!{{ model_expr }}"
           @click="{{ model_expr }} = ''; open = false; {{ on_change|default:'' }}"
@@ -94,8 +94,8 @@ Params:
         <li class="w-full min-w-0" role="none">
           <button
             type="button"
-            class="flex w-full min-w-0 items-center gap-2 rounded"
-            :class="{{ model_expr }} === epic.uuid ? 'active' : ''"
+            class="flex w-full min-w-0 items-center gap-2 rounded-sm"
+            :class="{{ model_expr }} === epic.uuid ? 'menu-active' : ''"
             role="menuitemradio"
             :aria-checked="{{ model_expr }} === epic.uuid"
             @click="{{ model_expr }} = epic.uuid; open = false; {{ on_change|default:'' }}"
@@ -115,7 +115,7 @@ Params:
       </template>
       {% if role == "admin" and writable and not disabled %}
         <li role="none" class="w-full min-w-0" x-data="{ newEpic: '' }">
-          <label class="flex w-full min-w-0 items-center gap-2 rounded cursor-text">
+          <label class="flex w-full min-w-0 items-center gap-2 rounded-sm cursor-text">
             <i data-lucide="plus" class="w-4 h-4 shrink-0 opacity-60"></i>
             <input
               type="text"

@@ -15,7 +15,7 @@
           Date &amp; time
         </legend>
         <div
-          class="tabs tabs-boxed tabs-sm bg-base-200 p-0.5 w-full"
+          class="tabs tabs-box tabs-sm bg-base-200 p-0.5 w-full"
           role="radiogroup"
           aria-label="Date and time"
         >
@@ -64,14 +64,14 @@
         <div x-show="captureDialog.dateMode === 'shift'" x-cloak class="space-y-2">
           <div class="flex flex-wrap items-end gap-2">
             <select
-              class="select select-bordered select-sm w-28"
+              class="select select-sm w-28"
               aria-label="Direction"
               x-model.number="captureDialog.shiftSign"
             >
               <option value="1">Later</option>
               <option value="-1">Earlier</option>
             </select>
-            <label class="input input-bordered input-sm flex items-center gap-1 w-24">
+            <label class="input input-sm flex items-center gap-1 w-24">
               <input
                 type="number"
                 min="0"
@@ -82,7 +82,7 @@
               />
               <span class="text-base-content/50">d</span>
             </label>
-            <label class="input input-bordered input-sm flex items-center gap-1 w-24">
+            <label class="input input-sm flex items-center gap-1 w-24">
               <input
                 type="number"
                 min="0"
@@ -92,7 +92,7 @@
               />
               <span class="text-base-content/50">h</span>
             </label>
-            <label class="input input-bordered input-sm flex items-center gap-1 w-24">
+            <label class="input input-sm flex items-center gap-1 w-24">
               <input
                 type="number"
                 min="0"
@@ -117,13 +117,13 @@
           <div class="flex flex-wrap gap-2">
             <input
               type="date"
-              class="input input-bordered input-sm w-44"
+              class="input input-sm w-44"
               aria-label="Date"
               x-model="captureDialog.date"
             />
             <input
               type="time"
-              class="input input-bordered input-sm w-32"
+              class="input input-sm w-32"
               aria-label="Time"
               x-model="captureDialog.time"
             />
@@ -148,7 +148,7 @@
           Location
         </legend>
         <div
-          class="tabs tabs-boxed tabs-sm bg-base-200 p-0.5 w-full"
+          class="tabs tabs-box tabs-sm bg-base-200 p-0.5 w-full"
           role="radiogroup"
           aria-label="Location"
         >
@@ -199,7 +199,7 @@
           x-cloak
           class="space-y-2"
         >
-          <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+          <label class="input input-sm flex items-center gap-2 w-full">
             <i data-lucide="map-pinned" class="w-4 h-4 opacity-60"></i>
             <input
               type="text"

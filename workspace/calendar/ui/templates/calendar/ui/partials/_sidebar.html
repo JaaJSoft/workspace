@@ -3,7 +3,7 @@
 {% load i18n %}
 {{ calendars|json_script:"calendars-data" }}
 {{ prefs|json_script:"calendar-prefs-data" }}
-<div class="drawer-side z-40 h-full !overflow-visible">
+<div class="drawer-side z-40 h-full overflow-visible!">
   <label
     for="calendar-drawer"
     aria-label="{% translate "close sidebar" %}"

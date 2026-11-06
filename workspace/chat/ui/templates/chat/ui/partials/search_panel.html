@@ -14,7 +14,7 @@
 
 <div class="p-4 space-y-3">
   <!-- Search input -->
-  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+  <label class="input input-sm flex items-center gap-2 w-full">
     <i data-lucide="search" class="w-3.5 h-3.5 opacity-50"></i>
     <input
       type="text"
@@ -73,7 +73,7 @@
     <div>
       <label class="text-xs font-medium text-base-content/60 mb-1 block">Sender</label>
       <select
-        class="select select-xs select-bordered w-full"
+        class="select select-xs w-full"
         x-model="searchFilterAuthor"
         @change="searchMessages()"
       >
@@ -88,7 +88,7 @@
     <div>
       <label class="text-xs font-medium text-base-content/60 mb-1 block">Date</label>
       <select
-        class="select select-xs select-bordered w-full"
+        class="select select-xs w-full"
         x-model="searchFilterDateRange"
         @change="searchMessages()"
       >
@@ -102,14 +102,14 @@
       <div x-show="searchFilterDateRange === 'custom'" class="flex gap-2 mt-1">
         <input
           type="date"
-          class="input input-xs input-bordered flex-1"
+          class="input input-xs flex-1"
           x-model="searchFilterDateFrom"
           @change="searchMessages()"
           placeholder="From"
         />
         <input
           type="date"
-          class="input input-xs input-bordered flex-1"
+          class="input input-xs flex-1"
           x-model="searchFilterDateTo"
           @change="searchMessages()"
           placeholder="To"
@@ -183,7 +183,7 @@
         highlighted unescaped - escaping it here would print the markup
         instead of rendering it.{% endcomment %}
         <div
-          class="text-xs text-base-content/70 line-clamp-3 break-words msg-body"
+          class="text-xs text-base-content/70 line-clamp-3 wrap-break-word msg-body"
           x-html="highlightMatch(result.body_html, searchQuery, { escape: false })"
         ></div>
       </div>

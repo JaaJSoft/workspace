@@ -13,7 +13,7 @@ here. Tags have no context menu: the tag manager dialog holds their actions.
   x-show="ctxMenu.type === 'folder' || ctxMenu.type === 'group_folder'"
 >
   <li x-show="ctxMenu.actions === null">
-    <span class="gap-3 rounded pointer-events-none">
+    <span class="gap-3 rounded-sm pointer-events-none">
       <span class="loading loading-spinner loading-xs"></span>
       <span>Loading…</span>
     </span>
@@ -35,7 +35,7 @@ here. Tags have no context menu: the tag manager dialog holds their actions.
 
 <ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'note'">
   <li x-show="ctxMenu.actions === null">
-    <span class="gap-3 rounded pointer-events-none">
+    <span class="gap-3 rounded-sm pointer-events-none">
       <span class="loading loading-spinner loading-xs"></span>
       <span>Loading…</span>
     </span>

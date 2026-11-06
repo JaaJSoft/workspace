@@ -92,7 +92,7 @@
               </div>
               <template x-if="!entry._removed">
                 <select
-                  class="select select-xs select-bordered w-28"
+                  class="select select-xs w-28"
                   :value="entry.role"
                   :title="roleHint(entry.role)"
                   aria-label="Role"
@@ -223,18 +223,14 @@
           >
             <div class="form-control">
               <label class="label py-0.5"><span class="label-text text-xs">Expiration (optional)</span></label>
-              <input
-                type="date"
-                class="input input-bordered input-sm"
-                x-model="newLinkExpiry"
-              />
+              <input type="date" class="input input-sm" x-model="newLinkExpiry" />
             </div>
             <div class="form-control">
               <label class="label py-0.5"><span class="label-text text-xs">Password (optional)</span></label>
               <div class="flex items-center gap-1.5">
                 <input
                   :type="linkPasswordRevealed ? 'text' : 'password'"
-                  class="input input-bordered input-sm flex-1 min-w-0"
+                  class="input input-sm flex-1 min-w-0"
                   :class="linkPasswordRevealed && 'font-mono'"
                   autocomplete="new-password"
                   spellcheck="false"

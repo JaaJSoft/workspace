@@ -330,14 +330,14 @@ Context:
     >
       <div x-show="loading" x-cloak>
         <div class="divider my-0 text-xs text-base-content/40">{% translate "Activity" %}</div>
-        <div class="h-7 bg-base-300/60 rounded my-2 animate-pulse"></div>
+        <div class="h-7 bg-base-300/60 rounded-sm my-2 animate-pulse"></div>
         <ul class="space-y-2.5 animate-pulse">
           {% for _ in "1234" %}
             <li class="flex items-start gap-2.5">
               <div class="w-3.5 h-3.5 mt-1 rounded-full bg-base-300 shrink-0"></div>
               <div class="flex-1 space-y-1.5">
-                <div class="h-3.5 bg-base-300 rounded w-3/4"></div>
-                <div class="h-3 bg-base-300 rounded w-1/3"></div>
+                <div class="h-3.5 bg-base-300 rounded-sm w-3/4"></div>
+                <div class="h-3 bg-base-300 rounded-sm w-1/3"></div>
               </div>
             </li>
           {% endfor %}
@@ -366,7 +366,7 @@ Context:
         <div class="text-xs">
           <span class="text-base-content/60">UUID</span>
           <code
-            class="block mt-1 text-xs bg-base-200 px-2 py-1 rounded select-all break-all"
+            class="block mt-1 text-xs bg-base-200 px-2 py-1 rounded-sm select-all break-all"
           >{{ file.uuid }}</code>
         </div>
       </div>

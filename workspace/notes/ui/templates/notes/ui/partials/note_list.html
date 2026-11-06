@@ -41,7 +41,7 @@
     ></i>
     <input
       type="text"
-      class="input input-xs input-bordered w-full pl-8 pr-7 text-sm"
+      class="input input-xs w-full pl-8 pr-7 text-sm"
       placeholder="Search notes..."
       x-model="filters.search"
       @input="onSearchInput()"
@@ -151,7 +151,7 @@
           x-cloak
         ></i>
         <span
-          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity shrink-0"
+          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:opacity-100! transition-opacity shrink-0"
           @click.stop="openCtxMenu($event, 'note', { uuid: note.uuid, name: note.name, is_favorite: note.is_favorite, parent: note.parent })"
         >
           <i data-lucide="ellipsis-vertical" class="w-3.5 h-3.5"></i>
@@ -211,11 +211,11 @@
           :class="notePrefs.compactList ? 'px-3 py-1.5' : 'p-3'"
         >
           <div
-            class="h-4 bg-base-300 rounded w-3/4"
+            class="h-4 bg-base-300 rounded-sm w-3/4"
             :class="notePrefs.compactList ? '' : 'mb-2'"
           ></div>
           <div
-            class="h-3 bg-base-300/60 rounded w-1/3"
+            class="h-3 bg-base-300/60 rounded-sm w-1/3"
             x-show="!notePrefs.compactList"
           ></div>
         </div>

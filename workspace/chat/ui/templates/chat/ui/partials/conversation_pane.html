@@ -120,7 +120,7 @@
               <li>
                 <a
                   @click="document.activeElement.blur(); setNotificationLevel('all')"
-                  :class="notificationLevel() === 'all' ? 'active' : ''"
+                  :class="notificationLevel() === 'all' ? 'menu-active' : ''"
                 >
                   <i data-lucide="bell" class="w-4 h-4"></i> All messages
                 </a>
@@ -128,7 +128,7 @@
               <li>
                 <a
                   @click="document.activeElement.blur(); setNotificationLevel('mentions')"
-                  :class="notificationLevel() === 'mentions' ? 'active' : ''"
+                  :class="notificationLevel() === 'mentions' ? 'menu-active' : ''"
                 >
                   <i data-lucide="at-sign" class="w-4 h-4"></i> Mentions only
                 </a>
@@ -136,7 +136,7 @@
               <li>
                 <a
                   @click="document.activeElement.blur(); setNotificationLevel('none')"
-                  :class="notificationLevel() === 'none' ? 'active' : ''"
+                  :class="notificationLevel() === 'none' ? 'menu-active' : ''"
                 >
                   <i data-lucide="bell-off" class="w-4 h-4"></i> Nothing
                 </a>
@@ -276,7 +276,7 @@
                      one the finished message renders. -->
                 <div
                   class="ai-thinking-bubble rounded-2xl min-w-0 max-w-full"
-                  :class="botSteps.length ? 'px-3 py-2' : 'px-8 py-3.5 min-w-[9rem]'"
+                  :class="botSteps.length ? 'px-3 py-2' : 'px-8 py-3.5 min-w-36'"
                 >
                   <div class="flex flex-col gap-1 min-w-0">
                     <div
@@ -313,7 +313,7 @@
                     <div
                       x-show="!botStepsRunning()"
                       class="ai-thinking-dots"
-                      :class="botSteps.length ? 'ml-[1.125rem]' : 'self-center'"
+                      :class="botSteps.length ? 'ml-4.5' : 'self-center'"
                     >
                       <span class="ai-thinking-dot"></span>
                       <span class="ai-thinking-dot"></span>
@@ -380,11 +380,11 @@
           x-show="showInfoPanel"
           x-cloak
           x-transition:enter="transition-[width] ease-out duration-200"
-          x-transition:enter-start="!w-0"
-          x-transition:enter-end="!w-72"
+          x-transition:enter-start="w-0!"
+          x-transition:enter-end="w-72!"
           x-transition:leave="transition-[width] ease-in duration-150"
-          x-transition:leave-start="!w-72"
-          x-transition:leave-end="!w-0"
+          x-transition:leave-start="w-72!"
+          x-transition:leave-end="w-0!"
           class="{% if overlay_panels %}hidden{% else %}hidden lg:flex{% endif %} w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
           <div class="w-72 flex-1 overflow-y-auto">{% include "chat/ui/partials/info_panel.html" %}</div>
@@ -395,11 +395,11 @@
           x-show="showSearchPanel"
           x-cloak
           x-transition:enter="transition-[width] ease-out duration-200"
-          x-transition:enter-start="!w-0"
-          x-transition:enter-end="!w-72"
+          x-transition:enter-start="w-0!"
+          x-transition:enter-end="w-72!"
           x-transition:leave="transition-[width] ease-in duration-150"
-          x-transition:leave-start="!w-72"
-          x-transition:leave-end="!w-0"
+          x-transition:leave-start="w-72!"
+          x-transition:leave-end="w-0!"
           class="{% if overlay_panels %}hidden{% else %}hidden lg:flex{% endif %} w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
           <div class="w-72 flex-1 overflow-y-auto">{% include "chat/ui/partials/search_panel.html" %}</div>
@@ -479,7 +479,7 @@
 <div
   x-show="emojiPickerVisible"
   x-cloak
-  class="fixed z-[100]"
+  class="fixed z-100"
   :style="`left:${emojiPickerX}px; top:${emojiPickerY}px`"
   @click.outside="closeEmojiPicker()"
   @keydown.escape.stop="closeEmojiPicker()"
@@ -614,7 +614,7 @@
     <div class="modal-box max-w-sm p-0 flex flex-col">
       {% include "ui/partials/dialog_header.html" with icon="sparkles" title="Start AI Chat" close_expr="showBotPicker = false" class="px-5 pt-5 pb-2" only %}
       <div class="px-5 pb-1" x-show="availableBots.length > 5">
-        <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+        <label class="input input-sm flex items-center gap-2 w-full">
           <i data-lucide="search" class="w-4 h-4 opacity-50"></i>
           <input
             type="text"
@@ -695,14 +695,14 @@
         </button>
         <div x-show="botGoalDraft.enabled" x-collapse class="space-y-2 pb-2">
           <textarea
-            class="textarea textarea-bordered textarea-sm w-full"
+            class="textarea textarea-sm w-full"
             rows="3"
             placeholder="Objective: what should the bot pursue autonomously? (e.g. follow apartment listings in Lyon and alert me about good ones)"
             x-model="botGoalDraft.goal"
           ></textarea>
           <input
             type="text"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full"
             placeholder="Title (optional)"
             x-model="botGoalDraft.title"
           />
@@ -711,7 +711,7 @@
               <span class="label-text text-xs text-base-content/60 pb-0.5">First check-in (optional)</span>
               <input
                 type="datetime-local"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full"
                 x-model="botGoalDraft.first_check_at"
               />
             </label>
@@ -719,7 +719,7 @@
               <span class="label-text text-xs text-base-content/60 pb-0.5">Deadline (optional)</span>
               <input
                 type="datetime-local"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full"
                 x-model="botGoalDraft.deadline"
               />
             </label>

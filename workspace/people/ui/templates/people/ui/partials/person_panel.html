@@ -116,7 +116,7 @@
                 <span class="label-text text-xs opacity-60">{% translate "First name" %}</span>
                 <input
                   type="text"
-                  class="input input-bordered input-sm"
+                  class="input input-sm"
                   x-model="person.given_name"
                   @change="saveField('given_name')"
                   :readonly="!can('edit')"
@@ -126,7 +126,7 @@
                 <span class="label-text text-xs opacity-60">{% translate "Last name" %}</span>
                 <input
                   type="text"
-                  class="input input-bordered input-sm"
+                  class="input input-sm"
                   x-model="person.family_name"
                   @change="saveField('family_name')"
                   :readonly="!can('edit')"
@@ -136,7 +136,7 @@
                 <span class="label-text text-xs opacity-60">{% translate "Organization" %}</span>
                 <input
                   type="text"
-                  class="input input-bordered input-sm"
+                  class="input input-sm"
                   x-model="person.organization"
                   @change="saveField('organization')"
                   :readonly="!can('edit')"
@@ -146,7 +146,7 @@
                 <span class="label-text text-xs opacity-60">{% translate "Title" context "job title" %}</span>
                 <input
                   type="text"
-                  class="input input-bordered input-sm"
+                  class="input input-sm"
                   x-model="person.title"
                   @change="saveField('title')"
                   :readonly="!can('edit')"
@@ -156,7 +156,7 @@
                 <span class="label-text text-xs opacity-60">{% translate "Birthday" %}</span>
                 <input
                   type="date"
-                  class="input input-bordered input-sm"
+                  class="input input-sm"
                   x-model="person.birthday"
                   @change="saveField('birthday')"
                   :readonly="!can('edit')"
@@ -190,7 +190,7 @@
                   class="flex {% if kind == 'addresses' %}items-start{% else %}items-center{% endif %} gap-2 mb-2"
                 >
                   <select
-                    class="select select-bordered select-xs w-24"
+                    class="select select-xs w-24"
                     x-model="entry.type"
                     @change="saveEntries('{{ kind|escapejs }}')"
                     :disabled="!can('edit')"
@@ -201,7 +201,7 @@
                     <div class="flex-1 min-w-0 space-y-2">
                       <input
                         type="text"
-                        class="input input-bordered input-xs w-full"
+                        class="input input-xs w-full"
                         placeholder="{% translate "Street" %}"
                         x-model="entry.street"
                         @change="saveEntries('addresses')"
@@ -210,7 +210,7 @@
                       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <input
                           type="text"
-                          class="input input-bordered input-xs w-full"
+                          class="input input-xs w-full"
                           placeholder="{% translate "Postal code" %}"
                           x-model="entry.postal_code"
                           @change="saveEntries('addresses')"
@@ -218,7 +218,7 @@
                         />
                         <input
                           type="text"
-                          class="input input-bordered input-xs w-full"
+                          class="input input-xs w-full"
                           placeholder="{% translate "City" %}"
                           x-model="entry.city"
                           @change="saveEntries('addresses')"
@@ -226,7 +226,7 @@
                         />
                         <input
                           type="text"
-                          class="input input-bordered input-xs w-full"
+                          class="input input-xs w-full"
                           placeholder="{% translate "Country" %}"
                           x-model="entry.country"
                           @change="saveEntries('addresses')"
@@ -237,7 +237,7 @@
                   {% else %}
                     <input
                       type="text"
-                      class="input input-bordered input-xs flex-1"
+                      class="input input-xs flex-1"
                       x-model="entry.value"
                       @change="saveEntries('{{ kind|escapejs }}')"
                       :readonly="!can('edit')"
@@ -328,7 +328,7 @@
             <i data-lucide="sticky-note" class="w-3.5 h-3.5"></i>{% translate "Notes" %}
           </h3>
           <textarea
-            class="textarea textarea-bordered w-full"
+            class="textarea w-full"
             rows="4"
             x-model="person.notes"
             @change="saveField('notes')"
@@ -361,7 +361,7 @@
             <div class="label"><span class="label-text">{% translate "List" %}</span></div>
             <select
               name="list"
-              class="select select-bordered select-sm w-full"
+              class="select select-sm w-full"
               x-model="listPick"
               required
             >
@@ -396,11 +396,7 @@
         <form @submit.prevent="confirmMove()" class="space-y-3">
           <label class="form-control w-full">
             <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
-            <select
-              name="scope"
-              class="select select-bordered select-sm w-full"
-              x-model="movePick"
-            >
+            <select name="scope" class="select select-sm w-full" x-model="movePick">
               <option value="mine">{% translate "My contacts" %}</option>
               <template x-for="group in groups" :key="group.id">
                 <option :value="'group:' + group.id" x-text="group.name"></option>

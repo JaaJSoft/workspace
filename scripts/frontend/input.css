@@ -1,10 +1,69 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
 
-/* Thin, unobtrusive scrollbar for picker dropdowns (user/label selectors).
-   The default ~15px scrollbar is carved out of the dropdown's content box,
-   squeezing the rows and making the dropdown visibly wider than its input. */
+/* Tailwind only ships classes it can see as literal strings in these files.
+   Anything constructed at runtime (Django `bg-{{ color }}/10`, Alpine
+   `'checkbox-' + cal.color`, the chart classes built in Python services) is
+   invisible to the scanner and must be listed in the inline sources below. */
+@source "../../workspace/**/templates/**/*.html";
+/* offline.html is a static file, not a template: the service worker serves
+   it directly, and its classes are purged without this line. */
+@source "../../workspace/**/static/**/*.{html,js}";
+/* Minified vendored bundles carry no utility class, but the scanner finds
+   class-shaped substrings in them and emits dead rules for each. */
+@source not "../../workspace/**/static/**/vendor/**";
+
+/* daisyUI semantic colors that the codebase interpolates at runtime
+   (calendar.color, label.color, badge_variant, drawer_item's color param...),
+   `module` included for drawer_item.html, which interpolates `bg-{{ c }}`
+   with c="module". */
+@source inline("{,hover:,focus:,group-hover:}{bg,text,border,ring,fill,stroke,checkbox,badge,btn,toggle,link,progress,range,radio,input}-{primary,secondary,accent,neutral,info,success,warning,error,ghost,base-100,base-200,base-300,base-content,module}{,-content}");
+/* Their opacity-modified forms. `fill`/`stroke` cover the chart classes
+   built as plain strings in Python (projects/services/timeline.py,
+   files/services/storage_analysis.py, common/charts.py), which the scanner
+   never reads. The hover form serves drawer_item.html and
+   upcoming_events.html, which interpolate `hover:bg-{{ c }}/X`. */
+@source inline("{bg,text,border,ring,fill,stroke}-{primary,secondary,accent,neutral,info,success,warning,error,base-100,base-200,base-300,base-content,module}/{5,10,15,20,25,30,40,50,60}");
+@source inline("hover:bg-{primary,secondary,accent,neutral,info,success,warning,error,base-100,base-200,base-300,base-content,module}/{5,10,15,20,25,30,40,50,60}");
+
+@plugin "@tailwindcss/typography";
+/* Themes available in the user preference picker
+   (workspace/users/ui/templates/users/ui/partials/settings_appearance.html
+   lightThemes + darkThemes). Listing a theme bakes it into the bundle;
+   omitting it would break that user's selection. */
+@plugin "daisyui" {
+  themes: light --default, cupcake, bumblebee, emerald, corporate, retro,
+    valentine, garden, pastel, lemonade, autumn, winter, nord,
+    dark --prefersdark, synthwave, halloween, forest, aqua, black, luxury,
+    dracula, business, night, coffee, dim, sunset;
+  logs: false;
+}
+@plugin "./module-hues.js";
+
+/* The current module's identity color, set by .module-<hue> (module-hues.js).
+   `inline` resolves the variable where the utility is used, so a tile of
+   another module nested in the page takes that module's hue. */
+@theme inline {
+  --color-module: var(--module);
+  --color-module-content: var(--module-content);
+}
+
+/* Tailwind 4 applies hover: only on devices that can hover. Several actions
+   are revealed on hover alone and have no touch path yet (#1480), so keep
+   hover: unconditional until they do. */
+@custom-variant hover (&:hover);
+
+/* Tailwind 4 defaults borders to currentColor. A border without an explicit
+   color takes the theme's base-300 instead, which follows light and dark. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-base-300, currentcolor);
+  }
+}
+
 @layer components {
   /* Scrollable control rows (filter pills, chip rows): hide the scrollbar
      entirely - the row still scrolls by touch/wheel. Sub-pixel rounding can
@@ -22,9 +81,12 @@
   .scroll-fade-end {
     mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
   }
+  /* Thin, unobtrusive scrollbar for picker dropdowns (user/label selectors).
+     The default ~15px scrollbar is carved out of the dropdown's content box,
+     squeezing the rows and making the dropdown visibly wider than its input. */
   .thin-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: oklch(var(--bc) / 0.15) transparent;
+    scrollbar-color: color-mix(in oklab, var(--color-base-content) 15%, transparent) transparent;
   }
   .thin-scrollbar::-webkit-scrollbar {
     width: 6px;
@@ -33,11 +95,11 @@
     background: transparent;
   }
   .thin-scrollbar::-webkit-scrollbar-thumb {
-    background: oklch(var(--bc) / 0.15);
+    background: color-mix(in oklab, var(--color-base-content) 15%, transparent);
     border-radius: 3px;
   }
   .thin-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: oklch(var(--bc) / 0.25);
+    background: color-mix(in oklab, var(--color-base-content) 25%, transparent);
   }
 
   /* A toolbar popover: anchored under its button (the wrapper is `relative`),
@@ -65,11 +127,11 @@
     @apply transition-[background-color,box-shadow,transform,color] duration-150;
   }
   .file-drop-target {
-    @apply !bg-module/15 ring-1 ring-module/35 rounded-lg;
+    @apply bg-module/15! ring-1 ring-module/35 rounded-lg;
   }
   /* The active sidebar entry already sits on bg-module/15: step up. */
   aside .file-drop-target {
-    @apply !bg-module/25;
+    @apply bg-module/25!;
   }
   #folder-browser .grid > .file-drop-target {
     @apply scale-[1.02];
@@ -79,7 +141,7 @@
     @apply px-1.5 py-0.5 -mx-1.5 -my-0.5;
   }
   tr.file-drop-target {
-    @apply !bg-transparent ring-0 rounded-none;
+    @apply bg-transparent! ring-0 rounded-none;
   }
   tr.file-drop-target > td {
     @apply bg-module/15;
@@ -93,112 +155,74 @@
   .file-drag-source {
     @apply opacity-40;
   }
-  /* daisyUI generates btn-primary, badge-primary... only for its own seven
-     slots. These are the same rules with the module hue in place of --p,
-     for the components module templates use with their identity color. */
-  .btn-module {
-    border-color: rgb(var(--module));
-    background-color: rgb(var(--module));
-    color: rgb(var(--module-content));
-    outline-color: rgb(var(--module));
+}
+
+/* daisyUI generates btn-primary, badge-primary... only for its own color
+   slots. These set the same component variables with the module hue in
+   place of the primary color, for the components module templates use
+   with their identity color. */
+@utility btn-module {
+  --btn-color: var(--module);
+  --btn-fg: var(--module-content);
+  --btn-soft-bg: initial;
+}
+@utility badge-module {
+  --badge-color: var(--module);
+  --badge-fg: var(--module-content);
+}
+@utility toggle-module {
+  &:checked,
+  &[aria-checked="true"] {
+    --input-color: var(--module);
   }
-  .btn-module:hover,
-  .btn-module.btn-active {
-    border-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
-    background-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+}
+@utility link-module {
+  color: var(--module);
+  &:hover {
+    color: color-mix(in oklab, var(--module) 80%, #000);
   }
-  .btn-outline.btn-module {
-    border-color: currentColor;
-    background-color: transparent;
-    color: rgb(var(--module));
+}
+@utility step-module {
+  & + .step-module::before,
+  &::after,
+  & > .step-icon {
+    --step-bg: var(--module);
+    --step-fg: var(--module-content);
   }
-  .btn-outline.btn-module:hover,
-  .btn-outline.btn-module.btn-active {
-    border-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
-    background-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
-    color: rgb(var(--module-content));
+}
+@utility progress-module {
+  color: var(--module);
+}
+@utility range-module {
+  color: var(--module);
+  --range-thumb: var(--module-content);
+}
+@utility radio-module {
+  --input-color: var(--module);
+}
+/* Unchecked keeps daisyUI's neutral border: the hue marks selection only. */
+@utility checkbox-module {
+  color: var(--module-content);
+  &:checked,
+  &[aria-checked="true"],
+  &:indeterminate,
+  &[aria-checked="mixed"],
+  &:focus-visible {
+    --input-color: var(--module);
   }
-  .badge-module {
-    border-color: rgb(var(--module));
-    background-color: rgb(var(--module));
-    color: rgb(var(--module-content));
+}
+@utility input-module {
+  &,
+  &:focus,
+  &:focus-within {
+    --input-color: var(--module);
   }
-  .badge-outline.badge-module {
-    background-color: transparent;
-    color: rgb(var(--module));
-  }
-  .toggle-module:focus-visible {
-    outline-color: rgb(var(--module));
-  }
-  .toggle-module:checked,
-  .toggle-module[aria-checked="true"] {
-    border-color: rgb(var(--module) / 0.1);
-    background-color: rgb(var(--module));
-    color: rgb(var(--module-content));
-  }
-  .link-module {
-    color: rgb(var(--module));
-  }
-  .link-module:hover {
-    color: color-mix(in oklab, rgb(var(--module)) 80%, black);
-  }
-  .steps .step-module + .step-module:before,
-  .steps .step-module:after {
-    background-color: rgb(var(--module));
-    color: rgb(var(--module-content));
-  }
-  .progress-module::-moz-progress-bar {
-    background-color: rgb(var(--module));
-  }
-  .progress-module::-webkit-progress-value {
-    background-color: rgb(var(--module));
-  }
-  .progress-module:indeterminate {
-    --progress-color: rgb(var(--module));
-  }
-  .range-module {
-    --range-shdw: rgb(var(--module));
-  }
-  .radio-module {
-    border-color: rgb(var(--module));
-  }
-  .radio-module:focus-visible {
-    outline-color: rgb(var(--module));
-  }
-  .radio-module:checked,
-  .radio-module[aria-checked="true"] {
-    border-color: rgb(var(--module));
-    background-color: rgb(var(--module));
-    color: rgb(var(--module-content));
-  }
-  /* Unchecked keeps daisyUI's neutral border: the hue marks selection only. */
-  .checkbox-module {
-    --chkbg: rgb(var(--module));
-    --chkfg: rgb(var(--module-content));
-  }
-  .checkbox-module:focus-visible {
-    outline-color: rgb(var(--module));
-  }
-  .checkbox-module:checked,
-  .checkbox-module[aria-checked="true"] {
-    border-color: rgb(var(--module));
-    background-color: rgb(var(--module));
-    color: rgb(var(--module-content));
-  }
-  .input-module {
-    border-color: rgb(var(--module));
-  }
-  .input-module:focus,
-  .input-module:focus-within {
-    border-color: rgb(var(--module));
-    outline-color: rgb(var(--module));
-  }
-  /* daisyUI paints the boxed active tab from --p, with a :hover twin; both
-     are one class short of these, so the module hue wins in either state. */
-  .tabs-boxed .tab-module.tab-active:not(.tab-disabled):not([disabled]),
-  .tabs-boxed .tab-module.tab-active:not(.tab-disabled):not([disabled]):hover {
-    background-color: rgb(var(--module));
-    color: rgb(var(--module-content));
+}
+/* The selected tab of a boxed tab bar paints on the module hue. */
+@utility tab-module {
+  &:is(.tab-active, [aria-selected="true"], [aria-current="true"], [aria-current="page"]):not(.tab-disabled, [disabled]) {
+    --tab-bg: var(--module);
+    color: var(--module-content);
   }
 }
 
@@ -311,23 +335,23 @@ html:has(> body.overflow-hidden.h-dvh) {
 
 /* Theme-aware prose inside modals (fixes dark-theme text) */
 .modal .prose {
-  --tw-prose-body: oklch(var(--bc));
-  --tw-prose-headings: oklch(var(--bc));
-  --tw-prose-bold: oklch(var(--bc));
-  --tw-prose-code: oklch(var(--bc));
-  --tw-prose-pre-bg: oklch(var(--b2));
-  --tw-prose-pre-code: oklch(var(--bc));
-  --tw-prose-bullets: oklch(var(--bc) / 0.5);
-  --tw-prose-counters: oklch(var(--bc) / 0.5);
-  --tw-prose-quotes: oklch(var(--bc) / 0.7);
-  --tw-prose-quote-borders: oklch(var(--bc) / 0.2);
-  --tw-prose-th-borders: oklch(var(--bc) / 0.2);
-  --tw-prose-td-borders: oklch(var(--bc) / 0.1);
+  --tw-prose-body: var(--color-base-content);
+  --tw-prose-headings: var(--color-base-content);
+  --tw-prose-bold: var(--color-base-content);
+  --tw-prose-code: var(--color-base-content);
+  --tw-prose-pre-bg: var(--color-base-200);
+  --tw-prose-pre-code: var(--color-base-content);
+  --tw-prose-bullets: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+  --tw-prose-counters: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+  --tw-prose-quotes: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+  --tw-prose-quote-borders: color-mix(in oklab, var(--color-base-content) 20%, transparent);
+  --tw-prose-th-borders: color-mix(in oklab, var(--color-base-content) 20%, transparent);
+  --tw-prose-td-borders: color-mix(in oklab, var(--color-base-content) 10%, transparent);
 }
 
 /* Typography plugin sets a hardcoded dark color on kbd — override it */
 .modal .prose kbd {
-  color: oklch(var(--bc));
+  color: var(--color-base-content);
 }
 
 /* Sensitive previews (files/sensitivity.py). The page root carries
@@ -433,7 +457,7 @@ file-preview .file-preview-body[data-preview-openable] {
 }
 
 file-preview[role="button"]:focus-visible {
-  @apply outline outline-2 outline-offset-2 outline-primary rounded-btn;
+  @apply outline-2 outline-offset-2 outline-primary rounded-field;
 }
 
 file-preview[bare] .file-preview-caption {
@@ -464,28 +488,28 @@ file-preview[fit="cover"] .file-preview-img {
    its controls do not glare white in a dark theme. Scoped under the map's
    attribute to outrank leaflet.css, which loads after this file. */
 :is([data-photo-map], [data-library-map]) .leaflet-container {
-  background: oklch(var(--b2));
+  background: var(--color-base-200);
   font: inherit;
 }
 [data-photo-map] .leaflet-bar {
-  border-color: oklch(var(--b3));
+  border-color: var(--color-base-300);
 }
 [data-photo-map] .leaflet-bar a {
-  background-color: oklch(var(--b1));
-  color: oklch(var(--bc));
-  border-bottom-color: oklch(var(--b3));
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
+  border-bottom-color: var(--color-base-300);
 }
 [data-photo-map] .leaflet-bar a:hover,
 [data-photo-map] .leaflet-bar a:focus {
-  background-color: oklch(var(--b2));
+  background-color: var(--color-base-200);
 }
 [data-photo-map] .leaflet-bar a.leaflet-disabled {
-  background-color: oklch(var(--b1));
-  color: oklch(var(--bc) / 0.3);
+  background-color: var(--color-base-100);
+  color: color-mix(in oklab, var(--color-base-content) 30%, transparent);
 }
 :is([data-photo-map], [data-library-map]) .leaflet-control-attribution {
-  background: oklch(var(--b1) / 0.85);
-  color: oklch(var(--bc) / 0.7);
+  background: color-mix(in oklab, var(--color-base-100) 85%, transparent);
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
   font-size: 10px;
 }
 :is([data-photo-map], [data-library-map]) .leaflet-control-attribution a {
@@ -509,7 +533,7 @@ file-preview[fit="cover"] .file-preview-img {
   outline: none;
 }
 .leaflet-marker-icon:focus-visible .library-map-frame {
-  outline: 3px solid rgb(var(--module));
+  outline: 3px solid var(--module);
   outline-offset: 2px;
 }
 .library-map-frame {
@@ -518,7 +542,7 @@ file-preview[fit="cover"] .file-preview-img {
   overflow: hidden;
   border: 3px solid #fff;
   border-radius: 0.75rem;
-  background: oklch(var(--b2));
+  background: var(--color-base-200);
   box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
 }
 .library-map-frame img {
@@ -531,7 +555,7 @@ file-preview[fit="cover"] .file-preview-img {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: oklch(var(--bc) / 0.4);
+  color: color-mix(in oklab, var(--color-base-content) 40%, transparent);
 }
 .library-map-marker.is-group::before {
   content: "";
@@ -552,8 +576,8 @@ file-preview[fit="cover"] .file-preview-img {
   padding: 0 0.375rem;
   border: 2px solid #fff;
   border-radius: 9999px;
-  background: rgb(var(--module));
-  color: rgb(var(--module-content));
+  background: var(--module);
+  color: var(--module-content);
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.25rem;
@@ -614,7 +638,7 @@ file-preview[fit="cover"] .file-preview-img {
   left: 0;
   height: 2px;
   border-radius: 9999px;
-  background: oklch(var(--bc) / 0.15);
+  background: color-mix(in oklab, var(--color-base-content) 15%, transparent);
 }
 .library-map-range {
   position: absolute;
@@ -642,9 +666,9 @@ file-preview[fit="cover"] .file-preview-img {
 .library-map-range::-webkit-slider-thumb {
   width: 1rem;
   height: 1rem;
-  border: 2px solid oklch(var(--b1));
+  border: 2px solid var(--color-base-100);
   border-radius: 9999px;
-  background: rgb(var(--module));
+  background: var(--module);
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
   cursor: grab;
   pointer-events: auto;
@@ -654,18 +678,18 @@ file-preview[fit="cover"] .file-preview-img {
 .library-map-range::-moz-range-thumb {
   width: 0.75rem;
   height: 0.75rem;
-  border: 2px solid oklch(var(--b1));
+  border: 2px solid var(--color-base-100);
   border-radius: 9999px;
-  background: rgb(var(--module));
+  background: var(--module);
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
   cursor: grab;
   pointer-events: auto;
 }
 .library-map-range:focus-visible::-webkit-slider-thumb {
-  outline: 2px solid rgb(var(--module));
+  outline: 2px solid var(--module);
   outline-offset: 2px;
 }
 .library-map-range:focus-visible::-moz-range-thumb {
-  outline: 2px solid rgb(var(--module));
+  outline: 2px solid var(--module);
   outline-offset: 2px;
 }

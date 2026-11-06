@@ -34,7 +34,7 @@
           <select
             x-model="compose.account_id"
             @change="onComposeAccountChange()"
-            class="select select-ghost select-sm flex-1 focus:outline-none focus:bg-transparent"
+            class="select select-ghost select-sm flex-1 focus:outline-hidden focus:bg-transparent"
             required
           >
             <template x-for="acc in accounts" :key="acc.uuid">
@@ -50,7 +50,7 @@
         <div class="flex items-start gap-3 py-1.5 border-b border-base-200">
           <label class="text-xs font-medium text-base-content/40 w-10 shrink-0 mt-1.5">To</label>
           <div class="flex-1 relative">
-            <div class="flex flex-wrap items-center gap-1 min-h-[2rem]">
+            <div class="flex flex-wrap items-center gap-1 min-h-8">
               <template x-for="(email, i) in compose.to" :key="'to-'+i">
                 <span
                   class="badge badge-sm gap-1 pr-0.5 bg-module/15 text-module border-module/20"
@@ -73,7 +73,7 @@
                 @blur="addTag('to', _tagInput.to)"
                 @input="_acSearch('to')"
                 autocomplete="off"
-                class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent"
+                class="input input-ghost input-sm flex-1 min-w-32 focus:outline-hidden focus:bg-transparent"
                 :placeholder="compose.to.length ? '' : 'recipient@example.com'"
               />
             </div>
@@ -97,7 +97,7 @@
         >
           <label class="text-xs font-medium text-base-content/40 w-10 shrink-0 mt-1.5">Cc</label>
           <div class="flex-1 relative">
-            <div class="flex flex-wrap items-center gap-1 min-h-[2rem]">
+            <div class="flex flex-wrap items-center gap-1 min-h-8">
               <template x-for="(email, i) in compose.cc" :key="'cc-'+i">
                 <span class="badge badge-sm gap-1 pr-0.5 bg-base-200 border-base-300">
                   <span x-text="email" class="max-w-40 truncate"></span>
@@ -118,7 +118,7 @@
                 @blur="addTag('cc', _tagInput.cc)"
                 @input="_acSearch('cc')"
                 autocomplete="off"
-                class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent"
+                class="input input-ghost input-sm flex-1 min-w-32 focus:outline-hidden focus:bg-transparent"
                 :placeholder="compose.cc.length ? '' : 'cc@example.com'"
               />
             </div>
@@ -134,7 +134,7 @@
         >
           <label class="text-xs font-medium text-base-content/40 w-10 shrink-0 mt-1.5">Bcc</label>
           <div class="flex-1 relative">
-            <div class="flex flex-wrap items-center gap-1 min-h-[2rem]">
+            <div class="flex flex-wrap items-center gap-1 min-h-8">
               <template x-for="(email, i) in compose.bcc" :key="'bcc-'+i">
                 <span class="badge badge-sm gap-1 pr-0.5 bg-base-200 border-base-300">
                   <span x-text="email" class="max-w-40 truncate"></span>
@@ -155,7 +155,7 @@
                 @blur="addTag('bcc', _tagInput.bcc)"
                 @input="_acSearch('bcc')"
                 autocomplete="off"
-                class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent"
+                class="input input-ghost input-sm flex-1 min-w-32 focus:outline-hidden focus:bg-transparent"
                 :placeholder="compose.bcc.length ? '' : 'bcc@example.com'"
               />
             </div>
@@ -169,7 +169,7 @@
           <input
             type="text"
             x-model="compose.subject"
-            class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
+            class="input input-ghost input-sm flex-1 focus:outline-hidden focus:bg-transparent"
             placeholder="Subject"
           />
         </div>
@@ -192,7 +192,7 @@
                 x-model="aiComposePrompt"
                 x-ref="aiComposeInput"
                 @keydown.enter.prevent="aiCompose()"
-                class="input input-sm input-bordered w-full"
+                class="input input-sm w-full"
                 placeholder="Describe what you want to write..."
               />
             </div>
@@ -225,7 +225,7 @@
         <textarea
           x-show="!aiComposing"
           x-model="compose.body"
-          class="w-full h-full text-sm leading-relaxed resize-none bg-transparent focus:outline-none"
+          class="w-full h-full text-sm leading-relaxed resize-none bg-transparent focus:outline-hidden"
           placeholder="Write your message..."
         ></textarea>
       </div>

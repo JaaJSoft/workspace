@@ -36,7 +36,7 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
+  <div class="drawer-side z-40 h-full overflow-visible!">
     <label for="people-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
@@ -86,7 +86,7 @@
                 type="button"
                 class="flex items-center w-full text-left text-base rounded-lg transition-colors"
                 :class="[
-                  sidebarCollapsed() ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
+                  sidebarCollapsed() ? 'justify-center w-10 h-10 p-0!' : 'p-2 gap-3',
                   scope === 'group:' + group.id ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
                 ]"
                 :title="sidebarCollapsed() ? group.name : ''"
@@ -225,7 +225,7 @@
     :class="{ 'max-lg:hidden': panelOpen }"
   >
     <div class="p-3 border-b border-base-300">
-      <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+      <label class="input input-sm flex items-center gap-2 w-full">
         <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
         <input
           type="search"

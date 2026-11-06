@@ -31,11 +31,11 @@
         <div class="relative isolate min-w-0 max-lg:h-[55%] lg:flex-1 bg-base-200">
           <div x-ref="canvas" class="absolute inset-0" data-testid="library-map"></div>
 
-          <div class="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
+          <div class="absolute top-3 right-3 z-1000 flex flex-col gap-2">
             <div class="join join-vertical shadow-md">
               <button
                 type="button"
-                class="btn btn-sm btn-square join-item bg-base-100/90 backdrop-blur border-base-300"
+                class="btn btn-sm btn-square join-item bg-base-100/90 backdrop-blur-sm border-base-300"
                 title="Zoom in"
                 aria-label="Zoom in"
                 @click="zoomIn()"
@@ -44,7 +44,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-sm btn-square join-item bg-base-100/90 backdrop-blur border-base-300"
+                class="btn btn-sm btn-square join-item bg-base-100/90 backdrop-blur-sm border-base-300"
                 title="Zoom out"
                 aria-label="Zoom out"
                 @click="zoomOut()"
@@ -54,7 +54,7 @@
             </div>
             <button
               type="button"
-              class="btn btn-sm btn-square shadow-md bg-base-100/90 backdrop-blur border-base-300"
+              class="btn btn-sm btn-square shadow-md bg-base-100/90 backdrop-blur-sm border-base-300"
               title="Show every photo"
               aria-label="Show every photo"
               :disabled="mapLoading || mapEmpty"
@@ -68,7 +68,7 @@
           <div
             x-show="mapLoading"
             x-transition.opacity
-            class="absolute inset-0 z-[1000] flex items-center justify-center pointer-events-none"
+            class="absolute inset-0 z-1000 flex items-center justify-center pointer-events-none"
             role="status"
           >
             <span
@@ -83,11 +83,11 @@
             x-show="mapEmpty || mapFailed"
             x-cloak
             x-transition.opacity
-            class="absolute inset-0 z-[1000] flex items-center justify-center p-6 pointer-events-none"
+            class="absolute inset-0 z-1000 flex items-center justify-center p-6 pointer-events-none"
             data-testid="library-map-empty"
           >
             <div
-              class="pointer-events-auto max-w-sm rounded-box bg-base-100/95 backdrop-blur border border-base-300 shadow-lg p-5 text-center space-y-2"
+              class="pointer-events-auto max-w-sm rounded-box bg-base-100/95 backdrop-blur-sm border border-base-300 shadow-lg p-5 text-center space-y-2"
             >
               <div class="mx-auto w-fit rounded-full bg-module/10 p-3">
                 <i data-lucide="map-pin-off" class="w-6 h-6 text-module"></i>
@@ -111,7 +111,7 @@
             x-show="periodSpan"
             x-cloak
             x-transition.opacity
-            class="absolute bottom-7 left-1/2 -translate-x-1/2 z-[1000] w-[min(30rem,calc(100%-1.5rem))] rounded-box bg-base-100/90 backdrop-blur border border-base-300 shadow-lg px-4 pt-2.5 pb-2"
+            class="absolute bottom-7 left-1/2 -translate-x-1/2 z-1000 w-[min(30rem,calc(100%-1.5rem))] rounded-box bg-base-100/90 backdrop-blur-sm border border-base-300 shadow-lg px-4 pt-2.5 pb-2"
             data-testid="library-map-period"
           >
             <div class="flex items-center justify-between gap-3 text-xs">
@@ -136,7 +136,7 @@
               >
                 <template x-for="(height, offset) in periodBars" :key="offset">
                   <div
-                    class="flex-1 rounded-t-sm transition-colors duration-150"
+                    class="flex-1 rounded-t-xs transition-colors duration-150"
                     :class="periodBarShown(offset) ? 'bg-module' : 'bg-base-content/15'"
                     :style="{ height: height + '%' }"
                   ></div>
@@ -170,7 +170,7 @@
 
         {# Scrolls on its own, under the map on a phone: the sentinel of its pages watches it. #}
         <aside
-          class="min-h-0 max-lg:flex-1 lg:w-[23rem] xl:w-[27rem] shrink-0 overflow-y-auto border-base-300 max-lg:border-t lg:border-l bg-base-100 sm:[--photo-tile:6.75rem] xl:[--photo-tile:8rem]"
+          class="min-h-0 max-lg:flex-1 lg:w-92 xl:w-108 shrink-0 overflow-y-auto border-base-300 max-lg:border-t lg:border-l bg-base-100 sm:[--photo-tile:6.75rem] xl:[--photo-tile:8rem]"
           data-scroll-root
           aria-label="Photos in this area"
         >

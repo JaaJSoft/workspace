@@ -4,7 +4,7 @@
   .monaco-editor,
   .monaco-editor .monaco-editor-background,
   .monaco-editor .margin {
-    background-color: oklch(var(--b2)) !important;
+    background-color: var(--color-base-200) !important;
   }
 
   .monaco-editor .minimap-shadow-visible {
@@ -189,7 +189,7 @@
             <li>
               <button
                 type="button"
-                class="gap-3 rounded"
+                class="gap-3 rounded-sm"
                 @click="aiAction('improve'); document.activeElement.blur()"
               >
                 <i data-lucide="wand-2" class="w-4 h-4"></i>
@@ -199,7 +199,7 @@
             <li>
               <button
                 type="button"
-                class="gap-3 rounded"
+                class="gap-3 rounded-sm"
                 @click="aiAction('explain'); document.activeElement.blur()"
               >
                 <i data-lucide="message-square-text" class="w-4 h-4"></i>
@@ -209,7 +209,7 @@
             <li>
               <button
                 type="button"
-                class="gap-3 rounded"
+                class="gap-3 rounded-sm"
                 @click="aiAction('summarize'); document.activeElement.blur()"
               >
                 <i data-lucide="list" class="w-4 h-4"></i>
@@ -220,7 +220,7 @@
             <li>
               <button
                 type="button"
-                class="gap-3 rounded"
+                class="gap-3 rounded-sm"
                 @click="aiAction('custom'); document.activeElement.blur()"
               >
                 <i data-lucide="pencil" class="w-4 h-4"></i>

@@ -9,7 +9,7 @@ from django.test import SimpleTestCase, TestCase
 
 from workspace.core.module_registry import MODULE_HUES, ModuleInfo, ModuleRegistry
 
-CONFIG = Path(settings.BASE_DIR) / "scripts" / "frontend" / "tailwind.config.js"
+PLUGIN = Path(settings.BASE_DIR) / "scripts" / "frontend" / "module-hues.js"
 STYLESHEET = (
     Path(settings.BASE_DIR) / "workspace" / "common" / "static" / "css" / "app.css"
 )
@@ -61,9 +61,9 @@ MODULE_COMPONENTS = (
 
 
 class ModuleHueStylesheetTests(SimpleTestCase):
-    def test_tailwind_config_lists_the_same_hues(self):
-        body = HUES_BLOCK_RE.search(CONFIG.read_text(encoding="utf-8"))
-        self.assertIsNotNone(body, "MODULE_HUES table missing from tailwind.config.js")
+    def test_stylesheet_plugin_lists_the_same_hues(self):
+        body = HUES_BLOCK_RE.search(PLUGIN.read_text(encoding="utf-8"))
+        self.assertIsNotNone(body, "MODULE_HUES table missing from module-hues.js")
         config_hues = HUE_LINE_RE.findall(body["body"])
         self.assertEqual(sorted(config_hues), sorted(MODULE_HUES))
 

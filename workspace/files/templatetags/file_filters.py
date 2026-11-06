@@ -113,7 +113,7 @@ def highlight(text, needle, autoescape=True):
         (
             (
                 mark_safe(
-                    '<mark class="bg-warning/30 text-inherit rounded-sm">'
+                    '<mark class="bg-warning/30 text-inherit rounded-xs">'
                     + conditional_escape(part)
                     + "</mark>"
                 )

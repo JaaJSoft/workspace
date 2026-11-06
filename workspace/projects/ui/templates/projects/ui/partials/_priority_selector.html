@@ -30,7 +30,7 @@ createIcons time.
 >
   <button
     type="button"
-    class="input input-sm input-bordered flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
+    class="input input-sm flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
     x-ref="trigger"
     aria-haspopup="menu"
     :aria-expanded="open"
@@ -95,8 +95,8 @@ createIcons time.
         <li role="none">
           <button
             type="button"
-            class="flex items-center gap-2 rounded"
-            :class="!{{ model_expr }} ? 'active' : ''"
+            class="flex items-center gap-2 rounded-sm"
+            :class="!{{ model_expr }} ? 'menu-active' : ''"
             role="menuitemradio"
             :aria-checked="!{{ model_expr }}"
             @click="{{ model_expr }} = ''; open = false; {{ on_change|default:'' }}"
@@ -109,8 +109,8 @@ createIcons time.
       <li role="none">
         <button
           type="button"
-          class="flex items-center gap-2 rounded"
-          :class="{{ model_expr }} === 'urgent' ? 'active' : ''"
+          class="flex items-center gap-2 rounded-sm"
+          :class="{{ model_expr }} === 'urgent' ? 'menu-active' : ''"
           role="menuitemradio"
           :aria-checked="{{ model_expr }} === 'urgent'"
           @click="{{ model_expr }} = 'urgent'; open = false; {{ on_change|default:'' }}"
@@ -122,8 +122,8 @@ createIcons time.
       <li role="none">
         <button
           type="button"
-          class="flex items-center gap-2 rounded"
-          :class="{{ model_expr }} === 'high' ? 'active' : ''"
+          class="flex items-center gap-2 rounded-sm"
+          :class="{{ model_expr }} === 'high' ? 'menu-active' : ''"
           role="menuitemradio"
           :aria-checked="{{ model_expr }} === 'high'"
           @click="{{ model_expr }} = 'high'; open = false; {{ on_change|default:'' }}"
@@ -135,8 +135,8 @@ createIcons time.
       <li role="none">
         <button
           type="button"
-          class="flex items-center gap-2 rounded"
-          :class="{{ model_expr }} === 'medium' ? 'active' : ''"
+          class="flex items-center gap-2 rounded-sm"
+          :class="{{ model_expr }} === 'medium' ? 'menu-active' : ''"
           role="menuitemradio"
           :aria-checked="{{ model_expr }} === 'medium'"
           @click="{{ model_expr }} = 'medium'; open = false; {{ on_change|default:'' }}"
@@ -148,8 +148,8 @@ createIcons time.
       <li role="none">
         <button
           type="button"
-          class="flex items-center gap-2 rounded"
-          :class="{{ model_expr }} === 'low' ? 'active' : ''"
+          class="flex items-center gap-2 rounded-sm"
+          :class="{{ model_expr }} === 'low' ? 'menu-active' : ''"
           role="menuitemradio"
           :aria-checked="{{ model_expr }} === 'low'"
           @click="{{ model_expr }} = 'low'; open = false; {{ on_change|default:'' }}"

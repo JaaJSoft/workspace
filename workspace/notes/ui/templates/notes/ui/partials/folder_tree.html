@@ -46,7 +46,7 @@
       <span class="truncate flex-1" x-text="row.name"></span>
       <button
         type="button"
-        class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100"
+        class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:opacity-100!"
         @click.stop="openCtxMenu($event, '{{ view_type|escapejs }}', row)"
       >
         <i data-lucide="ellipsis-vertical" class="w-3.5 h-3.5"></i>
@@ -59,7 +59,7 @@
       <button
         x-show="row.has_children && loadingChildren.indexOf(row.uuid) === -1"
         type="button"
-        class="btn btn-ghost btn-xs btn-square opacity-40 hover:!opacity-100"
+        class="btn btn-ghost btn-xs btn-square opacity-40 hover:opacity-100!"
         :class="expandedFolders.indexOf(row.uuid) !== -1 ? '' : '[&>svg]:-rotate-90'"
         @click.stop="toggleFolderExpand(row.uuid)"
       >

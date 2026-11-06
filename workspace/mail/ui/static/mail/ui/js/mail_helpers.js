@@ -105,7 +105,7 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
     let popover = wrapper._mailCardPopover;
     if (!popover) {
       popover = document.createElement('div');
-      popover.className = 'fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
+      popover.className = 'fixed z-9999 bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
       popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
       popover.style.opacity = '0';
       popover.addEventListener('mouseenter', function() { window._mailCardCancelHide(wrapper); });

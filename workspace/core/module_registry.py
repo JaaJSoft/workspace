@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 logger = logging.getLogger(__name__)
 
 # Tailwind hue names a module may claim as its identity color. The same list
-# drives the `.module-<hue>` rules in scripts/frontend/tailwind.config.js
+# drives the `.module-<hue>` rules in scripts/frontend/module-hues.js
 # (core.tests.test_module_colors keeps the two in step). `red` is reserved
 # for destructive semantics and `pink` for the AI feature, so neither is here.
 MODULE_HUES = (

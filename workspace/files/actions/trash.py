@@ -12,7 +12,7 @@ class RestoreAction(BaseFileAction):
     label = _("Restore")
     icon = "rotate-ccw"
     category = ActionCategory.TRASH
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     supports_bulk = True
 
     def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
@@ -27,7 +27,7 @@ class PurgeAction(BaseFileAction):
     label = _("Delete permanently")
     icon = "trash-2"
     category = ActionCategory.TRASH
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     css_class = "text-error"
     supports_bulk = True
 

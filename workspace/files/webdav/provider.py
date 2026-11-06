@@ -5,10 +5,9 @@ import logging
 from django.db import close_old_connections
 from wsgidav.dav_provider import DAVProvider
 
-from workspace.files.models import File
 from workspace.files.services import FileService
 
-from .resources import FileResource, FolderResource, RootCollection
+from .resources import FileResource, FolderResource, RootCollection, dav_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +37,9 @@ class WorkspaceDAVProvider(DAVProvider):
         # Use .filter().first() instead of .get() to survive duplicates
         # that can arise from concurrent PUT requests (race in
         # create_empty_resource).
-        file_obj = File.objects.filter(
+        file_obj = dav_nodes(
             FileService.accessible_files_q(user),
             path="/".join(parts),
-            deleted_at__isnull=True,
         ).first()
 
         if file_obj is None:
@@ -65,26 +63,23 @@ class WorkspaceDAVProvider(DAVProvider):
         accessible = FileService.accessible_files_q(user)
 
         if len(parts) == 1:
-            return File.objects.filter(
+            return dav_nodes(
                 accessible,
                 parent__isnull=True,
                 name=parts[0],
-                deleted_at__isnull=True,
             ).first()
 
         parent_path = "/".join(parts[:-1])
-        parent = File.objects.filter(
+        parent = dav_nodes(
             accessible,
             path=parent_path,
-            deleted_at__isnull=True,
         ).first()
         if parent is None:
             return None
-        return File.objects.filter(
+        return dav_nodes(
             accessible,
             parent=parent,
             name=parts[-1],
-            deleted_at__isnull=True,
         ).first()
 
     @staticmethod

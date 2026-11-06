@@ -93,6 +93,9 @@ window.fileBrowser = function fileBrowser() {
           case 'manage_tags':
             this.openTagPicker(uuid, name);
             break;
+          case 'create_shortcut':
+            this.createShortcut(uuid, name);
+            break;
         }
       });
 
@@ -1139,6 +1142,50 @@ window.fileBrowser = function fileBrowser() {
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       this.refreshFolderBrowser();
       this._stopLoading(...itemUuids);
+    },
+
+    async createShortcut(uuid, name) {
+      const folder = await AppDialog.folderPicker({
+        title: gettext('Create shortcut'),
+        message: interpolate(gettext('Choose where to put a shortcut to "%(name)s".'), { name }, true),
+        okLabel: gettext('Create'),
+        okClass: 'btn-module',
+        icon: 'file-symlink',
+        iconClass: 'bg-module/15 text-module',
+      });
+      if (!folder) return;
+
+      try {
+        const resp = await fetch('/api/v1/files', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          // A name already taken there gets the next free "name (Copy)".
+          body: JSON.stringify({
+            name,
+            node_type: 'shortcut',
+            shortcut_target: uuid,
+            parent: folder.uuid || null,
+            on_conflict: 'rename',
+          }),
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          window.AppAlert.error(window.fileActions.firstErrorMessage(body));
+          return;
+        }
+        window.AppAlert.success(interpolate(
+          gettext('Shortcut created in "%(folder)s"'), { folder: folder.name }, true
+        ));
+        // Root is null on both sides: the picker's root and an empty dataset.
+        if ((folder.uuid || null) === (this.currentFolder || null)) {
+          this.refreshFolderBrowser();
+        }
+      } catch (e) {
+        window.AppAlert.error(gettext('Failed to create shortcut'));
+      }
     },
 
     async extractArchive(uuid, name) {

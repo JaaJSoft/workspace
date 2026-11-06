@@ -178,9 +178,12 @@ def delete_node_storage(node):
     cascade deletes alike. Paths are resolved through the same helpers as the
     other storage ops (``folder_storage_path``), never rebuilt by hand.
     """
+    # A shortcut has nothing on storage. Its live path may well be a
+    # directory, though - one nobody registered yet, or that a trashed folder
+    # left behind - and removing it as a folder would take that with it.
     if node.node_type == File.NodeType.FILE:
         _delete_file_storage(node)
-    else:
+    elif node.node_type == File.NodeType.FOLDER:
         _delete_folder_storage(node)
 
 
@@ -414,7 +417,7 @@ def unique_copy_name(base_name, node_type, existing_names):
     while True:
         suffix = "Copy" if counter == 1 else f"Copy {counter}"
         parts = base_name.rsplit(".", 1)
-        if len(parts) == 2 and node_type == File.NodeType.FILE:
+        if len(parts) == 2 and node_type != File.NodeType.FOLDER:
             candidate = f"{parts[0]} ({suffix}).{parts[1]}"
         else:
             candidate = f"{base_name} ({suffix})"
@@ -450,6 +453,9 @@ def copy_node(node, parent, owner, _sibling_names=None):
         image_edit=node.image_edit,
         icon=node.icon,
         color=node.color,
+        # The same target, under the same rule: the copy grants no more
+        # than the shortcut it was made from.
+        shortcut_target_id=node.shortcut_target_id,
     )
 
     def insert(content=None):

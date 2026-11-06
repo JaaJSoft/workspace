@@ -17,6 +17,7 @@ from workspace.files.models import File, FileFavorite, FileShare, PinnedFolder
 from workspace.files.sensitivity import with_sensitivity
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
+from workspace.files.services.shortcuts import attach_resolutions
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,9 @@ class ActionsMixin:
             )
 
         permissions = FileService.trash_permissions_bulk(request.user, file_objects)
+        # What open_target reads: the shortcuts' targets, under the caller's
+        # own permission on each.
+        attach_resolutions(request.user, file_objects)
         # Read once for the whole batch rather than once per file.
         journal_folder = journal_folder_id(request.user)
 

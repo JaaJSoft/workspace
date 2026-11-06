@@ -158,6 +158,9 @@ window.contextMenu = function contextMenu() {
         case 'open':
           window.folderNav.navigateTo(`/files/${nd.uuid}`);
           break;
+        case 'open_target':
+          window.fileActions.openShortcutTarget(nd);
+          break;
         case 'copy_link': {
           const url = new URL(window.location.origin + window.location.pathname);
           url.searchParams.set('open', nd.uuid);

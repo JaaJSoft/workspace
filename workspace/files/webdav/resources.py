@@ -36,6 +36,17 @@ from workspace.files.services.scanning.policy import QuarantinedSource
 logger = logging.getLogger(__name__)
 
 
+def dav_nodes(*args, **kwargs):
+    """Live nodes WebDAV serves, filtered by *args* and *kwargs*.
+
+    Shortcuts are left out: a client would take one for an empty file, and
+    every byte it wrote into it would land on a node that holds none.
+    """
+    return File.objects.filter(*args, deleted_at__isnull=True, **kwargs).exclude(
+        node_type=File.NodeType.SHORTCUT
+    )
+
+
 def _require_permission(user, file_obj, level, verb):
     """Raise 403 unless *user* holds *level* on *file_obj*.
 
@@ -202,10 +213,9 @@ class RootCollection(DAVCollection):
         if hasattr(self, "_members_cache"):
             return
         self._members_cache = list(
-            File.objects.filter(
+            dav_nodes(
                 FileService.accessible_files_q(self._user),
                 parent__isnull=True,
-                deleted_at__isnull=True,
             )
         )
 
@@ -288,10 +298,9 @@ class FolderResource(DAVCollection):
         if hasattr(self, "_members_cache"):
             return
         self._members_cache = list(
-            File.objects.filter(
+            dav_nodes(
                 FileService.accessible_files_q(self._user),
                 parent=self._file,
-                deleted_at__isnull=True,
             )
         )
 

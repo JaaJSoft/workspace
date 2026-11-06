@@ -24,7 +24,7 @@ class PropertiesAction(BaseFileAction):
     label = _("Properties")
     icon = "info"
     category = ActionCategory.INFO
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     keyboard_shortcut = "Ctrl+I"
 
     def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):

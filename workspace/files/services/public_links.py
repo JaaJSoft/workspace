@@ -60,9 +60,13 @@ def resolve_within(link, node_uuid):
     if parsed is None:
         return None
 
-    node = File.objects.filter(
-        scope_q(root), uuid=parsed, deleted_at__isnull=True
-    ).first()
+    # A shortcut opens a node through its viewer's own access, and a visitor
+    # has none: inside a share it is a dead end, so it is not there at all.
+    node = (
+        File.objects.filter(scope_q(root), uuid=parsed, deleted_at__isnull=True)
+        .exclude(node_type=File.NodeType.SHORTCUT)
+        .first()
+    )
     if node is None:
         return None
     if node.pk == root.pk:

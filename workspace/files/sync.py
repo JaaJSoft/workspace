@@ -31,6 +31,10 @@ class SyncResult:
 _WALK_FIELDS = ("uuid", "name", "node_type", "parent", "path", "deleted_at")
 
 
+def _live_nodes(queryset):
+    return queryset.exclude(node_type=File.NodeType.SHORTCUT).only(*_WALK_FIELDS)
+
+
 class _NodeIndex:
     """Name/type lookup of a user's file rows, grouped by parent.
 
@@ -43,6 +47,9 @@ class _NodeIndex:
     Trashed rows are held separately and only as keys: they exist to stop
     phase 1 from creating a live duplicate next to a node the user deleted,
     never as candidates to recurse into.
+
+    Shortcuts are left out: they exist in the database alone, and the walk
+    would trash every one of them as gone from the disk.
     """
 
     def __init__(self):
@@ -53,7 +60,7 @@ class _NodeIndex:
     def for_subtree(cls, user):
         """Index every personal row the user owns, live and trashed."""
         index = cls()
-        live = FileService.user_files_qs(user).only(*_WALK_FIELDS)
+        live = _live_nodes(FileService.user_files_qs(user))
         trashed = File.objects.filter(owner=user, deleted_at__isnull=False).values_list(
             "name", "node_type", "parent_id"
         )
@@ -64,9 +71,7 @@ class _NodeIndex:
     def for_level(cls, user, parent_db):
         """Index a single directory level - the shallow, on-demand path."""
         index = cls()
-        live = (
-            FileService.user_files_qs(user).filter(parent=parent_db).only(*_WALK_FIELDS)
-        )
+        live = _live_nodes(FileService.user_files_qs(user).filter(parent=parent_db))
         trashed = File.objects.filter(
             owner=user, parent=parent_db, deleted_at__isnull=False
         ).values_list("name", "node_type", "parent_id")

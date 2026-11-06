@@ -39,6 +39,8 @@ def search_files(query, user, limit, scope=SearchScope.ALL):
         files = File.objects.filter(
             pk__in=FileService.accessible_file_ids(user, include_deleted=False)
         )
+    # A hit lands on the node it names, and a shortcut has nothing to show.
+    files = files.exclude(node_type=File.NodeType.SHORTCUT)
     qs = apply_fulltext(
         exclude_blocked(files.select_related("parent")),
         query,

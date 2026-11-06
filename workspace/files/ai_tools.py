@@ -100,6 +100,9 @@ Use read_file with the returned UUID to get the content."""
             .order_by("-updated_at")
         )
 
+        # The target of a shortcut is found under its own name, and a
+        # shortcut has no content to read.
+        qs = qs.exclude(node_type=File.NodeType.SHORTCUT)
         file_type = args.file_type.strip().lower()
         if file_type == "file":
             qs = qs.filter(node_type=File.NodeType.FILE)

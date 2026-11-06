@@ -16,6 +16,7 @@ on:
       - '!.github/**'
       - '.github/workflows/docker.yml'
       - '!.claude/**'
+      - '!packaging/**'
       - '!.gitignore'
       - '!workspace/**/tests/**'
   pull_request:
@@ -28,6 +29,7 @@ on:
       - '!.github/**'
       - '.github/workflows/docker.yml'
       - '!.claude/**'
+      - '!packaging/**'
       - '!.gitignore'
       - '!workspace/**/tests/**'
 

@@ -1,0 +1,14 @@
+{
+    ".url": {
+        "SYNO.SDS.workspace.Application": {
+            "title": "Workspace",
+            "desc": "Workspace",
+            "icon": "images/workspace_{0}.png",
+            "type": "url",
+            "protocol": "http",
+            "port": "__PORT__",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Container Manager starts and stops the containers itself (docker-project
+# worker in conf/resource); this script only reports whether the web
+# container runs.
+DOCKER_INSPECT=/usr/local/bin/docker_inspect
+
+case "$1" in
+start | stop | prestart | prestop)
+    exit 0
+    ;;
+status)
+    # docker_inspect needs its setuid bit to read the container state from a
+    # package's user. Without an answer the status is unknown, not stopped:
+    # a "stopped" package would be restarted by DSM in a loop.
+    state=$("$DOCKER_INSPECT" workspace-web 2>/dev/null) || exit 0
+    [ -n "$state" ] || exit 0
+    echo "$state" | grep -q '"Status": "running"' && exit 0
+    exit 3
+    ;;
+*)
+    exit 0
+    ;;
+esac

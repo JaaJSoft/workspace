@@ -104,6 +104,8 @@ docs/_build/
 docs/superpowers/
 .pybuilder/
 target/
+# The Synology package names the folder DSM extracts it into "target".
+!packaging/synology/target/
 .ipynb_checkpoints
 profile_default/
 ipython_config.py

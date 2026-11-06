@@ -35,12 +35,14 @@ XLS = "application/vnd.ms-excel"
 PPT = "application/vnd.ms-powerpoint"
 RTF = "application/rtf"
 EPUB = "application/epub+zip"
+FB2 = "application/x-fictionbook+xml"
+FBZ = "application/x-zip-compressed-fb2"
 
 # What this app claims to look inside. Tika reads a great deal more, so this
 # is a decision rather than a limit: a type earns its place here once someone
 # has established that indexing its text is useful and that Tika reads it.
 DOCUMENT_MIME_TYPES = frozenset(
-    {PDF, DOCX, DOTX, XLSX, PPTX, ODT, ODS, ODP, DOC, XLS, PPT, RTF, EPUB}
+    {PDF, DOCX, DOTX, XLSX, PPTX, ODT, ODS, ODP, DOC, XLS, PPT, RTF, EPUB, FB2, FBZ}
 )
 
 # What a caller may page in to hand the parser. These formats are not

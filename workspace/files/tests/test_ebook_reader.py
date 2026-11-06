@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from workspace.files.services import FileService
@@ -126,3 +126,14 @@ class EbookViewerTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "data-ebook-reader")
+
+    @override_settings(FILES_EBOOK_READER_MAX_BYTES=1024)
+    def test_a_book_past_the_reader_s_limit_is_offered_as_a_download(self):
+        request = RequestFactory().get("/")
+        request.user = self.user
+
+        html = EbookViewer(self.file).render(request)
+
+        self.assertNotIn("data-ebook-reader", html)
+        self.assertIn("Too large to read here", html)
+        self.assertIn(f'href="/api/v1/files/{self.file.uuid}/content" download', html)

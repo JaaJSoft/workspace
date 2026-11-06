@@ -7,6 +7,7 @@ from workspace.files.services.detection import (
     has_extension,
     label_from_name,
 )
+from workspace.files.services.ebooks import EBOOK_LABELS
 
 _KB = get_all_labels()
 
@@ -38,8 +39,9 @@ _LABEL_OVERRIDES = {
     "jsonc": {"icon": "file-json"},
     "dockerfile": {"icon": "container"},
     "svg": {"icon": "image"},
-    "epub": {"icon": "book-open"},
 }
+_LABEL_OVERRIDES.update({label: {"icon": "book-open"} for label in EBOOK_LABELS})
+_LABEL_OVERRIDES["cbz"] = {"icon": "book-image"}
 
 _DEFAULT_ICON = "file"
 _DEFAULT_COLOR = "text-base-content/60"

@@ -29,6 +29,13 @@ FILES_TEXT_VIEWER_MAX_BYTES = int(
     os.getenv("FILES_TEXT_VIEWER_MAX_BYTES", str(5 * 1024 * 1024))
 )  # 5 MiB
 
+# Largest e-book the reader opens: the browser holds the whole file while the
+# book is open, and a comic book archive easily weighs hundreds of megabytes.
+# A larger one is offered as a download.
+FILES_EBOOK_READER_MAX_BYTES = int(
+    os.getenv("FILES_EBOOK_READER_MAX_BYTES", str(256 * 1024 * 1024))
+)  # 256 MiB
+
 # The e-book reader page's Content-Security-Policy, applied through
 # csp.decorators.csp. It is what keeps a book's own JavaScript from running:
 # foliate-js renders each chapter in a blob: iframe that inherits this policy,

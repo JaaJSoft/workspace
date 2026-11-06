@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 10:45+0000\n"
+"POT-Creation-Date: 2026-11-06 11:15+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -2026,6 +2026,19 @@ msgstr "Vue en grille"
 #: ui/templates/files/ui/viewers/pdf_viewer.html
 msgid "New tab"
 msgstr "Nouvel onglet"
+
+#: ui/templates/files/ui/viewers/ebook_viewer_too_large.html
+msgid "Too large to read here"
+msgstr "Trop volumineux pour être lu ici"
+
+#: ui/templates/files/ui/viewers/ebook_viewer_too_large.html
+#, python-format
+msgid ""
+"%(name)s is larger than %(max_size)s, the most the reader opens. Download it "
+"to read it in an e-book app."
+msgstr ""
+"%(name)s dépasse %(max_size)s, la taille maximale que le lecteur peut ouvrir. "
+"Téléchargez-le pour le lire dans une application de lecture."
 
 #: ui/templates/files/ui/viewers/image_viewer.html
 #, python-format

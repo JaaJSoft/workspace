@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 from django.conf import settings
 from django.utils.html import escape
 
+from workspace.files.services.ebooks import EBOOK_LABELS
+
 # Default id the viewer panel hosts (files inline viewer, chat attachment
 # viewer modal, notes editor pane) target with alpine-ajax. The client keeps an
 # element with this id mounted at all times; every viewer response replaces it.
@@ -319,8 +321,8 @@ class BaseViewer(ABC):
         )
 
 
-def _too_large_to_embed(file_obj) -> bool:
-    """Whether *file_obj* is past the size the text viewers embed.
+def _larger_than(file_obj, limit) -> bool:
+    """Whether *file_obj*'s blob is past *limit* bytes.
 
     Read off the stored blob rather than a ``size`` column: the chat and
     project attachment adapters have none.
@@ -329,7 +331,12 @@ def _too_large_to_embed(file_obj) -> bool:
         size = file_obj.content.size
     except AttributeError, ValueError, OSError:
         return False
-    return size > settings.FILES_TEXT_VIEWER_MAX_BYTES
+    return size > limit
+
+
+def _too_large_to_embed(file_obj) -> bool:
+    """Whether *file_obj* is past the size the text viewers embed."""
+    return _larger_than(file_obj, settings.FILES_TEXT_VIEWER_MAX_BYTES)
 
 
 def _render_too_large(viewer, request) -> str:
@@ -544,7 +551,7 @@ class EbookViewer(BaseViewer):
     running with the reader's session.
     """
 
-    handles_labels = frozenset({"epub"})
+    handles_labels = EBOOK_LABELS
     weight = 50
     slug = "ebook"
 
@@ -564,10 +571,17 @@ class EbookViewer(BaseViewer):
     def render(self, request) -> str:
         from django.template.loader import render_to_string
 
+        context = self.get_context(request)
+        # The browser holds the whole book while it is open.
+        if _larger_than(self.file, settings.FILES_EBOOK_READER_MAX_BYTES):
+            context["max_bytes"] = settings.FILES_EBOOK_READER_MAX_BYTES
+            return render_to_string(
+                "files/ui/viewers/ebook_viewer_too_large.html",
+                context,
+                request=request,
+            )
         return render_to_string(
-            "files/ui/viewers/ebook_viewer.html",
-            self.get_context(request),
-            request=request,
+            "files/ui/viewers/ebook_viewer.html", context, request=request
         )
 
 
@@ -630,8 +644,9 @@ class OfficeViewer(BaseViewer):
         {"docx", "xlsx", "pptx", "odt", "ods", "odp", "doc", "xls", "ppt", "rtf"}
     )
     # Never claimed even when the editor advertises them: the browser's own
-    # PDF renderer is lighter and needs no editor round-trip.
-    _never_claimed = frozenset({"pdf"})
+    # PDF renderer is lighter and needs no editor round-trip, and an e-book
+    # opens in the e-book reader.
+    _never_claimed = frozenset({"pdf"}) | EBOOK_LABELS
     weight = 50
     slug = "office"
 

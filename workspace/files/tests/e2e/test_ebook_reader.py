@@ -15,7 +15,13 @@ from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.services import FileService
-from workspace.files.tests.ebooks import epub_bytes
+from workspace.files.tests.ebooks import (
+    cbz_bytes,
+    epub_bytes,
+    fb2_bytes,
+    fbz_bytes,
+    mobi_bytes,
+)
 
 # Each payload marks the top page, which the chapter frame could reach were
 # its script allowed to run: the frames are all same-origin.
@@ -74,6 +80,43 @@ class EbookReaderTests(PlaywrightTestCase):
             timeout=10_000,
         )
         self.assertIn("striking thirteen", self._chapter_text())
+
+    def test_every_text_format_opens_on_its_first_chapter(self):
+        for name, data in [
+            ("book.mobi", mobi_bytes(title="Nineteen")),
+            ("book.azw3", mobi_bytes(title="Nineteen")),
+            ("book.fb2", fb2_bytes(title="Nineteen")),
+            ("book.fbz", fbz_bytes(title="Nineteen")),
+        ]:
+            with self.subTest(name=name):
+                reader = self._open(data, name=name)
+                self.assertEqual(
+                    reader.locator("[data-ref=title]").inner_text(), "Nineteen"
+                )
+                self.page.wait_for_function(
+                    "() => [...document.querySelectorAll('iframe')].length > 0"
+                )
+                self.assertIn("bright cold day", self._chapter_text())
+                self.assertTrue(reader.locator("[data-action=larger]").is_visible())
+
+    def test_a_comic_book_shows_its_first_page(self):
+        reader = self._open(cbz_bytes(pages=3), name="comic.cbz")
+        self.assertFalse(reader.locator("[data-action=larger]").is_visible())
+
+        def page_drawn():
+            for frame in self.page.frames:
+                if frame.url.startswith("blob:") and frame.evaluate(
+                    "() => { const img = document.querySelector('img');"
+                    " return !!img && img.complete && img.naturalWidth === 60; }"
+                ):
+                    return True
+            return False
+
+        for _ in range(50):
+            if page_drawn():
+                break
+            self.page.wait_for_timeout(100)
+        self.assertTrue(page_drawn())
 
     def test_a_book_that_cannot_be_read_says_so(self):
         file_obj = FileService.create_file(

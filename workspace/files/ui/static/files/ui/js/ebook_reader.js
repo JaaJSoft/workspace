@@ -277,6 +277,11 @@ async function openEbookReader(root) {
   for (const control of root.querySelectorAll('[data-action], [data-ref="progress"]')) {
     control.disabled = false;
   }
+  // A comic book or a fixed-layout book is pictures of pages: no text to size.
+  if (view.isFixedLayout) {
+    action('smaller').classList.add('hidden');
+    action('larger').classList.add('hidden');
+  }
   root.dataset.ready = '';
 }
 

@@ -1,13 +1,21 @@
-"""Minimal EPUB 3 books for tests, built with zipfile.
+"""Minimal e-books for tests, one builder per format the reader opens.
 
-The container follows the OCF rules a reader and Magika rely on: the
-``mimetype`` entry first and stored uncompressed, then ``META-INF/container.xml``
-pointing at the package document.
+Each follows the rules its readers rely on, and foliate-js opens all of them
+(e2e/test_ebook_reader.py):
+
+- EPUB: the OCF container, ``mimetype`` first and stored uncompressed, then
+  ``META-INF/container.xml`` pointing at the package document;
+- MOBI: a Palm database typed ``BOOKMOBI``, record 0 carrying the PalmDOC and
+  MOBI headers, then uncompressed text records of HTML split by
+  ``<mbp:pagebreak/>``;
+- FB2: FictionBook 2.0 XML; FBZ: that XML zipped;
+- CBZ: a zip of page images.
 """
 
 from __future__ import annotations
 
 import io
+import struct
 import zipfile
 from html import escape
 
@@ -99,4 +107,107 @@ def epub_bytes(
         )
         for name, content in files.items():
             archive.writestr(name, content, compress_type=zipfile.ZIP_DEFLATED)
+    return buffer.getvalue()
+
+
+_DEFAULT_CHAPTERS = [
+    ("Chapter One", "It was a bright cold day in April."),
+    ("Chapter Two", "The clocks were striking thirteen."),
+]
+
+_MOBI_RECORD_SIZE = 4096
+_MOBI_HEADER_LENGTH = 232
+_NO_INDEX = 0xFFFFFFFF
+
+
+def mobi_bytes(
+    title: str = "Test Book", chapters: list[tuple[str, str]] | None = None
+) -> bytes:
+    """A Mobipocket book (MOBI 6, uncompressed) of *chapters*, a list of
+    ``(title, paragraph text)`` pairs."""
+    chapters = chapters or _DEFAULT_CHAPTERS
+    body = "<mbp:pagebreak/>".join(
+        f"<h1>{escape(name)}</h1><p>{escape(text)}</p>" for name, text in chapters
+    )
+    text = f"<html><head></head><body>{body}</body></html>".encode()
+    text_records = [
+        text[i : i + _MOBI_RECORD_SIZE] for i in range(0, len(text), _MOBI_RECORD_SIZE)
+    ]
+    end_of_records = len(text_records) + 1
+
+    title_bytes = title.encode()
+    record0 = bytearray(16 + _MOBI_HEADER_LENGTH)
+    # PalmDOC header: no compression, the text's length and records, no DRM.
+    struct.pack_into(
+        ">HHIHHH", record0, 0, 1, 0, len(text), len(text_records), _MOBI_RECORD_SIZE, 0
+    )
+    struct.pack_into(">4sIIII", record0, 16, b"MOBI", _MOBI_HEADER_LENGTH, 2, 65001, 1)
+    struct.pack_into(">I", record0, 36, 6)  # format version
+    for offset in range(40, 80, 4):  # the dictionary indexes it has none of
+        struct.pack_into(">I", record0, offset, _NO_INDEX)
+    struct.pack_into(">I", record0, 80, end_of_records)  # first non-book record
+    struct.pack_into(">II", record0, 84, len(record0), len(title_bytes))
+    struct.pack_into(">I", record0, 92, 9)  # locale: English
+    struct.pack_into(">I", record0, 108, end_of_records)  # first resource
+    struct.pack_into(">I", record0, 244, _NO_INDEX)  # no NCX index
+    record0 += title_bytes + b"\0" * (4 - len(title_bytes) % 4)
+
+    records = [bytes(record0), *text_records, b"\xe9\x8e\r\n"]
+    header = bytearray(78)
+    header[:32] = title_bytes[:31].ljust(32, b"\0")
+    header[60:68] = b"BOOKMOBI"
+    struct.pack_into(">H", header, 76, len(records))
+    offset = len(header) + 8 * len(records) + 2
+    record_list = bytearray()
+    for index, record in enumerate(records):
+        record_list += struct.pack(">II", offset, index * 2)
+        offset += len(record)
+    return bytes(header + record_list + b"\0\0" + b"".join(records))
+
+
+def fb2_bytes(
+    title: str = "Test Book", chapters: list[tuple[str, str]] | None = None
+) -> bytes:
+    """A FictionBook 2.0 book of *chapters*, ``(title, paragraph text)`` pairs."""
+    chapters = chapters or _DEFAULT_CHAPTERS
+    sections = "".join(
+        f"<section><title><p>{escape(name)}</p></title><p>{escape(text)}</p></section>"
+        for name, text in chapters
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">
+  <description>
+    <title-info>
+      <genre>prose</genre>
+      <author><first-name>Test</first-name><last-name>Author</last-name></author>
+      <book-title>{escape(title)}</book-title>
+      <lang>en</lang>
+    </title-info>
+  </description>
+  <body>{sections}</body>
+</FictionBook>
+""".encode()
+
+
+def fbz_bytes(
+    title: str = "Test Book", chapters: list[tuple[str, str]] | None = None
+) -> bytes:
+    """The FictionBook of :func:`fb2_bytes`, zipped."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("book.fb2", fb2_bytes(title, chapters))
+    return buffer.getvalue()
+
+
+def cbz_bytes(pages: int = 3, size: tuple[int, int] = (60, 90)) -> bytes:
+    """A comic book of *pages* PNG pages, each a different shade."""
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for number in range(1, pages + 1):
+            page = io.BytesIO()
+            shade = 40 * number % 256
+            Image.new("RGB", size, (shade, 120, 200)).save(page, format="PNG")
+            archive.writestr(f"page{number:03}.png", page.getvalue())
     return buffer.getvalue()

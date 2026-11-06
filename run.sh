@@ -7,10 +7,11 @@
 #           scheduler, which spares a single-node deployment the beat process
 #   beat    the Celery scheduler, exactly one per deployment
 #
-# No option needs forwarding from here. Celery reads every option of
-# `celery worker` from CELERY_WORKER_<OPTION> and of `celery beat` from
-# CELERY_BEAT_<OPTION> (CELERY_WORKER_AUTOSCALE=8,2 is --autoscale=8,2), and
-# gunicorn takes extra flags from GUNICORN_CMD_ARGS.
+# Celery reads the options of `celery worker` from CELERY_WORKER_<OPTION> and
+# of `celery beat` from CELERY_BEAT_<OPTION> (CELERY_WORKER_AUTOSCALE=8,2 is
+# --autoscale=8,2), and gunicorn takes extra flags from GUNICORN_CMD_ARGS. The
+# one exception is the worker's --beat: its option type never reads the
+# environment, so CELERY_WORKER_BEAT is turned into the flag here.
 set -eu
 
 # glibc raises its mmap threshold to the size of each mapped block it frees, up
@@ -34,7 +35,12 @@ web)
         --capture-output
     ;;
 worker)
-    exec celery -A workspace worker --loglevel "${CELERY_WORKER_LOGLEVEL:-info}"
+    set -- celery -A workspace worker --loglevel "${CELERY_WORKER_LOGLEVEL:-info}"
+    # The values env_bool accepts in workspace/settings/env.py.
+    case "$(printf '%s' "${CELERY_WORKER_BEAT:-}" | tr '[:upper:]' '[:lower:]')" in
+    1 | true | yes | on) set -- "$@" --beat ;;
+    esac
+    exec "$@"
     ;;
 beat)
     exec celery -A workspace beat --loglevel "${CELERY_BEAT_LOGLEVEL:-info}"

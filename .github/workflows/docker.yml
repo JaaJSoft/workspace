@@ -239,15 +239,23 @@ jobs:
             -e DEBUG=False \
             -e SECRET_KEY=smoke-test-key-not-secret \
             workspace:ci
+          # A single-node deployment runs the scheduler inside its one worker.
+          docker run -d --name workspace-worker-beat --cpus 1 \
+            -e PROCESS_TYPE=worker \
+            -e CELERY_WORKER_BEAT=1 \
+            -e DEBUG=False \
+            -e SECRET_KEY=smoke-test-key-not-secret \
+            workspace:ci
 
-          trap 'for c in workspace-worker workspace-beat; do
+          trap 'for c in workspace-worker workspace-beat workspace-worker-beat; do
                   echo "--- $c logs ---"; docker logs "$c" 2>&1 || true
                   docker rm -f "$c" >/dev/null 2>&1 || true
                 done' EXIT
 
           logged() { docker logs "$1" 2>&1 | grep -q "$2"; }
           for i in $(seq 1 45); do
-            if logged workspace-worker ' ready\.' && logged workspace-beat 'beat: Starting'; then
+            if logged workspace-worker ' ready\.' && logged workspace-beat 'beat: Starting' \
+              && logged workspace-worker-beat ' ready\.' && logged workspace-worker-beat 'beat: Starting'; then
               echo "Worker and scheduler up after ${i}s"
               break
             fi
@@ -260,6 +268,13 @@ jobs:
             || { echo "The scheduler never started" >&2; exit 1; }
           logged workspace-worker 'concurrency: 1 (prefork)' \
             || { echo "The worker pool was not sized from its 1-CPU limit" >&2; exit 1; }
+          logged workspace-worker-beat ' ready\.' \
+            || { echo "The worker with CELERY_WORKER_BEAT=1 never reported ready" >&2; exit 1; }
+          logged workspace-worker-beat 'beat: Starting' \
+            || { echo "CELERY_WORKER_BEAT=1 did not start the scheduler inside the worker" >&2; exit 1; }
+          if logged workspace-worker 'beat: Starting'; then
+            echo "The worker without CELERY_WORKER_BEAT started a scheduler" >&2; exit 1
+          fi
 
       - name: Log in to GitHub Container Registry
         if: env.SHOULD_PUSH == 'true'

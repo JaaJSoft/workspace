@@ -27,7 +27,7 @@
 
     <ul
       x-show="!assignDialog.loading"
-      class="menu menu-sm p-0 mt-3 max-h-64 flex-nowrap overflow-y-auto"
+      class="menu menu-sm p-0 mt-3 max-h-64 flex-nowrap overflow-y-auto w-full"
     >
       <template x-for="person in assignDialog.results" :key="person.uuid">
         <li>

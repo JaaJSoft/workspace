@@ -17,7 +17,7 @@ Optional context:
 <label class="flex items-center justify-between gap-2">
   <span class="text-sm">{{ label }}</span>
   <select
-    class="select select-sm"
+    class="select select-sm w-auto"
     :value="prefs.{{ key }}"
     @change="{% firstof handler 'update' %}('{{ key|escapejs }}', $event.target.value)"
   >

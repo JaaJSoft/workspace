@@ -16,7 +16,7 @@
       {% include "ui/partials/dialog_header.html" with icon="folder-input" title_expr="'Move ' + (moveDialog.uuids.length === 1 ? ((entries.find((e) => e.uuid === moveDialog.uuids[0]) || {}).name || '') : moveDialog.uuids.length + ' entries')" title_id="vault-move-dialog-title" subtitle_expr="moveDialog.uuids.length > 1 ? 'Choose where they go in this vault.' : 'Choose where it goes in this vault.'" close_expr="closeMoveDialog()" only %}
 
       <ul
-        class="menu bg-base-200/50 rounded-box max-h-72 overflow-y-auto flex-nowrap"
+        class="menu bg-base-200/50 rounded-box max-h-72 overflow-y-auto flex-nowrap w-full"
       >
         <li>
           <a

@@ -11,7 +11,7 @@ space) targets the current folder rather than a node, so it has no registry
 entry and is written out below.
 {% endcomment %}
 <template x-if="isBackgroundMenu">
-  <ul class="menu menu-sm p-0">
+  <ul class="menu menu-sm p-0 w-full">
     {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label=_("New folder") click="createFolder()" only %}
     {% include "ui/partials/context_menu_item.html" with icon="file-text" label=_("New file") click="createFile()" only %}
     {% include "ui/partials/context_menu_item.html" with icon="file-plus" label=_("Upload files") click="uploadFiles()" only %}
@@ -26,7 +26,7 @@ entry and is written out below.
 </template>
 
 <template x-if="nodeData && !isBackgroundMenu">
-  <ul class="menu menu-sm p-0">
+  <ul class="menu menu-sm p-0 w-full">
     <template x-for="(action, idx) in menuActions()" :key="action.id">
       <li
         x-show="action.id !== 'paste_into' || hasClipboardItems"

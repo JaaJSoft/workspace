@@ -52,20 +52,20 @@
       </label>
 
       <div class="grid grid-cols-2 gap-2">
-        <label class="fieldset">
+        <label class="fieldset min-w-0">
           <div class="fieldset-legend"><span>{% translate "Start" context "event field" %}</span></div>
           <input
             :type="form.all_day ? 'date' : 'datetime-local'"
-            class="input input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="form.start"
             required
           />
         </label>
-        <label class="fieldset">
+        <label class="fieldset min-w-0">
           <div class="fieldset-legend"><span>{% translate "End" context "event field" %}</span></div>
           <input
             :type="form.all_day ? 'date' : 'datetime-local'"
-            class="input input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="form.end"
             :min="form.start"
           />

@@ -7,7 +7,7 @@
   out.
 {% endcomment %}
 {% load i18n %}
-<ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'person'">
+<ul class="menu menu-sm p-0 w-full" x-show="ctxMenu.type === 'person'">
   <li
     class="menu-title text-xs truncate px-3 py-1"
     x-text="ctxMenu.data ? ctxMenu.data.name : ''"
@@ -25,7 +25,7 @@
     <span class="opacity-50">{% translate "Nothing can be done with this contact" %}</span>
   </li>
 </ul>
-<ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'list'">
+<ul class="menu menu-sm p-0 w-full" x-show="ctxMenu.type === 'list'">
   <li
     class="menu-title text-xs truncate px-3 py-1"
     x-text="ctxMenu.data ? ctxMenu.data.name : ''"

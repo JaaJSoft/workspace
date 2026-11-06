@@ -2,7 +2,7 @@
   Rows of the listing menu. The panel around them is
   ui/partials/context_menu_panel.html, included from browser_listing_menu.html.
 {% endcomment %}
-<ul class="menu menu-sm p-0">
+<ul class="menu menu-sm p-0 w-full">
   <template x-if="view !== 'trash'">
     <template x-for="type in entryTypes" :key="type.id">
       <li>

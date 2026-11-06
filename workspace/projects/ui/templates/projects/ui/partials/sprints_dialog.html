@@ -60,17 +60,21 @@ menus without a reload.
             />
           </label>
           <div class="grid grid-cols-2 gap-3">
-            <label class="fieldset">
+            <label class="fieldset min-w-0">
               <div class="fieldset-legend"><span>Start</span></div>
               <input
                 type="date"
-                class="input input-sm w-full"
+                class="input input-sm w-full min-w-0"
                 x-model="addForm.start_date"
               />
             </label>
-            <label class="fieldset">
+            <label class="fieldset min-w-0">
               <div class="fieldset-legend"><span>End</span></div>
-              <input type="date" class="input input-sm w-full" x-model="addForm.end_date" />
+              <input
+                type="date"
+                class="input input-sm w-full min-w-0"
+                x-model="addForm.end_date"
+              />
             </label>
           </div>
           <label class="fieldset">
@@ -158,7 +162,7 @@ menus without a reload.
                 Start
                 <input
                   type="date"
-                  class="input input-xs"
+                  class="input input-xs w-auto"
                   :value="sprint.start_date || ''"
                   {% if writable %}@change="setDate(sprint, 'start_date', $event.target.value)"{% else %}disabled{% endif %}
                 />
@@ -167,7 +171,7 @@ menus without a reload.
                 End
                 <input
                   type="date"
-                  class="input input-xs"
+                  class="input input-xs w-auto"
                   :value="sprint.end_date || ''"
                   {% if writable %}@change="setDate(sprint, 'end_date', $event.target.value)"{% else %}disabled{% endif %}
                 />
@@ -183,7 +187,7 @@ menus without a reload.
             </template>
             <template x-if="editingGoal === sprint.uuid">
               <textarea
-                class="textarea textarea-sm text-xs"
+                class="textarea textarea-sm text-xs w-full"
                 rows="2"
                 x-model="goalDraft"
                 @keydown.escape="editingGoal = null"

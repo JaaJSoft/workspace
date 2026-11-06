@@ -9,7 +9,7 @@ knows nothing about (sidebar visibility, "Open in Files") are written out
 here. Tags have no context menu: the tag manager dialog holds their actions.
 {% endcomment %}
 <ul
-  class="menu menu-sm p-0"
+  class="menu menu-sm p-0 w-full"
   x-show="ctxMenu.type === 'folder' || ctxMenu.type === 'group_folder'"
 >
   <li x-show="ctxMenu.actions === null">
@@ -33,7 +33,7 @@ here. Tags have no context menu: the tag manager dialog holds their actions.
   </template>
 </ul>
 
-<ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'note'">
+<ul class="menu menu-sm p-0 w-full" x-show="ctxMenu.type === 'note'">
   <li x-show="ctxMenu.actions === null">
     <span class="gap-3 rounded-sm pointer-events-none">
       <span class="loading loading-spinner loading-xs"></span>

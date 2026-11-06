@@ -2,7 +2,7 @@
 Rows of the conversation context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from conversation_pane.html.
 {% endcomment %}
-<ul class="menu menu-sm p-0">
+<ul class="menu menu-sm p-0 w-full">
   {% include "ui/partials/context_menu_item.html" with icon="info" label="Conversation info" click="ctxMenuAction('info')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="link" label="Copy link" click="ctxMenuAction('copy_link')" only %}
   {% include "ui/partials/context_menu_item.html" with show="!ctxMenu.isPinned" icon="pin" label="Pin conversation" click="ctxMenuAction('pin')" only %}

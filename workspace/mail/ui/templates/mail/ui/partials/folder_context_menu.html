@@ -6,7 +6,7 @@ Everything below the first separator only applies to user-created folders:
 the IMAP special folders (Inbox, Sent, ...) can't be renamed, moved, hidden
 or deleted, hence the shared `folder_type !== 'other'` disabling.
 {% endcomment %}
-<ul class="menu menu-sm p-0">
+<ul class="menu menu-sm p-0 w-full">
   {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label="Refresh" click="folderCtxAction('refresh')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="mail-check" label="Mark all as read" click="folderCtxAction('mark_all_read')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="palette" label="Change icon" click="folderCtxAction('change_icon')" only %}

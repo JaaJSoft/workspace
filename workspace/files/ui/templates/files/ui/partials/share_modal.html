@@ -189,26 +189,26 @@
             </template>
             <template x-if="showsCaps()">
               <div class="grid grid-cols-2 gap-2">
-                <div class="fieldset">
+                <div class="fieldset min-w-0">
                   <label class="fieldset-legend">
                     <span class="text-xs">{% translate "Max file size (bytes)" %}</span>
                   </label>
                   <input
                     type="number"
                     min="1"
-                    class="input input-sm w-full"
+                    class="input input-sm w-full min-w-0"
                     x-model="newLinkMaxBytes"
                     placeholder="{% translate 'No limit' %}"
                   />
                 </div>
-                <div class="fieldset">
+                <div class="fieldset min-w-0">
                   <label class="fieldset-legend">
                     <span class="text-xs">{% translate "Max uploads" %}</span>
                   </label>
                   <input
                     type="number"
                     min="1"
-                    class="input input-sm w-full"
+                    class="input input-sm w-full min-w-0"
                     x-model="newLinkMaxCount"
                     placeholder="{% translate 'No limit' %}"
                   />

@@ -51,7 +51,7 @@
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
   >
-    <ul class="menu menu-sm p-1">
+    <ul class="menu menu-sm p-1 w-full">
       <template x-for="(user, idx) in results" :key="user.id">
         {% comment %}w-full/min-w-0 down the chain: every flex level defaults
           to min-width:auto, which lets long usernames push the row wider

@@ -22,7 +22,11 @@
       />
     </label>
 
-    <select class="select select-sm" x-model="typeFilter" aria-label="Show">
+    <select
+      class="select select-sm w-auto"
+      x-model="typeFilter"
+      aria-label="Show"
+    >
       <option value="all">Everything</option>
       <option value="folders">Folders</option>
       <option value="entries">Entries</option>
@@ -31,7 +35,7 @@
 
     <div class="join">
       <select
-        class="select select-sm join-item"
+        class="select select-sm w-auto join-item"
         x-model="sortField"
         aria-label="Sort by"
       >

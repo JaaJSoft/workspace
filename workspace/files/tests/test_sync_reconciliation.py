@@ -12,6 +12,7 @@ correctness terms and very visible in production.
 
 import os
 import shutil
+import unicodedata
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -434,6 +435,164 @@ class ShortcutCollisionTests(SyncReconciliationTestCase):
             File.objects.filter(
                 owner=self.user, node_type=File.NodeType.FILE, name="report.pdf"
             ).exists()
+        )
+
+
+class CaselessDuplicateTests(SyncReconciliationTestCase):
+    """Disk entries whose names differ only in case or accent encoding.
+
+    A case-sensitive disk (Linux) holds ``Report.txt`` and ``report.txt``
+    side by side, and one that does not normalize names (Linux, Windows)
+    holds both encodings of ``café``; a folder holds one live node per
+    caseless name. The node that holds the name keeps it, the newcomer is
+    renamed to ``name (Copy N)`` on disk and registered under that name, the
+    way migrations 0063 and 0066 resolved the same clashes in the database.
+    """
+
+    def _write_clashing(self, *names, contents=None):
+        contents = contents or [b"data"] * len(names)
+        for name, data in zip(names, contents, strict=True):
+            self._write(name, contents=data)
+        if len(os.listdir(self._root())) < len(names):
+            self.skipTest("this file system folds the names into one")
+
+    def _on_disk(self):
+        return sorted(os.listdir(self._root()))
+
+    def test_a_newcomer_is_renamed_on_disk_and_registered(self):
+        self._write("Report.txt", contents=b"first")
+        self._sync()
+        kept = self._live("Report.txt")
+        self._write_clashing("report.txt", contents=[b"second"])
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.files_created, 1)
+        self.assertEqual(result.disk_entries_renamed, 1)
+        self.assertEqual(self._on_disk(), ["Report.txt", "report (Copy).txt"])
+        newcomer = self._live("report (Copy).txt")
+        self.assertEqual(
+            newcomer.content.name,
+            f"files/users/{self.user.username}/report (Copy).txt",
+        )
+        self.assertEqual(newcomer.size, len(b"second"))
+        with newcomer.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"second")
+        self.assertEqual(self._live("Report.txt").pk, kept.pk)
+
+    def test_the_next_run_leaves_both_alone(self):
+        self._write("Report.txt")
+        self._sync()
+        self._write_clashing("report.txt")
+        self._sync()
+
+        second = self._sync()
+
+        self.assertEqual(second.errors, [])
+        self.assertEqual(second.files_created, 0)
+        self.assertEqual(second.files_soft_deleted, 0)
+        self.assertEqual(second.disk_entries_renamed, 0)
+        self.assertIsNotNone(self._live("Report.txt"))
+        self.assertIsNotNone(self._live("report (Copy).txt"))
+
+    def test_two_newcomers_of_one_run_keep_one_name(self):
+        self._write_clashing("Report.txt", "report.txt")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.files_created, 2)
+        self.assertEqual(result.disk_entries_renamed, 1)
+        # By name order, so every run of every instance picks the same one.
+        self.assertEqual(self._on_disk(), ["Report.txt", "report (Copy).txt"])
+        self.assertIsNotNone(self._live("Report.txt"))
+        self.assertIsNotNone(self._live("report (Copy).txt"))
+
+    def test_the_new_name_is_not_taken_from_another_disk_entry(self):
+        self._write("Report.txt")
+        self._sync()
+        self._write_clashing("report.txt", "report (Copy).txt")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.files_created, 2)
+        self.assertEqual(
+            self._on_disk(),
+            ["Report.txt", "report (Copy 2).txt", "report (Copy).txt"],
+        )
+        self.assertIsNotNone(self._live("report (Copy 2).txt"))
+
+    def test_a_directory_is_renamed_and_walked_in_the_same_run(self):
+        self._mkdir("Docs")
+        self._sync()
+        self._write("docs", "inside.txt")
+        if len(self._on_disk()) < 2:
+            self.skipTest("this file system folds the names into one")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.folders_created, 1)
+        self.assertEqual(result.files_created, 1)
+        self.assertEqual(self._on_disk(), ["Docs", "docs (Copy)"])
+        renamed = self._live("docs (Copy)")
+        self.assertEqual(renamed.node_type, File.NodeType.FOLDER)
+        inside = self._live("inside.txt")
+        self.assertEqual(inside.parent_id, renamed.pk)
+        self.assertEqual(
+            inside.content.name,
+            f"files/users/{self.user.username}/docs (Copy)/inside.txt",
+        )
+
+    def test_accent_encodings_clash_like_case(self):
+        composed = unicodedata.normalize("NFC", "café.txt")
+        decomposed = unicodedata.normalize("NFD", "café.txt")
+        self._write(composed)
+        self._sync()
+        self._write_clashing(decomposed)
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.disk_entries_renamed, 1)
+        self.assertIsNotNone(self._live(composed))
+        self.assertIsNotNone(
+            self._live(unicodedata.normalize("NFD", "café (Copy).txt"))
+        )
+
+    def test_a_name_changed_only_in_case_on_disk_is_no_clash(self):
+        # The old name is gone from the disk: its row goes to the trash and
+        # the new name registers as it is.
+        path = self._write("Report.txt")
+        if os.path.exists(os.path.join(self._root(), "REPORT.TXT")):
+            # There both names are one file: the row is trashed with the
+            # bytes it still points at, a gap of its own.
+            self.skipTest("this file system folds the names into one")
+        self._sync()
+        os.rename(path, os.path.join(self._root(), "report.txt"))
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.files_soft_deleted, 1)
+        self.assertEqual(result.disk_entries_renamed, 0)
+        self.assertEqual(self._on_disk(), ["report.txt"])
+        self.assertIsNotNone(self._live("report.txt"))
+
+    def test_a_dry_run_reports_the_rename_and_changes_nothing(self):
+        self._write("Report.txt")
+        self._sync()
+        self._write_clashing("report.txt")
+
+        result = FileSyncService(dry_run=True).sync_user_recursive(self.user)
+
+        self.assertEqual(result.files_created, 1)
+        self.assertEqual(result.disk_entries_renamed, 1)
+        self.assertEqual(self._on_disk(), ["Report.txt", "report.txt"])
+        self.assertEqual(
+            File.objects.filter(owner=self.user, deleted_at__isnull=True).count(), 1
         )
 
 

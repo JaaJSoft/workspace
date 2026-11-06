@@ -809,23 +809,15 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
         self.assertEqual(sorted(os.listdir(self._root())), ["a (Copy).txt"])
         self.assertEqual(self._read("a (Copy).txt"), b"newcomer")
 
-    def test_without_hard_links_a_free_name_is_still_taken(self):
+    def test_without_hard_links_a_file_stays_where_it_is(self):
+        # No other call renames a file without replacing what holds the name.
         self._write("a.txt", contents=b"newcomer")
 
         with patch("os.link", side_effect=PermissionError("no hard links")):
-            self._rename("a.txt", "a (Copy).txt")
-
-        self.assertEqual(sorted(os.listdir(self._root())), ["a (Copy).txt"])
-
-    def test_without_hard_links_a_taken_name_is_refused(self):
-        self._write("a.txt", contents=b"newcomer")
-        self._write("a (Copy).txt", contents=b"theirs")
-
-        with patch("os.link", side_effect=PermissionError("no hard links")):
-            with self.assertRaises(FileExistsError):
+            with self.assertRaises(OSError):
                 self._rename("a.txt", "a (Copy).txt")
 
-        self.assertEqual(self._read("a (Copy).txt"), b"theirs")
+        self.assertEqual(sorted(os.listdir(self._root())), ["a.txt"])
 
     def test_a_directory_is_not_renamed_onto_an_existing_entry(self):
         self._write("d", "inside.txt")
@@ -836,6 +828,27 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
 
         self.assertEqual(self._read("d (Copy)"), b"theirs")
         self.assertTrue(os.path.isfile(os.path.join(self._root(), "d", "inside.txt")))
+
+    def test_an_empty_directory_made_after_the_check_is_not_replaced(self):
+        # rename(2) replaces an empty directory without a word.
+        self._write("d", "inside.txt")
+        self._mkdir("d (Copy)")
+
+        with patch("os.path.lexists", return_value=False):
+            with self.assertRaises(FileExistsError):
+                self._rename("d", "d (Copy)", is_dir=True)
+
+        self.assertEqual(os.listdir(os.path.join(self._root(), "d (Copy)")), [])
+        self.assertTrue(os.path.isfile(os.path.join(self._root(), "d", "inside.txt")))
+
+    def test_a_directory_rename_that_fails_releases_the_name(self):
+        self._write("d", "inside.txt")
+
+        with patch("os.rename", side_effect=OSError("busy")):
+            with self.assertRaises(OSError):
+                self._rename("d", "d (Copy)", is_dir=True)
+
+        self.assertEqual(sorted(os.listdir(self._root())), ["d"])
 
 
 class SyncEndpointTests(SyncReconciliationTestCase):

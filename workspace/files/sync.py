@@ -1,8 +1,8 @@
 """Bidirectional file sync between disk storage and database."""
 
-import errno
 import logging
 import os
+from contextlib import suppress
 from dataclasses import dataclass, field, fields
 
 from django.core.files.storage import default_storage
@@ -519,30 +519,30 @@ class FileSyncService:
         """Rename a disk entry, never replacing what holds *new_name*.
 
         Raises ``FileExistsError`` when something does, even something that
-        appeared after the walk scanned the folder.
+        appeared after the walk scanned the folder. A file system without hard
+        links leaves a file where it is, with an ``OSError``.
         """
         source = os.path.join(disk_path, old_name)
         destination = os.path.join(disk_path, new_name)
-        if not is_dir:
-            # rename(2) replaces a file without a word, however recently it
-            # was checked for; a hard link refuses an existing name in the
-            # same atomic step.
+        if os.name == "nt":
+            os.rename(source, destination)  # refuses any existing destination
+            return
+        # rename(2) replaces its destination, however recently it was checked
+        # for; each branch claims the name with a call that refuses a taken one.
+        if is_dir:
+            # Renaming onto the empty directory just made replaces nothing
+            # else, and fails if anything was put inside it meanwhile.
+            os.mkdir(destination)
             try:
-                os.link(source, destination)
-            except FileExistsError:
-                raise
+                os.rename(source, destination)
             except OSError:
-                pass  # no hard links on this file system
-            else:
-                try:
-                    os.unlink(source)
-                except OSError:
-                    os.unlink(destination)
-                    raise
-                return
-        # What is left can lose nothing to the gap after the check: a
-        # directory rename only ever replaces an empty directory, and Windows
-        # refuses any existing destination.
-        if os.path.lexists(destination):
-            raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), new_name)
-        os.rename(source, destination)
+                with suppress(OSError):
+                    os.rmdir(destination)
+                raise
+            return
+        os.link(source, destination)
+        try:
+            os.unlink(source)
+        except OSError:
+            os.unlink(destination)
+            raise

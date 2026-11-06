@@ -10,7 +10,7 @@
   <label for="vault-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
   <aside
-    class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
+    class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
     :class="{ 'lg:w-72': !collapsed }"
   >
     <div class="border-b border-base-300 py-3 px-3 relative">

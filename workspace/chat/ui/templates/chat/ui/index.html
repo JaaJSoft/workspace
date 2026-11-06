@@ -75,7 +75,7 @@ be defined before the parser reaches the markup using it, or server-rendered
       diverges from that on a later toggle.
     {% endcomment %}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 w-16{% if not workspace_sidebar_collapsed %} lg:w-80!{% endif %}"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16{% if not workspace_sidebar_collapsed %} lg:w-80!{% endif %}"
       :class="{ 'lg:w-80!': !collapsed }"
     >
       <!-- Sidebar header -->

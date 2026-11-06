@@ -8,7 +8,7 @@
     {% include "ui/partials/dialog_header.html" with icon="user-round-pen" title_expr="selectedFaces.length === 1 ? 'Who is this?' : 'Who are these ' + selectedFaces.length + ' faces?'" subtitle="Pick a contact, or type a new name to add one to People." only %}
 
     <form @submit.prevent="canCreateAssign() && assignToNewPerson()">
-      <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+      <label class="input input-sm flex items-center gap-2 w-full">
         <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
         <input
           type="text"
@@ -31,7 +31,11 @@
     >
       <template x-for="person in assignDialog.results" :key="person.uuid">
         <li>
-          <button type="button" class="gap-3 rounded" @click="assignToPerson(person)">
+          <button
+            type="button"
+            class="gap-3 rounded-sm"
+            @click="assignToPerson(person)"
+          >
             <template x-if="person.cover_url">
               <img
                 :src="person.cover_url"
@@ -58,7 +62,7 @@
       <li x-show="canCreateAssign()" x-cloak>
         <button
           type="button"
-          class="gap-3 rounded text-module"
+          class="gap-3 rounded-sm text-module"
           @click="assignToNewPerson()"
         >
           <span
@@ -85,7 +89,7 @@
       <div class="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
         <button
           type="button"
-          class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+          class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
           title="Someone new, no name yet"
           aria-label="Someone new, no name yet"
           @click="assignToSomeoneNew()"
@@ -95,7 +99,7 @@
         <template x-for="cluster in assignDialog.clusters" :key="cluster.uuid">
           <button
             type="button"
-            class="aspect-square overflow-hidden rounded-full ring-offset-2 ring-offset-base-100 hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+            class="aspect-square overflow-hidden rounded-full ring-offset-2 ring-offset-base-100 hover:ring-2 hover:ring-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
             :title="cluster.photo_count + (cluster.photo_count === 1 ? ' photo' : ' photos')"
             :aria-label="'Unnamed person with ' + cluster.photo_count + ' photos'"
             @click="assignToCluster(cluster)"

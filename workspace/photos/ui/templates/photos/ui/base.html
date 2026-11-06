@@ -44,7 +44,7 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
+  <div class="drawer-side z-40 h-full overflow-visible!">
     <label for="photos-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
@@ -140,7 +140,7 @@
       x-show="importDropActive"
       x-cloak
       x-transition.opacity
-      class="absolute inset-2 z-30 flex items-center justify-center rounded-box border-2 border-dashed border-module bg-base-100/90 backdrop-blur-sm pointer-events-none"
+      class="absolute inset-2 z-30 flex items-center justify-center rounded-box border-2 border-dashed border-module bg-base-100/90 backdrop-blur-xs pointer-events-none"
       data-testid="photos-drop-zone"
     >
       <div class="text-center">
@@ -163,11 +163,11 @@
     x-show="showPropertiesPanel"
     x-cloak
     x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
-    x-transition:enter-start="max-md:opacity-0 md:!w-0"
-    x-transition:enter-end="max-md:opacity-100 md:!w-80"
+    x-transition:enter-start="max-md:opacity-0 md:w-0!"
+    x-transition:enter-end="max-md:opacity-100 md:w-80!"
     x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
-    x-transition:leave-start="max-md:opacity-100 md:!w-80"
-    x-transition:leave-end="max-md:opacity-0 md:!w-0"
+    x-transition:leave-start="max-md:opacity-100 md:w-80!"
+    x-transition:leave-end="max-md:opacity-0 md:w-0!"
     class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 shrink-0 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
   >
     <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>

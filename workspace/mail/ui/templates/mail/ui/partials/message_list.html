@@ -55,7 +55,7 @@
     ></i>
     <input
       type="text"
-      class="input input-xs input-bordered w-full pl-8 pr-7 text-sm"
+      class="input input-xs w-full pl-8 pr-7 text-sm"
       placeholder="Search messages..."
       x-model="filters.search"
       @input="onSearchInput()"
@@ -271,7 +271,7 @@
         <!-- Account badge (unified inbox) -->
         <div x-show="unifiedInbox && accounts.length > 1" x-cloak class="mt-0.5">
           <span
-            class="badge badge-ghost badge-xs truncate max-w-[10rem]"
+            class="badge badge-ghost badge-xs truncate max-w-40"
             x-text="_getAccountEmail(msg.account_id)"
           ></span>
         </div>

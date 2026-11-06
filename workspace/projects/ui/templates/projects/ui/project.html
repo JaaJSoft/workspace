@@ -40,7 +40,7 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
+  <div class="drawer-side z-40 h-full overflow-visible!">
     <label
       for="projects-drawer"
       aria-label="close sidebar"
@@ -245,7 +245,7 @@
           <div class="label"><span class="label-text">Name</span></div>
           <input
             type="text"
-            class="input input-bordered w-full"
+            class="input w-full"
             x-model="name"
             required
             maxlength="255"
@@ -253,11 +253,7 @@
         </label>
         <label class="form-control w-full mt-2">
           <div class="label"><span class="label-text">Description</span></div>
-          <textarea
-            class="textarea textarea-bordered w-full"
-            x-model="description"
-            rows="2"
-          ></textarea>
+          <textarea class="textarea w-full" x-model="description" rows="2"></textarea>
         </label>
         <div class="form-control w-full mt-2">
           <div class="label"><span class="label-text">Type</span></div>

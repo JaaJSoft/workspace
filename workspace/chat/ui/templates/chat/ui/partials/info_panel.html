@@ -96,7 +96,7 @@
       <i data-lucide="align-left" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
       <span
         x-text="activeConversation.description"
-        class="whitespace-pre-line break-words flex-1"
+        class="whitespace-pre-line wrap-break-word flex-1"
       ></span>
       <button
         type="button"
@@ -328,7 +328,7 @@
   <template x-if="loadingMedia">
     <div class="grid grid-cols-3 gap-1">
       <template x-for="i in 6" :key="i">
-        <div class="aspect-square bg-base-300 rounded animate-pulse"></div>
+        <div class="aspect-square bg-base-300 rounded-sm animate-pulse"></div>
       </template>
     </div>
   </template>
@@ -344,7 +344,7 @@
           :key="item.uuid"
         >
           <div
-            class="group/media relative aspect-square rounded overflow-hidden bg-base-300"
+            class="group/media relative aspect-square rounded-sm overflow-hidden bg-base-300"
             :title="item.original_name"
           >
             <file-preview src="{% url 'chat_ui:attachment_previews' %}" :uuid="item.uuid" :name="item.original_name" fit="cover" bare open-event="open-chat-attachment-viewer"></file-preview>
@@ -445,9 +445,9 @@
   <!-- Loading skeleton -->
   <template x-if="loadingStats">
     <div class="space-y-2 animate-pulse">
-      <div class="h-4 bg-base-300 rounded w-3/4"></div>
-      <div class="h-4 bg-base-300 rounded w-1/2"></div>
-      <div class="h-4 bg-base-300 rounded w-2/3"></div>
+      <div class="h-4 bg-base-300 rounded-sm w-3/4"></div>
+      <div class="h-4 bg-base-300 rounded-sm w-1/2"></div>
+      <div class="h-4 bg-base-300 rounded-sm w-2/3"></div>
     </div>
   </template>
 
@@ -535,7 +535,7 @@
         ></i>
         <input
           type="text"
-          class="input input-xs input-bordered w-full pl-7 pr-7"
+          class="input input-xs w-full pl-7 pr-7"
           placeholder="Search memories..."
           x-model.debounce.200ms="memorySearch"
         />
@@ -580,7 +580,10 @@
               ></i>
               <div class="flex-1 min-w-0">
                 <div class="text-xs font-semibold truncate" x-text="mem.key"></div>
-                <p class="text-xs text-base-content/70 break-words" x-text="mem.content"></p>
+                <p
+                  class="text-xs text-base-content/70 wrap-break-word"
+                  x-text="mem.content"
+                ></p>
               </div>
               <!-- Actions -->
               <div
@@ -643,30 +646,30 @@
               <div class="flex-1 min-w-0">
                 <div class="text-xs font-semibold truncate" x-text="goal.title"></div>
                 <p
-                  class="text-xs text-base-content/70 break-words line-clamp-2"
+                  class="text-xs text-base-content/70 wrap-break-word line-clamp-2"
                   x-text="goal.goal"
                 ></p>
                 <p
                   x-show="goal.success_criteria"
-                  class="text-[0.65rem] text-base-content/50 break-words line-clamp-2 mt-0.5"
+                  class="text-[0.65rem] text-base-content/50 wrap-break-word line-clamp-2 mt-0.5"
                 >
                   Done when: <span x-text="goal.success_criteria"></span>
                 </p>
                 <p
                   x-show="goal.reporting"
-                  class="text-[0.65rem] text-base-content/50 break-words line-clamp-2"
+                  class="text-[0.65rem] text-base-content/50 wrap-break-word line-clamp-2"
                 >
                   Reports: <span x-text="goal.reporting"></span>
                 </p>
                 <p
                   x-show="goal.constraints"
-                  class="text-[0.65rem] text-base-content/50 break-words line-clamp-2"
+                  class="text-[0.65rem] text-base-content/50 wrap-break-word line-clamp-2"
                 >
                   Constraints: <span x-text="goal.constraints"></span>
                 </p>
                 <p
                   x-show="goal.notes"
-                  class="text-[0.65rem] text-base-content/50 break-words line-clamp-2 mt-0.5 italic"
+                  class="text-[0.65rem] text-base-content/50 wrap-break-word line-clamp-2 mt-0.5 italic"
                   x-text="goal.notes"
                 ></p>
                 <div class="flex items-center gap-1 mt-0.5">
@@ -766,7 +769,7 @@
               ></i>
               <div class="flex-1 min-w-0">
                 <p
-                  class="text-xs text-base-content/90 break-words line-clamp-2"
+                  class="text-xs text-base-content/90 wrap-break-word line-clamp-2"
                   x-text="sched.prompt"
                 ></p>
                 <div class="flex items-center gap-1 mt-0.5">

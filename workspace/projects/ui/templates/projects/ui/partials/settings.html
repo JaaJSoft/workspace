@@ -36,7 +36,7 @@
         <div class="label py-1"><span class="label-text">Name</span></div>
         <input
           type="text"
-          class="input input-bordered w-full"
+          class="input w-full"
           x-model="name"
           maxlength="255"
           {% if not writable %}disabled{% endif %}
@@ -45,7 +45,7 @@
       <label class="form-control w-full">
         <div class="label py-1"><span class="label-text">Description</span></div>
         <textarea
-          class="textarea textarea-bordered w-full"
+          class="textarea w-full"
           rows="3"
           x-model="description"
           {% if not writable %}disabled{% endif %}
@@ -55,7 +55,7 @@
         <div class="label py-1"><span class="label-text">Key</span></div>
         <input
           type="text"
-          class="input input-bordered w-full font-mono uppercase"
+          class="input w-full font-mono uppercase"
           x-model="key"
           maxlength="10"
           {% if not writable %}disabled{% endif %}
@@ -101,7 +101,7 @@
       <label class="form-control w-full">
         <div class="label py-1"><span class="label-text">Task estimation</span></div>
         <select
-          class="select select-bordered select-sm"
+          class="select select-sm"
           x-model="estimateUnit"
           {% if not writable %}disabled{% endif %}
         >
@@ -200,7 +200,7 @@
               class="flex items-center gap-3 p-2 rounded-box bg-base-100"
               x-data="{ imgOk: true }"
             >
-              <div class="avatar placeholder">
+              <div class="avatar avatar-placeholder">
                 <div
                   class="w-8 rounded-full text-white text-xs"
                   :class="imgOk ? '' : userAvatarColorClass(member.user)"
@@ -219,7 +219,7 @@
               <span class="font-medium flex-1 truncate" x-text="member.username"></span>
               {% if writable %}
                 <select
-                  class="select select-bordered select-sm"
+                  class="select select-sm"
                   :value="member.role"
                   :disabled="busy"
                   @change="changeRole(member, $event.target.value)"
@@ -338,7 +338,7 @@
             <div class="label py-0"><span class="label-text-alt">Name</span></div>
             <input
               type="text"
-              class="input input-bordered input-sm"
+              class="input input-sm"
               x-model="addForm.name"
               required
               maxlength="100"
@@ -346,7 +346,7 @@
           </label>
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Category</span></div>
-            <select class="select select-bordered select-sm" x-model="addForm.category">
+            <select class="select select-sm" x-model="addForm.category">
               <option value="backlog">Backlog</option>
               <option value="active">Active</option>
               <option value="done">Done</option>
@@ -404,7 +404,7 @@
             <template x-if="editing === column.uuid">
               <input
                 type="text"
-                class="input input-bordered input-sm h-6 flex-1"
+                class="input input-sm h-6 flex-1"
                 x-model="editName"
                 maxlength="100"
                 @keydown.enter.prevent="saveEdit(column)"
@@ -475,7 +475,7 @@
         </h3>
         <div class="flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-3" x-show="items.length" x-cloak>
-            <label class="input input-bordered input-sm flex items-center gap-2 w-44">
+            <label class="input input-sm flex items-center gap-2 w-44">
               <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
               <input
                 type="search"
@@ -520,7 +520,7 @@
               <div class="label py-0"><span class="label-text-alt">Name</span></div>
               <input
                 type="text"
-                class="input input-bordered input-sm"
+                class="input input-sm"
                 x-model="addForm.name"
                 required
                 maxlength="100"
@@ -544,20 +544,12 @@
             </div>
             <label class="form-control">
               <div class="label py-0"><span class="label-text-alt">Target date (optional)</span></div>
-              <input
-                type="date"
-                class="input input-bordered input-sm"
-                x-model="addForm.target_date"
-              />
+              <input type="date" class="input input-sm" x-model="addForm.target_date" />
             </label>
           </div>
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Description (optional)</span></div>
-            <textarea
-              class="textarea textarea-bordered textarea-sm"
-              rows="2"
-              x-model="addForm.description"
-            ></textarea>
+            <textarea class="textarea textarea-sm" rows="2" x-model="addForm.description"></textarea>
           </label>
           <div class="flex items-center gap-2 ml-auto">
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
@@ -724,7 +716,7 @@
             </div>
             <template x-if="editingDesc !== epic.uuid">
               <p
-                class="text-xs text-base-content/60 whitespace-pre-line break-words"
+                class="text-xs text-base-content/60 whitespace-pre-line wrap-break-word"
                 :class="epic.description ? '' : 'italic'"
                 x-text="epic.description || 'No description.'"
                 {% if writable %}@click="startDescEdit(epic)"{% endif %}
@@ -732,7 +724,7 @@
             </template>
             <template x-if="editingDesc === epic.uuid">
               <textarea
-                class="textarea textarea-bordered textarea-sm text-xs"
+                class="textarea textarea-sm text-xs"
                 rows="2"
                 x-model="descDraft"
                 @keydown.escape="editingDesc = null"
@@ -793,7 +785,7 @@
             <div class="label py-0"><span class="label-text-alt">Name</span></div>
             <input
               type="text"
-              class="input input-bordered input-sm"
+              class="input input-sm"
               x-model="addForm.name"
               required
               maxlength="100"

@@ -2,7 +2,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Density</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.density"
       @change="update('density', $event.target.value)"
     >
@@ -14,7 +14,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Preview lines</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.previewLines"
       @change="update('previewLines', parseInt($event.target.value))"
     >
@@ -44,7 +44,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Notify me about</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="notifyMode"
       @change="saveNotifyMode($event.target.value)"
     >
@@ -59,7 +59,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Max notifications per folder at once</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="notifyBurst"
       @change="saveNotifyBurst(parseInt($event.target.value))"
     >

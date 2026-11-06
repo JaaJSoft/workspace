@@ -4,7 +4,7 @@
   {{ review|json_script:"photos-review-data" }}
   <div x-data="facesReview()" class="min-h-full flex flex-col">
     <header
-      class="sticky top-0 z-20 border-b border-base-300 bg-base-100/90 backdrop-blur"
+      class="sticky top-0 z-20 border-b border-base-300 bg-base-100/90 backdrop-blur-sm"
     >
       <div class="flex items-center gap-3 px-4 py-3">
         {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
@@ -72,7 +72,7 @@
           </div>
           <button
             type="button"
-            class="btn btn-module w-full sm:w-auto sm:min-w-56 gap-2 shadow-sm"
+            class="btn btn-module w-full sm:w-auto sm:min-w-56 gap-2 shadow-xs"
             :class="{ 'pointer-events-none': refreshing }"
             :aria-busy="refreshing"
             @click="refresh()"

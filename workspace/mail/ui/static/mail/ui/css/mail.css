@@ -23,7 +23,7 @@
 }
 
 .mail-body a {
-  color: rgb(var(--module));
+  color: var(--module);
   text-decoration: underline;
 }
 
@@ -32,10 +32,10 @@
 }
 
 .mail-body blockquote {
-  border-left: 3px solid rgb(var(--module) / 0.4);
+  border-left: 3px solid color-mix(in oklab, var(--module) 40%, transparent);
   padding-left: 1rem;
   margin-left: 0;
-  color: oklch(var(--bc) / 0.7);
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
 }
 
 /* Plain text body */
@@ -43,7 +43,7 @@
   line-height: 1.6;
   word-break: break-word;
   overflow-wrap: break-word;
-  color: oklch(var(--bc) / 0.85);
+  color: color-mix(in oklab, var(--color-base-content) 85%, transparent);
 }
 
 /* Message list - unread indicator */
@@ -51,7 +51,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgb(var(--module));
+  background: var(--module);
   flex-shrink: 0;
 }
 
@@ -68,8 +68,8 @@
 
 /* Folder list active state */
 .mail-folder-active {
-  background: rgb(var(--module) / 0.1);
-  color: rgb(var(--module));
+  background: color-mix(in oklab, var(--module) 10%, transparent);
+  color: var(--module);
 }
 
 /* Scrollbar styling for message list */
@@ -82,12 +82,12 @@
 }
 
 .mail-scrollbar::-webkit-scrollbar-thumb {
-  background: oklch(var(--bc) / 0.15);
+  background: color-mix(in oklab, var(--color-base-content) 15%, transparent);
   border-radius: 3px;
 }
 
 .mail-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: oklch(var(--bc) / 0.25);
+  background: color-mix(in oklab, var(--color-base-content) 25%, transparent);
 }
 
 /* Drag & drop */

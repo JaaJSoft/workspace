@@ -43,7 +43,7 @@
           <span class="text-xs text-base-content/60">{% translate "Show closed" context "polls" %}</span>
         </label>
       </div>
-      <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+      <label class="input input-sm flex items-center gap-2 w-full">
         <i data-lucide="search" class="w-3.5 h-3.5 opacity-40"></i>
         <input
           type="text"
@@ -198,7 +198,7 @@
           <div class="label"><span class="label-text">{% translate "Title" context "poll" %}</span></div>
           <input
             type="text"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full"
             x-model="pollForm.title"
             placeholder="{% translate 'e.g. Team meeting next week' %}"
             required
@@ -208,7 +208,7 @@
         <label class="form-control w-full">
           <div class="label"><span class="label-text">{% translate "Description" context "poll" %}</span></div>
           <textarea
-            class="textarea textarea-bordered textarea-sm w-full"
+            class="textarea textarea-sm w-full"
             rows="2"
             x-model="pollForm.description"
             placeholder="{% translate 'Optional description' %}"
@@ -228,7 +228,7 @@
                 <label class="form-control flex-1">
                   <input
                     type="datetime-local"
-                    class="input input-bordered input-sm w-full"
+                    class="input input-sm w-full"
                     x-model="pollForm.slots[i].start"
                     required
                   />
@@ -239,7 +239,7 @@
                     <label class="form-control flex-1">
                       <input
                         type="datetime-local"
-                        class="input input-bordered input-sm w-full"
+                        class="input input-sm w-full"
                         x-model="pollForm.slots[i].end"
                       />
                     </label>
@@ -330,7 +330,7 @@
           <div class="label"><span class="label-text">{% translate "Title" context "poll" %}</span></div>
           <input
             type="text"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full"
             x-model="pollForm.title"
             placeholder="{% translate 'e.g. Team meeting next week' %}"
             required
@@ -340,7 +340,7 @@
         <label class="form-control w-full">
           <div class="label"><span class="label-text">{% translate "Description" context "poll" %}</span></div>
           <textarea
-            class="textarea textarea-bordered textarea-sm w-full"
+            class="textarea textarea-sm w-full"
             rows="2"
             x-model="pollForm.description"
             placeholder="{% translate 'Optional description' %}"
@@ -360,7 +360,7 @@
                 <label class="form-control flex-1">
                   <input
                     type="datetime-local"
-                    class="input input-bordered input-sm w-full"
+                    class="input input-sm w-full"
                     x-model="pollForm.slots[i].start"
                     required
                   />
@@ -371,7 +371,7 @@
                     <label class="form-control flex-1">
                       <input
                         type="datetime-local"
-                        class="input input-bordered input-sm w-full"
+                        class="input input-sm w-full"
                         x-model="pollForm.slots[i].end"
                       />
                     </label>
@@ -443,7 +443,7 @@
   @click.self="closePollDetail()"
   @keydown.escape.window="showPollDetailModal && closePollDetail()"
 >
-  <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col !p-0">
+  <div class="modal-box w-11/12 max-w-3xl h-[70vh] flex flex-col p-0!">
     {% include "ui/partials/dialog_header.html" with icon="vote" title_expr="currentPoll?.title || ''" subtitle_expr="pollCreatorLabel()" actions_template="calendar/ui/partials/_poll_detail_header_actions.html" close_expr="closePollDetail()" class="px-4 pt-4 pb-3 shrink-0" only %}
 
     <!-- Loading -->
@@ -545,10 +545,7 @@
         <div class="flex items-center gap-2 mb-4 p-3 bg-base-200/50 rounded-lg">
           <i data-lucide="trophy" class="w-4 h-4 text-success shrink-0"></i>
           <span class="text-sm font-medium shrink-0">{% translate "Finalize:" %}</span>
-          <select
-            class="select select-bordered select-sm flex-1"
-            x-model="pollFinalizeSlotId"
-          >
+          <select class="select select-sm flex-1" x-model="pollFinalizeSlotId">
             <option value="">{% translate "Choose winning slot..." %}</option>
             <template x-for="slot in (currentPoll?.slots || [])" :key="slot.uuid">
               <option
@@ -609,7 +606,7 @@
           <tbody>
             <!-- Existing participants -->
             <template x-for="p in pollParticipants()" :key="p.key">
-              <tr class="hover">
+              <tr class="hover:bg-base-300">
                 <td class="font-medium text-sm">
                   <div class="flex items-center gap-2">
                     <template x-if="p.isUser">
@@ -698,7 +695,7 @@
       <div class="flex flex-wrap gap-4 mt-3 text-xs text-base-content/50">
         <div class="flex items-center gap-1.5">
           <div
-            class="w-5 h-5 rounded bg-success/20 flex items-center justify-center"
+            class="w-5 h-5 rounded-sm bg-success/20 flex items-center justify-center"
           >
             <i data-lucide="check" class="w-3 h-3 text-success"></i>
           </div>
@@ -706,14 +703,16 @@
         </div>
         <div class="flex items-center gap-1.5">
           <div
-            class="w-5 h-5 rounded bg-warning/20 flex items-center justify-center"
+            class="w-5 h-5 rounded-sm bg-warning/20 flex items-center justify-center"
           >
             <i data-lucide="help-circle" class="w-3 h-3 text-warning"></i>
           </div>
           {% translate "Maybe" context "poll vote" %}
         </div>
         <div class="flex items-center gap-1.5">
-          <div class="w-5 h-5 rounded bg-error/20 flex items-center justify-center">
+          <div
+            class="w-5 h-5 rounded-sm bg-error/20 flex items-center justify-center"
+          >
             <i data-lucide="x" class="w-3 h-3 text-error"></i>
           </div>
           {% translate "No" context "poll vote" %}

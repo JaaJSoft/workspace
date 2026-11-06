@@ -19,7 +19,7 @@
 
     <label
       x-show="!mergeDialog.loading && mergeDialog.clusters.length > 0"
-      class="input input-sm input-bordered flex items-center gap-2 mb-3"
+      class="input input-sm flex items-center gap-2 mb-3"
     >
       <i data-lucide="search" class="w-4 h-4 text-base-content/50"></i>
       <input
@@ -54,7 +54,7 @@
       <template x-for="cluster in visibleMergeClusters()" :key="cluster.uuid">
         <button
           type="button"
-          class="relative flex flex-col items-center gap-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+          class="relative flex flex-col items-center gap-1 rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
           :aria-pressed="isMergeSelected(cluster) ? 'true' : 'false'"
           @click="toggleMergeSelection(cluster)"
         >

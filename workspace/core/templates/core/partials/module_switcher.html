@@ -21,7 +21,7 @@ Params:
 {% with ce=collapse_expr|default:"collapsed" %}
   <div
     id="module-switcher"
-    class="dropdown leading-[0]"
+    class="dropdown leading-0"
     x-data="moduleSwitcher()"
     @keydown.escape.prevent="document.activeElement.blur()"
     @keydown.window="if (isShortcut($event)) { $event.preventDefault(); open(); }"
@@ -63,7 +63,7 @@ Params:
     </label>
     <div
       tabindex="0"
-      class="dropdown-content mt-2 z-[100] p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-[16.5rem]"
+      class="dropdown-content mt-2 z-100 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-66"
     >
       <div
         class="pb-1 mb-1 border-b border-base-300 flex items-center justify-between"

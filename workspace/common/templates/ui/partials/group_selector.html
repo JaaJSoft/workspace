@@ -20,7 +20,7 @@
   x-data="groupSelector('{{ on_select_event|escapejs }}', () => ({{ local_source }}))"
   class="relative"
 >
-  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+  <label class="input input-sm flex items-center gap-2 w-full">
     <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
     <input
       type="text"
@@ -47,8 +47,8 @@
         <li>
           <button
             type="button"
-            class="flex items-center gap-2 rounded"
-            :class="idx === highlight ? 'active' : ''"
+            class="flex items-center gap-2 rounded-sm"
+            :class="idx === highlight ? 'menu-active' : ''"
             @click="selectGroup(group)"
             @mouseenter="highlight = idx"
           >

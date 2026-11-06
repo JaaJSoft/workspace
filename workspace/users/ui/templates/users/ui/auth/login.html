@@ -3,7 +3,7 @@
 
 {% block title %}{% translate "Login" %} · Workspace{% endblock %}
 
-{% block body_class %}bg-gradient-to-br from-base-200 to-base-300 min-h-screen{% endblock %}
+{% block body_class %}bg-linear-to-br from-base-200 to-base-300 min-h-screen{% endblock %}
 
 {% block body %}
   {% translate "Signing in..." as signing_in_label %}
@@ -59,7 +59,7 @@
               <span class="label-text font-medium">{% translate "Username" context "login form" %}</span>
             </label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
               <i data-lucide="user" class="w-4 h-4 text-base-content/40"></i>
               <input
@@ -80,7 +80,7 @@
               <span class="label-text font-medium">{% translate "Password" %}</span>
             </label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
               <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
               <input

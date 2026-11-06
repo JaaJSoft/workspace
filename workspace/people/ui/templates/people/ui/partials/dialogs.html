@@ -20,7 +20,7 @@
         <input
           type="text"
           name="display_name"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           placeholder="{% translate "Full name" %}"
           x-ref="personName"
           x-model="personForm.name"
@@ -38,7 +38,7 @@
         <input
           type="email"
           name="email"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           placeholder="{% translate "name@example.com" %}"
           x-model="personForm.email"
         />
@@ -47,7 +47,7 @@
         <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
         <select
           name="scope"
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
           x-model="personForm.scope"
         >
           <option value="mine">{% translate "My contacts" %}</option>
@@ -104,7 +104,7 @@
           type="file"
           name="file"
           accept=".vcf,text/vcard,text/x-vcard"
-          class="file-input file-input-bordered file-input-sm w-full"
+          class="file-input file-input-sm w-full"
           x-ref="importFile"
           @change="importForm.file = $event.target.files[0] || null"
         />
@@ -113,7 +113,7 @@
         <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
         <select
           name="scope"
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
           x-model="importForm.scope"
         >
           <option value="mine">{% translate "My contacts" %}</option>
@@ -205,7 +205,7 @@
         {% translate "List: %(name)s" as list_target %}
         <select
           name="target"
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
           x-model="exportForm.target"
         >
           <template x-if="exportPerson">
@@ -279,7 +279,7 @@
         <input
           type="text"
           name="name"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           placeholder="{% translate "Family, Clients..." %}"
           x-ref="listName"
           x-model="listForm.name"
@@ -289,11 +289,7 @@
       <div x-show="!listForm.uuid">
         <label class="form-control w-full">
           <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
-          <select
-            name="scope"
-            class="select select-bordered select-sm w-full"
-            x-model="listForm.scope"
-          >
+          <select name="scope" class="select select-sm w-full" x-model="listForm.scope">
             <option value="mine">{% translate "My contacts" %}</option>
             <template x-for="group in groups" :key="group.id">
               <option :value="'group:' + group.id" x-text="group.name"></option>

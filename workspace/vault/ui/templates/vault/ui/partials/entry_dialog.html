@@ -19,7 +19,7 @@
           <span class="label-text">Name</span>
           <input
             type="text"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full"
             autocomplete="off"
             spellcheck="false"
             x-model="draft.name"
@@ -48,7 +48,7 @@
               <input
                 :id="'entry-field-' + field.field_id"
                 :type="field.secret ? 'password' : 'text'"
-                class="input input-bordered input-sm flex-1"
+                class="input input-sm flex-1"
                 :class="field.secret ? 'font-mono' : ''"
                 autocomplete="off"
                 spellcheck="false"
@@ -154,7 +154,7 @@
               <input
                 id="entry-totp-input"
                 type="password"
-                class="input input-bordered input-sm flex-1 font-mono"
+                class="input input-sm flex-1 font-mono"
                 autocomplete="off"
                 spellcheck="false"
                 placeholder="Key or otpauth:// address"
@@ -175,7 +175,7 @@
         <label class="form-control">
           <span class="label-text">Notes</span>
           <textarea
-            class="textarea textarea-bordered textarea-sm w-full"
+            class="textarea textarea-sm w-full"
             rows="4"
             autocomplete="off"
             spellcheck="false"
@@ -189,10 +189,7 @@
 
         <label class="form-control">
           <span class="label-text">Folder</span>
-          <select
-            class="select select-bordered select-sm w-full"
-            x-model="draft.folder"
-          >
+          <select class="select select-sm w-full" x-model="draft.folder">
             <option :value="null">No folder</option>
             <template x-for="folder in folders" :key="folder.uuid">
               <option :value="folder.uuid" x-text="folder.name"></option>
@@ -249,7 +246,7 @@
       <form @submit.prevent="saveFolder()">
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           autocomplete="off"
           spellcheck="false"
           placeholder="Folder name"

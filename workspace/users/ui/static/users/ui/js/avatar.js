@@ -138,7 +138,7 @@ window._userCardShow = function(wrapper, userId) {
     let popover = wrapper._userCardPopover;
     if (!popover) {
       popover = document.createElement('div');
-      popover.className = 'user-card-popover fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
+      popover.className = 'user-card-popover fixed z-9999 bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
       popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
       popover.style.opacity = '0';
       const spinWrap = document.createElement('div');

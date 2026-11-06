@@ -9,7 +9,7 @@
   x-data="apiTokensTab()"
   x-init="fetchTokens()"
 >
-  <div class="card bg-base-100 border border-base-300 shadow-sm">
+  <div class="card bg-base-100 border border-base-300 shadow-xs">
     <div class="card-body">
       <div class="flex items-center justify-between">
         <h2 class="card-title text-lg gap-2">
@@ -28,7 +28,7 @@
 
       <p class="text-sm text-base-content/60 mt-1">
         {% translate "Create tokens to authenticate API requests. Use the header" %}
-        <code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">Authorization: Token &lt;value&gt;</code>
+        <code class="bg-base-200 px-1.5 py-0.5 rounded-sm text-xs">Authorization: Token &lt;value&gt;</code>
       </p>
 
       <!-- Feedback -->
@@ -41,7 +41,7 @@
 
       <!-- Search -->
       <div x-show="!loading && tokens.length > 0" class="mt-4">
-        <label class="input input-bordered input-sm flex items-center gap-2">
+        <label class="input input-sm flex items-center gap-2">
           <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
           <input
             type="text"
@@ -93,7 +93,7 @@
                 ></div>
                 <div class="flex items-center gap-2 text-xs text-base-content/50 mt-0.5">
                   <code
-                    class="bg-base-200 px-1 py-0.5 rounded"
+                    class="bg-base-200 px-1 py-0.5 rounded-sm"
                     x-text="token.token_key + '...'"
                   ></code>
                   <span>&middot;</span>
@@ -142,7 +142,7 @@
       <form @submit.prevent="createToken()" class="space-y-4">
         <label class="form-control w-full">
           <div class="label"><span class="label-text font-medium">{% translate "Name" %}</span></div>
-          <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+          <label class="input input-sm flex items-center gap-2 w-full">
             <i data-lucide="tag" class="w-4 h-4 text-base-content/40"></i>
             <input
               type="text"
@@ -162,7 +162,7 @@
 
         <label class="form-control w-full">
           <div class="label"><span class="label-text font-medium">{% translate "Expiration" %}</span></div>
-          <select x-model="newExpiry" class="select select-bordered select-sm w-full">
+          <select x-model="newExpiry" class="select select-sm w-full">
             <option value="">{% translate "No expiration" %}</option>
             <option value="7">{% blocktranslate count counter=7 %}{{ counter }} day{% plural %}{{ counter }} days{% endblocktranslate %}</option>
             <option value="30">{% blocktranslate count counter=30 %}{{ counter }} day{% plural %}{{ counter }} days{% endblocktranslate %}</option>

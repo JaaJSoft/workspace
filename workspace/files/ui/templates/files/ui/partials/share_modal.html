@@ -76,7 +76,7 @@
               </div>
               <template x-if="!entry._removed">
                 <select
-                  class="select select-xs select-bordered w-24"
+                  class="select select-xs w-24"
                   :value="entry.permission || 'ro'"
                   @change="stagePermissionChange(entry.key, $event.target.value, entry._pending)"
                 >
@@ -180,7 +180,7 @@
             <template x-if="canChooseMode()">
               <div class="form-control">
                 <label class="label py-0.5"><span class="label-text text-xs">{% translate "Access" %}</span></label>
-                <select class="select select-bordered select-sm" x-model="newLinkMode">
+                <select class="select select-sm" x-model="newLinkMode">
                   <template x-for="option in availableModes()" :key="option.value">
                     <option :value="option.value" x-text="option.label"></option>
                   </template>
@@ -196,7 +196,7 @@
                   <input
                     type="number"
                     min="1"
-                    class="input input-bordered input-sm"
+                    class="input input-sm"
                     x-model="newLinkMaxBytes"
                     placeholder="{% translate 'No limit' %}"
                   />
@@ -208,7 +208,7 @@
                   <input
                     type="number"
                     min="1"
-                    class="input input-bordered input-sm"
+                    class="input input-sm"
                     x-model="newLinkMaxCount"
                     placeholder="{% translate 'No limit' %}"
                   />
@@ -219,11 +219,7 @@
               <label class="label py-0.5">
                 <span class="label-text text-xs">{% translate "Expiration (optional)" %}</span>
               </label>
-              <input
-                type="date"
-                class="input input-bordered input-sm"
-                x-model="newLinkExpiry"
-              />
+              <input type="date" class="input input-sm" x-model="newLinkExpiry" />
             </div>
             <div class="form-control">
               <label class="label py-0.5">
@@ -233,7 +229,7 @@
                 <input
                   id="share-link-password"
                   :type="linkPasswordRevealed ? 'text' : 'password'"
-                  class="input input-bordered input-sm flex-1 min-w-0"
+                  class="input input-sm flex-1 min-w-0"
                   :class="linkPasswordRevealed && 'font-mono'"
                   autocomplete="new-password"
                   spellcheck="false"

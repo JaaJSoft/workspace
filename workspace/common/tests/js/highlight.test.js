@@ -11,7 +11,7 @@ const ctx = loadScripts([
 ]);
 const { highlightMatch } = ctx;
 
-const MARK = 'bg-warning/40 text-inherit rounded-sm px-0.5';
+const MARK = 'bg-warning/40 text-inherit rounded-xs px-0.5';
 const mark = (s) => `<mark class="${MARK}">${s}</mark>`;
 
 test('wraps the matched term and leaves the rest alone', () => {

@@ -5,8 +5,8 @@
    across zoom levels, so keep it integer). */
 .mention-badge {
   display: inline-block;
-  background-color: oklch(var(--in) / 0.15);
-  color: oklch(var(--in));
+  background-color: color-mix(in oklab, var(--color-info) 15%, transparent);
+  color: var(--color-info);
   padding: 0.28em 0.45em;
   border-radius: 9999px;
   font-weight: 600;
@@ -31,6 +31,6 @@
 }
 
 .mention-everyone {
-  background-color: oklch(var(--wa) / 0.15);
-  color: oklch(var(--wa));
+  background-color: color-mix(in oklab, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
 }

@@ -3,7 +3,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">{% translate "Default view" %}</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.defaultView"
       @change="updatePref('defaultView', $event.target.value)"
     >
@@ -17,7 +17,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">{% translate "First day of week" %}</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.firstDay"
       @change="updatePref('firstDay', parseInt($event.target.value))"
     >
@@ -30,7 +30,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">{% translate "Time format" %}</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.timeFormat"
       @change="updatePref('timeFormat', $event.target.value)"
     >

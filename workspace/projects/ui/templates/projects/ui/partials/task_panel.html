@@ -70,7 +70,7 @@
         <li>
           <a
             @click="document.activeElement.blur(); reset()"
-            :class="state === '' ? 'active' : ''"
+            :class="state === '' ? 'menu-active' : ''"
           >
             <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Default · follows involvement
           </a>
@@ -78,7 +78,7 @@
         <li>
           <a
             @click="document.activeElement.blur(); set('watching')"
-            :class="state === 'watching' ? 'active' : ''"
+            :class="state === 'watching' ? 'menu-active' : ''"
           >
             <i data-lucide="eye" class="w-4 h-4"></i> Watching
           </a>
@@ -86,7 +86,7 @@
         <li>
           <a
             @click="document.activeElement.blur(); set('muted')"
-            :class="state === 'muted' ? 'active' : ''"
+            :class="state === 'muted' ? 'menu-active' : ''"
           >
             <i data-lucide="eye-off" class="w-4 h-4"></i> Muted
           </a>
@@ -137,8 +137,8 @@
     <div class="min-w-0">
       <template x-if="editing !== 'title'">
         <h2
-          class="font-semibold text-lg leading-tight break-words"
-          :class="can('edit') && 'cursor-text hover:bg-base-200 rounded px-1 -mx-1'"
+          class="font-semibold text-lg leading-tight wrap-break-word"
+          :class="can('edit') && 'cursor-text hover:bg-base-200 rounded-sm px-1 -mx-1'"
           @click="startEdit('title', data.title)"
         >
           {{ panel_task.title }}
@@ -154,7 +154,7 @@
         <textarea
           rows="1"
           maxlength="255"
-          class="textarea textarea-bordered box-content block w-full resize-none overflow-hidden min-h-0 rounded p-[3px] -m-1 font-semibold text-lg leading-tight"
+          class="textarea box-content block w-full resize-none overflow-hidden min-h-0 rounded-sm p-[3px] -m-1 font-semibold text-lg leading-tight"
           {# $nextTick: x-init runs before x-model fills the value, #}
           {# so sizing must wait for the draft to land in the field. #}
           x-model="draft"
@@ -190,7 +190,7 @@
         <div class="label py-1"><span class="label-text text-xs">Start date</span></div>
         <input
           type="date"
-          class="input input-bordered input-sm"
+          class="input input-sm"
           x-model="data.start_date"
           :max="data.due_date || null"
           @change="commitField('start_date', data.start_date || null)"
@@ -201,7 +201,7 @@
         <div class="label py-1"><span class="label-text text-xs">Due date</span></div>
         <input
           type="date"
-          class="input input-bordered input-sm"
+          class="input input-sm"
           x-model="data.due_date"
           :min="data.start_date || null"
           @change="commitField('due_date', data.due_date || null)"
@@ -216,7 +216,7 @@
           {# '' commits as null (unestimated); '0' is a real value, hence the explicit check. #}
           <input
             type="number"
-            class="input input-bordered input-sm"
+            class="input input-sm"
             min="0"
             step="0.5"
             inputmode="decimal"
@@ -353,7 +353,7 @@
       <div x-show="sectionsOpen.description">
         <template x-if="editing !== 'description'">
           <div
-            :class="can('edit') && 'cursor-text hover:bg-base-200 rounded p-1 -m-1'"
+            :class="can('edit') && 'cursor-text hover:bg-base-200 rounded-sm p-1 -m-1'"
             @click="startEdit('description', data.description)"
           >
             {% if panel_description_html %}
@@ -366,7 +366,7 @@
         <template x-if="editing === 'description'">
           <div>
             <textarea
-              class="textarea textarea-bordered w-full text-sm"
+              class="textarea w-full text-sm"
               rows="6"
               x-model="draft"
               placeholder="Markdown supported"
@@ -429,7 +429,7 @@
         >
           <template x-for="st in subtasks" :key="st.uuid">
             <li
-              class="group flex items-center gap-2 py-0.5 rounded {% if "edit" in panel_action_ids %}cursor-grab{% endif %}"
+              class="group flex items-center gap-2 py-0.5 rounded-sm {% if "edit" in panel_action_ids %}cursor-grab{% endif %}"
               :class="draggingSubtask === st.uuid && 'opacity-50'"
               :data-subtask-uuid="st.uuid"
               {% if "edit" in panel_action_ids %} draggable="true" @dragstart="onSubtaskDragStart($event, st.uuid)" @dragend="draggingSubtask = null" {% endif %}
@@ -444,7 +444,7 @@
               />
               <template x-if="editingSubtask !== st.uuid">
                 <span
-                  class="flex-1 min-w-0 text-sm break-words"
+                  class="flex-1 min-w-0 text-sm wrap-break-word"
                   :class="st.done && 'line-through text-base-content/50'"
                   {% if "edit" in panel_action_ids %}@click="startSubtaskEdit(st)"{% endif %}
                   x-text="st.title"
@@ -454,7 +454,7 @@
                 <input
                   type="text"
                   maxlength="255"
-                  class="input input-bordered input-xs flex-1 min-w-0"
+                  class="input input-xs flex-1 min-w-0"
                   x-model="subtaskDraft"
                   x-init="$nextTick(() => $el.focus())"
                   @keydown.enter.prevent="$el.blur()"
@@ -480,7 +480,7 @@
             <input
               type="text"
               maxlength="255"
-              class="input input-bordered input-sm flex-1"
+              class="input input-sm flex-1"
               placeholder="Add an item..."
               x-model="newSubtask"
               @keydown.enter.prevent="addSubtask()"
@@ -578,7 +578,7 @@
           {# input too narrow to read a reference and a title fragment. #}
           <div class="flex flex-col gap-1.5">
             <select
-              class="select select-sm select-bordered w-full"
+              class="select select-sm w-full"
               x-model="linkRel"
               aria-label="Link type"
             >
@@ -589,7 +589,7 @@
               <option value="relates_to">relates to</option>
             </select>
             <div class="relative min-w-0" @click.outside="linkDropdown = false">
-              <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+              <label class="input input-sm flex items-center gap-2 w-full">
                 {# shrink-0 + min-w-0: the label-selector precedent - keeps the icon from flex-crushing. #}
                 <i data-lucide="link" class="w-4 h-4 opacity-60 shrink-0"></i>
                 <input
@@ -619,7 +619,7 @@
                     <li class="w-full min-w-0">
                       <button
                         type="button"
-                        class="flex w-full min-w-0 items-baseline gap-2 rounded"
+                        class="flex w-full min-w-0 items-baseline gap-2 rounded-sm"
                         @click="addLink(result)"
                       >
                         <span

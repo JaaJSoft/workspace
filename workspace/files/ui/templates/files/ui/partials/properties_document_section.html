@@ -12,7 +12,7 @@ Context: document, the file's current files.models.DocumentInfo.
       data-document-detail="title"
     >
       <i data-lucide="heading" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
-      <span class="min-w-0 break-words font-medium text-base-content/80">{{ document.title }}</span>
+      <span class="min-w-0 wrap-break-word font-medium text-base-content/80">{{ document.title }}</span>
     </div>
   {% endif %}
   {% if document.author %}
@@ -21,7 +21,7 @@ Context: document, the file's current files.models.DocumentInfo.
       data-document-detail="author"
     >
       <i data-lucide="user-pen" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
-      <span class="min-w-0 break-words">{{ document.author }}</span>
+      <span class="min-w-0 wrap-break-word">{{ document.author }}</span>
     </div>
   {% endif %}
   {% if document.subject %}
@@ -30,7 +30,7 @@ Context: document, the file's current files.models.DocumentInfo.
       data-document-detail="subject"
     >
       <i data-lucide="text" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
-      <span class="min-w-0 break-words">{{ document.subject }}</span>
+      <span class="min-w-0 wrap-break-word">{{ document.subject }}</span>
     </div>
   {% endif %}
   {% if document.keywords %}
@@ -39,7 +39,7 @@ Context: document, the file's current files.models.DocumentInfo.
       data-document-detail="keywords"
     >
       <i data-lucide="tags" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
-      <span class="min-w-0 break-words">{{ document.keywords }}</span>
+      <span class="min-w-0 wrap-break-word">{{ document.keywords }}</span>
     </div>
   {% endif %}
   {% if document.page_count %}

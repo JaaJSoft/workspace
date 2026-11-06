@@ -28,7 +28,7 @@
 
 {% block drawer_sidebar %}
   <div
-    class="drawer-side z-40 h-full !overflow-visible"
+    class="drawer-side z-40 h-full overflow-visible!"
     x-data="sidebarCollapse()"
   >
     <label
@@ -204,7 +204,7 @@
               <!-- Top Header Bar: navigation and trail above, title and the folder action below -->
               {# Under an open file only the trail shows, so the header tightens around it. #}
               <div
-                class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5 group-data-[viewer-covered]/viewer:py-2"
+                class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5 group-data-viewer-covered/viewer:py-2"
               >
                 {# The trail stays above an open file (data-viewer-keep); the title row goes under the viewer. #}
                 <div class="flex items-center gap-2 min-w-0" data-viewer-keep>
@@ -297,7 +297,7 @@
                   x-show="dropZoneActive"
                   x-cloak
                   x-transition.opacity
-                  class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-sm border-2 border-dashed border-module rounded-lg flex items-center justify-center pointer-events-none"
+                  class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-xs border-2 border-dashed border-module rounded-lg flex items-center justify-center pointer-events-none"
                 >
                   <div class="text-center">
                     <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 text-module"></i>
@@ -356,11 +356,11 @@
         x-show="showPropertiesPanel"
         x-cloak
         x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
-        x-transition:enter-start="max-md:opacity-0 md:!w-0"
-        x-transition:enter-end="max-md:opacity-100 md:!w-80"
+        x-transition:enter-start="max-md:opacity-0 md:w-0!"
+        x-transition:enter-end="max-md:opacity-100 md:w-80!"
         x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
-        x-transition:leave-start="max-md:opacity-100 md:!w-80"
-        x-transition:leave-end="max-md:opacity-0 md:!w-0"
+        x-transition:leave-start="max-md:opacity-100 md:w-80!"
+        x-transition:leave-end="max-md:opacity-0 md:w-0!"
         class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
       >
         <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>

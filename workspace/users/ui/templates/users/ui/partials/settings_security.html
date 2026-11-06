@@ -8,7 +8,7 @@
   {% if not oidc_managed %}x-data="changePasswordForm()"{% endif %}
 >
   {% if oidc_managed %}
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card bg-base-100 border border-base-300 shadow-xs">
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="shield-check" class="w-5 h-5"></i>
@@ -29,7 +29,7 @@
       </div>
     </div>
   {% else %}
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card bg-base-100 border border-base-300 shadow-xs">
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="lock" class="w-5 h-5"></i>
@@ -47,7 +47,7 @@
           <div class="form-control">
             <label class="label"><span class="label-text font-medium">{% translate "Current Password" %}</span></label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
               <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
               <input
@@ -82,7 +82,7 @@
           <div class="form-control">
             <label class="label"><span class="label-text font-medium">{% translate "New Password" %}</span></label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors"
             >
               <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
               <input
@@ -180,7 +180,7 @@
               <span class="label-text font-medium">{% translate "Confirm New Password" %}</span>
             </label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors"
               :class="{ 'input-error': confirmMismatch }"
             >
               <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>

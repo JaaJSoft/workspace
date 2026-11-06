@@ -8,7 +8,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Lock after</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.lockAfterMinutes"
       @change="updatePref('lock_after_minutes', parseInt($event.target.value))"
     >
@@ -22,7 +22,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.defaultSort"
       @change="updatePref('default_sort', $event.target.value)"
     >

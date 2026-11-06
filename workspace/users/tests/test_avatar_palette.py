@@ -20,6 +20,7 @@ and Pillow at module scope, none of which a test about a colour list needs.
 from __future__ import annotations
 
 import ast
+import math
 import re
 from pathlib import Path
 
@@ -60,7 +61,35 @@ def _seeder_palette() -> list[tuple[int, ...]]:
     raise AssertionError(f"AVATAR_PALETTE not found in {SEEDER_SOURCE}")
 
 
-def _rendered_rgb(class_name: str) -> tuple[int, int, int]:
+def _oklch_to_srgb(lightness: float, chroma: float, hue: float) -> tuple[int, ...]:
+    """An ``oklch()`` colour as 8-bit sRGB, the way Pillow will paint it.
+
+    Tailwind's ramp sits partly outside sRGB; out-of-gamut channels are
+    clamped, which is what an sRGB PNG can hold.
+    """
+    a = chroma * math.cos(math.radians(hue))
+    b = chroma * math.sin(math.radians(hue))
+    l_ = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    m_ = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    s_ = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3
+    linear = (
+        4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+        -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+        -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_,
+    )
+
+    def encode(channel: float) -> int:
+        channel = min(max(channel, 0.0), 1.0)
+        if channel <= 0.0031308:
+            gamma = 12.92 * channel
+        else:
+            gamma = 1.055 * channel ** (1 / 2.4) - 0.055
+        return round(gamma * 255)
+
+    return tuple(encode(c) for c in linear)
+
+
+def _rendered_rgb(class_name: str) -> tuple[int, ...]:
     """What the compiled bundle actually paints for a `bg-*` utility."""
     css = CSS_BUNDLE.read_text(encoding="utf-8")
     rule = re.search(rf"\.{re.escape(class_name)}\s*\{{([^}}]*)\}}", css)
@@ -69,12 +98,16 @@ def _rendered_rgb(class_name: str) -> tuple[int, int, int]:
             f"{class_name} is absent from {CSS_BUNDLE.name}; either the class was "
             "renamed or Tailwind purged it (rebuild: cd scripts/frontend && npm run build:css)"
         )
-    colour = re.search(
-        r"background-color:\s*rgb\(\s*(\d+)\s+(\d+)\s+(\d+)", rule.group(1)
+    variable = re.search(r"background-color:\s*var\((--color-[a-z0-9-]+)\)", rule.group(1))
+    if variable is None:
+        raise AssertionError(f"no theme colour variable in the {class_name} rule")
+    value = re.search(
+        rf"{re.escape(variable.group(1))}:\s*oklch\(([\d.]+)%\s+([\d.]+)\s+([\d.]+)\)", css
     )
-    if colour is None:
-        raise AssertionError(f"no rgb() background-color in the {class_name} rule")
-    return tuple(int(c) for c in colour.groups())
+    if value is None:
+        raise AssertionError(f"{variable.group(1)} is not an oklch() value in {CSS_BUNDLE.name}")
+    lightness, chroma, hue = (float(v) for v in value.groups())
+    return _oklch_to_srgb(lightness / 100, chroma, hue)
 
 
 class AvatarPaletteLockstepTests(SimpleTestCase):

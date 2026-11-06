@@ -16,7 +16,7 @@
   x-data="inviteeSelector('{{ on_select_event|escapejs }}')"
   class="relative"
 >
-  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+  <label class="input input-sm flex items-center gap-2 w-full">
     <i data-lucide="user-plus" class="w-4 h-4 opacity-60 shrink-0"></i>
     <input
       type="text"
@@ -42,7 +42,7 @@
   >
     <ul class="menu menu-sm p-1 w-full">
       <template x-for="(item, idx) in results" :key="item.key">
-        <li class="w-full min-w-0" :class="item.disabled && 'disabled'">
+        <li class="w-full min-w-0" :class="item.disabled && 'menu-disabled'">
           <div
             x-show="isGroupStart(idx)"
             class="menu-title px-2 pt-2 pb-1 text-[11px] uppercase tracking-wider"
@@ -50,8 +50,8 @@
           ></div>
           <button
             type="button"
-            class="flex w-full min-w-0 items-center gap-2 rounded"
-            :class="idx === highlight ? 'active' : ''"
+            class="flex w-full min-w-0 items-center gap-2 rounded-sm"
+            :class="idx === highlight ? 'menu-active' : ''"
             :disabled="item.disabled"
             @click="select(item)"
             @mouseenter="if (!item.disabled) highlight = idx"

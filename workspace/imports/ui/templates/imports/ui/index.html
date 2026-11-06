@@ -235,10 +235,7 @@
         <form class="space-y-3" @submit.prevent="saveConnection()">
           <div class="form-control" x-show="!connEditing">
             <label class="label"><span class="label-text font-medium">Provider</span></label>
-            <select
-              x-model="connForm.provider"
-              class="select select-bordered select-sm w-full"
-            >
+            <select x-model="connForm.provider" class="select select-sm w-full">
               <template x-for="p in credentialProviders()" :key="p.slug">
                 <option :value="p.slug" x-text="p.name"></option>
               </template>
@@ -249,7 +246,7 @@
             <input
               type="text"
               x-model="connForm.label"
-              class="input input-bordered input-sm w-full"
+              class="input input-sm w-full"
               placeholder="e.g. My old Nextcloud"
               required
             />
@@ -259,7 +256,7 @@
             <input
               type="url"
               x-model="connForm.base_url"
-              class="input input-bordered input-sm w-full"
+              class="input input-sm w-full"
               placeholder="https://cloud.example.org"
               required
             />
@@ -271,7 +268,7 @@
               <input
                 type="text"
                 x-model="connForm.username"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full"
                 autocomplete="off"
                 required
               />
@@ -286,7 +283,7 @@
               <input
                 type="password"
                 x-model="connForm.secret"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full"
                 autocomplete="new-password"
                 :required="!connEditing"
               />
@@ -486,7 +483,7 @@
                 </label>
                 <select
                   x-model="wizard.options.files.on_conflict"
-                  class="select select-bordered select-sm w-full"
+                  class="select select-sm w-full"
                 >
                   <option value="rename">Keep both (rename the imported one)</option>
                   <option value="skip">Keep mine (skip the imported one)</option>
@@ -544,7 +541,7 @@
                     ></div>
                   </div>
                   <select
-                    class="select select-bordered select-sm w-36 sm:w-44 shrink-0"
+                    class="select select-sm w-36 sm:w-44 shrink-0"
                     x-model="book.target"
                     :disabled="!book.selected"
                     aria-label="Import into"

@@ -20,7 +20,7 @@
       >
         <li>
           <a
-            :class="{ active: moveDialog.target === null }"
+            :class="{ 'menu-active': moveDialog.target === null }"
             @click="moveDialog.target = null"
           >
             <i
@@ -38,7 +38,7 @@
         <template x-for="folder in folderTree()" :key="folder.uuid">
           <li>
             <a
-              :class="{ active: moveDialog.target === folder.uuid }"
+              :class="{ 'menu-active': moveDialog.target === folder.uuid }"
               :style="{ paddingLeft: (0.75 + 1.25 * (folder.depth + 1)) + 'rem' }"
               @click="moveDialog.target = folder.uuid"
             >

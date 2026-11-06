@@ -40,7 +40,7 @@
         </label>
         <div class="relative">
           <div
-            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-module/50 transition-colors cursor-text"
+            class="flex flex-wrap items-center gap-1.5 min-h-10 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-module/50 transition-colors cursor-text"
             @click="$refs.userSearchInput.focus()"
           >
             <!-- Selected user chips -->
@@ -52,7 +52,7 @@
             <input
               type="text"
               x-ref="userSearchInput"
-              class="grow bg-transparent outline-none text-sm min-w-[8rem] h-6"
+              class="grow bg-transparent outline-hidden text-sm min-w-32 h-6"
               placeholder="Search users..."
               x-model="userSearchQuery"
               @input.debounce.300ms="searchUsers()"
@@ -76,8 +76,8 @@
                 <li>
                   <button
                     type="button"
-                    class="flex items-center gap-2 rounded"
-                    :class="idx === userSearchHighlight ? 'active' : ''"
+                    class="flex items-center gap-2 rounded-sm"
+                    :class="idx === userSearchHighlight ? 'menu-active' : ''"
                     :data-search-active="idx === userSearchHighlight"
                     @click="selectSearchedUser(user); $refs.userSearchInput.focus()"
                     @mouseenter="userSearchHighlight = idx"
@@ -148,7 +148,7 @@
         </label>
         <input
           type="text"
-          class="input input-sm input-bordered w-full"
+          class="input input-sm w-full"
           placeholder="e.g. Project Team"
           x-model="newConvTitle"
         />

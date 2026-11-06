@@ -32,7 +32,7 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
+  <div class="drawer-side z-40 h-full overflow-visible!">
     <label for="notes-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
@@ -263,7 +263,7 @@
             <select
               x-model="selectedGroup"
               x-ref="noteGroupSelect"
-              class="select select-bordered w-full"
+              class="select w-full"
               required
             >
               <option value="" disabled selected>Select a group</option>

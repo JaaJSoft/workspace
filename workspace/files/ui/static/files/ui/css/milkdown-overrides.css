@@ -16,17 +16,17 @@
 .milkdown {
   --crepe-font-default: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --crepe-font-title: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --crepe-color-background: oklch(var(--b1));
-  --crepe-color-on-background: oklch(var(--bc));
-  --crepe-color-surface: oklch(var(--b2));
-  --crepe-color-outline: oklch(var(--b3));
-  --crepe-color-primary: rgb(var(--module));
-  --crepe-color-on-primary: rgb(var(--module-content));
-  --crepe-color-selected: rgb(var(--module) / 0.12);
-  --crepe-color-hover: oklch(var(--b3) / 0.4);
-  --crepe-color-solid: oklch(var(--bc));
-  --crepe-color-line: oklch(var(--b3));
-  --crepe-color-inline-code: oklch(var(--b2));
+  --crepe-color-background: var(--color-base-100);
+  --crepe-color-on-background: var(--color-base-content);
+  --crepe-color-surface: var(--color-base-200);
+  --crepe-color-outline: var(--color-base-300);
+  --crepe-color-primary: var(--module);
+  --crepe-color-on-primary: var(--module-content);
+  --crepe-color-selected: color-mix(in oklab, var(--module) 12%, transparent);
+  --crepe-color-hover: color-mix(in oklab, var(--color-base-300) 40%, transparent);
+  --crepe-color-solid: var(--color-base-content);
+  --crepe-color-line: var(--color-base-300);
+  --crepe-color-inline-code: var(--color-base-200);
 }
 
 /* ========================================================
@@ -89,7 +89,7 @@
    Target both inside .milkdown and portals on document.body. */
 .milkdown .milkdown-icon,
 .milkdown-icon {
-  color: oklch(var(--bc) / 0.6) !important;
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent) !important;
 }
 
 .milkdown .milkdown-icon svg,
@@ -129,7 +129,7 @@
   }
 
 .milkdown .ProseMirror-focused {
-    --prosemirror-virtual-cursor-color: oklch(var(--bc) / 0.5);
+    --prosemirror-virtual-cursor-color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
   }
 
 .milkdown .ProseMirror-focused .prosemirror-virtual-cursor-animation {

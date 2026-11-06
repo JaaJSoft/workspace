@@ -273,11 +273,11 @@
       </div>
       <div class="flex-1 min-w-0">
         <h3
-          class="font-bold text-lg leading-tight break-words"
+          class="font-bold text-lg leading-tight wrap-break-word"
           x-text="options.title || defaultTitle"
         ></h3>
         <p
-          class="text-sm text-base-content/60 break-words mt-0.5"
+          class="text-sm text-base-content/60 wrap-break-word mt-0.5"
           x-text="options.message || defaultMessage"
         ></p>
       </div>
@@ -286,7 +286,7 @@
     <!-- Space selector (personal / group folders) - only when the user has group folders -->
     <div x-show="spaces.length > 1" x-cloak class="mb-3">
       <select
-        class="select select-bordered select-sm w-full"
+        class="select select-sm w-full"
         @change="selectSpace($event.target.value)"
         aria-label="{% translate 'Location' %}"
       >
@@ -308,7 +308,7 @@
         ></i>
         <input
           type="text"
-          class="input input-bordered input-sm w-full pl-9"
+          class="input input-sm w-full pl-9"
           placeholder="{% translate 'Search files...' %}"
           x-model="search"
           @input="handleSearch()"
@@ -450,7 +450,7 @@
           <input
             x-ref="newFolderInput"
             type="text"
-            class="input input-bordered input-sm flex-1"
+            class="input input-sm flex-1"
             placeholder="{% translate 'Folder name' %}"
             x-model="newFolderName"
             @keydown.enter.prevent="createFolder()"

@@ -35,7 +35,7 @@
     </div>
 
     <form @submit.prevent="canCreateName() ? createName() : null">
-      <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+      <label class="input input-sm flex items-center gap-2 w-full">
         <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
         <input
           type="text"
@@ -54,7 +54,7 @@
         <li>
           <button
             type="button"
-            class="gap-3 rounded"
+            class="gap-3 rounded-sm"
             :disabled="nameDialog.saving"
             @click="chooseName(person)"
           >
@@ -84,7 +84,7 @@
       <li x-show="canCreateName()" x-cloak>
         <button
           type="button"
-          class="gap-3 rounded text-module"
+          class="gap-3 rounded-sm text-module"
           :disabled="nameDialog.saving"
           @click="createName()"
         >

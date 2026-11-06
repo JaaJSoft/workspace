@@ -50,12 +50,17 @@ class ModuleSwitcherShortcutTests(PlaywrightTestCase):
         self.page.get_by_role("button", name="Collapse sidebar").click()
         self.page.keyboard.press("Alt+k")
         expect(self.page.locator(PANEL)).to_be_visible()
-        # daisyUI animates the dropdown in; measure once it has settled.
+        # daisyUI animates the dropdown in (opacity and the scale property);
+        # measure once it has settled.
         self.page.locator(PANEL).evaluate(
             "el => new Promise(done => {"
-            "  const tick = () => getComputedStyle(el).opacity === '1'"
-            "    && getComputedStyle(el).transform.startsWith('matrix(1, 0, 0, 1')"
-            "    ? done() : requestAnimationFrame(tick);"
+            "  const tick = () => {"
+            "    const s = getComputedStyle(el);"
+            "    const settled = s.opacity === '1'"
+            "      && ['none', '1'].includes(s.scale)"
+            "      && (s.transform === 'none' || s.transform.startsWith('matrix(1, 0, 0, 1'));"
+            "    settled ? done() : requestAnimationFrame(tick);"
+            "  };"
             "  tick();"
             "})"
         )

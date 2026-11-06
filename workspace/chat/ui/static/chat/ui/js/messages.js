@@ -2,6 +2,11 @@
 // delete, reply, reactions, mark-as-read, scroll, pin / unpin messages,
 // "edit last own message" shortcut.
 window.chatMessagesMixin = function chatMessagesMixin() {
+  // How long the view keeps following the end of the list once it stops
+  // growing, and the gestures that mean the user is scrolling themselves.
+  const FOLLOW_SETTLE_MS = 3000;
+  const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'mousedown'];
+
   return {
     // ── State ────────────────────────────────────────────────
     messageBody: '',
@@ -11,6 +16,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     editingMessageUuid: null,
     replyingTo: null,
     pinnedMessages: [],
+    _unfollowBottom: null,
     msgMenu: {
       open: false, x: 0, y: 0, uuid: null, authorName: '', body: '',
       own: false, deletable: false, pinned: false,
@@ -109,7 +115,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         // and scroll position to the request that won.
         if ((render || []).some(Boolean)) {
           this._readPaginationState();
-          // Scroll immediately after the merge, before images load
+          // Right after the merge: scrollToBottom keeps up as the
+          // attachments take their size.
           this.scrollToBottom();
         }
       } catch (e) {
@@ -171,23 +178,37 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
     },
 
-    scrollToBottom(waitForImages = false) {
+    scrollToBottom() {
       const container = this.$refs.messagesContainer;
       if (!container) return;
       container.scrollTop = container.scrollHeight;
+      this._followBottom(container);
+    },
 
-      if (waitForImages) {
-        const images = container.querySelectorAll('img:not([complete])');
-        images.forEach(img => {
-          if (!img.complete) {
-            img.addEventListener('load', () => {
-              if (this._isNearBottom()) {
-                container.scrollTop = container.scrollHeight;
-              }
-            }, { once: true });
-          }
-        });
-      }
+    // Keep the newest message in view while the list grows under it: file
+    // previews and their pictures take their size after the list is drawn,
+    // and each one pushes the end of the conversation further down. Lets go
+    // as soon as the user scrolls themselves, or once the list has kept the
+    // same size for FOLLOW_SETTLE_MS.
+    _followBottom(container) {
+      if (this._unfollowBottom) this._unfollowBottom();
+      if (typeof ResizeObserver === 'undefined') return;
+      let settle = null;
+      let observer = null;
+      const unfollow = () => {
+        if (observer) observer.disconnect();
+        clearTimeout(settle);
+        for (const type of USER_SCROLL_EVENTS) container.removeEventListener(type, unfollow);
+        if (this._unfollowBottom === unfollow) this._unfollowBottom = null;
+      };
+      observer = new ResizeObserver(() => {
+        container.scrollTop = container.scrollHeight;
+        clearTimeout(settle);
+        settle = setTimeout(unfollow, FOLLOW_SETTLE_MS);
+      });
+      for (const child of container.children) observer.observe(child);
+      for (const type of USER_SCROLL_EVENTS) container.addEventListener(type, unfollow, { passive: true });
+      this._unfollowBottom = unfollow;
     },
 
     // ── Sending messages ───────────────────────────────────

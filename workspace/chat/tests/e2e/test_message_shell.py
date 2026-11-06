@@ -292,6 +292,32 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         self.page.wait_for_timeout(300)
         expect(sent).to_be_in_viewport()
 
+    def test_opening_a_conversation_lands_on_its_last_message(self):
+        for color in ((40, 90, 160), (120, 60, 140), (200, 110, 60)):
+            msg = self._message(self.user, "a picture")
+            MessageAttachment.objects.create(
+                message=msg,
+                file=SimpleUploadedFile(
+                    "photo.png", _picture(color), content_type="image/png"
+                ),
+                original_name="photo.png",
+                mime_type="image/png",
+                type="png",
+                category="image",
+                size=1000,
+            )
+        last = self._message(self.user, "the last word")
+
+        # The pictures arrive after the list is drawn and push it down: the
+        # view must still end on the last message.
+        self._open_conversation()
+        self.page.wait_for_function(
+            """() => Array.from(document.querySelectorAll('#messages-container file-preview img'))
+                .filter(i => i.complete && i.naturalWidth).length === 3"""
+        )
+        self.page.wait_for_timeout(300)
+        expect(self.page.locator(f"#msg-{last.uuid}")).to_be_in_viewport()
+
     def test_compact_mode_restyles_the_shell_reactively(self):
         self._open_conversation()
 

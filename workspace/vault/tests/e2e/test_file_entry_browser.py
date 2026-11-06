@@ -10,7 +10,7 @@ class FileEntryBrowserTests(VaultBrowserCase):
 
         self.page.click("tbody tr:has-text('GitHub')")
         self.page.locator(PANEL).get_by_role("button", name="Edit").click()
-        self.page.wait_for_selector(".modal-box")
+        self.page.wait_for_selector(".modal-box:has-text('Save')")
         self.page.get_by_role("textbox", name="Notes").fill("first line\nsecond line")
         self.page.click(".modal-box button:has-text('Save')")
         self.page.wait_for_selector(

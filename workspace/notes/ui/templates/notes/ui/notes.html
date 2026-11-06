@@ -38,7 +38,7 @@
     <!-- Sidebar -->
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
       :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
     >
       <!-- Sidebar header -->

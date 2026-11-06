@@ -98,14 +98,19 @@ def _rendered_rgb(class_name: str) -> tuple[int, ...]:
             f"{class_name} is absent from {CSS_BUNDLE.name}; either the class was "
             "renamed or Tailwind purged it (rebuild: cd scripts/frontend && npm run build:css)"
         )
-    variable = re.search(r"background-color:\s*var\((--color-[a-z0-9-]+)\)", rule.group(1))
+    variable = re.search(
+        r"background-color:\s*var\((--color-[a-z0-9-]+)\)", rule.group(1)
+    )
     if variable is None:
         raise AssertionError(f"no theme colour variable in the {class_name} rule")
     value = re.search(
-        rf"{re.escape(variable.group(1))}:\s*oklch\(([\d.]+)%\s+([\d.]+)\s+([\d.]+)\)", css
+        rf"{re.escape(variable.group(1))}:\s*oklch\(([\d.]+)%\s+([\d.]+)\s+([\d.]+)\)",
+        css,
     )
     if value is None:
-        raise AssertionError(f"{variable.group(1)} is not an oklch() value in {CSS_BUNDLE.name}")
+        raise AssertionError(
+            f"{variable.group(1)} is not an oklch() value in {CSS_BUNDLE.name}"
+        )
     lightness, chroma, hue = (float(v) for v in value.groups())
     return _oklch_to_srgb(lightness / 100, chroma, hue)
 

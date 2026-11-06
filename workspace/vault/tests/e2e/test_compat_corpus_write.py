@@ -334,7 +334,7 @@ class CorpusWriteWalk(VaultBrowserCase):
         """
         self.page.click(f"tbody tr:has-text('{name}')")
         self.page.locator(PANEL).get_by_role("button", name="Edit").click()
-        self.page.wait_for_selector(".modal-box")
+        self.page.wait_for_selector(".modal-box:has-text('Save')")
         self.page.get_by_role("button", name="Add").click()
         self.page.fill(".modal-box input[placeholder='Key or otpauth:// address']", uri)
         self.page.click(".modal-box button:has-text('Save')")

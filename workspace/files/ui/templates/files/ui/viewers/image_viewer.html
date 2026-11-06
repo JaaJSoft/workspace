@@ -271,8 +271,8 @@
           </h4>
 
           <!-- Prompt -->
-          <div class="form-control">
-            <label class="label"><span class="label-text text-xs">{% translate "Describe the edit" %}</span></label>
+          <div class="fieldset">
+            <label class="fieldset-legend"><span class="text-xs">{% translate "Describe the edit" %}</span></label>
             <textarea
               x-model="editPrompt"
               class="textarea textarea-sm w-full"
@@ -284,8 +284,8 @@
           </div>
 
           <!-- Size selector -->
-          <div class="form-control">
-            <label class="label"><span class="label-text text-xs">{% translate "Output size" %}</span></label>
+          <div class="fieldset">
+            <label class="fieldset-legend"><span class="text-xs">{% translate "Output size" %}</span></label>
             <select
               x-model="editSize"
               class="select select-sm w-full"
@@ -355,8 +355,8 @@
                 x-cloak
                 class="flex flex-col gap-2 p-3 bg-base-200 rounded-lg"
               >
-                <div class="form-control">
-                  <label class="label"><span class="label-text text-xs">{% translate "File name" %}</span></label>
+                <div class="fieldset">
+                  <label class="fieldset-legend"><span class="text-xs">{% translate "File name" %}</span></label>
                   <input
                     type="text"
                     x-model="saveAsName"
@@ -364,8 +364,8 @@
                     :disabled="saveAsLoading"
                   />
                 </div>
-                <div class="form-control">
-                  <label class="label"><span class="label-text text-xs">{% translate "Folder" %}</span></label>
+                <div class="fieldset">
+                  <label class="fieldset-legend"><span class="text-xs">{% translate "Folder" %}</span></label>
                   <select
                     x-model="saveAsParent"
                     class="select select-sm w-full"

@@ -54,12 +54,12 @@
           {% csrf_token %}
 
           <!-- Username Field -->
-          <div class="form-control w-full mb-4">
-            <label class="label" for="{{ form.username.id_for_label }}">
-              <span class="label-text font-medium">{% translate "Username" context "login form" %}</span>
+          <div class="fieldset w-full mb-4">
+            <label class="fieldset-legend" for="{{ form.username.id_for_label }}">
+              <span class="font-medium">{% translate "Username" context "login form" %}</span>
             </label>
             <label
-              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors w-full"
             >
               <i data-lucide="user" class="w-4 h-4 text-base-content/40"></i>
               <input
@@ -75,12 +75,12 @@
           </div>
 
           <!-- Password Field -->
-          <div class="form-control w-full mb-6">
-            <label class="label" for="{{ form.password.id_for_label }}">
-              <span class="label-text font-medium">{% translate "Password" %}</span>
+          <div class="fieldset w-full mb-6">
+            <label class="fieldset-legend" for="{{ form.password.id_for_label }}">
+              <span class="font-medium">{% translate "Password" %}</span>
             </label>
             <label
-              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors w-full"
             >
               <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
               <input
@@ -98,7 +98,7 @@
           <input type="hidden" name="next" value="{{ next }}" />
 
           <!-- Submit Button -->
-          <div class="form-control mt-6">
+          <div class="fieldset mt-6">
             <button
               type="submit"
               class="btn btn-primary w-full gap-2 h-12 text-base font-medium shadow-lg hover:shadow-xl transition-all"

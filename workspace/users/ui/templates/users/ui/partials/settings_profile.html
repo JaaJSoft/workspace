@@ -113,8 +113,8 @@
       <div x-ref="profileFieldsFeedback"></div>
 
       <!-- Role -->
-      <div class="form-control mt-3">
-        <label class="label"><span class="label-text font-medium">{% translate "Role" %}</span></label>
+      <div class="fieldset mt-3">
+        <label class="fieldset-legend"><span class="font-medium">{% translate "Role" %}</span></label>
         <input
           type="text"
           x-model="role"
@@ -124,16 +124,14 @@
           @blur="saveField('role', role)"
           @keydown.enter="$event.target.blur()"
         />
-        <label class="label">
-          <span
-            class="label-text-alt text-base-content/40"
-          >{% translate "Displayed below your name on your profile." %}</span>
+        <label class="label whitespace-normal">
+          <span class="text-base-content/40">{% translate "Displayed below your name on your profile." %}</span>
         </label>
       </div>
 
       <!-- Bio -->
-      <div class="form-control mt-2">
-        <label class="label"><span class="label-text font-medium">{% translate "Bio" %}</span></label>
+      <div class="fieldset mt-2">
+        <label class="fieldset-legend"><span class="font-medium">{% translate "Bio" %}</span></label>
         <textarea
           x-model="bio"
           maxlength="200"
@@ -142,10 +140,9 @@
           class="textarea w-full max-w-md text-sm"
           @blur="saveField('bio', bio)"
         ></textarea>
-        <label class="label">
-          <span class="label-text-alt text-base-content/40">{% translate "Visible on your public profile." %}</span>
+        <label class="label whitespace-normal">
+          <span class="text-base-content/40">{% translate "Visible on your public profile." %}</span>
           <span
-            class="label-text-alt"
             :class="bio.length > 180 ? 'text-warning' : 'text-base-content/40'"
             x-text="bio.length + ' / 200'"
           ></span>

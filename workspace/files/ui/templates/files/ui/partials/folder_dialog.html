@@ -7,9 +7,9 @@
     <form
       @submit.prevent="window.dispatchEvent(new CustomEvent('create-folder', { detail: { name: folderName } }))"
     >
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text">{% translate "Folder name" %}</span>
+      <div class="fieldset">
+        <label class="fieldset-legend">
+          <span>{% translate "Folder name" %}</span>
         </label>
         <input
           x-model="folderName"

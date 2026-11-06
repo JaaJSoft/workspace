@@ -32,10 +32,10 @@
       </div>
 
       <!-- To: tag-input -->
-      <div class="form-control" x-show="newConvMode === 'people'" x-cloak>
-        <label class="label pb-1">
+      <div class="fieldset" x-show="newConvMode === 'people'" x-cloak>
+        <label class="fieldset-legend">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+            class="text-xs font-medium uppercase tracking-wide text-base-content/50"
           >To</span>
         </label>
         <div class="relative">
@@ -110,10 +110,10 @@
       </div>
 
       <!-- Groups: select one or more of the user's groups -->
-      <div class="form-control" x-show="newConvMode === 'groups'" x-cloak>
-        <label class="label pb-1">
+      <div class="fieldset" x-show="newConvMode === 'groups'" x-cloak>
+        <label class="fieldset-legend">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+            class="text-xs font-medium uppercase tracking-wide text-base-content/50"
           >Groups</span>
         </label>
         <div
@@ -135,16 +135,16 @@
 
       <!-- Group name (shown when 2+ users, or always in Groups mode) -->
       <div
-        class="form-control"
+        class="fieldset"
         x-show="selectedUsers.length >= 2 || newConvMode === 'groups'"
         x-cloak
         x-transition
       >
-        <label class="label pb-1">
+        <label class="fieldset-legend">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+            class="text-xs font-medium uppercase tracking-wide text-base-content/50"
           >Group name</span>
-          <span class="label-text-alt text-xs text-base-content/40">Optional</span>
+          <span class="text-xs text-base-content/40">Optional</span>
         </label>
         <input
           type="text"

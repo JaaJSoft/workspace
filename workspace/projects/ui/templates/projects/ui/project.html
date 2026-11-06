@@ -241,8 +241,8 @@
       }).catch((e) => { error = e.message; }).finally(() => { creating = false; });
     "
       >
-        <label class="form-control w-full">
-          <div class="label"><span class="label-text">Name</span></div>
+        <label class="fieldset w-full">
+          <div class="fieldset-legend"><span>Name</span></div>
           <input
             type="text"
             class="input w-full"
@@ -251,12 +251,12 @@
             maxlength="255"
           />
         </label>
-        <label class="form-control w-full mt-2">
-          <div class="label"><span class="label-text">Description</span></div>
+        <label class="fieldset w-full mt-2">
+          <div class="fieldset-legend"><span>Description</span></div>
           <textarea class="textarea w-full" x-model="description" rows="2"></textarea>
         </label>
-        <div class="form-control w-full mt-2">
-          <div class="label"><span class="label-text">Type</span></div>
+        <div class="fieldset w-full mt-2">
+          <div class="fieldset-legend"><span>Type</span></div>
           <div class="grid grid-cols-2 gap-2">
             <label
               class="rounded-box border p-3 cursor-pointer flex flex-col gap-1"

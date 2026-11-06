@@ -256,9 +256,9 @@
         <form
           @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.noteGroupSelect.options[$refs.noteGroupSelect.selectedIndex].text } })); document.getElementById('notes-create-group-folder-dialog').close(); }"
         >
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Group</span>
+          <div class="fieldset">
+            <label class="fieldset-legend">
+              <span>Group</span>
             </label>
             <select
               x-model="selectedGroup"
@@ -271,8 +271,8 @@
                 <option value="{{ g.id }}">{{ g.name }}</option>
               {% endfor %}
             </select>
-            <label class="label">
-              <span class="label-text-alt">The folder will be named after the group</span>
+            <label class="label whitespace-normal">
+              <span>The folder will be named after the group</span>
             </label>
           </div>
           <div class="modal-action">

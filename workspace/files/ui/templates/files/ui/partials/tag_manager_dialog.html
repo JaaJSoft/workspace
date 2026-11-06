@@ -150,8 +150,8 @@ and the tag_dialog partial on the same page for create/edit.
       {% endblocktranslate %}
     </p>
     <form @submit.prevent="confirmTagMerge()">
-      <label class="form-control w-full mb-3">
-        <div class="label"><span class="label-text">{% translate "Merge into" %}</span></div>
+      <label class="fieldset w-full mb-3">
+        <div class="fieldset-legend"><span>{% translate "Merge into" %}</span></div>
         <select
           class="select select-sm w-full"
           x-model="tagManager.mergeTarget"

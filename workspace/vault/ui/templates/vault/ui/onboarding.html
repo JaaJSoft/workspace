@@ -196,8 +196,8 @@
                 @strength-change="strengthChanged($event.detail)"
               >
                 <p>Pick your master password. It never leaves this browser.</p>
-                <label class="form-control w-full">
-                  <span class="label-text">Master password</span>
+                <label class="fieldset w-full">
+                  <span class="text-sm">Master password</span>
                   {% comment %}
                     On input, not change: the corpus check gates the step, and
                     hanging it off change would leave the button disabled for
@@ -227,8 +227,8 @@
                   opens and never on step one.
                 {% endcomment %}
                 {% include "ui/partials/password_strength.html" with password_expr="password" %}
-                <label class="form-control w-full">
-                  <span class="label-text">Confirm it</span>
+                <label class="fieldset w-full">
+                  <span class="text-sm">Confirm it</span>
                   <input
                     type="password"
                     class="input w-full"
@@ -264,21 +264,21 @@
                   x-text="groupedSecret()"
                 ></pre>
                 <button type="button" class="btn btn-outline btn-sm" @click="downloadKit()">Download the emergency kit (PDF)</button>
-                <label class="label cursor-pointer justify-start gap-3">
+                <label class="label cursor-pointer justify-start gap-3 whitespace-normal">
                   <input
                     type="checkbox"
                     id="recovery-key-acknowledged"
                     class="checkbox"
                     x-model="acknowledged"
                   />
-                  <span class="label-text">
+                  <span>
                     I have saved my recovery key. Without it, nobody can open my
                     vaults.
                   </span>
                 </label>
-                <label class="label cursor-pointer justify-start gap-3">
+                <label class="label cursor-pointer justify-start gap-3 whitespace-normal">
                   <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
-                  <span class="label-text">
+                  <span>
                     Remember my recovery key on this device. Anything that can run
                     code on this page can then read it, so leave it off on a shared
                     computer.

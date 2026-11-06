@@ -233,16 +233,16 @@
       <div class="modal-box max-w-lg">
         {% include "ui/partials/dialog_header.html" with icon="plug" title_expr="connEditing ? 'Edit connection' : 'Add a connection'" subtitle="Nothing is saved until the server has answered with these credentials." only %}
         <form class="space-y-3" @submit.prevent="saveConnection()">
-          <div class="form-control" x-show="!connEditing">
-            <label class="label"><span class="label-text font-medium">Provider</span></label>
+          <div class="fieldset" x-show="!connEditing">
+            <label class="fieldset-legend"><span class="font-medium">Provider</span></label>
             <select x-model="connForm.provider" class="select select-sm w-full">
               <template x-for="p in credentialProviders()" :key="p.slug">
                 <option :value="p.slug" x-text="p.name"></option>
               </template>
             </select>
           </div>
-          <div class="form-control">
-            <label class="label"><span class="label-text font-medium">Name</span></label>
+          <div class="fieldset">
+            <label class="fieldset-legend"><span class="font-medium">Name</span></label>
             <input
               type="text"
               x-model="connForm.label"
@@ -251,8 +251,8 @@
               required
             />
           </div>
-          <div class="form-control">
-            <label class="label"><span class="label-text font-medium">URL</span></label>
+          <div class="fieldset">
+            <label class="fieldset-legend"><span class="font-medium">URL</span></label>
             <input
               type="url"
               x-model="connForm.base_url"
@@ -260,11 +260,11 @@
               placeholder="https://cloud.example.org"
               required
             />
-            <span class="label-text-alt text-base-content/60 mt-1" x-text="hint('url')"></span>
+            <span class="text-xs text-base-content/60 mt-1" x-text="hint('url')"></span>
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <div class="form-control">
-              <label class="label"><span class="label-text font-medium">Username</span></label>
+            <div class="fieldset">
+              <label class="fieldset-legend"><span class="font-medium">Username</span></label>
               <input
                 type="text"
                 x-model="connForm.username"
@@ -273,10 +273,10 @@
                 required
               />
             </div>
-            <div class="form-control">
-              <label class="label">
+            <div class="fieldset">
+              <label class="fieldset-legend">
                 <span
-                  class="label-text font-medium"
+                  class="font-medium"
                   x-text="connEditing ? 'New password (optional)' : 'Password'"
                 ></span>
               </label>
@@ -289,7 +289,7 @@
               />
             </div>
           </div>
-          <span class="label-text-alt text-base-content/60" x-text="hint('secret')"></span>
+          <span class="text-xs text-base-content/60" x-text="hint('secret')"></span>
           <template x-if="connError">
             <inline-alert type="error"><span x-text="connError"></span></inline-alert>
           </template>
@@ -466,8 +466,8 @@
             </div>
 
             <div class="grid sm:grid-cols-2 gap-3">
-              <div class="form-control">
-                <label class="label"><span class="label-text font-medium">Import into</span></label>
+              <div class="fieldset">
+                <label class="fieldset-legend"><span class="font-medium">Import into</span></label>
                 <button
                   type="button"
                   class="btn btn-sm btn-outline justify-start gap-2 font-normal"
@@ -477,9 +477,9 @@
                   <span class="truncate" x-text="wizard.options.files.destination_name"></span>
                 </button>
               </div>
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text font-medium">When a file with the same name exists</span>
+              <div class="fieldset">
+                <label class="fieldset-legend">
+                  <span class="font-medium">When a file with the same name exists</span>
                 </label>
                 <select
                   x-model="wizard.options.files.on_conflict"

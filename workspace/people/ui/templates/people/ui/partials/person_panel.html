@@ -112,51 +112,51 @@
               </button>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 flex-1 min-w-0">
-              <label class="form-control">
-                <span class="label-text text-xs opacity-60">{% translate "First name" %}</span>
+              <label class="fieldset">
+                <span class="text-sm text-xs opacity-60">{% translate "First name" %}</span>
                 <input
                   type="text"
-                  class="input input-sm"
+                  class="input input-sm w-full"
                   x-model="person.given_name"
                   @change="saveField('given_name')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="form-control">
-                <span class="label-text text-xs opacity-60">{% translate "Last name" %}</span>
+              <label class="fieldset">
+                <span class="text-sm text-xs opacity-60">{% translate "Last name" %}</span>
                 <input
                   type="text"
-                  class="input input-sm"
+                  class="input input-sm w-full"
                   x-model="person.family_name"
                   @change="saveField('family_name')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="form-control">
-                <span class="label-text text-xs opacity-60">{% translate "Organization" %}</span>
+              <label class="fieldset">
+                <span class="text-sm text-xs opacity-60">{% translate "Organization" %}</span>
                 <input
                   type="text"
-                  class="input input-sm"
+                  class="input input-sm w-full"
                   x-model="person.organization"
                   @change="saveField('organization')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="form-control">
-                <span class="label-text text-xs opacity-60">{% translate "Title" context "job title" %}</span>
+              <label class="fieldset">
+                <span class="text-sm text-xs opacity-60">{% translate "Title" context "job title" %}</span>
                 <input
                   type="text"
-                  class="input input-sm"
+                  class="input input-sm w-full"
                   x-model="person.title"
                   @change="saveField('title')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="form-control">
-                <span class="label-text text-xs opacity-60">{% translate "Birthday" %}</span>
+              <label class="fieldset">
+                <span class="text-sm text-xs opacity-60">{% translate "Birthday" %}</span>
                 <input
                   type="date"
-                  class="input input-sm"
+                  class="input input-sm w-full"
                   x-model="person.birthday"
                   @change="saveField('birthday')"
                   :readonly="!can('edit')"
@@ -357,8 +357,8 @@
         {% translate "Add to list" as add_to_list_title %}
         {% include "ui/partials/dialog_header.html" with icon="list-plus" title=add_to_list_title subtitle_expr="person.display_name" close_expr="$refs.listPickDialog.close()" only %}
         <form @submit.prevent="confirmAddToList()" class="space-y-3">
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">{% translate "List" %}</span></div>
+          <label class="fieldset w-full">
+            <div class="fieldset-legend"><span>{% translate "List" %}</span></div>
             <select
               name="list"
               class="select select-sm w-full"
@@ -394,8 +394,8 @@
         {% translate "Move to" as move_to_title %}
         {% include "ui/partials/dialog_header.html" with icon="users" title=move_to_title subtitle_expr="person.display_name" close_expr="$refs.moveDialog.close()" only %}
         <form @submit.prevent="confirmMove()" class="space-y-3">
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
+          <label class="fieldset w-full">
+            <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
             <select name="scope" class="select select-sm w-full" x-model="movePick">
               <option value="mine">{% translate "My contacts" %}</option>
               <template x-for="group in groups" :key="group.id">

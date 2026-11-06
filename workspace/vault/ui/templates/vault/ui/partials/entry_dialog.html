@@ -15,8 +15,8 @@
       {% include "ui/partials/dialog_header.html" with icon_expr="typeIcon(draft.type)" title_expr="draft.isNew ? 'New ' + typeLabel(draft.type).toLowerCase() : 'Edit entry'" close_expr="closeEntryDialog()" only %}
 
       <form @submit.prevent="saveEntry()" class="space-y-3">
-        <label class="form-control">
-          <span class="label-text">Name</span>
+        <label class="fieldset">
+          <span class="text-sm">Name</span>
           <input
             type="text"
             class="input input-sm w-full"
@@ -38,9 +38,9 @@
           here.
         {% endcomment %}
         <template x-for="field in formFields()" :key="field.field_id">
-          <div class="form-control">
+          <div class="fieldset">
             <label
-              class="label-text"
+              class="text-sm"
               :for="'entry-field-' + field.field_id"
               x-text="field.label"
             ></label>
@@ -102,9 +102,9 @@
           offer to overwrite it with whatever was typed. Three states, one
           visible at a time - none, set, being entered.
         {% endcomment %}
-        <div class="form-control" x-show="totpFieldState() !== 'unsupported'">
+        <div class="fieldset" x-show="totpFieldState() !== 'unsupported'">
           {# for, not a wrapping label: the control's other two states are buttons, and a label around a button steals its click. #}
-          <label class="label-text" for="entry-totp-input">Authenticator key</label>
+          <label class="text-sm" for="entry-totp-input">Authenticator key</label>
 
           <div
             class="flex items-center gap-2 mt-1"
@@ -172,8 +172,8 @@
           </template>
         </div>
 
-        <label class="form-control">
-          <span class="label-text">Notes</span>
+        <label class="fieldset">
+          <span class="text-sm">Notes</span>
           <textarea
             class="textarea textarea-sm w-full"
             rows="4"
@@ -182,13 +182,13 @@
             x-model="draft.notes"
             :readonly="!draft.notesOpened"
           ></textarea>
-          <span class="label-text-alt text-warning mt-1" x-show="!draft.notesOpened">
+          <span class="text-xs text-warning mt-1" x-show="!draft.notesOpened">
             These notes could not be opened. Saving keeps them as they are.
           </span>
         </label>
 
-        <label class="form-control">
-          <span class="label-text">Folder</span>
+        <label class="fieldset">
+          <span class="text-sm">Folder</span>
           <select class="select select-sm w-full" x-model="draft.folder">
             <option :value="null">No folder</option>
             <template x-for="folder in folders" :key="folder.uuid">
@@ -198,7 +198,7 @@
         </label>
 
         <div x-show="tags.length">
-          <span class="label-text">Tags</span>
+          <span class="text-sm">Tags</span>
           <div class="flex flex-wrap gap-2 mt-1">
             <template x-for="tag in tags" :key="tag.uuid">
               <button
@@ -215,7 +215,7 @@
 
         <label class="label cursor-pointer justify-start gap-3">
           <input type="checkbox" class="checkbox checkbox-sm" x-model="draft.favorite" />
-          <span class="label-text">Favourite</span>
+          <span>Favourite</span>
         </label>
 
         <div class="modal-action">

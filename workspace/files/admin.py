@@ -93,7 +93,7 @@ class FileAdmin(ModelAdmin):
     list_filter_submit = True
     list_select_related = ("owner",)
     search_fields = ("uuid", "name", "path", "owner__username")
-    autocomplete_fields = ("owner", "parent")
+    autocomplete_fields = ("owner", "parent", "shortcut_target")
     readonly_fields = ("uuid", "created_at", "updated_at")
     date_hierarchy = "created_at"
 

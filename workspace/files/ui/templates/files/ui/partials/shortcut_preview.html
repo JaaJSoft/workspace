@@ -1,0 +1,13 @@
+{% comment %}
+  A shortcut's square tile in the mosaic, sized like node_preview.html: the
+  icon of what it opens, never a thumbnail of it. The target's own tile
+  carries its preview, under the sensitivity blur that goes with it.
+
+  Context:
+    - node: the shortcut, prepared by views.present_shortcuts
+{% endcomment %}
+<div class="relative w-full" style="padding-bottom: 100%">
+  <div class="absolute inset-0 flex items-center justify-center bg-base-200">
+    {% include "files/ui/partials/shortcut_icon.html" with size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" badge_class="w-5 h-5" %}
+  </div>
+</div>

@@ -12,7 +12,7 @@ class DeleteAction(BaseFileAction):
     label = _("Delete")
     icon = "trash-2"
     category = ActionCategory.DANGER
-    node_types = ("file", "folder")
+    node_types = ("file", "folder", "shortcut")
     keyboard_shortcut = "Del"
     css_class = "text-error"
     supports_bulk = True

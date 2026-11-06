@@ -85,6 +85,8 @@ def share_file(
       - ``permission_changed`` is True when an existing share's permission
         was updated; False otherwise (including when ``created`` is True).
     """
+    if file_obj.node_type == File.NodeType.SHORTCUT:
+        raise ValueError("A shortcut cannot be shared, only what it opens.")
     target, payload = _share_target(target_user, target_group, target_project)
     share, created = FileShare.objects.get_or_create(
         file=file_obj,
@@ -146,6 +148,10 @@ def create_share_link(
     A file target is read-only by construction: there is nowhere to upload to.
     Only a folder can carry a mode that accepts anonymous writes.
     """
+    if file_obj.node_type == File.NodeType.SHORTCUT:
+        raise ShareLinkRuleError(
+            gettext("A shortcut cannot be shared, only what it opens.")
+        )
     mode = mode or FileShareLink.Mode.READ
     if mode not in FileShareLink.Mode.values:
         raise ShareLinkRuleError("Unknown share link mode.")

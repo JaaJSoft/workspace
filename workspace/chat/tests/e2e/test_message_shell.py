@@ -13,7 +13,10 @@ Skipped unless E2E=1 is set.
 
 from __future__ import annotations
 
+import io
+
 from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from playwright.sync_api import expect
 
 from workspace.chat.models import (
@@ -24,6 +27,12 @@ from workspace.chat.models import (
 )
 from workspace.chat.services.rendering import render_message_body
 from workspace.common.tests.e2e.base import PlaywrightTestCase
+
+
+def _picture(color):
+    buffer = io.BytesIO()
+    Image.new("RGB", (640, 400), color).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class MessageShellRenderingTests(PlaywrightTestCase):
@@ -188,6 +197,150 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         )
         expect(settled).to_be_visible()
         expect(self.page.locator("chat-message-group[pending]")).to_have_count(0)
+
+    def test_a_sent_message_leaves_the_attachments_above_it_drawn(self):
+        media_msg = self._message(self.user, "with a picture")
+        image = MessageAttachment.objects.create(
+            message=media_msg,
+            file=SimpleUploadedFile("photo.png", b"fakepng", content_type="image/png"),
+            original_name="photo.png",
+            mime_type="image/png",
+            type="png",
+            category="image",
+            size=7,
+        )
+        self._open_conversation()
+        preview = self.page.locator(
+            f'#msg-{media_msg.uuid} file-preview[uuid="{image.uuid}"]'
+        )
+        expect(preview).to_have_attribute("state", "ready")
+
+        # The list reloads after a send and every message is drawn again:
+        # a preview already on the page must not go back to its spinner,
+        # nor ask the server again.
+        requests = []
+        self.page.on(
+            "request",
+            lambda r: (
+                requests.append(r.url) if "attachment-previews" in r.url else None
+            ),
+        )
+        self.page.evaluate(
+            """() => {
+              window.__reloaded = [];
+              new MutationObserver((records) => {
+                for (const r of records) {
+                  if (r.target.getAttribute('state') === 'loading') {
+                    window.__reloaded.push(r.target.getAttribute('uuid'));
+                  }
+                }
+              }).observe(document.body, {
+                subtree: true, attributes: true, attributeFilter: ['state'],
+              });
+            }"""
+        )
+        composer = self.page.locator(".chat-rich-input")
+        composer.fill("a message under the picture")
+        composer.press("Enter")
+        expect(
+            self.page.locator(
+                '#message-list-items .msg-bubble[data-body="a message under the picture"]'
+            )
+        ).to_be_visible()
+
+        expect(preview).to_have_attribute("state", "ready")
+        self.assertEqual(self.page.evaluate("window.__reloaded"), [])
+        self.assertEqual(requests, [])
+
+    def test_a_sent_message_keeps_the_conversation_at_its_end(self):
+        for color in ((40, 90, 160), (120, 60, 140), (200, 110, 60)):
+            msg = self._message(self.user, "a picture")
+            MessageAttachment.objects.create(
+                message=msg,
+                file=SimpleUploadedFile(
+                    "photo.png", _picture(color), content_type="image/png"
+                ),
+                original_name="photo.png",
+                mime_type="image/png",
+                type="png",
+                category="image",
+                size=1000,
+            )
+        # Tall enough that the list, once its pictures lose their size in the
+        # swap, fits in the view and the scroll falls to the top.
+        self.page.set_viewport_size({"width": 1280, "height": 1100})
+        self._open_conversation()
+        self.page.wait_for_function(
+            """() => Array.from(document.querySelectorAll('#messages-container file-preview img'))
+                .filter(i => i.complete && i.naturalWidth).length === 3"""
+        )
+
+        # The list is drawn again from the server after a send, its pictures
+        # without a size until they load: the view must end on the message
+        # just sent, not on the top of the conversation.
+        composer = self.page.locator(".chat-rich-input")
+        composer.fill("a message under the pictures")
+        composer.press("Enter")
+        sent = self.page.locator(
+            '#message-list-items .msg-bubble[data-body="a message under the pictures"]'
+        )
+        expect(sent).to_be_visible()
+        self.page.wait_for_function(
+            """() => Array.from(document.querySelectorAll('#messages-container file-preview img'))
+                .filter(i => i.complete && i.naturalWidth).length === 3"""
+        )
+        self.page.wait_for_timeout(300)
+        expect(sent).to_be_in_viewport()
+
+    def test_opening_a_conversation_lands_on_its_last_message(self):
+        for color in ((40, 90, 160), (120, 60, 140), (200, 110, 60)):
+            msg = self._message(self.user, "a picture")
+            MessageAttachment.objects.create(
+                message=msg,
+                file=SimpleUploadedFile(
+                    "photo.png", _picture(color), content_type="image/png"
+                ),
+                original_name="photo.png",
+                mime_type="image/png",
+                type="png",
+                category="image",
+                size=1000,
+            )
+        last = self._message(self.user, "the last word")
+
+        # The pictures arrive after the list is drawn and push it down: the
+        # view must still end on the last message.
+        self._open_conversation()
+        self.page.wait_for_function(
+            """() => Array.from(document.querySelectorAll('#messages-container file-preview img'))
+                .filter(i => i.complete && i.naturalWidth).length === 3"""
+        )
+        self.page.wait_for_timeout(300)
+        expect(self.page.locator(f"#msg-{last.uuid}")).to_be_in_viewport()
+
+    def test_scrolling_away_from_the_end_stops_following_it(self):
+        self._open_conversation()
+        # Opening scrolls to the end once more behind its last requests.
+        self.page.wait_for_load_state("networkidle")
+        scroller = "Alpine.$data(document.getElementById('messages-container')).$refs.messagesContainer"
+        grow = """(height) => {
+          const block = document.createElement('div');
+          block.style.height = height + 'px';
+          document.getElementById('messages-container').append(block);
+        }"""
+        # A list taller than the view, followed to its end.
+        self.page.evaluate(grow, 2000)
+        self.page.wait_for_timeout(100)
+        self.assertGreater(self.page.evaluate(f"{scroller}.scrollTop"), 0)
+
+        # A scroll up that is no wheel or touch (a key, the pagination
+        # anchoring) leaves the end: the next growth must not throw the
+        # reader back down.
+        self.page.evaluate(f"{scroller}.scrollTop = 0")
+        self.page.wait_for_timeout(100)
+        self.page.evaluate(grow, 300)
+        self.page.wait_for_timeout(200)
+        self.assertEqual(self.page.evaluate(f"{scroller}.scrollTop"), 0)
 
     def test_compact_mode_restyles_the_shell_reactively(self):
         self._open_conversation()

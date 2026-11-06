@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 11:25+0000\n"
+"POT-Creation-Date: 2026-11-05 15:34+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -343,6 +343,22 @@ msgstr "Le presse-papiers est vide"
 msgid "Replace the existing file (the moved one goes to the trash)"
 msgstr ""
 "Remplacer le fichier existant (le fichier déplacé va dans la corbeille)"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Create shortcut"
+msgstr "Créer un raccourci"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Choose where to put a shortcut to \"%(name)s\"."
+msgstr "Choisissez où placer un raccourci vers « %(name)s »."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Shortcut created in \"%(folder)s\""
+msgstr "Raccourci créé dans « %(folder)s »"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Failed to create shortcut"
+msgstr "Impossible de créer le raccourci"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Extract archive"

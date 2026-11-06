@@ -29,7 +29,9 @@ Context:
         x-ref="previewIcon"
         {% if file.node_type == 'folder' %}x-init="$nextTick(() => updatePreviewIcon())"{% endif %}
       >
-        {% if file.node_type != "folder" %}
+        {% if file.node_type == "shortcut" %}
+          {% include "files/ui/partials/shortcut_icon.html" with node=file size_class="w-8 h-8" badge_class="w-4 h-4" %}
+        {% elif file.node_type != "folder" %}
           <i
             data-lucide="{{ file.type|type_to_icon }}"
             class="w-8 h-8 {{ file.type|type_to_color }}"
@@ -41,6 +43,8 @@ Context:
         <span class="badge badge-sm badge-ghost">
           {% if file.node_type == "folder" %}
             {% translate "Folder" %}
+          {% elif file.node_type == "shortcut" %}
+            {% translate "Shortcut" %}
           {% else %}
             {% translate "File" %}
           {% endif %}
@@ -72,6 +76,34 @@ Context:
         <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0"></i>
         <span class="font-mono text-xs truncate">/{{ file_path }}</span>
       </div>
+      {% if file.node_type == "shortcut" %}
+        <div
+          class="flex items-center gap-2 text-base-content/60"
+          data-shortcut-target
+        >
+          <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 shrink-0"></i>
+          {% if file.shortcut_state == "ok" %}
+            <span
+              class="font-mono text-xs truncate"
+              title="{{ file.shortcut_title }}"
+            >/{{ file.shortcut_target_path }}</span>
+          {% else %}
+            <span>{{ file.shortcut_title }}</span>
+          {% endif %}
+          {% if file.shortcut_opens and not file.deleted_at %}
+            {% translate "Open" as open_label %}
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square ml-auto hover:text-module"
+              title="{{ open_label }}"
+              aria-label="{{ open_label }}"
+              @click="window.fileActions.openShortcutTarget({ opens: '{{ file.shortcut_opens|escapejs }}', targetUuid: '{{ file.resolved_target.uuid|escapejs }}', targetName: '{{ file.resolved_target.name|escapejs }}', targetFileType: '{{ file.resolved_target.type|escapejs }}' })"
+            >
+              <i data-lucide="square-arrow-out-up-right" class="w-3.5 h-3.5"></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endif %}
       {% if file.node_type == "file" %}
         <div class="flex items-center gap-2 text-base-content/60">
           <i data-lucide="hard-drive" class="w-3.5 h-3.5 shrink-0"></i>
@@ -235,7 +267,8 @@ Context:
 
     {% endif %}
 
-    {% if is_owner %}
+    {# A shortcut is never shared, nor commented on: both belong to what it opens. #}
+    {% if is_owner and file.node_type != "shortcut" %}
       <!-- Share Links -->
       <div class="divider my-0 text-xs text-base-content/40">
         {% translate "Public links" %}
@@ -298,11 +331,13 @@ Context:
       </div>
     {% endif %}
 
-    <!-- Comments -->
-    <div class="divider my-0 text-xs text-base-content/40">{% translate "Comments" %}</div>
+    {% if file.node_type != "shortcut" %}
+      <!-- Comments -->
+      <div class="divider my-0 text-xs text-base-content/40">{% translate "Comments" %}</div>
 
-    {% url 'file-comments' uuid=file.uuid as comments_url %}
-    {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=True %}
+      {% url 'file-comments' uuid=file.uuid as comments_url %}
+      {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=True %}
+    {% endif %}
 
     <!-- Activity (lazy-loaded via alpine-ajax: same endpoint serves
        initial fetch, refresh, filter changes and "Load more" clicks).

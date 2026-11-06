@@ -2,10 +2,11 @@ import posixpath
 import secrets
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.storage import FileSystemStorage
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
-from django.db.models import F, Q, Value
+from django.db.models import Case, F, Q, Value, When
 from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
@@ -93,6 +94,17 @@ class FileQuerySet(models.QuerySet):
         """
         return self.order_by(*prefix_fields, Lower("name"))
 
+    def folders_first(self):
+        """Folders, then everything else, each set by name.
+
+        Not ``-node_type``: shortcut sorts after folder in that order, and a
+        shortcut belongs with the files, whatever it opens.
+        """
+        return self.order_by(
+            Case(When(node_type=File.NodeType.FOLDER, then=Value(0)), default=Value(1)),
+            Lower("name"),
+        )
+
     def alive(self):
         """Rows not in the trash."""
         return self.filter(deleted_at__isnull=True)
@@ -114,6 +126,7 @@ class File(models.Model):
     class NodeType(models.TextChoices):
         FILE = "file", "File"
         FOLDER = "folder", "Folder"
+        SHORTCUT = "shortcut", "Shortcut"
 
     uuid = models.UUIDField(
         primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
@@ -126,6 +139,18 @@ class File(models.Model):
     node_type = models.CharField(max_length=10, choices=NodeType.choices)
     parent = models.ForeignKey(
         "self", on_delete=models.CASCADE, null=True, blank=True, related_name="children"
+    )
+    # What a shortcut opens (services/shortcuts.py). Never followed on the
+    # server: every endpoint acts on the node it was given, so a shortcut
+    # grants no access to its target - the client opens the target by its own
+    # uuid, under the viewer's own permission on it. Purging the target purges
+    # its shortcuts, wherever they live.
+    shortcut_target = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="shortcuts",
     )
 
     # File-specific fields
@@ -348,8 +373,23 @@ class File(models.Model):
                         & (models.Q(content__isnull=True) | models.Q(content=""))
                     )
                     | models.Q(node_type="file")
+                    | models.Q(node_type="shortcut")
                 ),
                 name="folder_has_no_content",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        node_type="shortcut",
+                        shortcut_target__isnull=False,
+                    )
+                    & (models.Q(content__isnull=True) | models.Q(content=""))
+                )
+                | (
+                    ~models.Q(node_type="shortcut")
+                    & models.Q(shortcut_target__isnull=True)
+                ),
+                name="shortcut_has_target_and_no_content",
             ),
             models.UniqueConstraint(
                 fields=["group"],
@@ -458,6 +498,22 @@ class File(models.Model):
                 return
 
         super().save(*args, **kwargs)
+
+    def clean(self):
+        # The one shortcut rule no constraint can state, since it spans two
+        # rows. services.shortcuts never writes a chain; this keeps a form
+        # (the admin) from writing one either.
+        super().clean()
+        target = self.shortcut_target if self.shortcut_target_id else None
+        if self.node_type == self.NodeType.SHORTCUT and target is not None:
+            if target.pk == self.pk or target.node_type == self.NodeType.SHORTCUT:
+                raise ValidationError(
+                    {
+                        "shortcut_target": gettext_lazy(
+                            "A shortcut opens a file or a folder."
+                        )
+                    }
+                )
 
     @classmethod
     def _update_descendant_paths(cls, old_path, new_path, namespace):

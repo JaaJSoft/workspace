@@ -39,6 +39,24 @@
 }
 @plugin "./module-hues.js";
 
+/* The default light and dark themes keep the radii daisyUI 4 gave them:
+   1rem boxes (cards, dialogs), 0.5rem fields (buttons, inputs), pill badges
+   and toggles. Everything else comes from daisyUI's own definitions. */
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  --radius-box: 1rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1rem;
+}
+@plugin "daisyui/theme" {
+  name: "dark";
+  prefersdark: true;
+  --radius-box: 1rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1rem;
+}
+
 /* The current module's identity color, set by .module-<hue> (module-hues.js).
    `inline` resolves the variable where the utility is used, so a tile of
    another module nested in the page takes that module's hue. */
@@ -61,6 +79,22 @@
   ::backdrop,
   ::file-selector-button {
     border-color: var(--color-base-300, currentcolor);
+  }
+}
+
+/* A checkbox shares --radius-selector with badges and toggles: at the pill
+   radius above it would be a circle. It keeps daisyUI 4's square-ish 0.5rem
+   in those two themes. */
+:is([data-theme="light"], [data-theme="dark"], :root:not([data-theme])) .checkbox {
+  --radius-selector: 0.5rem;
+}
+
+/* daisyUI 5 pads a fieldset top and bottom on top of the gap between its
+   rows; forms stack fields in their own space-y / gap containers, so the
+   padding doubled the space between two fields. */
+@layer utilities {
+  :where(.fieldset) {
+    padding-block: 0;
   }
 }
 

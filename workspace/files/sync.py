@@ -26,6 +26,7 @@ class SyncResult:
     folders_soft_deleted: int = 0
     shortcuts_renamed: int = 0
     disk_entries_renamed: int = 0
+    renames_followed: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -128,16 +129,36 @@ class _NodeIndex:
         )
         self._holders.get(file_obj.parent_id, {}).pop(caseless(file_obj.name), None)
 
-    def renamed(self, file_obj, old_name):
+    def renamed(self, file_obj, old_name, old_path=None):
+        """Re-key a row the walk just renamed.
+
+        A folder's rename rewrote the paths below it in the database, and the
+        rows held here were loaded before it: trashing one of them builds its
+        subtree from its ``path``, which has to be the new one.
+        """
         self._live.get(file_obj.parent_id, {}).pop((old_name, file_obj.node_type), None)
         self._holders[file_obj.parent_id].pop(caseless(old_name))
         self._hold(file_obj)
+        if old_path and file_obj.node_type == File.NodeType.FOLDER:
+            prefix = f"{old_path}/"
+            for bucket in self._holders.values():
+                for record in bucket.values():
+                    if record.path and record.path.startswith(prefix):
+                        record.path = f"{file_obj.path}/{record.path[len(prefix) :]}"
 
     def _hold(self, record):
         self._holders.setdefault(record.parent_id, {})[caseless(record.name)] = record
         if record.node_type != File.NodeType.SHORTCUT:
             bucket = self._live.setdefault(record.parent_id, {})
             bucket[(record.name, record.node_type)] = record
+
+
+def _node_type_of(entry):
+    if entry.is_dir(follow_symlinks=False):
+        return File.NodeType.FOLDER
+    if entry.is_file(follow_symlinks=False):
+        return File.NodeType.FILE
+    return None
 
 
 class FileSyncService:
@@ -147,12 +168,19 @@ class FileSyncService:
     - Disk -> DB: create DB entries for files present on disk but missing in DB.
     - DB -> Disk: soft-delete DB entries whose files no longer exist on disk.
 
-    A row's name is its name on disk: that is how the next run finds it. A
-    disk entry whose name a live node already holds caselessly - a shortcut,
-    or a sibling differing only in case or accent encoding, which a
-    case-sensitive disk keeps side by side - is reconciled before it is
-    registered: the shortcut, which has no name on disk, gives the name up;
-    otherwise the newcomer is renamed to ``name (Copy N)`` on disk.
+    A row's name is its name on disk: that is how the next run finds it.
+    Names are matched the way the live name constraint compares them, without
+    case or accent encoding, whether or not the disk does:
+
+    - A row whose name is gone from the disk follows an entry of the same
+      type spelled differently. On a disk that folds names (Windows, macOS)
+      it is the same file, and trashing the row would carry its bytes into
+      the trash; on any disk the node keeps its shares, tags and history.
+    - A disk entry whose name a live node already holds - a shortcut, or a
+      sibling spelled differently, which a case-sensitive disk keeps side by
+      side - is reconciled before it is registered: the shortcut, which has
+      no name on disk, gives the name up; otherwise the newcomer is renamed
+      to ``name (Copy N)`` on disk.
     """
 
     def __init__(self, *, dry_run=False, log=None):
@@ -278,6 +306,8 @@ class FileSyncService:
         # Before creating anything: a path that flipped from file to
         # directory has to free its name here, or the row created for the
         # new node collides with the stale one.
+        spellings = None  # caseless(name) -> disk names, built on first need
+        followed = set()  # disk names a row of this level took over
         for (name, node_type), db_record in list(db_by_name.items()):
             if name in disk_names:
                 disk_entry = disk_names[name]
@@ -285,6 +315,23 @@ class FileSyncService:
                 expected_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
                 if expected_type == node_type:
                     continue  # matches, nothing to do
+            else:
+                if spellings is None:
+                    spellings = {}
+                    for disk_name in sorted(disk_names):
+                        spellings.setdefault(caseless(disk_name), []).append(disk_name)
+                new_name = next(
+                    (
+                        disk_name
+                        for disk_name in spellings.get(caseless(name), ())
+                        if _node_type_of(disk_names[disk_name]) == node_type
+                    ),
+                    None,
+                )
+                if new_name is not None:
+                    followed.add(new_name)
+                    self._follow_rename(user, db_record, new_name, index, result)
+                    continue
 
             # Not found on disk or type mismatch -> soft-delete
             if self.dry_run:
@@ -341,7 +388,7 @@ class FileSyncService:
 
             node_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
 
-            if (entry_name, node_type) in db_by_name:
+            if entry_name in followed or (entry_name, node_type) in db_by_name:
                 continue  # already tracked
 
             if index.is_trashed(parent_db, entry_name, node_type):
@@ -421,6 +468,28 @@ class FileSyncService:
                 self.log.warning("Error creating %s: %s", scrub(entry_name), scrub(e))
 
         return renamed
+
+    def _follow_rename(self, user, db_record, new_name, index, result):
+        old_name, old_path = db_record.name, db_record.path
+        if self.dry_run:
+            self.log.info(
+                "[DRY-RUN] Would follow rename: %s -> %s",
+                scrub(old_name),
+                scrub(new_name),
+            )
+            result.renames_followed += 1
+            return
+        try:
+            FileService.rename(db_record, new_name, acting_user=user)
+        except Exception as e:
+            # The rename rolled back, not the attributes it set on the row.
+            db_record.refresh_from_db()
+            result.errors.append(f"Error renaming {old_name}: {e}")
+            self.log.warning("Error renaming %s: %s", scrub(old_name), scrub(e))
+            return
+        index.renamed(db_record, old_name, old_path)
+        result.renames_followed += 1
+        self.log.info("Followed rename: %s -> %s", scrub(old_name), scrub(new_name))
 
     def _rename_shortcut_aside(self, user, shortcut, keep_free, index, result):
         old_name = shortcut.name

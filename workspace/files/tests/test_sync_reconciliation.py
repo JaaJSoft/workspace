@@ -13,6 +13,7 @@ correctness terms and very visible in production.
 import os
 import shutil
 import unicodedata
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -562,25 +563,6 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
             self._live(unicodedata.normalize("NFD", "café (Copy).txt"))
         )
 
-    def test_a_name_changed_only_in_case_on_disk_is_no_clash(self):
-        # The old name is gone from the disk: its row goes to the trash and
-        # the new name registers as it is.
-        path = self._write("Report.txt")
-        if os.path.exists(os.path.join(self._root(), "REPORT.TXT")):
-            # There both names are one file: the row is trashed with the
-            # bytes it still points at, a gap of its own.
-            self.skipTest("this file system folds the names into one")
-        self._sync()
-        os.rename(path, os.path.join(self._root(), "report.txt"))
-
-        result = self._sync()
-
-        self.assertEqual(result.errors, [])
-        self.assertEqual(result.files_soft_deleted, 1)
-        self.assertEqual(result.disk_entries_renamed, 0)
-        self.assertEqual(self._on_disk(), ["report.txt"])
-        self.assertIsNotNone(self._live("report.txt"))
-
     def test_a_dry_run_reports_the_rename_and_changes_nothing(self):
         self._write("Report.txt")
         self._sync()
@@ -594,6 +576,179 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
         self.assertEqual(
             File.objects.filter(owner=self.user, deleted_at__isnull=True).count(), 1
         )
+
+
+class FollowedRenameTests(SyncReconciliationTestCase):
+    """A disk entry renamed only in case or accent encoding is the same node.
+
+    Its row follows the new name instead of going to the trash: on a disk
+    that folds names (Windows, macOS) both names are one file, and trashing
+    the row would carry the bytes into the trash with it. On any disk the
+    node keeps what hangs on its row - shares, tags, comments, history.
+    """
+
+    def _rename(self, old, new, *parent):
+        os.rename(
+            os.path.join(self._root(), *parent, old),
+            os.path.join(self._root(), *parent, new),
+        )
+
+    def _on_disk(self, *parts):
+        return sorted(os.listdir(os.path.join(self._root(), *parts)))
+
+    def test_the_row_of_a_file_follows_its_new_case(self):
+        self._write("Report.txt", contents=b"kept")
+        self._sync()
+        row = self._live("Report.txt")
+        self._rename("Report.txt", "report.txt")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.renames_followed, 1)
+        self.assertEqual(result.files_soft_deleted, 0)
+        self.assertEqual(result.files_created, 0)
+        row.refresh_from_db()
+        self.assertIsNone(row.deleted_at)
+        self.assertEqual(row.name, "report.txt")
+        self.assertEqual(
+            row.content.name, f"files/users/{self.user.username}/report.txt"
+        )
+        with row.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"kept")
+        self.assertEqual(self._on_disk(), ["report.txt"])
+        self.assertTrue(
+            FileEvent.objects.filter(file=row, action=FileEvent.Action.RENAMED).exists()
+        )
+
+    def test_the_next_run_leaves_it_alone(self):
+        self._write("Report.txt")
+        self._sync()
+        self._rename("Report.txt", "report.txt")
+        self._sync()
+
+        second = self._sync()
+
+        self.assertEqual(second.errors, [])
+        self.assertEqual(second.renames_followed, 0)
+        self.assertEqual(second.files_soft_deleted, 0)
+        self.assertEqual(second.files_created, 0)
+
+    def test_the_subtree_of_a_folder_follows_it(self):
+        self._write("Docs", "a.txt")
+        self._write("Docs", "Sub", "b.txt")
+        self._sync()
+        folder = self._live("Docs")
+        self._rename("Docs", "docs")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.renames_followed, 1)
+        self.assertEqual(result.folders_soft_deleted, 0)
+        self.assertEqual(result.files_created + result.folders_created, 0)
+        folder.refresh_from_db()
+        self.assertEqual(folder.name, "docs")
+        prefix = f"files/users/{self.user.username}/docs"
+        self.assertEqual(self._live("a.txt").content.name, f"{prefix}/a.txt")
+        self.assertEqual(self._live("b.txt").content.name, f"{prefix}/Sub/b.txt")
+        self.assertEqual(self._live("b.txt").path, "docs/Sub/b.txt")
+        again = self._sync()
+        self.assertEqual(again.errors, [])
+        self.assertEqual(again.files_soft_deleted + again.folders_soft_deleted, 0)
+
+    def test_a_folder_gone_below_a_followed_one_takes_its_children_along(self):
+        # The walk renames the folder from rows it loaded before: trashing a
+        # folder below it builds the subtree from that folder's path, which
+        # has to be the new one. Accent encodings, because SQLite's LIKE
+        # would match a stale prefix that differs in case only.
+        composed = unicodedata.normalize("NFC", "Café")
+        decomposed = unicodedata.normalize("NFD", "Café")
+        self._write(composed, "Sub", "b.txt")
+        self._sync()
+        self._rename(composed, decomposed)
+        if self._on_disk() != [decomposed]:
+            self.skipTest("this file system normalizes names")
+        shutil.rmtree(os.path.join(self._root(), decomposed, "Sub"))
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.renames_followed, 1)
+        self.assertEqual(result.folders_soft_deleted, 1)
+        self.assertIsNotNone(self._live(decomposed))
+        self.assertIsNone(self._live("Sub"))
+        self.assertIsNone(self._live("b.txt"))
+
+    def test_of_two_new_spellings_the_first_by_name_is_followed(self):
+        self._write("Report.txt")
+        self._sync()
+        row = self._live("Report.txt")
+        os.remove(os.path.join(self._root(), "Report.txt"))
+        self._write("report.txt")
+        self._write("REPORT.txt")
+        if len(self._on_disk()) < 2:
+            self.skipTest("this file system folds the names into one")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.renames_followed, 1)
+        self.assertEqual(result.disk_entries_renamed, 1)
+        row.refresh_from_db()
+        self.assertEqual(row.name, "REPORT.txt")
+        self.assertIsNotNone(self._live("report (Copy).txt"))
+
+    def test_a_rename_that_fails_leaves_the_row_and_the_disk_alone(self):
+        # Trashing the row instead would carry the bytes along on a disk
+        # that folds names, where both names are the one file.
+        self._write("Report.txt", contents=b"kept")
+        self._sync()
+        row = self._live("Report.txt")
+        self._rename("Report.txt", "report.txt")
+
+        with patch.object(FileService, "rename", side_effect=OSError("busy")):
+            result = self._sync()
+
+        self.assertEqual(len(result.errors), 1)
+        self.assertEqual(result.renames_followed, 0)
+        self.assertEqual(result.files_soft_deleted, 0)
+        self.assertEqual(result.files_created, 0)
+        self.assertEqual(result.disk_entries_renamed, 0)
+        row.refresh_from_db()
+        self.assertIsNone(row.deleted_at)
+        self.assertEqual(row.name, "Report.txt")
+        self.assertEqual(self._on_disk(), ["report.txt"])
+        self.assertEqual(self._sync().renames_followed, 1)
+
+    def test_a_rename_that_changes_the_node_type_is_not_followed(self):
+        self._mkdir("Docs")
+        self._sync()
+        folder = self._live("Docs")
+        os.rmdir(os.path.join(self._root(), "Docs"))
+        self._write("docs")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.renames_followed, 0)
+        self.assertEqual(result.folders_soft_deleted, 1)
+        self.assertEqual(result.files_created, 1)
+        folder.refresh_from_db()
+        self.assertIsNotNone(folder.deleted_at)
+
+    def test_a_dry_run_reports_the_rename_and_changes_nothing(self):
+        self._write("Report.txt")
+        self._sync()
+        self._rename("Report.txt", "report.txt")
+
+        result = FileSyncService(dry_run=True).sync_user_recursive(self.user)
+
+        self.assertEqual(result.renames_followed, 1)
+        self.assertEqual(result.files_soft_deleted, 0)
+        self.assertEqual(result.files_created, 0)
+        self.assertEqual(result.disk_entries_renamed, 0)
+        self.assertIsNotNone(self._live("Report.txt"))
 
 
 class SyncQueryBudgetTests(SyncReconciliationTestCase):

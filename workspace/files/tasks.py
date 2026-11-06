@@ -102,6 +102,7 @@ def sync_user_files(self, user_id):
         "folders_soft_deleted": result.folders_soft_deleted,
         "shortcuts_renamed": result.shortcuts_renamed,
         "disk_entries_renamed": result.disk_entries_renamed,
+        "renames_followed": result.renames_followed,
         "errors": result.errors,
     }
 
@@ -327,6 +328,7 @@ def sync_folder(self, user_id, folder_uuid=None):
         "folders_soft_deleted": result.folders_soft_deleted,
         "shortcuts_renamed": result.shortcuts_renamed,
         "disk_entries_renamed": result.disk_entries_renamed,
+        "renames_followed": result.renames_followed,
         "errors": result.errors,
     }
 

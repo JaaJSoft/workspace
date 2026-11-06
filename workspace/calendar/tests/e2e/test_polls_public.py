@@ -129,7 +129,7 @@ class SharedPollVotingTests(PlaywrightTestCase):
         )
 
         expect(self.page.locator("h1")).to_have_text("Offsite")
-        rows = self.page.locator("tbody tr.hover")
+        rows = self.page.locator("tbody tr[data-poll-participant]")
         expect(rows).to_have_count(3)
         expect(rows.filter(has_text="Sam Smith")).to_have_count(2)
         expect(rows.filter(has_text="Grace")).to_have_count(1)

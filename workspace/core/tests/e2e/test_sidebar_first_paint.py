@@ -36,7 +36,7 @@ EXPANDED = {
     "calendar": "w-72",
     "projects": "w-72",
     "people": "w-72",
-    "chat": "lg:!w-80",
+    "chat": "lg:w-80!",
 }
 COLLAPSED = "w-16"
 
@@ -137,7 +137,7 @@ class SidebarFirstPaintTests(PlaywrightTestCase):
         for module in OFF_CANVAS_ON_MOBILE:
             with self.subTest(module=module):
                 self.page.goto(f"{self.live_server_url}{self.urls[module]}")
-                self.page.wait_for_selector(".drawer-side aside")
+                self.page.wait_for_selector(".drawer-side aside", state="attached")
                 self.page.wait_for_timeout(600)
                 self.page.evaluate(OPEN_DRAWER)
                 self.page.wait_for_timeout(600)

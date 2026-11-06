@@ -28,7 +28,8 @@
  *
  * The element reflects where it stands in `state`: loading, ready, or
  * unavailable. Elements connected in the same task share one request per
- * src, through alpine-ajax: each preview merges into its own slot.
+ * src, through alpine-ajax: each preview merges into its own slot. A file
+ * already drawn on the page is drawn again from that markup, with no request.
  *
  * base.html loads this in <head>, before Alpine: elements connected before
  * Alpine starts wait for it.
@@ -39,6 +40,25 @@
   const SLOT_CLASS = 'file-preview-slot';
   // What a click inside a preview must leave alone: the controls it holds.
   const INTERACTIVE = 'a, button, audio, input, select, textarea';
+
+  // What each file's preview looked like, by endpoint. A host that draws
+  // the same file again (the chat redraws its whole list after a send, the
+  // editor its node views) shows it at once, its media from the browser
+  // cache, instead of a spinner and a request per element. Only previews
+  // that open are kept: a placeholder may stop being one. A reload starts
+  // afresh.
+  const DRAWN_MAX = 200;
+  const drawn = new Map();
+
+  function drawnKey(src, uuid) {
+    return `${src}\n${uuid}`;
+  }
+
+  function remember(key, html) {
+    drawn.delete(key);
+    drawn.set(key, html);
+    if (drawn.size > DRAWN_MAX) drawn.delete(drawn.keys().next().value);
+  }
 
   let counter = 0;
   // The Alpine bundle starts Alpine as soon as it sets window.Alpine, so a
@@ -144,7 +164,12 @@
       this._slotId = 'file-preview-' + (++counter);
       this._openable = false;
       this.addEventListener('ajax:merged', (event) => {
-        if (event.target.id === this._slotId) this._ready();
+        if (event.target.id !== this._slotId) return;
+        const html = event.target.innerHTML;
+        this._ready();
+        if (this._openable) {
+          remember(drawnKey(this.getAttribute('src'), this.getAttribute('uuid')), html);
+        }
       });
       this.addEventListener('click', (event) => this._onClick(event));
       this.addEventListener('keydown', (event) => {
@@ -163,9 +188,16 @@
         this._fail();
         return;
       }
-      this.setAttribute('state', 'loading');
       const slot = el('div', SLOT_CLASS);
       slot.id = this._slotId;
+      const html = drawn.get(drawnKey(src, this.getAttribute('uuid')));
+      if (html !== undefined) {
+        slot.innerHTML = html;
+        this.replaceChildren(slot);
+        this._ready();
+        return;
+      }
+      this.setAttribute('state', 'loading');
       const loading = el('div', 'file-preview-body file-preview-loading flex items-center gap-2 min-w-0');
       loading.appendChild(el('span', 'loading loading-spinner loading-xs shrink-0'));
       loading.appendChild(el('span', 'file-preview-name truncate text-sm', this.getAttribute('name') || ''));

@@ -8,8 +8,10 @@ from django.core.files.storage import default_storage
 from django.utils import timezone
 
 from workspace.common.logging import scrub
+from workspace.common.text import caseless
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.shortcuts import rename_aside
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ class SyncResult:
     folders_created: int = 0
     files_soft_deleted: int = 0
     folders_soft_deleted: int = 0
+    shortcuts_renamed: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -32,7 +35,7 @@ _WALK_FIELDS = ("uuid", "name", "node_type", "parent", "path", "deleted_at")
 
 
 def _live_nodes(queryset):
-    return queryset.exclude(node_type=File.NodeType.SHORTCUT).only(*_WALK_FIELDS)
+    return queryset.only(*_WALK_FIELDS)
 
 
 class _NodeIndex:
@@ -48,13 +51,16 @@ class _NodeIndex:
     phase 1 from creating a live duplicate next to a node the user deleted,
     never as candidates to recurse into.
 
-    Shortcuts are left out: they exist in the database alone, and the walk
-    would trash every one of them as gone from the disk.
+    Shortcuts are held apart, keyed by their caseless name: they exist in the
+    database alone, so matching them against disk would trash every one of
+    them as gone from the disk. They are only looked up when a disk entry
+    needs their name.
     """
 
     def __init__(self):
         self._live = {}  # parent_id -> {(name, node_type): File}
         self._trashed = {}  # parent_id -> {(name, node_type)}
+        self._shortcuts = {}  # parent_id -> {caseless(name): File}
 
     @classmethod
     def for_subtree(cls, user):
@@ -80,6 +86,10 @@ class _NodeIndex:
 
     def _absorb(self, live_qs, trashed_values):
         for record in live_qs:
+            if record.node_type == File.NodeType.SHORTCUT:
+                bucket = self._shortcuts.setdefault(record.parent_id, {})
+                bucket[caseless(record.name)] = record
+                continue
             bucket = self._live.setdefault(record.parent_id, {})
             bucket[(record.name, record.node_type)] = record
         for name, node_type, parent_id in trashed_values:
@@ -95,6 +105,15 @@ class _NodeIndex:
 
     def is_trashed(self, parent_db, name, node_type):
         return (name, node_type) in self._trashed.get(self._key(parent_db), set())
+
+    def shortcut_holding(self, parent_db, name):
+        """The live shortcut of that level whose name *name* clashes with."""
+        return self._shortcuts.get(self._key(parent_db), {}).get(caseless(name))
+
+    def shortcut_renamed(self, shortcut, old_name):
+        bucket = self._shortcuts[shortcut.parent_id]
+        del bucket[caseless(old_name)]
+        bucket[caseless(shortcut.name)] = shortcut
 
     def add(self, file_obj):
         """Register a row the walk just created.
@@ -297,7 +316,16 @@ class FileSyncService:
             if index.is_trashed(parent_db, entry_name, node_type):
                 continue  # in trash, don't create a duplicate
 
+            # The disk entry keeps its name, or the next run would find its
+            # row missing from the disk; the shortcut has none to keep.
+            shortcut = index.shortcut_holding(parent_db, entry_name)
+
             if self.dry_run:
+                if shortcut is not None:
+                    self.log.info(
+                        "[DRY-RUN] Would rename shortcut: %s", scrub(shortcut.name)
+                    )
+                    result.shortcuts_renamed += 1
                 self.log.info(
                     "[DRY-RUN] Would create %s: %s", node_type, scrub(entry_name)
                 )
@@ -308,6 +336,10 @@ class FileSyncService:
                 continue
 
             try:
+                if shortcut is not None:
+                    self._rename_shortcut_aside(
+                        user, shortcut, disk_names, index, result
+                    )
                 if is_dir:
                     created = FileService.create_folder(
                         user, entry_name, parent_db, acting_user=user
@@ -340,3 +372,14 @@ class FileSyncService:
             except Exception as e:
                 result.errors.append(f"Error creating {entry_name}: {e}")
                 self.log.warning("Error creating %s: %s", scrub(entry_name), scrub(e))
+
+    def _rename_shortcut_aside(self, user, shortcut, disk_names, index, result):
+        old_name = shortcut.name
+        rename_aside(shortcut, keep_free=disk_names, acting_user=user)
+        index.shortcut_renamed(shortcut, old_name)
+        result.shortcuts_renamed += 1
+        self.log.info(
+            "Renamed shortcut %s to %s: a disk entry holds its name",
+            scrub(old_name),
+            scrub(shortcut.name),
+        )

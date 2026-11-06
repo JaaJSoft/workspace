@@ -14,13 +14,15 @@ import os
 import shutil
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
-from workspace.files.models import File
+from workspace.files.models import File, FileEvent
 from workspace.files.services import FileService
+from workspace.files.services.shortcuts import create_shortcut
 from workspace.files.sync import FileSyncService
 
 User = get_user_model()
@@ -302,6 +304,137 @@ class ScopeIsolationTests(SyncReconciliationTestCase):
 
         group_folder.refresh_from_db()
         self.assertIsNone(group_folder.deleted_at)
+
+
+class ShortcutCollisionTests(SyncReconciliationTestCase):
+    """A disk entry under the name of a live shortcut takes the name.
+
+    The walk matches rows to disk entries by name, so a disk entry registered
+    under any other name would read as gone from the disk on the next run.
+    The shortcut has no name on disk to keep in step: it is the one renamed.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.target = FileService.create_file(
+            self.user, "target.txt", content=ContentFile(b"target", name="t.txt")
+        )
+
+    def _shortcut(self, name, parent=None):
+        return create_shortcut(self.user, self.target, parent, name=name)
+
+    def test_a_file_on_disk_takes_the_name_of_a_shortcut(self):
+        shortcut = self._shortcut("report.pdf")
+        self._write("report.pdf", contents=b"%PDF-1.4 from disk")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.files_created, 1)
+        self.assertEqual(result.shortcuts_renamed, 1)
+        registered = self._live("report.pdf")
+        self.assertEqual(registered.node_type, File.NodeType.FILE)
+        self.assertEqual(
+            registered.content.name, f"files/users/{self.user.username}/report.pdf"
+        )
+        shortcut.refresh_from_db()
+        self.assertEqual(shortcut.name, "report (Copy).pdf")
+        self.assertIsNone(shortcut.deleted_at)
+        self.assertEqual(shortcut.shortcut_target_id, self.target.pk)
+        self.assertTrue(
+            FileEvent.objects.filter(
+                file=shortcut,
+                action=FileEvent.Action.RENAMED,
+                metadata__new_name="report (Copy).pdf",
+            ).exists()
+        )
+
+    def test_the_next_run_leaves_both_alone(self):
+        shortcut = self._shortcut("report.pdf")
+        self._write("report.pdf")
+        self._sync()
+
+        second = self._sync()
+
+        self.assertEqual(second.errors, [])
+        self.assertEqual(second.files_created, 0)
+        self.assertEqual(second.files_soft_deleted, 0)
+        self.assertEqual(second.shortcuts_renamed, 0)
+        self.assertIsNotNone(self._live("report.pdf"))
+        shortcut.refresh_from_db()
+        self.assertEqual(shortcut.name, "report (Copy).pdf")
+        self.assertIsNone(shortcut.deleted_at)
+
+    def test_names_clash_caselessly(self):
+        shortcut = self._shortcut("REPORT.pdf")
+        self._write("report.pdf")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertIsNotNone(self._live("report.pdf"))
+        shortcut.refresh_from_db()
+        self.assertEqual(shortcut.name, "REPORT (Copy).pdf")
+
+    def test_a_directory_on_disk_takes_the_name_and_is_walked(self):
+        docs = FileService.create_folder(self.user, "Docs")
+        shortcut = self._shortcut("Archive", parent=docs)
+        self._write("Docs", "Archive", "inside.txt")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        archive = self._live("Archive")
+        self.assertEqual(archive.node_type, File.NodeType.FOLDER)
+        self.assertEqual(archive.parent_id, docs.pk)
+        self.assertEqual(self._live("inside.txt").parent_id, archive.pk)
+        shortcut.refresh_from_db()
+        self.assertEqual(shortcut.name, "Archive (Copy)")
+
+    def test_the_new_name_is_not_taken_from_another_disk_entry(self):
+        # Unregistered as well: the shortcut must not move onto a name the
+        # same walk is about to register.
+        shortcut = self._shortcut("report.pdf")
+        self._write("report.pdf")
+        self._write("report (Copy).pdf")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.files_created, 2)
+        self.assertEqual(result.shortcuts_renamed, 1)
+        self.assertIsNotNone(self._live("report.pdf"))
+        self.assertIsNotNone(self._live("report (Copy).pdf"))
+        shortcut.refresh_from_db()
+        self.assertEqual(shortcut.name, "report (Copy 2).pdf")
+
+    def test_a_shallow_sync_of_the_folder_does_the_same(self):
+        docs = FileService.create_folder(self.user, "Docs")
+        shortcut = self._shortcut("notes.md", parent=docs)
+        self._write("Docs", "notes.md")
+
+        result = FileSyncService().sync_folder_shallow(self.user, docs)
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(self._live("notes.md").node_type, File.NodeType.FILE)
+        shortcut.refresh_from_db()
+        self.assertEqual(shortcut.name, "notes (Copy).md")
+
+    def test_a_dry_run_reports_the_rename_and_changes_nothing(self):
+        shortcut = self._shortcut("report.pdf")
+        self._write("report.pdf")
+
+        result = FileSyncService(dry_run=True).sync_user_recursive(self.user)
+
+        self.assertEqual(result.files_created, 1)
+        self.assertEqual(result.shortcuts_renamed, 1)
+        shortcut.refresh_from_db()
+        self.assertEqual(shortcut.name, "report.pdf")
+        self.assertFalse(
+            File.objects.filter(
+                owner=self.user, node_type=File.NodeType.FILE, name="report.pdf"
+            ).exists()
+        )
 
 
 class SyncQueryBudgetTests(SyncReconciliationTestCase):

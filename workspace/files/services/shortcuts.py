@@ -21,6 +21,7 @@ from enum import StrEnum
 from ..actions.base import UNRESOLVED
 from ..models import File, FileEvent
 from . import _names as _name_helpers
+from ._storage_ops import unique_copy_name
 from .events import record_event
 from .files import FilePermission, FileService, GroupMismatch
 from .scanning.policy import with_scan
@@ -105,6 +106,27 @@ def create_shortcut(
         _name_helpers.insert_node(shortcut)
     record_event(shortcut, acting_user or owner, FileEvent.Action.CREATED)
     return shortcut
+
+
+def rename_aside(shortcut, *, keep_free=(), acting_user=None):
+    """Rename *shortcut* to the first free ``name (Copy N)`` of its folder.
+
+    For the disk sync, which registers a file or a folder written into the
+    storage tree by hand under its name on disk or not at all: it matches rows
+    to disk entries by name, so a row named otherwise would read as gone from
+    the disk on its next run. A shortcut has no name on disk to keep in step,
+    so it is the one that gives the name up. *keep_free* lists further names
+    the new one must not take - the folder's disk entries, which may have no
+    row yet.
+    """
+    taken = set(
+        _name_helpers.sibling_nodes(shortcut.owner, shortcut.parent).values_list(
+            "name", flat=True
+        )
+    )
+    taken.update(keep_free)
+    name = unique_copy_name(shortcut.name, File.NodeType.SHORTCUT, taken)
+    return FileService.rename(shortcut, name, acting_user=acting_user)
 
 
 def resolve_shortcuts(user, nodes):

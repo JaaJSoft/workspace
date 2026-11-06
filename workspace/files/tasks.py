@@ -100,6 +100,7 @@ def sync_user_files(self, user_id):
         "folders_created": result.folders_created,
         "files_soft_deleted": result.files_soft_deleted,
         "folders_soft_deleted": result.folders_soft_deleted,
+        "shortcuts_renamed": result.shortcuts_renamed,
         "errors": result.errors,
     }
 
@@ -323,6 +324,7 @@ def sync_folder(self, user_id, folder_uuid=None):
         "folders_created": result.folders_created,
         "files_soft_deleted": result.files_soft_deleted,
         "folders_soft_deleted": result.folders_soft_deleted,
+        "shortcuts_renamed": result.shortcuts_renamed,
         "errors": result.errors,
     }
 

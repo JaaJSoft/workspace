@@ -88,7 +88,8 @@ class Command(BaseCommand):
                 f"files_created={result.files_created}, "
                 f"folders_created={result.folders_created}, "
                 f"files_soft_deleted={result.files_soft_deleted}, "
-                f"folders_soft_deleted={result.folders_soft_deleted}"
+                f"folders_soft_deleted={result.folders_soft_deleted}, "
+                f"shortcuts_renamed={result.shortcuts_renamed}"
             )
         )
         if result.errors:

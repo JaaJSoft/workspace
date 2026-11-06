@@ -13,7 +13,10 @@ Skipped unless E2E=1 is set.
 
 from __future__ import annotations
 
+import io
+
 from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from playwright.sync_api import expect
 
 from workspace.chat.models import (
@@ -24,6 +27,12 @@ from workspace.chat.models import (
 )
 from workspace.chat.services.rendering import render_message_body
 from workspace.common.tests.e2e.base import PlaywrightTestCase
+
+
+def _picture(color):
+    buffer = io.BytesIO()
+    Image.new("RGB", (640, 400), color).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class MessageShellRenderingTests(PlaywrightTestCase):
@@ -242,6 +251,46 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         expect(preview).to_have_attribute("state", "ready")
         self.assertEqual(self.page.evaluate("window.__reloaded"), [])
         self.assertEqual(requests, [])
+
+    def test_a_sent_message_keeps_the_conversation_at_its_end(self):
+        for color in ((40, 90, 160), (120, 60, 140), (200, 110, 60)):
+            msg = self._message(self.user, "a picture")
+            MessageAttachment.objects.create(
+                message=msg,
+                file=SimpleUploadedFile(
+                    "photo.png", _picture(color), content_type="image/png"
+                ),
+                original_name="photo.png",
+                mime_type="image/png",
+                type="png",
+                category="image",
+                size=1000,
+            )
+        # Tall enough that the list, once its pictures lose their size in the
+        # swap, fits in the view and the scroll falls to the top.
+        self.page.set_viewport_size({"width": 1280, "height": 1100})
+        self._open_conversation()
+        self.page.wait_for_function(
+            """() => Array.from(document.querySelectorAll('#messages-container file-preview img'))
+                .filter(i => i.complete && i.naturalWidth).length === 3"""
+        )
+
+        # The list is drawn again from the server after a send, its pictures
+        # without a size until they load: the view must end on the message
+        # just sent, not on the top of the conversation.
+        composer = self.page.locator(".chat-rich-input")
+        composer.fill("a message under the pictures")
+        composer.press("Enter")
+        sent = self.page.locator(
+            '#message-list-items .msg-bubble[data-body="a message under the pictures"]'
+        )
+        expect(sent).to_be_visible()
+        self.page.wait_for_function(
+            """() => Array.from(document.querySelectorAll('#messages-container file-preview img'))
+                .filter(i => i.complete && i.naturalWidth).length === 3"""
+        )
+        self.page.wait_for_timeout(300)
+        expect(sent).to_be_in_viewport()
 
     def test_compact_mode_restyles_the_shell_reactively(self):
         self._open_conversation()

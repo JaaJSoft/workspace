@@ -2,6 +2,8 @@
 
 import os
 
+from csp.constants import NONE, SELF, UNSAFE_INLINE
+
 from .cache import _REDIS_WEBDAV_URL
 from .env import env_bool
 
@@ -26,6 +28,35 @@ FILES_EXTRACT_MAX_ENTRIES = int(os.getenv("FILES_EXTRACT_MAX_ENTRIES", "10000"))
 FILES_TEXT_VIEWER_MAX_BYTES = int(
     os.getenv("FILES_TEXT_VIEWER_MAX_BYTES", str(5 * 1024 * 1024))
 )  # 5 MiB
+
+# The e-book reader page's Content-Security-Policy, applied through
+# csp.decorators.csp. It is what keeps a book's own JavaScript from running:
+# foliate-js renders each chapter in a blob: iframe that inherits this policy,
+# and that iframe has to carry allow-scripts and allow-same-origin together
+# (a WebKit bug leaves no choice), which makes its sandbox worthless. So
+# script-src stays 'self' alone - no 'unsafe-inline', no blob: - and the
+# reader page is the only document that may run code.
+#
+# The rest is what a book needs to look like itself: its stylesheets, inline
+# styles, images and embedded fonts arrive as blob: or data: URLs, and its
+# chapters are blob: frames. Injected CSS has nowhere to send anything: every
+# fetching directive stops at self, blob: and data:.
+FILES_EBOOK_READER_CSP = {
+    "default-src": [NONE],
+    "script-src": [SELF],
+    "connect-src": [SELF, "blob:", "data:"],
+    "style-src": [SELF, UNSAFE_INLINE, "blob:"],
+    "img-src": [SELF, "blob:", "data:"],
+    "font-src": [SELF, "blob:", "data:"],
+    "media-src": [SELF, "blob:"],
+    "frame-src": ["blob:"],
+    "object-src": [NONE],
+    "base-uri": [NONE],
+    "form-action": [NONE],
+    # The viewer panel frames the reader; nothing else may.
+    "frame-ancestors": [SELF],
+    "report-uri": ["/api/v1/csp-report"],
+}
 
 # WebDAV lock storage
 # Use dedicated Redis DB when available so locks are shared across gunicorn

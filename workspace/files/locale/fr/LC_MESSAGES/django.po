@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 15:34+0000\n"
+"POT-Creation-Date: 2026-11-06 10:45+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -31,7 +31,8 @@ msgstr "Extraire l’archive"
 msgid "Analyze storage"
 msgstr "Analyser le stockage"
 
-#: actions/open.py ui/templates/files/ui/viewers/pdf_viewer.html
+#: actions/open.py ui/templates/files/ui/viewers/ebook_viewer.html
+#: ui/templates/files/ui/viewers/pdf_viewer.html
 msgid "Open in new tab"
 msgstr "Ouvrir dans un nouvel onglet"
 
@@ -395,6 +396,46 @@ msgstr[2] "%(count)s fichiers ont été ajoutés à « %(name)s »"
 #: tasks.py
 msgid "Uploaded through your share link."
 msgstr "Téléversé via votre lien de partage."
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "E-book"
+msgstr "Livre numérique"
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "Table of contents"
+msgstr "Table des matières"
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "Smaller text"
+msgstr "Texte plus petit"
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "Larger text"
+msgstr "Texte plus grand"
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "This book could not be opened."
+msgstr "Ce livre n’a pas pu être ouvert."
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "Contents"
+msgstr "Sommaire"
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "This book has no table of contents."
+msgstr "Ce livre n’a pas de table des matières."
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "Previous page"
+msgstr "Page précédente"
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "Reading progress"
+msgstr "Progression de la lecture"
+
+#: ui/templates/files/ui/ebook_reader.html
+msgid "Next page"
+msgstr "Page suivante"
 
 #: ui/templates/files/ui/index.html
 msgid "close sidebar"
@@ -1981,6 +2022,11 @@ msgstr "Remonter"
 msgid "Grid view"
 msgstr "Vue en grille"
 
+#: ui/templates/files/ui/viewers/ebook_viewer.html
+#: ui/templates/files/ui/viewers/pdf_viewer.html
+msgid "New tab"
+msgstr "Nouvel onglet"
+
 #: ui/templates/files/ui/viewers/image_viewer.html
 #, python-format
 msgid "Edit %%(current)s of %%(total)s"
@@ -2154,10 +2200,6 @@ msgid ""
 msgstr ""
 "L’éditeur de documents est injoignable ou ne prend pas en charge ce format. "
 "Vous pouvez toujours télécharger le fichier."
-
-#: ui/templates/files/ui/viewers/pdf_viewer.html
-msgid "New tab"
-msgstr "Nouvel onglet"
 
 #: ui/templates/files/ui/viewers/text_viewer.html
 msgid "Undo (Ctrl+Z)"

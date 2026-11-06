@@ -535,6 +535,42 @@ class PDFViewer(BaseViewer):
         )
 
 
+class EbookViewer(BaseViewer):
+    """E-books, laid out page by page in the browser by foliate-js.
+
+    The book is never rendered into the viewer panel: it opens in the
+    reader page (``files_ui:ebook_reader``), framed here, whose
+    Content-Security-Policy is what keeps the book's own scripts from
+    running with the reader's session.
+    """
+
+    handles_labels = frozenset({"epub"})
+    weight = 50
+    slug = "ebook"
+
+    def get_context(self, request) -> dict:
+        from urllib.parse import urlencode
+
+        from django.urls import reverse
+
+        context = super().get_context(request)
+        context["reader_url"] = (
+            reverse("files_ui:ebook_reader")
+            + "?"
+            + urlencode({"src": context["content_url"], "name": self.file.name})
+        )
+        return context
+
+    def render(self, request) -> str:
+        from django.template.loader import render_to_string
+
+        return render_to_string(
+            "files/ui/viewers/ebook_viewer.html",
+            self.get_context(request),
+            request=request,
+        )
+
+
 def _render_media(viewer, request, *, is_audio: bool) -> str:
     """Shared body for the audio and video viewers.
 

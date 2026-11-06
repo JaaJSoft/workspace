@@ -1,6 +1,7 @@
 import json
 from urllib.parse import quote, urlencode
 
+from csp.decorators import csp
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q
@@ -8,8 +9,11 @@ from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.html import escape, format_html
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_GET
 
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
@@ -1368,3 +1372,40 @@ def shared_file_view(request, token):
         return render(request, "files/ui/shared_page.html#shared-content", context)
 
     return render(request, "files/ui/shared_page.html", context)
+
+
+_EBOOK_SOURCE_MAX_LENGTH = 2048
+
+
+def _site_path(value):
+    """*value* when it is a path on this site (``/api/...``), else None."""
+    if (
+        not value
+        or len(value) > _EBOOK_SOURCE_MAX_LENGTH
+        or not value.startswith("/")
+        or not url_has_allowed_host_and_scheme(value, allowed_hosts=set())
+    ):
+        return None
+    return value
+
+
+@require_GET
+@xframe_options_sameorigin
+@csp(settings.FILES_EBOOK_READER_CSP)
+def ebook_reader(request):
+    """The e-book reader, a page of its own that the viewer panel frames.
+
+    It holds no data: ``?src=`` is the content URL the hosting viewer already
+    hands the browser, fetched by the page with the visitor's own cookies, so
+    a public link's visitor reads through it as well as a signed-in user.
+    The page exists apart from the viewer panel for its Content-Security-
+    Policy (``FILES_EBOOK_READER_CSP``), which is what stops a book's scripts.
+    """
+    src = _site_path(request.GET.get("src", ""))
+    if src is None:
+        raise Http404
+    return render(
+        request,
+        "files/ui/ebook_reader.html",
+        {"src": src, "name": request.GET.get("name", "")[:255]},
+    )

@@ -45,13 +45,6 @@ updates:
           - "@tailwindcss/*"
           - "daisyui"
     ignore:
-      # Tailwind 4 drops the tailwindcss CLI and the JS config, DaisyUI 5
-      # requires Tailwind 4: that migration is a project of its own, not a
-      # dependency bump.
-      - dependency-name: "tailwindcss"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "daisyui"
-        update-types: ["version-update:semver-major"]
       # FullCalendar 7 drops the global build we vendor, the luxon3 timezone
       # bridge and every fc-* class the calendar theme targets: a migration of
       # its own, tracked in #1102, not a dependency bump.

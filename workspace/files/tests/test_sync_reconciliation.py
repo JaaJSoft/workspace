@@ -564,6 +564,29 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
             self._live(unicodedata.normalize("NFD", "café (Copy).txt"))
         )
 
+    def test_a_row_that_could_not_be_trashed_renames_nothing_on_disk(self):
+        # The stale row still holds the name, for this run only: renaming
+        # the directory aside would answer a failure that the next run clears.
+        path = self._write("swap")
+        self._sync()
+        os.remove(path)
+        self._write("swap", "inside.txt")
+
+        with patch.object(File, "soft_delete", side_effect=OSError("busy")):
+            result = self._sync()
+
+        self.assertEqual(len(result.errors), 1)
+        self.assertEqual(result.disk_entries_renamed, 0)
+        self.assertEqual(result.folders_created, 0)
+        self.assertEqual(self._on_disk(), ["swap"])
+
+        again = self._sync()
+
+        self.assertEqual(again.errors, [])
+        self.assertEqual(again.files_soft_deleted, 1)
+        self.assertEqual(again.folders_created, 1)
+        self.assertEqual(self._live("swap").node_type, File.NodeType.FOLDER)
+
     def test_a_dry_run_reports_the_rename_and_changes_nothing(self):
         self._write("Report.txt")
         self._sync()

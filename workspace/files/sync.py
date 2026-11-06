@@ -316,6 +316,7 @@ class FileSyncService:
         # new node collides with the stale one.
         spellings = None  # caseless(name) -> disk names, built on first need
         followed = set()  # disk names a row of this level took over
+        untrashed = set()  # pks of the rows phase 1 failed to trash
         for (name, node_type), db_record in list(db_by_name.items()):
             if name in disk_names:
                 disk_entry = disk_names[name]
@@ -380,6 +381,7 @@ class FileSyncService:
                     result.files_soft_deleted += 1
                 index.discard(db_record)
             except Exception as e:
+                untrashed.add(db_record.pk)
                 result.errors.append(f"Error soft-deleting {name}: {e}")
                 self.log.warning("Error soft-deleting %s: %s", scrub(name), scrub(e))
 
@@ -405,6 +407,8 @@ class FileSyncService:
             name = entry_name
             shortcut = None
             holder = index.holder_of(parent_db, entry_name)
+            if holder is not None and holder.pk in untrashed:
+                continue  # its name frees up once a later run trashes it
             if holder is not None and holder.node_type == File.NodeType.SHORTCUT:
                 shortcut = holder
             elif holder is not None:

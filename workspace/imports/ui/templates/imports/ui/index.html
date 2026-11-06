@@ -263,17 +263,17 @@
             <span class="text-xs text-base-content/60 mt-1" x-text="hint('url')"></span>
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <div class="fieldset">
+            <div class="fieldset min-w-0">
               <label class="fieldset-legend"><span class="font-medium">Username</span></label>
               <input
                 type="text"
                 x-model="connForm.username"
-                class="input input-sm w-full"
+                class="input input-sm w-full min-w-0"
                 autocomplete="off"
                 required
               />
             </div>
-            <div class="fieldset">
+            <div class="fieldset min-w-0">
               <label class="fieldset-legend">
                 <span
                   class="font-medium"
@@ -283,7 +283,7 @@
               <input
                 type="password"
                 x-model="connForm.secret"
-                class="input input-sm w-full"
+                class="input input-sm w-full min-w-0"
                 autocomplete="new-password"
                 :required="!connEditing"
               />
@@ -466,7 +466,7 @@
             </div>
 
             <div class="grid sm:grid-cols-2 gap-3">
-              <div class="fieldset">
+              <div class="fieldset min-w-0">
                 <label class="fieldset-legend"><span class="font-medium">Import into</span></label>
                 <button
                   type="button"
@@ -477,13 +477,13 @@
                   <span class="truncate" x-text="wizard.options.files.destination_name"></span>
                 </button>
               </div>
-              <div class="fieldset">
+              <div class="fieldset min-w-0">
                 <label class="fieldset-legend">
                   <span class="font-medium">When a file with the same name exists</span>
                 </label>
                 <select
                   x-model="wizard.options.files.on_conflict"
-                  class="select select-sm w-full"
+                  class="select select-sm w-full min-w-0"
                 >
                   <option value="rename">Keep both (rename the imported one)</option>
                   <option value="skip">Keep mine (skip the imported one)</option>

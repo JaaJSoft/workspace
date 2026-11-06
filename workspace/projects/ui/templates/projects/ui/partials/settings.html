@@ -65,7 +65,7 @@
         </div>
       </label>
       <div class="fieldset w-full">
-        <div class="fieldset-legend">
+        <div class="fieldset-legend w-full">
           <span>Completed tasks visibility</span>
           <span class="font-medium text-module" x-text="retentionSliderLabel()"></span>
         </div>
@@ -214,7 +214,7 @@
               <span class="font-medium flex-1 truncate" x-text="member.username"></span>
               {% if writable %}
                 <select
-                  class="select select-sm"
+                  class="select select-sm w-auto"
                   :value="member.role"
                   :disabled="busy"
                   @change="changeRole(member, $event.target.value)"
@@ -727,7 +727,7 @@
             </template>
             <template x-if="editingDesc === epic.uuid">
               <textarea
-                class="textarea textarea-sm text-xs"
+                class="textarea textarea-sm text-xs w-full"
                 rows="2"
                 x-model="descDraft"
                 @keydown.escape="editingDesc = null"

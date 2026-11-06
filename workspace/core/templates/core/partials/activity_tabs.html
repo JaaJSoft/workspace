@@ -2,15 +2,13 @@
 Stacked tabs: icon on top, label underneath, every tab at the same fixed
 width, so the whole source row fits on one line. daisyUI has no built-in
 variant for this; .tab is overridden with h-auto/w-16 + flex-col (utilities
-win over the component layer). daisyUI's .tabs is a CSS grid whose columns shrink
-under pressure - auto-cols-max keeps each tab at its natural width and lets
-the row overflow into the horizontal scroll instead; min-w-0 lets the block
+win over the component layer). daisyUI's .tabs is a wrapping flex row - flex-nowrap
+and shrink-0 on each tab keep the row on one line at the tabs' natural widths and
+let it overflow into the horizontal scroll instead; min-w-0 lets the block
 shrink inside the header flex row rather than squeezing the card title.
 {% endcomment %}
 {% load i18n %}
-<div
-  class="tabs tabs-box grid-flow-col auto-cols-max overflow-x-auto min-w-0"
->
+<div class="tabs tabs-box flex-nowrap *:shrink-0 overflow-x-auto min-w-0">
   <a
     :href="feedUrl.replace(/source=[^&]*/g, '').replace(/[?&]$/, '')"
     class="tab h-auto w-16 flex-col flex-nowrap gap-0.5 py-1.5 px-1!"

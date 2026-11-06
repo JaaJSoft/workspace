@@ -142,7 +142,7 @@
 
       <!-- Storage & Help -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% translate "My files" as my_files_label %}
           {% with my_files_js=my_files_label|escapejs %}
             {% include "ui/partials/drawer_item.html" with icon="chart-pie" label=_("Storage") color="module" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: '"|add:my_files_js|add:"' } }))" tooltip=_("Storage") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
@@ -155,14 +155,14 @@
       <div class="border-t border-base-300 py-4 px-3">
         {% translate "Expand sidebar" as expand_sidebar_label %}
         {% translate "Collapse sidebar" as collapse_sidebar_label %}
-        <ul class="menu p-0 hidden lg:block">
+        <ul class="menu p-0 hidden lg:block w-full">
           {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
             {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
               {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
             {% endwith %}
           {% endwith %}
         </ul>
-        <ul class="menu p-0 lg:hidden">
+        <ul class="menu p-0 lg:hidden w-full">
           {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip=_("Preferences") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>

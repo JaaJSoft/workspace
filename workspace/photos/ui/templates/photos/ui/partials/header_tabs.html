@@ -12,7 +12,7 @@
     {% if scope_tabs %}
       {# Which folders the library reads. The view filters (favorites, a tag, the media type) carry over; the date does not. #}
       <nav
-        class="tabs tabs-box tabs-sm min-w-0 grid-flow-col auto-cols-max overflow-x-auto"
+        class="tabs tabs-box tabs-sm min-w-0 flex-nowrap *:shrink-0 overflow-x-auto"
         aria-label="Library"
       >
         {% for tab in scope_tabs %}
@@ -34,7 +34,7 @@
     {% if type_tabs %}
       {# Photos, videos or both, on top of the sidebar view and the library; the date does not carry over. Icons only on phones. #}
       <nav
-        class="tabs tabs-box tabs-sm shrink-0 ml-auto grid-flow-col auto-cols-max"
+        class="tabs tabs-box tabs-sm shrink-0 ml-auto flex-nowrap *:shrink-0"
         aria-label="Media type"
       >
         {% for tab in type_tabs %}

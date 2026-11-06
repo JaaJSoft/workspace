@@ -27,40 +27,40 @@
         ></textarea>
       </label>
       <div class="grid grid-cols-2 gap-2 mt-2">
-        <div class="fieldset">
+        <div class="fieldset min-w-0">
           <div class="fieldset-legend"><span>Status</span></div>
           {% include "projects/ui/partials/_status_selector.html" with model_expr="form.status" label="Status" %}
         </div>
-        <div class="fieldset">
+        <div class="fieldset min-w-0">
           <div class="fieldset-legend"><span>Priority</span></div>
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="form.priority" label="Priority" %}
         </div>
-        <label class="fieldset">
+        <label class="fieldset min-w-0">
           <div class="fieldset-legend"><span>Start date</span></div>
           <input
             type="date"
-            class="input input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="form.start_date"
             :max="form.due_date || null"
           />
         </label>
-        <label class="fieldset">
+        <label class="fieldset min-w-0">
           <div class="fieldset-legend"><span>Due date</span></div>
           <input
             type="date"
-            class="input input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="form.due_date"
             :min="form.start_date || null"
           />
         </label>
         {% if project.estimate_unit %}
-          <label class="fieldset">
+          <label class="fieldset min-w-0">
             <div class="fieldset-legend">
               <span>Estimate ({{ project.get_estimate_unit_display|lower }})</span>
             </div>
             <input
               type="number"
-              class="input input-sm w-full"
+              class="input input-sm w-full min-w-0"
               min="0"
               step="0.5"
               inputmode="decimal"
@@ -70,7 +70,7 @@
         {% endif %}
         {# Reactive gate: an epic created in the settings surfaces the field without a reload; admins always get it (inline create lives in the menu). #}
         <div
-          class="fieldset col-span-2"
+          class="fieldset col-span-2 min-w-0"
           {% if role != "admin" %}x-show="openEpics().length" x-cloak{% endif %}
         >
           <div class="fieldset-legend"><span>Epic</span></div>

@@ -148,7 +148,7 @@
 
       <!-- Project navigation -->
       <div class="flex-1 overflow-y-auto py-2 px-3">
-        <ul class="menu p-0 gap-1">
+        <ul class="menu p-0 gap-1 w-full">
           {% url 'projects_ui:project' project.uuid as overview_url %}
           {% include "ui/partials/drawer_item.html" with href=overview_url icon="layout-dashboard" label="Overview" color="module" active_binding="currentView === 'overview'" x_target="project-content" x_target_history="push" onclick="currentView = 'overview'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Overview" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% url 'projects_ui:board' project.uuid as board_url %}
@@ -170,14 +170,14 @@
 
       <!-- Help button -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('projects-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Collapse toggle (desktop only) -->
       <div class="border-t border-base-300 py-4 px-3">
-        <ul class="menu p-0 hidden lg:block">
+        <ul class="menu p-0 hidden lg:block w-full">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" collapse_expr="sidebarCollapsed()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
       </div>

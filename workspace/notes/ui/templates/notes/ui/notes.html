@@ -67,17 +67,17 @@
 
       <!-- Help button -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
-        <ul class="menu p-0 hidden lg:block">
+        <ul class="menu p-0 hidden lg:block w-full">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
-        <ul class="menu p-0 lg:hidden">
+        <ul class="menu p-0 lg:hidden w-full">
           {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>

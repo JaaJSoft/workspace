@@ -116,7 +116,7 @@
                 :disabled="facesDialog.busy"
               />
             </label>
-            <ul class="menu menu-sm p-0 max-h-48 flex-nowrap overflow-y-auto">
+            <ul class="menu menu-sm p-0 max-h-48 flex-nowrap overflow-y-auto w-full">
               <template x-for="person in pickablePersons(face)" :key="person.uuid">
                 <li>
                   <button

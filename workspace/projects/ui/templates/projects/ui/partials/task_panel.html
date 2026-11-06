@@ -170,7 +170,7 @@
 
   <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
     <div class="grid grid-cols-2 gap-2">
-      <div class="fieldset">
+      <div class="fieldset min-w-0">
         <div class="fieldset-legend"><span class="text-xs">Status</span></div>
         {% if "move" in panel_action_ids %}
           {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" on_change="commitField('status', data.status)" label="Status" %}
@@ -178,7 +178,7 @@
           {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" disabled=True label="Status" %}
         {% endif %}
       </div>
-      <div class="fieldset">
+      <div class="fieldset min-w-0">
         <div class="fieldset-legend"><span class="text-xs">Priority</span></div>
         {% if "set_priority" in panel_action_ids %}
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" on_change="commitField('priority', data.priority)" label="Priority" %}
@@ -186,22 +186,22 @@
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" disabled=True label="Priority" %}
         {% endif %}
       </div>
-      <label class="fieldset">
+      <label class="fieldset min-w-0">
         <div class="fieldset-legend"><span class="text-xs">Start date</span></div>
         <input
           type="date"
-          class="input input-sm w-full"
+          class="input input-sm w-full min-w-0"
           x-model="data.start_date"
           :max="data.due_date || null"
           @change="commitField('start_date', data.start_date || null)"
           {% if "set_due" not in panel_action_ids %}disabled{% endif %}
         />
       </label>
-      <label class="fieldset">
+      <label class="fieldset min-w-0">
         <div class="fieldset-legend"><span class="text-xs">Due date</span></div>
         <input
           type="date"
-          class="input input-sm w-full"
+          class="input input-sm w-full min-w-0"
           x-model="data.due_date"
           :min="data.start_date || null"
           @change="commitField('due_date', data.due_date || null)"
@@ -209,14 +209,14 @@
         />
       </label>
       {% if project.estimate_unit %}
-        <label class="fieldset">
+        <label class="fieldset min-w-0">
           <div class="fieldset-legend">
             <span class="text-xs">Estimate ({{ project.get_estimate_unit_display|lower }})</span>
           </div>
           {# '' commits as null (unestimated); '0' is a real value, hence the explicit check. #}
           <input
             type="number"
-            class="input input-sm w-full"
+            class="input input-sm w-full min-w-0"
             min="0"
             step="0.5"
             inputmode="decimal"
@@ -228,7 +228,7 @@
       {% endif %}
       {# The reactive gate surfaces an epic created in the settings without a reload; admins always get the field (inline create lives in the menu). #}
       <div
-        class="fieldset col-span-2"
+        class="fieldset col-span-2 min-w-0"
         {% if role != "admin" %}x-show="openEpics().length || data.epic" x-cloak{% endif %}
       >
         <div class="fieldset-legend"><span class="text-xs">Epic</span></div>
@@ -614,7 +614,7 @@
                 x-cloak
                 class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-64 overflow-y-auto overflow-x-hidden thin-scrollbar"
               >
-                <ul class="menu p-1" x-show="linkResults.length">
+                <ul class="menu p-1 w-full" x-show="linkResults.length">
                   <template x-for="result in linkResults" :key="result.uuid">
                     <li class="w-full min-w-0">
                       <button

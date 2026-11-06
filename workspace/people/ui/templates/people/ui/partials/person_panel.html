@@ -112,51 +112,51 @@
               </button>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 flex-1 min-w-0">
-              <label class="fieldset">
+              <label class="fieldset min-w-0">
                 <span class="text-sm text-xs opacity-60">{% translate "First name" %}</span>
                 <input
                   type="text"
-                  class="input input-sm w-full"
+                  class="input input-sm w-full min-w-0"
                   x-model="person.given_name"
                   @change="saveField('given_name')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="fieldset">
+              <label class="fieldset min-w-0">
                 <span class="text-sm text-xs opacity-60">{% translate "Last name" %}</span>
                 <input
                   type="text"
-                  class="input input-sm w-full"
+                  class="input input-sm w-full min-w-0"
                   x-model="person.family_name"
                   @change="saveField('family_name')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="fieldset">
+              <label class="fieldset min-w-0">
                 <span class="text-sm text-xs opacity-60">{% translate "Organization" %}</span>
                 <input
                   type="text"
-                  class="input input-sm w-full"
+                  class="input input-sm w-full min-w-0"
                   x-model="person.organization"
                   @change="saveField('organization')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="fieldset">
+              <label class="fieldset min-w-0">
                 <span class="text-sm text-xs opacity-60">{% translate "Title" context "job title" %}</span>
                 <input
                   type="text"
-                  class="input input-sm w-full"
+                  class="input input-sm w-full min-w-0"
                   x-model="person.title"
                   @change="saveField('title')"
                   :readonly="!can('edit')"
                 />
               </label>
-              <label class="fieldset">
+              <label class="fieldset min-w-0">
                 <span class="text-sm text-xs opacity-60">{% translate "Birthday" %}</span>
                 <input
                   type="date"
-                  class="input input-sm w-full"
+                  class="input input-sm w-full min-w-0"
                   x-model="person.birthday"
                   @change="saveField('birthday')"
                   :readonly="!can('edit')"

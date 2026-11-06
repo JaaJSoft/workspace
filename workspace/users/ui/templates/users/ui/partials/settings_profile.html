@@ -140,7 +140,7 @@
           class="textarea w-full max-w-md text-sm"
           @blur="saveField('bio', bio)"
         ></textarea>
-        <label class="label whitespace-normal">
+        <label class="label whitespace-normal flex w-full justify-between">
           <span class="text-base-content/40">{% translate "Visible on your public profile." %}</span>
           <span
             :class="bio.length > 180 ? 'text-warning' : 'text-base-content/40'"

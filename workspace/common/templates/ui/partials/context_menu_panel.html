@@ -4,7 +4,7 @@ Context menu panel
 The floating shell every right-click menu is built on: fixed positioning at
 the cursor, the base-100 card look, click-outside and Escape dismissal.
 The rows themselves are module business, so the caller supplies them as a
-template path rendered inside the panel - including the `<ul class="menu">`
+template path rendered inside the panel - including the `<ul class="menu w-full">`
 wrapper, since some menus hold several (one per node type).
 
 Rows should be built with `ui/partials/context_menu_item.html`.

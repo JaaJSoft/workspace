@@ -67,24 +67,24 @@
         :class="{ hidden: !sidebarCollapsed() }"
         x-show="sidebarCollapsed()"
       >
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="module" onclick="showCompose()" tooltip="Compose" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
-        <ul class="menu p-0 hidden lg:block">
+        <ul class="menu p-0 hidden lg:block w-full">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
-        <ul class="menu p-0 lg:hidden">
+        <ul class="menu p-0 lg:hidden w-full">
           {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
@@ -177,7 +177,7 @@
           />
         </label>
         <label class="fieldset w-full mb-3">
-          <div class="fieldset-legend">
+          <div class="fieldset-legend w-full">
             <span>What belongs here</span>
             <span class="text-base-content/50">Optional</span>
           </div>
@@ -392,13 +392,13 @@
 
       <form @submit.prevent="addAccount()">
         <div class="grid grid-cols-1 gap-3">
-          <label class="fieldset w-full">
+          <label class="fieldset w-full min-w-0">
             <div class="fieldset-legend"><span>Email address</span></div>
             <div class="flex gap-2">
               <input
                 type="email"
                 x-model="newAccount.email"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
               <button
@@ -415,31 +415,31 @@
               </button>
             </div>
           </label>
-          <label class="fieldset w-full">
+          <label class="fieldset w-full min-w-0">
             <div class="fieldset-legend"><span>Display name</span></div>
             <input
               type="text"
               x-model="newAccount.display_name"
-              class="input w-full input-sm"
+              class="input w-full input-sm min-w-0"
             />
           </label>
           <div class="divider text-xs my-1">IMAP (Incoming)</div>
           <div class="grid grid-cols-3 gap-2">
-            <label class="fieldset col-span-2">
+            <label class="fieldset col-span-2 min-w-0">
               <div class="fieldset-legend"><span>Host</span></div>
               <input
                 type="text"
                 x-model="newAccount.imap_host"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
             </label>
-            <label class="fieldset">
+            <label class="fieldset min-w-0">
               <div class="fieldset-legend"><span>Port</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.imap_port"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
               />
             </label>
           </div>
@@ -453,21 +453,21 @@
           </label>
           <div class="divider text-xs my-1">SMTP (Outgoing)</div>
           <div class="grid grid-cols-3 gap-2">
-            <label class="fieldset col-span-2">
+            <label class="fieldset col-span-2 min-w-0">
               <div class="fieldset-legend"><span>Host</span></div>
               <input
                 type="text"
                 x-model="newAccount.smtp_host"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
             </label>
-            <label class="fieldset">
+            <label class="fieldset min-w-0">
               <div class="fieldset-legend"><span>Port</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.smtp_port"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
               />
             </label>
           </div>
@@ -480,21 +480,21 @@
             <span class="text-sm">Use STARTTLS</span>
           </label>
           <div class="divider text-xs my-1">Authentication</div>
-          <label class="fieldset w-full">
+          <label class="fieldset w-full min-w-0">
             <div class="fieldset-legend"><span>Username</span></div>
             <input
               type="text"
               x-model="newAccount.username"
-              class="input w-full input-sm"
+              class="input w-full input-sm min-w-0"
               required
             />
           </label>
-          <label class="fieldset w-full">
+          <label class="fieldset w-full min-w-0">
             <div class="fieldset-legend"><span>Password</span></div>
             <input
               type="password"
               x-model="newAccount.password"
-              class="input w-full input-sm"
+              class="input w-full input-sm min-w-0"
               required
             />
           </label>
@@ -526,31 +526,31 @@
         {% include "ui/partials/dialog_header.html" with icon="mail-pen" title="Edit Account" subtitle_expr="editAccount?.email" only %}
         <form @submit.prevent="saveAccount()">
           <div class="grid grid-cols-1 gap-3">
-            <label class="fieldset w-full">
+            <label class="fieldset w-full min-w-0">
               <div class="fieldset-legend"><span>Display name</span></div>
               <input
                 type="text"
                 x-model="editAccount.display_name"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
               />
             </label>
             <div class="divider text-xs my-1">IMAP (Incoming)</div>
             <div class="grid grid-cols-3 gap-2">
-              <label class="fieldset col-span-2">
+              <label class="fieldset col-span-2 min-w-0">
                 <div class="fieldset-legend"><span>Host</span></div>
                 <input
                   type="text"
                   x-model="editAccount.imap_host"
-                  class="input w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                   required
                 />
               </label>
-              <label class="fieldset">
+              <label class="fieldset min-w-0">
                 <div class="fieldset-legend"><span>Port</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.imap_port"
-                  class="input w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                 />
               </label>
             </div>
@@ -564,21 +564,21 @@
             </label>
             <div class="divider text-xs my-1">SMTP (Outgoing)</div>
             <div class="grid grid-cols-3 gap-2">
-              <label class="fieldset col-span-2">
+              <label class="fieldset col-span-2 min-w-0">
                 <div class="fieldset-legend"><span>Host</span></div>
                 <input
                   type="text"
                   x-model="editAccount.smtp_host"
-                  class="input w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                   required
                 />
               </label>
-              <label class="fieldset">
+              <label class="fieldset min-w-0">
                 <div class="fieldset-legend"><span>Port</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.smtp_port"
-                  class="input w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                 />
               </label>
             </div>
@@ -591,24 +591,24 @@
               <span class="text-sm">Use STARTTLS</span>
             </label>
             <div class="divider text-xs my-1">Authentication</div>
-            <label class="fieldset w-full">
+            <label class="fieldset w-full min-w-0">
               <div class="fieldset-legend"><span>Username</span></div>
               <input
                 type="text"
                 x-model="editAccount.username"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
             </label>
-            <label class="fieldset w-full">
-              <div class="fieldset-legend">
+            <label class="fieldset w-full min-w-0">
+              <div class="fieldset-legend w-full">
                 <span>Password</span>
                 <span class="text-base-content/40">Leave empty to keep current</span>
               </div>
               <input
                 type="password"
                 x-model="editAccount.password"
-                class="input w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 placeholder="••••••••"
               />
             </label>

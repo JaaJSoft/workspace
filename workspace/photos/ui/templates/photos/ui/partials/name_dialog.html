@@ -49,7 +49,9 @@
       </label>
     </form>
 
-    <ul class="menu menu-sm p-0 mt-3 max-h-72 flex-nowrap overflow-y-auto">
+    <ul
+      class="menu menu-sm p-0 mt-3 max-h-72 flex-nowrap overflow-y-auto w-full"
+    >
       <template x-for="person in nameDialog.results" :key="person.uuid">
         <li>
           <button

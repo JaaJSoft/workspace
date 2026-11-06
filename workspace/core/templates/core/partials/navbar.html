@@ -2,10 +2,10 @@
 {% translate "Invisible" context "presence status" as invisible_label %}
 {% translate "No email" as no_email_label %}
 <div
-  class="navbar bg-base-100 border-b border-base-300 backdrop-blur-lg bg-opacity-80 sticky top-0 z-50 min-h-13 py-1"
+  class="navbar bg-base-100/80 border-b border-base-300 backdrop-blur-lg sticky top-0 z-50 min-h-13 py-1"
 >
   <div
-    class="{% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}"
+    class="flex items-center {% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}"
   >
     <!-- Brand -->
     <div class="flex-1">

@@ -3,7 +3,7 @@ Rows of an album's menu, from `POST /api/v1/photos/albums/actions` narrowed
 to the ones that act on the album as a whole (ALBUM_MENU_ACTIONS in
 photos.js). The panel is `ui/partials/context_menu_panel.html`.
 {% endcomment %}
-<ul class="menu menu-sm p-0">
+<ul class="menu menu-sm p-0 w-full">
   <li x-show="albumMenu.actions === null">
     <span class="gap-3 rounded-sm pointer-events-none">
       <span class="loading loading-spinner loading-xs"></span>

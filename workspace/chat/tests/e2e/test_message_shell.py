@@ -318,6 +318,30 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         self.page.wait_for_timeout(300)
         expect(self.page.locator(f"#msg-{last.uuid}")).to_be_in_viewport()
 
+    def test_scrolling_away_from_the_end_stops_following_it(self):
+        self._open_conversation()
+        # Opening scrolls to the end once more behind its last requests.
+        self.page.wait_for_load_state("networkidle")
+        scroller = "Alpine.$data(document.getElementById('messages-container')).$refs.messagesContainer"
+        grow = """(height) => {
+          const block = document.createElement('div');
+          block.style.height = height + 'px';
+          document.getElementById('messages-container').append(block);
+        }"""
+        # A list taller than the view, followed to its end.
+        self.page.evaluate(grow, 2000)
+        self.page.wait_for_timeout(100)
+        self.assertGreater(self.page.evaluate(f"{scroller}.scrollTop"), 0)
+
+        # A scroll up that is no wheel or touch (a key, the pagination
+        # anchoring) leaves the end: the next growth must not throw the
+        # reader back down.
+        self.page.evaluate(f"{scroller}.scrollTop = 0")
+        self.page.wait_for_timeout(100)
+        self.page.evaluate(grow, 300)
+        self.page.wait_for_timeout(200)
+        self.assertEqual(self.page.evaluate(f"{scroller}.scrollTop"), 0)
+
     def test_compact_mode_restyles_the_shell_reactively(self):
         self._open_conversation()
 

@@ -89,7 +89,40 @@
                     {{ type }} - {{ size }} - shared by {{ name }}
                   {% endblocktranslate %}
                   {% if sibling_total > 1 %}
-                    <span class="text-white/50">· {{ sibling_position }} / {{ sibling_total }}</span>
+                    {% comment %}
+                      Below md, previous and next sit here rather than over the
+                      file, where they would cover what it shows.
+                    {% endcomment %}
+                    <span
+                      class="inline-flex items-center gap-1 whitespace-nowrap text-white/50"
+                    >
+                      ·
+                      {% if prev_url %}
+                        <a
+                          href="{{ prev_url }}"
+                          x-target.push="shared-content"
+                          class="btn btn-xs btn-square bg-white/20 border-0 text-white hover:bg-white/30 md:hidden"
+                          title="{% translate 'Previous file' %}"
+                          aria-label="{% translate 'Previous file' %}"
+                          data-shared-pager-prev
+                        >
+                          <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+                        </a>
+                      {% endif %}
+                      {{ sibling_position }} / {{ sibling_total }}
+                      {% if next_url %}
+                        <a
+                          href="{{ next_url }}"
+                          x-target.push="shared-content"
+                          class="btn btn-xs btn-square bg-white/20 border-0 text-white hover:bg-white/30 md:hidden"
+                          title="{% translate 'Next file' %}"
+                          aria-label="{% translate 'Next file' %}"
+                          data-shared-pager-next
+                        >
+                          <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                        </a>
+                      {% endif %}
+                    </span>
                   {% endif %}
                 {% endif %}
               </p>
@@ -110,9 +143,10 @@
               <a
                 href="{{ download_url }}"
                 class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+                title="{% translate 'Download' %}"
               >
                 <i data-lucide="download" class="w-4 h-4"></i>
-                {% translate "Download" %}
+                <span class="max-sm:hidden">{% translate "Download" %}</span>
               </a>
             {% endif %}
           </div>

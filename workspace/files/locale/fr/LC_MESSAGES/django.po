@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 13:40+0000\n"
+"POT-Creation-Date: 2026-11-06 15:28+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1127,12 +1127,16 @@ msgstr "Échec du chargement du fichier"
 #: ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
 #: ui/templates/files/ui/partials/shared_viewer.html
+#: ui/templates/files/ui/partials/viewer_pager.html
+#: ui/templates/files/ui/shared_page.html
 msgid "Previous file"
 msgstr "Fichier précédent"
 
 #: ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
 #: ui/templates/files/ui/partials/shared_viewer.html
+#: ui/templates/files/ui/partials/viewer_pager.html
+#: ui/templates/files/ui/shared_page.html
 msgid "Next file"
 msgstr "Fichier suivant"
 

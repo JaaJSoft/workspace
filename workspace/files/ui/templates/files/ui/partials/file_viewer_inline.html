@@ -53,11 +53,7 @@
           :class="{ 'max-sm:hidden': fileLocation }"
           x-text="fileType"
         ></p>
-        <span
-          class="text-xs text-base-content/40 shrink-0 whitespace-nowrap"
-          x-show="_totalViewable() > 1 && _currentIndex() >= 0"
-          x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
-        ></span>
+        {% include "files/ui/partials/viewer_pager.html" %}
       </div>
     </div>
     {% if slideshow %}
@@ -190,7 +186,7 @@
   <!-- Prev / Next overlay arrows -->
   <button
     type="button"
-    class="btn btn-circle absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
+    class="btn btn-circle max-md:hidden absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
     title="{% translate 'Previous file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() > 0"
@@ -201,7 +197,7 @@
   </button>
   <button
     type="button"
-    class="btn btn-circle absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
+    class="btn btn-circle max-md:hidden absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
     title="{% translate 'Next file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() >= 0 && _currentIndex() < _totalViewable() - 1"

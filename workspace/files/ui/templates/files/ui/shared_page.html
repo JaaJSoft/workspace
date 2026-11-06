@@ -94,6 +94,18 @@
                 {% endif %}
               </p>
             </div>
+            {% if new_tab_url %}
+              <a
+                href="{{ new_tab_url }}"
+                target="_blank"
+                rel="noopener"
+                class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+                title="{% translate 'Open in new tab' %}"
+              >
+                <i data-lucide="external-link" class="w-4 h-4"></i>
+                <span class="max-sm:hidden">{% translate "New tab" %}</span>
+              </a>
+            {% endif %}
             {% if download_url %}
               <a
                 href="{{ download_url }}"

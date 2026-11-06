@@ -1271,6 +1271,7 @@ def shared_file_view(request, token):
     # for a folder, so skip it entirely rather than looking up a viewer class
     # that will never match.
     viewer_html = ""
+    new_tab_url = None
     if show_viewer and quarantine_reason is None:
         ViewerClass = get_viewer_by_slug(target.viewer) or (
             ViewerRegistry.get_viewer(target.type, target.name) if target.type else None
@@ -1281,6 +1282,7 @@ def shared_file_view(request, token):
             viewer._content_url = _shared_action_url(
                 token, "/content", effective_access_token, file=target.uuid
             )
+            new_tab_url = viewer.new_tab_url(viewer._content_url)
             # Blurred as by default, whoever is signed in: shared_base.html
             # blurs the listing the same way.
             viewer_html = veil_sensitive(
@@ -1338,6 +1340,7 @@ def shared_file_view(request, token):
         "needs_password": link.has_password and not password_verified,
         "expired": False,
         "download_url": download_url,
+        "new_tab_url": new_tab_url,
         "view_mode": view_mode,
     }
     if show_dropzone:

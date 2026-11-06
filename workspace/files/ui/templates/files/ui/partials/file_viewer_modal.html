@@ -72,6 +72,19 @@
         >
           <i data-lucide="star" class="w-4 h-4"></i>
         </button>
+        <a
+          :href="newTabHref()"
+          target="_blank"
+          rel="noopener"
+          class="btn btn-ghost btn-sm btn-square"
+          title="{% translate 'Open in new tab' %}"
+          aria-label="{% translate 'Open in new tab' %}"
+          x-show="newTabHref()"
+          x-cloak
+          data-viewer-new-tab-link
+        >
+          <i data-lucide="external-link" class="w-4 h-4"></i>
+        </a>
         {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
         <a
           :href="downloadOverride || downloadUrl"

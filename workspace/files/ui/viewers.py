@@ -275,6 +275,16 @@ class BaseViewer(ABC):
         """Check if this viewer supports editing."""
         return False
 
+    def new_tab_url(self, content_url) -> str | None:
+        """Where the header's "Open in new tab" takes the file, or None.
+
+        Only a viewer whose file the browser shows on a page of its own
+        offers one: its PDF reader, its player, an image it decodes. A text
+        file, a Markdown note or an office document would come up as raw
+        bytes or as a download, which the panel already does better.
+        """
+        return None
+
     def get_context(self, request) -> dict:
         """Get context data for template rendering."""
         can_edit = self.can_edit() and getattr(self, "_user_can_edit", True)
@@ -290,6 +300,7 @@ class BaseViewer(ABC):
             "can_edit": can_edit,
             "lock_info": lock_info,
             "content_url": content_url,
+            "new_tab_url": self.new_tab_url(content_url),
         }
 
     # What render_preview draws: the generic card, unless the viewer shows
@@ -463,6 +474,14 @@ class ImageViewer(BaseViewer):
         )
         return context
 
+    def new_tab_url(self, content_url) -> str | None:
+        from workspace.files.services.raw_images import RAW_LABELS
+
+        # The two formats the viewer decodes itself: a tab would download them.
+        if self.file.type == "heif" or self.file.type in RAW_LABELS:
+            return None
+        return content_url
+
     def _image_edit_available(self, request):
         """Whether the registry lets the viewer rotate and crop the file. Only
         the Files viewer passes the permission it resolved (``_permission``);
@@ -531,6 +550,9 @@ class PDFViewer(BaseViewer):
     weight = 50
     slug = "pdf"
 
+    def new_tab_url(self, content_url) -> str | None:
+        return content_url
+
     def render(self, request) -> str:
         """Render PDF viewer."""
         from django.template.loader import render_to_string
@@ -555,17 +577,20 @@ class EbookViewer(BaseViewer):
     weight = 50
     slug = "ebook"
 
-    def get_context(self, request) -> dict:
+    def new_tab_url(self, content_url) -> str | None:
         from urllib.parse import urlencode
 
         from django.urls import reverse
 
-        context = super().get_context(request)
-        context["reader_url"] = (
+        return (
             reverse("files_ui:ebook_reader")
             + "?"
-            + urlencode({"src": context["content_url"], "name": self.file.name})
+            + urlencode({"src": content_url, "name": self.file.name})
         )
+
+    def get_context(self, request) -> dict:
+        context = super().get_context(request)
+        context["reader_url"] = context["new_tab_url"]
         return context
 
     def render(self, request) -> str:
@@ -611,6 +636,9 @@ class AudioViewer(BaseViewer):
     slug = "audio"
     preview_template = "files/ui/viewers/previews/audio.html"
 
+    def new_tab_url(self, content_url) -> str | None:
+        return content_url
+
     def render(self, request) -> str:
         return _render_media(self, request, is_audio=True)
 
@@ -622,6 +650,9 @@ class VideoViewer(BaseViewer):
     weight = 100
     slug = "video"
     preview_template = "files/ui/viewers/previews/video.html"
+
+    def new_tab_url(self, content_url) -> str | None:
+        return content_url
 
     def render(self, request) -> str:
         return _render_media(self, request, is_audio=False)

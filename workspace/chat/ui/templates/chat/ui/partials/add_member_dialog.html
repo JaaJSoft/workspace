@@ -9,15 +9,15 @@
     <!-- Body -->
     <div class="px-5 pb-5 flex flex-col gap-3">
       <!-- Search input with chips -->
-      <div class="form-control">
-        <label class="label pb-1">
+      <div class="fieldset">
+        <label class="fieldset-legend">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+            class="text-xs font-medium uppercase tracking-wide text-base-content/50"
           >Search users</span>
         </label>
         <div class="relative">
           <div
-            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-module/50 transition-colors cursor-text"
+            class="flex flex-wrap items-center gap-1.5 min-h-10 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-module/50 transition-colors cursor-text"
             @click="$refs.addMemberSearchInput.focus()"
           >
             <!-- Selected user chips -->
@@ -29,7 +29,7 @@
             <input
               type="text"
               x-ref="addMemberSearchInput"
-              class="grow bg-transparent outline-none text-sm min-w-[8rem] h-6"
+              class="grow bg-transparent outline-hidden text-sm min-w-32 h-6"
               placeholder="Search users..."
               x-model="addMemberSearchQuery"
               @input.debounce.300ms="searchUsersForAdd()"
@@ -48,13 +48,13 @@
             @click.outside="addMemberShowDropdown = false"
             class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
           >
-            <ul class="menu menu-sm p-1">
+            <ul class="menu menu-sm p-1 w-full">
               <template x-for="(user, idx) in addMemberResults" :key="user.id">
                 <li>
                   <button
                     type="button"
-                    class="flex items-center gap-2 rounded"
-                    :class="idx === addMemberHighlight ? 'active' : ''"
+                    class="flex items-center gap-2 rounded-sm"
+                    :class="idx === addMemberHighlight ? 'menu-active' : ''"
                     @click="selectAddMember(user); $refs.addMemberSearchInput.focus()"
                     @mouseenter="addMemberHighlight = idx"
                   >

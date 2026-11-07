@@ -6,7 +6,7 @@
 <!-- Profile Tab -->
 <div x-show="tab === 'profile'" x-cloak>
   <div x-data="avatarUploadForm()">
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card bg-base-100 border border-base-300 shadow-xs">
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="camera" class="w-5 h-5"></i>
@@ -101,7 +101,7 @@
 
   <!-- Bio & Role -->
   <div
-    class="card bg-base-100 border border-base-300 shadow-sm mt-4"
+    class="card bg-base-100 border border-base-300 shadow-xs mt-4"
     x-data="profileFieldsForm()"
   >
     <div class="card-body">
@@ -113,39 +113,36 @@
       <div x-ref="profileFieldsFeedback"></div>
 
       <!-- Role -->
-      <div class="form-control mt-3">
-        <label class="label"><span class="label-text font-medium">{% translate "Role" %}</span></label>
+      <div class="fieldset mt-3">
+        <label class="fieldset-legend"><span class="font-medium">{% translate "Role" %}</span></label>
         <input
           type="text"
           x-model="role"
           maxlength="50"
           placeholder="{% translate 'ex: Lead Backend, Designer...' %}"
-          class="input input-bordered input-sm w-full max-w-md"
+          class="input input-sm w-full max-w-md"
           @blur="saveField('role', role)"
           @keydown.enter="$event.target.blur()"
         />
-        <label class="label">
-          <span
-            class="label-text-alt text-base-content/40"
-          >{% translate "Displayed below your name on your profile." %}</span>
+        <label class="label whitespace-normal">
+          <span class="text-base-content/40">{% translate "Displayed below your name on your profile." %}</span>
         </label>
       </div>
 
       <!-- Bio -->
-      <div class="form-control mt-2">
-        <label class="label"><span class="label-text font-medium">{% translate "Bio" %}</span></label>
+      <div class="fieldset mt-2">
+        <label class="fieldset-legend"><span class="font-medium">{% translate "Bio" %}</span></label>
         <textarea
           x-model="bio"
           maxlength="200"
           rows="3"
           placeholder="{% translate 'A few words about yourself...' %}"
-          class="textarea textarea-bordered w-full max-w-md text-sm"
+          class="textarea w-full max-w-md text-sm"
           @blur="saveField('bio', bio)"
         ></textarea>
-        <label class="label">
-          <span class="label-text-alt text-base-content/40">{% translate "Visible on your public profile." %}</span>
+        <label class="label whitespace-normal flex w-full justify-between">
+          <span class="text-base-content/40">{% translate "Visible on your public profile." %}</span>
           <span
-            class="label-text-alt"
             :class="bio.length > 180 ? 'text-warning' : 'text-base-content/40'"
             x-text="bio.length + ' / 200'"
           ></span>
@@ -157,7 +154,7 @@
   <!-- Banner Palette -->
   {{ banner_palette|json_script:"banner-palette-data" }}
   <div
-    class="card bg-base-100 border border-base-300 shadow-sm mt-4"
+    class="card bg-base-100 border border-base-300 shadow-xs mt-4"
     x-data="bannerPaletteForm()"
   >
     <div class="card-body">
@@ -219,7 +216,7 @@
               type="color"
               x-model="customFrom"
               @input="previewCustom()"
-              class="w-8 h-8 rounded cursor-pointer border-0 p-0"
+              class="w-8 h-8 rounded-sm cursor-pointer border-0 p-0"
             />
             <span class="text-xs text-base-content/40 font-mono" x-text="customFrom"></span>
           </label>
@@ -229,7 +226,7 @@
               type="color"
               x-model="customVia"
               @input="previewCustom()"
-              class="w-8 h-8 rounded cursor-pointer border-0 p-0"
+              class="w-8 h-8 rounded-sm cursor-pointer border-0 p-0"
             />
             <span class="text-xs text-base-content/40 font-mono" x-text="customVia"></span>
           </label>
@@ -239,7 +236,7 @@
               type="color"
               x-model="customTo"
               @input="previewCustom()"
-              class="w-8 h-8 rounded cursor-pointer border-0 p-0"
+              class="w-8 h-8 rounded-sm cursor-pointer border-0 p-0"
             />
             <span class="text-xs text-base-content/40 font-mono" x-text="customTo"></span>
           </label>

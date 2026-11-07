@@ -33,10 +33,10 @@
         <div>
           <!-- Header card -->
           <div class="card bg-base-100 shadow-lg overflow-hidden">
-            <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+            <div class="bg-linear-to-r from-primary to-secondary px-6 py-5">
               <div class="flex items-center gap-3">
                 <div
-                  class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"
+                  class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-xs"
                 >
                   <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
                 </div>
@@ -84,25 +84,25 @@
                     <span class="text-sm font-medium">{% translate "Your identity" %}</span>
                   </div>
                   <div class="flex gap-4">
-                    <div class="form-control flex-1">
-                      <label class="label py-0.5">
-                        <span class="label-text text-xs">{% translate "Name *" %}</span>
+                    <div class="fieldset flex-1">
+                      <label class="fieldset-legend">
+                        <span class="text-xs">{% translate "Name *" %}</span>
                       </label>
                       <input
                         type="text"
-                        class="input input-bordered input-sm"
+                        class="input input-sm w-full"
                         x-model="guestName"
                         placeholder="{% translate 'Your name' %}"
                         maxlength="100"
                       />
                     </div>
-                    <div class="form-control flex-1">
-                      <label class="label py-0.5">
-                        <span class="label-text text-xs">{% translate "Email (optional)" %}</span>
+                    <div class="fieldset flex-1">
+                      <label class="fieldset-legend">
+                        <span class="text-xs">{% translate "Email (optional)" %}</span>
                       </label>
                       <input
                         type="email"
-                        class="input input-bordered input-sm"
+                        class="input input-sm w-full"
                         x-model="guestEmail"
                         placeholder="{% translate 'your@email.com' %}"
                       />
@@ -174,7 +174,7 @@
                   </thead>
                   <tbody>
                     <template x-for="p in participants" :key="p.key">
-                      <tr class="hover">
+                      <tr class="hover:bg-base-300" data-poll-participant>
                         <td class="font-medium text-sm">
                           <div class="flex items-center gap-2">
                             <div
@@ -257,7 +257,7 @@
               <div class="flex flex-wrap gap-4 mt-3 text-xs text-base-content/50">
                 <div class="flex items-center gap-1.5">
                   <div
-                    class="w-5 h-5 rounded bg-success/20 flex items-center justify-center"
+                    class="w-5 h-5 rounded-sm bg-success/20 flex items-center justify-center"
                   >
                     <i data-lucide="check" class="w-3 h-3 text-success"></i>
                   </div>
@@ -265,14 +265,16 @@
                 </div>
                 <div class="flex items-center gap-1.5">
                   <div
-                    class="w-5 h-5 rounded bg-warning/20 flex items-center justify-center"
+                    class="w-5 h-5 rounded-sm bg-warning/20 flex items-center justify-center"
                   >
                     <i data-lucide="help-circle" class="w-3 h-3 text-warning"></i>
                   </div>
                   {% translate "Maybe" context "poll vote" %}
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <div class="w-5 h-5 rounded bg-error/20 flex items-center justify-center">
+                  <div
+                    class="w-5 h-5 rounded-sm bg-error/20 flex items-center justify-center"
+                  >
                     <i data-lucide="x" class="w-3 h-3 text-error"></i>
                   </div>
                   {% translate "No" context "poll vote" %}
@@ -321,14 +323,14 @@
               class="flex items-center justify-center gap-2 text-base-content/40 text-sm"
             >
               <div
-                class="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center"
+                class="w-6 h-6 rounded-md bg-linear-to-br from-primary to-secondary flex items-center justify-center"
               >
                 <i data-lucide="users" class="w-3.5 h-3.5 text-white"></i>
               </div>
               <span>{% translate "Poll created with" %}</span>
               <a
                 href="/"
-                class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"
+                class="font-semibold bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"
               >Workspace</a>
             </div>
           </footer>

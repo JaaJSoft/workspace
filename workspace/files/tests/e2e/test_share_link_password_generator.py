@@ -121,29 +121,36 @@ class ShareLinkPasswordGeneratorTests(PlaywrightTestCase):
         )
 
     def test_the_panel_takes_the_page_module_hue(self):
-        # daisyUI paints the boxed active tab from the theme primary; the
-        # module rule has to outrank it for the panel to match its host.
+        # daisyUI paints the boxed active tab on base-100; tab-module has to
+        # put the host's hue on it for the panel to match its host.
         dialog = self._open_link_form()
         dialog.get_by_role("button", name="Generate a password").click()
         expect(dialog.get_by_role("button", name="Use")).to_be_visible()
 
-        same_hue_as_host = """(expected) => {
+        # The host's hue, read by painting it: --module holds a colour, and
+        # the browser serializes it the way it serializes the tab's.
+        same_hue_as_host = """(previous) => {
             const d = document.querySelector('dialog[open]');
             const bg = (el) => getComputedStyle(el).backgroundColor;
             const tab = d.querySelector('.tab.tab-active');
             const dice = d.querySelector('[aria-label="Generate a password"]');
-            const module = getComputedStyle(document.body).getPropertyValue('--module').trim();
-            return bg(tab) === bg(dice) && bg(tab) === `rgb(${module.split(' ').join(', ')})`
-                && (!expected || bg(tab) === expected);
+            const probe = document.createElement('span');
+            probe.style.backgroundColor = 'var(--module)';
+            document.body.appendChild(probe);
+            const host = bg(probe);
+            probe.remove();
+            return bg(tab) === bg(dice) && bg(tab) === host
+                && (!previous || bg(tab) !== previous);
         }"""
         self.page.wait_for_function(same_hue_as_host, arg=None, timeout=3000)
+        indigo = self.page.evaluate(
+            "getComputedStyle(document.querySelector('dialog[open] .tab.tab-active')).backgroundColor"
+        )
 
         self.page.evaluate(
             "document.body.classList.replace('module-indigo', 'module-purple')"
         )
-        self.page.wait_for_function(
-            same_hue_as_host, arg="rgb(168, 85, 247)", timeout=3000
-        )
+        self.page.wait_for_function(same_hue_as_host, arg=indigo, timeout=3000)
 
     def test_the_panel_fits_a_narrow_phone(self):
         # 360px leaves the panel about 230px once the modal, the link form and

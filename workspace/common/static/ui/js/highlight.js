@@ -37,7 +37,7 @@ function highlightMatch(text, query, options) {
     .split(/(<[^>]*>)/)
     .map((segment, i) => (
       i % 2 === 0
-        ? segment.replace(pattern, '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>')
+        ? segment.replace(pattern, '<mark class="bg-warning/40 text-inherit rounded-xs px-0.5">$1</mark>')
         : segment
     ))
     .join('');

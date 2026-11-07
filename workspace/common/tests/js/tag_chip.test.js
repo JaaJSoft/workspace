@@ -78,13 +78,13 @@ test('the sm pill is shorter, in both variants', () => {
 test('a daisyUI semantic color name resolves to the theme variable', () => {
   const { tagChipColor } = load();
 
-  assert.equal(tagChipColor('primary'), 'oklch(var(--p))');
-  assert.equal(tagChipColor('secondary'), 'oklch(var(--s))');
-  assert.equal(tagChipColor('accent'), 'oklch(var(--a))');
-  assert.equal(tagChipColor('info'), 'oklch(var(--in))');
-  assert.equal(tagChipColor('success'), 'oklch(var(--su))');
-  assert.equal(tagChipColor('warning'), 'oklch(var(--wa))');
-  assert.equal(tagChipColor('error'), 'oklch(var(--er))');
+  assert.equal(tagChipColor('primary'), 'var(--color-primary)');
+  assert.equal(tagChipColor('secondary'), 'var(--color-secondary)');
+  assert.equal(tagChipColor('accent'), 'var(--color-accent)');
+  assert.equal(tagChipColor('info'), 'var(--color-info)');
+  assert.equal(tagChipColor('success'), 'var(--color-success)');
+  assert.equal(tagChipColor('warning'), 'var(--color-warning)');
+  assert.equal(tagChipColor('error'), 'var(--color-error)');
 });
 
 test('ghost and empty both mean the neutral pill', () => {

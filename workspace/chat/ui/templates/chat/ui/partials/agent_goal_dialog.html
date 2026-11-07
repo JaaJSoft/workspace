@@ -13,61 +13,61 @@
 
     <!-- Body -->
     <div class="px-5 py-4 space-y-3 overflow-y-auto">
-      <label class="form-control">
+      <label class="fieldset">
         <span
-          class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+          class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
         >Title</span>
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           maxlength="200"
           x-model="goalEditor.title"
           placeholder="Short label for the goal"
         />
       </label>
 
-      <label class="form-control">
+      <label class="fieldset">
         <span
-          class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+          class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
         >Objective</span>
         <textarea
-          class="textarea textarea-bordered textarea-sm w-full"
+          class="textarea textarea-sm w-full"
           rows="3"
           x-model="goalEditor.goal"
           placeholder="What the bot should accomplish or track"
         ></textarea>
       </label>
 
-      <label class="form-control">
+      <label class="fieldset">
         <span
-          class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+          class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
         >Definition of done</span>
         <textarea
-          class="textarea textarea-bordered textarea-sm w-full"
+          class="textarea textarea-sm w-full"
           rows="2"
           x-model="goalEditor.success_criteria"
           placeholder="How the bot knows the goal is achieved and can close it"
         ></textarea>
       </label>
 
-      <label class="form-control">
+      <label class="fieldset">
         <span
-          class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+          class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
         >Constraints &amp; preferences</span>
         <textarea
-          class="textarea textarea-bordered textarea-sm w-full"
+          class="textarea textarea-sm w-full"
           rows="2"
           x-model="goalEditor.constraints"
           placeholder="Rules to respect: budget, sources to use or avoid, tone, what not to do"
         ></textarea>
       </label>
 
-      <label class="form-control">
+      <label class="fieldset">
         <span
-          class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+          class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
         >When to contact me</span>
         <textarea
-          class="textarea textarea-bordered textarea-sm w-full"
+          class="textarea textarea-sm w-full"
           rows="2"
           x-model="goalEditor.reporting"
           placeholder="e.g. only for a listing under 900€, plus a recap every Sunday"
@@ -75,34 +75,34 @@
       </label>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="form-control">
+        <label class="fieldset min-w-0">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+            class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
           >Next check-in</span>
           <input
             type="datetime-local"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="goalEditor.next_check_at"
           />
         </label>
-        <label class="form-control">
+        <label class="fieldset min-w-0">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+            class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
           >Deadline</span>
           <input
             type="datetime-local"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="goalEditor.deadline"
           />
         </label>
       </div>
 
-      <label class="form-control">
+      <label class="fieldset">
         <span
-          class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
+          class="text-sm text-xs font-medium uppercase tracking-wide text-base-content/50 pb-1"
         >Bot's working notes</span>
         <textarea
-          class="textarea textarea-bordered textarea-sm w-full font-mono text-xs"
+          class="textarea textarea-sm w-full font-mono text-xs"
           rows="5"
           x-model="goalEditor.notes"
           placeholder="Empty until the first check-in"

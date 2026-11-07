@@ -14,7 +14,7 @@
 
     <!-- ── Profile hero ───────────────────────────────────── -->
     <div
-      class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden relative"
+      class="card bg-base-100 border border-base-300 shadow-xs overflow-hidden relative"
     >
       <!-- Banner -->
       {% if banner_gradient %}
@@ -26,7 +26,7 @@
         </div>
       {% else %}
         <div
-          class="h-36 bg-gradient-to-br from-primary via-primary/80 to-secondary relative"
+          class="h-36 bg-linear-to-br from-primary via-primary/80 to-secondary relative"
         >
           <div
             class="absolute inset-0"
@@ -39,7 +39,7 @@
       {% if is_own_profile %}
         <a
           href="{% url 'users_ui:settings' %}"
-          class="btn btn-sm btn-ghost bg-base-100/80 backdrop-blur-sm hover:bg-base-100 text-base-content/70 hover:text-primary absolute top-3 right-3 z-10 w-8 px-0 sm:w-auto sm:px-3 gap-0 sm:gap-2"
+          class="btn btn-sm btn-ghost bg-base-100/80 backdrop-blur-xs hover:bg-base-100 text-base-content/70 hover:text-primary absolute top-3 right-3 z-10 w-8 px-0 sm:w-auto sm:px-3 gap-0 sm:gap-2"
           aria-label="{% translate 'Settings' %}"
           title="{% translate 'Settings' %}"
         >
@@ -82,7 +82,7 @@
               ></span>
             </div>
           {% else %}
-            <div class="avatar placeholder relative -mt-14">
+            <div class="avatar avatar-placeholder relative -mt-14">
               <div
                 class="w-24 h-24 text-3xl text-white rounded-full ring-4 ring-base-100 shadow-lg"
                 :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }}) + ' ' + userAvatarColorClass({{ profile_user.id }})"
@@ -207,7 +207,7 @@
     </div>
 
     <!-- ── Contribution heatmap ─────────────────────────── -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card bg-base-100 border border-base-300 shadow-xs">
       <div class="card-body p-4 sm:p-6">
         <div class="flex items-center justify-between mb-3">
           <h2 class="card-title text-base gap-2">
@@ -266,7 +266,7 @@
                   <div class="flex-1 min-w-0 flex flex-col gap-px">
                     {% for day in week %}
                       <div
-                        class="aspect-square rounded-sm cursor-pointer {% if day.level == 0 %}bg-base-300/50{% elif day.level == 1 %}bg-primary/20{% elif day.level == 2 %}bg-primary/40{% elif day.level == 3 %}bg-primary/60{% else %}bg-primary{% endif %}"
+                        class="aspect-square rounded-xs cursor-pointer {% if day.level == 0 %}bg-base-300/50{% elif day.level == 1 %}bg-primary/20{% elif day.level == 2 %}bg-primary/40{% elif day.level == 3 %}bg-primary/60{% else %}bg-primary{% endif %}"
                         aria-label="{{ day.label }}"
                         @mouseenter="tooltip = '{{ day.label|escapejs }}'; showTooltip = true; tooltipX = $event.clientX; tooltipY = $event.clientY"
                         @mouseleave="showTooltip = false"
@@ -282,7 +282,7 @@
           <div
             x-show="showTooltip"
             x-cloak
-            class="fixed z-50 px-2 py-1 text-xs bg-neutral text-neutral-content rounded shadow-lg pointer-events-none whitespace-nowrap"
+            class="fixed z-50 px-2 py-1 text-xs bg-neutral text-neutral-content rounded-sm shadow-lg pointer-events-none whitespace-nowrap"
             :style="{ left: tooltipX + 'px', top: (tooltipY - 32) + 'px', transform: 'translateX(-50%)' }"
             x-text="tooltip"
           ></div>
@@ -292,11 +292,11 @@
             class="flex items-center justify-end gap-1.5 mt-2 text-xs text-base-content/40"
           >
             <span>{% translate "Less" context "heatmap legend" %}</span>
-            <div class="w-2.5 h-2.5 rounded-sm bg-base-300/50"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary/20"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary/40"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary/60"></div>
-            <div class="w-2.5 h-2.5 rounded-sm bg-primary"></div>
+            <div class="w-2.5 h-2.5 rounded-xs bg-base-300/50"></div>
+            <div class="w-2.5 h-2.5 rounded-xs bg-primary/20"></div>
+            <div class="w-2.5 h-2.5 rounded-xs bg-primary/40"></div>
+            <div class="w-2.5 h-2.5 rounded-xs bg-primary/60"></div>
+            <div class="w-2.5 h-2.5 rounded-xs bg-primary"></div>
             <span>{% translate "More" context "heatmap legend" %}</span>
           </div>
         </div>
@@ -305,7 +305,7 @@
 
     <!-- ── Activity feed ────────────────────────────────── -->
     <div
-      class="card bg-base-100 border border-base-300 shadow-sm"
+      class="card bg-base-100 border border-base-300 shadow-xs"
       x-data="{
          activityTab: 'all',
          activitySearch: '',
@@ -360,8 +360,8 @@
                 <li class="py-3 flex items-center gap-3">
                   <div class="w-9 h-9 rounded-lg bg-base-300 shrink-0"></div>
                   <div class="flex-1 min-w-0 space-y-2">
-                    <div class="h-4 bg-base-300 rounded w-3/4"></div>
-                    <div class="h-3 bg-base-300 rounded w-1/2"></div>
+                    <div class="h-4 bg-base-300 rounded-sm w-3/4"></div>
+                    <div class="h-3 bg-base-300 rounded-sm w-1/2"></div>
                   </div>
                 </li>
               {% endfor %}

@@ -51,7 +51,7 @@
         <li>
           <a
             @click="document.activeElement.blur(); reset()"
-            :class="override === '' ? 'active' : ''"
+            :class="override === '' ? 'menu-active' : ''"
           >
             <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
             <span>Default · <span x-text="label(moduleLevel)"></span></span>
@@ -60,7 +60,7 @@
         <li>
           <a
             @click="document.activeElement.blur(); set('all')"
-            :class="override === 'all' ? 'active' : ''"
+            :class="override === 'all' ? 'menu-active' : ''"
           >
             <i data-lucide="bell" class="w-4 h-4"></i> All notifications
           </a>
@@ -68,7 +68,7 @@
         <li>
           <a
             @click="document.activeElement.blur(); set('in_app')"
-            :class="override === 'in_app' ? 'active' : ''"
+            :class="override === 'in_app' ? 'menu-active' : ''"
           >
             <i data-lucide="bell-minus" class="w-4 h-4"></i> In-app only
           </a>
@@ -76,7 +76,7 @@
         <li>
           <a
             @click="document.activeElement.blur(); set('none')"
-            :class="override === 'none' ? 'active' : ''"
+            :class="override === 'none' ? 'menu-active' : ''"
           >
             <i data-lucide="bell-off" class="w-4 h-4"></i> Nothing
           </a>

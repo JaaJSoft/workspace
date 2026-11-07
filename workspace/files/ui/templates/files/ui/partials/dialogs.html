@@ -9,26 +9,26 @@
     <form
       @submit.prevent="$dispatch('create-file', { name: $refs.fileName.value, fileType, customExt: $refs.customExt ? $refs.customExt.value : '' })"
     >
-      <div class="form-control mb-3">
-        <label class="label">
-          <span class="label-text">{% translate "File name" %}</span>
+      <div class="fieldset mb-3">
+        <label class="fieldset-legend">
+          <span>{% translate "File name" %}</span>
         </label>
         <input
           x-ref="fileName"
           type="text"
           placeholder="{% translate 'notes' %}"
-          class="input input-bordered w-full"
+          class="input w-full"
           required
         />
-        <label class="label">
-          <span class="label-text-alt">{% translate "Extension added if missing" %}</span>
+        <label class="label whitespace-normal">
+          <span>{% translate "Extension added if missing" %}</span>
         </label>
       </div>
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text">{% translate "Type" %}</span>
+      <div class="fieldset">
+        <label class="fieldset-legend">
+          <span>{% translate "Type" %}</span>
         </label>
-        <select x-model="fileType" class="select select-bordered w-full">
+        <select x-model="fileType" class="select w-full">
           <option value="txt">{% translate "Text (.txt)" %}</option>
           <option value="md">Markdown (.md)</option>
           <option value="json">JSON (.json)</option>
@@ -36,16 +36,11 @@
           <option value="custom">{% translate "Custom extension" %}</option>
         </select>
       </div>
-      <div class="form-control mt-3" x-show="fileType === 'custom'" x-cloak>
-        <label class="label">
-          <span class="label-text">{% translate "Extension" %}</span>
+      <div class="fieldset mt-3" x-show="fileType === 'custom'" x-cloak>
+        <label class="fieldset-legend">
+          <span>{% translate "Extension" %}</span>
         </label>
-        <input
-          x-ref="customExt"
-          type="text"
-          placeholder="log"
-          class="input input-bordered w-full"
-        />
+        <input x-ref="customExt" type="text" placeholder="log" class="input w-full" />
       </div>
       <div class="modal-action">
         <button
@@ -154,7 +149,7 @@
   hard-drive | {% translate "WebDAV Access" %}
   <p>{% translate "Mount your files as a network drive using WebDAV. Your WebDAV URL is:" %}</p>
   <code
-    class="block bg-base-300 px-3 py-2 rounded text-sm mb-3"
+    class="block bg-base-300 px-3 py-2 rounded-sm text-sm mb-3"
   >https://&lt;{% translate "your-domain" %}&gt;/dav/</code>
   <p class="mb-3">
     {% blocktranslate trimmed %}
@@ -176,7 +171,7 @@
     </li>
     <li>
       {% translate "If connecting over HTTP, add a registry key to allow Basic auth:" %}
-      <code class="block bg-base-300 px-3 py-2 rounded text-xs mt-1">
+      <code class="block bg-base-300 px-3 py-2 rounded-sm text-xs mt-1">
         HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\BasicAuthLevel = 2
       </code>
       {% blocktranslate trimmed %}

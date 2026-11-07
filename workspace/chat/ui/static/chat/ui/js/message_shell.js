@@ -281,7 +281,7 @@
 
       const body = typeof this.body === 'string' ? this.body : '';
       if (body) {
-        const bodyEl = el('div', 'msg-body prose prose-sm max-w-[36rem] break-words');
+        const bodyEl = el('div', 'msg-body prose prose-sm max-w-144 wrap-break-word');
         body.split('\n').forEach((line, i) => {
           if (i) bodyEl.appendChild(document.createElement('br'));
           bodyEl.appendChild(document.createTextNode(line));
@@ -383,7 +383,7 @@
     _saveButton(item, { grid = false, chip = false } = {}) {
       const btn = el('button', chip
         ? 'btn btn-ghost btn-xs btn-square opacity-0 group-hover/att:opacity-100 transition-opacity shrink-0'
-        : 'absolute top-1 right-1 btn btn-xs btn-square bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm opacity-0 group-hover/att:opacity-100 transition-opacity');
+        : 'absolute top-1 right-1 btn btn-xs btn-square bg-base-100/80 hover:bg-base-100 border-base-300 shadow-xs opacity-0 group-hover/att:opacity-100 transition-opacity');
       // .stop inside the mosaic: the whole cell opens the viewer on click.
       // x-on:, not the @ shorthand: setAttribute rejects '@' in a name.
       btn.setAttribute(grid ? 'x-on:click.stop' : 'x-on:click', `saveAttachmentToFiles('${item.uuid}')`);
@@ -442,7 +442,7 @@
       media.forEach((item, index) => {
         const interactive = !this._pending && safeUuid(item.uuid);
         // Three items: the first spans the full row, the two others share it.
-        const shape = media.length === 3 && index === 0 ? 'col-span-2 aspect-[2/1]' : 'aspect-square';
+        const shape = media.length === 3 && index === 0 ? 'col-span-2 aspect-2/1' : 'aspect-square';
         const cell = el('div', `relative group/att overflow-hidden ${shape}${this._pending ? ' opacity-60' : ''}`);
         if (interactive) {
           this._stampAttachment(cell, item);

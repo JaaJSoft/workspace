@@ -10,7 +10,7 @@
 {% endcomment %}
 <li x-show="({{ cluster_expr }})?.person">
   <a
-    class="gap-3 rounded"
+    class="gap-3 rounded-sm"
     :href="({{ cluster_expr }})?.person?.url"
     @click="closeClusterMenu()"
   >
@@ -21,7 +21,7 @@
 <li>
   <button
     type="button"
-    class="gap-3 rounded"
+    class="gap-3 rounded-sm"
     @click="runClusterAction('name', {{ cluster_expr }})"
   >
     <i data-lucide="pencil" class="w-4 h-4"></i>
@@ -33,7 +33,7 @@
 <li x-show="({{ cluster_expr }})?.person" x-cloak>
   <button
     type="button"
-    class="gap-3 rounded"
+    class="gap-3 rounded-sm"
     @click="runClusterAction('avatar', {{ cluster_expr }})"
   >
     <i data-lucide="circle-user-round" class="w-4 h-4"></i>
@@ -43,7 +43,7 @@
 <li x-show="!({{ cluster_expr }})?.hidden">
   <button
     type="button"
-    class="gap-3 rounded"
+    class="gap-3 rounded-sm"
     @click="runClusterAction('hide', {{ cluster_expr }})"
   >
     <i data-lucide="eye-off" class="w-4 h-4"></i>
@@ -53,7 +53,7 @@
 <li x-show="({{ cluster_expr }})?.hidden" x-cloak>
   <button
     type="button"
-    class="gap-3 rounded"
+    class="gap-3 rounded-sm"
     @click="runClusterAction('show', {{ cluster_expr }})"
   >
     <i data-lucide="eye" class="w-4 h-4"></i>
@@ -63,7 +63,7 @@
 <li>
   <button
     type="button"
-    class="gap-3 rounded"
+    class="gap-3 rounded-sm"
     @click="runClusterAction('merge', {{ cluster_expr }})"
   >
     <i data-lucide="combine" class="w-4 h-4"></i>
@@ -77,7 +77,7 @@
 >
   <button
     type="button"
-    class="gap-3 rounded text-error"
+    class="gap-3 rounded-sm text-error"
     @click="runClusterAction('unname', {{ cluster_expr }})"
   >
     <i data-lucide="user-minus" class="w-4 h-4"></i>
@@ -90,7 +90,7 @@
 >
   <button
     type="button"
-    class="gap-3 rounded text-error"
+    class="gap-3 rounded-sm text-error"
     @click="runClusterAction('ungroup', {{ cluster_expr }})"
   >
     <i data-lucide="ungroup" class="w-4 h-4"></i>

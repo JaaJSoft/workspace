@@ -80,23 +80,14 @@ window.tagChipClasses = function tagChipClasses(size, removable, compact) {
 
 // Semantic names map onto the theme so a chip colored like its module
 // ("primary" for files, "success" for notes) follows the light/dark switch.
-// daisyUI 4 stores each theme color as raw oklch channels in a short
-// variable, hence the wrapping.
-const TAG_CHIP_THEME_VARS = {
-  primary: '--p',
-  secondary: '--s',
-  accent: '--a',
-  info: '--in',
-  success: '--su',
-  warning: '--wa',
-  error: '--er',
-};
+const TAG_CHIP_THEME_COLORS = new Set([
+  'primary', 'secondary', 'accent', 'info', 'success', 'warning', 'error',
+]);
 
 window.tagChipColor = function tagChipColor(value) {
   const color = (value || '').trim();
   if (!color || color === 'ghost') return '';
-  const themeVar = TAG_CHIP_THEME_VARS[color];
-  return themeVar ? `oklch(var(${themeVar}))` : color;
+  return TAG_CHIP_THEME_COLORS.has(color) ? `var(--color-${color})` : color;
 };
 
 (function defineTagChip() {
@@ -111,7 +102,7 @@ window.tagChipColor = function tagChipColor(value) {
   // room and the equal negative margin takes it back out of the layout, so
   // the trimmed box still decides the centering.
   const LABEL_CLASSES =
-    'relative -top-px truncate py-[0.4em] -my-[0.4em] [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
+    'relative -top-px truncate py-[0.4em] my-[-0.4em] [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
 
   // Inline SVG on purpose: lucide.createIcons() does not process nodes
   // Alpine clones out of an x-for template.

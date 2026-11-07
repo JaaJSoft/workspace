@@ -11,24 +11,24 @@
     <div class="modal-box max-w-md">
       {% include "ui/partials/dialog_header.html" with icon_expr="vaultDialog.mode === 'rename' ? 'pencil' : 'palette'" title_expr="vaultDialog.mode === 'rename' ? 'Name and description' : 'Icon and colour'" close_expr="closeVaultDialog()" only %}
 
-      <label class="form-control" x-show="vaultDialog.mode === 'rename'">
-        <span class="label-text">Name</span>
+      <label class="fieldset" x-show="vaultDialog.mode === 'rename'">
+        <span class="text-sm">Name</span>
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           autocomplete="off"
           spellcheck="false"
           x-model="vaultDialog.name"
         />
       </label>
 
-      <label class="form-control mt-3" x-show="vaultDialog.mode === 'rename'">
-        <span class="label-text">
+      <label class="fieldset mt-3" x-show="vaultDialog.mode === 'rename'">
+        <span class="text-sm">
           Description <span class="text-base-content/40">(optional)</span>
         </span>
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           placeholder="A short description…"
           autocomplete="off"
           spellcheck="false"

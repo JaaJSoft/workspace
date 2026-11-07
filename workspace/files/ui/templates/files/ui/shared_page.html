@@ -62,10 +62,10 @@
         x-init="$nextTick(() => window.folderNav.onNavigate())"
       >
         <!-- Header -->
-        <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+        <div class="bg-linear-to-r from-primary to-secondary px-6 py-5">
           <div class="flex items-center gap-3">
             <div
-              class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"
+              class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-xs"
             >
               <i
                 data-lucide="{% if link.mode == 'drop' %}upload-cloud{% elif is_folder %}folder{% else %}file{% endif %}"

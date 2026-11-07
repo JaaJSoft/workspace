@@ -65,7 +65,7 @@ Shortcut badge:
 {% if blank %}target="_blank"{% endif %}
 {% if download_expr %}download :download="{{ download_expr }}"{% endif %}
 {% if bare and show %}x-show="{{ show }}"{% endif %}
-class="gap-3 rounded{% if tone %} text-{{ tone }}{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
+class="gap-3 rounded-sm{% if tone %} text-{{ tone }}{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
 {% if class_expr %}:class="{{ class_expr }}"{% endif %}
 {% if click %}@click{% if stop %}.stop{% endif %}="{{ click }}"{% endif %}
 {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}

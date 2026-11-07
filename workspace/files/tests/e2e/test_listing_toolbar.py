@@ -63,6 +63,12 @@ class ListingToolbarTests(PlaywrightTestCase):
         )
 
     def _assert_single_line(self, label):
+        # A viewport change resizes the sidebar through daisyUI's width
+        # transition: measure the bar once the sidebar has settled.
+        self.page.wait_for_function(
+            "() => [...document.querySelectorAll('aside')]"
+            ".every(el => el.getAnimations().length === 0)"
+        )
         geometry = self.page.locator(BAR).evaluate(
             """bar => {
                 const tops = Array.from(bar.children)

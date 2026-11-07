@@ -23,7 +23,7 @@
   x-data="userSelector('{{ on_select_event|escapejs }}'{% if local_source %}, () => ({{ local_source }}){% endif %})"
   class="relative"
 >
-  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+  <label class="input input-sm flex items-center gap-2 w-full">
     {# shrink-0 + min-w-0: in a narrow container the input's intrinsic min width otherwise flex-crushes the icon to zero width. #}
     <i
       data-lucide="{{ icon|default:'search' }}"
@@ -51,7 +51,7 @@
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden thin-scrollbar"
   >
-    <ul class="menu menu-sm p-1">
+    <ul class="menu menu-sm p-1 w-full">
       <template x-for="(user, idx) in results" :key="user.id">
         {% comment %}w-full/min-w-0 down the chain: every flex level defaults
           to min-width:auto, which lets long usernames push the row wider
@@ -59,8 +59,8 @@
         <li class="w-full min-w-0">
           <button
             type="button"
-            class="flex w-full min-w-0 items-center gap-2 rounded"
-            :class="idx === highlight ? 'active' : ''"
+            class="flex w-full min-w-0 items-center gap-2 rounded-sm"
+            :class="idx === highlight ? 'menu-active' : ''"
             @click="selectUser(user)"
             @mouseenter="highlight = idx"
           >

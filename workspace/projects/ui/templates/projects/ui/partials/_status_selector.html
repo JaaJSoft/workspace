@@ -28,7 +28,7 @@ Params:
 >
   <button
     type="button"
-    class="input input-sm input-bordered flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
+    class="input input-sm flex items-center gap-2 w-full cursor-pointer text-left disabled:cursor-not-allowed"
     x-ref="trigger"
     aria-haspopup="menu"
     :aria-expanded="open"
@@ -71,13 +71,13 @@ Params:
     x-cloak
     class="absolute z-50 mt-1 w-full min-w-40 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-60 overflow-y-auto overflow-x-hidden thin-scrollbar"
   >
-    <ul class="menu menu-sm p-1" role="menu">
+    <ul class="menu menu-sm p-1 w-full" role="menu">
       {% if with_all %}
         <li role="none">
           <button
             type="button"
-            class="flex items-center gap-2 rounded"
-            :class="!{{ model_expr }} ? 'active' : ''"
+            class="flex items-center gap-2 rounded-sm"
+            :class="!{{ model_expr }} ? 'menu-active' : ''"
             role="menuitemradio"
             :aria-checked="!{{ model_expr }}"
             @click="{{ model_expr }} = ''; open = false; {{ on_change|default:'' }}"
@@ -93,8 +93,8 @@ Params:
         <li class="w-full min-w-0" role="none">
           <button
             type="button"
-            class="flex w-full min-w-0 items-center gap-2 rounded"
-            :class="{{ model_expr }} === '{{ s.uuid|escapejs }}' ? 'active' : ''"
+            class="flex w-full min-w-0 items-center gap-2 rounded-sm"
+            :class="{{ model_expr }} === '{{ s.uuid|escapejs }}' ? 'menu-active' : ''"
             role="menuitemradio"
             :aria-checked="{{ model_expr }} === '{{ s.uuid|escapejs }}'"
             @click="{{ model_expr }} = '{{ s.uuid|escapejs }}'; open = false; {{ on_change|default:'' }}"

@@ -87,14 +87,14 @@
       x-data="commandPaletteDropdown()"
     >
       <div class="relative">
-        {% include "core/partials/search/search_input.html" with input_class="input-md text-base shadow-sm" show_kbd=True size="lg" %}
+        {% include "core/partials/search/search_input.html" with input_class="input-md text-base shadow-xs" show_kbd=True size="lg" %}
 
         {# ── Dropdown ── #}
         <div
           x-show="open"
           x-cloak
           @click.outside="close()"
-          class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
+          class="absolute z-100 mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
         >
           {% include "core/partials/search/quick_actions.html" with size="lg" %}
           {% include "core/partials/search/search_results.html" with size="lg" %}
@@ -132,7 +132,7 @@
     <section class="max-w-4xl mx-auto w-full">
       <div>
         <div
-          class="card bg-base-100 shadow border border-base-300"
+          class="card bg-base-100 shadow-sm border border-base-300"
           x-data="{ activityTab: '{{ activity_tab|default:"all"|escapejs }}', activitySearch: '', searchOpen: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }"
           @ajax:before="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedSkeleton.innerHTML"
           @ajax:error="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedFailed.innerHTML"
@@ -178,10 +178,10 @@
                     <li class="py-3 flex items-center gap-3">
                       <div class="w-9 h-9 rounded-lg bg-base-300 shrink-0"></div>
                       <div class="flex-1 min-w-0 space-y-2">
-                        <div class="h-4 bg-base-300 rounded w-3/4"></div>
-                        <div class="h-3 bg-base-300 rounded w-1/2"></div>
+                        <div class="h-4 bg-base-300 rounded-sm w-3/4"></div>
+                        <div class="h-3 bg-base-300 rounded-sm w-1/2"></div>
                       </div>
-                      <div class="h-6 w-12 bg-base-300 rounded hidden sm:block"></div>
+                      <div class="h-6 w-12 bg-base-300 rounded-sm hidden sm:block"></div>
                     </li>
                   {% endfor %}
                 </ul>

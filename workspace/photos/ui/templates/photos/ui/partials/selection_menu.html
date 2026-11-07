@@ -7,7 +7,7 @@ them is `ui/partials/context_menu_panel.html`, included from base.html.
 The file rows wait for the registry's answer about every selected photo
 (selectionActions is null meanwhile) and show only what all of them offer.
 {% endcomment %}
-<ul class="menu menu-sm p-0">
+<ul class="menu menu-sm p-0 w-full">
   <li class="menu-title py-1">
     <span x-text="countLabel(selection.length) + ' selected'"></span>
   </li>
@@ -22,7 +22,7 @@ The file rows wait for the registry's answer about every selected photo
   {% include "ui/partials/context_menu_item.html" with show="selectionShows('unhide')" li_class_expr="selectionRule('unhide')" icon="eye" label="Unhide" click="setPhotosHidden(selection, false)" only %}
   {% include "ui/partials/context_menu_item.html" with show="selectionShows('delete')" li_class_expr="selectionRule('delete')" icon="trash-2" label="Move to trash" tone="error" click="trashSelection()" only %}
   <li x-show="selectionActions === null">
-    <span class="gap-3 rounded pointer-events-none">
+    <span class="gap-3 rounded-sm pointer-events-none">
       <span class="loading loading-spinner loading-xs"></span>
       <span>Loading…</span>
     </span>

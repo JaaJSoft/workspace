@@ -72,8 +72,8 @@
             <li>
               <button
                 type="button"
-                class="rounded"
-                :class="currentView === 'dayGridMonth' ? 'active' : ''"
+                class="rounded-sm"
+                :class="currentView === 'dayGridMonth' ? 'menu-active' : ''"
                 @click="changeView('dayGridMonth'); document.activeElement.blur()"
               >
                 <i data-lucide="calendar-days" class="w-4 h-4"></i> {% translate "Month" context "calendar view" %}
@@ -82,8 +82,8 @@
             <li>
               <button
                 type="button"
-                class="rounded"
-                :class="currentView === 'timeGridWeek' ? 'active' : ''"
+                class="rounded-sm"
+                :class="currentView === 'timeGridWeek' ? 'menu-active' : ''"
                 @click="changeView('timeGridWeek'); document.activeElement.blur()"
               >
                 <i data-lucide="calendar-range" class="w-4 h-4"></i> {% translate "Week" context "calendar view" %}
@@ -92,8 +92,8 @@
             <li>
               <button
                 type="button"
-                class="rounded"
-                :class="currentView === 'timeGridDay' ? 'active' : ''"
+                class="rounded-sm"
+                :class="currentView === 'timeGridDay' ? 'menu-active' : ''"
                 @click="changeView('timeGridDay'); document.activeElement.blur()"
               >
                 <i data-lucide="calendar-clock" class="w-4 h-4"></i> {% translate "Day" context "calendar view" %}
@@ -102,8 +102,8 @@
             <li>
               <button
                 type="button"
-                class="rounded"
-                :class="currentView === 'agenda' ? 'active' : ''"
+                class="rounded-sm"
+                :class="currentView === 'agenda' ? 'menu-active' : ''"
                 @click="changeView('agenda'); document.activeElement.blur()"
               >
                 <i data-lucide="list" class="w-4 h-4"></i> {% translate "Agenda" context "calendar view" %}

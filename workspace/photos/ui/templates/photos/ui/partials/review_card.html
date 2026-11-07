@@ -55,7 +55,7 @@
       <div class="group relative aspect-square">
         <button
           type="button"
-          class="absolute inset-0 overflow-hidden rounded-lg bg-base-200 ring-2 ring-offset-1 ring-offset-base-100 transition focus-visible:outline-none"
+          class="absolute inset-0 overflow-hidden rounded-lg bg-base-200 ring-2 ring-offset-1 ring-offset-base-100 transition focus-visible:outline-hidden"
           :class="isExcluded(card, face.uuid) ? 'ring-error/60' : 'ring-transparent hover:ring-error/40 focus-visible:ring-module'"
           :aria-pressed="isExcluded(card, face.uuid)"
           :title="isExcluded(card, face.uuid) ? 'Put back' : 'Not them: leave out'"
@@ -76,13 +76,13 @@
           x-cloak
           class="pointer-events-none absolute inset-0 flex items-center justify-center"
         >
-          <span class="rounded-full bg-error text-error-content p-1 shadow">
+          <span class="rounded-full bg-error text-error-content p-1 shadow-sm">
             <i data-lucide="x" class="w-4 h-4"></i>
           </span>
         </span>
         <button
           type="button"
-          class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 border-0 shadow opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
+          class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 border-0 shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
           :title="face.timestamp == null ? 'Open the photo' : 'Open the video'"
           :aria-label="face.timestamp == null ? 'Open the photo' : 'Open the video'"
           @click="openFacePhoto(face)"
@@ -123,7 +123,7 @@
     </template>
 
     <div class="relative flex-1 min-w-48">
-      <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+      <label class="input input-sm flex items-center gap-2 w-full">
         <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
         <input
           type="text"
@@ -160,7 +160,7 @@
           <li role="option" :aria-selected="optionIndex(card, i) === active">
             <button
               type="button"
-              class="gap-3 rounded"
+              class="gap-3 rounded-sm"
               :class="{ 'bg-base-content/10': optionIndex(card, i) === active, 'text-module': option.kind === 'create' }"
               :disabled="!canPick(card, option)"
               @mousedown.prevent

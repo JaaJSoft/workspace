@@ -22,7 +22,7 @@
 
 <div
   x-show="showResults()"
-  class="{{ container_class|default:'overflow-y-auto scroll-smooth' }} {% if size == 'lg' %}max-h-[28rem]{% elif not container_class %}max-h-96{% endif %}"
+  class="{{ container_class|default:'overflow-y-auto scroll-smooth' }} {% if size == 'lg' %}max-h-112{% elif not container_class %}max-h-96{% endif %}"
 >
 
   {% comment %}
@@ -50,10 +50,10 @@
         ></div>
         <div class="flex-1 min-w-0 space-y-1.5">
           <div
-            class="skeleton h-3 rounded"
+            class="skeleton h-3 rounded-sm"
             :class="['w-2/3', 'w-1/2', 'w-3/5'][i - 1]"
           ></div>
-          <div class="skeleton h-2 w-1/4 rounded"></div>
+          <div class="skeleton h-2 w-1/4 rounded-sm"></div>
         </div>
       </div>
     </template>
@@ -136,7 +136,7 @@
         :class="isResultActive(index) ? 'bg-base-300' : 'bg-transparent'"
         class="flex items-center gap-3 {% if size == 'lg' %}p-3{% else %}p-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
-        <div class="avatar placeholder shrink-0">
+        <div class="avatar avatar-placeholder shrink-0">
           <div
             :class="`module-${result.module_color || 'slate'}`"
             class="bg-module text-module-content rounded-full {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center overflow-hidden"

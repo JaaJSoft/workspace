@@ -8,7 +8,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default view</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.defaultView"
       @change="update('defaultView', $event.target.value)"
     >
@@ -20,7 +20,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Sort notes by</label>
     <select
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="prefs.sortBy"
       @change="update('sortBy', $event.target.value)"
     >
@@ -32,7 +32,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default notes folder</label>
     <div
-      class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
+      class="input input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
       @mousedown.prevent
       @click="pickDefaultFolder()"
     >
@@ -48,7 +48,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Journal folder</label>
     <div
-      class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
+      class="input input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
       @mousedown.prevent
       @click="pickJournalFolder()"
     >

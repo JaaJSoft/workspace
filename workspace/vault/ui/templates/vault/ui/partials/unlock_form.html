@@ -5,7 +5,7 @@
   written once.
 {% endcomment %}
 <div
-  class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto"
+  class="card bg-base-100 border border-base-300 shadow-xs max-w-lg mx-auto"
 >
   <div class="card-body">
     <div class="flex items-start gap-3">
@@ -27,11 +27,11 @@
     <span x-text="error"></span>
     </inline-alert>
     <form @submit.prevent="unlock()">
-      <label class="form-control">
-        <span class="label-text">Master password</span>
+      <label class="fieldset">
+        <span class="text-sm">Master password</span>
         <input
           type="password"
-          class="input input-bordered"
+          class="input w-full"
           autocomplete="current-password"
           x-model="password"
           :disabled="state === 'deriving'"
@@ -72,7 +72,7 @@
             <div class="space-y-3">
               <input
                 type="text"
-                class="input input-bordered font-mono placeholder:font-sans w-full"
+                class="input font-mono placeholder:font-sans w-full"
                 aria-label="Recovery key"
                 placeholder="From your emergency kit. Dashes and case are ignored."
                 autocomplete="off"

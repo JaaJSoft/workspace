@@ -48,10 +48,7 @@ class SyncMixin:
             logger.warning("sync root: %s", scrub(err))
         return Response(
             {
-                "files_created": result.files_created,
-                "folders_created": result.folders_created,
-                "files_soft_deleted": result.files_soft_deleted,
-                "folders_soft_deleted": result.folders_soft_deleted,
+                **result.counts(),
                 "error_count": len(result.errors),
             }
         )
@@ -89,10 +86,7 @@ class SyncMixin:
             logger.warning("sync folder %s: %s", scrub(uuid), scrub(err))
         return Response(
             {
-                "files_created": result.files_created,
-                "folders_created": result.folders_created,
-                "files_soft_deleted": result.files_soft_deleted,
-                "folders_soft_deleted": result.folders_soft_deleted,
+                **result.counts(),
                 "error_count": len(result.errors),
             }
         )

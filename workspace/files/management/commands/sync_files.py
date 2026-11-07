@@ -85,10 +85,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Sync complete for {scope}: "
-                f"files_created={result.files_created}, "
-                f"folders_created={result.folders_created}, "
-                f"files_soft_deleted={result.files_soft_deleted}, "
-                f"folders_soft_deleted={result.folders_soft_deleted}"
+                + ", ".join(f"{name}={n}" for name, n in result.counts().items())
             )
         )
         if result.errors:

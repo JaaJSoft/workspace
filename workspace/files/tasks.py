@@ -96,10 +96,7 @@ def sync_user_files(self, user_id):
 
     return {
         "status": "ok",
-        "files_created": result.files_created,
-        "folders_created": result.folders_created,
-        "files_soft_deleted": result.files_soft_deleted,
-        "folders_soft_deleted": result.folders_soft_deleted,
+        **result.counts(),
         "errors": result.errors,
     }
 
@@ -319,10 +316,7 @@ def sync_folder(self, user_id, folder_uuid=None):
     service = FileSyncService(log=logger)
     result = service.sync_folder_shallow(user, parent_db)
     return {
-        "files_created": result.files_created,
-        "folders_created": result.folders_created,
-        "files_soft_deleted": result.files_soft_deleted,
-        "folders_soft_deleted": result.folders_soft_deleted,
+        **result.counts(),
         "errors": result.errors,
     }
 

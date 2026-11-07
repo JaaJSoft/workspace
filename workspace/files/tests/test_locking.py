@@ -1018,3 +1018,108 @@ class LockNeedsWriteAccessTests(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class LockHolderChangeTests(APITestCase):
+    """The lock token belongs to the holder who set it, never to the next one."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="p")
+        self.bob = User.objects.create_user(username="bob", password="p")
+        self.file = File.objects.create(
+            owner=self.alice, name="doc.md", node_type=File.NodeType.FILE
+        )
+        FileShare.objects.create(
+            file=self.file,
+            shared_by=self.alice,
+            shared_with=self.bob,
+            permission=FileShare.Permission.READ_WRITE,
+        )
+        self.url = f"/api/v1/files/{self.file.uuid}/lock"
+
+    def _expire_lock(self):
+        File.objects.filter(pk=self.file.pk).update(
+            lock_expires_at=timezone.now() - timedelta(minutes=1)
+        )
+
+    def test_an_old_wopi_token_cannot_touch_the_next_holders_app_lock(self):
+        from workspace.files.services.wopi import locks as wopi_locks
+
+        self.assertTrue(wopi_locks.lock(self.file, self.alice, "wopi-1").ok)
+        self._expire_lock()
+        self.client.force_authenticate(self.bob)
+        self.assertEqual(self.client.post(self.url).status_code, status.HTTP_200_OK)
+
+        self.assertFalse(wopi_locks.unlock(self.file, "wopi-1").ok)
+        self.assertFalse(wopi_locks.refresh(self.file, "wopi-1").ok)
+        self.assertEqual(wopi_locks.current_lock_token(self.file), "")
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.locked_by, self.bob)
+        self.assertTrue(self.file.is_locked())
+
+    def test_releasing_the_lock_drops_its_token(self):
+        from workspace.files.services.wopi import locks as wopi_locks
+
+        self.assertTrue(wopi_locks.lock(self.file, self.alice, "wopi-1").ok)
+        self.client.force_authenticate(self.alice)
+        resp = self.client.delete(self.url)
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.file.refresh_from_db()
+        self.assertIsNone(self.file.locked_by_id)
+        self.assertEqual(self.file.lock_token, "")
+
+    def test_a_renew_does_not_extend_the_lock_somebody_took_meanwhile(self):
+        """Alice's heartbeat reads her expired lock; Bob takes it before the
+        renew's UPDATE runs. The renew must not land on Bob's lock."""
+        from django.db.models.query import QuerySet
+
+        self.client.force_authenticate(self.alice)
+        self.client.post(self.url)
+        self._expire_lock()
+        bobs_expiry = timezone.now() + timedelta(minutes=1)
+        real_first = QuerySet.first
+        injected = []
+
+        def first_then_take(qs_self):
+            result = real_first(qs_self)
+            if (
+                not injected
+                and isinstance(result, File)
+                and result.pk == self.file.pk
+                and result.locked_by_id == self.alice.pk
+            ):
+                injected.append(True)
+                File.objects.filter(pk=self.file.pk).update(
+                    locked_by=self.bob,
+                    locked_at=timezone.now(),
+                    lock_expires_at=bobs_expiry,
+                )
+            return result
+
+        with patch.object(QuerySet, "first", first_then_take):
+            resp = self.client.post(self.url)
+
+        self.assertTrue(injected)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.locked_by, self.bob)
+        self.assertEqual(self.file.lock_expires_at, bobs_expiry)
+
+    def test_a_renew_leaves_the_holders_own_wopi_lock_alone(self):
+        """The in-app viewer's heartbeat next to the same user's editing
+        session: the lock is theirs already, and its token and deadline are
+        the protocol's."""
+        from workspace.files.services.wopi import locks as wopi_locks
+
+        self.assertTrue(wopi_locks.lock(self.file, self.alice, "wopi-1").ok)
+        self.file.refresh_from_db()
+        wopi_expiry = self.file.lock_expires_at
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(self.url)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["locked_by"]["username"], "alice")
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.lock_token, "wopi-1")
+        self.assertEqual(self.file.lock_expires_at, wopi_expiry)

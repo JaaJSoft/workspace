@@ -1,14 +1,15 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.mail.models import MailAccount, MailFolder
+from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.folder_merge import promote_alias
 from workspace.mail.services.imap_sync import (
     accounts_with_sync_errors,
     queue_account_syncs,
+    sync_folder_messages,
 )
 
 User = get_user_model()
@@ -190,3 +191,61 @@ class DiscoveryMergeGroupTests(TestCase):
         self.assertIsNone(survivor.alias_of_id)
         self.assertFalse(MailFolder.objects.filter(pk=self.envoyes.pk).exists())
         self.assertFalse(MailFolder.objects.filter(pk=self.sent.pk).exists())
+
+
+class UidValidityResetTests(TestCase):
+    """A UIDVALIDITY change resets the cursor in the same write as the validity."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="uidreset", password="pw")
+        self.account = _make_account(self.user, "reset@test.com")
+        self.folder = MailFolder.objects.create(
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+            uid_validity=111,
+            last_sync_uid=500,
+        )
+        MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=500
+        )
+
+    def _connection(self, uid):
+        conn = MagicMock()
+        conn.select.return_value = ("OK", [b"3"])
+        conn.untagged_responses = {"OK": [b"[UIDVALIDITY 222]"]}
+        conn.uid.side_effect = uid
+        return conn
+
+    def _sync_dying_after_select(self):
+        conn = self._connection(ConnectionResetError("connection dropped"))
+        with (
+            patch("workspace.mail.services.imap_sync.connect_imap", return_value=conn),
+            self.assertRaises(ConnectionResetError),
+        ):
+            sync_folder_messages(self.account, self.folder)
+
+    def test_a_sync_dying_after_the_reset_leaves_the_cursor_at_zero(self):
+        self._sync_dying_after_select()
+
+        stored = MailFolder.objects.get(pk=self.folder.pk)
+        self.assertEqual(stored.uid_validity, 222)
+        self.assertEqual(stored.last_sync_uid, 0)
+        self.assertFalse(MailMessage.objects.filter(folder=self.folder).exists())
+
+    def test_the_next_sync_searches_the_whole_folder_again(self):
+        self._sync_dying_after_select()
+        searches = []
+
+        def uid(command, *args):
+            if command == "SEARCH":
+                searches.append(args[1])
+            return ("OK", [b""])
+
+        folder = MailFolder.objects.get(pk=self.folder.pk)
+        conn = self._connection(uid)
+        with patch("workspace.mail.services.imap_sync.connect_imap", return_value=conn):
+            sync_folder_messages(self.account, folder)
+
+        self.assertEqual(searches[0], "ALL")

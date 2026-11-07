@@ -582,6 +582,8 @@ class EbookViewer(BaseViewer):
 
         from django.urls import reverse
 
+        if _larger_than(self.file, settings.FILES_EBOOK_READER_MAX_BYTES):
+            return None
         return (
             reverse("files_ui:ebook_reader")
             + "?"

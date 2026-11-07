@@ -74,3 +74,11 @@ test('title reads a plain title and a language map', () => {
   assert.equal(reader.title({}), '');
   assert.equal(reader.title(undefined), '');
 });
+
+test('tooLarge refuses a book announced past the limit, and only then', () => {
+  const reader = load();
+  assert.equal(reader.tooLarge('2048', '1024'), true);
+  assert.equal(reader.tooLarge('1024', '1024'), false);
+  assert.equal(reader.tooLarge(null, '1024'), false);
+  assert.equal(reader.tooLarge('2048', ''), false);
+});

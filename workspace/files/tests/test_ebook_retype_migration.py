@@ -10,9 +10,10 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.common.tests.migrations import schema_editor_stub
-from workspace.files.models import File
+from workspace.files.models import File, SearchIndexState
 from workspace.files.services import FileService
 from workspace.files.services.ebooks import EBOOK_FORMATS
+from workspace.files.services.search_index import index_file, pending_search_qs
 from workspace.files.tests.ebooks import cbz_bytes, fb2_bytes, fbz_bytes, mobi_bytes
 
 migration = importlib.import_module("workspace.files.migrations.0076_retype_ebooks")
@@ -61,6 +62,16 @@ class RetypeEbooksTests(TestCase):
                     self._typed(file_obj),
                     (label, "document", EBOOK_FORMATS[label][0], ""),
                 )
+
+    def test_a_retyped_book_is_searched_again(self):
+        book = self._stored_as("d.fbz", fbz_bytes(), "zip")
+        index_file(File.objects.get(pk=book.pk))
+        self.assertTrue(SearchIndexState.objects.filter(file_id=book.pk).exists())
+
+        self._migrate()
+
+        self.assertFalse(SearchIndexState.objects.filter(file_id=book.pk).exists())
+        self.assertIn(book.pk, pending_search_qs().values_list("pk", flat=True))
 
     def test_a_file_whose_content_is_not_the_book_its_name_says_keeps_its_type(self):
         buffer = io.BytesIO()

@@ -5,8 +5,10 @@ covered by e2e/test_ebook_reader.py; this pins the server half that makes it
 safe: the reader page's policy, and the URLs it accepts.
 """
 
+import re
 from urllib.parse import parse_qs, urlsplit
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import RequestFactory, TestCase, override_settings
@@ -39,14 +41,32 @@ class ReaderPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'data-src="{CONTENT_URL}"')
         self.assertContains(response, 'data-name="a.epub"')
+        self.assertContains(
+            response, f'data-max-bytes="{settings.FILES_EBOOK_READER_MAX_BYTES}"'
+        )
 
-    def test_no_script_but_the_site_s_own_files_may_run(self):
+    def test_only_the_reader_s_own_script_tags_may_run(self):
+        # Not 'self': a book may point a <script src> at any URL of the site,
+        # and a public link serves an uploaded .js file from one.
         response = self.client.get(READER_URL, {"src": CONTENT_URL})
 
         directives = _directives(response)
-        self.assertEqual(directives["script-src"], ["'self'"])
+        [source] = directives["script-src"]
+        self.assertRegex(source, r"^'nonce-[^']+'$")
+        nonce = source[len("'nonce-") : -1]
+        tags = re.findall(r"<script\b[^>]*>", response.content.decode())
+        self.assertTrue(tags)
+        for tag in tags:
+            with self.subTest(tag=tag):
+                self.assertIn(f'nonce="{nonce}"', tag)
         self.assertEqual(directives["default-src"], ["'none'"])
         self.assertEqual(directives["frame-ancestors"], ["'self'"])
+
+    def test_each_response_gets_its_own_nonce(self):
+        first = _directives(self.client.get(READER_URL, {"src": CONTENT_URL}))
+        second = _directives(self.client.get(READER_URL, {"src": CONTENT_URL}))
+
+        self.assertNotEqual(first["script-src"], second["script-src"])
 
     def test_the_viewer_panel_may_frame_it(self):
         response = self.client.get(READER_URL, {"src": CONTENT_URL})
@@ -135,5 +155,6 @@ class EbookViewerTests(TestCase):
         html = EbookViewer(self.file).render(request)
 
         self.assertNotIn("data-ebook-reader", html)
+        self.assertIsNone(EbookViewer(self.file).new_tab_url("/content"))
         self.assertIn("Too large to read here", html)
         self.assertIn(f'href="/api/v1/files/{self.file.uuid}/content" download', html)

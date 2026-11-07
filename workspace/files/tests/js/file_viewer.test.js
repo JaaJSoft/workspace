@@ -646,12 +646,13 @@ test('no marker, a blocked file or a closed viewer offers no new tab', async () 
   assert.equal(shell.newTabHref(), null);
 
   panel.blocked = false;
+  panel.newTab = '/api/v1/files/c/content';
   const shownFile = shell.openFile('c', 'c.pdf', 'pdf', false);
   loads[2].resolve([{}]);
   await shownFile;
   actionCalls[2].answer.resolve({ c: [{ id: 'open_new_tab' }] });
   await flush();
-  assert.equal(shell.newTabHref(), '/api/v1/files/b/content');
+  assert.equal(shell.newTabHref(), '/api/v1/files/c/content');
   shell._onClosed();
   assert.equal(shell.newTabHref(), null);
 });

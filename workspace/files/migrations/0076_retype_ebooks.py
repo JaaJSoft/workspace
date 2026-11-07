@@ -10,7 +10,9 @@ content is detected right.
 
 The MIME types and the content checks are a copy of
 ``services/ebooks.py`` at the time of writing. A pinned viewer goes with the
-old type: it was chosen for it.
+old type: it was chosen for it. So does the search document's record: a
+FictionBook's text is indexed under its new type, and dropping the record
+makes the search catch-up read the file again.
 """
 
 import logging
@@ -33,7 +35,7 @@ _MIME_TYPES = {
 }
 _NAME_PATTERN = r"\.(mobi|prc|azw|azw3|fb2|fbz|cbz|fb2\.zip)$"
 _SNIFF_SIZE = 4096
-_FB2_ROOT = re.compile(rb"<(?:[\w.-]+:)?FictionBook[\s>]")
+_FB2_ROOT = re.compile(rb"<FictionBook[\s>]")
 _IMAGE_EXTENSIONS = (
     ".jpg",
     ".jpeg",
@@ -79,6 +81,7 @@ def _label(name, handle):
 
 def retype_ebooks(apps, schema_editor):
     File = apps.get_model("files", "File")
+    SearchIndexState = apps.get_model("files", "SearchIndexState")
     db = schema_editor.connection.alias
 
     candidates = (
@@ -105,6 +108,7 @@ def retype_ebooks(apps, schema_editor):
             mime_type=_MIME_TYPES[label],
             viewer="",
         )
+        SearchIndexState.objects.using(db).filter(file_id=row.pk).delete()
 
 
 class Migration(migrations.Migration):

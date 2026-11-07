@@ -22,6 +22,17 @@ function ebookSourceUrl(src, origin) {
   return url.origin === origin ? url.href : null;
 }
 
+/**
+ * Whether a response announcing *contentLength* bytes is past *maxBytes*,
+ * the most the reader opens: the browser would hold all of it. A response
+ * that announces no length is let through.
+ */
+function ebookTooLarge(contentLength, maxBytes) {
+  const length = Number(contentLength);
+  const max = Number(maxBytes);
+  return length > 0 && max > 0 && length > max;
+}
+
 /** The scale one step from *current* in *direction* (+1 or -1), clamped. */
 function ebookStepFontScale(current, direction) {
   const index = EBOOK_FONT_SCALES.indexOf(current);
@@ -71,6 +82,7 @@ function ebookTitle(metadata) {
 
 window.ebookReader = {
   sourceUrl: ebookSourceUrl,
+  tooLarge: ebookTooLarge,
   stepFontScale: ebookStepFontScale,
   parseFontScale: ebookParseFontScale,
   bookStyles: ebookBookStyles,
@@ -129,10 +141,11 @@ function ebookFollowParentTheme(onChange) {
     }
   };
   sync();
-  new MutationObserver(sync).observe(parentRoot, {
-    attributes: true,
-    attributeFilter: ['data-theme'],
-  });
+  const observer = new MutationObserver(sync);
+  observer.observe(parentRoot, { attributes: true, attributeFilter: ['data-theme'] });
+  // Registered on the parent's document, the observer would keep this page,
+  // and the book in it, alive after the panel drops the frame.
+  window.addEventListener('pagehide', () => observer.disconnect());
 }
 
 function ebookRenderToc(list, items, onSelect) {
@@ -182,6 +195,9 @@ async function openEbookReader(root) {
       fetch(src, { credentials: 'same-origin' }),
     ]);
     if (!response.ok) throw new Error(`The book could not be fetched: ${response.status}`);
+    if (ebookTooLarge(response.headers.get('Content-Length'), root.dataset.maxBytes)) {
+      throw new Error('The book is larger than the reader opens');
+    }
     const blob = await response.blob();
     // foliate tells the formats apart by name as well as by content.
     book = await makeBook(new File([blob], root.dataset.name || 'book.epub', { type: blob.type }));
@@ -272,7 +288,12 @@ async function openEbookReader(root) {
     ref('chapter').textContent = (detail.tocItem?.label || '').trim();
   });
 
-  await view.renderer.next();
+  try {
+    await view.renderer.next();
+  } catch (error) {
+    fail(error);
+    return;
+  }
   ref('loading').classList.replace('flex', 'hidden');
   for (const control of root.querySelectorAll('[data-action], [data-ref="progress"]')) {
     control.disabled = false;

@@ -1410,5 +1410,9 @@ def ebook_reader(request):
     return render(
         request,
         "files/ui/ebook_reader.html",
-        {"src": src, "name": request.GET.get("name", "")[:255]},
+        {
+            "src": src,
+            "name": request.GET.get("name", "")[:255],
+            "max_bytes": settings.FILES_EBOOK_READER_MAX_BYTES,
+        },
     )

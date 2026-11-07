@@ -72,12 +72,14 @@ class EbookDetectionTests(TestCase):
     def test_a_fictionbook_is_told_by_its_root_element_whatever_its_name(self):
         self._assert_ebook(self._upload("book.xml", fb2_bytes()), "fb2")
 
-    def test_a_fictionbook_with_a_namespace_prefix_is_still_one(self):
+    def test_a_fictionbook_with_a_namespace_prefix_is_left_as_xml(self):
+        # The reader matches FictionBook elements by their name as written:
+        # <fb:body> is no <body> to it, so the book would not open.
         data = fb2_bytes().replace(b"<FictionBook", b"<fb:FictionBook", 1)
         data = data.replace(b"</FictionBook>", b"</fb:FictionBook>")
         data = data.replace(b'xmlns="', b'xmlns:fb="', 1)
 
-        self._assert_ebook(self._upload("book.fb2", data), "fb2")
+        self.assertNotIn(self._upload("book.fb2", data).type, EBOOK_LABELS)
 
     def test_other_xml_named_fb2_stays_xml(self):
         file_obj = self._upload(

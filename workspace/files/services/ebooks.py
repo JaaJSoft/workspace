@@ -37,7 +37,9 @@ _MOBI_LABEL_BY_EXTENSION = {"azw": "azw", "azw3": "azw3"}
 # The root element follows the XML declaration and, at most, a few comments
 # or a doctype: past this, a file is not a FictionBook anyone wrote.
 _SNIFF_SIZE = 4096
-_FB2_ROOT = re.compile(rb"<(?:[\w.-]+:)?FictionBook[\s>]")
+# Unprefixed: the reader's converter matches element names as written, so a
+# FictionBook whose elements carry a namespace prefix would not open.
+_FB2_ROOT = re.compile(rb"<FictionBook[\s>]")
 # Content labels a FictionBook comes out as.
 _XML_LIKE_LABELS = frozenset({"xml", "html", "txt", "unknown"})
 # A central directory past this many entries is not read to find one image.

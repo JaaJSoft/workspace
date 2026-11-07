@@ -14,6 +14,7 @@ from __future__ import annotations
 from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
+from workspace.files.models import FileShareLink
 from workspace.files.services import FileService
 from workspace.files.tests.ebooks import (
     cbz_bytes,
@@ -132,6 +133,40 @@ class EbookReaderTests(PlaywrightTestCase):
         error.wait_for(state="visible", timeout=30_000)
         self.assertIn("could not be opened", error.inner_text())
         self.assertFalse(reader.locator("[data-ref=loading]").is_visible())
+
+    def test_a_book_cannot_load_a_script_the_site_serves(self):
+        # A same-origin URL serving JavaScript: a file anyone can publish
+        # behind a public link. A policy allowing the site's own scripts by
+        # origin would run it in the chapter, with the reader's session.
+        script = FileService.create_file(
+            owner=self.user,
+            name="payload.js",
+            content=ContentFile(
+                f"{_MARK} = 'site-script';".encode(), name="payload.js"
+            ),
+        )
+        link = FileShareLink.objects.create(
+            file=script, created_by=self.user, mode=FileShareLink.Mode.READ
+        )
+        src = f"{self.live_server_url}/api/v1/files/shared/{link.token}/content"
+        self._open(
+            epub_bytes(
+                chapters=[
+                    ("Scripted", f'<p>Loads a script.</p><script src="{src}"></script>')
+                ]
+            )
+        )
+        self.page.wait_for_function(
+            "() => [...document.querySelectorAll('iframe')].length > 0"
+        )
+        self.assertIn("Loads a script", self._chapter_text())
+        self.page.wait_for_timeout(500)
+
+        marks = [
+            frame.evaluate("() => document.documentElement.dataset.pwned || null")
+            for frame in self.page.frames
+        ]
+        self.assertEqual([mark for mark in marks if mark], [])
 
     def test_the_scripts_a_book_carries_never_run(self):
         data = epub_bytes(

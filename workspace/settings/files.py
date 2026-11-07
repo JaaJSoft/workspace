@@ -2,7 +2,7 @@
 
 import os
 
-from csp.constants import NONE, SELF, UNSAFE_INLINE
+from csp.constants import NONCE, NONE, SELF, UNSAFE_INLINE
 
 from .cache import _REDIS_WEBDAV_URL
 from .env import env_bool
@@ -40,9 +40,12 @@ FILES_EBOOK_READER_MAX_BYTES = int(
 # csp.decorators.csp. It is what keeps a book's own JavaScript from running:
 # foliate-js renders each chapter in a blob: iframe that inherits this policy,
 # and that iframe has to carry allow-scripts and allow-same-origin together
-# (a WebKit bug leaves no choice), which makes its sandbox worthless. So
-# script-src stays 'self' alone - no 'unsafe-inline', no blob: - and the
-# reader page is the only document that may run code.
+# (a WebKit bug leaves no choice), which makes its sandbox worthless.
+#
+# So script-src names the response's nonce and nothing else. Not 'self': a
+# chapter may point a <script src> at any URL of this site, and a public share
+# link serves an uploaded .js file from one. The reader's own <script> tags
+# carry the nonce, and the modules they import() inherit it.
 #
 # The rest is what a book needs to look like itself: its stylesheets, inline
 # styles, images and embedded fonts arrive as blob: or data: URLs, and its
@@ -50,7 +53,7 @@ FILES_EBOOK_READER_MAX_BYTES = int(
 # fetching directive stops at self, blob: and data:.
 FILES_EBOOK_READER_CSP = {
     "default-src": [NONE],
-    "script-src": [SELF],
+    "script-src": [NONCE],
     "connect-src": [SELF, "blob:", "data:"],
     "style-src": [SELF, UNSAFE_INLINE, "blob:"],
     "img-src": [SELF, "blob:", "data:"],

@@ -3,9 +3,10 @@
 <!DOCTYPE html>
 {% comment %}
   A page of its own rather than a viewer partial: its Content-Security-Policy
-  (FILES_EBOOK_READER_CSP) only allows same-origin script files, which is what
-  stops the scripts a book may carry. Nothing inline may run here - no Alpine,
-  no inline script - so the page is driven by ebook_reader.js alone.
+  (FILES_EBOOK_READER_CSP) only runs the script tags carrying the response's
+  nonce, which is what stops the scripts a book may carry. Nothing inline may
+  run here - no Alpine, no inline script - so the page is driven by
+  ebook_reader.js alone.
 {% endcomment %}
 <html
   lang="{{ LANGUAGE_CODE }}"
@@ -21,9 +22,16 @@
       href="{% static 'icons/favicon.svg' %}"
       type="image/svg+xml"
     />
-    <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
-    <script src="{% static 'ui/js/lucide.js' %}"></script>
-    <script defer src="{% static 'files/ui/js/ebook_reader.js' %}"></script>
+    <script
+      nonce="{{ request.csp_nonce }}"
+      src="{% static 'ui/js/vendor/lucide/lucide.js' %}"
+    ></script>
+    <script nonce="{{ request.csp_nonce }}" src="{% static 'ui/js/lucide.js' %}"></script>
+    <script
+      nonce="{{ request.csp_nonce }}"
+      defer
+      src="{% static 'files/ui/js/ebook_reader.js' %}"
+    ></script>
   </head>
   {% comment %}
     What comes and goes is toggled with the hidden class, never the hidden
@@ -35,6 +43,7 @@
     class="h-screen flex flex-col overflow-hidden bg-base-100 text-base-content"
     data-src="{{ src }}"
     data-name="{{ name }}"
+    data-max-bytes="{{ max_bytes }}"
     data-foliate-url="{% static 'files/ui/js/vendor/foliate/foliate-view.js' %}"
   >
     <header

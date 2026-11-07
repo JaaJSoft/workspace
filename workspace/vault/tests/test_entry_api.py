@@ -7,6 +7,7 @@ wrong database, so the status code is never asserted alone.
 """
 
 import uuid
+from datetime import timedelta
 from unittest import mock
 
 from django.db import connection
@@ -279,6 +280,90 @@ class EntryApiTests(TestCase):
         entry = VaultEntry.objects.get(uuid=created["uuid"])
         self.assertIsNotNone(entry.deleted_at)
         self.assertEqual(entry.metadata_sig, created["metadata_sig"])
+
+    def _while_the_registry_answers(self, concurrent_write):
+        """Run *concurrent_write* once the view has read the entry and asked
+        the registry, before it writes anything."""
+        offers = entry_views._offers
+
+        def offers_then_write(*args, **kwargs):
+            answer = offers(*args, **kwargs)
+            concurrent_write()
+            return answer
+
+        return mock.patch.object(entry_views, "_offers", offers_then_write)
+
+    def test_trashing_a_trashed_entry_is_refused_and_keeps_the_first_stamp(self):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+        first_stamp = VaultEntry.objects.get(uuid=created["uuid"]).deleted_at
+        response = self.client.delete(f"{LIST_URL}/{created['uuid']}")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            VaultEntry.objects.get(uuid=created["uuid"]).deleted_at, first_stamp
+        )
+
+    def test_a_trash_landed_after_the_check_keeps_its_stamp(self):
+        created = self._create(self.signed_entry()).json()
+        first_stamp = timezone.now() - timedelta(minutes=5)
+
+        def trash_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).update(
+                deleted_at=first_stamp
+            )
+
+        with self._while_the_registry_answers(trash_elsewhere):
+            response = self.client.delete(f"{LIST_URL}/{created['uuid']}")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            VaultEntry.objects.get(uuid=created["uuid"]).deleted_at, first_stamp
+        )
+
+    def test_trashing_an_entry_purged_after_the_check_answers_like_a_missing_one(
+        self,
+    ):
+        created = self._create(self.signed_entry()).json()
+
+        def purge_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).delete()
+
+        with self._while_the_registry_answers(purge_elsewhere):
+            response = self.client.delete(f"{LIST_URL}/{created['uuid']}")
+        missing = self.client.delete(f"{LIST_URL}/{uuid.uuid4()}")
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
+
+    def test_restoring_an_entry_purged_after_the_check_answers_like_a_missing_one(
+        self,
+    ):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+
+        def purge_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).delete()
+
+        with self._while_the_registry_answers(purge_elsewhere):
+            response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        missing = self.client.post(f"{LIST_URL}/{uuid.uuid4()}/restore")
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
+
+    def test_restoring_an_entry_restored_after_the_check_is_harmless(self):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+
+        def restore_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).update(deleted_at=None)
+
+        with self._while_the_registry_answers(restore_elsewhere):
+            response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["deleted_at"])
+        self.assertIsNone(VaultEntry.objects.get(uuid=created["uuid"]).deleted_at)
 
     def test_deleting_an_entry_of_another_vault_answers_404(self):
         response = self.client.delete(f"{LIST_URL}/{self.other_entry.uuid}")

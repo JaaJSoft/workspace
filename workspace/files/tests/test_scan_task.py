@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import File, FileScan
+from workspace.files.services import FileService
 from workspace.files.services.scanning.base import ScanVerdict
 from workspace.files.services.scanning.policy import is_blocked
 from workspace.files.tasks import scan_file
@@ -43,6 +44,23 @@ class _RacingScanner:
     def scan(self, stream, *, name=""):
         stream.read()
         File.objects.filter(pk=self.file_obj.pk).update(content_hash=self.new_hash)
+        return self.verdict
+
+    def health(self):
+        raise AssertionError("not used here")
+
+
+class _RenamingScanner:
+    """Renames the file while its scan is in flight, as a user can at any time."""
+
+    def __init__(self, verdict, file_obj, new_name):
+        self.verdict = verdict
+        self.file_obj = file_obj
+        self.new_name = new_name
+
+    def scan(self, stream, *, name=""):
+        stream.read()
+        FileService.rename(File.objects.get(pk=self.file_obj.pk), self.new_name)
         return self.verdict
 
     def health(self):
@@ -300,6 +318,30 @@ class ScanTaskTests(TestCase):
         f.refresh_from_db()
         self.assertEqual(f.scan.status, FileScan.Status.CLEAN)
         self.assertEqual(f.scan.signature, "")
+
+    def test_quarantining_a_file_renamed_mid_scan_keeps_its_path(self):
+        """The verdict lands on a row the scan did not load, and must not put
+        back the name the file had when the scan started."""
+        f = self._file(name="before.png")
+        File.objects.filter(pk=f.pk).update(has_thumbnail=True)
+        scanner = _RenamingScanner(
+            ScanVerdict(status=FileScan.Status.INFECTED, signature="Unit.Test"),
+            f,
+            "after.png",
+        )
+        with (
+            override_settings(**ENABLED),
+            patch(
+                "workspace.files.services.scanning.registry.get_scanner",
+                return_value=scanner,
+            ),
+        ):
+            scan_file(str(f.uuid))
+
+        f.refresh_from_db()
+        self.assertEqual(f.name, "after.png")
+        self.assertEqual(f.path, "after.png")
+        self.assertFalse(f.has_thumbnail)
 
 
 class ScanVerdictContentHashTests(TestCase):

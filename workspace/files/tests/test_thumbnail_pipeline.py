@@ -1,4 +1,5 @@
 import io
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -6,9 +7,13 @@ from django.core.files.storage import default_storage
 from django.test import TestCase
 from PIL import Image
 
+from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.services.processors import run_pipeline
-from workspace.files.services.thumbnails.generation import get_thumbnail_path
+from workspace.files.services.thumbnails.generation import (
+    get_thumbnail_path,
+    refresh_thumbnail,
+)
 
 User = get_user_model()
 
@@ -105,3 +110,45 @@ class ThumbnailPipelineTests(TestCase):
         run_pipeline(f.uuid)
 
         self.assertFalse(default_storage.exists(get_thumbnail_path(f.uuid)))
+
+
+class ThumbnailFlagWriteTests(TestCase):
+    """The flag lands on the row as it is now, not as the task loaded it."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="th-flag", password="p")
+
+    def setUp(self):
+        self.file = FileService.create_file(
+            owner=self.user,
+            name="before.png",
+            content=ContentFile(_png_bytes(), name="before.png"),
+            mime_type="image/png",
+        )
+
+    def _refresh_while(self, concurrent_write):
+        """Run refresh_thumbnail on a snapshot, *concurrent_write* landing mid-draw."""
+        stale = File.objects.get(pk=self.file.pk)
+
+        def draw(file_obj):
+            concurrent_write(File.objects.get(pk=self.file.pk))
+            return True
+
+        with patch(
+            "workspace.files.services.thumbnails.generation.generate_thumbnail",
+            side_effect=draw,
+        ):
+            return refresh_thumbnail(stale)
+
+    def test_a_rename_during_the_draw_keeps_its_path(self):
+        self._refresh_while(
+            lambda current: FileService.rename(
+                current, "after.png", acting_user=self.user
+            )
+        )
+
+        row = File.objects.get(pk=self.file.pk)
+        self.assertEqual(row.name, "after.png")
+        self.assertEqual(row.path, "after.png")
+        self.assertTrue(row.has_thumbnail)

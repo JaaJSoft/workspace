@@ -174,8 +174,10 @@ def scan_and_record(file_obj, scanner):
             from ..thumbnails.generation import delete_thumbnail
 
             delete_thumbnail(file_obj.uuid)
+            # Not a save(): *file_obj* is as old as the scan, and File.save()
+            # would put back the path of the name it had then.
+            File.objects.filter(pk=file_obj.pk).update(has_thumbnail=False)
             file_obj.has_thumbnail = False
-            file_obj.save(update_fields=["has_thumbnail"])
     elif was_blocked:
         from .override import restore_after_unblock
 

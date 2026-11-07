@@ -312,9 +312,13 @@ def refresh_thumbnail(file_obj):
 
     Raises when the file cannot be decoded, like generate_thumbnail.
     """
+    from workspace.files.models import File
+
     if not generate_thumbnail(file_obj):
         return False
+    # *file_obj* was loaded when the task started: saving it would write back
+    # the name and parent it had then, through the path File.save() derives.
     if not file_obj.has_thumbnail:
+        File.objects.filter(pk=file_obj.pk).update(has_thumbnail=True)
         file_obj.has_thumbnail = True
-        file_obj.save(update_fields=["has_thumbnail"])
     return True

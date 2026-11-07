@@ -9,7 +9,7 @@ from django.conf import settings
 from django.db import transaction
 from pydantic import BaseModel
 
-from workspace.ai.services.ai_task import ai_task_lifecycle
+from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
 from workspace.ai.services.llm import (
     call_llm,
     call_llm_structured,
@@ -86,6 +86,8 @@ def summarize(self, task_id: str):
                 result["completion_tokens"],
             )
             return {"status": "ok", "task_id": task_id}
+    except TaskNotPending:
+        return {"status": "skipped", "reason": "not_pending"}
     except AITask.DoesNotExist:
         logger.error("Summarize task not found: %s", scrub(task_id))
         return {"status": "error", "error": "Task not found"}
@@ -170,6 +172,8 @@ def compose_email(self, task_id: str):
                 result["completion_tokens"],
             )
             return {"status": "ok", "task_id": task_id}
+    except TaskNotPending:
+        return {"status": "skipped", "reason": "not_pending"}
     except AITask.DoesNotExist:
         logger.error("Compose task not found: %s", scrub(task_id))
         return {"status": "error", "error": "Task not found"}
@@ -395,6 +399,8 @@ def classify_mail_messages(self, task_id: str):
                 total_completion,
             )
             return {"status": "ok", "task_id": task_id}
+    except TaskNotPending:
+        return {"status": "skipped", "reason": "not_pending"}
     except AITask.DoesNotExist:
         logger.error("Classify task not found: %s", scrub(task_id))
         return {"status": "error", "error": "Task not found"}

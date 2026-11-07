@@ -12,6 +12,7 @@ from celery import shared_task
 from django.conf import settings
 
 from workspace.ai.harness.runner import StopReason
+from workspace.ai.services.ai_task import claim_task, close_task
 from workspace.ai.services.bot_access import run_refusal
 from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
@@ -59,15 +60,9 @@ def generate_chat_response(self, ai_task_id: str):
         logger.error("Bot response failed: AITask %s not found", scrub(ai_task_id))
         return {"status": "error", "error": "Not found"}
 
-    # Claimed with a conditional write: a cancel that landed while the job
-    # waited in the queue has already closed the row, and must win.
-    claimed = AITask.objects.filter(pk=ai_task.pk, status=AITask.Status.PENDING).update(
-        status=AITask.Status.PROCESSING
-    )
-    if not claimed:
-        logger.info("Bot response cancelled while queued: task=%s", ai_task.pk)
+    if not claim_task(ai_task):
+        logger.info("Bot response skipped, task no longer pending: task=%s", ai_task.pk)
         return {"status": "cancelled"}
-    ai_task.status = AITask.Status.PROCESSING
 
     conversation_id = ai_task.input_data.get("conversation_id")
     message_id = ai_task.input_data.get("message_id")
@@ -164,7 +159,7 @@ def generate_chat_response(self, ai_task_id: str):
             )
             return {"status": "cancelled"}
 
-        body, bot_message = post_bot_message(
+        posted = post_bot_message(
             conversation,
             bot_user,
             run.response,
@@ -174,6 +169,12 @@ def generate_chat_response(self, ai_task_id: str):
             tool_data=run.tool_data,
             usage=run.usage,
         )
+        if posted is None:
+            logger.info(
+                "Bot response cancelled: conversation=%s", scrub(conversation_id)
+            )
+            return {"status": "cancelled"}
+        body, bot_message = posted
 
         # Auto-generate title if the conversation doesn't have one yet.
         msg_count = Message.objects.filter(
@@ -201,12 +202,7 @@ def generate_chat_response(self, ai_task_id: str):
 
 def _close_without_reply(ai_task, reason):
     """End a run that posts nothing, so the chat stops showing it as under way."""
-    from django.utils import timezone
-
-    ai_task.status = ai_task.Status.FAILED
-    ai_task.error = reason
-    ai_task.completed_at = timezone.now()
-    ai_task.save(update_fields=["status", "error", "completed_at"])
+    close_task(ai_task, ai_task.Status.FAILED, error=reason)
 
 
 @shared_task(

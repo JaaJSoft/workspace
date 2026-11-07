@@ -4,7 +4,7 @@ import logging
 
 from celery import shared_task
 
-from workspace.ai.services.ai_task import ai_task_lifecycle
+from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
 from workspace.ai.services.llm import (
     call_llm,
     sanitize_messages_for_storage,
@@ -79,6 +79,8 @@ def editor_action(self, task_id: str):
                 result["completion_tokens"],
             )
             return {"status": "ok", "task_id": task_id}
+    except TaskNotPending:
+        return {"status": "skipped", "reason": "not_pending"}
     except AITask.DoesNotExist:
         logger.error("Editor action task not found: %s", scrub(task_id))
         return {"status": "error", "error": "Task not found"}

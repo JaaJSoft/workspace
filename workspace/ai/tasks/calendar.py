@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from workspace.ai.models import AITask
 from workspace.ai.prompts.calendar import build_event_extraction_messages
-from workspace.ai.services.ai_task import ai_task_lifecycle
+from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
 from workspace.ai.services.llm import call_llm_structured
 from workspace.calendar.models import Event
 from workspace.calendar.services.event_creation import create_event_from_payload
@@ -105,6 +105,8 @@ def extract_from_mail_messages(self, task_id: str):
             ai_task.completion_tokens = total_completion
 
             return {"status": "ok", "task_id": task_id}
+    except TaskNotPending:
+        return {"status": "skipped", "reason": "not_pending"}
     except AITask.DoesNotExist:
         logger.warning("Extract: AITask %s not found", scrub(task_id))
         return {"status": "error", "task_id": task_id}

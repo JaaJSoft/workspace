@@ -7,6 +7,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from workspace.ai.metrics import AI_AGENT_CHECKINS
+from workspace.ai.services.ai_task import close_task
 from workspace.ai.services.bot_access import run_refusal
 from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
@@ -18,7 +19,7 @@ from workspace.ai.services.llm import sanitize_messages_for_storage
 from workspace.ai.services.responses import (
     post_bot_message,
     produced_media,
-    record_run_usage,
+    run_usage_fields,
 )
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
@@ -276,12 +277,13 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         # send_user_message, or media a tool produced to be sent.
         queued = [m for m in run.context.get("agent_messages", []) if m.strip()]
         if not queued and not produced_media(run.context):
-            ai_task.status = ai_task.Status.COMPLETED
-            ai_task.result = "[SILENT]"
-            record_run_usage(ai_task, run.response, run.usage)
-            ai_task.raw_messages = raw_messages
-            ai_task.completed_at = timezone.now()
-            ai_task.save()
+            close_task(
+                ai_task,
+                AITask.Status.COMPLETED,
+                result="[SILENT]",
+                raw_messages=raw_messages,
+                **run_usage_fields(run.response, run.usage),
+            )
             AI_AGENT_CHECKINS.labels(outcome="silent").inc()
             logger.info("Agent check-in done silently: goal=%s", scrub(goal_id))
             return {"status": "ok", "reason": "silent"}
@@ -299,12 +301,13 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         if current_status != AgentGoal.Status.ACTIVE and not run.context.get(
             "agent_goal_changed"
         ):
-            ai_task.status = ai_task.Status.COMPLETED
-            ai_task.result = "[SUPPRESSED]"
-            record_run_usage(ai_task, run.response, run.usage)
-            ai_task.raw_messages = raw_messages
-            ai_task.completed_at = timezone.now()
-            ai_task.save()
+            close_task(
+                ai_task,
+                AITask.Status.COMPLETED,
+                result="[SUPPRESSED]",
+                raw_messages=raw_messages,
+                **run_usage_fields(run.response, run.usage),
+            )
             AI_AGENT_CHECKINS.labels(outcome="suppressed").inc()
             logger.info(
                 "Agent check-in message suppressed (goal closed by user mid-run): "
@@ -314,7 +317,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             )
             return {"status": "skipped", "reason": "goal_closed_by_user"}
 
-        body, bot_message = post_bot_message(
+        posted = post_bot_message(
             conversation,
             bot_user,
             replace(run.response, content="\n\n".join(queued)),
@@ -324,6 +327,14 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             tool_data=run.tool_data,
             usage=run.usage,
         )
+        if posted is None:
+            AI_AGENT_CHECKINS.labels(outcome="suppressed").inc()
+            logger.info(
+                "Agent check-in message dropped, task already closed: goal=%s",
+                scrub(goal_id),
+            )
+            return {"status": "skipped", "reason": "task_closed"}
+        body, bot_message = posted
 
         maybe_dispatch_summary_update(str(conversation.pk), history.summary)
 
@@ -343,9 +354,6 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         # post an error message: the user never asked for this run, and the
         # silent-default contract holds on failure too. The fallback
         # next_check_at written at claim time already schedules the retry.
-        ai_task.status = ai_task.Status.FAILED
-        ai_task.error = str(e)
-        ai_task.completed_at = timezone.now()
-        ai_task.save()
+        close_task(ai_task, AITask.Status.FAILED, error=str(e))
         logger.exception("Agent goal check-in failed: goal=%s", scrub(goal_id))
         return {"status": "error", "error": str(e)}

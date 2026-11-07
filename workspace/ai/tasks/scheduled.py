@@ -5,6 +5,7 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from workspace.ai.services.ai_task import close_task
 from workspace.ai.services.bot_access import run_refusal
 from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
@@ -20,7 +21,7 @@ from workspace.ai.services.responses import (
     handle_generation_error,
     post_bot_message,
     produced_media,
-    record_run_usage,
+    run_usage_fields,
 )
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
@@ -208,11 +209,12 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             run = runner.retry_final(messages, run)
             body_preview = clean_llm_content(run.response.content)
             if not body_preview and not produced_media(run.context):
-                ai_task.status = ai_task.Status.COMPLETED
-                ai_task.result = "[EMPTY]"
-                record_run_usage(ai_task, run.response, run.usage)
-                ai_task.completed_at = timezone.now()
-                ai_task.save()
+                close_task(
+                    ai_task,
+                    AITask.Status.COMPLETED,
+                    result="[EMPTY]",
+                    **run_usage_fields(run.response, run.usage),
+                )
                 logger.warning(
                     "Scheduled response empty after retry: schedule=%s",
                     scrub(schedule_id),
@@ -224,19 +226,20 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         # Let the bot skip if it judges the message is no longer relevant.
         body = clean_llm_content(run.response.content)
         if body == "[SKIP]":
-            ai_task.status = ai_task.Status.COMPLETED
-            ai_task.result = "[SKIP]"
-            record_run_usage(ai_task, run.response, run.usage)
-            ai_task.raw_messages = raw_messages
-            ai_task.completed_at = timezone.now()
-            ai_task.save()
+            close_task(
+                ai_task,
+                AITask.Status.COMPLETED,
+                result="[SKIP]",
+                raw_messages=raw_messages,
+                **run_usage_fields(run.response, run.usage),
+            )
             logger.info(
                 "Scheduled response skipped (bot judged irrelevant): schedule=%s",
                 scrub(schedule_id),
             )
             return {"status": "skipped", "reason": "bot_judged_irrelevant"}
 
-        body, bot_message = post_bot_message(
+        posted = post_bot_message(
             conversation,
             bot_user,
             run.response,
@@ -246,6 +249,10 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             tool_data=run.tool_data,
             usage=run.usage,
         )
+        if posted is None:
+            logger.info("Scheduled response cancelled: schedule=%s", scrub(schedule_id))
+            return {"status": "cancelled"}
+        body, bot_message = posted
 
         maybe_dispatch_summary_update(str(conversation.pk), history.summary)
 

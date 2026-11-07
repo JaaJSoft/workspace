@@ -1,11 +1,13 @@
 import logging
 
 from django.db import transaction
-from django.utils import timezone
 
 from workspace.ai.harness.model import RunUsage
+from workspace.ai.models import AITask
+from workspace.ai.services.ai_task import close_task
 from workspace.ai.services.llm import clean_llm_content
 from workspace.ai.services.speech import audio_duration_seconds
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +51,20 @@ def produced_media(tool_context) -> bool:
     return bool(tool_context.get("images") or tool_context.get("voices"))
 
 
-def record_run_usage(ai_task, response, usage):
-    """Write what a run cost onto its task.
+def run_usage_fields(response, usage):
+    """What a run cost, as the AITask columns that record it.
 
     *usage* is the total of every call; *response* the call the run ended on,
     whose own figures give the speed at which the answer itself was written.
     """
-    ai_task.model_used = response.model
-    ai_task.prompt_tokens = usage.prompt_tokens
-    ai_task.completion_tokens = usage.completion_tokens
-    ai_task.generation_seconds = usage.seconds
-    ai_task.answer_tokens = response.completion_tokens
-    ai_task.answer_seconds = response.duration
+    return {
+        "model_used": response.model,
+        "prompt_tokens": usage.prompt_tokens,
+        "completion_tokens": usage.completion_tokens,
+        "generation_seconds": usage.seconds,
+        "answer_tokens": response.completion_tokens,
+        "answer_seconds": response.duration,
+    }
 
 
 @transaction.atomic
@@ -74,12 +78,14 @@ def post_bot_message(
     tool_data=None,
     usage=None,
 ):
-    """Create the bot message, attach its media, update unread counts, notify, and complete AITask.
+    """Complete AITask, then create the bot message, attach its media, update unread counts and notify.
 
     *response* is the :class:`~workspace.ai.harness.model.ModelResponse` the
     run ended on and *usage* the :class:`~workspace.ai.harness.model.RunUsage`
     of the whole run; a single-call reply passes no usage and the response is
-    the whole run. Returns (body, bot_message).
+    the whole run. Returns (body, bot_message), or None when the task was
+    closed before the reply could land - the user cancelled it - in which
+    case nothing is posted.
     """
     from django.core.files.base import ContentFile
 
@@ -88,6 +94,23 @@ def post_bot_message(
     from workspace.chat.services.rendering import render_message_body
 
     body = clean_llm_content(response.content)
+
+    if usage is None:
+        usage = RunUsage()
+        usage.add(response)
+    # Closed before the message exists, in the same transaction: the
+    # conditional write holds the row until commit, so a cancel either lands
+    # first and nothing is posted, or finds the task closed and changes nothing.
+    if not close_task(
+        ai_task,
+        AITask.Status.COMPLETED,
+        result=body,
+        raw_messages=raw_messages,
+        **run_usage_fields(response, usage),
+    ):
+        logger.info("Bot reply dropped, task already closed: task=%s", ai_task.pk)
+        return None
+
     body_html = render_message_body(body)
 
     # Reasoning of the final completion is not captured in tool_data, which
@@ -180,35 +203,29 @@ def post_bot_message(
             lambda atts=created_attachments: [enqueue_caption_if_image(a) for a in atts]
         )
 
-    if usage is None:
-        usage = RunUsage()
-        usage.add(response)
-    ai_task.status = ai_task.Status.COMPLETED
-    ai_task.result = body
     ai_task.chat_message = bot_message
-    record_run_usage(ai_task, response, usage)
-    ai_task.raw_messages = raw_messages
-    ai_task.completed_at = timezone.now()
-    ai_task.save()
+    ai_task.save(update_fields=["chat_message"])
 
     return body, bot_message
 
 
 @transaction.atomic
 def handle_generation_error(conversation, bot_user, ai_task, error):
-    """Handle a failed bot response: post error message, update counts, notify."""
+    """Handle a failed bot response: post error message, update counts, notify.
+
+    Posts nothing when the task was already closed: a user who cancelled the
+    reply asked for silence, and keeps the cancel as the recorded reason.
+    """
     from workspace.chat.services.posting import post_message
     from workspace.chat.services.rendering import render_message_body
 
+    logger.warning(
+        "Bot generation failed for conversation=%s: %s", conversation.pk, scrub(error)
+    )
     # Detailed error stays on AITask + logs; the chat sees a generic message so
     # we don't leak provider/backend/user data into the conversation body.
-    ai_task.status = ai_task.Status.FAILED
-    ai_task.error = str(error)
-    ai_task.completed_at = timezone.now()
-    ai_task.save()
-    logger.warning(
-        "Bot generation failed for conversation=%s: %s", conversation.pk, error
-    )
+    if not close_task(ai_task, AITask.Status.FAILED, error=str(error)):
+        return
 
     error_body = (
         "⚠️ Sorry, I encountered an error generating a response. Please try again."

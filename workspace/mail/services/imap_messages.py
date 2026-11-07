@@ -4,6 +4,7 @@ import imaplib
 import logging
 import mmap
 import time
+from itertools import batched
 
 from django.utils import timezone as dj_timezone
 
@@ -12,6 +13,10 @@ from workspace.mail.services.imap_connection import connect_imap
 from workspace.mail.services.imap_mailbox import _quote_mailbox
 
 logger = logging.getLogger(__name__)
+
+# UIDs per STORE command: keeps each command line well under the length
+# servers accept (Dovecot and Cyrus cut off around 64 KB).
+STORE_BATCH_SIZE = 500
 
 
 def mark_read(account, message):
@@ -32,6 +37,33 @@ def star_message(account, message):
 def unstar_message(account, message):
     """Unstar a message on the IMAP server."""
     _set_flag(account, message, "\\Flagged", False)
+
+
+def mark_uids_read(account, folder, uids):
+    """Set ``\\Seen`` on the messages of `folder` carrying these IMAP UIDs.
+
+    Raises when the server refuses the SELECT or a STORE: imaplib answers a
+    ``NO`` with a status, not an exception, and a caller told nothing would
+    believe the flags reached the server.
+    """
+    conn = connect_imap(account)
+    try:
+        status, data = conn.select(_quote_mailbox(folder.name))
+        if status != "OK":
+            raise Exception(f"IMAP SELECT failed: {data}")
+        for batch in batched(sorted(uids), STORE_BATCH_SIZE, strict=False):
+            status, data = conn.uid(
+                "STORE", ",".join(map(str, batch)), "+FLAGS.SILENT", "(\\Seen)"
+            )
+            if status != "OK":
+                raise Exception(f"IMAP STORE failed: {data}")
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            # Best-effort cleanup: a logout failure on an already-broken
+            # connection isn't actionable.
+            pass
 
 
 def delete_message(account, message):

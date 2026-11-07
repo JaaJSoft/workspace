@@ -1,7 +1,5 @@
 import logging
 
-from django.db import transaction
-from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -12,8 +10,7 @@ from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import MailAccount, MailFolder, MailMessage
-from ..queries import folder_group_ids
+from ..models import MailAccount, MailFolder
 from ..serializers import (
     MailFolderCreateSerializer,
     MailFolderMergeSerializer,
@@ -324,7 +321,6 @@ class MailFolderMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Mark all messages in a folder as read")
-    @transaction.atomic
     def post(self, request, uuid):
         try:
             folder = MailFolder.objects.select_related("account").get(uuid=uuid)
@@ -334,25 +330,7 @@ class MailFolderMarkReadView(APIView):
         if folder.account.owner != request.user:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        group_ids = folder_group_ids(folder)
-        qs = MailMessage.objects.filter(
-            folder_id__in=group_ids,
-            is_read=False,
-            deleted_at__isnull=True,
-        )
-        # Capture pks BEFORE the update so we can refresh denormalized
-        # MailLabel.unread_count for any label attached to these messages.
-        # Without this, label badges in the sidebar stay stale until the next
-        # user-side toggle.
-        affected_ids = list(qs.values_list("pk", flat=True))
-        updated = qs.update(is_read=True)
+        from ..services.triage import mark_folder_read
 
-        MailFolder.objects.filter(uuid__in=group_ids).update(
-            unread_count=0, updated_at=timezone.now()
-        )
-
-        from ..services.label_counts import refresh_labels_for_messages
-
-        refresh_labels_for_messages(affected_ids)
-
+        updated, _ = mark_folder_read(folder)
         return Response({"updated": updated})

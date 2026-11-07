@@ -13,7 +13,13 @@ do. They still take their IMAP move from `move_to_folder` - the invariant
 below is not something to write twice.
 """
 
+import logging
+from collections import defaultdict
+
 from django.db import transaction
+from django.utils import timezone
+
+from workspace.common.logging import scrub
 
 from .counts import (
     refresh_folder_counts,
@@ -21,6 +27,8 @@ from .counts import (
     refresh_label_counts,
     refresh_message_label_counts,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def flag_operations():
@@ -64,6 +72,53 @@ def set_flag(message, flag):
         if field == "is_read":
             refresh_message_label_counts(message)
     return synced
+
+
+def mark_folder_read(folder):
+    """Mark every unread message of `folder`'s merge group read, here and on IMAP.
+
+    Returns ``(updated, synced)``: how many rows turned read, and whether
+    every mailbox of the group took the flags. Same contract as `set_flag`:
+    the server is asked first, the local write happens either way, and a
+    mailbox that refused the flags flips its messages back to unread on the
+    next sync.
+    """
+    from ..models import MailFolder, MailMessage
+    from ..queries import folder_group_ids
+    from .imap_messages import mark_uids_read
+    from .label_counts import refresh_labels_for_messages
+
+    group_ids = folder_group_ids(folder)
+    unread = MailMessage.objects.filter(
+        folder_id__in=group_ids,
+        is_read=False,
+        deleted_at__isnull=True,
+    )
+    affected_ids = []
+    uids_by_folder = defaultdict(list)
+    for pk, folder_id, uid in unread.values_list("pk", "folder_id", "imap_uid"):
+        affected_ids.append(pk)
+        uids_by_folder[folder_id].append(uid)
+
+    synced = True
+    for mailbox in MailFolder.objects.filter(uuid__in=uids_by_folder):
+        try:
+            mark_uids_read(folder.account, mailbox, uids_by_folder[mailbox.pk])
+        except Exception as e:
+            synced = False
+            logger.warning(
+                "IMAP mark-all-read failed for folder %s: %s",
+                scrub(mailbox.name),
+                scrub(e),
+            )
+
+    with transaction.atomic():
+        updated = unread.update(is_read=True)
+        MailFolder.objects.filter(uuid__in=group_ids).update(
+            unread_count=0, updated_at=timezone.now()
+        )
+        refresh_labels_for_messages(affected_ids)
+    return updated, synced
 
 
 def move_to_folder(message, target, refresh=True):

@@ -207,6 +207,22 @@ class MergedFolderMarkReadTests(APITestCase):
             is_read=False,
         )
         self.client.force_authenticate(self.user)
+        patcher = patch("workspace.mail.services.imap_messages.mark_uids_read")
+        self.mark_uids_read = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_flags_each_mailbox_of_the_group_on_the_server(self):
+        MailMessage.objects.create(
+            account=self.account, folder=self.trash, imap_uid=9, is_read=False
+        )
+
+        self.client.post(f"/api/v1/mail/folders/{self.trash.uuid}/mark-read")
+
+        flagged = {
+            call.args[1].pk: sorted(call.args[2])
+            for call in self.mark_uids_read.call_args_list
+        }
+        self.assertEqual(flagged, {self.trash.pk: [9], self.corbeille.pk: [1]})
 
     def test_marks_alias_messages_read(self):
         resp = self.client.post(f"/api/v1/mail/folders/{self.trash.uuid}/mark-read")

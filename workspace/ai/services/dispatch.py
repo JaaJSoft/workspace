@@ -9,9 +9,8 @@ single spot so adding a new AI feature is one entry instead of a grep
 across views.
 """
 
-from django.utils import timezone
-
 from workspace.ai.models import AITask
+from workspace.ai.services.ai_task import close_task
 
 
 def dispatch(*, owner, task_type: str, input_data: dict | None = None) -> AITask:
@@ -31,11 +30,12 @@ def dispatch(*, owner, task_type: str, input_data: dict | None = None) -> AITask
         _enqueue_worker(ai_task)
     except Exception as exc:
         # No worker will ever close this row: left PENDING, it would read as
-        # work under way (a chat keeps its typing bubble up for it).
-        AITask.objects.filter(pk=ai_task.pk).update(
-            status=AITask.Status.FAILED,
+        # work under way (a chat keeps its typing bubble up for it). Unless
+        # the worker ran inline (eager mode) and closed it with its own error.
+        close_task(
+            ai_task,
+            AITask.Status.FAILED,
             error=f"Could not enqueue the worker: {exc}",
-            completed_at=timezone.now(),
         )
         raise
     return ai_task

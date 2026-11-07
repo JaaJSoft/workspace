@@ -140,6 +140,27 @@ class DispatchEnqueueFailureTests(TestCase):
         self.assertEqual(task.status, AITask.Status.FAILED)
         self.assertIsNotNone(task.completed_at)
 
+    def test_a_worker_that_ran_inline_keeps_its_own_outcome(self):
+        # Eager mode (development) runs the worker inside delay() and
+        # propagates its exception: the task is closed already, by the worker.
+        def run_inline_then_raise(task_id):
+            AITask.objects.filter(pk=task_id).update(
+                status=AITask.Status.FAILED, error="LLM crashed"
+            )
+            raise RuntimeError("LLM crashed")
+
+        with (
+            patch(
+                "workspace.ai.tasks.mail.summarize.delay",
+                side_effect=run_inline_then_raise,
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            dispatch(owner=self.user, task_type=AITask.TaskType.SUMMARIZE)
+
+        task = AITask.objects.get(owner=self.user)
+        self.assertEqual(task.error, "LLM crashed")
+
     @patch("workspace.ai.tasks.chat.generate_chat_response.delay")
     def test_chat_replies_go_to_their_worker(self, mock_delay):
         ai_task = dispatch(

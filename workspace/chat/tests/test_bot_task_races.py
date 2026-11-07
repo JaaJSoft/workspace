@@ -1,7 +1,7 @@
-"""A PATCH racing the worker that runs the same schedule or goal.
+"""A PATCH or DELETE racing the worker that runs the same schedule or goal.
 
-The request loads the row, then writes it back while the dispatcher and the
-check-in worker write the same row. Each test lands the worker's write between
+The request loads the row, then writes it back while the dispatcher, the
+check-in worker and the agent's own tools write the same row. Each test lands the worker's write between
 the request's load and its write, through the permission check the view runs
 in between, and asserts the worker's write survives.
 """
@@ -14,7 +14,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.ai.models import BotProfile, ScheduledMessage
+from workspace.ai.models import AgentGoal, BotProfile, ScheduledMessage
 from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.services.bot_tasks import can_manage_bot_task
 
@@ -130,3 +130,64 @@ class ScheduledMessagePatchRaceTests(BotTaskRaceMixin, APITestCase):
         # Written back as loaded, the past run time would fire it again.
         self.assertEqual(daily.next_run_at, tomorrow)
         self.assertEqual(datetime.fromisoformat(resp.data["next_run_at"]), tomorrow)
+
+
+class AgentGoalRequestRaceTests(BotTaskRaceMixin, APITestCase):
+    PERMISSION_CHECK = "workspace.chat.views.goals.can_manage_bot_task"
+
+    def setUp(self):
+        super().setUp()
+        self.goal = AgentGoal.objects.create(
+            conversation=self.conversation,
+            bot=self.bot,
+            created_by=self.user,
+            title="Watch listings",
+            goal="Report good listings.",
+            status=AgentGoal.Status.PAUSED,
+            next_check_at=timezone.now() + timedelta(hours=1),
+        )
+        self.url = (
+            f"/api/v1/chat/conversations/{self.conversation.uuid}/goals/"
+            f"{self.goal.uuid}"
+        )
+
+    def _agent_completes(self):
+        AgentGoal.objects.filter(pk=self.goal.pk).update(
+            status=AgentGoal.Status.COMPLETED,
+            outcome="Found the flat.",
+            closed_at=timezone.now(),
+        )
+
+    def test_a_resume_does_not_reopen_a_goal_the_agent_closed(self):
+        with patch(self.PERMISSION_CHECK, run_meanwhile(self._agent_completes)):
+            resp = self.client.patch(self.url, {"status": "active"}, format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.status, AgentGoal.Status.COMPLETED)
+
+    def test_a_notes_edit_keeps_the_check_in_the_worker_parked(self):
+        parked = timezone.now() + timedelta(days=1)
+
+        def check_in():
+            AgentGoal.objects.filter(pk=self.goal.pk).update(
+                next_check_at=parked, check_count=1
+            )
+
+        with patch(self.PERMISSION_CHECK, run_meanwhile(check_in)):
+            resp = self.client.patch(self.url, {"notes": "Lyon only."}, format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.notes, "Lyon only.")
+        self.assertEqual(self.goal.next_check_at, parked)
+        self.assertEqual(self.goal.check_count, 1)
+
+    def test_a_stop_does_not_overwrite_the_agent_closing_the_goal(self):
+        with patch(self.PERMISSION_CHECK, run_meanwhile(self._agent_completes)):
+            resp = self.client.delete(self.url)
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.status, AgentGoal.Status.COMPLETED)
+        self.assertEqual(self.goal.outcome, "Found the flat.")

@@ -1,0 +1,159 @@
+{% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}
+<!DOCTYPE html>
+{% comment %}
+  A page of its own rather than a viewer partial: its Content-Security-Policy
+  (FILES_EBOOK_READER_CSP) only allows same-origin script files, which is what
+  stops the scripts a book may carry. Nothing inline may run here - no Alpine,
+  no inline script - so the page is driven by ebook_reader.js alone.
+{% endcomment %}
+<html
+  lang="{{ LANGUAGE_CODE }}"
+  data-theme="{{ user_theme|default:'light' }}"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ name|default:_("E-book") }} - Workspace</title>
+    <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    <link
+      rel="icon"
+      href="{% static 'icons/favicon.svg' %}"
+      type="image/svg+xml"
+    />
+    <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
+    <script src="{% static 'ui/js/lucide.js' %}"></script>
+    <script defer src="{% static 'files/ui/js/ebook_reader.js' %}"></script>
+  </head>
+  {% comment %}
+    What comes and goes is toggled with the hidden class, never the hidden
+    attribute: a display class on the same element (flex) overrides the
+    attribute and the element stays on screen.
+  {% endcomment %}
+  <body
+    id="ebook-reader"
+    class="h-screen flex flex-col overflow-hidden bg-base-100 text-base-content"
+    data-src="{{ src }}"
+    data-name="{{ name }}"
+    data-foliate-url="{% static 'files/ui/js/vendor/foliate/foliate-view.js' %}"
+  >
+    <header
+      class="flex items-center gap-1 px-2 py-1 border-b border-base-300 shrink-0"
+    >
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost btn-square"
+        data-action="toc"
+        title="{% translate 'Table of contents' %}"
+        aria-label="{% translate 'Table of contents' %}"
+        aria-expanded="false"
+        aria-controls="ebook-toc"
+        disabled
+      >
+        <i data-lucide="list" class="w-4 h-4"></i>
+      </button>
+      <div class="flex-1 min-w-0 px-1">
+        <p class="text-sm font-medium truncate" data-ref="title">{{ name }}</p>
+        <p class="text-xs text-base-content/60 truncate" data-ref="chapter"></p>
+      </div>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost btn-square"
+        data-action="smaller"
+        title="{% translate 'Smaller text' %}"
+        aria-label="{% translate 'Smaller text' %}"
+        disabled
+      >
+        <i data-lucide="a-arrow-down" class="w-4 h-4"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost btn-square"
+        data-action="larger"
+        title="{% translate 'Larger text' %}"
+        aria-label="{% translate 'Larger text' %}"
+        disabled
+      >
+        <i data-lucide="a-arrow-up" class="w-4 h-4"></i>
+      </button>
+    </header>
+
+    <main class="relative flex-1 min-h-0">
+      <div data-ref="book" class="absolute inset-0"></div>
+
+      <div
+        data-ref="loading"
+        class="absolute inset-0 flex items-center justify-center"
+      >
+        <span class="loading loading-spinner loading-lg"></span>
+      </div>
+
+      <div
+        data-ref="error"
+        class="absolute inset-0 hidden items-center justify-center p-6"
+      >
+        <div role="alert" class="alert alert-error max-w-md">
+          <i data-lucide="circle-alert" class="w-5 h-5"></i>
+          <span>{% translate "This book could not be opened." %}</span>
+        </div>
+      </div>
+
+      <nav
+        id="ebook-toc"
+        data-ref="toc"
+        class="absolute inset-y-0 left-0 z-10 hidden w-80 max-w-[85%] overflow-y-auto bg-base-100 border-r border-base-300 shadow-lg p-2"
+        aria-label="{% translate 'Table of contents' %}"
+      >
+        <p class="px-2 py-1 text-sm font-semibold">{% translate "Contents" %}</p>
+        <ul data-ref="toc-list" class="menu menu-sm w-full p-0">
+        </ul>
+        <p
+          data-ref="toc-empty"
+          class="hidden px-2 py-1 text-sm text-base-content/60"
+        >
+          {% translate "This book has no table of contents." %}
+        </p>
+      </nav>
+    </main>
+
+    <footer
+      class="flex items-center gap-2 px-2 py-1 border-t border-base-300 shrink-0"
+    >
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost btn-square"
+        data-action="left"
+        title="{% translate 'Previous page' %}"
+        aria-label="{% translate 'Previous page' %}"
+        disabled
+      >
+        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+      </button>
+      <input
+        type="range"
+        data-ref="progress"
+        class="range range-xs flex-1"
+        min="0"
+        max="1"
+        step="any"
+        value="0"
+        aria-label="{% translate 'Reading progress' %}"
+        disabled
+      />
+      <span
+        data-ref="percent"
+        class="text-xs tabular-nums w-10 text-right text-base-content/60"
+      ></span>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost btn-square"
+        data-action="right"
+        title="{% translate 'Next page' %}"
+        aria-label="{% translate 'Next page' %}"
+        disabled
+      >
+        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+      </button>
+    </footer>
+  </body>
+</html>

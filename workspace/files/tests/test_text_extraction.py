@@ -27,6 +27,7 @@ from workspace.files.services.text_extraction import (
     file_text,
     is_indexable,
 )
+from workspace.files.tests.ebooks import fb2_bytes, fbz_bytes
 
 User = get_user_model()
 
@@ -250,6 +251,24 @@ class DocumentExtractionTests(TestCase):
         f = self._file("report.pdf", "application/pdf", make_pdf(["quarterly budget"]))
         self.assertIn("quarterly budget", extract_text(f))
 
+    def test_fictionbook_bodies_are_extracted(self):
+        for name, mime, payload in (
+            (
+                "a.fb2",
+                extraction.FB2,
+                fb2_bytes(chapters=[("One", "The kraken sleeps.")]),
+            ),
+            (
+                "a.fbz",
+                extraction.FBZ,
+                fbz_bytes(chapters=[("One", "The kraken sleeps.")]),
+            ),
+        ):
+            with self.subTest(name=name):
+                self.assertIn(
+                    "The kraken sleeps.", extract_text(self._file(name, mime, payload))
+                )
+
     def test_office_bodies_are_extracted(self):
         for name, mime, payload in (
             ("a.docx", extraction.DOCX, make_docx(["The kraken sleeps."])),
@@ -369,6 +388,14 @@ class ExtractorCoverageTests(SimpleTestCase):
         "application/x-hwp",
         "application/msonenote",
         "application/vnd.ms-visio.drawing.main+xml",
+        # Mobipocket and Kindle books: Tika has no parser for the Palm
+        # database they are, and reads nothing out of one.
+        "application/x-mobipocket-ebook",
+        "application/vnd.amazon.ebook",
+        "application/vnd.amazon.mobi8-ebook",
+        # A comic book's pages are pictures: Tika lists the image names, and
+        # the words in the bubbles are what OCR would be.
+        "application/vnd.comicbook+zip",
     }
 
     def _document_mime_types(self):

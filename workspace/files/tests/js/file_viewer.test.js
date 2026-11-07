@@ -20,10 +20,15 @@ function makeShell({ properties = false, favoriteOk = true } = {}) {
   const panel = {
     blocked: false,
     location: null,
+    newTab: null,
     replaceChildren() {},
     querySelector(selector) {
       if (selector === 'video') return video;
       if (selector === '[data-viewer-blocked]') return this.blocked ? {} : null;
+      if (selector === '[data-viewer-new-tab]' && this.newTab) {
+        const url = this.newTab;
+        return { getAttribute: (name) => (name === 'data-viewer-new-tab' ? url : null) };
+      }
       if (selector === '[data-viewer-location]' && this.location) {
         const attrs = this.location;
         return { getAttribute: (name) => (name in attrs ? attrs[name] : null) };
@@ -579,4 +584,74 @@ test('a close event landing after a reopen leaves the new item open', () => {
 
   assert.equal(dialog.open, true);
   assert.equal(modal.fileUuid, 'b');
+});
+
+test('a Files file offers a new tab once the registry allows it', async () => {
+  const { shell, loads, panel, actionCalls } = makeShell();
+  panel.newTab = '/api/v1/files/a/content';
+
+  const opening = shell.openFile('a', 'a.pdf', 'pdf', false);
+  loads[0].resolve([{}]);
+  await opening;
+  assert.equal(shell.newTabHref(), null);
+
+  actionCalls[0].answer.resolve({ a: [{ id: 'open_new_tab' }] });
+  await flush();
+  assert.equal(shell.newTabHref(), '/api/v1/files/a/content');
+});
+
+test('a Files file the registry keeps out of a tab offers none', async () => {
+  const { shell, loads, panel, actionCalls } = makeShell();
+  panel.newTab = '/api/v1/files/a/content';
+
+  const opening = shell.openFile('a', 'a.pdf', 'pdf', false);
+  loads[0].resolve([{}]);
+  await opening;
+  actionCalls[0].answer.resolve({ a: [{ id: 'toggle_favorite' }] });
+  await flush();
+
+  assert.equal(shell.newTabHref(), null);
+});
+
+test('an attachment offers the new tab its panel names, with no registry', async () => {
+  const { shell, loads, panel, actionCalls } = makeShell();
+  shell._filesItems = false;
+  panel.newTab = '/api/v1/chat/attachments/a';
+
+  const opening = shell.openFile('a', 'a.pdf', 'pdf', false);
+  loads[0].resolve([{}]);
+  await opening;
+
+  assert.equal(actionCalls.length, 0);
+  assert.equal(shell.newTabHref(), '/api/v1/chat/attachments/a');
+});
+
+test('no marker, a blocked file or a closed viewer offers no new tab', async () => {
+  const { shell, loads, panel, actionCalls } = makeShell();
+
+  const plain = shell.openFile('a', 'a.txt', 'text', false);
+  loads[0].resolve([{}]);
+  await plain;
+  actionCalls[0].answer.resolve({ a: [{ id: 'open_new_tab' }] });
+  await flush();
+  assert.equal(shell.newTabHref(), null);
+
+  panel.newTab = '/api/v1/files/b/content';
+  panel.blocked = true;
+  const blocked = shell.openFile('b', 'b.pdf', 'pdf', false);
+  loads[1].resolve([{}]);
+  await blocked;
+  actionCalls[1].answer.resolve({ b: [{ id: 'open_new_tab' }] });
+  await flush();
+  assert.equal(shell.newTabHref(), null);
+
+  panel.blocked = false;
+  const shownFile = shell.openFile('c', 'c.pdf', 'pdf', false);
+  loads[2].resolve([{}]);
+  await shownFile;
+  actionCalls[2].answer.resolve({ c: [{ id: 'open_new_tab' }] });
+  await flush();
+  assert.equal(shell.newTabHref(), '/api/v1/files/b/content');
+  shell._onClosed();
+  assert.equal(shell.newTabHref(), null);
 });

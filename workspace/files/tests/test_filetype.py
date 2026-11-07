@@ -15,6 +15,7 @@ from workspace.files.services.filetype import (
 )
 from workspace.files.ui.viewers import (
     AudioViewer,
+    EbookViewer,
     ImageViewer,
     MarkdownViewer,
     PDFViewer,
@@ -186,6 +187,10 @@ class ViewerResolutionTest(TestCase):
 
     def test_pdf_gets_pdf_viewer(self):
         self.assertEqual(get_viewer("pdf"), PDFViewer)
+
+    def test_epub_gets_ebook_viewer(self):
+        self.assertEqual(get_viewer("epub"), EbookViewer)
+        self.assertEqual(get_viewer("application/epub+zip"), EbookViewer)
 
     def test_mp4_uses_video_viewer(self):
         self.assertEqual(get_viewer("mp4"), VideoViewer)

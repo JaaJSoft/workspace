@@ -56,6 +56,11 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     // Where the panel wants the download to come from instead (an edited
     // image, rendered as shown); null for the raw bytes.
     downloadOverride: null,
+    // What the header's "Open in new tab" opens, read off the panel's
+    // [data-viewer-new-tab] marker: null until it merges, and for a viewer
+    // whose file a tab would show no better (see newTabHref).
+    newTabUrl: null,
+    canOpenNewTab: false,
     // What the action registry lets the user do on the file on screen; false
     // while it answers. canShowProperties stays false without `properties`.
     canShowProperties: false,
@@ -198,6 +203,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.viewerBlocked = false;
       this.panelEditing = false;
       this.downloadOverride = null;
+      this.newTabUrl = null;
       const wasOpen = this.open;
       this.open = true;
       this._present();
@@ -225,6 +231,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       const panel = document.getElementById(this._viewerPanelId());
       this.viewerBlocked = !!(panel && panel.querySelector('[data-viewer-blocked]'));
       this.fileLocation = this._readLocation(panel);
+      this.newTabUrl = this._readNewTab(panel);
       const video = at != null && panel ? panel.querySelector('video') : null;
       // Before the metadata has loaded, this sets where playback starts.
       if (video) video.currentTime = at;
@@ -246,10 +253,26 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.viewerBlocked = false;
       this.panelEditing = false;
       this.downloadOverride = null;
+      this.newTabUrl = null;
+      this.canOpenNewTab = false;
       this.viewerError = null;
       this.canShowProperties = false;
       this.canFavorite = false;
       this.isFavorite = false;
+    },
+
+    _readNewTab(panel) {
+      const marker = panel && panel.querySelector('[data-viewer-new-tab]');
+      return (marker && marker.getAttribute('data-viewer-new-tab')) || null;
+    },
+
+    // The header's "Open in new tab" link, or null to hide it. A Files file
+    // also needs the registry's open_new_tab; an attachment has no registry,
+    // and the panel the server rendered for it is the answer.
+    newTabHref() {
+      if (!this.newTabUrl || this.viewerBlocked) return null;
+      if (this.filesItem && !this.canOpenNewTab) return null;
+      return this.newTabUrl;
     },
 
     _readLocation(panel) {
@@ -289,6 +312,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.canShowProperties = false;
       this.canFavorite = false;
       this.isFavorite = false;
+      this.canOpenNewTab = false;
       const seq = ++this._actionsSeq;
       if (!this.filesItem) return;
       let actions = null;
@@ -300,6 +324,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       const favorite = available.find(a => a.id === 'toggle_favorite');
       this.canFavorite = !!favorite;
       this.isFavorite = !!(favorite && favorite.state && favorite.state.is_favorite);
+      this.canOpenNewTab = available.some(a => a.id === 'open_new_tab');
       if (!this._propertiesEnabled) return;
       this.canShowProperties = available.some(a => a.id === 'properties');
       window.dispatchEvent(new CustomEvent('viewer-file-shown', {

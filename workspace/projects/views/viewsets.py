@@ -86,6 +86,7 @@ from ..services.projects import create_project
 from ..services.sprints import (
     assign_tasks_to_sprint,
     complete_sprint,
+    delete_sprint,
     propagate_sprint_rename,
     start_sprint,
 )
@@ -538,12 +539,11 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         self._require_writable()
         self._require_scrum()
         sprint = self.get_object()
-        if sprint.state == Sprint.State.ACTIVE:
-            return Response(
-                {"detail": "The active sprint must be completed, not deleted."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return super().destroy(request, *args, **kwargs)
+        try:
+            delete_sprint(sprint)
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def start(self, request, *args, **kwargs):
         self._require_admin()

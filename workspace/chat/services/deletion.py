@@ -10,11 +10,16 @@ import logging
 
 from django.core.files.storage import default_storage
 from django.db import DEFAULT_DB_ALIAS, transaction
+from django.db.models import F, Q
+from django.db.models.functions import Greatest
+from django.utils import timezone
 
 from workspace.common.cache import invalidate_tags
 from workspace.common.logging import scrub
 
 from ..models import (
+    ConversationMember,
+    Message,
     MessageAttachment,
     MessageInteraction,
     MessageLinkPreview,
@@ -22,8 +27,50 @@ from ..models import (
     Reaction,
 )
 from .reactions import invalidate_quick_reactions
+from .threads import recount_thread, retract_thread_reply
 
 logger = logging.getLogger(__name__)
+
+
+@transaction.atomic
+def soft_delete_message(message):
+    """Soft-delete *message* and retract what it counted for; False if it already was.
+
+    The stamp is a conditional write: of two deletes racing on one message only
+    the first runs the accounting below, which a second run would apply twice.
+    """
+    deleted_at = timezone.now()
+    stamped = Message.objects.filter(pk=message.pk, deleted_at__isnull=True).update(
+        deleted_at=deleted_at
+    )
+    if not stamped:
+        return False
+    message.deleted_at = deleted_at
+
+    if message.thread_root_id:
+        # A deleted reply must stop counting, or the parent advertises
+        # replies the panel no longer shows. Deleting a root leaves its own
+        # counters alone: its replies still exist and still belong to it.
+        #
+        # Its unread accounting is retracted for thread participants only,
+        # mirroring delivery: the conversation-wide decrement below would
+        # rob non-participants of unread they never gained for this reply.
+        retract_thread_reply(message)
+        recount_thread(message.thread_root)
+    else:
+        # Decrement unread_count for members who hadn't read this message
+        ConversationMember.objects.filter(
+            conversation_id=message.conversation_id,
+            left_at__isnull=True,
+            unread_count__gt=0,
+        ).filter(
+            Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at),
+        ).exclude(user_id=message.author_id).update(
+            unread_count=Greatest(F("unread_count") - 1, 0),
+        )
+
+    purge_message_content(message)
+    return True
 
 
 def purge_message_content(message):

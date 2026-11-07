@@ -3,8 +3,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import F, Prefetch, Q
-from django.db.models.functions import Greatest
+from django.db.models import Prefetch
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
@@ -33,15 +32,14 @@ from ..serializers import (
     ReactionToggleSerializer,
 )
 from ..services.conversations import get_active_membership
-from ..services.deletion import purge_message_content
+from ..services.deletion import soft_delete_message
+from ..services.editing import edit_message
 from ..services.notifications import notify_conversation_members
 from ..services.posting import post_message
 from ..services.rendering import render_message_body
 from ..services.threads import (
     mark_conversation_threads_read,
-    recount_thread,
     resolve_thread_root,
-    retract_thread_reply,
 )
 
 User = get_user_model()
@@ -412,15 +410,11 @@ class MessageDetailView(APIView):
         serializer = MessageEditSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        message.body = serializer.validated_data["body"]
-
-        # Extract mentions for rendering
-        body = message.body
-        mention_map, _ = build_mention_map(body)
-        message.body_html = render_message_body(body, mention_map=mention_map or None)
-
-        message.edited_at = timezone.now()
-        message.save(update_fields=["body", "body_html", "edited_at"])
+        if not edit_message(message, serializer.validated_data["body"]):
+            return Response(
+                {"detail": "Message not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         notify_conversation_members(
             message.conversation,
@@ -485,32 +479,11 @@ class MessageDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        message.deleted_at = timezone.now()
-        message.save(update_fields=["deleted_at"])
-
-        if message.thread_root_id:
-            # A deleted reply must stop counting, or the parent advertises
-            # replies the panel no longer shows. Deleting a root leaves its own
-            # counters alone: its replies still exist and still belong to it.
-            #
-            # Its unread accounting is retracted for thread participants only,
-            # mirroring delivery: the conversation-wide decrement below would
-            # rob non-participants of unread they never gained for this reply.
-            retract_thread_reply(message)
-            recount_thread(message.thread_root)
-        else:
-            # Decrement unread_count for members who hadn't read this message
-            ConversationMember.objects.filter(
-                conversation_id=message.conversation_id,
-                left_at__isnull=True,
-                unread_count__gt=0,
-            ).filter(
-                Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at),
-            ).exclude(user=message.author).update(
-                unread_count=Greatest(F("unread_count") - 1, 0),
+        if not soft_delete_message(message):
+            return Response(
+                {"detail": "Message not found."},
+                status=status.HTTP_404_NOT_FOUND,
             )
-
-        purge_message_content(message)
 
         notify_conversation_members(
             message.conversation,

@@ -152,3 +152,17 @@ class ThumbnailFlagWriteTests(TestCase):
         self.assertEqual(row.name, "after.png")
         self.assertEqual(row.path, "after.png")
         self.assertTrue(row.has_thumbnail)
+
+    def test_a_thumbnail_of_replaced_bytes_does_not_flag_the_new_ones(self):
+        """The replacement cleared the flag; the late draw of the old bytes
+        must leave it cleared, so the new bytes still get a thumbnail."""
+        stored = self._refresh_while(
+            lambda current: FileService.update_content(
+                current,
+                ContentFile(_png_bytes((40, 30)), name="before.png"),
+                acting_user=self.user,
+            )
+        )
+
+        self.assertFalse(stored)
+        self.assertFalse(File.objects.get(pk=self.file.pk).has_thumbnail)

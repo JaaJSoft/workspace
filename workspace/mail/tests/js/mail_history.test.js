@@ -37,6 +37,7 @@ function makeApp(search = '') {
   const ctx = loadScripts(
     [
       'workspace/common/static/ui/js/uuid.js',
+      'workspace/common/static/ui/js/latest_only.js',
       'workspace/common/static/ui/js/attachment_input.js',
       'workspace/mail/ui/static/mail/ui/js/mail_accounts.js',
       'workspace/mail/ui/static/mail/ui/js/mail_folders.js',

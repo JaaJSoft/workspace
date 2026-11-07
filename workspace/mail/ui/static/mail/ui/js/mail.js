@@ -32,7 +32,8 @@ function mailApp() {
     loadingMoreMessages: false,
     loadingDetail: false,
     syncingAccounts: {},  // { accountUuid: true }
-    actionInProgress: false,
+    // Message actions (read, star, delete) may overlap: busy until the last ends.
+    actionsInFlight: 0,
     batchInProgress: false,
     classifyingFolder: false,
     hasMoreMessages: false,
@@ -168,6 +169,10 @@ function mailApp() {
       const q = (this.hiddenFoldersSearch || '').toLowerCase();
       if (!q) return this.hiddenFolders;
       return this.hiddenFolders.filter(f => f.display_name.toLowerCase().includes(q));
+    },
+
+    get actionInProgress() {
+      return this.actionsInFlight > 0;
     },
 
     async init() {

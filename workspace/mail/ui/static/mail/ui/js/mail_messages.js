@@ -196,6 +196,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     _resetAi() {
       this.aiSummary = null;
       this.aiSummarizing = false;
+      this._aiSummaries.cancel();
       if (this._aiPollInterval) clearInterval(this._aiPollInterval);
     },
 
@@ -247,7 +248,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
 
     // ----- Flags -----
     async toggleRead(msg, forceRead) {
-      this.actionInProgress = true;
+      this.actionsInFlight += 1;
       const newVal = forceRead !== undefined ? forceRead : !msg.is_read;
       const oldVal = msg.is_read;
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
@@ -273,12 +274,12 @@ window.mailMessagesMixin = function mailMessagesMixin() {
           this._adjustUnreadCount(ref, newVal ? 1 : -1);
         }
       } finally {
-        this.actionInProgress = false;
+        this.actionsInFlight -= 1;
       }
     },
 
     async toggleStar(msg) {
-      this.actionInProgress = true;
+      this.actionsInFlight += 1;
       const newVal = !msg.is_starred;
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
       // Optimistic UI update
@@ -294,7 +295,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
         msg.is_starred = !newVal;
         if (listMsg && listMsg !== msg) listMsg.is_starred = !newVal;
       } finally {
-        this.actionInProgress = false;
+        this.actionsInFlight -= 1;
       }
     },
 
@@ -309,7 +310,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       });
       if (!ok) return;
 
-      this.actionInProgress = true;
+      this.actionsInFlight += 1;
       // Optimistic UI update
       this._optimisticRemoveMessages([msg.uuid]);
       try {
@@ -320,7 +321,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
         // list is fragile; reload to reconcile with the server.
         await this.loadMessages();
       } finally {
-        this.actionInProgress = false;
+        this.actionsInFlight -= 1;
       }
     },
 

@@ -7,6 +7,7 @@ wrong database, so the status code is never asserted alone.
 """
 
 import uuid
+from unittest import mock
 
 from django.db import connection
 from django.test import TestCase
@@ -31,6 +32,7 @@ from workspace.vault.tests.factories import (
     sealed,
     sign,
 )
+from workspace.vault.views import entries as entry_views
 
 LIST_URL = "/api/v1/vault/entries"
 NAME = sealed("AQID")
@@ -430,6 +432,29 @@ class EntryApiTests(TestCase):
         entry = self._trashed_entry()
         body = self.signed_entry(entry_uuid=entry.uuid)
         self.assertEqual(self._put(entry.uuid, body).status_code, 200)
+
+    def test_an_edit_keeps_a_trash_landed_while_it_ran(self):
+        """The trash stamp is outside the signature, so an edit has no business
+        writing it - least of all the value it read before someone trashed the
+        entry from another device."""
+        created = self._create(self.signed_entry()).json()
+        body = self.signed_entry(
+            entry_uuid=created["uuid"], encrypted_name=sealed("BAUG")
+        )
+        trashed_at = timezone.now()
+        verify = entry_views.verify_record
+
+        def verify_then_trash(*args, **kwargs):
+            VaultEntry.objects.filter(uuid=created["uuid"]).update(
+                deleted_at=trashed_at
+            )
+            return verify(*args, **kwargs)
+
+        with mock.patch.object(entry_views, "verify_record", verify_then_trash):
+            self.assertEqual(self._put(created["uuid"], body).status_code, 200)
+        entry = VaultEntry.objects.get(uuid=created["uuid"])
+        self.assertEqual(entry.encrypted_name, sealed("BAUG"))
+        self.assertEqual(entry.deleted_at, trashed_at)
 
     def test_unfavoriting_an_active_entry_is_accepted(self):
         created = self._create(self.signed_entry(is_favorite=True)).json()

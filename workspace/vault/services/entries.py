@@ -32,6 +32,23 @@ class UnknownTag(EntryWriteError):
     pass
 
 
+# What a write stores: the columns entry_signature_payload covers, the
+# signature over them, and the timestamp. The trash stamp and last use are
+# outside the signature and belong to other writers; republishing them from
+# the instance the request loaded would undo a trash that landed meanwhile.
+SIGNED_ENTRY_COLUMNS = (
+    "type",
+    "folder",
+    "encrypted_name",
+    "encrypted_notes",
+    "key_version",
+    "entry_version",
+    "is_favorite",
+    "metadata_sig",
+    "updated_at",
+)
+
+
 def entry_signature_payload(entry, *, signer_account_uuid, tag_uuids, fields):
     """The payload the signature covers, built from the row about to be
     written - never from what the request said it was writing."""
@@ -93,7 +110,7 @@ def write_entry(entry, *, tags, fields):
     operation whose atomicity is the point.
     """
     entry.full_clean(exclude=["uuid"])
-    entry.save()
+    entry.save(update_fields=SIGNED_ENTRY_COLUMNS)
     entry.tags.set(tags)
     entry.fields.all().delete()
     EntryField.objects.bulk_create(

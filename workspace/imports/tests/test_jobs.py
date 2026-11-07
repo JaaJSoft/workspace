@@ -495,6 +495,95 @@ class CancelRetryPurgeTests(JobsTestCase):
             self.assertEqual(recover_stale_jobs.apply().result, {"recovered": 0})
 
     @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_pending_jobs_whose_delivery_was_lost_are_re_enqueued(self):
+        lost = ImportJob.objects.create(connection=self.conn, kinds=["files"])
+        ImportJob.objects.filter(pk=lost.pk).update(
+            created_at=timezone.now() - timedelta(hours=1)
+        )
+        other_conn = ImportConnection.objects.create(
+            owner=self.user,
+            provider="fake",
+            label="Other",
+            base_url="https://y/dav",
+            username="b",
+        )
+        # Just created: its delivery is still on the way.
+        ImportJob.objects.create(connection=other_conn, kinds=["files"])
+
+        with patch("workspace.imports.services.jobs._enqueue") as enqueue:
+            self.assertEqual(recover_stale_jobs.apply().result, {"recovered": 1})
+        enqueue.assert_called_once()
+        self.assertEqual(enqueue.call_args.args[0].pk, lost.pk)
+        # ...and the next scan does not send it a second delivery.
+        with patch("workspace.imports.services.jobs._enqueue") as enqueue:
+            self.assertEqual(recover_stale_jobs.apply().result, {"recovered": 0})
+        enqueue.assert_not_called()
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_overlapping_scans_enqueue_a_stale_job_once(self):
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now() - timedelta(hours=1),
+            heartbeat_at=timezone.now() - timedelta(minutes=30),
+        )
+        real_filter = ImportJob.objects.filter
+        scans = []
+
+        def list_then_recover_elsewhere(*args, **kwargs):
+            queryset = real_filter(*args, **kwargs)
+            if scans:
+                return queryset
+            scans.append(list(queryset))
+            # Another scan recovers the job between this one's read and stamp.
+            real_filter(pk=job.pk).update(heartbeat_at=timezone.now())
+            return scans[0]
+
+        with (
+            patch.object(
+                ImportJob.objects, "filter", side_effect=list_then_recover_elsewhere
+            ),
+            patch("workspace.imports.services.jobs._enqueue") as enqueue,
+        ):
+            self.assertEqual(svc.recover_stale_jobs(), 0)
+        self.assertEqual([j.pk for j in scans[0]], [job.pk])
+        enqueue.assert_not_called()
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
+    def test_a_recovered_pending_job_runs_to_completion(self):
+        job = ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], options={"files": {}}
+        )
+        ImportJob.objects.filter(pk=job.pk).update(
+            created_at=timezone.now() - timedelta(hours=1)
+        )
+        with patch("workspace.imports.services.jobs._enqueue") as enqueue:
+            svc.recover_stale_jobs()
+        self.assertIs(svc.run_job(enqueue.call_args.args[0].pk), Outcome.DONE)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
+
+    def test_a_stop_racing_the_jobs_end_leaves_the_finished_job_unflagged(self):
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files"],
+            status=ImportJob.Status.RUNNING,
+            started_at=timezone.now(),
+            heartbeat_at=timezone.now(),
+        )
+        # The worker finishes after the view loaded the job, before the stop
+        # reaches the database.
+        ImportJob.objects.filter(pk=job.pk).update(
+            status=ImportJob.Status.COMPLETED, finished_at=timezone.now()
+        )
+
+        job = svc.cancel_job(job)
+
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
+        self.assertIsNone(job.cancel_requested_at)
+
+    @override_settings(IMPORTS_BATCH_SECONDS=60)
     def test_a_recovered_job_resumes_and_finishes(self):
         job = ImportJob.objects.create(
             connection=self.conn,

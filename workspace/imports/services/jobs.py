@@ -123,7 +123,9 @@ def cancel_job(job):
         )
     )
     if not ended:
-        ImportJob.objects.filter(pk=job.pk).update(cancel_requested_at=now)
+        ImportJob.objects.filter(pk=job.pk).exclude(
+            status__in=ImportJob.TERMINAL_STATUSES
+        ).update(cancel_requested_at=now)
     job.refresh_from_db()
     progress.push_job_progress(job)
     return job
@@ -160,17 +162,34 @@ def _stale_running_q(now):
     )
 
 
+def _stale_pending_q(now):
+    """Pending jobs no worker has claimed for a lock TTL - the enqueue after
+    commit never reached the broker, or the delivery was lost. Left alone they
+    stay pending forever and hold the connection's one live-job slot."""
+    cutoff = now - timedelta(seconds=lock_ttl_seconds())
+    return Q(status=ImportJob.Status.PENDING) & (
+        Q(heartbeat_at__lt=cutoff) | Q(heartbeat_at__isnull=True, created_at__lt=cutoff)
+    )
+
+
 def recover_stale_jobs():
-    """Re-enqueue running jobs whose worker stopped reporting (killed, OOM,
-    deploy...). The advisory lock has expired by then, so the new delivery
-    picks the job up where the persisted stats left it."""
-    stale = ImportJob.objects.filter(_stale_running_q(timezone.now()))
+    """Re-enqueue jobs nobody is working on: running ones whose worker stopped
+    reporting (killed, OOM, deploy...) and pending ones whose delivery never
+    arrived. A running job's advisory lock has expired by then, so the new
+    delivery picks the job up where the persisted stats left it."""
+    now = timezone.now()
+    stale_q = _stale_running_q(now) | _stale_pending_q(now)
     recovered = 0
-    for job in stale:
+    for job in ImportJob.objects.filter(stale_q):
+        # Stamped conditionally, so of two overlapping scans only one enqueues,
+        # and the next scan leaves the job alone for one TTL while the new
+        # delivery makes its way to a worker.
+        stamped = ImportJob.objects.filter(stale_q, pk=job.pk).update(
+            heartbeat_at=timezone.now()
+        )
+        if not stamped:
+            continue
         logger.warning("Re-enqueueing stale import job %s", job.pk)
-        # Refresh the stamp so the next scan leaves the job alone for one TTL
-        # while the new delivery makes its way to a worker.
-        ImportJob.objects.filter(pk=job.pk).update(heartbeat_at=timezone.now())
         _enqueue(job)
         recovered += 1
     return recovered

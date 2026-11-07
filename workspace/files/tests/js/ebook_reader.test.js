@@ -75,10 +75,44 @@ test('title reads a plain title and a language map', () => {
   assert.equal(reader.title(undefined), '');
 });
 
-test('tooLarge refuses a book announced past the limit, and only then', () => {
-  const reader = load();
-  assert.equal(reader.tooLarge('2048', '1024'), true);
-  assert.equal(reader.tooLarge('1024', '1024'), false);
-  assert.equal(reader.tooLarge(null, '1024'), false);
-  assert.equal(reader.tooLarge('2048', ''), false);
+function fakeResponse(chunks, headers = {}) {
+  let cancelled = false;
+  const queue = chunks.map((size) => new Uint8Array(size));
+  return {
+    headers: { get: (name) => headers[name] ?? null },
+    body: {
+      getReader: () => ({
+        read: async () => (queue.length ? { done: false, value: queue.shift() } : { done: true }),
+        cancel: () => { cancelled = true; },
+      }),
+    },
+    wasCancelled: () => cancelled,
+  };
+}
+
+function loadWithBlob() {
+  return loadScript(READER, { document: { addEventListener() {} }, URL, Blob }).ebookReader;
+}
+
+test('readBook returns the whole body within the limit', async () => {
+  const reader = loadWithBlob();
+  const blob = await reader.readBook(
+    fakeResponse([400, 400], { 'Content-Type': 'application/epub+zip' }),
+    '1024',
+  );
+  assert.equal(blob.size, 800);
+  assert.equal(blob.type, 'application/epub+zip');
+});
+
+test('readBook refuses an announced length past the limit before reading', async () => {
+  const reader = loadWithBlob();
+  const response = fakeResponse([10], { 'Content-Length': '2048' });
+  await assert.rejects(reader.readBook(response, '1024'), /larger than the reader opens/);
+});
+
+test('readBook stops a body without a length as soon as it goes past', async () => {
+  const reader = loadWithBlob();
+  const response = fakeResponse([600, 600, 600]);
+  await assert.rejects(reader.readBook(response, '1024'), /larger than the reader opens/);
+  assert.equal(response.wasCancelled(), true);
 });

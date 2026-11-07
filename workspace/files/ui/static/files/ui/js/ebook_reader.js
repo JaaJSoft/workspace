@@ -23,14 +23,29 @@ function ebookSourceUrl(src, origin) {
 }
 
 /**
- * Whether a response announcing *contentLength* bytes is past *maxBytes*,
- * the most the reader opens: the browser would hold all of it. A response
- * that announces no length is let through.
+ * The body of *response* as a Blob, refused past *maxBytes*: the browser
+ * holds the whole book while it is open. A response that announces its
+ * length is refused before any of it is read; one that does not (compressed,
+ * chunked) is counted as it arrives and dropped the moment it goes past.
  */
-function ebookTooLarge(contentLength, maxBytes) {
-  const length = Number(contentLength);
-  const max = Number(maxBytes);
-  return length > 0 && max > 0 && length > max;
+async function ebookReadBook(response, maxBytes) {
+  const max = Number(maxBytes) || Infinity;
+  const tooLarge = () => new Error('The book is larger than the reader opens');
+  if (Number(response.headers.get('Content-Length')) > max) throw tooLarge();
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      reader.cancel();
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return new Blob(chunks, { type: response.headers.get('Content-Type') || '' });
 }
 
 /** The scale one step from *current* in *direction* (+1 or -1), clamped. */
@@ -82,7 +97,7 @@ function ebookTitle(metadata) {
 
 window.ebookReader = {
   sourceUrl: ebookSourceUrl,
-  tooLarge: ebookTooLarge,
+  readBook: ebookReadBook,
   stepFontScale: ebookStepFontScale,
   parseFontScale: ebookParseFontScale,
   bookStyles: ebookBookStyles,
@@ -195,10 +210,7 @@ async function openEbookReader(root) {
       fetch(src, { credentials: 'same-origin' }),
     ]);
     if (!response.ok) throw new Error(`The book could not be fetched: ${response.status}`);
-    if (ebookTooLarge(response.headers.get('Content-Length'), root.dataset.maxBytes)) {
-      throw new Error('The book is larger than the reader opens');
-    }
-    const blob = await response.blob();
+    const blob = await ebookReadBook(response, root.dataset.maxBytes);
     // foliate tells the formats apart by name as well as by content.
     book = await makeBook(new File([blob], root.dataset.name || 'book.epub', { type: blob.type }));
     view = document.createElement('foliate-view');

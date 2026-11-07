@@ -130,11 +130,13 @@ class MailAccountDetailView(APIView):
         ser.is_valid(raise_exception=True)
 
         password = ser.validated_data.pop("password", None)
+        changed = list(ser.validated_data)
         for key, value in ser.validated_data.items():
             setattr(account, key, value)
         if password:
             account.set_password(password)
-        account.save()
+            changed.append("password_encrypted")
+        account.save(update_fields=[*changed, "updated_at"])
 
         return Response(MailAccountSerializer(account).data)
 

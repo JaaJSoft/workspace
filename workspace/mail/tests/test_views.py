@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import orjson
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -80,6 +82,34 @@ class MailAccountSignatureApiTests(APITestCase):
         self.assertEqual(resp.status_code, 200, resp.content)
         self.account.refresh_from_db()
         self.assertEqual(self.account.signature, "keep me")
+
+    def test_patch_keeps_sync_state_written_while_it_ran(self):
+        """A sync landing between the PATCH's read and its write survives it."""
+        from workspace.mail.views.accounts import MailAccountDetailView
+
+        load = MailAccountDetailView._get_account
+
+        def load_then_sync_lands(view, request, uuid):
+            account = load(view, request, uuid)
+            MailAccount.objects.filter(pk=account.pk).update(
+                last_sync_error="Some folders failed to sync.",
+                imap_delimiter=".",
+            )
+            return account
+
+        with patch.object(MailAccountDetailView, "_get_account", load_then_sync_lands):
+            resp = self.client.patch(
+                self.url,
+                data=orjson.dumps({"display_name": "New Name", "password": "pw"}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.display_name, "New Name")
+        self.assertEqual(self.account.get_password(), "pw")
+        self.assertEqual(self.account.last_sync_error, "Some folders failed to sync.")
+        self.assertEqual(self.account.imap_delimiter, ".")
 
 
 class MergedFolderMessageListTests(APITestCase):

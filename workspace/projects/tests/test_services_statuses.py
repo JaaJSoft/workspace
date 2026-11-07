@@ -1,6 +1,8 @@
+from datetime import UTC, datetime
+
 from django.test import TestCase
 
-from workspace.projects.models import TaskEvent, TaskStatus
+from workspace.projects.models import Task, TaskEvent, TaskStatus
 from workspace.projects.services.statuses import (
     LastCategoryStatusError,
     StatusTargetError,
@@ -152,6 +154,18 @@ class DeleteStatusTests(ProjectTestMixin, TestCase):
         delete_status(second_done, move_to=self.todo, actor=self.admin)
         task.refresh_from_db()
         self.assertIsNone(task.completed_at)
+
+    def test_moving_between_done_columns_keeps_the_first_stamp(self):
+        first_completion = datetime(2026, 1, 5, 9, 0, tzinfo=UTC)
+        second_done = create_status(
+            self.project, name="Archived done", category=TaskStatus.Category.DONE
+        )
+        task = create_task(self.project, self.admin, title="A", status=second_done)
+        Task.objects.filter(pk=task.pk).update(completed_at=first_completion)
+        delete_status(second_done, move_to=self.done, actor=self.admin)
+        task.refresh_from_db()
+        self.assertEqual(task.status, self.done)
+        self.assertEqual(task.completed_at, first_completion)
 
     def test_records_move_events_with_name_snapshots(self):
         create_task(self.project, self.admin, title="A", status=self.todo)

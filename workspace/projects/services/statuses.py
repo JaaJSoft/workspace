@@ -5,6 +5,7 @@ from django.utils import timezone
 from ..models import Task, TaskStatus
 from .events import move_event_type, record_task_event
 from .members import ProjectRuleError
+from .tasks import completion_stamp
 
 
 class LastCategoryStatusError(ProjectRuleError):
@@ -109,11 +110,7 @@ def delete_status(status, *, move_to=None, actor=None):
                 task.status = move_to
                 task.position = next_position + i
                 task.project = project
-                if move_to.category == TaskStatus.Category.DONE:
-                    if task.completed_at is None:
-                        task.completed_at = now
-                else:
-                    task.completed_at = None
+                task.completed_at = completion_stamp(move_to, task.completed_at, now)
                 # bulk_update bypasses save(), so auto_now would leave
                 # updated_at stale; stamp it by hand.
                 task.updated_at = now

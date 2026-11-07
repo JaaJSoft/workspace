@@ -52,6 +52,19 @@ def _default_sprint(project, status):
     return project.sprints.filter(state=Sprint.State.ACTIVE).first()
 
 
+def completion_stamp(status, completed_at, now):
+    """The ``completed_at`` of a task entering *status*.
+
+    A task is done exactly when it carries a stamp, and the stamp is when it
+    first reached the done category: moving between two done columns keeps
+    it, leaving the category clears it. *completed_at* is the stamp the row
+    holds now - read under the row lock, or another writer's stamp is lost.
+    """
+    if status.category != TaskStatus.Category.DONE:
+        return None
+    return completed_at or now
+
+
 def next_position(project, status):
     """Next free position at the end of *status*'s column."""
     last = project.tasks.filter(status=status).aggregate(last=Max("position"))["last"]
@@ -126,14 +139,12 @@ def create_task(
             sprint=sprint,
             created_by=user,
             position=_locked_tail_position(project, status),
+            completed_at=completion_stamp(status, None, timezone.now()),
         )
         if assignees:
             task.assignees.set(assignees)
         if labels:
             task.labels.set(labels)
-        if status.category == TaskStatus.Category.DONE:
-            task.completed_at = timezone.now()
-            task.save(update_fields=["completed_at"])
         record_task_event(
             task,
             type=TaskEvent.Type.CREATED,
@@ -172,7 +183,7 @@ def has_field_updates(task, validated_data):
     """True when *validated_data* would change a non-status field of *task*.
 
     Status changes are excluded on purpose: they get their own MOVED or
-    COMPLETED event via apply_status_change, and a no-op PATCH must not
+    COMPLETED event via change_task_status, and a no-op PATCH must not
     pollute the activity feed. Assignee additions are excluded for the same
     reason - they get their own ASSIGNED event, as are epic changes (EPIC)
     and estimate changes (ESTIMATED).
@@ -194,34 +205,48 @@ def has_field_updates(task, validated_data):
     return False
 
 
-def apply_status_change(task, *, actor=None, old_status=None):
-    """Side effects after ``task.status`` was reassigned.
+def change_task_status(task, status, *, actor=None):
+    """Move *task* to the end of *status*'s column; return the column it left.
 
-    Appends the task to the end of its new column, maintains
-    ``completed_at`` from the status category and records the move event.
-    Saves the task.
+    The status, the position and ``completed_at`` land in one write under
+    the task's row lock, decided from the row as stored rather than from
+    *task*, which may have been loaded before another writer moved it. A
+    task without a sprint entering a board column joins the running sprint.
+    *task* is updated in place. Writes nothing and returns None when the
+    task already sits in *status*.
     """
     with transaction.atomic():
-        task.position = _locked_tail_position(task.project, task.status)
-        if task.status.category == TaskStatus.Category.DONE:
-            if task.completed_at is None:
-                task.completed_at = timezone.now()
-        else:
-            task.completed_at = None
-        update_fields = ["status", "position", "completed_at", "updated_at"]
+        position = _locked_tail_position(task.project, status)
+        stored = (
+            Task.objects.select_for_update(of=("self",))
+            .select_related("status")
+            .get(pk=task.pk)
+        )
+        old_status = stored.status
+        if old_status.pk == status.pk:
+            return None
+        now = timezone.now()
+        changes = {
+            "status": status,
+            "position": position,
+            "completed_at": completion_stamp(status, stored.completed_at, now),
+            # A queryset update bypasses auto_now.
+            "updated_at": now,
+        }
         joined_sprint = None
-        if task.sprint_id is None:
-            joined_sprint = _default_sprint(task.project, task.status)
+        if stored.sprint_id is None:
+            joined_sprint = _default_sprint(task.project, status)
             if joined_sprint is not None:
-                task.sprint = joined_sprint
-                update_fields.append("sprint")
-        task.save(update_fields=update_fields)
+                changes["sprint"] = joined_sprint
+        Task.objects.filter(pk=task.pk).update(**changes)
+        for field, value in changes.items():
+            setattr(task, field, value)
         record_task_event(
             task,
-            type=move_event_type(task.status),
+            type=move_event_type(status),
             actor=actor,
             from_status=old_status,
-            to_status=task.status,
+            to_status=status,
         )
         if joined_sprint is not None:
             record_task_event(
@@ -231,11 +256,12 @@ def apply_status_change(task, *, actor=None, old_status=None):
                 to_value=joined_sprint.name,
                 to_ref=joined_sprint.pk,
             )
-    if task.status.category == TaskStatus.Category.DONE:
+    if status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task])
     # After the settle: settling would immediately mark the fresh
     # status notification read on the done path.
     notify_status_changed([(task, old_status)], actor)
+    return old_status
 
 
 def delete_task(task, actor=None):
@@ -281,11 +307,7 @@ def move_tasks(project, status, task_uuids, *, actor=None):
             task.status = status
             task.position = position
             position += 1
-            if status.category == TaskStatus.Category.DONE:
-                if task.completed_at is None:
-                    task.completed_at = now
-            else:
-                task.completed_at = None
+            task.completed_at = completion_stamp(status, task.completed_at, now)
             if default_sprint is not None and task.sprint_id is None:
                 task.sprint = default_sprint
                 joined_sprint.append(task)
@@ -369,11 +391,7 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
             if task.status_id != status.pk:
                 moved.append((task, task.status))
                 task.status = status
-                if status.category == TaskStatus.Category.DONE:
-                    if task.completed_at is None:
-                        task.completed_at = now
-                elif task.completed_at is not None:
-                    task.completed_at = None
+                task.completed_at = completion_stamp(status, task.completed_at, now)
                 if default_sprint is not None and task.sprint_id is None:
                     task.sprint = default_sprint
                     joined_sprint.append(task)

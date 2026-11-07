@@ -14,7 +14,7 @@ from workspace.projects.models import (
     TaskWatcher,
 )
 from workspace.projects.services.comments import notify_comment_added
-from workspace.projects.services.tasks import apply_status_change, create_task
+from workspace.projects.services.tasks import change_task_status, create_task
 from workspace.projects.services.watchers import (
     auto_watch,
     clear_watch_state,
@@ -132,9 +132,7 @@ class CommentFanOutTests(WatcherTestsBase):
 
 class StatusChangeTests(WatcherTestsBase):
     def _move(self, task, status, actor):
-        task.status = status
-        old_status = self.todo if status != self.todo else self.done
-        apply_status_change(task, actor=actor, old_status=old_status)
+        change_task_status(task, status, actor=actor)
 
     def test_watcher_is_notified_of_a_move(self):
         task = self._task(status=self.todo)

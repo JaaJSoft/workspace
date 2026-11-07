@@ -98,7 +98,7 @@ from ..services.task_filters import (
     apply_task_ordering,
 )
 from ..services.tasks import (
-    apply_status_change,
+    change_task_status,
     create_task,
     delete_task,
     due_move_settles,
@@ -769,9 +769,12 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         fields_updated = has_field_updates(
             serializer.instance, serializer.validated_data
         )
+        # The status is not the serializer's to write: it moves together with
+        # the position and completed_at, in change_task_status's locked write.
+        new_status = serializer.validated_data.pop("status", None)
         task = serializer.save()
-        if task.status_id != old_status.pk:
-            apply_status_change(task, actor=self.request.user, old_status=old_status)
+        if new_status is not None and new_status.pk != old_status.pk:
+            change_task_status(task, new_status, actor=self.request.user)
         added_assignees = [
             u
             for u in serializer.validated_data.get("assignees", [])

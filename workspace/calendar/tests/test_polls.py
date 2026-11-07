@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -16,9 +17,26 @@ from workspace.calendar.models import (
     PollSlot,
     PollVote,
 )
+from workspace.calendar.serializers_polls import (
+    GuestVoteSubmitSerializer,
+    PollFinalizeSerializer,
+    VoteSubmitSerializer,
+)
 from workspace.notifications.models import Notification
 
 User = get_user_model()
+
+
+def _closed_while_validating(serializer_class, poll):
+    """Patch *serializer_class* so *poll* closes once the view has read it as
+    open - what a concurrent finalize committing at that moment looks like."""
+    real_is_valid = serializer_class.is_valid
+
+    def is_valid(serializer, *args, **kwargs):
+        Poll.objects.filter(pk=poll.pk).update(status=Poll.Status.CLOSED)
+        return real_is_valid(serializer, *args, **kwargs)
+
+    return patch.object(serializer_class, "is_valid", is_valid)
 
 
 class PollTestMixin:
@@ -367,6 +385,17 @@ class PollVoteTests(PollTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_a_vote_racing_the_finalize_is_refused_like_a_late_one(self):
+        self.client.force_authenticate(user=self.voter)
+        with _closed_while_validating(VoteSubmitSerializer, self.poll):
+            resp = self.client.post(
+                f"/api/v1/polls/{self.poll.uuid}/vote",
+                {"votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}]},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(PollVote.objects.filter(user=self.voter).exists())
+
     def test_vote_requires_auth(self):
         resp = self.client.post(
             f"/api/v1/polls/{self.poll.uuid}/vote",
@@ -638,6 +667,19 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_a_guest_vote_racing_the_finalize_is_refused_like_a_late_one(self):
+        with _closed_while_validating(GuestVoteSubmitSerializer, self.poll):
+            resp = self.client.post(
+                f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+                {
+                    "guest_name": "Late",
+                    "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                },
+                format="json",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(PollVote.objects.filter(guest_name="Late").exists())
+
     def test_guest_vote_rate_limit(self):
         cache.clear()
         url = f"/api/v1/polls/shared/{self.poll.share_token}/vote"
@@ -777,6 +819,34 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_concurrent_finalize_creates_no_second_event(self):
+        """The other finalize closes the poll after this one read it as open;
+        this one answers like a poll already closed and creates nothing."""
+        PollInvitee.objects.create(poll=self.poll, user=self.voter)
+        self.client.force_authenticate(user=self.owner)
+        with _closed_while_validating(PollFinalizeSerializer, self.poll):
+            resp = self.client.post(
+                f"/api/v1/polls/{self.poll.uuid}/finalize",
+                {"slot_id": str(self.slot.uuid)},
+                format="json",
+            )
+        # The 404 rolled back the request's transaction, the stand-in for the
+        # other finalize's close included.
+        Poll.objects.filter(pk=self.poll.pk).update(status=Poll.Status.CLOSED)
+        already_closed = self.client.post(
+            f"/api/v1/polls/{self.poll.uuid}/finalize",
+            {"slot_id": str(self.slot.uuid)},
+            format="json",
+        )
+        self.assertEqual(
+            (resp.status_code, resp.content),
+            (already_closed.status_code, already_closed.content),
+        )
+        self.assertFalse(Event.objects.filter(title="Lunch").exists())
+        self.assertFalse(Notification.objects.filter(recipient=self.voter).exists())
+        self.poll.refresh_from_db()
+        self.assertIsNone(self.poll.chosen_slot)
 
 
 # ── Invitations ──────────────────────────────────────────────────

@@ -92,12 +92,15 @@ window.calendarApp = function calendarApp() {
     polls: [],
     pollsLoading: false,
     pollForm: { title: '', description: '', slots: [{ start: '', end: '', showEnd: false }, { start: '', end: '', showEnd: false }] },
-    pollFormSubmitting: false,
+    pollCreating: false,
+    pollEditSaving: false,
     pollFormError: null,
     currentPoll: null,
     currentPollLoading: false,
+    currentPollError: null,
     pollMyVotes: {},
-    pollSubmitting: false,
+    pollVoting: false,
+    pollFinalizing: false,
     pollFinalizeSlotId: null,
 
     // Agenda view state (custom list view, not FullCalendar)

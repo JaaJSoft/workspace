@@ -293,10 +293,7 @@
           class="btn btn-sm btn-module"
           :disabled="pollCreating || !pollForm.title.trim()"
         >
-          <span
-            x-show="pollCreating"
-            class="loading loading-spinner loading-xs"
-          ></span>
+          <span x-show="pollCreating" class="loading loading-spinner loading-xs"></span>
           {% translate "Create poll" %}
         </button>
       </div>
@@ -425,10 +422,7 @@
           class="btn btn-sm btn-module"
           :disabled="pollEditSaving || !pollForm.title.trim()"
         >
-          <span
-            x-show="pollEditSaving"
-            class="loading loading-spinner loading-xs"
-          ></span>
+          <span x-show="pollEditSaving" class="loading loading-spinner loading-xs"></span>
           {% translate "Save changes" %}
         </button>
       </div>

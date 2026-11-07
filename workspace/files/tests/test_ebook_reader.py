@@ -5,7 +5,7 @@ covered by e2e/test_ebook_reader.py; this pins the server half that makes it
 safe: the reader page's policy, and the URLs it accepts.
 """
 
-import re
+from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlsplit
 
 from django.conf import settings
@@ -22,6 +22,19 @@ User = get_user_model()
 
 READER_URL = reverse("files_ui:ebook_reader")
 CONTENT_URL = "/api/v1/files/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b/content"
+
+
+class _ScriptTags(HTMLParser):
+    """The attributes of every <script> tag of a page, whatever its case."""
+
+    def __init__(self, html):
+        super().__init__()
+        self.tags = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self.tags.append(dict(attrs))
 
 
 def _directives(response):
@@ -54,11 +67,11 @@ class ReaderPageTests(TestCase):
         [source] = directives["script-src"]
         self.assertRegex(source, r"^'nonce-[^']+'$")
         nonce = source[len("'nonce-") : -1]
-        tags = re.findall(r"<script\b[^>]*>", response.content.decode())
+        tags = _ScriptTags(response.content.decode()).tags
         self.assertTrue(tags)
         for tag in tags:
             with self.subTest(tag=tag):
-                self.assertIn(f'nonce="{nonce}"', tag)
+                self.assertEqual(tag.get("nonce"), nonce)
         self.assertEqual(directives["default-src"], ["'none'"])
         self.assertEqual(directives["frame-ancestors"], ["'self'"])
 

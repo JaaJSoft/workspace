@@ -13,7 +13,7 @@
 >
   <button
     type="button"
-    class="btn btn-ghost btn-xs btn-square md:hidden"
+    class="btn btn-ghost btn-xs btn-square md:hidden disabled:bg-transparent disabled:border-transparent"
     :disabled="panelEditing || _currentIndex() <= 0"
     @click="navigatePrev()"
     title="{% translate 'Previous file' %}"
@@ -28,7 +28,7 @@
   ></span>
   <button
     type="button"
-    class="btn btn-ghost btn-xs btn-square md:hidden"
+    class="btn btn-ghost btn-xs btn-square md:hidden disabled:bg-transparent disabled:border-transparent"
     :disabled="panelEditing || _currentIndex() >= _totalViewable() - 1"
     @click="navigateNext()"
     title="{% translate 'Next file' %}"

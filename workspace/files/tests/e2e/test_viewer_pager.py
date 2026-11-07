@@ -13,6 +13,7 @@ from __future__ import annotations
 from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
+from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import FileShareLink
 from workspace.files.services import FileService
 
@@ -71,6 +72,49 @@ class ViewerPagerTests(PlaywrightTestCase):
             "() => document.querySelector('[data-file-viewer-inline] h3')"
             ".textContent === 'b.txt'"
         )
+
+    def test_on_a_phone_the_pager_overlaps_no_header_button(self):
+        # PDFs: the header then carries every button it can (slideshow,
+        # favorite, new tab, download, properties, close), which leaves the
+        # title column its narrowest.
+        pdfs = [
+            FileService.create_file(
+                owner=self.user,
+                parent=self.folder,
+                name=name,
+                content=ContentFile(make_pdf([name]), name=name),
+            )
+            for name in ("x.pdf", "y.pdf")
+        ]
+        self.page.set_viewport_size(PHONE)
+        self.login_as(self.user)
+        self.page.goto(
+            f"{self.live_server_url}/files/{self.folder.uuid}?open={pdfs[1].uuid}"
+        )
+        viewer = self.page.locator("[data-file-viewer-inline]")
+        viewer.locator("[data-viewer-new-tab-link]").wait_for(state="visible")
+        viewer.locator("[data-viewer-pager-next]").wait_for(state="visible")
+
+        geometry = self.page.evaluate(
+            """() => {
+                const viewer = document.querySelector('[data-file-viewer-inline]');
+                const pager = viewer.querySelector('[data-viewer-pager]');
+                const header = pager.parentElement.parentElement;
+                const boxes = [...pager.children].map(c => c.getBoundingClientRect());
+                const buttons = [...header.querySelectorAll('button, a')]
+                    .filter(el => !pager.contains(el) && el.offsetParent)
+                    .map(el => el.getBoundingClientRect());
+                // Half a pixel of slack: boxes that only touch do not overlap.
+                const overlaps = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5
+                    && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+                const head = header.getBoundingClientRect();
+                return {
+                    overlapping: boxes.some(a => buttons.some(b => overlaps(a, b))),
+                    outside: boxes.some(a => a.right > head.right + 0.5 || a.left < head.left - 0.5),
+                };
+            }"""
+        )
+        self.assertEqual(geometry, {"overlapping": False, "outside": False})
 
     def test_on_a_desktop_the_arrows_float_and_the_header_only_counts(self):
         viewer = self._open_middle(DESKTOP)

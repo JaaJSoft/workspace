@@ -282,6 +282,7 @@ class EventListView(CacheControlMixin, APIView):
             cal_or_member,
             is_recurring=True,
             recurrence_parent__isnull=True,
+            is_cancelled=False,
             start__lt=range_end,
         ).filter(
             Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=range_start),

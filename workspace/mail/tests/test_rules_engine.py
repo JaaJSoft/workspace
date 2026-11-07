@@ -329,7 +329,7 @@ class ApplyRuleToFolderTests(TestCase):
             actions=[{"type": "move_to_folder", "folder_id": str(target.uuid)}]
         )
         with patch(
-            "workspace.mail.services.rules.actions.move_message",
+            "workspace.mail.services.imap_messages.move_message",
             side_effect=Exception("boom"),
         ):
             result = apply_rule_to_folder(rule, self.folder, dry_run=False)

@@ -129,17 +129,40 @@ def move_to_folder(message, target, refresh=True):
     holds the message in its old folder gives the next sync a message it
     cannot find where we claim it is, and it soft-deletes it.
 
+    The row takes the UID the server gave the copy, so the target's sync
+    recognises it rather than soft-deleting it and importing it again as a
+    stranger - without labels, summary or extractions, and with rules and
+    notifications firing a second time. When that UID is unknown the row
+    is soft-deleted in place, as the source's reconcile would have done:
+    keeping the old UID in the target would point it at whichever message
+    holds that number there, and a later flag or delete with it.
+
     Returns the folder the message came from. `refresh=False` leaves the
     counters to a caller batching several moves into one aggregate.
     """
+    from ..models import MailMessage
     from .imap_messages import move_message
+    from .notifications import settle_message_notifications
 
-    move_message(message.account, message, target)
+    copied_uid = move_message(message.account, message, target)
 
     source_id = message.folder_id
-    message.folder = target
     with transaction.atomic():
-        message.save(update_fields=["folder", "updated_at"])
+        # A sync of the target that ran between the COPY and here has already
+        # imported the copy under that UID.
+        if (
+            copied_uid is not None
+            and not MailMessage.objects.filter(
+                folder=target, imap_uid=copied_uid
+            ).exists()
+        ):
+            message.folder = target
+            message.imap_uid = copied_uid
+            message.save(update_fields=["folder", "imap_uid", "updated_at"])
+        else:
+            message.deleted_at = timezone.now()
+            message.save(update_fields=["deleted_at", "updated_at"])
+            settle_message_notifications(message.account.owner, [message.pk])
         if refresh:
             refresh_folders_counts_bulk({source_id, target.pk})
     return source_id

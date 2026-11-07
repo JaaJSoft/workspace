@@ -154,7 +154,9 @@ class MarkEmailTests(MailTriageToolsTestCase):
 
 class MoveEmailTests(MailTriageToolsTestCase):
     def test_move_by_folder_name(self):
-        with patch("workspace.mail.services.imap_messages.move_message") as move:
+        with patch(
+            "workspace.mail.services.imap_messages.move_message", return_value=900
+        ) as move:
             result = self._call(
                 self.tools.move_email,
                 MoveEmailParams(uuid=self.message.uuid, folder="archive"),
@@ -165,7 +167,9 @@ class MoveEmailTests(MailTriageToolsTestCase):
         self.assertEqual(move.call_args.args[2], self.archive)
 
     def test_unknown_folder_lists_nothing_and_moves_nothing(self):
-        with patch("workspace.mail.services.imap_messages.move_message") as move:
+        with patch(
+            "workspace.mail.services.imap_messages.move_message", return_value=900
+        ) as move:
             result = self._call(
                 self.tools.move_email,
                 MoveEmailParams(uuid=self.message.uuid, folder="Nowhere"),
@@ -191,7 +195,9 @@ class MoveEmailTests(MailTriageToolsTestCase):
         self.assertIn("did not complete the move", result)
 
     def test_moving_to_the_current_folder_is_a_no_op(self):
-        with patch("workspace.mail.services.imap_messages.move_message") as move:
+        with patch(
+            "workspace.mail.services.imap_messages.move_message", return_value=900
+        ) as move:
             result = self._call(
                 self.tools.move_email,
                 MoveEmailParams(uuid=self.message.uuid, folder="Inbox"),
@@ -202,7 +208,9 @@ class MoveEmailTests(MailTriageToolsTestCase):
 
 class DeleteEmailTests(MailTriageToolsTestCase):
     def test_delete_moves_to_the_trash_folder(self):
-        with patch("workspace.mail.services.imap_messages.move_message") as move:
+        with patch(
+            "workspace.mail.services.imap_messages.move_message", return_value=900
+        ) as move:
             result = self._call(
                 self.tools.delete_email, DeleteEmailParams(uuid=self.message.uuid)
             )

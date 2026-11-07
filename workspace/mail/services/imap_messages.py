@@ -3,6 +3,7 @@
 import imaplib
 import logging
 import mmap
+import re
 import time
 from itertools import batched
 
@@ -83,21 +84,31 @@ def delete_message(account, message):
 
 
 def move_message(account, message, target_folder):
-    """Move a message to another folder via IMAP COPY + DELETE."""
+    """Move a message to another folder via IMAP COPY + DELETE.
+
+    Returns the UID the message got in `target_folder`, or None when the
+    server did not say (no UIDPLUS) and no single copy carrying its
+    Message-ID turned up there either.
+    """
+    target = _quote_mailbox(target_folder.name)
     conn = connect_imap(account)
     try:
+        uid_next = _uid_next(conn, target)
         conn.select(_quote_mailbox(message.folder.name))
+        conn.response("COPYUID")
         # imaplib does NOT raise on a 'NO' response - it returns (status, data).
         # If COPY fails (target gone, quota exceeded, perms denied) and we
         # don't check, the STORE+EXPUNGE below would permanently delete the
         # source message with no copy in target: irrecoverable data loss.
-        st, data = conn.uid(
-            "COPY", str(message.imap_uid), _quote_mailbox(target_folder.name)
-        )
+        st, data = conn.uid("COPY", str(message.imap_uid), target)
         if st != "OK":
             raise Exception(f"IMAP COPY failed: {data}")
+        copied_uid = _copied_uid(conn, message.imap_uid)
         conn.uid("STORE", str(message.imap_uid), "+FLAGS", "(\\Deleted)")
         conn.expunge()
+        if copied_uid is None:
+            copied_uid = _find_copy(conn, target, message.message_id, uid_next)
+        return copied_uid
     finally:
         try:
             conn.logout()
@@ -105,6 +116,71 @@ def move_message(account, message, target_folder):
             # Best-effort cleanup: a logout failure on an already-broken
             # connection isn't actionable.
             pass
+
+
+def _decoded(value):
+    return (
+        value.decode("ascii", errors="replace") if isinstance(value, bytes) else value
+    )
+
+
+def _uid_next(conn, mailbox):
+    """The UID the next message landing in `mailbox` will get, or None."""
+    try:
+        status, data = conn.status(mailbox, "(UIDNEXT)")
+    except imaplib.IMAP4.error, OSError:
+        return None
+    if status != "OK" or not data:
+        return None
+    match = re.search(r"UIDNEXT (\d+)", _decoded(data[0]) or "")
+    return int(match.group(1)) if match else None
+
+
+def _copied_uid(conn, source_uid):
+    """The target UID from the COPYUID code (RFC 4315) of the last COPY.
+
+    ``COPYUID <uidvalidity> <source set> <target set>``; a single message
+    copied gives a single UID on each side.
+    """
+    _code, data = conn.response("COPYUID")
+    for item in reversed(data or []):
+        if not item:
+            continue
+        match = re.fullmatch(r"\d+ (\d+) (\d+)", _decoded(item).strip())
+        if match and int(match.group(1)) == source_uid:
+            return int(match.group(2))
+    return None
+
+
+def _find_copy(conn, mailbox, message_id, uid_next):
+    """The UID of the one message at or past `uid_next` carrying `message_id`.
+
+    The copy just made is the only message that can have both. Anything else
+    - no Message-ID to look for, no UIDNEXT to bound the search, two hits -
+    answers None rather than guess: a wrong UID would point later flags and
+    deletes at another message.
+    """
+    message_id = message_id.strip()
+    # The header came off the wire: a CR or LF in it would end the SEARCH
+    # line and start a command of the sender's choosing.
+    if not message_id or not uid_next or not message_id.isprintable():
+        return None
+    try:
+        status, _ = conn.select(mailbox, readonly=True)
+        if status != "OK":
+            return None
+        status, data = conn.uid(
+            "SEARCH",
+            None,
+            f"UID {uid_next}:* HEADER Message-ID {_quote_mailbox(message_id)}",
+        )
+    except imaplib.IMAP4.error, OSError:
+        return None
+    if status != "OK" or not data or not data[0]:
+        return None
+    # "n:*" always matches the highest UID, even when it is below n.
+    found = [int(u) for u in _decoded(data[0]).split() if int(u) >= uid_next]
+    return found[0] if len(found) == 1 else None
 
 
 def _set_flag(account, message, flag, add):

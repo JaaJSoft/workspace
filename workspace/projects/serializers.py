@@ -285,6 +285,9 @@ class SprintSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def update(self, instance, validated_data):
+        return save_written_columns(instance, validated_data)
+
 
 class TaskStatusSerializer(serializers.ModelSerializer):
     class Meta:

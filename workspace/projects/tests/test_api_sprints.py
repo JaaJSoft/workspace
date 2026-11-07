@@ -5,8 +5,9 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.projects.models import Project, Sprint, TaskEvent
+from workspace.projects.serializers import SprintSerializer
 from workspace.projects.services.projects import create_project
-from workspace.projects.services.sprints import start_sprint
+from workspace.projects.services.sprints import complete_sprint, start_sprint
 from workspace.projects.services.tasks import create_task
 from workspace.projects.views.viewsets import SprintViewSet
 
@@ -98,6 +99,25 @@ class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         sprint.refresh_from_db()
         self.assertEqual(sprint.state, Sprint.State.PLANNED)
+
+    def test_editing_a_sprint_keeps_a_completion_landed_meanwhile(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        validate = SprintSerializer.validate
+
+        def validate_then_complete(serializer, attrs):
+            complete_sprint(Sprint.objects.get(pk=sprint.pk))
+            return validate(serializer, attrs)
+
+        self.client.force_authenticate(self.admin)
+        with mock.patch.object(SprintSerializer, "validate", validate_then_complete):
+            response = self.client.patch(
+                f"{self.sprints_url}/{sprint.uuid}", {"goal": "Ship"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sprint.refresh_from_db()
+        self.assertEqual(sprint.goal, "Ship")
+        self.assertEqual(sprint.state, Sprint.State.CLOSED)
+        self.assertIsNotNone(sprint.closed_at)
 
     def test_delete_planned_sprint_keeps_tasks(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")

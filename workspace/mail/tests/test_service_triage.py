@@ -20,6 +20,7 @@ from workspace.mail.models import (
 )
 from workspace.mail.services.triage import (
     flag_operations,
+    mark_folder_read,
     move_to_folder,
     set_flag,
     set_label,
@@ -102,6 +103,40 @@ class SetFlagTests(TriageServiceTestCase):
             set_flag(self.message, "starred")
         label.refresh_from_db()
         self.assertEqual(label.unread_count, 7)
+
+
+class MarkFolderReadTests(TriageServiceTestCase):
+    def test_a_message_imported_during_the_imap_calls_stays_unread(self):
+        # Its UID was not in the STORE, so the server never got its \Seen:
+        # marking it read here would be undone by the next sync.
+        label = MailLabel.objects.get(account=self.account, name="Urgent")
+        MailMessageLabel.objects.create(message=self.message, label=label)
+        arrived = []
+
+        def sync_imports_one_more(account, mailbox, uids):
+            newcomer = MailMessage.objects.create(
+                account=self.account, folder=self.inbox, imap_uid=2, is_read=False
+            )
+            MailMessageLabel.objects.create(message=newcomer, label=label)
+            MailLabel.objects.filter(pk=label.pk).update(unread_count=2)
+            arrived.append(newcomer)
+
+        with patch(
+            "workspace.mail.services.imap_messages.mark_uids_read",
+            side_effect=sync_imports_one_more,
+        ) as mark:
+            updated, synced = mark_folder_read(self.inbox)
+
+        mark.assert_called_once_with(self.account, self.inbox, [1])
+        self.assertEqual((updated, synced), (1, True))
+        self.message.refresh_from_db()
+        arrived[0].refresh_from_db()
+        self.inbox.refresh_from_db()
+        label.refresh_from_db()
+        self.assertTrue(self.message.is_read)
+        self.assertFalse(arrived[0].is_read)
+        self.assertEqual(self.inbox.unread_count, 1)
+        self.assertEqual(label.unread_count, 1)
 
 
 class MoveToFolderTests(TriageServiceTestCase):

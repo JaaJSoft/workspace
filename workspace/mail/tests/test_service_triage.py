@@ -171,6 +171,19 @@ class MoveToFolderTests(TriageServiceTestCase):
         self.inbox.refresh_from_db()
         self.assertEqual(self.inbox.message_count, 0)
 
+    def test_a_retired_unread_message_leaves_its_label_counts(self):
+        label = MailLabel.objects.get(account=self.account, name="Urgent")
+        MailMessageLabel.objects.create(message=self.message, label=label)
+        MailLabel.objects.filter(pk=label.pk).update(unread_count=1)
+
+        with patch(
+            "workspace.mail.services.imap_messages.move_message", return_value=None
+        ):
+            move_to_folder(self.message, self.archive, refresh=False)
+
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 0)
+
     def test_a_copy_the_target_sync_already_imported_is_not_claimed_twice(self):
         MailMessage.objects.create(
             account=self.account, folder=self.archive, imap_uid=900

@@ -138,7 +138,9 @@ def move_to_folder(message, target, refresh=True):
     holds that number there, and a later flag or delete with it.
 
     Returns the folder the message came from. `refresh=False` leaves the
-    counters to a caller batching several moves into one aggregate.
+    folder counters to a caller batching several moves into one aggregate;
+    the label counters of a retired row are refreshed here either way, since
+    only this function knows the row was retired.
     """
     from ..models import MailMessage
     from .imap_messages import move_message
@@ -185,6 +187,7 @@ def move_to_folder(message, target, refresh=True):
             message.deleted_at = now
             message.updated_at = now
             settle_message_notifications(message.account.owner, [message.pk])
+            refresh_message_label_counts(message)
         if refresh:
             refresh_folders_counts_bulk({source_id, target.pk})
     return source_id

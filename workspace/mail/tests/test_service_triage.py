@@ -287,6 +287,8 @@ class MoveToFolderTests(TriageServiceTestCase):
         with patch.object(QuerySet, "exists", exists_then_sync_imports):
             self._move(900)
 
+        self.message.refresh_from_db()
+        imported[0].refresh_from_db()
         self.assertEqual(self.message.folder, self.inbox)
         self.assertIsNotNone(self.message.deleted_at)
         self.assertIsNone(imported[0].deleted_at)

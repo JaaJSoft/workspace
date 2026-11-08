@@ -541,6 +541,29 @@ class EntryApiTests(TestCase):
         self.assertEqual(entry.encrypted_name, sealed("BAUG"))
         self.assertEqual(entry.deleted_at, trashed_at)
 
+    def test_an_edit_of_an_entry_purged_while_it_ran_answers_like_a_missing_one(
+        self,
+    ):
+        created = self._create(self.signed_entry()).json()
+        body = self.signed_entry(
+            entry_uuid=created["uuid"], encrypted_name=sealed("BAUG")
+        )
+        verify = entry_views.verify_record
+
+        def verify_then_purge(*args, **kwargs):
+            VaultEntry.objects.filter(uuid=created["uuid"]).delete()
+            return verify(*args, **kwargs)
+
+        with mock.patch.object(entry_views, "verify_record", verify_then_purge):
+            response = self._put(created["uuid"], body)
+        missing_uuid = uuid.uuid4()
+        missing = self._put(missing_uuid, self.signed_entry(entry_uuid=missing_uuid))
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
+        self.assertFalse(VaultEntry.objects.filter(uuid=created["uuid"]).exists())
+
     def test_unfavoriting_an_active_entry_is_accepted(self):
         created = self._create(self.signed_entry(is_favorite=True)).json()
         body = self.signed_entry(entry_uuid=created["uuid"], is_favorite=False)

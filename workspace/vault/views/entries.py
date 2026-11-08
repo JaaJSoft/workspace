@@ -177,6 +177,9 @@ class _EntryWriteMixin:
             )
         except IntegrityError:
             return Response(status=status.HTTP_409_CONFLICT)
+        except VaultEntry.NotUpdated:
+            # Purged after the lookup: the answer an unknown entry gets.
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
         entry = entry_queryset().get(uuid=entry.uuid)
         return Response(

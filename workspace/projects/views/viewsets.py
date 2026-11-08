@@ -758,7 +758,6 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
 
     def perform_update(self, serializer):
-        old_status = serializer.instance.status
         old_due_date = serializer.instance.due_date
         old_estimate = serializer.instance.estimate
         old_epic = serializer.instance.epic
@@ -773,7 +772,9 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         # the position and completed_at, in change_task_status's locked write.
         new_status = serializer.validated_data.pop("status", None)
         task = serializer.save()
-        if new_status is not None and new_status.pk != old_status.pk:
+        if new_status is not None:
+            # Even when it names the status loaded above: another writer may
+            # have moved the task since, and the client asked for this one.
             change_task_status(task, new_status, actor=self.request.user)
         added_assignees = [
             u
@@ -821,6 +822,12 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
         if task.due_date != old_due_date and due_move_settles(task.due_date):
             settle_task_notifications([task])
+        # The response describes the row as stored, moves landed by another
+        # writer since the task was loaded included.
+        task.refresh_from_db(
+            from_queryset=Task.objects.select_related("status"),
+            fields=["status", "position", "completed_at", "sprint", "updated_at"],
+        )
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()

@@ -425,6 +425,31 @@ class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
         self.assertEqual(stored.status, self.shipped)
         self.assertEqual(stored.completed_at, self.FIRST_COMPLETION)
 
+    def test_a_field_edit_answers_with_a_concurrent_completion(self):
+        with self._while_the_request_runs(self._complete_elsewhere):
+            response = self.client.patch(
+                self.detail_url, {"title": "renamed"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            (
+                response.data["status"],
+                response.data["status_category"],
+                response.data["completed_at"],
+            ),
+            (self.shipped.pk, TaskStatus.Category.DONE, "2026-01-05T09:00:00Z"),
+        )
+
+    def test_asking_for_the_loaded_status_undoes_a_move_landed_meanwhile(self):
+        with self._while_the_request_runs(self._complete_elsewhere):
+            response = self.client.patch(
+                self.detail_url, {"status": str(self.todo.uuid)}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stored = Task.objects.get(pk=self.task.pk)
+        self.assertEqual((stored.status, stored.completed_at), (self.todo, None))
+        self.assertEqual(response.data["status"], self.todo.pk)
+
     def test_moving_into_done_keeps_a_stamp_landed_meanwhile(self):
         with self._while_the_request_runs(self._complete_elsewhere):
             response = self.client.patch(

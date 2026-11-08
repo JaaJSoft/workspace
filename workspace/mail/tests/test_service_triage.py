@@ -138,6 +138,25 @@ class MarkFolderReadTests(TriageServiceTestCase):
         self.assertEqual(self.inbox.unread_count, 1)
         self.assertEqual(label.unread_count, 1)
 
+    def test_a_message_moved_out_during_the_imap_calls_stays_unread(self):
+        # The STORE went to the Inbox; the copy now in the Archive never got
+        # its \Seen, so marking the row read there would be undone by the
+        # next sync of the Archive.
+        def moved_to_archive(account, mailbox, uids):
+            MailMessage.objects.filter(pk=self.message.pk).update(
+                folder=self.archive, imap_uid=900
+            )
+
+        with patch(
+            "workspace.mail.services.imap_messages.mark_uids_read",
+            side_effect=moved_to_archive,
+        ):
+            updated, _synced = mark_folder_read(self.inbox)
+
+        self.message.refresh_from_db()
+        self.assertEqual(updated, 0)
+        self.assertFalse(self.message.is_read)
+
 
 class MoveToFolderTests(TriageServiceTestCase):
     def test_a_move_repoints_the_row_and_refreshes_both_folders(self):

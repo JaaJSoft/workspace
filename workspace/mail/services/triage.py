@@ -116,16 +116,20 @@ def mark_folder_read(folder):
                 scrub(e),
             )
 
-    # Only the rows whose UIDs went out: a message the sync imported during
-    # the IMAP calls never got its \Seen, and the next sync would flip it
-    # back to unread.
+    # Only the rows whose UIDs went out, and only while they are still where
+    # the STORE found them: a message the sync imported during the IMAP calls,
+    # or one moved out of the group meanwhile, never got its \Seen, and the
+    # next sync would flip it back to unread.
     updated = 0
     now = timezone.now()
     with transaction.atomic():
         for batch in batched(affected_ids, PK_BATCH_SIZE, strict=False):
-            updated += MailMessage.objects.filter(pk__in=batch, is_read=False).update(
-                is_read=True, updated_at=now
-            )
+            updated += MailMessage.objects.filter(
+                pk__in=batch,
+                folder_id__in=group_ids,
+                deleted_at__isnull=True,
+                is_read=False,
+            ).update(is_read=True, updated_at=now)
             refresh_labels_for_messages(batch)
         refresh_folders_counts_bulk(group_ids)
     return updated, synced

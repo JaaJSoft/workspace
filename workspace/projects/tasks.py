@@ -68,7 +68,7 @@ def notify_due_tasks():
     day. ``TaskReminder`` rows record what was already sent, so reruns skip
     them; a moved due date no longer matches its rows, which re-arms both
     reminders for the new date. Completing the task or pushing its due date
-    back settles any still-unread notification (see ``apply_status_change``
+    back settles any still-unread notification (see ``change_task_status``
     and the task update view).
     """
     from workspace.notifications.services.notifications import notify_stream

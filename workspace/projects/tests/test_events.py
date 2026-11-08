@@ -8,7 +8,7 @@ from workspace.projects.services.events import (
     serialize_task_event,
 )
 from workspace.projects.services.tasks import (
-    apply_status_change,
+    change_task_status,
     create_task,
     delete_task,
     reorder_tasks,
@@ -177,9 +177,7 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
 
     def test_move_to_active_column_records_moved(self):
         in_progress = self.project.statuses.get(name="In progress")
-        old_status = self.task.status
-        self.task.status = in_progress
-        apply_status_change(self.task, actor=self.member, old_status=old_status)
+        change_task_status(self.task, in_progress, actor=self.member)
         event = TaskEvent.objects.get()
         self.assertEqual(event.type, TaskEvent.Type.MOVED)
         self.assertEqual(event.actor, self.member)
@@ -187,9 +185,7 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.to_status, "In progress")
 
     def test_move_to_done_records_completed(self):
-        old_status = self.task.status
-        self.task.status = self.done
-        apply_status_change(self.task, actor=self.admin, old_status=old_status)
+        change_task_status(self.task, self.done, actor=self.admin)
         event = TaskEvent.objects.get()
         self.assertEqual(event.type, TaskEvent.Type.COMPLETED)
 

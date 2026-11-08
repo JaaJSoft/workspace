@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import pgettext
 from drf_spectacular.utils import extend_schema
@@ -48,6 +49,18 @@ def _poll_detail_queryset():
             ).order_by("position", "start"),
         ),
         "invitees__user",
+    )
+
+
+def _lock_open_poll(poll):
+    """Lock *poll*'s row for the rest of the transaction, 404 once it closed.
+
+    Votes are written under this lock, so a finalize either waits for them
+    or has already closed the poll and the vote is refused like any vote on a
+    closed poll.
+    """
+    return get_object_or_404(
+        Poll.objects.select_for_update(), pk=poll.pk, status=Poll.Status.OPEN
     )
 
 
@@ -177,7 +190,7 @@ class PollDetailView(APIView):
         for field in ("title", "description"):
             if field in d:
                 setattr(poll, field, d[field])
-        poll.save()
+        poll.save(update_fields=["title", "description", "updated_at"])
 
         if "slots" in d:
             submitted_uuids = {
@@ -259,14 +272,16 @@ class PollVoteView(APIView):
             poll.slots.filter(uuid__in=slot_ids).values_list("uuid", flat=True)
         )
 
-        for vote_data in ser.validated_data["votes"]:
-            if vote_data["slot_id"] not in valid_slots:
-                continue
-            PollVote.objects.update_or_create(
-                slot_id=vote_data["slot_id"],
-                user=request.user,
-                defaults={"choice": vote_data["choice"]},
-            )
+        with transaction.atomic():
+            _lock_open_poll(poll)
+            for vote_data in ser.validated_data["votes"]:
+                if vote_data["slot_id"] not in valid_slots:
+                    continue
+                PollVote.objects.update_or_create(
+                    slot_id=vote_data["slot_id"],
+                    user=request.user,
+                    defaults={"choice": vote_data["choice"]},
+                )
 
         # Notify poll creator about the vote
         if poll.created_by_id != request.user.id:
@@ -304,12 +319,10 @@ class PollFinalizeView(APIView):
     )
     @transaction.atomic
     def post(self, request, poll_id):
-        poll = get_object_or_404(
-            Poll,
-            uuid=poll_id,
-            created_by=request.user,
-            status=Poll.Status.OPEN,
+        open_poll = Poll.objects.filter(
+            uuid=poll_id, created_by=request.user, status=Poll.Status.OPEN
         )
+        poll = get_object_or_404(open_poll)
         # Note: we don't use _poll_detail_queryset() here because we modify the poll
         # and re-fetch at the end
         ser = PollFinalizeSerializer(data=request.data)
@@ -318,6 +331,15 @@ class PollFinalizeView(APIView):
         slot = get_object_or_404(
             PollSlot, uuid=ser.validated_data["slot_id"], poll=poll
         )
+
+        # The transition is the guard: of two concurrent finalizes only one
+        # closes the poll, and the other answers exactly like a finalize that
+        # found it closed instead of creating a second event.
+        closed = open_poll.update(
+            status=Poll.Status.CLOSED, chosen_slot=slot, updated_at=timezone.now()
+        )
+        if not closed:
+            get_object_or_404(open_poll.none())
 
         # Find or create default calendar
         calendar = Calendar.objects.filter(owner=request.user).order_by("name").first()
@@ -355,10 +377,7 @@ class PollFinalizeView(APIView):
             ]
         )
 
-        poll.status = Poll.Status.CLOSED
-        poll.chosen_slot = slot
-        poll.event = event
-        poll.save()
+        Poll.objects.filter(pk=poll.pk).update(event=event)
 
         # Notify invitees about finalization. Only yes/maybe voters became
         # EventMembers; the rest cannot open the event, so their notification
@@ -555,19 +574,21 @@ class SharedPollVoteView(APIView):
             poll.slots.filter(uuid__in=slot_ids).values_list("uuid", flat=True)
         )
 
-        for vote_data in d["votes"]:
-            if vote_data["slot_id"] not in valid_slots:
-                continue
-            PollVote.objects.update_or_create(
-                slot_id=vote_data["slot_id"],
-                user=None,
-                voter_token=voter_token,
-                defaults={
-                    "choice": vote_data["choice"],
-                    "guest_name": d["guest_name"],
-                    "guest_email": d.get("guest_email", ""),
-                },
-            )
+        with transaction.atomic():
+            _lock_open_poll(poll)
+            for vote_data in d["votes"]:
+                if vote_data["slot_id"] not in valid_slots:
+                    continue
+                PollVote.objects.update_or_create(
+                    slot_id=vote_data["slot_id"],
+                    user=None,
+                    voter_token=voter_token,
+                    defaults={
+                        "choice": vote_data["choice"],
+                        "guest_name": d["guest_name"],
+                        "guest_email": d.get("guest_email", ""),
+                    },
+                )
 
         # Notify poll creator about the guest vote
         creator_prefs = get_setting(

@@ -165,6 +165,36 @@ class AssignTasksTests(SprintServiceTestCase):
         with self.assertRaises(SprintTargetError):
             assign_tasks_to_sprint(self.scrum, sprint, [task.uuid])
 
+    def test_assign_refuses_a_sprint_closed_after_it_was_read(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        read_before_the_close = Sprint.objects.get(pk=sprint.pk)
+        complete_sprint(sprint)
+        task = create_task(self.scrum, self.admin, title="a")
+        with self.assertRaises(SprintTargetError):
+            assign_tasks_to_sprint(self.scrum, read_before_the_close, [task.uuid])
+        task.refresh_from_db()
+        self.assertIsNone(task.sprint_id)
+
+    def test_assign_follows_a_start_landed_after_the_sprint_was_read(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        read_before_the_start = Sprint.objects.get(pk=sprint.pk)
+        start_sprint(sprint)
+        task = create_task(self.scrum, self.admin, title="a")
+        assign_tasks_to_sprint(self.scrum, read_before_the_start, [task.uuid])
+        task.refresh_from_db()
+        self.assertEqual(task.sprint_id, sprint.pk)
+        self.assertEqual(task.status_id, self.todo.pk)
+
+    def test_assign_refuses_a_sprint_deleted_after_it_was_read(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        read_before_the_delete = Sprint.objects.get(pk=sprint.pk)
+        sprint.delete()
+        task = create_task(self.scrum, self.admin, title="a")
+        with self.assertRaises(SprintTargetError):
+            assign_tasks_to_sprint(self.scrum, read_before_the_delete, [task.uuid])
+        task.refresh_from_db()
+        self.assertIsNone(task.sprint_id)
+
     def test_clearing_records_removal_event(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         task = create_task(self.scrum, self.admin, title="a", sprint=sprint)

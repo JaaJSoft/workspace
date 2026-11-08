@@ -167,6 +167,7 @@ class SyncMixin:
                     locked_by=None,
                     locked_at=None,
                     lock_expires_at=None,
+                    lock_token="",
                 )
             )
             if not cleared:
@@ -181,33 +182,33 @@ class SyncMixin:
             )
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-        # POST - acquire or renew
-        if file_obj.locked_by_id == request.user.pk:
-            # Renew
-            File.objects.filter(pk=file_obj.pk).update(
-                lock_expires_at=now + self.LOCK_TTL,
-            )
-            file_obj.refresh_from_db()
-            return _lock_response(file_obj)
-
-        # Acquire (unlocked or expired). The "is free?" predicate lives in
-        # the UPDATE's WHERE clause so two concurrent acquires that both
-        # read the row as free can't both win - the loser sees count=0
-        # and returns 409 instead of silently overwriting the winner.
-        acquired = (
+        # POST - renew or acquire. Each predicate lives in its UPDATE's WHERE
+        # clause, not in the row read above: the lock can change hands in
+        # between, and two requests that both read it as theirs or as free
+        # can't both win - the loser sees count=0 and returns 409.
+        # Renew only the caller's app lock (no token). A WOPI or DAV lock of
+        # theirs keeps the deadline its protocol set.
+        renewed = File.objects.filter(
+            pk=file_obj.pk, locked_by=request.user, lock_token=""
+        ).update(lock_expires_at=now + self.LOCK_TTL)
+        # An app lock carries no token. Clearing the previous holder's is what
+        # stops their WOPI or DAV client from refreshing or releasing this one.
+        acquired = renewed or (
             File.objects.filter(pk=file_obj.pk)
             .filter(Q(locked_by__isnull=True) | Q(lock_expires_at__lte=now))
             .update(
                 locked_by=request.user,
                 locked_at=now,
                 lock_expires_at=now + self.LOCK_TTL,
+                lock_token="",
             )
         )
-        if not acquired:
-            file_obj.refresh_from_db()
+        file_obj.refresh_from_db()
+        if not acquired and not (
+            file_obj.locked_by_id == request.user.pk and file_obj.is_locked()
+        ):
             return Response(
                 _lock_response(file_obj).data,
                 status=status.HTTP_409_CONFLICT,
             )
-        file_obj.refresh_from_db()
         return _lock_response(file_obj)

@@ -291,12 +291,9 @@
         <button
           type="submit"
           class="btn btn-sm btn-module"
-          :disabled="pollFormSubmitting || !pollForm.title.trim()"
+          :disabled="pollCreating || !pollForm.title.trim()"
         >
-          <span
-            x-show="pollFormSubmitting"
-            class="loading loading-spinner loading-xs"
-          ></span>
+          <span x-show="pollCreating" class="loading loading-spinner loading-xs"></span>
           {% translate "Create poll" %}
         </button>
       </div>
@@ -423,12 +420,9 @@
         <button
           type="submit"
           class="btn btn-sm btn-module"
-          :disabled="pollFormSubmitting || !pollForm.title.trim()"
+          :disabled="pollEditSaving || !pollForm.title.trim()"
         >
-          <span
-            x-show="pollFormSubmitting"
-            class="loading loading-spinner loading-xs"
-          ></span>
+          <span x-show="pollEditSaving" class="loading loading-spinner loading-xs"></span>
           {% translate "Save changes" %}
         </button>
       </div>
@@ -450,6 +444,13 @@
     <div x-show="currentPollLoading" class="flex justify-center py-12 px-4">
       <span class="loading loading-spinner loading-lg"></span>
     </div>
+
+    <!-- Load failure -->
+    <template x-if="!currentPollLoading && currentPollError">
+      <div class="px-4 py-12">
+        <inline-alert type="error"><span x-text="currentPollError"></span></inline-alert>
+      </div>
+    </template>
 
     <!-- Content -->
     <div
@@ -558,10 +559,10 @@
             type="button"
             class="btn btn-sm btn-success"
             @click="finalizePoll()"
-            :disabled="!pollFinalizeSlotId || pollSubmitting"
+            :disabled="!pollFinalizeSlotId || pollFinalizing"
           >
-            <span x-show="pollSubmitting" class="loading loading-spinner loading-xs"></span>
-            <i data-lucide="check" class="w-4 h-4" x-show="!pollSubmitting"></i> {% translate "Finalize" %}
+            <span x-show="pollFinalizing" class="loading loading-spinner loading-xs"></span>
+            <i data-lucide="check" class="w-4 h-4" x-show="!pollFinalizing"></i> {% translate "Finalize" %}
           </button>
         </div>
       </template>
@@ -729,10 +730,10 @@
           type="button"
           class="btn btn-sm btn-module"
           @click="submitPollVotes()"
-          :disabled="pollSubmitting"
+          :disabled="pollVoting"
         >
-          <span x-show="pollSubmitting" class="loading loading-spinner loading-xs"></span>
-          <i data-lucide="save" class="w-4 h-4" x-show="!pollSubmitting"></i>
+          <span x-show="pollVoting" class="loading loading-spinner loading-xs"></span>
+          <i data-lucide="save" class="w-4 h-4" x-show="!pollVoting"></i>
           {% translate "Save my votes" %}
         </button>
       </template>

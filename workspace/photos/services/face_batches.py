@@ -102,14 +102,20 @@ def _run(user, action, faces, target, result, touched):
                 touched=touched,
             )
         elif action == REJECT:
-            face_corrections.reject_face(face, touched=touched)
-            result.done.append(face.pk)
+            _record(result, face, face_corrections.reject_face(face, touched=touched))
         elif action == HIDE:
-            face_corrections.hide_face(face, touched=touched)
-            result.done.append(face.pk)
+            _record(result, face, face_corrections.hide_face(face, touched=touched))
         elif action == UNHIDE:
-            face_corrections.unhide_face(face)
-            result.done.append(face.pk)
+            _record(result, face, face_corrections.unhide_face(face))
+
+
+def _record(result, face, applied):
+    """A correction the face had left behind by the time it ran - moved,
+    confirmed, unhidden elsewhere - skips it like one that never applied."""
+    if applied:
+        result.done.append(face.pk)
+    else:
+        result.skipped.append((face.pk, UNAVAILABLE))
 
 
 def _attempt(result, face, fn, *args, **kwargs):

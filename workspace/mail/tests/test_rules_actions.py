@@ -157,7 +157,7 @@ class MoveDeleteActionTests(_BaseActionTests):
             folder_type="archive",
         )
 
-    @patch("workspace.mail.services.rules.actions.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_move_to_folder_success(self, mock_imap):
         action = parse_actions(
             [
@@ -170,8 +170,18 @@ class MoveDeleteActionTests(_BaseActionTests):
         self.assertEqual(self.msg.folder_id, self.archive.uuid)
         mock_imap.assert_called_once()
 
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
+    def test_move_to_folder_takes_the_uid_of_the_copy(self, _move):
+        """Same move as the UI's: the target's sync must recognise the row."""
+        action = parse_actions(
+            [{"type": "move_to_folder", "folder_id": str(self.archive.uuid)}]
+        )[0]
+        apply_action(action, self.msg)
+        self.msg.refresh_from_db()
+        self.assertEqual(self.msg.imap_uid, 900)
+
     @patch(
-        "workspace.mail.services.rules.actions.move_message",
+        "workspace.mail.services.imap_messages.move_message",
         side_effect=Exception("IMAP down"),
     )
     def test_move_to_folder_imap_failure_keeps_local_folder(self, _mock):
@@ -189,7 +199,7 @@ class MoveDeleteActionTests(_BaseActionTests):
         self.msg.refresh_from_db()
         self.assertEqual(self.msg.folder_id, orig_folder_id)
 
-    @patch("workspace.mail.services.rules.actions.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_move_to_other_account_folder_rejected(self, mock_imap):
         from django.contrib.auth import get_user_model
 
@@ -267,7 +277,7 @@ class MoveToFolderMergeTests(TestCase):
             account=self.account, folder=folder, imap_uid=uid, subject="m"
         )
 
-    @patch("workspace.mail.services.rules.actions.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_alias_target_resolves_to_the_canonical(self, move):
         from workspace.mail.services.rules.actions import _move_to_folder
         from workspace.mail.services.rules.schema import MoveToFolderAction
@@ -283,7 +293,7 @@ class MoveToFolderMergeTests(TestCase):
         self.assertEqual(msg.folder_id, self.trash.pk)
         self.assertEqual(result["folder_id"], str(self.trash.uuid))
 
-    @patch("workspace.mail.services.rules.actions.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_move_within_the_group_is_a_noop(self, move):
         from workspace.mail.services.rules.actions import _move_to_folder
         from workspace.mail.services.rules.schema import MoveToFolderAction

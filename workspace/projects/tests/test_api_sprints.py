@@ -1,11 +1,15 @@
 from datetime import date
+from unittest import mock
 
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.projects.models import Project, Sprint, TaskEvent
+from workspace.projects.serializers import SprintSerializer
 from workspace.projects.services.projects import create_project
+from workspace.projects.services.sprints import complete_sprint, start_sprint
 from workspace.projects.services.tasks import create_task
+from workspace.projects.views.viewsets import SprintViewSet
 
 from .base import ProjectTestMixin
 
@@ -96,6 +100,25 @@ class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
         sprint.refresh_from_db()
         self.assertEqual(sprint.state, Sprint.State.PLANNED)
 
+    def test_editing_a_sprint_keeps_a_completion_landed_meanwhile(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
+        validate = SprintSerializer.validate
+
+        def validate_then_complete(serializer, attrs):
+            complete_sprint(Sprint.objects.get(pk=sprint.pk))
+            return validate(serializer, attrs)
+
+        self.client.force_authenticate(self.admin)
+        with mock.patch.object(SprintSerializer, "validate", validate_then_complete):
+            response = self.client.patch(
+                f"{self.sprints_url}/{sprint.uuid}", {"goal": "Ship"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sprint.refresh_from_db()
+        self.assertEqual(sprint.goal, "Ship")
+        self.assertEqual(sprint.state, Sprint.State.CLOSED)
+        self.assertIsNotNone(sprint.closed_at)
+
     def test_delete_planned_sprint_keeps_tasks(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         task = create_task(self.scrum, self.admin, title="a", sprint=sprint)
@@ -110,6 +133,27 @@ class SprintCrudApiTests(ScrumProjectMixin, APITestCase):
         self.client.force_authenticate(self.admin)
         response = self.client.delete(f"{self.sprints_url}/{sprint.uuid}")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_delete_refuses_a_sprint_started_after_it_was_read(self):
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        task = create_task(self.scrum, self.admin, title="a", sprint=sprint)
+        read = SprintViewSet.get_object
+
+        def read_then_start(view):
+            loaded = read(view)
+            if loaded.state == Sprint.State.PLANNED:
+                start_sprint(Sprint.objects.get(pk=loaded.pk))
+            return loaded
+
+        self.client.force_authenticate(self.admin)
+        with mock.patch.object(SprintViewSet, "get_object", read_then_start):
+            response = self.client.delete(f"{self.sprints_url}/{sprint.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"], "The active sprint must be completed, not deleted."
+        )
+        task.refresh_from_db()
+        self.assertEqual(task.sprint_id, sprint.pk)
 
 
 class SprintLifecycleApiTests(ScrumProjectMixin, APITestCase):

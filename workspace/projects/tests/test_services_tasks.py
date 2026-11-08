@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 from django.test import TestCase
 
-from workspace.projects.models import TaskEvent
+from workspace.projects.models import Task, TaskEvent, TaskStatus
+from workspace.projects.services.statuses import create_status
 from workspace.projects.services.tasks import (
-    apply_status_change,
+    change_task_status,
     create_task,
     move_tasks,
     reorder_tasks,
@@ -73,23 +74,78 @@ class CreateTaskTests(TaskServiceMixin, TestCase):
         self.assertEqual(self.project.tasks.count(), 0)
 
 
-class ApplyStatusChangeTests(TaskServiceMixin, TestCase):
+class ChangeTaskStatusTests(TaskServiceMixin, TestCase):
     def test_moving_to_done_sets_completed_at_and_appends(self):
         create_task(self.project, self.admin, title="already", status=self.done)
         task = create_task(self.project, self.admin, title="t")
-        task.status = self.done
-        apply_status_change(task)
+        change_task_status(task, self.done)
         task.refresh_from_db()
         self.assertIsNotNone(task.completed_at)
         self.assertEqual(task.position, 1)
 
     def test_moving_out_of_done_clears_completed_at(self):
         task = create_task(self.project, self.admin, title="t", status=self.done)
-        task.status = self.todo
-        apply_status_change(task)
+        change_task_status(task, self.todo)
         task.refresh_from_db()
         self.assertIsNone(task.completed_at)
         self.assertEqual(task.status, self.todo)
+
+
+class CompletionStampTests(TaskServiceMixin, TestCase):
+    """Every writer that moves a task keeps the done category and
+    ``completed_at`` in step: done exactly when stamped, and the stamp is the
+    moment the task first reached the done category."""
+
+    FIRST_COMPLETION = datetime(2026, 1, 5, 9, 0, tzinfo=UTC)
+
+    def setUp(self):
+        super().setUp()
+        self.shipped = create_status(
+            self.project, name="Shipped", category=TaskStatus.Category.DONE
+        )
+
+    def _writers(self):
+        return {
+            "change_task_status": change_task_status,
+            "move_tasks": lambda task, status: move_tasks(
+                self.project, status, [task.uuid]
+            ),
+            "reorder_tasks": lambda task, status: reorder_tasks(
+                self.project, status, [task.uuid]
+            ),
+        }
+
+    def _completed_task(self):
+        task = create_task(self.project, self.admin, title="t", status=self.done)
+        Task.objects.filter(pk=task.pk).update(completed_at=self.FIRST_COMPLETION)
+        return Task.objects.get(pk=task.pk)
+
+    def test_entering_the_done_category_stamps_the_task(self):
+        for name, write in self._writers().items():
+            with self.subTest(writer=name):
+                task = create_task(self.project, self.admin, title=name)
+                write(task, self.done)
+                task.refresh_from_db()
+                self.assertEqual(task.status, self.done)
+                self.assertIsNotNone(task.completed_at)
+
+    def test_moving_between_done_columns_keeps_the_first_stamp(self):
+        for name, write in self._writers().items():
+            with self.subTest(writer=name):
+                task = self._completed_task()
+                write(task, self.shipped)
+                task.refresh_from_db()
+                self.assertEqual(task.status, self.shipped)
+                self.assertEqual(task.completed_at, self.FIRST_COMPLETION)
+
+    def test_leaving_the_done_category_clears_the_stamp(self):
+        for name, write in self._writers().items():
+            with self.subTest(writer=name):
+                task = self._completed_task()
+                write(task, self.todo)
+                task.refresh_from_db()
+                self.assertEqual(task.status, self.todo)
+                self.assertIsNone(task.completed_at)
 
 
 class ReorderTasksTests(TaskServiceMixin, TestCase):

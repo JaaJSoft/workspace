@@ -111,7 +111,7 @@ from workspace.projects.services.projects import (  # noqa: E402
     get_or_create_personal_project,
 )
 from workspace.projects.services.tasks import (  # noqa: E402
-    apply_status_change,
+    change_task_status,
     create_task,
 )
 from workspace.users.models import UserPresence  # noqa: E402
@@ -868,7 +868,7 @@ def _seed_task(project, statuses, members, labels, history_days, not_before):
 
     The final column is drawn from STATUS_WEIGHTS; about half of the tasks
     that end up off-backlog are first created in the backlog column and then
-    moved via apply_status_change, so the activity feed gets realistic
+    moved via change_task_status, so the activity feed gets realistic
     MOVED/COMPLETED events on top of the CREATED ones. Returns the task's
     last-activity timestamp.
     """
@@ -903,9 +903,7 @@ def _seed_task(project, statuses, members, labels, history_days, not_before):
     created_ts = max(_rand_past(history_days), not_before)
     updated_ts = created_ts
     if moved:
-        old_status = task.status
-        task.status = final
-        apply_status_change(task, actor=random.choice(members), old_status=old_status)
+        change_task_status(task, final, actor=random.choice(members))
         span = (timezone.now() - created_ts).total_seconds()
         updated_ts = created_ts + timedelta(seconds=random.random() * span)
 

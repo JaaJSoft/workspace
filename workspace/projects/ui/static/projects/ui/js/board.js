@@ -299,7 +299,10 @@ function projectBoard(config) {
     currentView: config.view || 'board',
     collapsed: window.sidebarPreference.initial(),
     dragging: null,
-    saving: false,
+    creatingTask: false,
+    // Each drop's refresh would render the server's order as of that
+    // reorder, over the optimistic DOM of any drop made since.
+    _reorders: window.latestOnly(),
     statuses: [],
     members: [],
     labels: [],
@@ -484,7 +487,7 @@ function projectBoard(config) {
     },
 
     async saveOrder(statusUuid, order) {
-      this.saving = true;
+      const reorder = this._reorders.start();
       try {
         const resp = await fetch(config.apiBase + '/tasks/reorder', {
           method: 'POST',
@@ -495,8 +498,7 @@ function projectBoard(config) {
       } catch (e) {
         // On failure, refresh in finally restores server truth
       } finally {
-        this.refresh();
-        this.saving = false;
+        if (reorder.isCurrent()) this.refresh();
       }
     },
 
@@ -1249,8 +1251,8 @@ function projectBoard(config) {
 
 
     async saveTask() {
-      if (this.saving) return;
-      this.saving = true;
+      if (this.creatingTask) return;
+      this.creatingTask = true;
       try {
         const resp = await fetch(config.apiBase + '/tasks', {
           method: 'POST',
@@ -1280,7 +1282,7 @@ function projectBoard(config) {
       } catch (e) {
         this.formError = 'Could not save the task.';
       } finally {
-        this.saving = false;
+        this.creatingTask = false;
       }
     },
   };

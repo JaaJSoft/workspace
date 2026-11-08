@@ -1,10 +1,14 @@
-from datetime import date
+import uuid
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from unittest import mock
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.projects.models import Task, TaskEvent
+from workspace.projects.models import Task, TaskEvent, TaskStatus
+from workspace.projects.services.statuses import create_status
 from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
@@ -325,6 +329,35 @@ class TaskDetailTests(TaskApiMixin, APITestCase):
         self.task.refresh_from_db()
         self.assertIsNotNone(self.task.completed_at)
 
+    def _completed_at(self, when):
+        Task.objects.filter(pk=self.task.pk).update(status=self.done, completed_at=when)
+
+    def test_patching_between_done_columns_keeps_the_first_stamp(self):
+        first_completion = datetime(2026, 1, 5, 9, 0, tzinfo=UTC)
+        shipped = create_status(
+            self.project, name="Shipped", category=TaskStatus.Category.DONE
+        )
+        self._completed_at(first_completion)
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            self.detail_url, {"status": str(shipped.uuid)}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, shipped)
+        self.assertEqual(self.task.completed_at, first_completion)
+
+    def test_patching_out_of_done_clears_completed_at(self):
+        self._completed_at(timezone.now())
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            self.detail_url, {"status": str(self.todo.uuid)}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["completed_at"])
+        self.task.refresh_from_db()
+        self.assertIsNone(self.task.completed_at)
+
     def test_member_deletes_task(self):
         self.client.force_authenticate(self.member)
         response = self.client.delete(self.detail_url)
@@ -343,6 +376,131 @@ class TaskDetailTests(TaskApiMixin, APITestCase):
         self.assertEqual(resp.data["number"], self.task.number)
         self.assertEqual(
             resp.data["reference"], f"{self.project.key}-{self.task.number}"
+        )
+
+
+class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
+    """A PATCH loads the task when the request begins and writes it when it
+    ends. Whatever another writer did to the row in between - completing the
+    task, stamping it - must survive, and the status must never land without
+    the stamp that goes with it."""
+
+    FIRST_COMPLETION = datetime(2026, 1, 5, 9, 0, tzinfo=UTC)
+
+    def setUp(self):
+        super().setUp()
+        self.shipped = create_status(
+            self.project, name="Shipped", category=TaskStatus.Category.DONE
+        )
+        self.task = create_task(self.project, self.admin, title="t", status=self.todo)
+        self.detail_url = f"{self.tasks_url}/{self.task.uuid}"
+        self.client.force_authenticate(self.member)
+
+    def _while_the_request_runs(self, concurrent_write):
+        """Run *concurrent_write* after the view loaded the task, before it
+        writes anything back."""
+        from workspace.projects.services.tasks import has_field_updates
+
+        def interleaved(task, validated_data):
+            concurrent_write()
+            return has_field_updates(task, validated_data)
+
+        return mock.patch(
+            "workspace.projects.views.viewsets.has_field_updates",
+            side_effect=interleaved,
+        )
+
+    def _complete_elsewhere(self):
+        Task.objects.filter(pk=self.task.pk).update(
+            status=self.shipped, completed_at=self.FIRST_COMPLETION
+        )
+
+    def test_a_field_edit_leaves_a_concurrent_completion_alone(self):
+        with self._while_the_request_runs(self._complete_elsewhere):
+            response = self.client.patch(
+                self.detail_url, {"title": "renamed"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stored = Task.objects.get(pk=self.task.pk)
+        self.assertEqual(stored.title, "renamed")
+        self.assertEqual(stored.status, self.shipped)
+        self.assertEqual(stored.completed_at, self.FIRST_COMPLETION)
+
+    def test_a_task_deleted_once_the_edit_landed_answers_like_a_missing_one(self):
+        from workspace.projects.services.events import record_task_event
+
+        def deleted_meanwhile(task, **kwargs):
+            record_task_event(task, **kwargs)
+            Task.objects.filter(pk=self.task.pk).delete()
+
+        with mock.patch(
+            "workspace.projects.views.viewsets.record_task_event",
+            side_effect=deleted_meanwhile,
+        ):
+            response = self.client.patch(
+                self.detail_url, {"title": "renamed"}, format="json"
+            )
+        missing = self.client.patch(
+            f"{self.tasks_url}/{uuid.uuid4()}", {"title": "renamed"}, format="json"
+        )
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
+
+    def test_a_field_edit_answers_with_a_concurrent_completion(self):
+        with self._while_the_request_runs(self._complete_elsewhere):
+            response = self.client.patch(
+                self.detail_url, {"title": "renamed"}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            (
+                response.data["status"],
+                response.data["status_category"],
+                response.data["completed_at"],
+            ),
+            (self.shipped.pk, TaskStatus.Category.DONE, "2026-01-05T09:00:00Z"),
+        )
+
+    def test_asking_for_the_loaded_status_undoes_a_move_landed_meanwhile(self):
+        with self._while_the_request_runs(self._complete_elsewhere):
+            response = self.client.patch(
+                self.detail_url, {"status": str(self.todo.uuid)}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stored = Task.objects.get(pk=self.task.pk)
+        self.assertEqual((stored.status, stored.completed_at), (self.todo, None))
+        self.assertEqual(response.data["status"], self.todo.pk)
+
+    def test_moving_into_done_keeps_a_stamp_landed_meanwhile(self):
+        with self._while_the_request_runs(self._complete_elsewhere):
+            response = self.client.patch(
+                self.detail_url, {"status": str(self.done.uuid)}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stored = Task.objects.get(pk=self.task.pk)
+        self.assertEqual(stored.status, self.done)
+        self.assertEqual(stored.completed_at, self.FIRST_COMPLETION)
+        self.assertEqual(response.data["completed_at"], "2026-01-05T09:00:00Z")
+        event = self.task.events.get(type=TaskEvent.Type.COMPLETED)
+        self.assertEqual(event.from_status, "Shipped")
+
+    def test_the_status_never_lands_without_its_stamp(self):
+        with (
+            mock.patch(
+                "workspace.projects.services.tasks.record_task_event",
+                side_effect=RuntimeError("worker died"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.patch(
+                self.detail_url, {"status": str(self.done.uuid)}, format="json"
+            )
+        stored = Task.objects.get(pk=self.task.pk)
+        self.assertEqual(
+            (stored.status.category, stored.completed_at),
+            (TaskStatus.Category.ACTIVE, None),
         )
 
 

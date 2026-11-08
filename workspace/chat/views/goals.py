@@ -6,6 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.ai.services.agent_goals import close_goal, update_open_goal
+
 from ..serializers import AgentGoalCreateSerializer, AgentGoalSerializer
 from ..services.bot_tasks import can_manage_bot_task
 from ..services.conversations import get_active_membership
@@ -166,13 +168,19 @@ class AgentGoalDetailView(APIView):
             goal, data=request.data, partial=True, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
-        updated = serializer.save()
-        return Response(AgentGoalSerializer(updated, context={"request": request}).data)
+        # Only the fields the request changed, and only while the goal is open:
+        # the agent may have closed it, and the check-in worker moved
+        # next_check_at, since the row was loaded.
+        if not update_open_goal(goal, serializer.validated_data):
+            return Response(
+                {"detail": "Agent goal not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        goal.refresh_from_db()
+        return Response(AgentGoalSerializer(goal, context={"request": request}).data)
 
     @extend_schema(summary="Stop an agent goal (marks it abandoned)")
     def delete(self, request, conversation_id, goal_id):
-        from django.utils import timezone
-
         from workspace.ai.models import AgentGoal
 
         membership = get_active_membership(request.user, conversation_id)
@@ -194,8 +202,11 @@ class AgentGoalDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        goal.status = AgentGoal.Status.ABANDONED
-        goal.outcome = goal.outcome or "Stopped by the user."
-        goal.closed_at = timezone.now()
-        goal.save(update_fields=["status", "outcome", "closed_at", "updated_at"])
+        if not close_goal(
+            goal, AgentGoal.Status.ABANDONED, goal.outcome or "Stopped by the user."
+        ):
+            return Response(
+                {"detail": "Agent goal not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)

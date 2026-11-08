@@ -134,14 +134,20 @@ def sync_folder_messages(account, folder):
         # data[0] which is the EXISTS message count)
         uid_validity = _get_uidvalidity(conn)
         if uid_validity and folder.uid_validity and folder.uid_validity != uid_validity:
-            # UIDVALIDITY changed - purge and re-sync
+            # The cursor counts UIDs of the old validity: stored apart from the
+            # new validity, a sync dying in between would skip every message
+            # whose new UID falls at or below it, for good.
             logger.info("UIDVALIDITY changed for %s, resetting", scrub(folder.name))
-            MailMessage.objects.filter(folder=folder).delete()
-            folder.last_sync_uid = 0
-
-        if uid_validity:
+            with transaction.atomic():
+                MailMessage.objects.filter(folder=folder).delete()
+                folder.uid_validity = uid_validity
+                folder.last_sync_uid = 0
+                folder.save(
+                    update_fields=["uid_validity", "last_sync_uid", "updated_at"]
+                )
+        elif uid_validity and folder.uid_validity != uid_validity:
             folder.uid_validity = uid_validity
-        folder.save(update_fields=["uid_validity", "updated_at"])
+            folder.save(update_fields=["uid_validity", "updated_at"])
 
         # Captured here on purpose. Reading it at function entry would miss the
         # UIDVALIDITY reset just above, which purges the folder and re-imports

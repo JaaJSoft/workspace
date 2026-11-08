@@ -7,8 +7,10 @@ session; a test class needs one of its own only when it reads the tree back
 (``workspace.common.tests.media``).
 
 It also arms the full-row-write guard over ``File``, the model the app mutates
-from the most places at once (``workspace.common.tests.row_writes`` explains
-what it catches and why nothing else can).
+from the most places at once, and over the models whose lifecycle state is
+written by a request and a worker at the same time (``GUARDED_LIFECYCLE_MODELS``).
+``workspace.common.tests.row_writes`` explains what it catches and why nothing
+else can.
 
 And it opens preview modules to everyone. Fixture users are regular users, and
 under the production audience (``staff``) a preview module refuses every
@@ -31,6 +33,25 @@ from django.test.utils import override_settings
 
 VAULT_TEST_SWITCHES = {"VAULT_TEST_SUITES": True, "VAULT_TEST_RUNNER_ACTIVE": True}
 
+# Rows whose status, claim token or trash stamp is written by several actors at
+# once - a request, a Celery worker, a dispatcher. A full-row save on one of
+# them republishes the state it was loaded in, which is how a cancel came back
+# as COMPLETED and a fired one-shot came back active.
+GUARDED_LIFECYCLE_MODELS = (
+    "ai.AITask",
+    "ai.AgentGoal",
+    "ai.ScheduledMessage",
+    "calendar.Poll",
+    "chat.Message",
+    "imports.ImportJob",
+    "mail.MailAccount",
+    "mail.MailFolder",
+    "photos.Face",
+    "projects.Sprint",
+    "projects.Task",
+    "vault.VaultEntry",
+)
+
 
 def make_worker_media_root(session_root):
     """Return this process's own subdirectory of the session media root.
@@ -46,8 +67,47 @@ def make_worker_media_root(session_root):
     return worker_root
 
 
+# Labels the guard watches in this process. A worker started by fork inherits
+# both the receivers and this set, one started by forkserver or spawn neither.
+_armed_labels = set()
+
+
+def armed_row_write_guards():
+    """The ``app.Model`` labels the full-row-write guard watches here."""
+    return frozenset(_armed_labels)
+
+
+def arm_row_write_guards():
+    """Arm the full-row-write guard in this process, once.
+
+    Called by the parent and again by every ``--parallel`` worker: a signal
+    receiver does not survive the forkserver start method, which builds the
+    worker from a fresh import, so a guard armed only in the parent is off
+    exactly where the tests run.
+    """
+    if _armed_labels:
+        return
+    # Imported here rather than at module scope: the runner is built before
+    # the app registry is ready, and this reaches for models.
+    from django.apps import apps
+
+    from workspace.common.tests.row_writes import guard_full_row_writes
+    from workspace.files.models import File
+
+    guard_full_row_writes(
+        # File.save() forwards every caller's save to the signal;
+        # naming it here keeps the blame on whoever asked for one.
+        File,
+        forwarded_by=("workspace/files/models.py:save",),
+    )
+    for label in GUARDED_LIFECYCLE_MODELS:
+        guard_full_row_writes(apps.get_model(label))
+    _armed_labels.update({File._meta.label, *GUARDED_LIFECYCLE_MODELS})
+
+
 def _init_worker_with_media_root(counter, *args, **kwargs):
     _init_worker(counter, *args, **kwargs)
+    arm_row_write_guards()
     # Under spawn and forkserver ``_init_worker`` has just re-imported the
     # settings from the environment, so the override has to follow it.
     worker_root = make_worker_media_root(os.environ["MEDIA_ROOT"])
@@ -65,17 +125,7 @@ class MediaRootTestRunner(DiscoverRunner):
 
     def setup_test_environment(self, **kwargs):
         super().setup_test_environment(**kwargs)
-        # Imported here rather than at module scope: the runner is built before
-        # the app registry is ready, and this reaches for a model.
-        from workspace.common.tests.row_writes import guard_full_row_writes
-        from workspace.files.models import File
-
-        guard_full_row_writes(
-            # File.save() forwards every caller's save to the signal;
-            # naming it here keeps the blame on whoever asked for one.
-            File,
-            forwarded_by=("workspace/files/models.py:save",),
-        )
+        arm_row_write_guards()
 
         self._media_root = tempfile.mkdtemp(prefix="workspace-test-media-")
         # Derived from MEDIA_ROOT when the settings load, so it does not

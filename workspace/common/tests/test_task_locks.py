@@ -1,9 +1,10 @@
 """Tests for the advisory task lock used to stop beat runs from stacking."""
 
-from unittest import mock
+import os
+from unittest import mock, skipUnless
 
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from workspace.common.task_locks import task_lock
 
@@ -51,6 +52,16 @@ class TaskLockTests(TestCase):
 
         self.assertEqual(cache.get("job:owned"), "locked")
 
+    def test_a_run_that_outlived_its_lock_leaves_the_next_holders_lock(self):
+        with task_lock("job:overrun", 60) as first:
+            self.assertTrue(first)
+            cache.delete("job:overrun")  # the TTL expires under the first run
+            self.assertTrue(cache.add("job:overrun", "next-holder", 60))
+
+        self.assertEqual(cache.get("job:overrun"), "next-holder")
+        with task_lock("job:overrun", 60) as third:
+            self.assertFalse(third)
+
     def test_distinct_keys_do_not_contend(self):
         with task_lock("job:a", 60) as a:
             with task_lock("job:b", 60) as b:
@@ -71,3 +82,47 @@ class TaskLockTests(TestCase):
         with mock.patch.object(cache, "delete", side_effect=RuntimeError("gone")):
             with task_lock("job:flaky-release", 60) as acquired:
                 self.assertTrue(acquired)
+
+
+@skipUnless(os.getenv("REDIS_URL"), "needs a Redis server (REDIS_URL)")
+class RedisTaskLockTests(SimpleTestCase):
+    """The compare-and-delete path, against the production backend."""
+
+    def setUp(self):
+        from django_redis.cache import RedisCache
+
+        self.redis_cache = RedisCache(
+            os.environ["REDIS_URL"],
+            {
+                "KEY_PREFIX": "task-lock-tests",
+                "OPTIONS": {
+                    "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+                },
+            },
+        )
+        patcher = mock.patch("workspace.common.task_locks.cache", self.redis_cache)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.redis_cache.delete, "job:redis")
+
+    def test_release_compares_and_deletes_in_redis(self):
+        with mock.patch.object(self.redis_cache, "get") as get:
+            with task_lock("job:redis", 60):
+                pass
+
+        get.assert_not_called()
+        self.assertIsNone(self.redis_cache.get("job:redis"))
+
+    def test_release_deletes_the_holders_own_lock(self):
+        with task_lock("job:redis", 60) as acquired:
+            self.assertTrue(acquired)
+
+        self.assertIsNone(self.redis_cache.get("job:redis"))
+
+    def test_release_leaves_a_lock_taken_after_expiry(self):
+        with task_lock("job:redis", 60) as acquired:
+            self.assertTrue(acquired)
+            self.redis_cache.delete("job:redis")
+            self.redis_cache.add("job:redis", "next-holder", 60)
+
+        self.assertEqual(self.redis_cache.get("job:redis"), "next-holder")

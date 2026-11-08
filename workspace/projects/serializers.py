@@ -31,6 +31,22 @@ User = get_user_model()
 _HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
+def save_written_columns(instance, validated_data, *, also=()):
+    """Assign *validated_data* to *instance* and write only those columns.
+
+    ``ModelSerializer.update`` ends in a bare ``save()``, which republishes
+    every column as loaded when the request began - a state transition or a
+    stamp another writer landed meanwhile would be reverted. *also* names
+    columns the model maintains itself (``auto_now``).
+    """
+    for attr, value in validated_data.items():
+        setattr(instance, attr, value)
+    columns = [*validated_data, *also]
+    if columns:
+        instance.save(update_fields=columns)
+    return instance
+
+
 def _validate_hex_color(value):
     """Raise unless *value* is empty or a #rrggbb hex string.
 
@@ -269,6 +285,9 @@ class SprintSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def update(self, instance, validated_data):
+        return save_written_columns(instance, validated_data)
+
 
 class TaskStatusSerializer(serializers.ModelSerializer):
     class Meta:
@@ -387,6 +406,16 @@ class TaskSerializer(serializers.ModelSerializer):
                 {"start_date": "Start date cannot be after the due date."}
             )
         return attrs
+
+    def update(self, instance, validated_data):
+        assignees = validated_data.pop("assignees", None)
+        labels = validated_data.pop("labels", None)
+        save_written_columns(instance, validated_data, also=["updated_at"])
+        if assignees is not None:
+            instance.assignees.set(assignees)
+        if labels is not None:
+            instance.labels.set(labels)
+        return instance
 
 
 class TaskCalendarSerializer(serializers.ModelSerializer):

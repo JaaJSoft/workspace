@@ -6,7 +6,9 @@ from django.contrib.auth import get_user_model
 
 from workspace.people.models import Person
 from workspace.people.services.persons import create_person
+from workspace.photos.actions import FaceActionRegistry
 from workspace.photos.models import Face, FaceCluster
+from workspace.photos.services import face_corrections
 from workspace.photos.services.face_grouping import cluster_owner
 
 from .faces import opt_in
@@ -71,6 +73,121 @@ class HideTests(FaceBatchTestCase):
             [{"face": str(face.pk), "reason": "unavailable"}],
         )
         self.assertIsNone(response.json()["undo"])
+
+
+class CorrectionsOfAStaleFaceTests(FaceBatchTestCase):
+    """The face a correction is handed was read when the request began; a
+    clustering run or another correction may have moved it since. The user
+    judged the face where they saw it, and said nothing about where it is now."""
+
+    def test_rejecting_leaves_a_face_another_cluster_took_meanwhile(self):
+        seen = self.face("alice-2.png")
+        Face.objects.filter(pk=seen.pk).update(cluster=self.bob)
+
+        self.assertFalse(face_corrections.reject_face(seen))
+
+        seen.refresh_from_db()
+        self.assertEqual(seen.cluster_id, self.bob.pk)
+        self.assertEqual(seen.assignment, Face.Assignment.AUTO)
+        self.assertIsNone(seen.rejected_cluster_id)
+
+    def test_hiding_leaves_a_face_another_cluster_took_meanwhile(self):
+        seen = self.face("alice-2.png")
+        Face.objects.filter(pk=seen.pk).update(cluster=self.bob)
+
+        self.assertFalse(face_corrections.hide_face(seen))
+
+        seen.refresh_from_db()
+        self.assertEqual(seen.cluster_id, self.bob.pk)
+        self.assertEqual(seen.assignment, Face.Assignment.AUTO)
+
+    def test_unhiding_leaves_a_face_confirmed_meanwhile(self):
+        face = self.face("alice-2.png")
+        self.batch("hide", [face])
+        seen = Face.objects.get(pk=face.pk)
+        Face.objects.filter(pk=face.pk).update(
+            cluster=self.alice, assignment=Face.Assignment.CONFIRMED
+        )
+
+        self.assertFalse(face_corrections.unhide_face(seen))
+
+        face.refresh_from_db()
+        self.assertEqual(face.assignment, Face.Assignment.CONFIRMED)
+
+    def test_a_batch_skips_a_face_moved_while_it_ran(self):
+        face = self.face("alice-2.png")
+        available = FaceActionRegistry.is_action_available
+
+        def available_then_moved(action, user, obj):
+            answer = available(action, user, obj)
+            Face.objects.filter(pk=obj.pk).update(cluster=self.bob)
+            return answer
+
+        with patch.object(
+            FaceActionRegistry, "is_action_available", available_then_moved
+        ):
+            response = self.batch("reject", [face])
+
+        self.assertEqual(response.json()["done"], [])
+        self.assertEqual(
+            response.json()["skipped"],
+            [{"face": str(face.pk), "reason": "unavailable"}],
+        )
+        face.refresh_from_db()
+        self.assertEqual(face.cluster_id, self.bob.pk)
+
+    def test_rejecting_one_face_moved_while_the_request_ran_is_refused(self):
+        face = self.face("alice-2.png")
+        reject = face_corrections.reject_face
+
+        def moved_then_rejected(seen, **kwargs):
+            Face.objects.filter(pk=seen.pk).update(cluster=self.bob)
+            return reject(seen, **kwargs)
+
+        with patch.object(face_corrections, "reject_face", moved_then_rejected):
+            response = self.client.patch(
+                f"/api/v1/photos/faces/{face.pk}",
+                {"cluster": None},
+                content_type="application/json",
+            )
+
+        self.assertEqual(
+            (response.status_code, response.json()),
+            (400, {"cluster": "The face has left that group since."}),
+        )
+        face.refresh_from_db()
+        self.assertEqual(
+            (face.cluster_id, face.assignment), (self.bob.pk, Face.Assignment.AUTO)
+        )
+
+    def test_rejecting_a_face_in_no_cluster_is_refused(self):
+        face = self.face("alice-2.png")
+        Face.objects.filter(pk=face.pk).update(
+            cluster=None, assignment=Face.Assignment.REJECTED
+        )
+
+        response = self.client.patch(
+            f"/api/v1/photos/faces/{face.pk}",
+            {"cluster": None},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            (response.status_code, response.json()),
+            (400, {"cluster": "The face is in no group."}),
+        )
+
+    def test_a_cover_that_left_the_cluster_meanwhile_is_refused(self):
+        seen = self.face("alice-2.png")
+        cover_before = FaceCluster.objects.get(pk=self.alice.pk).cover_id
+        Face.objects.filter(pk=seen.pk).update(cluster=self.bob)
+
+        with self.assertRaises(face_corrections.CoverNotInCluster):
+            face_corrections.set_cover(self.alice, seen)
+
+        self.assertEqual(
+            FaceCluster.objects.get(pk=self.alice.pk).cover_id, cover_before
+        )
 
 
 class AssignTests(FaceBatchTestCase):

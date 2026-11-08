@@ -17,6 +17,7 @@ from workspace.common.limits import clamp_limit
 from workspace.common.logging import scrub
 
 from .models import UserMemory
+from .services.agent_goals import close_goal, update_open_goal
 from .services.call_order import call_position
 from .tool_registry import ToolError, ToolProvider, tool
 
@@ -1127,7 +1128,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
             raise ToolError(f"no open goal found with id {args.goal_id}")
 
         user_tz = get_user_timezone(user)
-        update_fields = ["updated_at"]
+        update_fields = []
         changes = []
 
         if args.notes.strip():
@@ -1184,16 +1185,20 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
             goal.status = status_value
             update_fields.append("status")
             changes.append(f"status → {status_value}")
-            # Lets the check-in worker distinguish a status change made by
-            # the agent during its own run from one made by the user.
-            context["agent_goal_changed"] = True
 
         if not changes:
             raise ToolError(
                 "nothing to update — provide notes, next_check_at, deadline or status"
             )
 
-        goal.save(update_fields=update_fields)
+        if not update_open_goal(
+            goal, {field: getattr(goal, field) for field in update_fields}
+        ):
+            raise ToolError(f"goal {args.goal_id} was closed in the meantime")
+        if "status" in update_fields:
+            # Lets the check-in worker distinguish a status change made by
+            # the agent during its own run from one made by the user.
+            context["agent_goal_changed"] = True
         return f'Updated goal "{goal.title}": ' + ", ".join(changes) + "."
 
     @tool(
@@ -1216,12 +1221,11 @@ Call this when the goal is reached, has become irrelevant, or the user asks you 
         if not outcome:
             raise ToolError("outcome is required")
 
-        goal.status = (
+        status = (
             AgentGoal.Status.ABANDONED if args.abandoned else AgentGoal.Status.COMPLETED
         )
-        goal.outcome = outcome
-        goal.closed_at = timezone.now()
-        goal.save(update_fields=["status", "outcome", "closed_at", "updated_at"])
+        if not close_goal(goal, status, outcome):
+            raise ToolError(f"goal {args.goal_id} was closed in the meantime")
         context["agent_goal_changed"] = True
         logger.info(
             "Agent goal closed (%s): %s bot=%s",

@@ -368,7 +368,7 @@ project's backlog column."""
 mark it done or start working on it. Statuses are per-project: use the names \
 returned by list_projects for the task's project. Find the task's UUID with \
 list_my_tasks or search_tasks first."""
-        from .services.tasks import apply_status_change
+        from .services.tasks import change_task_status
 
         task = _get_task(user, args.task_uuid)
         if task is None:
@@ -396,9 +396,9 @@ list_my_tasks or search_tasks first."""
         if target.pk == task.status_id:
             return f'Task {task.reference} is already in "{target.name}".'
 
-        old_status = task.status
-        task.status = target
-        apply_status_change(task, actor=user, old_status=old_status)
+        old_status = change_task_status(task, target, actor=user)
+        if old_status is None:
+            return f'Task {task.reference} is already in "{target.name}".'
         logger.info(
             "AI moved task %s to %s for %s",
             scrub(task.reference),

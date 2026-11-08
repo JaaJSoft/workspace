@@ -23,11 +23,11 @@ from ..imap_messages import (
     delete_message,
     mark_read,
     mark_unread,
-    move_message,
     star_message,
     unstar_message,
 )
 from ..notifications import settle_message_notifications
+from ..triage import move_to_folder
 from .schema import (
     AddLabelAction,
     DeleteAction,
@@ -118,16 +118,11 @@ def _move_to_folder(action: MoveToFolderAction, message: MailMessage) -> dict:
     target = canonical_folder(target)
     if canonical_folder_id(message.folder) == target.pk:
         return _ok("move_to_folder", folder_id=str(target.uuid), noop=True)
-    # IMAP first: if COPY fails, leave the local row alone so the next
-    # reconciliation does not soft-delete a message that is still in the
-    # source folder server-side (same invariant as MailBatchActionView).
     try:
-        move_message(message.account, message, target)
+        move_to_folder(message, target)
     except Exception as e:
         logger.warning("IMAP move failed for message %s: %s", message.uuid, scrub(e))
         return _err("move_to_folder", "imap_failed")
-    message.folder = target
-    message.save(update_fields=["folder", "updated_at"])
     return _ok("move_to_folder", folder_id=str(target.uuid))
 
 

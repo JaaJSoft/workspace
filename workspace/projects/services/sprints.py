@@ -25,6 +25,17 @@ def active_sprint(project):
     return project.sprints.filter(state=Sprint.State.ACTIVE).first()
 
 
+def _locked_sprint(project, sprint):
+    """*sprint* as stored now, or None once it is gone.
+
+    Takes the lock start_sprint and complete_sprint take - every sprint row
+    of the project - so a decision made on the returned state holds until
+    the transaction ends. Must be called inside one.
+    """
+    sprints = list(project.sprints.select_for_update())
+    return next((s for s in sprints if s.pk == sprint.pk), None)
+
+
 def start_sprint(sprint, *, actor=None):
     """Activate a planned sprint and bring its tasks onto the board.
 
@@ -169,10 +180,14 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
     *names* snapshotted - sprints are renamable and deletable, a FK would
     rewrite history. Returns the changed tasks.
     """
-    if sprint is not None and sprint.state == Sprint.State.CLOSED:
-        raise SprintTargetError("Tasks cannot be assigned to a closed sprint.")
     target_id = sprint.pk if sprint is not None else None
     with transaction.atomic():
+        if sprint is not None:
+            sprint = _locked_sprint(project, sprint)
+            if sprint is None:
+                raise SprintTargetError("Unknown sprint for this project.")
+            if sprint.state == Sprint.State.CLOSED:
+                raise SprintTargetError("Tasks cannot be assigned to a closed sprint.")
         board_status = None
         if sprint is not None and sprint.state == Sprint.State.ACTIVE:
             board_status = (
@@ -227,6 +242,21 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
             if to_board:
                 move_tasks(project, board_status, to_board, actor=actor)
     return [task for task, _ in changed]
+
+
+def delete_sprint(sprint):
+    """Delete a planned or closed sprint; its tasks return to the pool.
+
+    The running sprint is completed, never deleted: its tasks are on the
+    board and would vanish from it. A sprint already gone is left alone.
+    """
+    with transaction.atomic():
+        current = _locked_sprint(sprint.project, sprint)
+        if current is None:
+            return
+        if current.state == Sprint.State.ACTIVE:
+            raise SprintStateError("The active sprint must be completed, not deleted.")
+        current.delete()
 
 
 def propagate_sprint_rename(sprint):

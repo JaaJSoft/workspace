@@ -2,8 +2,13 @@
 // background polling for AI tasks.
 window.mailAiMixin = function mailAiMixin() {
   return {
+    // A summary belongs to the message it was asked for: opening another one
+    // supersedes it, whether it is still being queued or already polling.
+    _aiSummaries: window.latestOnly(),
+
     // ----- AI features -----
     async summarizeMessage(message) {
+      const summary = this._aiSummaries.start();
       this.aiSummarizing = true;
       this.aiSummary = null;
       try {
@@ -20,20 +25,18 @@ window.mailAiMixin = function mailAiMixin() {
           throw new Error(err.detail || 'Failed to start summarization');
         }
         const task = await resp.json();
-        this._pollAITask(task.uuid);
+        if (!summary.isCurrent()) return;
+        this._pollAITask(task.uuid, summary);
       } catch (e) {
+        if (!summary.isCurrent()) return;
         this.aiSummarizing = false;
         AppDialog.error({ message: e.message });
       }
     },
 
-    async _pollAITask(taskId) {
-      // Supersede any in-flight poll from a previous summarize request so its
-      // late-arriving result can't overwrite the current selection's summary.
+    async _pollAITask(taskId, summary) {
       if (this._aiPollInterval) clearInterval(this._aiPollInterval);
-      this._aiPollToken = (this._aiPollToken || 0) + 1;
-      const token = this._aiPollToken;
-      const isCurrent = () => this._aiPollToken === token;
+      const isCurrent = () => summary.isCurrent();
 
       let intervalId = null;
       const stop = () => { if (intervalId) clearInterval(intervalId); };

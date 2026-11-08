@@ -504,6 +504,24 @@ class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
         self.assertGreaterEqual(len(recurring), 5)
         self.assertLessEqual(len(recurring), 6)
 
+    def test_cancelled_series_is_not_expanded(self):
+        """An ICS CANCEL for the whole series flags the master; none of its
+        occurrences is drawn, like a cancelled one-off event."""
+        now = timezone.now()
+        cancelled = self._create_recurring(freq="daily", start_offset=0, now=now)
+        Event.objects.filter(pk=cancelled.pk).update(is_cancelled=True)
+        kept = self._create_recurring(freq="weekly", start_offset=0, now=now)
+        self.client.force_authenticate(self.owner)
+        params = {
+            "start": now.isoformat(),
+            "end": (now + timedelta(days=14)).isoformat(),
+        }
+        resp = self.client.get(self.url, params)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        masters = {e.get("master_event_id") for e in resp.data}
+        self.assertNotIn(str(cancelled.uuid), masters)
+        self.assertIn(str(kept.uuid), masters)
+
     def test_virtual_occurrence_has_is_recurring(self):
         self._create_recurring(freq="weekly", start_offset=0)
         self.client.force_authenticate(self.owner)

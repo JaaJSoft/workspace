@@ -124,7 +124,7 @@
         <button
           type="submit"
           class="btn btn-module btn-sm"
-          :disabled="saving || !form.title.trim()"
+          :disabled="creatingTask || !form.title.trim()"
         >
           Save
         </button>

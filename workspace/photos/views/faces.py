@@ -324,7 +324,12 @@ class FaceViewSet(
             return
         if "cluster_id" in data:
             if data["cluster_id"] is None:
-                face_corrections.reject_face(face)
+                if face.cluster_id is None:
+                    raise ValidationError({"cluster": "The face is in no group."})
+                if not face_corrections.reject_face(face):
+                    raise ValidationError(
+                        {"cluster": "The face has left that group since."}
+                    )
                 return
             cluster = (
                 user_face_clusters(self.request.user)

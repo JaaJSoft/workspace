@@ -49,7 +49,7 @@ class BatchMoveIMAPFailureTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-    @patch("workspace.mail.services.imap_messages.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_imap_move_failure_leaves_folder_unchanged(self, mock_move):
         """If move_message raises, the message must stay in its source folder
         on the DB side: updating msg.folder optimistically and never rolling
@@ -77,10 +77,10 @@ class BatchMoveIMAPFailureTests(TestCase):
             "Message must remain in source folder when IMAP move fails",
         )
 
-    @patch("workspace.mail.services.imap_messages.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_imap_move_success_updates_folder(self, mock_move):
         """Sanity check: when move_message succeeds, the folder is updated."""
-        mock_move.return_value = None
+        mock_move.return_value = 900
 
         resp = self.client.post(
             "/api/v1/mail/messages/batch-action",
@@ -138,7 +138,7 @@ class BatchMoveMergeTests(APITestCase):
             account=self.account, folder=folder, imap_uid=uid, subject="m"
         )
 
-    @patch("workspace.mail.services.imap_messages.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_alias_target_files_into_the_canonical(self, move):
         msg = self._message(self.inbox, 1)
 
@@ -156,7 +156,7 @@ class BatchMoveMergeTests(APITestCase):
         msg.refresh_from_db()
         self.assertEqual(msg.folder_id, self.trash.pk)
 
-    @patch("workspace.mail.services.imap_messages.move_message")
+    @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_move_within_the_group_does_nothing(self, move):
         """The message is already in the logical folder; no IMAP round trip."""
         msg = self._message(self.corbeille, 2)

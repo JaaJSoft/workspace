@@ -6,11 +6,12 @@ const {
   CUSTOM_ELEMENT_STUBS,
 } = require('../../../common/tests/js/loader');
 
-// board.js reads the shared <tag-chip> palette, which base.html loads
-// before it.
+// board.js reads the shared <tag-chip> palette and the latest-only request
+// tracker, which base.html loads before it.
 const ctx = loadScripts(
   [
     'workspace/common/static/ui/js/tag_chip.js',
+    'workspace/common/static/ui/js/latest_only.js',
     'workspace/common/static/ui/js/attachment_input.js',
     'workspace/projects/ui/static/projects/ui/js/board.js',
   ],
@@ -1679,4 +1680,97 @@ test('bulkDeleteSelected deletes, prunes the selection and closes a deleted pane
   assert.equal(calls[2], 'refresh');
   assert.deepStrictEqual(Array.from(board.selected), []);
   assert.equal(board.panelTaskUuid, null);
+});
+
+// A fetch whose answers the test hands out one at a time, in any order.
+function deferredFetch(calls) {
+  const pending = [];
+  ctx.fetch = (url, opts) => {
+    calls.push(opts.method + ' ' + url);
+    return new Promise((resolve) => {
+      pending.push(() => resolve({ ok: true, json: async () => ({}) }));
+    });
+  };
+  return pending;
+}
+
+function savingBoard(calls) {
+  ctx.getCSRFToken = () => 'token';
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.refresh = () => calls.push('refresh');
+  board.$refs = { taskDialog: { close: () => calls.push('close') } };
+  board.form.title = 'New task';
+  return board;
+}
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('a reorder in flight does not swallow a task create', async () => {
+  const calls = [];
+  const answer = deferredFetch(calls);
+  const board = savingBoard(calls);
+  const reorder = board.saveOrder('s1', ['a', 'b']);
+  const create = board.saveTask();
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/reorder',
+    'POST /api/tasks',
+  ]);
+  answer.forEach((resolve) => resolve());
+  await Promise.all([reorder, create]);
+});
+
+test('a reorder finishing does not re-enable Save while a create is in flight', async () => {
+  const calls = [];
+  const answer = deferredFetch(calls);
+  const board = savingBoard(calls);
+  const create = board.saveTask();
+  const reorder = board.saveOrder('s1', ['a', 'b']);
+  answer[1]();
+  await reorder;
+  const secondCreate = board.saveTask();
+  assert.equal(
+    calls.filter((call) => call === 'POST /api/tasks').length,
+    1
+  );
+  answer.slice(2).forEach((resolve) => resolve());
+  await secondCreate;
+  answer[0]();
+  await create;
+});
+
+test('only the latest of overlapping reorders refreshes the board', async () => {
+  const calls = [];
+  const answer = deferredFetch(calls);
+  const board = savingBoard(calls);
+  const first = board.saveOrder('s1', ['a', 'b']);
+  const second = board.saveOrder('s1', ['b', 'a']);
+  answer[0]();
+  await first;
+  await settle();
+  assert.equal(calls.includes('refresh'), false);
+  answer[1]();
+  await second;
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/reorder',
+    'POST /api/tasks/reorder',
+    'refresh',
+  ]);
+});
+
+test('a superseded reorder answering last does not refresh again', async () => {
+  const calls = [];
+  const answer = deferredFetch(calls);
+  const board = savingBoard(calls);
+  const first = board.saveOrder('s1', ['a', 'b']);
+  const second = board.saveOrder('s1', ['b', 'a']);
+  answer[1]();
+  await second;
+  answer[0]();
+  await first;
+  assert.equal(calls.filter((call) => call === 'refresh').length, 1);
 });

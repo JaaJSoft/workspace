@@ -84,6 +84,13 @@ def _not_the_owner():
     )
 
 
+def _trash_refused():
+    return Response(
+        {"detail": "Moving this entry to the trash is not available."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
 def _refused(detail):
     return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -170,6 +177,9 @@ class _EntryWriteMixin:
             )
         except IntegrityError:
             return Response(status=status.HTTP_409_CONFLICT)
+        except VaultEntry.NotUpdated:
+            # Purged after the lookup: the answer an unknown entry gets.
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
         entry = entry_queryset().get(uuid=entry.uuid)
         return Response(
@@ -280,10 +290,21 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
         entry = _reachable_entry(request.user, uuid)
         if entry is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        role = get_vault_role(request.user, entry.vault)
+        if not _offers("trash", request.user, entry, role):
+            return _trash_refused()
         # Soft: the trash is a view, not a rewrite. metadata_sig is untouched
         # because deleted_at is not inside it, and the server may not re-sign.
-        entry.deleted_at = timezone.now()
-        entry.save(update_fields=["deleted_at", "updated_at"])
+        # Conditional, so the stamp stays the moment the entry first went to
+        # the trash whoever else trashed it since the check above.
+        now = timezone.now()
+        trashed = VaultEntry.objects.filter(
+            pk=entry.pk, deleted_at__isnull=True
+        ).update(deleted_at=now, updated_at=now)
+        if not trashed:
+            if not VaultEntry.objects.filter(pk=entry.pk).exists():
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            return _trash_refused()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -347,8 +368,20 @@ class EntryRestoreView(CacheControlMixin, APIView):
                     {"detail": "Restoring this entry is not available to you."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            entry.deleted_at = None
-            entry.save(update_fields=["deleted_at", "updated_at"])
+            now = timezone.now()
+            restored = VaultEntry.objects.filter(
+                pk=entry.pk, deleted_at__isnull=False
+            ).update(deleted_at=None, updated_at=now)
+            if restored:
+                entry.deleted_at = None
+                entry.updated_at = now
+            else:
+                # Purged since the check, or restored by someone else: the
+                # first answers like any missing entry, the second like a
+                # restore of a live one.
+                entry = _reachable_entry(request.user, uuid)
+                if entry is None:
+                    return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(VaultEntrySerializer(entry).data)
 
 

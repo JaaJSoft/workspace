@@ -175,6 +175,10 @@ msgid "Failed to create poll."
 msgstr "Impossible de créer le sondage."
 
 #: ui/static/calendar/ui/js/calendar_polls.js
+msgid "Failed to load poll."
+msgstr "Impossible de charger le sondage."
+
+#: ui/static/calendar/ui/js/calendar_polls.js
 msgid "Votes saved!"
 msgstr "Votes enregistrés !"
 

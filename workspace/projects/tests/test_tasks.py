@@ -12,7 +12,7 @@ from rest_framework.test import APITestCase
 from workspace.notifications.models import Notification
 from workspace.projects.services.members import remove_member
 from workspace.projects.services.tasks import (
-    apply_status_change,
+    change_task_status,
     create_task,
     move_tasks,
 )
@@ -242,8 +242,7 @@ class SettleOnResolutionTests(NotifyDueTasksMixin, TestCase):
         task = self._task(due_days=0)
         self._run_cron()
 
-        task.status = self.done
-        apply_status_change(task, actor=self.admin, old_status=self.todo)
+        change_task_status(task, self.done, actor=self.admin)
 
         # The reminder is settled; what may remain unread is the completion
         # notification the auto-watched assignee just gained.
@@ -262,8 +261,7 @@ class SettleOnResolutionTests(NotifyDueTasksMixin, TestCase):
             task=task,
         )
 
-        task.status = self.done
-        apply_status_change(task, actor=self.admin, old_status=self.todo)
+        change_task_status(task, self.done, actor=self.admin)
 
         mention.refresh_from_db()
         self.assertIsNone(mention.read_at)

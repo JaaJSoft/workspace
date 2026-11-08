@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -722,6 +722,12 @@ class MailFolderHideGroupTests(MailTestMixin, APITestCase):
 class MailFolderMarkReadTests(MailTestMixin, APITestCase):
     """Tests for POST /api/v1/mail/folders/<uuid>/mark-read"""
 
+    def setUp(self):
+        super().setUp()
+        patcher = patch("workspace.mail.services.imap_messages.mark_uids_read")
+        self.mark_uids_read = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _url(self, folder):
         return f"/api/v1/mail/folders/{folder.uuid}/mark-read"
 
@@ -788,6 +794,97 @@ class MailFolderMarkReadTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         label.refresh_from_db()
         self.assertEqual(label.unread_count, 0)
+
+    def test_sends_the_seen_flag_to_the_server(self):
+        """Without the server copy, the next sync's reconcile reads the
+        messages as unread on IMAP and flips them back."""
+        for uid in (100, 101):
+            MailMessage.objects.create(
+                account=self.account, folder=self.inbox, imap_uid=uid
+            )
+        MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=102, is_read=True
+        )
+
+        self.client.force_authenticate(self.user)
+        self.client.post(self._url(self.inbox))
+
+        self.mark_uids_read.assert_called_once()
+        account, folder, uids = self.mark_uids_read.call_args.args
+        self.assertEqual((account, folder), (self.account, self.inbox))
+        self.assertEqual(sorted(uids), [100, 101])
+
+    def test_server_refusal_still_marks_read_locally(self):
+        """Same contract as a single message's flag: the UI is optimistic and
+        the next sync reconciles."""
+        msg = MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=100
+        )
+        self.mark_uids_read.side_effect = OSError("connection refused")
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(self._url(self.inbox))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["updated"], 1)
+        msg.refresh_from_db()
+        self.assertTrue(msg.is_read)
+
+    def test_no_server_round_trip_when_nothing_is_unread(self):
+        self.client.force_authenticate(self.user)
+        self.client.post(self._url(self.inbox))
+        self.mark_uids_read.assert_not_called()
+
+
+class MarkUidsReadImapTests(MailTestMixin, TestCase):
+    """The IMAP half of mark-all-read."""
+
+    def _conn(self, store_status="OK"):
+        conn = MagicMock()
+        conn.select.return_value = ("OK", [b"3"])
+        conn.uid.return_value = (store_status, [b"done"])
+        return conn
+
+    def test_stores_seen_on_the_given_uids_of_the_folder(self):
+        from workspace.mail.services.imap_messages import mark_uids_read
+
+        conn = self._conn()
+        with patch(
+            "workspace.mail.services.imap_messages.connect_imap", return_value=conn
+        ):
+            mark_uids_read(self.account, self.inbox, [7, 3])
+
+        conn.select.assert_called_once_with('"INBOX"')
+        conn.uid.assert_called_once_with("STORE", "3,7", "+FLAGS.SILENT", "(\\Seen)")
+
+    def test_splits_large_folders_into_bounded_commands(self):
+        from workspace.mail.services.imap_messages import (
+            STORE_BATCH_SIZE,
+            mark_uids_read,
+        )
+
+        conn = self._conn()
+        with patch(
+            "workspace.mail.services.imap_messages.connect_imap", return_value=conn
+        ):
+            mark_uids_read(self.account, self.inbox, range(1, STORE_BATCH_SIZE + 2))
+
+        self.assertEqual(conn.uid.call_count, 2)
+        self.assertEqual(conn.uid.call_args.args[1], str(STORE_BATCH_SIZE + 1))
+
+    def test_a_refused_store_raises(self):
+        from workspace.mail.services.imap_messages import mark_uids_read
+
+        conn = self._conn(store_status="NO")
+        with (
+            patch(
+                "workspace.mail.services.imap_messages.connect_imap",
+                return_value=conn,
+            ),
+            self.assertRaises(Exception),
+        ):
+            mark_uids_read(self.account, self.inbox, [1])
+        conn.logout.assert_called_once()
 
 
 class MailFolderAiClassifyTests(MailTestMixin, APITestCase):

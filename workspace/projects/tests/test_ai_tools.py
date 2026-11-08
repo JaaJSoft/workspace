@@ -293,6 +293,26 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         self.assertTrue(task.events.filter(type=TaskEvent.Type.COMPLETED).exists())
         self.assertIn('"Backlog" to "Done"', result)
 
+    def test_move_task_between_done_columns_keeps_the_first_stamp(self):
+        from workspace.projects.models import Task
+        from workspace.projects.services.statuses import create_status
+
+        first_completion = datetime(2026, 1, 5, 9, 0, tzinfo=UTC)
+        create_status(self.project, name="Shipped", category=TaskStatus.Category.DONE)
+        task = create_task(self.project, self.admin, title="Ship me")
+        Task.objects.filter(pk=task.pk).update(
+            status=self.project.statuses.get(name="Done"),
+            completed_at=first_completion,
+        )
+        self._call(
+            "move_task",
+            MoveTaskParams(task_uuid=task.uuid, status="shipped"),
+            self.member,
+        )
+        task.refresh_from_db()
+        self.assertEqual(task.status.name, "Shipped")
+        self.assertEqual(task.completed_at, first_completion)
+
     def test_move_task_unknown_status_lists_columns(self):
         task = create_task(self.project, self.admin, title="T")
         with self.assertRaises(ToolError) as caught:

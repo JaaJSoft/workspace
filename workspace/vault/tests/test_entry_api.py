@@ -7,6 +7,8 @@ wrong database, so the status code is never asserted alone.
 """
 
 import uuid
+from datetime import timedelta
+from unittest import mock
 
 from django.db import connection
 from django.test import TestCase
@@ -31,6 +33,7 @@ from workspace.vault.tests.factories import (
     sealed,
     sign,
 )
+from workspace.vault.views import entries as entry_views
 
 LIST_URL = "/api/v1/vault/entries"
 NAME = sealed("AQID")
@@ -278,6 +281,90 @@ class EntryApiTests(TestCase):
         self.assertIsNotNone(entry.deleted_at)
         self.assertEqual(entry.metadata_sig, created["metadata_sig"])
 
+    def _while_the_registry_answers(self, concurrent_write):
+        """Run *concurrent_write* once the view has read the entry and asked
+        the registry, before it writes anything."""
+        offers = entry_views._offers
+
+        def offers_then_write(*args, **kwargs):
+            answer = offers(*args, **kwargs)
+            concurrent_write()
+            return answer
+
+        return mock.patch.object(entry_views, "_offers", offers_then_write)
+
+    def test_trashing_a_trashed_entry_is_refused_and_keeps_the_first_stamp(self):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+        first_stamp = VaultEntry.objects.get(uuid=created["uuid"]).deleted_at
+        response = self.client.delete(f"{LIST_URL}/{created['uuid']}")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            VaultEntry.objects.get(uuid=created["uuid"]).deleted_at, first_stamp
+        )
+
+    def test_a_trash_landed_after_the_check_keeps_its_stamp(self):
+        created = self._create(self.signed_entry()).json()
+        first_stamp = timezone.now() - timedelta(minutes=5)
+
+        def trash_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).update(
+                deleted_at=first_stamp
+            )
+
+        with self._while_the_registry_answers(trash_elsewhere):
+            response = self.client.delete(f"{LIST_URL}/{created['uuid']}")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            VaultEntry.objects.get(uuid=created["uuid"]).deleted_at, first_stamp
+        )
+
+    def test_trashing_an_entry_purged_after_the_check_answers_like_a_missing_one(
+        self,
+    ):
+        created = self._create(self.signed_entry()).json()
+
+        def purge_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).delete()
+
+        with self._while_the_registry_answers(purge_elsewhere):
+            response = self.client.delete(f"{LIST_URL}/{created['uuid']}")
+        missing = self.client.delete(f"{LIST_URL}/{uuid.uuid4()}")
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
+
+    def test_restoring_an_entry_purged_after_the_check_answers_like_a_missing_one(
+        self,
+    ):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+
+        def purge_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).delete()
+
+        with self._while_the_registry_answers(purge_elsewhere):
+            response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        missing = self.client.post(f"{LIST_URL}/{uuid.uuid4()}/restore")
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
+
+    def test_restoring_an_entry_restored_after_the_check_is_harmless(self):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+
+        def restore_elsewhere():
+            VaultEntry.objects.filter(uuid=created["uuid"]).update(deleted_at=None)
+
+        with self._while_the_registry_answers(restore_elsewhere):
+            response = self.client.post(f"{LIST_URL}/{created['uuid']}/restore")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["deleted_at"])
+        self.assertIsNone(VaultEntry.objects.get(uuid=created["uuid"]).deleted_at)
+
     def test_deleting_an_entry_of_another_vault_answers_404(self):
         response = self.client.delete(f"{LIST_URL}/{self.other_entry.uuid}")
         self.assertEqual(response.status_code, 404)
@@ -430,6 +517,52 @@ class EntryApiTests(TestCase):
         entry = self._trashed_entry()
         body = self.signed_entry(entry_uuid=entry.uuid)
         self.assertEqual(self._put(entry.uuid, body).status_code, 200)
+
+    def test_an_edit_keeps_a_trash_landed_while_it_ran(self):
+        """The trash stamp is outside the signature, so an edit has no business
+        writing it - least of all the value it read before someone trashed the
+        entry from another device."""
+        created = self._create(self.signed_entry()).json()
+        body = self.signed_entry(
+            entry_uuid=created["uuid"], encrypted_name=sealed("BAUG")
+        )
+        trashed_at = timezone.now()
+        verify = entry_views.verify_record
+
+        def verify_then_trash(*args, **kwargs):
+            VaultEntry.objects.filter(uuid=created["uuid"]).update(
+                deleted_at=trashed_at
+            )
+            return verify(*args, **kwargs)
+
+        with mock.patch.object(entry_views, "verify_record", verify_then_trash):
+            self.assertEqual(self._put(created["uuid"], body).status_code, 200)
+        entry = VaultEntry.objects.get(uuid=created["uuid"])
+        self.assertEqual(entry.encrypted_name, sealed("BAUG"))
+        self.assertEqual(entry.deleted_at, trashed_at)
+
+    def test_an_edit_of_an_entry_purged_while_it_ran_answers_like_a_missing_one(
+        self,
+    ):
+        created = self._create(self.signed_entry()).json()
+        body = self.signed_entry(
+            entry_uuid=created["uuid"], encrypted_name=sealed("BAUG")
+        )
+        verify = entry_views.verify_record
+
+        def verify_then_purge(*args, **kwargs):
+            VaultEntry.objects.filter(uuid=created["uuid"]).delete()
+            return verify(*args, **kwargs)
+
+        with mock.patch.object(entry_views, "verify_record", verify_then_purge):
+            response = self._put(created["uuid"], body)
+        missing_uuid = uuid.uuid4()
+        missing = self._put(missing_uuid, self.signed_entry(entry_uuid=missing_uuid))
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
+        self.assertFalse(VaultEntry.objects.filter(uuid=created["uuid"]).exists())
 
     def test_unfavoriting_an_active_entry_is_accepted(self):
         created = self._create(self.signed_entry(is_favorite=True)).json()

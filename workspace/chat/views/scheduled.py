@@ -1,5 +1,6 @@
 import logging
 
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -90,23 +91,38 @@ class ScheduledMessageDetailView(APIView):
             schedule, data=request.data, partial=True, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
-        updated = serializer.save()
+        changes = dict(serializer.validated_data)
+        for field, value in changes.items():
+            setattr(schedule, field, value)
 
         # Recompute next_run_at if any timing fields were changed.
         # ONCE schedules can't go through compute_next_run(): it deactivates
         # them on the assumption it's being called post-fire by the dispatcher.
-        if self.TIMING_FIELDS & set(request.data.keys()):
-            if updated.kind == ScheduledMessage.Kind.ONCE:
-                updated.next_run_at = updated.scheduled_at
-                updated.save(update_fields=["next_run_at"])
+        if self.TIMING_FIELDS & changes.keys():
+            if schedule.kind == ScheduledMessage.Kind.ONCE:
+                schedule.next_run_at = schedule.scheduled_at
             else:
                 from workspace.users.services.settings import get_user_timezone
 
-                updated.compute_next_run(user_tz=get_user_timezone(request.user))
-                updated.save(update_fields=["next_run_at", "is_active"])
+                schedule.compute_next_run(user_tz=get_user_timezone(request.user))
+            changes["next_run_at"] = schedule.next_run_at
+
+        # Only the columns this request changed, and only while the schedule
+        # is still active: the dispatcher writes next_run_at and is_active
+        # while the request runs, and a one-time message that fired meanwhile
+        # must not come back to fire twice.
+        updated = ScheduledMessage.objects.filter(
+            pk=schedule.pk, is_active=True
+        ).update(**changes, updated_at=timezone.now())
+        if not updated:
+            return Response(
+                {"detail": "Scheduled message not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        schedule.refresh_from_db()
 
         return Response(
-            ScheduledMessageSerializer(updated, context={"request": request}).data
+            ScheduledMessageSerializer(schedule, context={"request": request}).data
         )
 
     @extend_schema(summary="Deactivate a scheduled message")

@@ -15,10 +15,16 @@ fold_face).
 The corrections of one face take a ``touched`` set: given one, they add the
 clusters to refresh to it instead of refreshing them, so a batch refreshes
 each cluster once rather than once per face.
+
+A correction that judges the face as the user saw it - rejecting it from the
+cluster it was in, hiding it, unhiding it - applies only while the face is
+still in that state, and returns whether it did: a clustering run or another
+correction may have moved it since, and the user said nothing about where
+it is now.
 """
 
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db.models import Exists, F, Q
 from django.utils import timezone
 
 from ..models import Face, FaceCluster
@@ -178,13 +184,18 @@ def reject_face(face, *, touched=None):
     """Not this person: take *face* out of its cluster, for good."""
     previous = face.cluster_id
     if previous is None:
-        return
+        return False
+    left = Face.objects.filter(pk=face.pk, cluster_id=previous).update(
+        cluster=None, assignment=Face.Assignment.REJECTED, rejected_cluster=previous
+    )
+    if not left:
+        return False
     face.cluster = None
     face.assignment = Face.Assignment.REJECTED
     face.rejected_cluster_id = previous
-    face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     _refresh([previous], touched)
     faces_left(face.owner_id, previous, [face.pk])
+    return True
 
 
 def fold_face(face, *, touched=None):
@@ -205,22 +216,34 @@ def hide_face(face, *, touched=None):
     puts it straight back where the user took it from.
     """
     previous = face.cluster_id
+    rejected = previous if previous is not None else face.rejected_cluster_id
+    hidden = (
+        Face.objects.filter(pk=face.pk, cluster_id=previous)
+        .exclude(assignment=Face.Assignment.HIDDEN)
+        .update(
+            cluster=None, assignment=Face.Assignment.HIDDEN, rejected_cluster=rejected
+        )
+    )
+    if not hidden:
+        return False
     face.cluster = None
     face.assignment = Face.Assignment.HIDDEN
-    if previous is not None:
-        face.rejected_cluster_id = previous
-    face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
+    face.rejected_cluster_id = rejected
     _refresh([previous], touched)
     faces_left(face.owner_id, previous, [face.pk])
+    return True
 
 
 def unhide_face(face):
     """Back among the faces waiting for a person; grouping may place it again."""
-    if face.assignment != Face.Assignment.HIDDEN:
-        return
+    unhidden = Face.objects.filter(
+        pk=face.pk, assignment=Face.Assignment.HIDDEN
+    ).update(assignment=Face.Assignment.AUTO)
+    if not unhidden:
+        return False
     face.assignment = Face.Assignment.AUTO
-    face.save(update_fields=["assignment"])
     faces_settled(face.owner_id, [face.pk])
+    return True
 
 
 def review_cluster(cluster, *, confirmed=(), rejected=()):
@@ -281,8 +304,17 @@ def start_cluster(face, person=None, *, touched=None):
 
 
 def set_cover(cluster, face):
-    if face.cluster_id != cluster.pk:
+    """Show *face* for *cluster* - provided it is one of the cluster's faces
+    when the cover is written, not only when the caller loaded it."""
+    now = timezone.now()
+    still_in_cluster = Face.objects.filter(pk=face.pk, cluster_id=cluster.pk)
+    chosen = (
+        FaceCluster.objects.filter(pk=cluster.pk)
+        .filter(Exists(still_in_cluster))
+        .update(cover=face, cover_chosen_at=now, updated_at=now)
+    )
+    if not chosen:
         raise CoverNotInCluster
     cluster.cover = face
-    cluster.cover_chosen_at = timezone.now()
-    cluster.save(update_fields=["cover", "cover_chosen_at", "updated_at"])
+    cluster.cover_chosen_at = now
+    cluster.updated_at = now

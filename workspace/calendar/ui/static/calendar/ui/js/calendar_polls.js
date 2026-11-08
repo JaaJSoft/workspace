@@ -5,6 +5,8 @@
 // the standalone /polls/<token> guest-vote page).
 window.calendarPollsMixin = function calendarPollsMixin() {
   return {
+    _pollLoads: window.latestOnly(),
+
     // Note: must be a method (not a getter). Mixins are spread into the data
     // object via `...calendarPollsMixin()`, and spreading evaluates getters
     // at composition time - which both crashes (this.pollSearch is undefined
@@ -79,7 +81,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
         this.pollFormError = gettext('At least 2 time slots with a start time are required.');
         return;
       }
-      this.pollFormSubmitting = true;
+      this.pollCreating = true;
       this.pollFormError = null;
       try {
         const resp = await fetch('/api/v1/polls', {
@@ -106,7 +108,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       } catch (e) {
         this.pollFormError = gettext('Network error. Please try again.');
       }
-      this.pollFormSubmitting = false;
+      this.pollCreating = false;
     },
 
     // `restoring`: a back or forward already put the URL in place.
@@ -123,6 +125,8 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     },
 
     closePollDetail() {
+      this._pollLoads.cancel();
+      this.currentPollLoading = false;
       this.showPollDetailModal = false;
       this._setPollUrl(null);
     },
@@ -140,8 +144,13 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       window.navHistory.replace(url);
     },
 
+    // An answer for another poll than the one on screen must not land on it.
+    _isPollShown(uuid) {
+      return this.currentPoll?.uuid === uuid;
+    },
+
     async loadPoll(uuid) {
-      const requestId = this._loadPollRequestId = (this._loadPollRequestId || 0) + 1;
+      const load = this._pollLoads.start();
       if (!isValidUuid(uuid)) {
         // Bail without leaving the modal stuck on its loading spinner if the
         // ?poll= query param was malformed.
@@ -151,12 +160,14 @@ window.calendarPollsMixin = function calendarPollsMixin() {
         return;
       }
       this.currentPollLoading = true;
+      this.currentPollError = null;
+      let loaded = false;
       try {
         const resp = await fetch(`/api/v1/polls/${uuid}`, { credentials: 'same-origin' });
-        if (requestId !== this._loadPollRequestId) return;
+        if (!load.isCurrent()) return;
         if (resp.ok) {
           const poll = await resp.json();
-          if (requestId !== this._loadPollRequestId) return;
+          if (!load.isCurrent()) return;
           // Pre-populate my votes
           const userId = String(document.body.dataset.userId);
           const myVotes = {};
@@ -167,12 +178,12 @@ window.calendarPollsMixin = function calendarPollsMixin() {
           }
           this.currentPoll = poll;
           this.pollMyVotes = myVotes;
-
+          loaded = true;
         }
       } catch (e) {}
-      if (requestId === this._loadPollRequestId) {
-        this.currentPollLoading = false;
-      }
+      if (!load.isCurrent()) return;
+      this.currentPollLoading = false;
+      if (!loaded) this.currentPollError = gettext('Failed to load poll.');
     },
 
     pollCycleVote(slotId) {
@@ -187,41 +198,44 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       if (!this.currentPoll) return;
       const votes = Object.entries(this.pollMyVotes).map(([slot_id, choice]) => ({ slot_id, choice }));
       if (votes.length === 0) return;
-      this.pollSubmitting = true;
+      const pollUuid = this.currentPoll.uuid;
+      this.pollVoting = true;
       try {
-        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/vote`, {
+        const resp = await fetch(`/api/v1/polls/${pollUuid}/vote`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ votes }),
         });
         if (resp.ok) {
-          this.currentPoll = await resp.json();
+          const poll = await resp.json();
+          if (this._isPollShown(pollUuid)) this.currentPoll = poll;
           if (window.AppAlert) window.AppAlert.success(gettext('Votes saved!'), { duration: 2000 });
-
         }
       } catch (e) {}
-      this.pollSubmitting = false;
+      this.pollVoting = false;
     },
 
     async finalizePoll() {
       if (!this.currentPoll || !this.pollFinalizeSlotId) return;
-      this.pollSubmitting = true;
+      const pollUuid = this.currentPoll.uuid;
+      this.pollFinalizing = true;
       try {
-        const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}/finalize`, {
+        const resp = await fetch(`/api/v1/polls/${pollUuid}/finalize`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ slot_id: this.pollFinalizeSlotId }),
         });
         if (resp.ok) {
-          this.currentPoll = await resp.json();
+          const poll = await resp.json();
+          if (this._isPollShown(pollUuid)) this.currentPoll = poll;
           if (this.calendar) this.calendar.refetchEvents();
           this.refetchAgenda();
           if (window.AppAlert) window.AppAlert.success(gettext('Poll finalized! Event created.'), { duration: 3000 });
         }
       } catch (e) {}
-      this.pollSubmitting = false;
+      this.pollFinalizing = false;
     },
 
     async deletePoll(uuid) {
@@ -364,7 +378,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
         this.pollFormError = gettext('At least 2 time slots with a start time are required.');
         return;
       }
-      this.pollFormSubmitting = true;
+      this.pollEditSaving = true;
       this.pollFormError = null;
       try {
         const resp = await fetch(`/api/v1/polls/${this.currentPoll.uuid}`, {
@@ -403,7 +417,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       } catch (e) {
         this.pollFormError = gettext('Network error. Please try again.');
       }
-      this.pollFormSubmitting = false;
+      this.pollEditSaving = false;
     },
   };
 };

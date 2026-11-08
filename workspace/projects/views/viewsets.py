@@ -86,6 +86,7 @@ from ..services.projects import create_project
 from ..services.sprints import (
     assign_tasks_to_sprint,
     complete_sprint,
+    delete_sprint,
     propagate_sprint_rename,
     start_sprint,
 )
@@ -98,7 +99,7 @@ from ..services.task_filters import (
     apply_task_ordering,
 )
 from ..services.tasks import (
-    apply_status_change,
+    change_task_status,
     create_task,
     delete_task,
     due_move_settles,
@@ -538,12 +539,11 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         self._require_writable()
         self._require_scrum()
         sprint = self.get_object()
-        if sprint.state == Sprint.State.ACTIVE:
-            return Response(
-                {"detail": "The active sprint must be completed, not deleted."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return super().destroy(request, *args, **kwargs)
+        try:
+            delete_sprint(sprint)
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def start(self, request, *args, **kwargs):
         self._require_admin()
@@ -758,7 +758,6 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
 
     def perform_update(self, serializer):
-        old_status = serializer.instance.status
         old_due_date = serializer.instance.due_date
         old_estimate = serializer.instance.estimate
         old_epic = serializer.instance.epic
@@ -769,9 +768,14 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         fields_updated = has_field_updates(
             serializer.instance, serializer.validated_data
         )
+        # The status is not the serializer's to write: it moves together with
+        # the position and completed_at, in change_task_status's locked write.
+        new_status = serializer.validated_data.pop("status", None)
         task = serializer.save()
-        if task.status_id != old_status.pk:
-            apply_status_change(task, actor=self.request.user, old_status=old_status)
+        if new_status is not None:
+            # Even when it names the status loaded above: another writer may
+            # have moved the task since, and the client asked for this one.
+            change_task_status(task, new_status, actor=self.request.user)
         added_assignees = [
             u
             for u in serializer.validated_data.get("assignees", [])
@@ -818,6 +822,18 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             )
         if task.due_date != old_due_date and due_move_settles(task.due_date):
             settle_task_notifications([task])
+        # The response describes the row as stored, moves landed by another
+        # writer since the task was loaded included.
+        try:
+            task.refresh_from_db(
+                from_queryset=Task.objects.select_related("status"),
+                fields=["status", "position", "completed_at", "sprint", "updated_at"],
+            )
+        except Task.DoesNotExist:
+            # Deleted meanwhile: answer the 404 an unknown task gets.
+            raise Http404(
+                f"No {Task._meta.object_name} matches the given query."
+            ) from None
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()

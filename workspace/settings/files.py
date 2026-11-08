@@ -2,6 +2,8 @@
 
 import os
 
+from csp.constants import NONCE, NONE, SELF, UNSAFE_INLINE
+
 from .cache import _REDIS_WEBDAV_URL
 from .env import env_bool
 
@@ -26,6 +28,45 @@ FILES_EXTRACT_MAX_ENTRIES = int(os.getenv("FILES_EXTRACT_MAX_ENTRIES", "10000"))
 FILES_TEXT_VIEWER_MAX_BYTES = int(
     os.getenv("FILES_TEXT_VIEWER_MAX_BYTES", str(5 * 1024 * 1024))
 )  # 5 MiB
+
+# Largest e-book the reader opens: the browser holds the whole file while the
+# book is open, and a comic book archive easily weighs hundreds of megabytes.
+# A larger one is offered as a download.
+FILES_EBOOK_READER_MAX_BYTES = int(
+    os.getenv("FILES_EBOOK_READER_MAX_BYTES", str(256 * 1024 * 1024))
+)  # 256 MiB
+
+# The e-book reader page's Content-Security-Policy, applied through
+# csp.decorators.csp. It is what keeps a book's own JavaScript from running:
+# foliate-js renders each chapter in a blob: iframe that inherits this policy,
+# and that iframe has to carry allow-scripts and allow-same-origin together
+# (a WebKit bug leaves no choice), which makes its sandbox worthless.
+#
+# So script-src names the response's nonce and nothing else. Not 'self': a
+# chapter may point a <script src> at any URL of this site, and a public share
+# link serves an uploaded .js file from one. The reader's own <script> tags
+# carry the nonce, and the modules they import() inherit it.
+#
+# The rest is what a book needs to look like itself: its stylesheets, inline
+# styles, images and embedded fonts arrive as blob: or data: URLs, and its
+# chapters are blob: frames. Injected CSS has nowhere to send anything: every
+# fetching directive stops at self, blob: and data:.
+FILES_EBOOK_READER_CSP = {
+    "default-src": [NONE],
+    "script-src": [NONCE],
+    "connect-src": [SELF, "blob:", "data:"],
+    "style-src": [SELF, UNSAFE_INLINE, "blob:"],
+    "img-src": [SELF, "blob:", "data:"],
+    "font-src": [SELF, "blob:", "data:"],
+    "media-src": [SELF, "blob:"],
+    "frame-src": ["blob:"],
+    "object-src": [NONE],
+    "base-uri": [NONE],
+    "form-action": [NONE],
+    # The viewer panel frames the reader; nothing else may.
+    "frame-ancestors": [SELF],
+    "report-uri": ["/api/v1/csp-report"],
+}
 
 # WebDAV lock storage
 # Use dedicated Redis DB when available so locks are shared across gunicorn

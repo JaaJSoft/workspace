@@ -1,0 +1,13 @@
+{% comment %}
+  The reader runs in a page of its own, framed here: its Content-Security-Policy
+  is what keeps the book's scripts from running (see FILES_EBOOK_READER_CSP).
+{% endcomment %}
+<div class="flex flex-col h-full">
+  {% include "files/ui/viewers/new_tab_marker.html" %}
+  <iframe
+    src="{{ reader_url }}"
+    class="flex-1 w-full border-none bg-base-100"
+    title="{{ file.name }}"
+    data-ebook-reader
+  ></iframe>
+</div>

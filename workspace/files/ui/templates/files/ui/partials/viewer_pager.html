@@ -1,0 +1,40 @@
+{% load i18n %}
+{% comment %}
+  The file's place in the gallery ("4 / 5") in a viewer header. Below md it
+  also carries previous and next: there the arrows floating over the file
+  would cover what it shows, and a swipe never reaches a viewer that is a
+  frame of its own (a PDF, an e-book). Include it inside a component spreading
+  fileViewerShellMixin().
+{% endcomment %}
+<div
+  class="flex items-center shrink-0"
+  x-show="_totalViewable() > 1 && _currentIndex() >= 0"
+  data-viewer-pager
+>
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square md:hidden disabled:bg-transparent disabled:border-transparent"
+    :disabled="panelEditing || _currentIndex() <= 0"
+    @click="navigatePrev()"
+    title="{% translate 'Previous file' %}"
+    aria-label="{% translate 'Previous file' %}"
+    data-viewer-pager-prev
+  >
+    <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+  </button>
+  <span
+    class="text-xs text-base-content/40 whitespace-nowrap"
+    x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
+  ></span>
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square md:hidden disabled:bg-transparent disabled:border-transparent"
+    :disabled="panelEditing || _currentIndex() >= _totalViewable() - 1"
+    @click="navigateNext()"
+    title="{% translate 'Next file' %}"
+    aria-label="{% translate 'Next file' %}"
+    data-viewer-pager-next
+  >
+    <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+  </button>
+</div>

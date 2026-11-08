@@ -85,8 +85,11 @@ class AttachmentGalleryTests(PlaywrightTestCase):
         expect(dialog.get_by_role("heading", name="one.png")).to_be_visible()
         expect(dialog).to_contain_text("1 / 2")
 
-        self.page.get_by_title("Next file").click()
+        # By role: the header carries a second "Next file" for narrow screens,
+        # hidden at this width, which a title lookup would also match.
+        next_file = dialog.get_by_role("button", name="Next file")
+        next_file.click()
         expect(dialog.get_by_role("heading", name="two.png")).to_be_visible()
         expect(dialog).to_contain_text("2 / 2")
         # The last thread attachment ends the gallery: the main flow's is out.
-        expect(self.page.get_by_title("Next file")).to_be_hidden()
+        expect(next_file).to_be_hidden()

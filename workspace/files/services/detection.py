@@ -7,6 +7,7 @@ import threading
 from dataclasses import dataclass
 from importlib.util import find_spec
 
+from .ebooks import EBOOK_FORMATS, ebook_label
 from .raw_images import RAW_FORMATS, is_camera_raw, label_for_name
 
 # Located without importing magika: the package pulls in onnxruntime and
@@ -55,6 +56,15 @@ for _label, (_mime_type, _extensions) in RAW_FORMATS.items():
         "mime_type": _mime_type,
         "group": "image",
         "description": "Camera RAW image",
+        "extensions": _extensions,
+        "is_text": False,
+    }
+# Magika knows EPUB alone of the e-books the reader opens (see ebooks.py).
+for _label, (_mime_type, _extensions, _description) in EBOOK_FORMATS.items():
+    _KB[_label] = {
+        "mime_type": _mime_type,
+        "group": "document",
+        "description": _description,
         "extensions": _extensions,
         "is_text": False,
     }
@@ -152,8 +162,22 @@ def _camera_raw(result, stream, filename):
     )
 
 
+def _ebook(result, stream, filename):
+    """*result*, or the e-book Magika took for something else (see ebooks.py)."""
+    label = ebook_label(result.label, stream, filename)
+    if label is None:
+        return result
+    return DetectionResult(
+        label=label,
+        mime_type=_KB[label]["mime_type"],
+        group="document",
+        score=result.score,
+    )
+
+
 def detect_from_stream(stream, filename: str = "") -> DetectionResult:
-    """The content type of *stream*; *filename* lets a camera RAW be told."""
+    """The content type of *stream*; *filename* lets a camera RAW, a comic
+    book or a zipped FictionBook be told from the container they share."""
     # identify_stream samples the head and tail of the file; identify_bytes
     # needs the whole of it in memory, so it is the last resort.
     raw = _buffered_stream(stream)
@@ -173,7 +197,8 @@ def detect_from_stream(stream, filename: str = "") -> DetectionResult:
         if not head:
             head = stream.read(_HEAD_SIZE)
             stream.seek(pos)
-    return _camera_raw(_result(result, head), stream, filename)
+    result = _camera_raw(_result(result, head), stream, filename)
+    return _ebook(result, stream, filename) if seekable else result
 
 
 def label_from_name(filename: str) -> str:

@@ -41,104 +41,116 @@
   @focusout="slideshowPlaying && slideshowWake()"
 >
   <div
-    class="flex items-center gap-2 pl-4 lg:pl-6 pr-3 py-2 border-b border-base-300 bg-base-100 transition-opacity duration-300"
+    class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 md:gap-y-0 pl-4 lg:pl-6 pr-3 py-2 border-b border-base-300 bg-base-100 transition-opacity duration-300"
     :class="{ 'absolute inset-x-0 top-0 z-20 bg-base-100/80 backdrop-blur': slideshowPlaying, 'opacity-0 pointer-events-none': slideshowIdle }"
   >
-    <div class="flex-1 min-w-0">
-      <h3 class="font-bold truncate" x-text="fileName"></h3>
-      <div class="flex items-center gap-2">
-        {% include "files/ui/partials/viewer_location.html" %}
-        <p
-          class="text-xs text-base-content/60 shrink-0"
-          :class="{ 'max-sm:hidden': fileLocation }"
-          x-text="fileType"
-        ></p>
-        <span
-          class="text-xs text-base-content/40 shrink-0 whitespace-nowrap"
-          x-show="_totalViewable() > 1 && _currentIndex() >= 0"
-          x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
-        ></span>
-      </div>
+    <h3 class="font-bold truncate col-start-1 row-start-1" x-text="fileName"></h3>
+    {# Below md the meta row runs under the buttons too: next to them it leaves no room for the gallery pager. #}
+    <div
+      class="flex items-center gap-2 min-w-0 col-span-2 row-start-2 md:col-span-1"
+    >
+      {% include "files/ui/partials/viewer_location.html" %}
+      <p
+        class="text-xs text-base-content/60 shrink-0"
+        :class="{ 'max-sm:hidden': fileLocation }"
+        x-text="fileType"
+      ></p>
+      {% include "files/ui/partials/viewer_pager.html" %}
     </div>
-    {% if slideshow %}
-      <select
-        class="select select-ghost select-sm w-auto"
-        x-show="slideshowPlaying"
-        x-cloak
-        aria-label="{% translate 'Time per photo' %}"
-        title="{% translate 'Time per photo' %}"
-        @change="setSlideshowInterval(Number($event.target.value))"
-        data-slideshow-interval
-      >
-        <template x-for="seconds in slideshowIntervals" :key="seconds">
-          <option
-            :value="seconds"
-            :selected="seconds === slideshowInterval"
-            x-text="seconds + ' s'"
-          ></option>
-        </template>
-      </select>
+    <div class="flex items-center gap-2 col-start-2 row-start-1 md:row-span-2">
+      {% if slideshow %}
+        <select
+          class="select select-ghost select-sm w-auto"
+          x-show="slideshowPlaying"
+          x-cloak
+          aria-label="{% translate 'Time per photo' %}"
+          title="{% translate 'Time per photo' %}"
+          @change="setSlideshowInterval(Number($event.target.value))"
+          data-slideshow-interval
+        >
+          <template x-for="seconds in slideshowIntervals" :key="seconds">
+            <option
+              :value="seconds"
+              :selected="seconds === slideshowInterval"
+              x-text="seconds + ' s'"
+            ></option>
+          </template>
+        </select>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          x-show="slideshowPlaying || canSlideshow()"
+          x-cloak
+          @click="toggleSlideshow()"
+          :title="slideshowPlaying ? '{{ stop_slideshow_title|escapejs }}' : '{{ slideshow_title|escapejs }}'"
+          :aria-label="slideshowPlaying ? '{{ stop_slideshow_label|escapejs }}' : '{{ slideshow_label|escapejs }}'"
+          :aria-pressed="slideshowPlaying ? 'true' : 'false'"
+          data-viewer-slideshow-toggle
+        >
+          <span x-show="!slideshowPlaying"><i data-lucide="play" class="w-4 h-4"></i></span>
+          <span x-show="slideshowPlaying" x-cloak><i data-lucide="pause" class="w-4 h-4"></i></span>
+        </button>
+      {% endif %}
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square"
-        x-show="slideshowPlaying || canSlideshow()"
-        x-cloak
-        @click="toggleSlideshow()"
-        :title="slideshowPlaying ? '{{ stop_slideshow_title|escapejs }}' : '{{ slideshow_title|escapejs }}'"
-        :aria-label="slideshowPlaying ? '{{ stop_slideshow_label|escapejs }}' : '{{ slideshow_label|escapejs }}'"
-        :aria-pressed="slideshowPlaying ? 'true' : 'false'"
-        data-viewer-slideshow-toggle
+        :class="{ 'text-warning [&_svg]:fill-current': isFavorite }"
+        @click="toggleFavorite()"
+        :disabled="!canFavorite"
+        :title="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
+        :aria-label="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
+        :aria-pressed="isFavorite ? 'true' : 'false'"
+        data-viewer-favorite
       >
-        <span x-show="!slideshowPlaying"><i data-lucide="play" class="w-4 h-4"></i></span>
-        <span x-show="slideshowPlaying" x-cloak><i data-lucide="pause" class="w-4 h-4"></i></span>
+        <i data-lucide="star" class="w-4 h-4"></i>
       </button>
-    {% endif %}
-    <button
-      type="button"
-      class="btn btn-ghost btn-sm btn-square"
-      :class="{ 'text-warning [&_svg]:fill-current': isFavorite }"
-      @click="toggleFavorite()"
-      :disabled="!canFavorite"
-      :title="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
-      :aria-label="isFavorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}'"
-      :aria-pressed="isFavorite ? 'true' : 'false'"
-      data-viewer-favorite
-    >
-      <i data-lucide="star" class="w-4 h-4"></i>
-    </button>
-    {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
-    <a
-      :href="downloadOverride || downloadUrl"
-      download
-      class="btn btn-ghost btn-sm btn-square"
-      title="{% translate 'Download file' %}"
-      x-show="fileUuid && downloadUrl && !viewerBlocked"
-    >
-      <i data-lucide="download" class="w-4 h-4"></i>
-    </a>
-    {% if properties %}
+      <a
+        :href="newTabHref()"
+        target="_blank"
+        rel="noopener"
+        class="btn btn-ghost btn-sm btn-square"
+        title="{% translate 'Open in new tab' %}"
+        aria-label="{% translate 'Open in new tab' %}"
+        x-show="newTabHref()"
+        x-cloak
+        data-viewer-new-tab-link
+      >
+        <i data-lucide="external-link" class="w-4 h-4"></i>
+      </a>
+      {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
+      <a
+        :href="downloadOverride || downloadUrl"
+        download
+        class="btn btn-ghost btn-sm btn-square"
+        title="{% translate 'Download file' %}"
+        x-show="fileUuid && downloadUrl && !viewerBlocked"
+      >
+        <i data-lucide="download" class="w-4 h-4"></i>
+      </a>
+      {% if properties %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          :class="{ 'btn-active': showPropertiesPanel && propertiesUuid === fileUuid }"
+          @click="toggleProperties()"
+          :disabled="!canShowProperties"
+          title="{% translate 'Properties (Ctrl+I)' %}"
+          aria-label="{% translate 'Properties' %}"
+          data-viewer-properties
+        >
+          <i data-lucide="info" class="w-4 h-4"></i>
+        </button>
+      {% endif %}
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square"
-        :class="{ 'btn-active': showPropertiesPanel && propertiesUuid === fileUuid }"
-        @click="toggleProperties()"
-        :disabled="!canShowProperties"
-        title="{% translate 'Properties (Ctrl+I)' %}"
-        aria-label="{% translate 'Properties' %}"
-        data-viewer-properties
+        @click="close()"
+        title="{% translate 'Close (ESC)' %}"
+        aria-label="{% translate 'Close' %}"
       >
-        <i data-lucide="info" class="w-4 h-4"></i>
+        <i data-lucide="x" class="w-4 h-4"></i>
       </button>
-    {% endif %}
-    <button
-      type="button"
-      class="btn btn-ghost btn-sm btn-square"
-      @click="close()"
-      title="{% translate 'Close (ESC)' %}"
-      aria-label="{% translate 'Close' %}"
-    >
-      <i data-lucide="x" class="w-4 h-4"></i>
-    </button>
+    </div>
   </div>
 
   <!-- Viewer Container: #viewer-panel is the alpine-ajax merge anchor
@@ -177,7 +189,7 @@
   <!-- Prev / Next overlay arrows -->
   <button
     type="button"
-    class="btn btn-circle absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
+    class="btn btn-circle max-md:hidden absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
     title="{% translate 'Previous file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() > 0"
@@ -188,7 +200,7 @@
   </button>
   <button
     type="button"
-    class="btn btn-circle absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
+    class="btn btn-circle max-md:hidden absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
     title="{% translate 'Next file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() >= 0 && _currentIndex() < _totalViewable() - 1"

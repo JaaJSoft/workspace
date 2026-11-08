@@ -9,6 +9,7 @@ import io
 import pathlib
 import shutil
 import tempfile
+import zipfile
 from datetime import UTC, datetime
 
 from django.test import SimpleTestCase
@@ -19,6 +20,8 @@ from workspace.common.documents.extraction import (
     DOCX,
     DOTX,
     EPUB,
+    FB2,
+    FBZ,
     ODP,
     ODS,
     ODT,
@@ -118,6 +121,19 @@ class OtherFormatTests(SimpleTestCase):
         )
         self.assertIn("kraken", document.text)
         self.assertEqual(document.title, "Moby Dick")
+
+    def test_a_fictionbook_is_read_plain_or_zipped(self):
+        book = (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">'
+            b"<body><section><p>The kraken sleeps.</p></section></body></FictionBook>"
+        )
+        zipped = io.BytesIO()
+        with zipfile.ZipFile(zipped, "w") as archive:
+            archive.writestr("book.fb2", book)
+
+        self.assertIn("kraken", _text(book))
+        self.assertIn("kraken", _text(zipped.getvalue()))
 
     def test_a_word_template_reads_like_a_document(self):
         # Registered as its own MIME type, but Tika sniffs the container, so
@@ -391,6 +407,8 @@ class CatalogueTests(SimpleTestCase):
                     ODP,
                     RTF,
                     EPUB,
+                    FB2,
+                    FBZ,
                     "application/msword",
                     "application/vnd.ms-excel",
                     "application/vnd.ms-powerpoint",

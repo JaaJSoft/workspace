@@ -147,7 +147,20 @@ def move_to_folder(message, target, refresh=True):
     copied_uid = move_message(message.account, message, target)
 
     source_id = message.folder_id
+    # A concurrent move of the same message may have re-pointed the row while
+    # this one talked to the server: its COPY of the UID the other expunged
+    # answers OK with nothing copied. Every write below is conditional on the
+    # row still being where this request found it, so the loser touches
+    # nothing.
+    still_in_source = MailMessage.objects.filter(
+        pk=message.pk,
+        folder_id=source_id,
+        imap_uid=message.imap_uid,
+        deleted_at__isnull=True,
+    )
+    now = timezone.now()
     with transaction.atomic():
+        repointed = 0
         # A sync of the target that ran between the COPY and here has already
         # imported the copy under that UID.
         if (
@@ -156,12 +169,16 @@ def move_to_folder(message, target, refresh=True):
                 folder=target, imap_uid=copied_uid
             ).exists()
         ):
-            message.folder = target
-            message.imap_uid = copied_uid
-            message.save(update_fields=["folder", "imap_uid", "updated_at"])
-        else:
-            message.deleted_at = timezone.now()
-            message.save(update_fields=["deleted_at", "updated_at"])
+            repointed = still_in_source.update(
+                folder=target, imap_uid=copied_uid, updated_at=now
+            )
+            if repointed:
+                message.folder = target
+                message.imap_uid = copied_uid
+                message.updated_at = now
+        if not repointed and still_in_source.update(deleted_at=now, updated_at=now):
+            message.deleted_at = now
+            message.updated_at = now
             settle_message_notifications(message.account.owner, [message.pk])
         if refresh:
             refresh_folders_counts_bulk({source_id, target.pk})

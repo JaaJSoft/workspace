@@ -180,6 +180,25 @@ class MoveToFolderTests(TriageServiceTestCase):
         self.assertEqual(self.message.folder, self.inbox)
         self.assertIsNotNone(self.message.deleted_at)
 
+    def test_a_concurrent_move_that_already_repointed_the_row_wins(self):
+        # The first request expunged the source; this one's COPY of the
+        # vanished UID answered OK with nothing copied, hence no copy UID.
+        def first_move_lands(account, message, target):
+            MailMessage.objects.filter(pk=message.pk).update(
+                folder=self.archive, imap_uid=900
+            )
+
+        with patch(
+            "workspace.mail.services.imap_messages.move_message",
+            side_effect=first_move_lands,
+        ):
+            move_to_folder(self.message, self.archive)
+
+        self.message.refresh_from_db()
+        self.assertEqual(self.message.folder, self.archive)
+        self.assertEqual(self.message.imap_uid, 900)
+        self.assertIsNone(self.message.deleted_at)
+
     def test_the_target_sync_keeps_the_moved_row(self):
         """The row survives the target's next sync, labels and all, and the
         copy is not imported a second time."""

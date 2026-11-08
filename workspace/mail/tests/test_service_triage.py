@@ -157,6 +157,22 @@ class MarkFolderReadTests(TriageServiceTestCase):
         self.assertEqual(updated, 0)
         self.assertFalse(self.message.is_read)
 
+    def test_a_message_moved_out_and_back_during_the_imap_calls_stays_unread(self):
+        # Back in the Inbox under a new UID: the STORE flagged the old one, so
+        # the copy that is there now never got its \Seen.
+        def moved_out_and_back(account, mailbox, uids):
+            MailMessage.objects.filter(pk=self.message.pk).update(imap_uid=901)
+
+        with patch(
+            "workspace.mail.services.imap_messages.mark_uids_read",
+            side_effect=moved_out_and_back,
+        ):
+            updated, _synced = mark_folder_read(self.inbox)
+
+        self.message.refresh_from_db()
+        self.assertEqual(updated, 0)
+        self.assertFalse(self.message.is_read)
+
 
 class MoveToFolderTests(TriageServiceTestCase):
     def test_a_move_repoints_the_row_and_refreshes_both_folders(self):

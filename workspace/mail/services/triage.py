@@ -98,10 +98,8 @@ def mark_folder_read(folder):
         is_read=False,
         deleted_at__isnull=True,
     )
-    affected_ids = []
     uids_by_folder = defaultdict(list)
-    for pk, folder_id, uid in unread.values_list("pk", "folder_id", "imap_uid"):
-        affected_ids.append(pk)
+    for folder_id, uid in unread.values_list("folder_id", "imap_uid"):
         uids_by_folder[folder_id].append(uid)
 
     synced = True
@@ -116,21 +114,28 @@ def mark_folder_read(folder):
                 scrub(e),
             )
 
-    # Only the rows whose UIDs went out, and only while they are still where
-    # the STORE found them: a message the sync imported during the IMAP calls,
-    # or one moved out of the group meanwhile, never got its \Seen, and the
-    # next sync would flip it back to unread.
+    # Only the rows the STORE flagged: matched by the folder and UID it was
+    # sent, not by primary key. A message the sync imported during the IMAP
+    # calls, or one moved out of the folder (and maybe back, under a new UID)
+    # meanwhile, never got its \Seen, and the next sync would flip it back
+    # to unread. A UID is unique in its folder and never reused, so the pair
+    # names exactly the message the server flagged.
     updated = 0
     now = timezone.now()
     with transaction.atomic():
-        for batch in batched(affected_ids, PK_BATCH_SIZE, strict=False):
-            updated += MailMessage.objects.filter(
-                pk__in=batch,
-                folder_id__in=group_ids,
-                deleted_at__isnull=True,
-                is_read=False,
-            ).update(is_read=True, updated_at=now)
-            refresh_labels_for_messages(batch)
+        for folder_id, uids in uids_by_folder.items():
+            for batch in batched(uids, PK_BATCH_SIZE, strict=False):
+                flagged = MailMessage.objects.filter(
+                    folder_id=folder_id,
+                    imap_uid__in=batch,
+                    deleted_at__isnull=True,
+                    is_read=False,
+                )
+                pks = list(flagged.values_list("pk", flat=True))
+                updated += MailMessage.objects.filter(pk__in=pks).update(
+                    is_read=True, updated_at=now
+                )
+                refresh_labels_for_messages(pks)
         refresh_folders_counts_bulk(group_ids)
     return updated, synced
 

@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest import mock
@@ -424,6 +425,28 @@ class TaskPatchCompletionTests(TaskApiMixin, APITestCase):
         self.assertEqual(stored.title, "renamed")
         self.assertEqual(stored.status, self.shipped)
         self.assertEqual(stored.completed_at, self.FIRST_COMPLETION)
+
+    def test_a_task_deleted_once_the_edit_landed_answers_like_a_missing_one(self):
+        from workspace.projects.services.events import record_task_event
+
+        def deleted_meanwhile(task, **kwargs):
+            record_task_event(task, **kwargs)
+            Task.objects.filter(pk=self.task.pk).delete()
+
+        with mock.patch(
+            "workspace.projects.views.viewsets.record_task_event",
+            side_effect=deleted_meanwhile,
+        ):
+            response = self.client.patch(
+                self.detail_url, {"title": "renamed"}, format="json"
+            )
+        missing = self.client.patch(
+            f"{self.tasks_url}/{uuid.uuid4()}", {"title": "renamed"}, format="json"
+        )
+        self.assertEqual(
+            (response.status_code, response.content),
+            (missing.status_code, missing.content),
+        )
 
     def test_a_field_edit_answers_with_a_concurrent_completion(self):
         with self._while_the_request_runs(self._complete_elsewhere):

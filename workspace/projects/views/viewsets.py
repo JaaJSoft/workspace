@@ -824,10 +824,16 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             settle_task_notifications([task])
         # The response describes the row as stored, moves landed by another
         # writer since the task was loaded included.
-        task.refresh_from_db(
-            from_queryset=Task.objects.select_related("status"),
-            fields=["status", "position", "completed_at", "sprint", "updated_at"],
-        )
+        try:
+            task.refresh_from_db(
+                from_queryset=Task.objects.select_related("status"),
+                fields=["status", "position", "completed_at", "sprint", "updated_at"],
+            )
+        except Task.DoesNotExist:
+            # Deleted meanwhile: answer the 404 an unknown task gets.
+            raise Http404(
+                f"No {Task._meta.object_name} matches the given query."
+            ) from None
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()

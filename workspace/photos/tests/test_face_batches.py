@@ -136,6 +136,47 @@ class CorrectionsOfAStaleFaceTests(FaceBatchTestCase):
         face.refresh_from_db()
         self.assertEqual(face.cluster_id, self.bob.pk)
 
+    def test_rejecting_one_face_moved_while_the_request_ran_is_refused(self):
+        face = self.face("alice-2.png")
+        reject = face_corrections.reject_face
+
+        def moved_then_rejected(seen, **kwargs):
+            Face.objects.filter(pk=seen.pk).update(cluster=self.bob)
+            return reject(seen, **kwargs)
+
+        with patch.object(face_corrections, "reject_face", moved_then_rejected):
+            response = self.client.patch(
+                f"/api/v1/photos/faces/{face.pk}",
+                {"cluster": None},
+                content_type="application/json",
+            )
+
+        self.assertEqual(
+            (response.status_code, response.json()),
+            (400, {"cluster": "The face has left that group since."}),
+        )
+        face.refresh_from_db()
+        self.assertEqual(
+            (face.cluster_id, face.assignment), (self.bob.pk, Face.Assignment.AUTO)
+        )
+
+    def test_rejecting_a_face_in_no_cluster_is_refused(self):
+        face = self.face("alice-2.png")
+        Face.objects.filter(pk=face.pk).update(
+            cluster=None, assignment=Face.Assignment.REJECTED
+        )
+
+        response = self.client.patch(
+            f"/api/v1/photos/faces/{face.pk}",
+            {"cluster": None},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            (response.status_code, response.json()),
+            (400, {"cluster": "The face is in no group."}),
+        )
+
     def test_a_cover_that_left_the_cluster_meanwhile_is_refused(self):
         seen = self.face("alice-2.png")
         cover_before = FaceCluster.objects.get(pk=self.alice.pk).cover_id

@@ -1,8 +1,7 @@
 """Tests for the advisory task lock used to stop beat runs from stacking."""
 
 import os
-import unittest
-from unittest import mock
+from unittest import mock, skipUnless
 
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
@@ -85,7 +84,7 @@ class TaskLockTests(TestCase):
                 self.assertTrue(acquired)
 
 
-@unittest.skipUnless(os.getenv("REDIS_URL"), "needs a Redis server (REDIS_URL)")
+@skipUnless(os.getenv("REDIS_URL"), "needs a Redis server (REDIS_URL)")
 class RedisTaskLockTests(SimpleTestCase):
     """The compare-and-delete path, against the production backend."""
 

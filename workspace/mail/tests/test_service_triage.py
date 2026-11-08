@@ -8,6 +8,7 @@ callers share.
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.db.models import QuerySet
 from django.test import TestCase
 
 from workspace.mail.models import (
@@ -198,6 +199,30 @@ class MoveToFolderTests(TriageServiceTestCase):
         self.assertEqual(self.message.folder, self.archive)
         self.assertEqual(self.message.imap_uid, 900)
         self.assertIsNone(self.message.deleted_at)
+
+    def test_a_copy_imported_right_after_the_check_retires_the_row(self):
+        # The target's sync commits the copy between the existence check and
+        # the write: the write hits the (folder, imap_uid) constraint after
+        # the server move has already happened.
+        real_exists = QuerySet.exists
+        imported = []
+
+        def exists_then_sync_imports(queryset):
+            found = real_exists(queryset)
+            if queryset.model is MailMessage and not imported:
+                imported.append(
+                    MailMessage.objects.create(
+                        account=self.account, folder=self.archive, imap_uid=900
+                    )
+                )
+            return found
+
+        with patch.object(QuerySet, "exists", exists_then_sync_imports):
+            self._move(900)
+
+        self.assertEqual(self.message.folder, self.inbox)
+        self.assertIsNotNone(self.message.deleted_at)
+        self.assertIsNone(imported[0].deleted_at)
 
     def test_the_target_sync_keeps_the_moved_row(self):
         """The row survives the target's next sync, labels and all, and the

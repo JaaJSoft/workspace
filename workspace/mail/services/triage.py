@@ -16,7 +16,7 @@ below is not something to write twice.
 import logging
 from collections import defaultdict
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -162,16 +162,21 @@ def move_to_folder(message, target, refresh=True):
     with transaction.atomic():
         repointed = 0
         # A sync of the target that ran between the COPY and here has already
-        # imported the copy under that UID.
+        # imported the copy under that UID - before the check, or after it,
+        # which only the unique constraint catches.
         if (
             copied_uid is not None
             and not MailMessage.objects.filter(
                 folder=target, imap_uid=copied_uid
             ).exists()
         ):
-            repointed = still_in_source.update(
-                folder=target, imap_uid=copied_uid, updated_at=now
-            )
+            try:
+                with transaction.atomic():
+                    repointed = still_in_source.update(
+                        folder=target, imap_uid=copied_uid, updated_at=now
+                    )
+            except IntegrityError:
+                repointed = 0
             if repointed:
                 message.folder = target
                 message.imap_uid = copied_uid

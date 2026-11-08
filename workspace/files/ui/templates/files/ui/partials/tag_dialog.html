@@ -12,11 +12,11 @@
       {% endwith %}
     {% endwith %}
     <form @submit.prevent="saveTagModal()">
-      <label class="form-control w-full mb-3">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full mb-3">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
-          class="input input-bordered w-full input-sm"
+          class="input w-full input-sm"
           x-model="tagModal.name"
           placeholder="{% translate 'Tag name' %}"
           required

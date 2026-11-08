@@ -18,23 +18,20 @@
     {% endwith %}
 
     <form @submit.prevent="saveEvent()" class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Title" context "event field" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Title" context "event field" %}</span></div>
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="form.title"
           placeholder="{% translate "Event title" %}"
           required
         />
       </label>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Calendar" context "event field" %}</span></div>
-        <select
-          class="select select-bordered select-sm w-full"
-          x-model="form.calendar_id"
-        >
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Calendar" context "event field" %}</span></div>
+        <select class="select select-sm w-full" x-model="form.calendar_id">
           <template
             x-for="cal in ownedCalendars.filter(c => !c.is_synced && !c.is_external)"
             :key="cal.uuid"
@@ -51,24 +48,24 @@
           :checked="form.all_day"
           @change="toggleAllDay()"
         />
-        <span class="label-text">{% translate "All day" %}</span>
+        <span class="text-sm">{% translate "All day" %}</span>
       </label>
 
       <div class="grid grid-cols-2 gap-2">
-        <label class="form-control">
-          <div class="label"><span class="label-text">{% translate "Start" context "event field" %}</span></div>
+        <label class="fieldset min-w-0">
+          <div class="fieldset-legend"><span>{% translate "Start" context "event field" %}</span></div>
           <input
             :type="form.all_day ? 'date' : 'datetime-local'"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="form.start"
             required
           />
         </label>
-        <label class="form-control">
-          <div class="label"><span class="label-text">{% translate "End" context "event field" %}</span></div>
+        <label class="fieldset min-w-0">
+          <div class="fieldset-legend"><span>{% translate "End" context "event field" %}</span></div>
           <input
             :type="form.all_day ? 'date' : 'datetime-local'"
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full min-w-0"
             x-model="form.end"
             :min="form.start"
           />
@@ -125,7 +122,7 @@
       <!-- Recurrence -->
       <div class="border border-base-300 rounded-lg p-3 space-y-3">
         <label class="flex items-center justify-between cursor-pointer">
-          <span class="label-text flex items-center gap-2 text-sm font-medium">
+          <span class="text-sm flex items-center gap-2 text-sm font-medium">
             <i data-lucide="repeat" class="w-4 h-4 opacity-60"></i> {% translate "Repeat" %}
           </span>
           <input
@@ -148,13 +145,10 @@
                 type="number"
                 min="1"
                 max="365"
-                class="input input-bordered input-sm w-16 text-center"
+                class="input input-sm w-16 text-center"
                 x-model.number="form.recurrence_interval"
               />
-              <select
-                class="select select-bordered select-sm flex-1"
-                x-model="form.recurrence_frequency"
-              >
+              <select class="select select-sm flex-1" x-model="form.recurrence_frequency">
                 <option value="daily" x-text="recurrenceUnitLabel('daily')"></option>
                 <option value="weekly" x-text="recurrenceUnitLabel('weekly')"></option>
                 <option value="monthly" x-text="recurrenceUnitLabel('monthly')"></option>
@@ -164,7 +158,7 @@
             <span class="text-sm text-base-content/70">{% translate "Until" context "recurrence end date" %}</span>
             <input
               type="date"
-              class="input input-bordered input-sm w-full"
+              class="input input-sm w-full"
               x-model="form.recurrence_end"
               placeholder="{% translate "No end date" %}"
             />
@@ -178,28 +172,28 @@
         </div>
       </div>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Location" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Location" %}</span></div>
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="form.location"
           placeholder="{% translate "Add a location" %}"
         />
       </label>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Description" context "event field" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Description" context "event field" %}</span></div>
         <textarea
-          class="textarea textarea-bordered textarea-sm w-full"
+          class="textarea textarea-sm w-full"
           rows="2"
           x-model="form.description"
           placeholder="{% translate "Add a description" %}"
         ></textarea>
       </label>
 
-      <div>
-        <div class="label"><span class="label-text">{% translate "Invite guests" %}</span></div>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><span>{% translate "Invite guests" %}</span></legend>
         {% include "calendar/ui/partials/_invitee_selector.html" with on_select_event="calendar-invitee-selected" %}
         <template x-if="inviteeNotice">
           <inline-alert type="warning" class="mt-2" data-testid="invitee-notice">
@@ -265,7 +259,7 @@
             </span>
           </template>
         </div>
-      </div>
+      </fieldset>
 
       <div class="modal-action">
         <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">{% translate "Cancel" %}</button>

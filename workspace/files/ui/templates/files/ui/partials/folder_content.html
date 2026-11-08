@@ -39,7 +39,7 @@
           data-testid="listing-filter-bar"
         >
           <label
-            class="input input-sm input-bordered flex items-center gap-2 flex-1 min-w-0 max-w-md px-2.5"
+            class="input input-sm flex items-center gap-2 flex-1 min-w-0 max-w-md px-2.5"
           >
             <i data-lucide="search" class="w-4 h-4 shrink-0 opacity-60"></i>
             <input
@@ -116,7 +116,7 @@
                 <div class="max-h-56 overflow-y-auto thin-scrollbar space-y-0.5">
                   {% for tag in listing_tags %}
                     <label
-                      class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-base-200 cursor-pointer"
+                      class="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-base-200 cursor-pointer"
                     >
                       <input
                         type="checkbox"
@@ -359,7 +359,9 @@
                   </div>
                   <div class="space-y-0.5">
                     <template x-for="col in columns" :key="col.id">
-                      <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
+                      <label
+                        class="flex items-center gap-2 px-2 py-1 rounded-sm hover:bg-base-200"
+                      >
                         <input
                           type="checkbox"
                           class="checkbox checkbox-xs checkbox-module"
@@ -383,7 +385,9 @@
                   </div>
                   <div class="space-y-0.5">
                     <template x-for="(col, index) in orderedColumns()" :key="col.id">
-                      <div class="flex items-center gap-2 px-2 py-0.5 rounded hover:bg-base-200">
+                      <div
+                        class="flex items-center gap-2 px-2 py-0.5 rounded-sm hover:bg-base-200"
+                      >
                         <span class="text-sm" x-text="col.label"></span>
                         <div class="ml-auto flex items-center gap-1">
                           <button
@@ -569,7 +573,7 @@
               outranks the quarantine tint by specificity, not stylesheet order.
                 {% endcomment %}
                 <tr
-                  class="hover group {% if node.node_type == 'folder' and not is_trash_view or node.node_type == 'file' and node.viewable or node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15 data-[busy]:opacity-50 data-[busy]:pointer-events-none"
+                  class="hover group {% if node.node_type == 'folder' and not is_trash_view or node.node_type == 'file' and node.viewable or node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-selected:bg-module/15 data-busy:opacity-50 data-busy:pointer-events-none"
                   data-uuid="{{ node.uuid }}"
                   data-name="{{ node.name|lower }}"
                   data-display-name="{{ node.name }}"
@@ -645,7 +649,7 @@
                       {% elif node.node_type == "file" and node.viewable %}
                         {# Focusable from script only: the inline viewer hands the focus back here on close. #}
                         <span
-                          class="font-medium block truncate min-w-0 group-hover:text-module group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module focus-visible:rounded-sm"
+                          class="font-medium block truncate min-w-0 group-hover:text-module group-hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module focus-visible:rounded-xs"
                           title="{{ node.name }}"
                           tabindex="-1"
                           data-viewer-focus
@@ -675,12 +679,12 @@
                       data-col="favorite"
                     >
                       <span
-                        class="loading loading-spinner loading-xs hidden group-data-[busy]:inline-block"
+                        class="loading loading-spinner loading-xs hidden group-data-busy:inline-block"
                       ></span>
                       {% if node.is_favorite %}
                         <button
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square group-data-[busy]:hidden"
+                          class="btn btn-ghost btn-xs btn-square group-data-busy:hidden"
                           aria-label="{% translate 'Remove from favorites' %}"
                           data-item-control="favorite"
                         >
@@ -689,7 +693,7 @@
                       {% else %}
                         <button
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square group-data-[busy]:hidden"
+                          class="btn btn-ghost btn-xs btn-square group-data-busy:hidden"
                           aria-label="{% translate 'Add to favorites' %}"
                           data-item-control="favorite"
                         >
@@ -745,11 +749,11 @@
                   {% if show_actions != False %}
                     <td data-stop-row-click data-col="actions">
                       <span
-                        class="loading loading-spinner loading-xs hidden group-data-[busy]:inline-block"
+                        class="loading loading-spinner loading-xs hidden group-data-busy:inline-block"
                       ></span>
                       <button
                         type="button"
-                        class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity group-data-[busy]:hidden"
+                        class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity group-data-busy:hidden"
                         aria-label="{% translate 'More actions' %}"
                         data-item-control="menu"
                       >
@@ -773,7 +777,7 @@
               {% for node in nodes %}
                 {# data-selected is set by the table's _paintSelection, data-busy by the browser #}
                 <div
-                  class="{% if node.is_quarantined %}bg-error/10 data-[selected]:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-[selected]:ring-2 data-[selected]:ring-module data-[selected]:border-module data-[busy]:opacity-50 data-[busy]:pointer-events-none"
+                  class="{% if node.is_quarantined %}bg-error/10 data-selected:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-selected:ring-2 data-selected:ring-module data-selected:border-module data-busy:opacity-50 data-busy:pointer-events-none"
                   data-uuid="{{ node.uuid }}"
                   data-name="{{ node.name|lower }}"
                   data-display-name="{{ node.name }}"
@@ -793,7 +797,7 @@
                   <div class="absolute top-2 left-2 z-10" data-stop-row-click>
                     <input
                       type="checkbox"
-                      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-data-[selected]:opacity-100"
+                      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-selected:opacity-100"
                       data-select-item
                     />
                   </div>
@@ -802,14 +806,14 @@
                   {% if not is_trash_view %}
                     <div class="absolute top-2 right-2 z-10" data-stop-row-click>
                       <span
-                        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none hidden group-data-[busy]:inline-flex"
+                        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs pointer-events-none hidden group-data-busy:inline-flex"
                       >
                         <span class="loading loading-spinner loading-xs"></span>
                       </span>
                       {% if node.is_favorite %}
                         <button
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm group-data-[busy]:hidden"
+                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs group-data-busy:hidden"
                           aria-label="{% translate 'Remove from favorites' %}"
                           data-item-control="favorite"
                         >
@@ -818,7 +822,7 @@
                       {% else %}
                         <button
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-data-[busy]:hidden"
+                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-busy:hidden"
                           aria-label="{% translate 'Add to favorites' %}"
                           data-item-control="favorite"
                         >

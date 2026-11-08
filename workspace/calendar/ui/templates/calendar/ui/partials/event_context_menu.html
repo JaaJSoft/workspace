@@ -3,7 +3,7 @@ Rows of the event context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from index.html.
 {% endcomment %}
 {% load i18n %}
-<ul class="menu menu-sm p-0">
+<ul class="menu menu-sm p-0 w-full">
   {% include "ui/partials/context_menu_item.html" with icon="eye" label=_("View details") click="ctxMenuAction('view')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="link" label=_("Copy link") click="ctxMenuAction('copy_link')" only %}
 

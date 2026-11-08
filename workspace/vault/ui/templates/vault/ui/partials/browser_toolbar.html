@@ -10,9 +10,7 @@
 {% endcomment %}
 <div class="bg-base-100 border-b border-base-300 px-3 py-2 flex-none">
   <div class="flex flex-wrap items-center gap-2">
-    <label
-      class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-48 md:w-64"
-    >
+    <label class="input input-sm flex items-center gap-2 w-full sm:w-48 md:w-64">
       <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
       <input
         type="search"
@@ -25,7 +23,7 @@
     </label>
 
     <select
-      class="select select-sm select-bordered"
+      class="select select-sm w-auto"
       x-model="typeFilter"
       aria-label="Show"
     >
@@ -37,7 +35,7 @@
 
     <div class="join">
       <select
-        class="select select-sm select-bordered join-item"
+        class="select select-sm w-auto join-item"
         x-model="sortField"
         aria-label="Sort by"
       >

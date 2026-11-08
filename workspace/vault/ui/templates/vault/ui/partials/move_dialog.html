@@ -16,11 +16,11 @@
       {% include "ui/partials/dialog_header.html" with icon="folder-input" title_expr="'Move ' + (moveDialog.uuids.length === 1 ? ((entries.find((e) => e.uuid === moveDialog.uuids[0]) || {}).name || '') : moveDialog.uuids.length + ' entries')" title_id="vault-move-dialog-title" subtitle_expr="moveDialog.uuids.length > 1 ? 'Choose where they go in this vault.' : 'Choose where it goes in this vault.'" close_expr="closeMoveDialog()" only %}
 
       <ul
-        class="menu bg-base-200/50 rounded-box max-h-72 overflow-y-auto flex-nowrap"
+        class="menu bg-base-200/50 rounded-box max-h-72 overflow-y-auto flex-nowrap w-full"
       >
         <li>
           <a
-            :class="{ active: moveDialog.target === null }"
+            :class="{ 'menu-active': moveDialog.target === null }"
             @click="moveDialog.target = null"
           >
             <i
@@ -38,7 +38,7 @@
         <template x-for="folder in folderTree()" :key="folder.uuid">
           <li>
             <a
-              :class="{ active: moveDialog.target === folder.uuid }"
+              :class="{ 'menu-active': moveDialog.target === folder.uuid }"
               :style="{ paddingLeft: (0.75 + 1.25 * (folder.depth + 1)) + 'rem' }"
               @click="moveDialog.target = folder.uuid"
             >

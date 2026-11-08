@@ -15,21 +15,21 @@
       {% endwith %}
     {% endwith %}
     <form @submit.prevent="createPerson()" class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
           name="display_name"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           placeholder="{% translate "Full name" %}"
           x-ref="personName"
           x-model="personForm.name"
           required
         />
       </label>
-      <label class="form-control w-full">
-        <div class="label">
-          <span class="label-text">
+      <label class="fieldset w-full">
+        <div class="fieldset-legend">
+          <span>
             {% blocktranslate trimmed %}
               Email <span class="opacity-60">(optional)</span>
             {% endblocktranslate %}
@@ -38,16 +38,16 @@
         <input
           type="email"
           name="email"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           placeholder="{% translate "name@example.com" %}"
           x-model="personForm.email"
         />
       </label>
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
         <select
           name="scope"
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
           x-model="personForm.scope"
         >
           <option value="mine">{% translate "My contacts" %}</option>
@@ -98,22 +98,22 @@
       class="space-y-3"
       x-show="!importResult"
     >
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "vCard file" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "vCard file" %}</span></div>
         <input
           type="file"
           name="file"
           accept=".vcf,text/vcard,text/x-vcard"
-          class="file-input file-input-bordered file-input-sm w-full"
+          class="file-input file-input-sm w-full"
           x-ref="importFile"
           @change="importForm.file = $event.target.files[0] || null"
         />
       </label>
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
         <select
           name="scope"
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
           x-model="importForm.scope"
         >
           <option value="mine">{% translate "My contacts" %}</option>
@@ -199,13 +199,13 @@
       {% endwith %}
     {% endwith %}
     <form @submit.prevent class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "What to export" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "What to export" %}</span></div>
         {% translate "Contact: %(name)s" as contact_target %}
         {% translate "List: %(name)s" as list_target %}
         <select
           name="target"
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
           x-model="exportForm.target"
         >
           <template x-if="exportPerson">
@@ -274,12 +274,12 @@
       {% endwith %}
     {% endwith %}
     <form @submit.prevent="saveList()" class="space-y-3">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
           name="name"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           placeholder="{% translate "Family, Clients..." %}"
           x-ref="listName"
           x-model="listForm.name"
@@ -287,13 +287,9 @@
         />
       </label>
       <div x-show="!listForm.uuid">
-        <label class="form-control w-full">
-          <div class="label"><span class="label-text">{% translate "Address book" %}</span></div>
-          <select
-            name="scope"
-            class="select select-bordered select-sm w-full"
-            x-model="listForm.scope"
-          >
+        <label class="fieldset w-full">
+          <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
+          <select name="scope" class="select select-sm w-full" x-model="listForm.scope">
             <option value="mine">{% translate "My contacts" %}</option>
             <template x-for="group in groups" :key="group.id">
               <option :value="'group:' + group.id" x-text="group.name"></option>

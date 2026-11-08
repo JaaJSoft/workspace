@@ -2,7 +2,7 @@
 Rows of the account context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from index.html.
 {% endcomment %}
-<ul class="menu menu-sm p-0">
+<ul class="menu menu-sm p-0 w-full">
   {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label_expr="syncingAccounts[accountCtx.account?.uuid] ? 'Syncing...' : 'Sync'" click="accountCtxAction('sync')" loading="syncingAccounts[accountCtx.account?.uuid]" class_expr="syncingAccounts[accountCtx.account?.uuid] ? 'pointer-events-none opacity-50' : ''" only %}
   {% include "ui/partials/context_menu_item.html" with icon="settings" label="Edit" click="accountCtxAction('edit')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="pen-line" label="Signature" click="accountCtxAction('signature')" only %}

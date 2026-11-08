@@ -36,7 +36,7 @@ Expects in context:
         <div
           class="h-5 mb-3 items-center {% if collapsed %}hidden{% else %}hidden lg:flex{% endif %}"
         >
-          <div class="h-3 w-16 bg-base-300 rounded"></div>
+          <div class="h-3 w-16 bg-base-300 rounded-sm"></div>
         </div>
         <ul class="space-y-1">
           {% for _ in pinned_conversations|slice:":15" %}

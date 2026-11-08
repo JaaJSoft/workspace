@@ -20,7 +20,7 @@
     <a
       href="{{ card.url }}"
       x-target.push="photos-nav photos-content"
-      class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+      class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
       :class="{ 'ring-2 ring-module': peoplePicking && isPeopleCardPicked('{{ key|escapejs }}') }"
       :tabindex="peoplePicking ? -1 : null"
       title="{% if card.person %}{{ card.person.name }}, {% endif %}{{ card.photo_count }} photo{{ card.photo_count|pluralize }}"
@@ -47,7 +47,7 @@
     {% else %}
       <button
         type="button"
-        class="mt-1 text-sm font-medium text-module hover:underline focus-visible:outline-none focus-visible:underline"
+        class="mt-1 text-sm font-medium text-module hover:underline focus-visible:outline-hidden focus-visible:underline"
         :tabindex="peoplePicking ? -1 : null"
         @click="openNameDialog({ uuid: '{{ card.uuid|escapejs }}', cover_url: '{{ card.cover_url|default:''|escapejs }}' })"
       >
@@ -59,7 +59,7 @@
     </span>
     <button
       type="button"
-      class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
+      class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
       title="More actions"
       aria-label="More actions"
       aria-haspopup="menu"
@@ -72,7 +72,7 @@
       type="button"
       x-show="peoplePicking"
       x-cloak
-      class="absolute inset-0 z-10 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+      class="absolute inset-0 z-10 rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
       :aria-pressed="isPeopleCardPicked('{{ key|escapejs }}') ? 'true' : 'false'"
       aria-label="Pick {% if card.person %}{{ card.person.name }}{% else %}this person{% endif %}"
       @click="togglePeopleCard('{{ key|escapejs }}')"

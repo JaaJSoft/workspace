@@ -18,20 +18,20 @@
     {% endwith %}
 
     <form @submit.prevent="saveCalendar()" class="space-y-4">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           id="calendar-form-name"
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="calendarForm.name"
           placeholder="{% translate "Calendar name" %}"
           required
         />
       </label>
 
-      <div>
-        <div class="label"><span class="label-text">{% translate "Color" %}</span></div>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><span>{% translate "Color" %}</span></legend>
         <div class="flex flex-wrap gap-2">
           <template x-for="c in calendarColors" :key="c">
             <button
@@ -40,19 +40,19 @@
               :class="calendarForm.color === c
                       ? 'border-base-content scale-110 ring-2 ring-base-content/20'
                       : 'border-transparent hover:scale-105'"
-              :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+              :style="{ backgroundColor: 'var(--color-' + c + ')' }"
               @click="calendarForm.color = c"
             >
               <i
                 data-lucide="check"
                 class="w-4 h-4"
                 x-show="calendarForm.color === c"
-                :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"
+                :style="{ color: 'var(--color-' + c + '-content)' }"
               ></i>
             </button>
           </template>
         </div>
-      </div>
+      </fieldset>
 
       <div
         x-show="calendarModalMode === 'edit'"
@@ -84,7 +84,7 @@
             <div class="join w-full">
               <input
                 type="text"
-                class="input input-bordered input-sm join-item w-full font-mono text-xs"
+                class="input input-sm join-item w-full font-mono text-xs"
                 :value="calendarFeed.url"
                 readonly
                 @focus="$event.target.select()"
@@ -159,30 +159,30 @@
     {% include "ui/partials/dialog_header.html" with icon="globe" icon_class="bg-info/10 text-info" title=_("Add external calendar") close_expr="showExternalModal = false" only %}
 
     <form @submit.prevent="saveExternalCalendar()" class="space-y-4">
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "ICS URL" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "ICS URL" %}</span></div>
         <input
           id="external-form-url"
           type="url"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="externalForm.url"
           placeholder="https://calendar.google.com/...ical"
           required
         />
       </label>
 
-      <label class="form-control w-full">
-        <div class="label"><span class="label-text">{% translate "Name" %}</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
-          class="input input-bordered input-sm w-full"
+          class="input input-sm w-full"
           x-model="externalForm.name"
           placeholder="{% translate "My external calendar" %}"
         />
       </label>
 
-      <div>
-        <div class="label"><span class="label-text">{% translate "Color" %}</span></div>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><span>{% translate "Color" %}</span></legend>
         <div class="flex flex-wrap gap-2">
           <template x-for="c in calendarColors" :key="c">
             <button
@@ -191,19 +191,19 @@
               :class="externalForm.color === c
                       ? 'border-base-content scale-110 ring-2 ring-base-content/20'
                       : 'border-transparent hover:scale-105'"
-              :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+              :style="{ backgroundColor: 'var(--color-' + c + ')' }"
               @click="externalForm.color = c"
             >
               <i
                 data-lucide="check"
                 class="w-4 h-4"
                 x-show="externalForm.color === c"
-                :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"
+                :style="{ color: 'var(--color-' + c + '-content)' }"
               ></i>
             </button>
           </template>
         </div>
-      </div>
+      </fieldset>
 
       <div class="modal-action">
         <button

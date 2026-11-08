@@ -27,7 +27,7 @@
   :style="{ top: keptHeight + 'px' }"
   :class="{ 'border-t border-base-300': keptHeight > 0, 'cursor-none': slideshowIdle }"
   x-cloak
-  class="absolute inset-0 z-[15] flex flex-col bg-base-100 outline-none"
+  class="absolute inset-0 z-15 flex flex-col bg-base-100 outline-hidden"
   role="region"
   aria-label="{% translate 'File viewer' %}"
   data-file-viewer-inline
@@ -42,7 +42,7 @@
 >
   <div
     class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 md:gap-y-0 pl-4 lg:pl-6 pr-3 py-2 border-b border-base-300 bg-base-100 transition-opacity duration-300"
-    :class="{ 'absolute inset-x-0 top-0 z-20 bg-base-100/80 backdrop-blur': slideshowPlaying, 'opacity-0 pointer-events-none': slideshowIdle }"
+    :class="{ 'absolute inset-x-0 top-0 z-20 bg-base-100/80 backdrop-blur-sm': slideshowPlaying, 'opacity-0 pointer-events-none': slideshowIdle }"
   >
     <h3 class="font-bold truncate col-start-1 row-start-1" x-text="fileName"></h3>
     {# Below md the meta row runs under the buttons too: next to them it leaves no room for the gallery pager. #}
@@ -158,7 +158,7 @@
   {# A playing slideshow hides the image viewer's own toolbar: zoom and edit have no place in it. #}
   <div
     class="flex-1 overflow-auto bg-base-200"
-    :class="{ '!bg-black [&_[data-viewer-toolbar]]:hidden': slideshowPlaying }"
+    :class="{ 'bg-black! **:data-viewer-toolbar:hidden': slideshowPlaying }"
     x-show="!viewerLoading && !viewerError"
   >
     <div id="viewer-panel" style="display: contents"></div>
@@ -189,7 +189,7 @@
   <!-- Prev / Next overlay arrows -->
   <button
     type="button"
-    class="btn btn-circle max-md:hidden absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
+    class="btn btn-circle max-md:hidden absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
     title="{% translate 'Previous file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() > 0"
@@ -200,7 +200,7 @@
   </button>
   <button
     type="button"
-    class="btn btn-circle max-md:hidden absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow transition-opacity duration-300"
+    class="btn btn-circle max-md:hidden absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm transition-opacity duration-300"
     :class="{ 'opacity-0 pointer-events-none': slideshowIdle }"
     title="{% translate 'Next file' %}"
     x-show="!panelEditing && _totalViewable() > 1 && _currentIndex() >= 0 && _currentIndex() < _totalViewable() - 1"

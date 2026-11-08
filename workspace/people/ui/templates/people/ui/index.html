@@ -36,12 +36,12 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
+  <div class="drawer-side z-40 h-full overflow-visible!">
     <label for="people-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
       :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
     >
       <!-- Sidebar header -->
@@ -71,7 +71,7 @@
       </div>
       <!-- Address books and lists -->
       <div class="flex-1 overflow-y-auto py-2 px-3">
-        <ul class="menu p-0 space-y-0.5">
+        <ul class="menu p-0 space-y-0.5 w-full">
           {% translate "All" context "address books" as all_label %}
           {% translate "My contacts" as mine_label %}
           {% include "ui/partials/drawer_item.html" with icon="users" label=all_label color="module" onclick="setScope('')" active_binding="scope === '' && !listUuid" tooltip=all_label collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
@@ -86,7 +86,7 @@
                 type="button"
                 class="flex items-center w-full text-left text-base rounded-lg transition-colors"
                 :class="[
-                  sidebarCollapsed() ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
+                  sidebarCollapsed() ? 'justify-center w-10 h-10 p-0!' : 'p-2 gap-3',
                   scope === 'group:' + group.id ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
                 ]"
                 :title="sidebarCollapsed() ? group.name : ''"
@@ -186,14 +186,14 @@
         :class="{ hidden: !sidebarCollapsed() }"
         x-show="sidebarCollapsed()"
       >
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% translate "New" context "new contact" as new_label %}
           {% include "ui/partials/drawer_item.html" with icon="user-plus" label=new_label color="module" onclick="newPerson()" tooltip=_("New contact") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
       <!-- Import / export, then help -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0 space-y-0.5">
+        <ul class="menu p-0 space-y-0.5 w-full">
           {% include "ui/partials/drawer_item.html" with icon="upload" label=_("Import") color="module" onclick="openImport()" tooltip=_("Import contacts") aria_label=_("Import contacts") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% include "ui/partials/drawer_item.html" with icon="download" label=_("Export") color="module" onclick="openExport()" tooltip=_("Export contacts") aria_label=_("Export contacts") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('people-help-dialog').showModal()" tooltip=_("Help") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
@@ -203,7 +203,7 @@
       <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
         {% translate "Expand sidebar" as expand_sidebar_label %}
         {% translate "Collapse sidebar" as collapse_sidebar_label %}
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
             {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
               {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
@@ -225,7 +225,7 @@
     :class="{ 'max-lg:hidden': panelOpen }"
   >
     <div class="p-3 border-b border-base-300">
-      <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+      <label class="input input-sm flex items-center gap-2 w-full">
         <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
         <input
           type="search"

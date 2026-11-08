@@ -12,7 +12,7 @@
   than on window so it only fires while the panel is mounted.
 {% endcomment %}
 <div
-  class="h-full flex flex-col min-w-0 bg-base-100 focus:outline-none"
+  class="h-full flex flex-col min-w-0 bg-base-100 focus:outline-hidden"
   x-data="chatThreadPanel(openThreadRoot)"
   tabindex="-1"
   @keydown.escape.prevent.stop="closeThread()"

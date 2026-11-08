@@ -15,7 +15,7 @@
             type="text"
             x-model="rulesSearch"
             placeholder="Filter by name or action type..."
-            class="input input-bordered input-sm w-full"
+            class="input input-sm w-full"
           />
         </template>
 
@@ -197,7 +197,7 @@
             class="font-semibold"
             x-text="rulesEditing.uuid ? 'Edit rule' : 'New rule'"
           ></h4>
-          <div class="tabs tabs-boxed">
+          <div class="tabs tabs-box">
             <button
               type="button"
               class="tab tab-sm tab-module"
@@ -219,7 +219,7 @@
 
         <input
           type="text"
-          class="input input-bordered w-full"
+          class="input w-full"
           placeholder="Rule name"
           x-model="rulesEditing.name"
         />
@@ -230,7 +230,7 @@
             class="grid grid-cols-1 sm:grid-cols-[10rem_10rem_1fr] gap-2 items-stretch"
           >
             <select
-              class="select select-bordered select-sm min-w-0 w-full"
+              class="select select-sm min-w-0 w-full"
               x-model="rulesForm.simpleCondition.field"
               @change="rulesOnFieldChange()"
             >
@@ -239,7 +239,7 @@
               </template>
             </select>
             <select
-              class="select select-bordered select-sm min-w-0 w-full"
+              class="select select-sm min-w-0 w-full"
               x-model="rulesForm.simpleCondition.op"
             >
               <template
@@ -252,7 +252,7 @@
             <input
               x-show="rulesNeedsValue(rulesForm.simpleCondition.op)"
               type="text"
-              class="input input-bordered input-sm min-w-0 w-full"
+              class="input input-sm min-w-0 w-full"
               x-model="rulesForm.simpleCondition.value"
             />
           </div>
@@ -260,7 +260,7 @@
           <div class="text-sm font-semibold mt-3">Then</div>
           <div class="flex flex-wrap gap-2 items-stretch">
             <select
-              class="select select-bordered select-sm w-full sm:w-44 sm:shrink-0"
+              class="select select-sm w-full sm:w-44 sm:shrink-0"
               x-model="rulesForm.simpleAction.type"
             >
               <option value="mark_read">Mark as read</option>
@@ -274,7 +274,7 @@
             </select>
             <select
               x-show="rulesForm.simpleAction.type === 'add_label' || rulesForm.simpleAction.type === 'remove_label'"
-              class="select select-bordered select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
+              class="select select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
               x-model="rulesForm.simpleAction.label_id"
             >
               <template x-for="lbl in rulesAccountLabels()" :key="lbl.uuid">
@@ -314,12 +314,12 @@
                 A condition is either a single check (leaf) or a group combining multiple checks with AND/OR.
               </p>
               <div
-                class="font-mono bg-base-100 border border-base-300 rounded p-2 mb-2 whitespace-pre-wrap"
+                class="font-mono bg-base-100 border border-base-300 rounded-sm p-2 mb-2 whitespace-pre-wrap"
               >
                 {"field": "from", "op": "contains", "value": "@news.com"}
               </div>
               <div
-                class="font-mono bg-base-100 border border-base-300 rounded p-2 whitespace-pre-wrap"
+                class="font-mono bg-base-100 border border-base-300 rounded-sm p-2 whitespace-pre-wrap"
               >
                 {"type": "all", "conditions": [
                 {"field": "from", "op": "contains", "value": "@github.com"},
@@ -350,7 +350,7 @@
             <div>
               <div class="font-semibold mb-1">Actions (flat list)</div>
               <div
-                class="font-mono bg-base-100 border border-base-300 rounded p-2 whitespace-pre-wrap"
+                class="font-mono bg-base-100 border border-base-300 rounded-sm p-2 whitespace-pre-wrap"
               >
                 [
                 {"type": "add_label", "label_id": "&lt;uuid&gt;"},
@@ -373,7 +373,7 @@
           </div>
 
           <textarea
-            class="textarea textarea-bordered w-full font-mono text-xs"
+            class="textarea w-full font-mono text-xs"
             rows="6"
             x-model="rulesForm.advancedConditionsText"
             @input="rulesSyncAdvancedConditions()"
@@ -381,7 +381,7 @@
 
           <div class="text-sm font-semibold mt-3">Actions (JSON list)</div>
           <textarea
-            class="textarea textarea-bordered w-full font-mono text-xs"
+            class="textarea w-full font-mono text-xs"
             rows="8"
             x-model="rulesForm.advancedActionsText"
             @input="rulesSyncAdvancedActions()"

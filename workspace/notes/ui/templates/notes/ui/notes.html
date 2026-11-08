@@ -32,13 +32,13 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
+  <div class="drawer-side z-40 h-full overflow-visible!">
     <label for="notes-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
       :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
     >
       <!-- Sidebar header -->
@@ -67,17 +67,17 @@
 
       <!-- Help button -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
-        <ul class="menu p-0 hidden lg:block">
+        <ul class="menu p-0 hidden lg:block w-full">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
-        <ul class="menu p-0 lg:hidden">
+        <ul class="menu p-0 lg:hidden w-full">
           {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
@@ -256,14 +256,14 @@
         <form
           @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.noteGroupSelect.options[$refs.noteGroupSelect.selectedIndex].text } })); document.getElementById('notes-create-group-folder-dialog').close(); }"
         >
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Group</span>
+          <div class="fieldset">
+            <label class="fieldset-legend">
+              <span>Group</span>
             </label>
             <select
               x-model="selectedGroup"
               x-ref="noteGroupSelect"
-              class="select select-bordered w-full"
+              class="select w-full"
               required
             >
               <option value="" disabled selected>Select a group</option>
@@ -271,8 +271,8 @@
                 <option value="{{ g.id }}">{{ g.name }}</option>
               {% endfor %}
             </select>
-            <label class="label">
-              <span class="label-text-alt">The folder will be named after the group</span>
+            <label class="label whitespace-normal">
+              <span>The folder will be named after the group</span>
             </label>
           </div>
           <div class="modal-action">

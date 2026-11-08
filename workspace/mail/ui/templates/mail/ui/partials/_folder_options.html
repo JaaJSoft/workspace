@@ -17,7 +17,7 @@ Params:
     <button
       type="button"
       class="flex items-center gap-2"
-      :class="{{ model }} === f.uuid ? 'active' : ''"
+      :class="{{ model }} === f.uuid ? 'menu-active' : ''"
       :style="f._depth ? `padding-left:${0.5 + f._depth * 0.75}rem` : ''"
       @click="{{ model }} = f.uuid;{% if on_change %} {{ on_change }};{% endif %}"
     >

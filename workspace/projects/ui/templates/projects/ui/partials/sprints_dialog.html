@@ -20,7 +20,7 @@ menus without a reload.
         x-cloak
       >
         <label
-          class="input input-bordered input-sm flex items-center gap-2 flex-1 min-w-0 sm:max-w-xs"
+          class="input input-sm flex items-center gap-2 flex-1 min-w-0 sm:max-w-xs"
         >
           <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
           <input
@@ -48,11 +48,11 @@ menus without a reload.
           @submit.prevent="addSprint()"
           @keydown.escape="adding = false"
         >
-          <label class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Name</span></div>
+          <label class="fieldset">
+            <div class="fieldset-legend"><span>Name</span></div>
             <input
               type="text"
-              class="input input-bordered input-sm w-full"
+              class="input input-sm w-full"
               x-model="addForm.name"
               required
               maxlength="100"
@@ -60,30 +60,26 @@ menus without a reload.
             />
           </label>
           <div class="grid grid-cols-2 gap-3">
-            <label class="form-control">
-              <div class="label py-0"><span class="label-text-alt">Start</span></div>
+            <label class="fieldset min-w-0">
+              <div class="fieldset-legend"><span>Start</span></div>
               <input
                 type="date"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full min-w-0"
                 x-model="addForm.start_date"
               />
             </label>
-            <label class="form-control">
-              <div class="label py-0"><span class="label-text-alt">End</span></div>
+            <label class="fieldset min-w-0">
+              <div class="fieldset-legend"><span>End</span></div>
               <input
                 type="date"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full min-w-0"
                 x-model="addForm.end_date"
               />
             </label>
           </div>
-          <label class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Goal (optional)</span></div>
-            <textarea
-              class="textarea textarea-bordered textarea-sm"
-              rows="2"
-              x-model="addForm.goal"
-            ></textarea>
+          <label class="fieldset">
+            <div class="fieldset-legend"><span>Goal (optional)</span></div>
+            <textarea class="textarea textarea-sm w-full" rows="2" x-model="addForm.goal"></textarea>
           </label>
           <div class="flex items-center gap-2 ml-auto">
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
@@ -166,7 +162,7 @@ menus without a reload.
                 Start
                 <input
                   type="date"
-                  class="input input-bordered input-xs"
+                  class="input input-xs w-auto"
                   :value="sprint.start_date || ''"
                   {% if writable %}@change="setDate(sprint, 'start_date', $event.target.value)"{% else %}disabled{% endif %}
                 />
@@ -175,7 +171,7 @@ menus without a reload.
                 End
                 <input
                   type="date"
-                  class="input input-bordered input-xs"
+                  class="input input-xs w-auto"
                   :value="sprint.end_date || ''"
                   {% if writable %}@change="setDate(sprint, 'end_date', $event.target.value)"{% else %}disabled{% endif %}
                 />
@@ -183,7 +179,7 @@ menus without a reload.
             </div>
             <template x-if="editingGoal !== sprint.uuid">
               <p
-                class="text-xs text-base-content/60 whitespace-pre-line break-words"
+                class="text-xs text-base-content/60 whitespace-pre-line wrap-break-word"
                 :class="sprint.goal ? '' : 'italic'"
                 x-text="sprint.goal || 'No goal.'"
                 {% if writable %}@click="startGoalEdit(sprint)"{% endif %}
@@ -191,7 +187,7 @@ menus without a reload.
             </template>
             <template x-if="editingGoal === sprint.uuid">
               <textarea
-                class="textarea textarea-bordered textarea-sm text-xs"
+                class="textarea textarea-sm text-xs w-full"
                 rows="2"
                 x-model="goalDraft"
                 @keydown.escape="editingGoal = null"

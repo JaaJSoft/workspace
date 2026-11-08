@@ -152,7 +152,7 @@ class VaultBrowserCase(PlaywrightTestCase):
         """
         self.page.click(f"tbody tr:has-text('{name}')")
         self.page.locator(PANEL).get_by_role("button", name="Edit").click()
-        self.page.wait_for_selector(".modal-box")
+        self.page.wait_for_selector(".modal-box:has-text('Save')")
         self.page.get_by_role("button", name="Add").click()
         self.page.fill(
             ".modal-box input[placeholder='Key or otpauth:// address']",
@@ -161,8 +161,8 @@ class VaultBrowserCase(PlaywrightTestCase):
         self.page.click(".modal-box button:has-text('Save')")
         # Scoped to the entry dialog itself: the page carries several other
         # ``.modal-box`` elements (help, prompts, the file picker) that stay
-        # in the DOM - out of view but not display:none - the whole time, so
-        # a bare ``.modal-box`` never reports hidden.
+        # in the DOM the whole time, so a bare ``.modal-box`` names whichever
+        # comes first, not the dialog this step opened.
         self.page.wait_for_selector(
             ".modal-box:has-text('Save')", state="hidden", timeout=30000
         )

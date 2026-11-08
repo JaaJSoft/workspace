@@ -76,7 +76,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             >
               <template x-for="p in remoteParticipants()" :key="p.user_id">
                 <div
-                  class="relative rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-module"
+                  class="relative rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors overflow-hidden cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
                   :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
                   role="button"
                   tabindex="0"
@@ -102,7 +102,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                   </template>
                   <span
                     x-show="hasVideo(p)"
-                    class="absolute bottom-1 left-2 text-xs bg-black/50 text-white rounded px-1"
+                    class="absolute bottom-1 left-2 text-xs bg-black/50 text-white rounded-sm px-1"
                     x-text="p.display_name"
                   ></span>
                   <i
@@ -136,7 +136,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                   <user-avatar :user-id="spotlightParticipant().user_id" :username="spotlightParticipant().display_name" size="xl"></user-avatar>
                 </template>
                 <span
-                  class="absolute bottom-2 left-3 text-sm bg-black/50 text-white rounded px-2 py-0.5"
+                  class="absolute bottom-2 left-3 text-sm bg-black/50 text-white rounded-sm px-2 py-0.5"
                   x-text="spotlightParticipant() ? spotlightParticipant().display_name : ''"
                 ></span>
                 <button
@@ -154,7 +154,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               >
                 <template x-for="p in stripParticipants()" :key="p.user_id">
                   <div
-                    class="relative w-28 h-20 shrink-0 rounded-lg bg-base-100 border-2 overflow-hidden flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-module"
+                    class="relative w-28 h-20 shrink-0 rounded-lg bg-base-100 border-2 overflow-hidden flex items-center justify-center cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
                     :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
                     role="button"
                     tabindex="0"
@@ -176,7 +176,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                       <user-avatar :user-id="p.user_id" :username="p.display_name" size="sm"></user-avatar>
                     </template>
                     <span
-                      class="absolute bottom-0.5 left-1 text-[10px] bg-black/50 text-white rounded px-1 truncate max-w-[6rem]"
+                      class="absolute bottom-0.5 left-1 text-[10px] bg-black/50 text-white rounded-sm px-1 truncate max-w-24"
                       x-text="p.display_name"
                     ></span>
                   </div>
@@ -223,7 +223,7 @@ be defined before the parser reaches the markup using it, or server-rendered
         <!-- Controls bar: centered dock at bottom -->
         <div class="flex justify-center shrink-0">
           <div
-            class="inline-flex items-center gap-3 p-3 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg"
+            class="inline-flex items-center gap-3 p-3 rounded-full bg-base-100/90 backdrop-blur-sm border border-base-300 shadow-lg"
           >
             <button
               type="button"

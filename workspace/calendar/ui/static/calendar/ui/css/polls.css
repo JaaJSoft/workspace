@@ -5,7 +5,7 @@
 }
 
 .poll-grid tfoot td {
-  border-top: 2px solid oklch(var(--bc) / 0.1);
+  border-top: 2px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
 }
 
 /* Winning slot column rounded corners */

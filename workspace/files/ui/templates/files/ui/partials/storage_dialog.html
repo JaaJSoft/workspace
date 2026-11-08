@@ -27,7 +27,7 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
           class="loading loading-spinner loading-sm ml-2"
         ></span>
         <label
-          class="input input-sm input-bordered flex items-center gap-2 ml-auto w-full sm:w-60 order-last sm:order-none"
+          class="input input-sm flex items-center gap-2 ml-auto w-full sm:w-60 order-last sm:order-0"
           title="{% translate 'Filter the largest files and duplicates by path' %}"
         >
           <i data-lucide="search" class="w-4 h-4 text-base-content/50 shrink-0"></i>
@@ -77,53 +77,53 @@ storage_analysis partial, loaded and re-loaded through alpine-ajax.
           aria-hidden="true"
         >
           <div class="flex items-center gap-2">
-            <div class="w-5 h-5 rounded bg-base-300"></div>
-            <div class="h-4 w-40 rounded bg-base-300"></div>
-            <div class="h-3 w-24 rounded bg-base-300 ml-auto"></div>
+            <div class="w-5 h-5 rounded-sm bg-base-300"></div>
+            <div class="h-4 w-40 rounded-sm bg-base-300"></div>
+            <div class="h-3 w-24 rounded-sm bg-base-300 ml-auto"></div>
           </div>
           <div
             class="grid grid-cols-1 md:grid-cols-3 gap-px bg-base-300 rounded-box overflow-hidden"
           >
             <div class="bg-base-200 p-4 space-y-2">
-              <div class="h-3 w-12 rounded bg-base-300"></div>
-              <div class="h-6 w-24 rounded bg-base-300"></div>
+              <div class="h-3 w-12 rounded-sm bg-base-300"></div>
+              <div class="h-6 w-24 rounded-sm bg-base-300"></div>
             </div>
             <div class="bg-base-200 p-4 space-y-2">
-              <div class="h-3 w-16 rounded bg-base-300"></div>
-              <div class="h-6 w-20 rounded bg-base-300"></div>
+              <div class="h-3 w-16 rounded-sm bg-base-300"></div>
+              <div class="h-6 w-20 rounded-sm bg-base-300"></div>
             </div>
             <div class="bg-base-200 p-4 space-y-2">
-              <div class="h-3 w-20 rounded bg-base-300"></div>
-              <div class="h-6 w-10 rounded bg-base-300"></div>
+              <div class="h-3 w-20 rounded-sm bg-base-300"></div>
+              <div class="h-6 w-10 rounded-sm bg-base-300"></div>
             </div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="rounded-box bg-base-200 p-4 flex flex-col items-center gap-4">
-              <div class="h-4 w-28 rounded bg-base-300 self-start"></div>
-              <div class="w-36 h-36 rounded-full border-[14px] border-base-300"></div>
+              <div class="h-4 w-28 rounded-sm bg-base-300 self-start"></div>
+              <div class="w-36 h-36 rounded-full border-14 border-base-300"></div>
               <div class="w-full space-y-2">
-                <div class="h-3 rounded bg-base-300"></div>
-                <div class="h-3 rounded bg-base-300 w-5/6"></div>
-                <div class="h-3 rounded bg-base-300 w-2/3"></div>
+                <div class="h-3 rounded-sm bg-base-300"></div>
+                <div class="h-3 rounded-sm bg-base-300 w-5/6"></div>
+                <div class="h-3 rounded-sm bg-base-300 w-2/3"></div>
               </div>
             </div>
             <div class="rounded-box bg-base-200 p-4 space-y-4">
-              <div class="h-4 w-24 rounded bg-base-300"></div>
+              <div class="h-4 w-24 rounded-sm bg-base-300"></div>
               {% for _ in "1234" %}
                 <div class="space-y-1.5">
-                  <div class="h-3 w-3/5 rounded bg-base-300"></div>
+                  <div class="h-3 w-3/5 rounded-sm bg-base-300"></div>
                   <div class="h-1.5 rounded-full bg-base-300"></div>
                 </div>
               {% endfor %}
             </div>
           </div>
           <div class="rounded-box bg-base-200 p-4 space-y-3">
-            <div class="h-4 w-28 rounded bg-base-300"></div>
+            <div class="h-4 w-28 rounded-sm bg-base-300"></div>
             {% for _ in "12345" %}
               <div class="flex items-center gap-3">
-                <div class="w-4 h-4 rounded bg-base-300"></div>
-                <div class="h-3 flex-1 rounded bg-base-300"></div>
-                <div class="h-3 w-12 rounded bg-base-300"></div>
+                <div class="w-4 h-4 rounded-sm bg-base-300"></div>
+                <div class="h-3 flex-1 rounded-sm bg-base-300"></div>
+                <div class="h-3 w-12 rounded-sm bg-base-300"></div>
               </div>
             {% endfor %}
           </div>

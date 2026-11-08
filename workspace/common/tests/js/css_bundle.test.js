@@ -24,7 +24,7 @@ test('the stylesheet carries the DaisyUI components and themes', () => {
 test('the stylesheet carries the safelisted runtime-built utilities', () => {
   const src = fs.readFileSync(BUNDLE, 'utf8');
   // Templates interpolate these at render time (`bg-{{ color }}/10`), so the
-  // content scanner never sees them: only tailwind.config.js's safelist keeps
+  // content scanner never sees them: only input.css's inline sources keep
   // them alive.
   assert.match(src, /\.bg-primary\\\/10\{/, 'safelisted opacity utility purged');
   assert.match(src, /\.badge-warning\{/, 'safelisted DaisyUI colour variant purged');

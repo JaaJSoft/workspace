@@ -32,15 +32,15 @@
       </div>
 
       <!-- To: tag-input -->
-      <div class="form-control" x-show="newConvMode === 'people'" x-cloak>
-        <label class="label pb-1">
+      <div class="fieldset" x-show="newConvMode === 'people'" x-cloak>
+        <label class="fieldset-legend">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+            class="text-xs font-medium uppercase tracking-wide text-base-content/50"
           >To</span>
         </label>
         <div class="relative">
           <div
-            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-module/50 transition-colors cursor-text"
+            class="flex flex-wrap items-center gap-1.5 min-h-10 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-module/50 transition-colors cursor-text"
             @click="$refs.userSearchInput.focus()"
           >
             <!-- Selected user chips -->
@@ -52,7 +52,7 @@
             <input
               type="text"
               x-ref="userSearchInput"
-              class="grow bg-transparent outline-none text-sm min-w-[8rem] h-6"
+              class="grow bg-transparent outline-hidden text-sm min-w-32 h-6"
               placeholder="Search users..."
               x-model="userSearchQuery"
               @input.debounce.300ms="searchUsers()"
@@ -71,13 +71,13 @@
             @click.outside="userSearchShowDropdown = false"
             class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
           >
-            <ul class="menu menu-sm p-1" x-ref="userSearchList">
+            <ul class="menu menu-sm p-1 w-full" x-ref="userSearchList">
               <template x-for="(user, idx) in userSearchResults" :key="user.id">
                 <li>
                   <button
                     type="button"
-                    class="flex items-center gap-2 rounded"
-                    :class="idx === userSearchHighlight ? 'active' : ''"
+                    class="flex items-center gap-2 rounded-sm"
+                    :class="idx === userSearchHighlight ? 'menu-active' : ''"
                     :data-search-active="idx === userSearchHighlight"
                     @click="selectSearchedUser(user); $refs.userSearchInput.focus()"
                     @mouseenter="userSearchHighlight = idx"
@@ -110,10 +110,10 @@
       </div>
 
       <!-- Groups: select one or more of the user's groups -->
-      <div class="form-control" x-show="newConvMode === 'groups'" x-cloak>
-        <label class="label pb-1">
+      <div class="fieldset" x-show="newConvMode === 'groups'" x-cloak>
+        <label class="fieldset-legend">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+            class="text-xs font-medium uppercase tracking-wide text-base-content/50"
           >Groups</span>
         </label>
         <div
@@ -135,20 +135,20 @@
 
       <!-- Group name (shown when 2+ users, or always in Groups mode) -->
       <div
-        class="form-control"
+        class="fieldset"
         x-show="selectedUsers.length >= 2 || newConvMode === 'groups'"
         x-cloak
         x-transition
       >
-        <label class="label pb-1">
+        <label class="fieldset-legend w-full">
           <span
-            class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50"
+            class="text-xs font-medium uppercase tracking-wide text-base-content/50"
           >Group name</span>
-          <span class="label-text-alt text-xs text-base-content/40">Optional</span>
+          <span class="text-xs text-base-content/40">Optional</span>
         </label>
         <input
           type="text"
-          class="input input-sm input-bordered w-full"
+          class="input input-sm w-full"
           placeholder="e.g. Project Team"
           x-model="newConvTitle"
         />

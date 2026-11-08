@@ -6,7 +6,7 @@ from django.test import SimpleTestCase
 
 # Tailwind's content scanner never reads .py files, so a `fill-*`/`stroke-*`
 # class built as a plain string in a chart service only exists in the
-# compiled bundle because scripts/frontend/tailwind.config.js safelists it.
+# compiled bundle because scripts/frontend/input.css lists it as an inline source.
 # This test closes the loop: every such literal found in the services must
 # resolve to an actual rule in the built CSS.
 _CLASS_RE = re.compile(r"\b(?:fill|stroke)-[a-z][a-z0-9-]*(?:/\d+)?\b")
@@ -36,6 +36,6 @@ class ChartClassesCompiledTests(SimpleTestCase):
         self.assertEqual(
             missing,
             [],
-            f"classes missing from the compiled bundle (extend the tailwind.config.js "
-            f"safelist and run npm run build:css): {missing}",
+            f"classes missing from the compiled bundle (extend the @source inline lists in "
+            f"scripts/frontend/input.css and run npm run build:css): {missing}",
         )

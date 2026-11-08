@@ -8,7 +8,7 @@
   {% if not oidc_managed %}x-data="changePasswordForm()"{% endif %}
 >
   {% if oidc_managed %}
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card bg-base-100 border border-base-300 shadow-xs">
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="shield-check" class="w-5 h-5"></i>
@@ -29,7 +29,7 @@
       </div>
     </div>
   {% else %}
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card bg-base-100 border border-base-300 shadow-xs">
       <div class="card-body">
         <h2 class="card-title text-lg gap-2">
           <i data-lucide="lock" class="w-5 h-5"></i>
@@ -44,10 +44,10 @@
           {% csrf_token %}
 
           <!-- Current password -->
-          <div class="form-control">
-            <label class="label"><span class="label-text font-medium">{% translate "Current Password" %}</span></label>
+          <div class="fieldset">
+            <label class="fieldset-legend"><span class="font-medium">{% translate "Current Password" %}</span></label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors w-full"
             >
               <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
               <input
@@ -79,10 +79,10 @@
           </div>
 
           <!-- New password -->
-          <div class="form-control">
-            <label class="label"><span class="label-text font-medium">{% translate "New Password" %}</span></label>
+          <div class="fieldset">
+            <label class="fieldset-legend"><span class="font-medium">{% translate "New Password" %}</span></label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors w-full"
             >
               <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
               <input
@@ -175,12 +175,12 @@
           </div>
 
           <!-- Confirm password -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text font-medium">{% translate "Confirm New Password" %}</span>
+          <div class="fieldset">
+            <label class="fieldset-legend">
+              <span class="font-medium">{% translate "Confirm New Password" %}</span>
             </label>
             <label
-              class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+              class="input flex items-center gap-2 focus-within:border-primary/50 transition-colors w-full"
               :class="{ 'input-error': confirmMismatch }"
             >
               <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
@@ -210,13 +210,13 @@
                 ></i>
               </button>
             </label>
-            <label class="label" x-show="confirmMismatch" x-cloak>
-              <span class="label-text-alt text-error">{% translate "Passwords do not match." %}</span>
+            <label class="label whitespace-normal" x-show="confirmMismatch" x-cloak>
+              <span class="text-error">{% translate "Passwords do not match." %}</span>
             </label>
           </div>
 
           <!-- Submit -->
-          <div class="form-control mt-6">
+          <div class="fieldset mt-6">
             <button type="submit" class="btn btn-primary gap-2" :disabled="!canSubmit">
               <span x-show="!loading"><i data-lucide="save" class="w-4 h-4"></i></span>
               <span x-show="loading" class="loading loading-spinner loading-sm"></span>

@@ -32,54 +32,49 @@
       <template x-if="saved">
         <inline-alert type="success" message="Saved."></inline-alert>
       </template>
-      <label class="form-control w-full">
-        <div class="label py-1"><span class="label-text">Name</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>Name</span></div>
         <input
           type="text"
-          class="input input-bordered w-full"
+          class="input w-full"
           x-model="name"
           maxlength="255"
           {% if not writable %}disabled{% endif %}
         />
       </label>
-      <label class="form-control w-full">
-        <div class="label py-1"><span class="label-text">Description</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>Description</span></div>
         <textarea
-          class="textarea textarea-bordered w-full"
+          class="textarea w-full"
           rows="3"
           x-model="description"
           {% if not writable %}disabled{% endif %}
         ></textarea>
       </label>
-      <label class="form-control w-full">
-        <div class="label py-1"><span class="label-text">Key</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>Key</span></div>
         <input
           type="text"
-          class="input input-bordered w-full font-mono uppercase"
+          class="input w-full font-mono uppercase"
           x-model="key"
           maxlength="10"
           {% if not writable %}disabled{% endif %}
         />
-        <div class="label py-1">
-          <span class="label-text-alt">
-            Used in task references ({{ project.key }}-42). Changing it changes every reference shown.
-          </span>
+        <div class="label whitespace-normal">
+          <span>Used in task references ({{ project.key }}-42). Changing it changes every reference shown.</span>
         </div>
       </label>
-      <div class="form-control w-full">
-        <div class="label py-1">
-          <span class="label-text">Completed tasks visibility</span>
-          <span
-            class="label-text-alt font-medium text-module"
-            x-text="retentionSliderLabel()"
-          ></span>
+      <div class="fieldset w-full">
+        <div class="fieldset-legend w-full">
+          <span>Completed tasks visibility</span>
+          <span class="font-medium text-module" x-text="retentionSliderLabel()"></span>
         </div>
         <input
           type="range"
           min="0"
           max="5"
           step="1"
-          class="range range-sm range-module"
+          class="range range-sm range-module w-full"
           aria-label="Completed tasks visibility"
           :aria-valuetext="retentionSliderLabel()"
           :value="retentionIndex()"
@@ -94,14 +89,14 @@
           <span>90d</span>
           <span>&infin;</span>
         </div>
-        <div class="label py-1">
-          <span class="label-text-alt">Tasks completed longer ago than this are hidden from the board's Done columns. They are not deleted and still count everywhere else.</span>
+        <div class="label whitespace-normal">
+          <span>Tasks completed longer ago than this are hidden from the board's Done columns. They are not deleted and still count everywhere else.</span>
         </div>
       </div>
-      <label class="form-control w-full">
-        <div class="label py-1"><span class="label-text">Task estimation</span></div>
+      <label class="fieldset w-full">
+        <div class="fieldset-legend"><span>Task estimation</span></div>
         <select
-          class="select select-bordered select-sm"
+          class="select select-sm w-full"
           x-model="estimateUnit"
           {% if not writable %}disabled{% endif %}
         >
@@ -109,8 +104,8 @@
           <option value="points">Story points</option>
           <option value="hours">Hours</option>
         </select>
-        <div class="label py-1">
-          <span class="label-text-alt">Adds an estimate field to tasks, with totals per board column. Switching the unit keeps the stored numbers and only relabels them.</span>
+        <div class="label whitespace-normal">
+          <span>Adds an estimate field to tasks, with totals per board column. Switching the unit keeps the stored numbers and only relabels them.</span>
         </div>
       </label>
       <div class="flex justify-end">
@@ -155,7 +150,7 @@
           <div class="flex items-center justify-between">
             <h4 class="text-sm font-medium text-base-content/70">Groups</h4>
             <span
-              class="label-text-alt text-success flex items-center gap-1"
+              class="text-xs text-success flex items-center gap-1"
               x-show="saved"
               x-transition
             >
@@ -185,7 +180,7 @@
             </template>
           </div>
           <p class="text-sm text-base-content/60" x-show="!items.length">No groups attached.</p>
-          <p class="label-text-alt text-base-content/60">
+          <p class="text-xs text-base-content/60">
             Members of attached groups get member access implicitly; they are not listed below.
           </p>
         </div>
@@ -200,7 +195,7 @@
               class="flex items-center gap-3 p-2 rounded-box bg-base-100"
               x-data="{ imgOk: true }"
             >
-              <div class="avatar placeholder">
+              <div class="avatar avatar-placeholder">
                 <div
                   class="w-8 rounded-full text-white text-xs"
                   :class="imgOk ? '' : userAvatarColorClass(member.user)"
@@ -219,7 +214,7 @@
               <span class="font-medium flex-1 truncate" x-text="member.username"></span>
               {% if writable %}
                 <select
-                  class="select select-bordered select-sm"
+                  class="select select-sm w-auto"
                   :value="member.role"
                   :disabled="busy"
                   @change="changeRole(member, $event.target.value)"
@@ -334,26 +329,26 @@
           @submit.prevent="addColumn()"
           @keydown.escape="adding = false"
         >
-          <label class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Name</span></div>
+          <label class="fieldset">
+            <div class="fieldset-legend"><span>Name</span></div>
             <input
               type="text"
-              class="input input-bordered input-sm"
+              class="input input-sm w-full"
               x-model="addForm.name"
               required
               maxlength="100"
             />
           </label>
-          <label class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Category</span></div>
-            <select class="select select-bordered select-sm" x-model="addForm.category">
+          <label class="fieldset">
+            <div class="fieldset-legend"><span>Category</span></div>
+            <select class="select select-sm w-full" x-model="addForm.category">
               <option value="backlog">Backlog</option>
               <option value="active">Active</option>
               <option value="done">Done</option>
             </select>
           </label>
-          <div class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Color</span></div>
+          <div class="fieldset">
+            <div class="fieldset-legend"><span>Color</span></div>
             <div class="flex items-center gap-1.5 h-8">
               <template x-for="c in colors" :key="c">
                 <button
@@ -404,7 +399,7 @@
             <template x-if="editing === column.uuid">
               <input
                 type="text"
-                class="input input-bordered input-sm h-6 flex-1"
+                class="input input-sm h-6 flex-1"
                 x-model="editName"
                 maxlength="100"
                 @keydown.enter.prevent="saveEdit(column)"
@@ -475,7 +470,7 @@
         </h3>
         <div class="flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-3" x-show="items.length" x-cloak>
-            <label class="input input-bordered input-sm flex items-center gap-2 w-44">
+            <label class="input input-sm flex items-center gap-2 w-44">
               <i data-lucide="search" class="w-4 h-4 opacity-60 shrink-0"></i>
               <input
                 type="search"
@@ -516,18 +511,18 @@
           @keydown.escape="adding = false"
         >
           <div class="flex flex-wrap items-end gap-3">
-            <label class="form-control">
-              <div class="label py-0"><span class="label-text-alt">Name</span></div>
+            <label class="fieldset">
+              <div class="fieldset-legend"><span>Name</span></div>
               <input
                 type="text"
-                class="input input-bordered input-sm"
+                class="input input-sm w-full"
                 x-model="addForm.name"
                 required
                 maxlength="100"
               />
             </label>
-            <div class="form-control">
-              <div class="label py-0"><span class="label-text-alt">Color</span></div>
+            <div class="fieldset">
+              <div class="fieldset-legend"><span>Color</span></div>
               <div class="flex items-center gap-1.5 h-8">
                 <template x-for="c in colors" :key="c">
                   <button
@@ -542,19 +537,19 @@
                 </template>
               </div>
             </div>
-            <label class="form-control">
-              <div class="label py-0"><span class="label-text-alt">Target date (optional)</span></div>
+            <label class="fieldset">
+              <div class="fieldset-legend"><span>Target date (optional)</span></div>
               <input
                 type="date"
-                class="input input-bordered input-sm"
+                class="input input-sm w-full"
                 x-model="addForm.target_date"
               />
             </label>
           </div>
-          <label class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Description (optional)</span></div>
+          <label class="fieldset">
+            <div class="fieldset-legend"><span>Description (optional)</span></div>
             <textarea
-              class="textarea textarea-bordered textarea-sm"
+              class="textarea textarea-sm w-full"
               rows="2"
               x-model="addForm.description"
             ></textarea>
@@ -724,7 +719,7 @@
             </div>
             <template x-if="editingDesc !== epic.uuid">
               <p
-                class="text-xs text-base-content/60 whitespace-pre-line break-words"
+                class="text-xs text-base-content/60 whitespace-pre-line wrap-break-word"
                 :class="epic.description ? '' : 'italic'"
                 x-text="epic.description || 'No description.'"
                 {% if writable %}@click="startDescEdit(epic)"{% endif %}
@@ -732,7 +727,7 @@
             </template>
             <template x-if="editingDesc === epic.uuid">
               <textarea
-                class="textarea textarea-bordered textarea-sm text-xs"
+                class="textarea textarea-sm text-xs w-full"
                 rows="2"
                 x-model="descDraft"
                 @keydown.escape="editingDesc = null"
@@ -789,18 +784,18 @@
           @submit.prevent="addLabel()"
           @keydown.escape="adding = false"
         >
-          <label class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Name</span></div>
+          <label class="fieldset">
+            <div class="fieldset-legend"><span>Name</span></div>
             <input
               type="text"
-              class="input input-bordered input-sm"
+              class="input input-sm w-full"
               x-model="addForm.name"
               required
               maxlength="100"
             />
           </label>
-          <div class="form-control">
-            <div class="label py-0"><span class="label-text-alt">Color</span></div>
+          <div class="fieldset">
+            <div class="fieldset-legend"><span>Color</span></div>
             <div class="flex items-center gap-1.5 h-8">
               <template x-for="c in colors" :key="c">
                 <button

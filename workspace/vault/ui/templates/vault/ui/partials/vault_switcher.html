@@ -41,7 +41,7 @@
     role="listbox"
   >
     <label
-      class="input input-sm input-bordered flex items-center gap-2 mb-2"
+      class="input input-sm flex items-center gap-2 mb-2"
       x-show="switcherNeedsSearch()"
     >
       <i data-lucide="search" class="w-3.5 h-3.5 opacity-60"></i>
@@ -64,7 +64,7 @@
             tabindex="0"
             :aria-selected="candidate.uuid === vaultUuid"
             :title="vaultRowTitle(candidate)"
-            :class="candidate.uuid === vaultUuid ? 'active' : (vaultIsDegraded(candidate) ? 'opacity-70' : '')"
+            :class="candidate.uuid === vaultUuid ? 'menu-active' : (vaultIsDegraded(candidate) ? 'opacity-70' : '')"
             @click="switchVault(candidate)"
             @keydown.enter.prevent="switchVault(candidate)"
             @keydown.space.prevent="switchVault(candidate)"

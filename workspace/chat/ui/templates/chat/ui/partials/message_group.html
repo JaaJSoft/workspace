@@ -44,7 +44,7 @@
 
         {% if msg.body_html %}
           {# Capped here, not on the bubble: attachments sit in it too #}
-          <div class="msg-body prose prose-sm max-w-[36rem] break-words">{{ msg.body_html|safe }}</div>
+          <div class="msg-body prose prose-sm max-w-144 wrap-break-word">{{ msg.body_html|safe }}</div>
         {% endif %}
         {% if is_bot %}
           {# One line under the text: the reasoning summary on the left, what the reply cost on the right. #}
@@ -87,7 +87,7 @@
                         <img
                           src="{{ lp.preview.favicon_url }}"
                           alt=""
-                          class="w-3.5 h-3.5 rounded-sm"
+                          class="w-3.5 h-3.5 rounded-xs"
                           loading="lazy"
                           decoding="async"
                           onerror="this.remove()"
@@ -158,7 +158,7 @@
           class="absolute top-full mt-0 pt-1 {% if is_own %}right-0{% else %}left-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity delay-150 group-hover/msg:delay-0 z-50"
         >
           <div
-            class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5"
+            class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-xs px-0.5 py-0.5"
           >
             {# Quick reactions - server-rendered so already-applied ones show as selected #}
             {% render_reaction_picker msg current_user quick_emojis %}

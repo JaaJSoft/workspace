@@ -21,7 +21,7 @@ Params (Alpine expression fragments, evaluated in the caller's scope):
         type="button"
         class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
         :class="{{ color_expr }} === swatch.value ? 'ring-2 ring-primary ring-offset-1' : ''"
-        :style="swatch.value ? 'background-color: ' + swatch.value + '; border-color: ' + swatch.value : 'border-color: var(--fallback-bc, currentColor)'"
+        :style="swatch.value ? 'background-color: ' + swatch.value + '; border-color: ' + swatch.value : 'border-color: var(--color-base-content)'"
         :title="swatch.name"
         :aria-label="swatch.name"
         @click="{{ color_expr }} = swatch.value"

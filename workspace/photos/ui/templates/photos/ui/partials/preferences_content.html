@@ -9,7 +9,7 @@
     </label>
     <select
       id="photos-pref-tile-shape"
-      class="select select-bordered select-sm w-full"
+      class="select select-sm w-full"
       :value="photoPrefs.tile_shape"
       @change="savePhotoPref('tile_shape', $event.target.value)"
       data-testid="photos-pref-tile-shape"
@@ -31,7 +31,7 @@
     <div class="space-y-2">
       <select
         id="photos-pref-scope"
-        class="select select-bordered select-sm w-full"
+        class="select select-sm w-full"
         :value="photoPrefs.default_scope"
         @change="savePhotoPref('default_scope', $event.target.value)"
         aria-label="Library the timeline opens on"
@@ -42,7 +42,7 @@
         {% endfor %}
       </select>
       <select
-        class="select select-bordered select-sm w-full"
+        class="select select-sm w-full"
         :value="photoPrefs.default_media_type"
         @change="savePhotoPref('default_media_type', $event.target.value)"
         aria-label="Media type the timeline opens on"
@@ -58,7 +58,7 @@
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Import folder</label>
     <div
-      class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
+      class="input input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
       @mousedown.prevent
       @click="chooseImportFolder()"
       data-testid="photos-import-folder"
@@ -126,7 +126,7 @@
     <label class="text-sm text-base-content/60 block mb-1">Hidden folders</label>
     <ul class="space-y-1 mb-1" data-testid="photos-hidden-folders">
       <template x-for="folder in hiddenFolders" :key="folder.uuid">
-        <li class="flex items-center gap-2 bg-base-200 rounded px-2 py-1">
+        <li class="flex items-center gap-2 bg-base-200 rounded-sm px-2 py-1">
           <i data-lucide="folder" class="w-3.5 h-3.5 shrink-0 opacity-60"></i>
           <span
             class="text-sm flex-1 truncate"
@@ -163,7 +163,7 @@
       Phone backup (WebDAV)
     </label>
     <code
-      class="block bg-base-200 px-2 py-1 rounded text-xs break-all select-all"
+      class="block bg-base-200 px-2 py-1 rounded-sm text-xs break-all select-all"
       x-text="importDavUrl()"
     ></code>
   </div>

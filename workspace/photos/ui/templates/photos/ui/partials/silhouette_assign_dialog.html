@@ -7,7 +7,7 @@
   <div class="modal-box max-w-md">
     {% include "ui/partials/dialog_header.html" with icon="user-round-pen" title_expr="selectedFaces.length === 1 ? 'Who is this?' : 'Who are these ' + selectedFaces.length + ' people?'" subtitle="Pick someone whose face is in your photos." only %}
 
-    <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+    <label class="input input-sm flex items-center gap-2 w-full">
       <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
       <input
         type="text"
@@ -25,13 +25,13 @@
 
     <ul
       x-show="!assignDialog.loading"
-      class="menu menu-sm p-0 mt-3 max-h-64 flex-nowrap overflow-y-auto"
+      class="menu menu-sm p-0 mt-3 max-h-64 flex-nowrap overflow-y-auto w-full"
     >
       <template x-for="option in silhouetteAssignOptions()" :key="option.uuid">
         <li>
           <button
             type="button"
-            class="gap-3 rounded"
+            class="gap-3 rounded-sm"
             @click="assignSilhouettes(option)"
           >
             <template x-if="option.cover_url">

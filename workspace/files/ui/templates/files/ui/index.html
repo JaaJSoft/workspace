@@ -28,7 +28,7 @@
 
 {% block drawer_sidebar %}
   <div
-    class="drawer-side z-40 h-full !overflow-visible"
+    class="drawer-side z-40 h-full overflow-visible!"
     x-data="sidebarCollapse()"
   >
     <label
@@ -46,7 +46,7 @@
       diverges from that on a later toggle.
     {% endcomment %}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
       :class="{ 'lg:w-72': !collapsed }"
     >
       <!-- Sidebar header -->
@@ -142,7 +142,7 @@
 
       <!-- Storage & Help -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% translate "My files" as my_files_label %}
           {% with my_files_js=my_files_label|escapejs %}
             {% include "ui/partials/drawer_item.html" with icon="chart-pie" label=_("Storage") color="module" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: '"|add:my_files_js|add:"' } }))" tooltip=_("Storage") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
@@ -155,14 +155,14 @@
       <div class="border-t border-base-300 py-4 px-3">
         {% translate "Expand sidebar" as expand_sidebar_label %}
         {% translate "Collapse sidebar" as collapse_sidebar_label %}
-        <ul class="menu p-0 hidden lg:block">
+        <ul class="menu p-0 hidden lg:block w-full">
           {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
             {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
               {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
             {% endwith %}
           {% endwith %}
         </ul>
-        <ul class="menu p-0 lg:hidden">
+        <ul class="menu p-0 lg:hidden w-full">
           {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip=_("Preferences") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
@@ -204,7 +204,7 @@
               <!-- Top Header Bar: navigation and trail above, title and the folder action below -->
               {# Under an open file only the trail shows, so the header tightens around it. #}
               <div
-                class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5 group-data-[viewer-covered]/viewer:py-2"
+                class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5 group-data-viewer-covered/viewer:py-2"
               >
                 {# The trail stays above an open file (data-viewer-keep); the title row goes under the viewer. #}
                 <div class="flex items-center gap-2 min-w-0" data-viewer-keep>
@@ -297,7 +297,7 @@
                   x-show="dropZoneActive"
                   x-cloak
                   x-transition.opacity
-                  class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-sm border-2 border-dashed border-module rounded-lg flex items-center justify-center pointer-events-none"
+                  class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-xs border-2 border-dashed border-module rounded-lg flex items-center justify-center pointer-events-none"
                 >
                   <div class="text-center">
                     <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 text-module"></i>
@@ -356,11 +356,11 @@
         x-show="showPropertiesPanel"
         x-cloak
         x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
-        x-transition:enter-start="max-md:opacity-0 md:!w-0"
-        x-transition:enter-end="max-md:opacity-100 md:!w-80"
+        x-transition:enter-start="max-md:opacity-0 md:w-0!"
+        x-transition:enter-end="max-md:opacity-100 md:w-80!"
         x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
-        x-transition:leave-start="max-md:opacity-100 md:!w-80"
-        x-transition:leave-end="max-md:opacity-0 md:!w-0"
+        x-transition:leave-start="max-md:opacity-100 md:w-80!"
+        x-transition:leave-end="max-md:opacity-0 md:w-0!"
         class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
       >
         <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>

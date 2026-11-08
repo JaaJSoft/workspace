@@ -91,7 +91,7 @@ const AppDialog = {
       activeInput.placeholder = placeholder;
 
       if (!useTextarea) {
-        input.className = `input input-bordered w-full mt-4 ${inputSize === 'sm' ? 'input-sm' : ''}`;
+        input.className = `input w-full mt-4 ${inputSize === 'sm' ? 'input-sm' : ''}`;
       }
 
       okBtn.textContent = okLabel;

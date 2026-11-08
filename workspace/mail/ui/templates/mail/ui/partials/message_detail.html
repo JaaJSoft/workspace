@@ -171,7 +171,7 @@
             </label>
             <ul
               tabindex="0"
-              class="dropdown-content z-[1] menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-48 p-1"
+              class="dropdown-content z-1 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-48 p-1"
             >
               <li>
                 <button
@@ -288,7 +288,7 @@
             download
           >
             <i data-lucide="paperclip" class="w-3 h-3 shrink-0"></i>
-            <span class="truncate max-w-[10rem]" x-text="att.filename"></span>
+            <span class="truncate max-w-40" x-text="att.filename"></span>
             <span
               class="text-base-content/50 shrink-0"
               x-text="formatFileSize(att.size)"
@@ -325,7 +325,7 @@
       <div
         x-show="aiSummary"
         x-cloak
-        class="mb-5 rounded-lg border border-secondary/15 bg-gradient-to-br from-secondary/5 via-transparent to-secondary/3 overflow-hidden"
+        class="mb-5 rounded-lg border border-secondary/15 bg-linear-to-br from-secondary/5 via-transparent to-secondary/3 overflow-hidden"
       >
         <div
           class="flex items-center gap-2 px-3 py-2 border-b border-secondary/10 bg-secondary/5"
@@ -357,7 +357,7 @@
         <div
           x-show="extraction.kind === 'event' && extraction.target"
           x-cloak
-          class="mb-5 rounded-lg border border-accent/15 bg-gradient-to-br from-accent/5 via-transparent to-accent/3 overflow-hidden"
+          class="mb-5 rounded-lg border border-accent/15 bg-linear-to-br from-accent/5 via-transparent to-accent/3 overflow-hidden"
         >
           <div
             class="flex items-center gap-2 px-3 py-2 border-b border-accent/10 bg-accent/5"

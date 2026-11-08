@@ -21,7 +21,7 @@ and the tag_dialog partial on the same page for create/edit.
         {% include "ui/partials/dialog_header.html" with icon="tags" title=tags_title subtitle_expr=count_js close_expr="closeTagManager()" class="mb-3" only %}
       {% endwith %}
     {% endwith %}
-    <label class="input input-bordered input-sm flex items-center gap-2 mb-2">
+    <label class="input input-sm flex items-center gap-2 mb-2">
       <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
       <input
         type="search"
@@ -37,7 +37,7 @@ and the tag_dialog partial on the same page for create/edit.
     <ul class="flex-1 overflow-y-auto min-h-0 -mx-2 px-2 space-y-0.5">
       <template x-for="tag in filteredManagedTags()" :key="tag.uuid">
         <li
-          class="group flex items-center gap-1 px-1 py-1 rounded hover:bg-base-200"
+          class="group flex items-center gap-1 px-1 py-1 rounded-sm hover:bg-base-200"
         >
           <button
             type="button"
@@ -150,10 +150,10 @@ and the tag_dialog partial on the same page for create/edit.
       {% endblocktranslate %}
     </p>
     <form @submit.prevent="confirmTagMerge()">
-      <label class="form-control w-full mb-3">
-        <div class="label"><span class="label-text">{% translate "Merge into" %}</span></div>
+      <label class="fieldset w-full mb-3">
+        <div class="fieldset-legend"><span>{% translate "Merge into" %}</span></div>
         <select
-          class="select select-bordered select-sm w-full"
+          class="select select-sm w-full"
           x-model="tagManager.mergeTarget"
           required
         >

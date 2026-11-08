@@ -23,13 +23,13 @@
 {% endblock %}
 
 {% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
+  <div class="drawer-side z-40 h-full overflow-visible!">
     <label for="mail-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
     <!-- Sidebar -->
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
     <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
       :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
     >
       <!-- Sidebar header -->
@@ -67,24 +67,24 @@
         :class="{ hidden: !sidebarCollapsed() }"
         x-show="sidebarCollapsed()"
       >
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="module" onclick="showCompose()" tooltip="Compose" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 w-full">
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
-        <ul class="menu p-0 hidden lg:block">
+        <ul class="menu p-0 hidden lg:block w-full">
           {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
-        <ul class="menu p-0 lg:hidden">
+        <ul class="menu p-0 lg:hidden w-full">
           {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
@@ -165,34 +165,32 @@
     <div class="modal-box max-w-md">
       {% include "ui/partials/dialog_header.html" with icon_expr="labelModal.icon || 'tag'" icon_class_expr="labelModal.color && labelModal.color !== 'ghost' ? 'bg-base-200 text-' + labelModal.color : 'bg-module/15 text-module'" title_expr="labelModal.uuid ? 'Edit Label' : 'New Label'" only %}
       <form @submit.prevent="saveLabelModal()">
-        <label class="form-control w-full mb-3">
-          <div class="label"><span class="label-text">Name</span></div>
+        <label class="fieldset w-full mb-3">
+          <div class="fieldset-legend"><span>Name</span></div>
           <input
             type="text"
-            class="input input-bordered w-full input-sm"
+            class="input w-full input-sm"
             x-model="labelModal.name"
             placeholder="Label name"
             required
             @keydown.escape="closeLabelModal()"
           />
         </label>
-        <label class="form-control w-full mb-3">
-          <div class="label">
-            <span class="label-text">What belongs here</span>
-            <span class="label-text-alt text-base-content/50">Optional</span>
+        <label class="fieldset w-full mb-3">
+          <div class="fieldset-legend w-full">
+            <span>What belongs here</span>
+            <span class="text-base-content/50">Optional</span>
           </div>
           <textarea
-            class="textarea textarea-bordered w-full textarea-sm leading-snug"
+            class="textarea w-full textarea-sm leading-snug"
             rows="2"
             maxlength="200"
             x-model="labelModal.description"
             placeholder="e.g. Client follow-ups I still owe an answer"
             @keydown.escape="closeLabelModal()"
           ></textarea>
-          <div class="label">
-            <span class="label-text-alt text-base-content/50">
-              The AI classifier reads this to decide what lands in this label.
-            </span>
+          <div class="label whitespace-normal">
+            <span class="text-base-content/50">The AI classifier reads this to decide what lands in this label.</span>
           </div>
         </label>
         <!-- Icon & color picker (shared component) -->
@@ -394,13 +392,13 @@
 
       <form @submit.prevent="addAccount()">
         <div class="grid grid-cols-1 gap-3">
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Email address</span></div>
+          <label class="fieldset w-full min-w-0">
+            <div class="fieldset-legend"><span>Email address</span></div>
             <div class="flex gap-2">
               <input
                 type="email"
                 x-model="newAccount.email"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
               <button
@@ -417,31 +415,31 @@
               </button>
             </div>
           </label>
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Display name</span></div>
+          <label class="fieldset w-full min-w-0">
+            <div class="fieldset-legend"><span>Display name</span></div>
             <input
               type="text"
               x-model="newAccount.display_name"
-              class="input input-bordered w-full input-sm"
+              class="input w-full input-sm min-w-0"
             />
           </label>
           <div class="divider text-xs my-1">IMAP (Incoming)</div>
           <div class="grid grid-cols-3 gap-2">
-            <label class="form-control col-span-2">
-              <div class="label"><span class="label-text">Host</span></div>
+            <label class="fieldset col-span-2 min-w-0">
+              <div class="fieldset-legend"><span>Host</span></div>
               <input
                 type="text"
                 x-model="newAccount.imap_host"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
             </label>
-            <label class="form-control">
-              <div class="label"><span class="label-text">Port</span></div>
+            <label class="fieldset min-w-0">
+              <div class="fieldset-legend"><span>Port</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.imap_port"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
               />
             </label>
           </div>
@@ -451,25 +449,25 @@
               x-model="newAccount.imap_use_ssl"
               class="toggle toggle-sm toggle-module"
             />
-            <span class="label-text">Use SSL</span>
+            <span class="text-sm">Use SSL</span>
           </label>
           <div class="divider text-xs my-1">SMTP (Outgoing)</div>
           <div class="grid grid-cols-3 gap-2">
-            <label class="form-control col-span-2">
-              <div class="label"><span class="label-text">Host</span></div>
+            <label class="fieldset col-span-2 min-w-0">
+              <div class="fieldset-legend"><span>Host</span></div>
               <input
                 type="text"
                 x-model="newAccount.smtp_host"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
             </label>
-            <label class="form-control">
-              <div class="label"><span class="label-text">Port</span></div>
+            <label class="fieldset min-w-0">
+              <div class="fieldset-legend"><span>Port</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.smtp_port"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
               />
             </label>
           </div>
@@ -479,24 +477,24 @@
               x-model="newAccount.smtp_use_tls"
               class="toggle toggle-sm toggle-module"
             />
-            <span class="label-text">Use STARTTLS</span>
+            <span class="text-sm">Use STARTTLS</span>
           </label>
           <div class="divider text-xs my-1">Authentication</div>
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Username</span></div>
+          <label class="fieldset w-full min-w-0">
+            <div class="fieldset-legend"><span>Username</span></div>
             <input
               type="text"
               x-model="newAccount.username"
-              class="input input-bordered w-full input-sm"
+              class="input w-full input-sm min-w-0"
               required
             />
           </label>
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Password</span></div>
+          <label class="fieldset w-full min-w-0">
+            <div class="fieldset-legend"><span>Password</span></div>
             <input
               type="password"
               x-model="newAccount.password"
-              class="input input-bordered w-full input-sm"
+              class="input w-full input-sm min-w-0"
               required
             />
           </label>
@@ -528,31 +526,31 @@
         {% include "ui/partials/dialog_header.html" with icon="mail-pen" title="Edit Account" subtitle_expr="editAccount?.email" only %}
         <form @submit.prevent="saveAccount()">
           <div class="grid grid-cols-1 gap-3">
-            <label class="form-control w-full">
-              <div class="label"><span class="label-text">Display name</span></div>
+            <label class="fieldset w-full min-w-0">
+              <div class="fieldset-legend"><span>Display name</span></div>
               <input
                 type="text"
                 x-model="editAccount.display_name"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
               />
             </label>
             <div class="divider text-xs my-1">IMAP (Incoming)</div>
             <div class="grid grid-cols-3 gap-2">
-              <label class="form-control col-span-2">
-                <div class="label"><span class="label-text">Host</span></div>
+              <label class="fieldset col-span-2 min-w-0">
+                <div class="fieldset-legend"><span>Host</span></div>
                 <input
                   type="text"
                   x-model="editAccount.imap_host"
-                  class="input input-bordered w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                   required
                 />
               </label>
-              <label class="form-control">
-                <div class="label"><span class="label-text">Port</span></div>
+              <label class="fieldset min-w-0">
+                <div class="fieldset-legend"><span>Port</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.imap_port"
-                  class="input input-bordered w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                 />
               </label>
             </div>
@@ -562,25 +560,25 @@
                 x-model="editAccount.imap_use_ssl"
                 class="toggle toggle-sm toggle-module"
               />
-              <span class="label-text">Use SSL</span>
+              <span class="text-sm">Use SSL</span>
             </label>
             <div class="divider text-xs my-1">SMTP (Outgoing)</div>
             <div class="grid grid-cols-3 gap-2">
-              <label class="form-control col-span-2">
-                <div class="label"><span class="label-text">Host</span></div>
+              <label class="fieldset col-span-2 min-w-0">
+                <div class="fieldset-legend"><span>Host</span></div>
                 <input
                   type="text"
                   x-model="editAccount.smtp_host"
-                  class="input input-bordered w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                   required
                 />
               </label>
-              <label class="form-control">
-                <div class="label"><span class="label-text">Port</span></div>
+              <label class="fieldset min-w-0">
+                <div class="fieldset-legend"><span>Port</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.smtp_port"
-                  class="input input-bordered w-full input-sm"
+                  class="input w-full input-sm min-w-0"
                 />
               </label>
             </div>
@@ -590,27 +588,27 @@
                 x-model="editAccount.smtp_use_tls"
                 class="toggle toggle-sm toggle-module"
               />
-              <span class="label-text">Use STARTTLS</span>
+              <span class="text-sm">Use STARTTLS</span>
             </label>
             <div class="divider text-xs my-1">Authentication</div>
-            <label class="form-control w-full">
-              <div class="label"><span class="label-text">Username</span></div>
+            <label class="fieldset w-full min-w-0">
+              <div class="fieldset-legend"><span>Username</span></div>
               <input
                 type="text"
                 x-model="editAccount.username"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 required
               />
             </label>
-            <label class="form-control w-full">
-              <div class="label">
-                <span class="label-text">Password</span>
-                <span class="label-text-alt text-base-content/40">Leave empty to keep current</span>
+            <label class="fieldset w-full min-w-0">
+              <div class="fieldset-legend w-full">
+                <span>Password</span>
+                <span class="text-base-content/40">Leave empty to keep current</span>
               </div>
               <input
                 type="password"
                 x-model="editAccount.password"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm min-w-0"
                 placeholder="••••••••"
               />
             </label>
@@ -647,13 +645,13 @@
     <div class="modal-box max-w-lg">
       {% include "ui/partials/dialog_header.html" with icon="signature" title="Signature" subtitle_expr="signatureEdit.email" only %}
       <form @submit.prevent="saveSignature()">
-        <label class="form-control w-full">
-          <div class="label">
-            <span class="label-text">This signature is added to new messages, replies and forwards.</span>
+        <label class="fieldset w-full">
+          <div class="fieldset-legend">
+            <span>This signature is added to new messages, replies and forwards.</span>
           </div>
           <textarea
             x-model="signatureEdit.text"
-            class="textarea textarea-bordered w-full"
+            class="textarea w-full"
             rows="6"
             maxlength="5000"
             placeholder="Your signature"

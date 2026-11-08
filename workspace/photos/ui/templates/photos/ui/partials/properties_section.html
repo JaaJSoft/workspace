@@ -34,7 +34,7 @@ photos.services.location_map.LocationMap or None.
       data-photo-detail="camera"
     >
       <i data-lucide="smartphone" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
-      <span class="min-w-0 break-words">{{ photo.camera }}</span>
+      <span class="min-w-0 wrap-break-word">{{ photo.camera }}</span>
     </div>
   {% endif %}
   {% if photo.lens %}
@@ -43,7 +43,7 @@ photos.services.location_map.LocationMap or None.
       data-photo-detail="lens"
     >
       <i data-lucide="aperture" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
-      <span class="min-w-0 break-words">{{ photo.lens }}</span>
+      <span class="min-w-0 wrap-break-word">{{ photo.lens }}</span>
     </div>
   {% endif %}
   {% if photo.exposure %}

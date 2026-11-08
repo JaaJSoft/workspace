@@ -162,8 +162,14 @@ def _find_copy(conn, mailbox, message_id, uid_next):
     """
     message_id = message_id.strip()
     # The header came off the wire: a CR or LF in it would end the SEARCH
-    # line and start a command of the sender's choosing.
-    if not message_id or not uid_next or not message_id.isprintable():
+    # line and start a command of the sender's choosing, and imaplib raises
+    # on anything outside ASCII rather than send it.
+    if (
+        not message_id
+        or not uid_next
+        or not message_id.isascii()
+        or not message_id.isprintable()
+    ):
         return None
     try:
         status, _ = conn.select(mailbox, readonly=True)

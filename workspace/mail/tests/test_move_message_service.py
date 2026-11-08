@@ -167,3 +167,24 @@ class MoveMessageTests(TestCase):
 
         self.assertIsNone(move_message(self.account, self.msg, self.archive))
         self.assertNotIn("SEARCH", [c.args[0] for c in conn.uid.call_args_list])
+
+    @patch("workspace.mail.services.imap_messages.connect_imap")
+    def test_a_non_ascii_message_id_does_not_fail_a_completed_move(self, mock_connect):
+        # imaplib encodes command arguments as ASCII and raises on anything
+        # else - after the source has already been expunged.
+        self.msg.message_id = "<réunion@example.com>"
+        conn = self._mock_conn(search=b"100")
+        answer = conn.uid.side_effect
+
+        def uid_as_imaplib_encodes(cmd, *args):
+            for arg in args:
+                if isinstance(arg, str):
+                    arg.encode("ascii")
+            return answer(cmd, *args)
+
+        conn.uid.side_effect = uid_as_imaplib_encodes
+        mock_connect.return_value = conn
+
+        self.assertIsNone(move_message(self.account, self.msg, self.archive))
+        conn.expunge.assert_called_once()
+        self.assertNotIn("SEARCH", [c.args[0] for c in conn.uid.call_args_list])

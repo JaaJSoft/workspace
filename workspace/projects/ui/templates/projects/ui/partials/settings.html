@@ -633,7 +633,7 @@
               {% if writable %}
                 <input
                   type="date"
-                  class="input input-ghost input-xs h-6 min-h-0 px-1 font-mono shrink-0"
+                  class="input input-ghost input-xs w-auto h-6 min-h-0 px-1 font-mono shrink-0"
                   :class="isOverdue(epic) ? 'text-error' : ''"
                   :value="epic.target_date"
                   @change="setTargetDate(epic, $event.target.value)"

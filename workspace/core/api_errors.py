@@ -2,6 +2,7 @@
 
 import errno
 
+from django.utils.translation import gettext
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -13,7 +14,7 @@ def exception_handler(exc, context):
     # path component past the filesystem's 255 - is the request's to change.
     if isinstance(exc, OSError) and exc.errno == errno.ENAMETOOLONG:
         return Response(
-            {"detail": "This name is too long to be stored."},
+            {"detail": gettext("This name is too long to be stored.")},
             status=status.HTTP_400_BAD_REQUEST,
         )
     return module_guard_exception_handler(exc, context)

@@ -289,7 +289,7 @@ class _DropFile(Relocation):
         try:
             os.unlink(self._path)
         except FileNotFoundError:
-            pass
+            pass  # dropped by an earlier commit: nothing is left of the move
         except OSError:
             logger.warning("Could not remove moved blob %s", scrub(self._path))
             return False

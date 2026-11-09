@@ -29,6 +29,7 @@ from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.announcements import announce_replaced
 from workspace.files.services.content_hash import find_duplicates
 from workspace.files.services.files import GroupRootFolder
 from workspace.files.services.locking import conflicting_lock, precondition_hash
@@ -68,31 +69,6 @@ def duplicate_entries(instance):
         }
         for dup in find_duplicates(instance).only("uuid", "name", "path", "parent_id")
     ]
-
-
-def announce_replaced(instance, actor):
-    """Tell live viewers and the owner that *instance* got new content."""
-    from workspace.files.sse_provider import push_file_event
-
-    push_file_event(
-        instance,
-        "file_updated",
-        actor.username,
-        exclude_user_id=actor.pk,
-    )
-    if instance.owner_id != actor.pk and FileService.can_access(
-        instance.owner, instance
-    ):
-        with translation.override(get_user_language(instance.owner)):
-            notify(
-                recipient=instance.owner,
-                origin="files",
-                title=_('%(actor)s edited "%(name)s"')
-                % {"actor": actor.username, "name": instance.name},
-                url=f"/files/{instance.parent_id}" if instance.parent_id else "/files",
-                actor=actor,
-                source=instance,
-            )
 
 
 @extend_schema_view(

@@ -27,6 +27,7 @@ from workspace.files.services.locking import (
     StaleContent,
     conflicting_lock,
 )
+from workspace.files.services.operations import MAX_ITEMS
 from workspace.files.services.scanning.policy import QuarantinedSource
 from workspace.files.services.shortcuts import (
     UNAVAILABLE,
@@ -35,9 +36,10 @@ from workspace.files.services.shortcuts import (
     create_shortcut,
     resolution_of,
 )
+from workspace.files.services.transfers import OnConflict, Refusal
 from workspace.files.services.uploads import CHUNK_SIZE
 
-from .models import File, FileComment, UploadSession, canonical_name
+from .models import File, FileComment, FileOperation, UploadSession, canonical_name
 
 
 class FileLocked(APIException):
@@ -1126,3 +1128,120 @@ class UploadSessionSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_completed(self, obj):
         return obj.completed_at is not None
+
+
+OPERATION_ERROR_MESSAGES = {
+    "not_found": gettext_lazy("This item no longer exists."),
+    "timeout": gettext_lazy("This item took too long and was left as it was."),
+    "failed": gettext_lazy("Something went wrong with this item."),
+    Refusal.NOT_ALLOWED: gettext_lazy("You are not allowed to do this with this item."),
+    Refusal.TARGET: gettext_lazy("The destination folder is no longer available."),
+    Refusal.INTO_ITSELF: gettext_lazy("A folder cannot go inside itself."),
+    Refusal.NAME_TAKEN: gettext_lazy(
+        "The destination already holds an item with this name."
+    ),
+    Refusal.NO_CONTENT: gettext_lazy("This file has no content to copy."),
+    Refusal.NOT_REPLACEABLE: gettext_lazy("You cannot replace the existing file."),
+    Refusal.LOCKED: gettext_lazy("The file is locked by someone else."),
+    Refusal.STALE: gettext_lazy("The existing file changed in the meantime."),
+    Refusal.QUARANTINED: gettext_lazy("File is quarantined."),
+    Refusal.QUOTA: gettext_lazy("There is not enough storage space left."),
+    Refusal.GROUP_ROOT: gettext_lazy("The root folder of a group cannot be moved."),
+}
+
+
+class FileOperationItemSerializer(serializers.Serializer):
+    uuid = serializers.UUIDField(help_text="File or folder to act on.")
+    on_conflict = serializers.ChoiceField(
+        choices=[(choice.value, choice.value) for choice in OnConflict],
+        required=False,
+        help_text=(
+            "What to do when the destination already holds the name: 'rename', "
+            "'replace', 'skip' or 'error'. Defaults to 'rename' for a copy and "
+            "to 'error' for a move."
+        ),
+    )
+
+
+class FileOperationCreateSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=FileOperation.Kind.choices)
+    # Required on purpose: a client that forgot it must not have its files
+    # sent to the root.
+    target = serializers.UUIDField(
+        allow_null=True, help_text="Destination folder; null for the root."
+    )
+    items = FileOperationItemSerializer(
+        many=True, allow_empty=False, max_length=MAX_ITEMS
+    )
+
+    def validate_items(self, value):
+        uuids = [item["uuid"] for item in value]
+        if len(set(uuids)) != len(uuids):
+            raise serializers.ValidationError(gettext("An item is listed twice."))
+        return value
+
+
+class FileOperationSerializer(serializers.ModelSerializer):
+    target = serializers.UUIDField(
+        source="target_uuid", help_text="Destination folder; null for the root."
+    )
+    errors = serializers.SerializerMethodField(
+        help_text=(
+            "The items that did not go through, each with a reason code and "
+            "its message. Capped: 'counts.failed' is the real number."
+        )
+    )
+    cancel_requested = serializers.SerializerMethodField(
+        help_text="True once a cancellation was asked for."
+    )
+
+    class Meta:
+        model = FileOperation
+        fields = [
+            "uuid",
+            "kind",
+            "status",
+            "target",
+            "target_name",
+            "total",
+            "processed",
+            "bytes_total",
+            "bytes_done",
+            "counts",
+            "errors",
+            "cancel_requested",
+            "created_at",
+            "finished_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(
+        {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "uuid": {"type": "string", "format": "uuid"},
+                    "name": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "message": {"type": "string"},
+                },
+            },
+        }
+    )
+    def get_errors(self, obj):
+        return [
+            {
+                **error,
+                "message": str(
+                    OPERATION_ERROR_MESSAGES.get(
+                        error["reason"], OPERATION_ERROR_MESSAGES["failed"]
+                    )
+                ),
+            }
+            for error in obj.errors
+        ]
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_cancel_requested(self, obj):
+        return obj.cancel_requested_at is not None

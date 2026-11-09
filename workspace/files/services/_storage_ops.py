@@ -364,15 +364,21 @@ def unique_copy_name(base_name, node_type, existing_names):
         counter += 1
 
 
-def copy_node(node, parent, owner, _sibling_names=None):
+def copy_node(node, parent, owner, _sibling_names=None, *, checkpoint=None):
     """Recursively copy a single node.
 
     The top-level copy competes for its name with every other writer of
     *parent*; the nodes below it land in a folder that did not exist a moment
     ago, so a name set kept along the way is enough for them.
+
+    *checkpoint* is called with every node once it is copied, and may raise to
+    stop there. A copy that stops halfway, for that reason or any other, takes
+    back what it had created: half a folder under the name of the whole one is
+    worse than no copy.
     """
     # Imported here because _names imports from this module.
     from ._names import insert_node, insert_node_keeping_both
+    from .hard_delete import hard_delete_tree
     from .scanning.policy import exclude_blocked
 
     copied = File(
@@ -436,11 +442,19 @@ def copy_node(node, parent, owner, _sibling_names=None):
     else:
         insert()
 
-    if node.node_type == File.NodeType.FOLDER:
-        # The folder was just created - no children yet, so start empty.
-        child_names = set()
-        children = File.objects.filter(parent=node, deleted_at__isnull=True)
-        for child in exclude_blocked(children):
-            copy_node(child, copied, owner, child_names)
+    try:
+        if node.node_type == File.NodeType.FOLDER:
+            # The folder was just created - no children yet, so start empty.
+            child_names = set()
+            children = File.objects.filter(parent=node, deleted_at__isnull=True)
+            for child in exclude_blocked(children):
+                copy_node(child, copied, owner, child_names, checkpoint=checkpoint)
+        if checkpoint is not None:
+            checkpoint(copied)
+    except Exception:
+        # Only the top of the copy cleans up: it holds the whole new subtree.
+        if _sibling_names is None:
+            hard_delete_tree(copied)
+        raise
 
     return copied

@@ -4,17 +4,66 @@ from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.serializers import (
+    FileContentStale,
+    FileLocked,
     FileSerializer,
-    content_write_refusals,
-    ensure_replaceable,
+    locked_payload,
 )
-from workspace.files.services import FilePermission, FileService
-from workspace.files.services.scanning.policy import QuarantinedSource
+from workspace.files.services import FileService
+from workspace.files.services.transfers import (
+    Outcome,
+    Refusal,
+    TransferRefused,
+    copy_item,
+)
+
+_ON_CONFLICT = ("rename", "replace", "error")
+
+
+def _refusal_response(refusal):
+    """The answer each refusal of a copy owes the client."""
+    reason = refusal.reason
+    if reason == Refusal.QUOTA:
+        # Already the 413 the client expects.
+        raise refusal.__cause__
+    if reason == Refusal.LOCKED:
+        raise FileLocked(locked_payload(refusal.holder))
+    if reason == Refusal.STALE:
+        raise FileContentStale(
+            {
+                "detail": FileContentStale.default_detail,
+                "content_hash": refusal.current_hash,
+            }
+        )
+    if reason == Refusal.NOT_REPLACEABLE:
+        raise PermissionDenied(_("You cannot replace the existing file."))
+    if reason == Refusal.NAME_TAKEN:
+        return Response(
+            {"name": [_("A file with the same name already exists in this folder.")]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    forbidden = {
+        Refusal.NOT_ALLOWED: _("Copying this item is not allowed."),
+        Refusal.QUARANTINED: _("File is quarantined."),
+    }
+    if reason in forbidden:
+        return Response({"detail": forbidden[reason]}, status=status.HTTP_403_FORBIDDEN)
+    bad_request = {
+        # Same answer whether the folder is missing or out of reach, so its
+        # existence does not leak.
+        Refusal.TARGET: _("Parent folder not found."),
+        Refusal.INTO_ITSELF: _("Cannot copy folder into itself or its descendants."),
+        Refusal.NO_CONTENT: _(
+            "This file has no content to replace the existing one with."
+        ),
+    }
+    return Response({"detail": bad_request[reason]}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CopyMixin:
@@ -68,122 +117,44 @@ class CopyMixin:
     @action(detail=True, methods=["post"], url_path="copy")
     def copy(self, request, uuid=None):
         """Copy a file or folder to a new location."""
-        from workspace.files.actions import ActionRegistry
-
         file_obj = self.get_object()
-        if not ActionRegistry.is_action_available(
-            "copy",
-            request.user,
-            file_obj,
-            permission=FileService.get_permission(request.user, file_obj),
-        ):
-            return Response(
-                {"detail": _("Copying this item is not allowed.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        parent_uuid = request.data.get("parent")
 
-        # Resolve parent folder. Use the access-aware permission check rather
-        # than ``owner=request.user``: group members must be able to copy into
-        # folders owned by another member of the same group. EDIT is the same
-        # threshold ``RenameAction``/``DeleteAction`` use for write operations.
         parent = None
+        parent_uuid = request.data.get("parent")
         if parent_uuid:
             parsed_parent_uuid = parse_uuid_or_none(parent_uuid)
-            if parsed_parent_uuid is None:
+            if parsed_parent_uuid is not None:
+                parent = File.objects.filter(
+                    uuid=parsed_parent_uuid,
+                    node_type=File.NodeType.FOLDER,
+                    deleted_at__isnull=True,
+                ).first()
+            if parent is None:
                 return Response(
                     {"detail": _("Parent folder not found.")},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            parent = File.objects.filter(
-                uuid=parsed_parent_uuid,
-                node_type=File.NodeType.FOLDER,
-                deleted_at__isnull=True,
-            ).first()
-
-            perm = FileService.get_permission(request.user, parent) if parent else None
-            if perm is None or perm < FilePermission.EDIT:
-                # Same generic 400 whether the folder is missing or the user
-                # has no write access - avoids leaking folder existence.
-                return Response(
-                    {"detail": _("Parent folder not found.")},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # Cannot copy into itself or its descendants. `path` is denormalized
-        # but may be None for newly created folders, so fall back to
-        # get_path() to avoid AttributeError on .startswith.
-        if file_obj.node_type == File.NodeType.FOLDER and parent:
-            file_path = file_obj.path or file_obj.get_path()
-            parent_path = parent.path or parent.get_path()
-            if parent.uuid == file_obj.uuid or parent_path.startswith(f"{file_path}/"):
-                return Response(
-                    {"detail": _("Cannot copy folder into itself or its descendants.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         on_conflict = request.data.get("on_conflict", "rename")
-        if on_conflict not in ("rename", "replace", "error"):
+        if on_conflict not in _ON_CONFLICT:
             return Response(
                 {"on_conflict": "Must be one of: rename, replace, error."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if on_conflict != "rename" and file_obj.node_type == File.NodeType.FILE:
-            existing = FileService.find_name_conflict(
-                request.user, parent, file_obj.name, exclude_pk=file_obj.pk
-            )
-            if existing is not None and on_conflict == "error":
-                return Response(
-                    {
-                        "name": [
-                            _(
-                                "A file with the same name already exists in this folder."
-                            )
-                        ]
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            if existing is not None:
-                if not file_obj.content:
-                    return Response(
-                        {
-                            "detail": _(
-                                "This file has no content to replace the existing one with."
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                ensure_replaceable(request.user, existing)
-                # get_queryset() only spans the user's own personal files;
-                # a teammate's file in a group folder needs the access-aware
-                # annotation instead.
-                annotated = FileService.annotate_for_serializer(
-                    File.objects.filter(pk=existing.pk), request.user
-                ).first()
-                with content_write_refusals():
-                    FileService.replace_content_from(
-                        annotated, file_obj, acting_user=request.user
-                    )
-                # views.files imports this mixin, so not at module level.
-                from workspace.files.views.files import announce_replaced
-
-                announce_replaced(annotated, request.user)
-                serializer = self.get_serializer(annotated)
-                return Response(serializer.data, status=status.HTTP_200_OK)
 
         try:
-            copied = FileService.copy(
-                file_obj, parent, request.user, acting_user=request.user
-            )
-        except QuarantinedSource:
-            return Response(
-                {"detail": _("File is quarantined.")}, status=status.HTTP_403_FORBIDDEN
-            )
-        # get_queryset() only spans the user's own personal files; a copy
-        # landing in a group folder needs the access-aware annotation instead
-        # to carry the annotations FileSerializer requires.
+            result = copy_item(request.user, file_obj, parent, on_conflict)
+        except TransferRefused as refusal:
+            return _refusal_response(refusal)
+
+        # get_queryset() only spans the user's own personal files; a node in a
+        # group folder needs the access-aware annotation instead to carry what
+        # FileSerializer requires.
         annotated = FileService.annotate_for_serializer(
-            File.objects.filter(pk=copied.pk), request.user
+            File.objects.filter(pk=result.node.pk), request.user
         ).first()
-        serializer = self.get_serializer(annotated)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        replaced = result.outcome == Outcome.REPLACED
+        return Response(
+            self.get_serializer(annotated).data,
+            status=status.HTTP_200_OK if replaced else status.HTTP_201_CREATED,
+        )

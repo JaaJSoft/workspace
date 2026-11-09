@@ -916,11 +916,13 @@ class FileService:
         return file_obj
 
     @staticmethod
-    def copy(file_obj, target_parent, owner, *, acting_user=None):
+    def copy(file_obj, target_parent, owner, *, acting_user=None, checkpoint=None):
         """Recursively copy a file or folder to *target_parent*.
 
         Blocked descendants of a folder are left behind; a blocked file raises
-        ``QuarantinedSource``.
+        ``QuarantinedSource``. *checkpoint* is called with each node once it is
+        copied and may raise to abandon the copy, which then leaves nothing
+        behind.
         """
         FileService.check_copy_allowed(file_obj)
         check_write_allowed(
@@ -929,7 +931,9 @@ class FileService:
             # copy_node only duplicates live descendants.
             additional_bytes=subtree_bytes(file_obj, include_trashed=False),
         )
-        copied = _storage.copy_node(file_obj, target_parent, owner)
+        copied = _storage.copy_node(
+            file_obj, target_parent, owner, checkpoint=checkpoint
+        )
         record_event(
             copied,
             acting_user or owner,

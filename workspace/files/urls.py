@@ -3,6 +3,11 @@ from rest_framework.routers import SimpleRouter
 
 from .views.files import FileViewSet
 from .views.graph import FileGraphView
+from .views.operations import (
+    FileOperationCancelView,
+    FileOperationListView,
+    FileOperationView,
+)
 from .views.sensitive import SensitiveFilesView
 from .views.share_links import (
     SharedFileContentView,
@@ -47,6 +52,22 @@ urlpatterns = [
         "api/v1/files/uploads/<uuid:uuid>/finalize",
         UploadSessionFinalizeView.as_view(),
         name="file-upload-session-finalize",
+    ),
+    # Ahead of the router for the same reason.
+    path(
+        "api/v1/files/operations",
+        FileOperationListView.as_view(),
+        name="file-operations",
+    ),
+    path(
+        "api/v1/files/operations/<uuid:uuid>",
+        FileOperationView.as_view(),
+        name="file-operation",
+    ),
+    path(
+        "api/v1/files/operations/<uuid:uuid>/cancel",
+        FileOperationCancelView.as_view(),
+        name="file-operation-cancel",
     ),
     path(
         "api/v1/files/shared/<str:token>",

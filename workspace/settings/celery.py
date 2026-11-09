@@ -97,6 +97,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.purge_staged_blobs",
         "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM
     },
+    # Batch operations a killed worker left open, and reports past retention.
+    "sweep-file-operations": {
+        "task": "files.sweep_file_operations",
+        "schedule": crontab(minute="*/10"),
+    },
     "purge-stale-uploads": {
         "task": "core.purge_stale_uploads",
         "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM

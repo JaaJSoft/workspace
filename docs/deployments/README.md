@@ -131,11 +131,11 @@ Uploaded files live under `MEDIA_ROOT` by default. Set `STORAGE_BACKEND=s3` to k
 | `S3_PRESIGN_ENDPOINT_URL` | `S3_ENDPOINT_URL` | Public URL of the store, when clients reach it under another name than the app does |
 | `S3_CONDITIONAL_WRITES`   | `1`       | Writes that must not replace an existing object send `If-None-Match`. Set to `0` only for a store that rejects it |
 | `S3_SIGNED_URLS`          | `0`       | `1` redirects downloads to short-lived signed URLs on the store instead of streaming them through the app (see below) |
-| `S3_SIGNED_URL_TTL`       | `3600`    | Seconds a signed download URL stays valid. Long enough for a video to play to its end |
+| `S3_SIGNED_URL_TTL`       | `3600`    | Seconds a signed download URL stays valid, a week (`604800`) at most. Long enough for a video to play to its end |
 
 The credentials need `s3:ListBucket` and `s3:ListBucketMultipartUploads` on the bucket and `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on its objects.
 
-Large uploads go in parts, and an interrupted one is aborted - but a worker killed in the middle of an upload cannot abort it, and most stores keep (and bill) the parts until told otherwise. A nightly task aborts the uploads left pending for more than a day. Where the store supports it, a lifecycle rule that aborts incomplete multipart uploads does the same on its side.
+Large uploads go in parts, and an interrupted one is aborted - but a worker killed in the middle of an upload cannot abort it, and most stores keep (and bill) the parts until told otherwise. A nightly task aborts the uploads left pending for more than a day - every one under `S3_PREFIX`, so with the prefix left empty that is every one in the bucket: give the instance a bucket of its own, or a prefix, when something else uploads to the same bucket. Where the store supports it, a lifecycle rule that aborts incomplete multipart uploads does the same on its side.
 
 ### Downloads served by the store
 

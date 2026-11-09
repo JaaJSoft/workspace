@@ -65,6 +65,21 @@ STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower() or "loca
 # other one while blobs are copied between them (core's copy_blobs).
 BLOB_BACKENDS = {"local": {"backend": "local"}}
 
+# Signature V4 refuses a URL signed for longer than a week, and the SDK signs
+# one all the same: every signed download would fail at the store instead.
+_MAX_SIGNED_URL_TTL = 7 * 24 * 3600
+
+
+def _signed_url_ttl():
+    ttl = env_non_negative_int("S3_SIGNED_URL_TTL") or 3600
+    if ttl > _MAX_SIGNED_URL_TTL:
+        raise ImproperlyConfigured(
+            f"S3_SIGNED_URL_TTL must be at most {_MAX_SIGNED_URL_TTL} (7 days), "
+            f"got {ttl}"
+        )
+    return ttl
+
+
 _S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
 if _S3_BUCKET:
     BLOB_BACKENDS["s3"] = {
@@ -90,7 +105,7 @@ if _S3_BUCKET:
         # streaming them through the app. Needs CORS on the bucket for the
         # app's origin (the image viewer fetch()es what it edits).
         "signed_urls": env_bool("S3_SIGNED_URLS", False),
-        "signed_url_ttl": env_non_negative_int("S3_SIGNED_URL_TTL") or 3600,
+        "signed_url_ttl": _signed_url_ttl(),
     }
 
 if STORAGE_BACKEND not in ("local", "s3"):

@@ -17,6 +17,7 @@ from django.test import TestCase
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.shortcuts import create_shortcut
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import FolderResource
@@ -68,6 +69,13 @@ class ServiceNameTests(NameFormsTestCase):
 
         self.assertEqual(folder.name, FOLDER_COMPOSED)
         self.assertEqual(self.blobs("files/users/nfc"), [FOLDER_COMPOSED])
+
+    def test_a_shortcut_named_decomposed_is_stored_composed(self):
+        target = FileService.create_file(self.user, "target.txt")
+
+        shortcut = create_shortcut(self.user, target, None, name=DECOMPOSED)
+
+        self.assertEqual(shortcut.name, COMPOSED)
 
     def test_the_two_forms_of_a_name_are_one_name(self):
         FileService.create_file(self.user, COMPOSED)

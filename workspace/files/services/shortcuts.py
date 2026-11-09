@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from ..actions.base import UNRESOLVED
-from ..models import File, FileEvent
+from ..models import File, FileEvent, canonical_name
 from . import _names as _name_helpers
 from ._storage_ops import unique_copy_name
 from .events import record_event
@@ -76,7 +76,7 @@ def create_shortcut(
     the node the caller picked. A taken name raises ``NameTaken`` unless
     ``keep_both`` asks for the first free ``name (Copy N)``.
     """
-    name = name or target.name
+    name = canonical_name(name or target.name)
     if target.node_type == File.NodeType.SHORTCUT:
         target = target.shortcut_target
     if (

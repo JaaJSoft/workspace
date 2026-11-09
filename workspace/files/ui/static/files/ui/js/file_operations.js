@@ -210,7 +210,8 @@ window.createFileOperations = function createFileOperations({
       this.panel = true;
       const response = await request(OPERATIONS_URL, { method: 'GET' });
       if (!response.ok) return;
-      for (const operation of response.body) {
+      // The server lists the newest first and each row goes on top: oldest first.
+      for (const operation of [...response.body].reverse()) {
         if (this._find(operation.uuid)) continue;
         if (window.isOperationFinished(operation) && !window.operationNeedsAttention(operation)) continue;
         this.follow(operation);

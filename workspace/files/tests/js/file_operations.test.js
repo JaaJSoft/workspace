@@ -169,7 +169,7 @@ test('reloading the page brings back what still runs or needs a look', async () 
 
   await store.restore();
 
-  assert.deepEqual(Array.from(store.rows, (row) => row.uuid).sort(), ['failed', 'running']);
+  assert.deepEqual(Array.from(store.rows, (row) => row.uuid), ['running', 'failed'], 'newest first, as listed');
   assert.equal(store.panel, true);
 });
 

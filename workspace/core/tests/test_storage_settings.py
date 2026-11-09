@@ -9,7 +9,13 @@ from django.test import SimpleTestCase
 
 import workspace.settings.storage as storage_settings
 
-_VARIABLES = ("STORAGE_BACKEND", "S3_BUCKET", "S3_ENDPOINT_URL", "S3_PREFIX")
+_VARIABLES = (
+    "STORAGE_BACKEND",
+    "S3_BUCKET",
+    "S3_ENDPOINT_URL",
+    "S3_PREFIX",
+    "S3_SIGNED_URL_TTL",
+)
 
 
 class StorageSettingsTests(SimpleTestCase):
@@ -64,6 +70,22 @@ class StorageSettingsTests(SimpleTestCase):
     def test_object_storage_needs_a_bucket(self):
         with self.assertRaises(ImproperlyConfigured):
             self._load(STORAGE_BACKEND="s3")
+
+    def test_a_signed_url_lasts_an_hour_by_default(self):
+        module = self._load(S3_BUCKET="workspace-media")
+
+        self.assertEqual(module.BLOB_BACKENDS["s3"]["signed_url_ttl"], 3600)
+
+    def test_a_signed_url_may_last_a_week(self):
+        module = self._load(S3_BUCKET="workspace-media", S3_SIGNED_URL_TTL="604800")
+
+        self.assertEqual(module.BLOB_BACKENDS["s3"]["signed_url_ttl"], 604800)
+
+    def test_a_signed_url_lifetime_the_store_would_refuse_is_refused(self):
+        """Past a week the SDK still signs the URL and the store rejects it:
+        every signed download would fail, one request at a time."""
+        with self.assertRaises(ImproperlyConfigured):
+            self._load(S3_BUCKET="workspace-media", S3_SIGNED_URL_TTL="604801")
 
     def test_an_unknown_backend_is_refused(self):
         with self.assertRaises(ImproperlyConfigured):

@@ -12,6 +12,7 @@ from django.test import SimpleTestCase, override_settings
 from workspace.common.storage.facade import BlobStorage
 from workspace.common.tests.s3 import S3TestMixin
 from workspace.photos.services.album_renditions import renditions_dir
+from workspace.photos.services.photo_embeddings import frame_path
 
 
 class CopyBlobsTests(S3TestMixin, SimpleTestCase):
@@ -66,6 +67,14 @@ class CopyBlobsTests(S3TestMixin, SimpleTestCase):
         self.copy("--to", "s3")
 
         self.assertIn(rendition, self.keys())
+
+    def test_video_frames_are_copied_too(self):
+        frame = frame_path("3f1c", "9a2b")
+        self.local.save(frame, ContentFile(b"frame"))
+
+        self.copy("--to", "s3")
+
+        self.assertIn(frame, self.keys())
 
     def test_a_second_run_copies_nothing_again(self):
         self.save_local("files/users/alice/a.txt", b"a")

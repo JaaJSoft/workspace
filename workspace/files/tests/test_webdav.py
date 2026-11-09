@@ -825,6 +825,29 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertEqual(refused.exception.value, 409)
         self.assertEqual(sorted(self._files_on_disk()), ["a.txt", "test.txt"])
 
+    def test_an_upload_whose_file_was_trashed_meanwhile_is_refused(self):
+        """Its bytes are staged under the file's live path, which the trash
+        freed for the next file of that name."""
+        buf = self.res.begin_write()
+        buf.write(b"new")
+        buf.close()
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.soft_delete(
+                File.objects.get(pk=self.file.pk), acting_user=self.user
+            )
+
+        with self.assertRaises(DAVError) as refused:
+            self.res.end_write(with_errors=False)
+
+        self.assertEqual(refused.exception.value, 409)
+        self.file.refresh_from_db()
+        self.assertEqual(
+            self.file.content.name, f"trash/users/davfile/{self.file.uuid}/test.txt"
+        )
+        with self.file.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"hello world")
+        self.assertEqual(self._files_on_disk(), [])
+
     def test_successful_overwrite_leaves_single_file_on_disk(self):
         """After a completed overwrite no temp/partial files may remain."""
         buf = self.res.begin_write()

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 11:55+0000\n"
+"POT-Creation-Date: 2026-11-09 20:30+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -683,6 +683,11 @@ msgid_plural "%(count)s contributions on %(date)s"
 msgstr[0] "%(count)s contribution le %(date)s"
 msgstr[1] "%(count)s de contributions le %(date)s"
 msgstr[2] "%(count)s contributions le %(date)s"
+
+#: validators.py
+#, python-format
+msgid "“%(value)s” cannot be used as a username."
+msgstr "« %(value)s » ne peut pas servir de nom d’utilisateur."
 
 #: views.py
 msgid ""

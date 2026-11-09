@@ -570,8 +570,13 @@ class FileResource(DAVNonCollection):
                         acting_user=self._user,
                     )
                 # The bytes are staged under the path the file had when the PUT
-                # began; a rename or a move since has its blob somewhere else.
-                if file_upload_path(self._file, self._file.name) != self._storage_path:
+                # began; a rename, a move or a trip to the trash since has its
+                # blob somewhere else.
+                if (
+                    self._file.deleted_at is not None
+                    or file_upload_path(self._file, self._file.name)
+                    != self._storage_path
+                ):
                     raise Relocated()
                 FileService.replace_content_storage(
                     self._file,

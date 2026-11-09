@@ -37,8 +37,9 @@ class Relocated(Exception):
     """A write was refused because the file moved while its bytes were staged.
 
     An upload staged under the path the file had when it began cannot follow
-    a rename or a move that committed meanwhile: that move deletes what is
-    left under the old path once it commits, bytes published there included.
+    a rename, a move or a trip to the trash that committed meanwhile: that
+    move deletes what is left under the old path once it commits, bytes
+    published there included.
     """
 
     def __init__(self):

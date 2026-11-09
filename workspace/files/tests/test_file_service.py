@@ -545,6 +545,28 @@ class TestReplaceContentStorage(TestCase):
         f.refresh_from_db()
         self.assertEqual(f.content.name, "files/users/svcuser_rcs/Archive/doc.txt")
 
+    def test_refused_for_a_file_trashed_since_it_was_loaded(self):
+        """The trash leaves the tree path as it was and moves the blob all the
+        same: the caller's bytes are staged under a name that is free again."""
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"a", name="doc.txt"),
+        )
+        loaded = File.objects.get(pk=f.pk)
+        FileService.soft_delete(f, acting_user=self.user)
+
+        with self.assertRaises(Relocated):
+            FileService.replace_content_storage(
+                loaded,
+                storage_path=loaded.content.name,
+                size=1,
+                content_hash="0" * 64,
+            )
+
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, f"trash/users/svcuser_rcs/{f.uuid}/doc.txt")
+
 
 class TestCopy(TestCase):
     """Tests for FileService.copy()."""

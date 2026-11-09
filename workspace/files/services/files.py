@@ -57,8 +57,18 @@ logger = logging.getLogger(__name__)
 
 
 def _location(file_obj):
-    """Everything a file's blob path is derived from (``file_upload_path``)."""
-    return (file_obj.path, file_obj.group_id, file_obj.owner_id)
+    """Everything a file's blob path is derived from.
+
+    Its place in the tree (``file_upload_path``), and whether it is in the
+    trash: trashing leaves the tree path as it was and moves the blob under
+    ``trash/`` all the same.
+    """
+    return (
+        file_obj.path,
+        file_obj.group_id,
+        file_obj.owner_id,
+        file_obj.deleted_at,
+    )
 
 
 class FileService:
@@ -706,18 +716,23 @@ class FileService:
         file_type = refine_with_name(detection.label, name or file_obj.name)
         content_field = File._meta.get_field("content")
 
-        def blob_path(instance, filename):
+        def blob_path(row):
+            # In the trash the row is the only record of where the blob went:
+            # a file trashed on its own keeps its trash directory when its
+            # folder is trashed after it, and the file that took its name
+            # rides inside the folder's.
+            if row.deleted_at is not None and row.content:
+                return row.content.name
+            if row.deleted_at is not None:
+                return _storage.node_storage_path(row)
+            # Where the file's own name puts its blob, whatever the upload
+            # was called.
             return content_field.storage.get_available_name(
-                content_field.generate_filename(instance, filename),
+                content_field.generate_filename(row, row.name),
                 max_length=content_field.max_length,
             )
 
-        # Where the file's own name puts its blob, whatever the upload was
-        # called. Resolved early because the row write has to name the path in
-        # the same statement that claims the row.
-        storage_path = blob_path(file_obj, file_obj.name)
         fields = {
-            "content": storage_path,
             "content_hash": upload_hash(content),
             "size": content.size,
             "mime_type": mime_type or detection.mime_type,
@@ -733,11 +748,15 @@ class FileService:
         }
         with transaction.atomic():
             FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
+            # The path comes from the row as claimed, not from the instance
+            # the caller loaded: a rename, a move or a trip to the trash that
+            # committed since has the blob somewhere else, and the claim left
+            # ``content`` as that move wrote it.
             current = FileService._claimed_row(file_obj)
-            if _location(current) != _location(file_obj):
-                storage_path = blob_path(current, current.name)
+            storage_path = blob_path(current)
+            if current.content.name != storage_path:
                 File.objects.filter(pk=file_obj.pk).update(content=storage_path)
-                fields["content"] = storage_path
+            fields["content"] = storage_path
             stored = content_field.storage.replace(storage_path, content)
             if stored != storage_path:
                 # A storage that renames around a collision moved the blob; the
@@ -762,10 +781,10 @@ class FileService:
     def _claimed_row(file_obj):
         """*file_obj*'s row as it stands, read once the caller has claimed it.
 
-        A rename or a move holds the rows it relocates until it commits, so a
-        claim that had to wait for one sees it here. The bytes then go where
-        the file is now: the path the caller computed from the instance it
-        loaded is one that move is about to empty.
+        A rename, a move or a trip to the trash holds the rows it relocates
+        until it commits, so a claim that had to wait for one sees it here.
+        The bytes then go where the file is now: the path the caller computed
+        from the instance it loaded is one that move is about to empty.
         """
         return File.objects.select_related("owner").get(pk=file_obj.pk)
 
@@ -883,8 +902,9 @@ class FileService:
         overwritten the content it was refused for.
 
         *storage_path* was derived from *file_obj* as the caller holds it, so
-        a rename or a move that committed while the claim waited makes it a
-        path that move is emptying: that refuses with ``Relocated``.
+        a rename, a move or a trip to the trash that committed while the claim
+        waited makes it a path that move is emptying: that refuses with
+        ``Relocated``.
         """
         from workspace.files.services.detection import detect_from_name
 

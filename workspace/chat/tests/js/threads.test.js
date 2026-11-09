@@ -463,6 +463,7 @@ test('switching conversations closes the thread panel', async () => {
     async loadMessages() {},
     async markAsRead() {},
     async loadPinnedMessages() {},
+    _isNearBottom: () => true,
     scrollToBottom() {},
     getMessageInput: () => null,
   });

@@ -39,6 +39,7 @@ function buildApp({ pathname = '/chat', returnToStepsBack = false, fetch = null 
     async loadMessages() {},
     async markAsRead() {},
     async loadPinnedMessages() {},
+    _isNearBottom: () => true,
     scrollToBottom() {},
     getMessageInput: () => null,
   });

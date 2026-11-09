@@ -10,6 +10,7 @@ Skipped unless E2E=1 is set.
 
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 
 from django.utils import timezone
@@ -141,4 +142,36 @@ class MessagePaginationTests(PlaywrightTestCase):
               const el = {self.SCROLLER};
               return Math.abs(el.scrollTop - (el.scrollHeight - {before_height})) < 40;
             }}"""
+        )
+
+    def test_a_reader_who_went_up_stays_there_when_the_opening_ends(self):
+        """Opening a conversation ends with a scroll to its newest message,
+        once the read receipt and the pins have answered. On a slow server a
+        reader has gone up the conversation by then: that scroll took them
+        back down."""
+        held = []
+        self.page.route("**/pinned-messages", lambda route: held.append(route))
+        self._open_conversation()
+        flow = self.page.locator("#messages-container")
+        expect(flow.get_by_text(f"pagination message {SEEDED:03d}")).to_be_visible()
+        deadline = time.monotonic() + 10
+        while not held and time.monotonic() < deadline:
+            self.page.wait_for_timeout(50)
+        self.assertTrue(held, "the opening must be waiting on the pins")
+
+        before_height = self.page.evaluate(f"{self.SCROLLER}.scrollHeight")
+        self._scroll_to_top()
+        anchored = f"""() => {{
+          const el = {self.SCROLLER};
+          return Math.abs(el.scrollTop - (el.scrollHeight - {before_height})) < 40;
+        }}"""
+        self.page.wait_for_function(anchored)
+
+        held[0].continue_()
+        # The opening's last step, right after its scroll.
+        expect(self.page.locator(".chat-rich-input")).to_be_focused()
+
+        self.assertTrue(
+            self.page.evaluate(anchored),
+            "the reader must stay on the message they were reading",
         )

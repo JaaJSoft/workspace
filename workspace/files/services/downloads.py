@@ -2,6 +2,8 @@
 
 from django.http import HttpResponseRedirect
 
+from workspace.common.stored_content import is_active_content
+
 from ..metrics import FILES_DOWNLOAD_BYTES
 
 
@@ -11,7 +13,12 @@ def signed_redirect(request, file_obj, *, attachment):
     The URL carries the content type and the disposition the app would have
     sent. Whoever holds it can fetch the blob until it expires, so only call
     this once access and quarantine have been checked.
+
+    A type a browser would run as a page (HTML, SVG, XML) is always served
+    here: the store sends none of the headers that keep it from running.
     """
+    if is_active_content(file_obj.mime_type or ""):
+        return None
     url = file_obj.content.storage.signed_url(
         file_obj.content.name,
         filename=file_obj.name,

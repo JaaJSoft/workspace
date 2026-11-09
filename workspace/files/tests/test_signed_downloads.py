@@ -156,6 +156,37 @@ class SignedDownloadTests(_ObjectStorageContent):
             self.client.get(self.download_url).status_code, status.HTTP_403_FORBIDDEN
         )
 
+    def _active_file(self):
+        page = File(owner=self.user, name="page.html", node_type=File.NodeType.FILE)
+        page.mime_type = "text/html"
+        page.content = ContentFile(b"<script>alert(1)</script>", name="page.html")
+        page.size = 25
+        page.save()
+        return page
+
+    def test_a_page_is_served_by_the_app_rather_than_signed(self):
+        # The store sends no sandbox: an HTML or SVG file opened from a signed
+        # URL would run as a page of whatever origin serves the bucket.
+        page = self._active_file()
+
+        response = self.client.get(f"/api/v1/files/{page.uuid}/content")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response["Content-Disposition"].startswith("attachment"))
+        self.assertIn("sandbox", response["Content-Security-Policy"])
+        self.assertEqual(_body(response), b"<script>alert(1)</script>")
+
+    def test_a_page_behind_a_public_link_is_served_by_the_app(self):
+        link = FileShareLink.objects.create(
+            file=self._active_file(), created_by=self.user
+        )
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(f"/api/v1/files/shared/{link.token}/content")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response["Content-Disposition"].startswith("attachment"))
+
     def test_a_public_link_redirects(self):
         link = FileShareLink.objects.create(file=self.file, created_by=self.user)
         self.client.force_authenticate(user=None)

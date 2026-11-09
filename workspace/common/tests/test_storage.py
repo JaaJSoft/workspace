@@ -275,6 +275,48 @@ class BlobStorageContract:
         self.assertFalse(self.storage.exists("files/users/alice/a.txt"))
         self.assertEqual(_read(self.storage, "files/users/alice/b.txt"), b"moved")
 
+    def test_an_exclusive_move_takes_a_free_name(self):
+        self.save("files/users/alice/a.txt", b"a")
+
+        self.storage.move_exclusive(
+            "files/users/alice/a.txt", "files/users/alice/b.txt"
+        )
+
+        self.assertFalse(self.storage.exists("files/users/alice/a.txt"))
+        self.assertEqual(_read(self.storage, "files/users/alice/b.txt"), b"a")
+
+    def test_an_exclusive_move_refuses_a_taken_name(self):
+        self.save("files/users/alice/a.txt", b"a")
+        self.save("files/users/alice/b.txt", b"b")
+
+        with self.assertRaises(FileExistsError):
+            self.storage.move_exclusive(
+                "files/users/alice/a.txt", "files/users/alice/b.txt"
+            )
+
+        self.assertEqual(_read(self.storage, "files/users/alice/a.txt"), b"a")
+        self.assertEqual(_read(self.storage, "files/users/alice/b.txt"), b"b")
+
+    def test_an_exclusive_move_carries_a_directory(self):
+        self.save("files/users/alice/Docs/a.txt", b"a")
+
+        self.storage.move_exclusive("files/users/alice/Docs", "files/users/alice/Kept")
+
+        self.assertFalse(self.storage.is_dir("files/users/alice/Docs"))
+        self.assertEqual(_read(self.storage, "files/users/alice/Kept/a.txt"), b"a")
+
+    def test_an_exclusive_move_refuses_a_directory_that_holds_the_name(self):
+        self.save("files/users/alice/Docs/a.txt", b"a")
+        self.storage.make_dir("files/users/alice/Kept")
+
+        with self.assertRaises(FileExistsError):
+            self.storage.move_exclusive(
+                "files/users/alice/Docs", "files/users/alice/Kept"
+            )
+
+        self.assertEqual(_read(self.storage, "files/users/alice/Docs/a.txt"), b"a")
+        self.assertTrue(self.storage.is_dir("files/users/alice/Kept"))
+
     def test_move_an_empty_directory(self):
         self.storage.make_dir("files/users/alice/Empty")
 

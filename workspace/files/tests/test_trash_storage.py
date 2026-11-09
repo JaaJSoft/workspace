@@ -64,6 +64,47 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self.assertEqual(f.content.name, f"trash/users/bob/{f.uuid}/report.pdf")
         self.assertEqual(self._blobs(), [f"trash/users/bob/{f.uuid}/report.pdf"])
 
+    def test_a_save_that_waited_on_a_trash_lands_in_the_trash(self):
+        """It loaded the file before the trash took it: its bytes go where the
+        blob is now, not back into the live tree under a name that is free."""
+        f = self._make_file("report.pdf", content=b"old")
+        loaded = File.objects.get(pk=f.pk)
+        self._trash(f)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.update_content(
+                loaded, ContentFile(b"new", name="report.pdf"), acting_user=self.user
+            )
+
+        trashed = f"trash/users/bob/{f.uuid}/report.pdf"
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, trashed)
+        self.assertEqual(self._blobs(), [trashed])
+        with f.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"new")
+        # The name the trash freed is still free.
+        self._make_file("report.pdf", content=b"another")
+
+    def test_a_save_that_waited_on_its_folders_trash_lands_inside_it(self):
+        docs = FileService.create_folder(self.user, "Docs")
+        f = self._make_file("a.txt", parent=docs, content=b"old")
+        loaded = File.objects.get(pk=f.pk)
+        self._trash(docs)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.update_content(
+                loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
+            )
+
+        trashed = f"trash/users/bob/{docs.uuid}/Docs/a.txt"
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, trashed)
+        self.assertEqual(self._blobs(), [trashed])
+        self._restore(docs)
+        f.refresh_from_db()
+        with f.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"new")
+
     def test_the_name_on_disk_is_the_one_the_trash_view_shows(self):
         f = self._make_file("Quarterly Report.pdf")
 

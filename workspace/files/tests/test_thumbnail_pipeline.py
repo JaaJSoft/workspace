@@ -77,6 +77,21 @@ class ThumbnailPipelineTests(TestCase):
         self.assertTrue(f.has_thumbnail)
         self.assertTrue(default_storage.exists(get_thumbnail_path(f.uuid)))
 
+    @patch("workspace.files.sse_provider.push_file_event")
+    def test_a_drawn_thumbnail_is_announced_before_the_file_settles(self, push):
+        f = FileService.create_file(
+            owner=self.user,
+            name="pic4.png",
+            content=ContentFile(_png_bytes(), name="pic4.png"),
+            mime_type="image/png",
+        )
+        self.addCleanup(self._cleanup, f.uuid)
+
+        run_pipeline(f.uuid)
+
+        events = [call.args[1] for call in push.call_args_list]
+        self.assertEqual(events, ["preview_ready", "processing_settled"])
+
     def test_non_image_is_skipped(self):
         f = FileService.create_file(
             owner=self.user,

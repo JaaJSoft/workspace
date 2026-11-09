@@ -110,6 +110,10 @@ class Processor:
     # for nothing.
     enabled: Callable[[], bool] = field(default=_always)
     order: int = DEFAULT_ORDER
+    # SSE event pushed to the file's open listings as soon as this step stored
+    # something in the upload pipeline, rather than when the whole pipeline
+    # settles: the thumbnail is ready long before the text is indexed.
+    announce: str = ""
 
     def pending_files(self, *, reanalyze=False):
         """The processor's pending files, or none while it is disabled.
@@ -140,6 +144,7 @@ def register_processor(
     enqueue=None,
     enabled=_always,
     order=DEFAULT_ORDER,
+    announce="",
 ):
     """Declare a processor; return the registered entry."""
     processor = Processor(
@@ -151,6 +156,7 @@ def register_processor(
         enqueue=enqueue,
         enabled=enabled,
         order=order,
+        announce=announce,
     )
     _PROCESSORS[name] = processor
     return processor
@@ -254,45 +260,46 @@ def run_pipeline(file_uuid):
             return None
         if file_obj.content_hash != content_hash or file_obj.deleted_at is not None:
             return None
-        _run_step(processor, file_obj)
+        if _run_step(processor, file_obj) and processor.announce:
+            _announce(file_obj, processor.announce)
 
     settled = this_content.filter(processing_status=Status.PROCESSING).update(
         processing_status=Status.READY
     )
     if not settled:
         return None
-    _announce_settled(file_obj)
+    _announce(file_obj, "processing_settled")
     return Status.READY
 
 
-def _announce_settled(file_obj):
-    """Tell every open listing of the file that its spinner can go.
+def _announce(file_obj, event_type):
+    """Tell every open listing of the file that something of it changed.
 
-    Best-effort: the status is already written, and a page that misses the
-    push shows it on its next load.
+    Best-effort: what it announces is already written, and a page that misses
+    the push shows it on its next load.
     """
     from ..sse_provider import push_file_event
 
     try:
-        push_file_event(file_obj, "processing_settled", None)
+        push_file_event(file_obj, event_type, None)
     except Exception:
         logger.exception(
-            "Could not announce the processed file %s", scrub(file_obj.uuid)
+            "Could not announce %s for %s", event_type, scrub(file_obj.uuid)
         )
 
 
 def _run_step(processor, file_obj):
+    """Run one pipeline step on *file_obj*; True when it stored something inline."""
     try:
         applies = processor.applies_to(file_obj)
     except Exception:
         logger.exception(
             "Processor %s could not decide on %s", processor.name, scrub(file_obj.uuid)
         )
-        return
+        return False
     if applies:
         if processor.enqueue is None:
-            run_processor(processor, file_obj)
-            return
+            return run_processor(processor, file_obj)
         try:
             processor.enqueue(file_obj)
         except Exception:
@@ -309,6 +316,7 @@ def _run_step(processor, file_obj):
                 processor.name,
                 scrub(file_obj.uuid),
             )
+    return False
 
 
 def stalled_files_qs():

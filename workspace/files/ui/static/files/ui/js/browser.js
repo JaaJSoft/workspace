@@ -1,3 +1,22 @@
+// Runs *fn* once a burst of calls has gone quiet for *wait* ms, and at least
+// every *maxWait* ms while the burst goes on: a plain debounce would put the
+// call off for as long as calls keep coming.
+window.coalesceCalls = function coalesceCalls(fn, { wait, maxWait }) {
+  let timer = null;
+  let burstStart = null;
+  const run = () => {
+    timer = null;
+    burstStart = null;
+    fn();
+  };
+  return () => {
+    const now = Date.now();
+    if (burstStart === null) burstStart = now;
+    clearTimeout(timer);
+    timer = setTimeout(run, Math.max(0, Math.min(wait, burstStart + maxWait - now)));
+  };
+};
+
 window.fileBrowser = function fileBrowser() {
   const tags = window.tagsMixin();
 
@@ -1357,17 +1376,26 @@ window.fileBrowser = function fileBrowser() {
       });
 
       // A file still being scanned and previewed shows a spinner rendered
-      // server-side; re-render once its pipeline settles so the spinner goes
-      // and the fresh thumbnail appears. Debounced: a batch upload settles
-      // one file after another.
-      window.addEventListener('sse:files.processing_settled', (e) => {
+      // server-side: the listing re-renders once its thumbnail is drawn, so
+      // the preview shows while the rest of the pipeline runs, and again once
+      // the pipeline settles, so the spinner goes. A batch upload settles one
+      // file after another, so the re-renders are grouped, without waiting
+      // for the end of the batch.
+      const refreshProcessed = window.coalesceCalls(() => this.refreshFolderBrowser(), {
+        wait: 400,
+        maxWait: 2000,
+      });
+      const onProcessed = (e) => {
         const uuid = e.detail && e.detail.file_uuid;
         if (!uuid) return;
-        if (this.propertiesUuid === uuid) this.reloadPropertiesPanel();
+        if (e.type === 'sse:files.processing_settled' && this.propertiesUuid === uuid) {
+          this.reloadPropertiesPanel();
+        }
         if (!document.querySelector(`#folder-browser [data-uuid="${CSS.escape(uuid)}"]`)) return;
-        clearTimeout(this._processingRefreshTimer);
-        this._processingRefreshTimer = setTimeout(() => this.refreshFolderBrowser(), 400);
-      });
+        refreshProcessed();
+      };
+      window.addEventListener('sse:files.preview_ready', onProcessed);
+      window.addEventListener('sse:files.processing_settled', onProcessed);
 
       // Listen for form submissions from dialogs
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));

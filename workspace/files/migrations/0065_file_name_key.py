@@ -1,7 +1,8 @@
 """Add ``File.name_key`` and fill it from every row's name.
 
-Also moves the ``content`` field onto ``TreeStorage``, first, so that any blob
-the next migrations copy lands under its row's name exactly.
+Also moves the ``content`` field onto the blob storage's ``files`` alias,
+first, so that any blob the next migrations copy lands under its row's name
+exactly, on whichever backend holds the blobs.
 """
 
 import unicodedata
@@ -50,7 +51,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 max_length=1024,
                 null=True,
-                storage=workspace.files.models.TreeStorage(allow_overwrite=True),
+                storage=workspace.files.models.files_storage,
                 upload_to=workspace.files.models.file_upload_path,
             ),
         ),

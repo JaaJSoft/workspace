@@ -29,7 +29,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
         "workspace.core.module_guard.ModuleVisible",
     ],
-    "EXCEPTION_HANDLER": "workspace.core.module_guard.exception_handler",
+    "EXCEPTION_HANDLER": "workspace.core.api_errors.exception_handler",
     # Disable BrowsableAPI renderer in production for better performance
     "DEFAULT_RENDERER_CLASSES": [
         "drf_orjson_renderer.renderers.ORJSONRenderer",

@@ -1,15 +1,18 @@
 """Unit tests for FileService."""
 
 import os
+import posixpath
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
+from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.locking import Relocated
 
 User = get_user_model()
 
@@ -96,32 +99,20 @@ class TestCreateFolderOnStorage(TestCase):
 
     def test_root_folder_created_on_disk(self):
         FileService.create_folder(self.user, "Photos")
-        expected = os.path.join(
-            settings.MEDIA_ROOT, "files", "users", self.user.username, "Photos"
-        )
-        self.assertTrue(os.path.isdir(expected))
+        self.assertTrue(default_storage.is_dir("files/users/storageuser/Photos"))
 
     def test_nested_folder_created_on_disk(self):
         parent = FileService.create_folder(self.user, "Documents")
         FileService.create_folder(self.user, "Work", parent=parent)
-        expected = os.path.join(
-            settings.MEDIA_ROOT,
-            "files",
-            "users",
-            self.user.username,
-            "Documents",
-            "Work",
+        self.assertTrue(
+            default_storage.is_dir("files/users/storageuser/Documents/Work")
         )
-        self.assertTrue(os.path.isdir(expected))
 
     def test_deeply_nested_folder(self):
         a = FileService.create_folder(self.user, "A")
         b = FileService.create_folder(self.user, "B", parent=a)
         FileService.create_folder(self.user, "C", parent=b)
-        expected = os.path.join(
-            settings.MEDIA_ROOT, "files", "users", self.user.username, "A", "B", "C"
-        )
-        self.assertTrue(os.path.isdir(expected))
+        self.assertTrue(default_storage.is_dir("files/users/storageuser/A/B/C"))
 
     def test_silently_skipped_for_unsupported_backend(self):
         """A backend without local paths (S3-like) must not break folder creation."""
@@ -180,6 +171,18 @@ class TestRename(TestCase):
         FileService.rename(f, "new.txt")
         f.refresh_from_db()
         self.assertEqual(f.name, "new.txt")
+
+    def test_rename_to_a_name_without_extension_keeps_the_blob_at_that_name(self):
+        """The blob lives at the node's tree path, the name it was given."""
+        content = ContentFile(b"data", name="notes.txt")
+        f = FileService.create_file(self.user, "notes.txt", content=content)
+
+        FileService.rename(f, "README")
+
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, f"files/users/{self.user.username}/README")
+        with f.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"data")
 
     def test_rename_noop_when_same_name(self):
         f = FileService.create_file(self.user, "same.txt", mime_type="text/plain")
@@ -313,7 +316,7 @@ class TestUpdateContent(TestCase):
 
         storage = File._meta.get_field("content").storage
         with (
-            patch.object(storage, "save", side_effect=OSError("disk full")),
+            patch.object(storage, "replace", side_effect=OSError("disk full")),
             self.assertRaises(OSError),
         ):
             FileService.update_content(
@@ -325,24 +328,24 @@ class TestUpdateContent(TestCase):
         self.assertEqual(stored.size, original_size)
 
     def _dying_storage_write(self, partial):
-        """Patch the storage so a write lands *partial* bytes, then fails.
+        """Patch the disk so a write lands *partial* bytes, then fails.
 
         A transfer cut off mid-flight, which is the case the staged write
-        exists for: the storage truncates its target at the first byte, so
-        whichever path it was handed is left holding neither version.
+        exists for: written in place, the target would be left holding
+        neither version.
         """
-        storage = File._meta.get_field("content").storage
+        real_write = os.write
+        writes = []
 
-        def write_then_die(name, content, max_length=None):
-            with open(storage.path(name), "wb") as handle:
-                handle.write(partial)
-            raise OSError("connection reset mid-transfer")
+        def write_then_die(fd, data):
+            if writes:
+                raise OSError("connection reset mid-transfer")
+            writes.append(data)
+            return real_write(fd, bytes(data)[: len(partial)])
 
-        return patch.object(storage, "save", write_then_die)
+        return patch("workspace.common.storage.local.os.write", write_then_die)
 
-    def _blobs_in(self, directory):
-        return sorted(os.listdir(directory))
-
+    @local_storage_only
     def test_a_write_that_dies_halfway_leaves_the_previous_bytes_whole(self):
         """The path holds one complete version or the other, never a stump.
 
@@ -367,14 +370,12 @@ class TestUpdateContent(TestCase):
         with stored.content.open("rb") as handle:
             self.assertEqual(handle.read(), b"the original bytes")
 
+    @local_storage_only
     def test_a_failed_write_leaves_no_staging_file_behind(self):
         f = FileService.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"the original bytes", name="doc.txt"),
-        )
-        directory = os.path.dirname(
-            File._meta.get_field("content").storage.path(f.content.name)
         )
 
         with self._dying_storage_write(b"half"), self.assertRaises(OSError):
@@ -382,7 +383,7 @@ class TestUpdateContent(TestCase):
                 f, ContentFile(b"a new body", name="doc.txt"), name="doc.txt"
             )
 
-        self.assertEqual(self._blobs_in(directory), ["doc.txt"])
+        self.assertEqual(self._blobs_beside(f), ["doc.txt"])
 
     def test_a_successful_write_leaves_no_staging_file_behind(self):
         f = FileService.create_file(
@@ -394,10 +395,11 @@ class TestUpdateContent(TestCase):
             f, ContentFile(b"new bytes", name="doc.txt"), name="doc.txt"
         )
 
-        directory = os.path.dirname(
-            File._meta.get_field("content").storage.path(f.content.name)
-        )
-        self.assertEqual(self._blobs_in(directory), ["doc.txt"])
+        self.assertEqual(self._blobs_beside(f), ["doc.txt"])
+
+    def _blobs_beside(self, f):
+        directory = posixpath.dirname(f.content.name)
+        return sorted(entry.name for entry in default_storage.scan(directory))
 
     def test_the_returned_instance_needs_no_refresh(self):
         """The row write bypasses ``save()``, so the instance follows by hand.
@@ -518,6 +520,30 @@ class TestReplaceContentStorage(TestCase):
         )
         f.refresh_from_db()
         self.assertEqual(f.content.name, "dav/streamed/doc.txt")
+
+    def test_refused_for_a_file_moved_since_it_was_loaded(self):
+        """The caller staged its bytes under a path derived from the row as it
+        loaded it; a move that committed while the claim waited empties it."""
+        folder = FileService.create_folder(self.user, "Docs")
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            parent=folder,
+            content=ContentFile(b"a", name="doc.txt"),
+        )
+        loaded = File.objects.get(pk=f.pk)
+        FileService.rename(folder, "Archive")
+
+        with self.assertRaises(Relocated):
+            FileService.replace_content_storage(
+                loaded,
+                storage_path=loaded.content.name,
+                size=1,
+                content_hash="0" * 64,
+            )
+
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, "files/users/svcuser_rcs/Archive/doc.txt")
 
 
 class TestCopy(TestCase):
@@ -700,33 +726,36 @@ class TestMoveOnStorage(TestCase):
             username="moveuser", email="move@test.com", password="pass"
         )
 
-    def _storage_path(self, *parts):
-        return os.path.join(
-            settings.MEDIA_ROOT, "files", "users", self.user.username, *parts
-        )
+    def _is_dir(self, *parts):
+        return default_storage.is_dir("/".join(["files/users/moveuser", *parts]))
+
+    def _move(self, node, parent):
+        # Object storage drops what a move copied once its transaction commits.
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.move(node, parent)
 
     def test_move_folder_moves_directory_on_disk(self):
         src = FileService.create_folder(self.user, "Src")
         dest = FileService.create_folder(self.user, "Dest")
         child = FileService.create_folder(self.user, "Child", parent=src)
 
-        self.assertTrue(os.path.isdir(self._storage_path("Src", "Child")))
+        self.assertTrue(self._is_dir("Src", "Child"))
 
-        FileService.move(child, dest)
+        self._move(child, dest)
 
-        self.assertFalse(os.path.isdir(self._storage_path("Src", "Child")))
-        self.assertTrue(os.path.isdir(self._storage_path("Dest", "Child")))
+        self.assertFalse(self._is_dir("Src", "Child"))
+        self.assertTrue(self._is_dir("Dest", "Child"))
 
     def test_move_folder_to_root(self):
         parent = FileService.create_folder(self.user, "Parent")
         child = FileService.create_folder(self.user, "Child", parent=parent)
 
-        self.assertTrue(os.path.isdir(self._storage_path("Parent", "Child")))
+        self.assertTrue(self._is_dir("Parent", "Child"))
 
-        FileService.move(child, None)
+        self._move(child, None)
 
-        self.assertFalse(os.path.isdir(self._storage_path("Parent", "Child")))
-        self.assertTrue(os.path.isdir(self._storage_path("Child")))
+        self.assertFalse(self._is_dir("Parent", "Child"))
+        self.assertTrue(self._is_dir("Child"))
 
     def test_move_folder_updates_descendant_content_names(self):
         src = FileService.create_folder(self.user, "Src")
@@ -760,14 +789,13 @@ class TestMoveOnStorage(TestCase):
             content=ContentFile(b"hello", name="doc.txt"),
         )
 
-        old_full_path = os.path.join(settings.MEDIA_ROOT, f.content.name)
-        self.assertTrue(os.path.isfile(old_full_path))
+        old_name = f.content.name
+        self.assertTrue(default_storage.is_file(old_name))
 
-        FileService.move(f, dest)
+        self._move(f, dest)
 
-        self.assertFalse(os.path.isfile(old_full_path))
-        new_full_path = os.path.join(settings.MEDIA_ROOT, f.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
+        self.assertFalse(default_storage.is_file(old_name))
+        self.assertTrue(default_storage.is_file(f.content.name))
 
     def test_move_file_to_root(self):
         folder = FileService.create_folder(self.user, "Folder")
@@ -778,12 +806,11 @@ class TestMoveOnStorage(TestCase):
             content=ContentFile(b"hello", name="doc.txt"),
         )
 
-        FileService.move(f, None)
+        self._move(f, None)
 
         new_path = f.content.name.replace("\\", "/")
         self.assertNotIn("Folder", new_path)
-        new_full_path = os.path.join(settings.MEDIA_ROOT, f.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
+        self.assertTrue(default_storage.is_file(f.content.name))
 
     def test_move_noop_when_same_parent(self):
         folder = FileService.create_folder(self.user, "Folder")

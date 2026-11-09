@@ -12,7 +12,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from workspace.common.tests.media import IsolatedMediaRootMixin
+from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File
 from workspace.files.services import FileService
@@ -122,7 +122,8 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
 
         kept = self._create(DECOMPOSED, b"decomposed", keep_both=True)
 
-        self.assertEqual(kept.name, "Été (Copy).txt")
+        # Composed like every name the service is handed.
+        self.assertEqual(kept.name, COMPOSED.replace(".txt", " (Copy).txt"))
         self.assertEqual(read(kept), b"decomposed")
 
     def test_a_rename_refreshes_the_key_the_constraint_compares(self):
@@ -250,6 +251,7 @@ class NameBlobsAfterTheirRowsMigrationTests(IsolatedMediaRootMixin, TestCase):
         with self.storage.open(stray, "rb") as fh:
             self.assertEqual(fh.read(), b"stray")
 
+    @local_storage_only
     def test_a_blob_already_under_its_name_stays(self):
         path = self._blob("files/users/alice/a b.txt", b"x")
         row = self._row("a b.txt", path)

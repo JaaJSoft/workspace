@@ -12,7 +12,7 @@ from django.core.files.storage import default_storage
 from django.test import TestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService, _storage_ops
+from workspace.files.services import FileService
 
 User = get_user_model()
 
@@ -40,23 +40,17 @@ class StreamedBlobMoveTests(TestCase):
 
     def test_rename_streams_the_blob(self):
         old_path = self.file.content.name
-        peak = self._peak_during(lambda: FileService.rename(self.file, "renamed.mp4"))
+
+        def rename():
+            # Object storage drops the source once the move commits.
+            with self.captureOnCommitCallbacks(execute=True):
+                FileService.rename(self.file, "renamed.mp4")
+
+        peak = self._peak_during(rename)
 
         self.file.refresh_from_db()
         self.assertLess(peak, 8 * MB)
         self.assertNotEqual(self.file.content.name, old_path)
         self.assertFalse(default_storage.exists(old_path))
         with self.file.content.open("rb") as handle:
-            self.assertEqual(handle.read(), PAYLOAD)
-
-    def test_object_storage_relocation_streams_the_blob(self):
-        source = self.file.content.name
-        destination = source.replace("clip.mp4", "moved.mp4")
-        peak = self._peak_during(
-            lambda: _storage_ops._relocate_without_paths(source, destination)
-        )
-
-        self.assertLess(peak, 8 * MB)
-        self.assertFalse(default_storage.exists(source))
-        with default_storage.open(destination, "rb") as handle:
             self.assertEqual(handle.read(), PAYLOAD)

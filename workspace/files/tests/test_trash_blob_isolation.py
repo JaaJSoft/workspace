@@ -11,14 +11,12 @@ assertion on ``content.name`` alone passes against the buggy version - the
 two rows agreeing on a path is exactly the bug.
 """
 
-import os
-import shutil
-import tempfile
-
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
+from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
 
@@ -28,16 +26,10 @@ TRASHED = b"ORIGINAL-IN-TRASH"
 LIVE = b"BRAND-NEW"
 
 
-class TrashedBlobIsolationTests(TestCase):
+class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
-        self._override = self.settings(MEDIA_ROOT=self.media_root)
-        self._override.enable()
+        super().setUp()
         self.user = User.objects.create_user(username="trasher", password="pass")
-
-    def tearDown(self):
-        self._override.disable()
-        shutil.rmtree(self.media_root, ignore_errors=True)
 
     def _make(self, name, content, parent=None):
         return FileService.create_file(
@@ -158,6 +150,4 @@ class TrashedBlobIsolationTests(TestCase):
         FileService.hard_delete(trashed, acting_user=self.user)
 
         self.assertEqual(self._bytes_of(live), LIVE)
-        self.assertTrue(
-            os.path.isfile(os.path.join(self.media_root, live.content.name))
-        )
+        self.assertTrue(default_storage.is_file(live.content.name))

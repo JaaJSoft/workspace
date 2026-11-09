@@ -21,6 +21,8 @@ from mozilla_django_oidc.auth import OIDCAuthenticationBackend
 
 from workspace.common.logging import scrub
 
+from ..validators import PATH_SEGMENT_USERNAMES
+
 logger = logging.getLogger(__name__)
 
 # Django's UnicodeUsernameValidator allows letters, digits and @ . + - _ .
@@ -273,7 +275,9 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
             or claims.get("sub")
             or "user"
         )
-        base = _USERNAME_DISALLOWED.sub("", str(raw))[:150] or "user"
+        base = _USERNAME_DISALLOWED.sub("", str(raw))[:150]
+        if not base or base in PATH_SEGMENT_USERNAMES:
+            base = "user"
 
         username = base
         suffix = 1

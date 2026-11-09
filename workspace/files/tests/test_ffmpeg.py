@@ -1,5 +1,6 @@
 import io
 import os
+import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -7,6 +8,8 @@ from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase
 from PIL import Image
 
+from workspace.common.storage.backend import temporary_copy
+from workspace.common.tests.media import local_storage_only
 from workspace.files.services import FileService, ffmpeg
 
 from .videos import clip_bytes, requires_ffmpeg
@@ -14,25 +17,43 @@ from .videos import clip_bytes, requires_ffmpeg
 User = get_user_model()
 
 
-class _RemoteFieldFile:
-    """A stored file whose backend has no local path, as an object store."""
+def _local_file(test, name, data):
+    """A file on disk holding *data*, removed after *test*: the tools read a path."""
+    directory = tempfile.TemporaryDirectory()
+    test.addCleanup(directory.cleanup)
+    path = os.path.join(directory.name, name)
+    with open(path, "wb") as handle:
+        handle.write(data)
+    return path
+
+
+class _RemoteStorage:
+    """A storage whose backend has no local path, as an object store."""
 
     def __init__(self, data):
         self._data = data
-        self.size = len(data)
 
-    @property
-    def path(self):
-        raise NotImplementedError
+    def size(self, name):
+        return len(self._data)
 
-    def open(self, mode="rb"):
+    def open(self, name, mode="rb"):
         return io.BytesIO(self._data)
+
+    def local_path(self, name, *, max_bytes):
+        return temporary_copy(self, name, max_bytes=max_bytes)
+
+
+class _RemoteFieldFile:
+    def __init__(self, data):
+        self.name = "clip.webm"
+        self.storage = _RemoteStorage(data)
 
 
 class LocalPathTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
 
+    @local_storage_only
     def test_local_storage_hands_out_the_blob_itself(self):
         f = FileService.create_file(
             owner=self.user, name="clip.webm", content=ContentFile(b"bytes")
@@ -113,15 +134,9 @@ class DurationTests(SimpleTestCase):
 
 
 @requires_ffmpeg
-class RealToolsTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(username="alice", password="p")
-
+class RealToolsTests(SimpleTestCase):
     def _clip_path(self, name):
-        f = FileService.create_file(
-            owner=self.user, name=name, content=ContentFile(clip_bytes(name))
-        )
-        return f.content.path
+        return _local_file(self, name, clip_bytes(name))
 
     def test_probe_reports_streams_and_format(self):
         report = ffmpeg.probe(self._clip_path("clip.webm"))
@@ -130,12 +145,8 @@ class RealToolsTests(TestCase):
         self.assertEqual(ffmpeg.duration(report), 3.0)
 
     def test_probe_of_something_that_is_not_a_video(self):
-        f = FileService.create_file(
-            owner=self.user, name="notes.txt", content=ContentFile(b"not a video")
-        )
-
         with self.assertRaises(ffmpeg.MediaToolError):
-            ffmpeg.probe(f.content.path)
+            ffmpeg.probe(_local_file(self, "notes.txt", b"not a video"))
 
     def test_frame_is_a_png_within_the_bounds(self):
         png = ffmpeg.extract_frame(
@@ -164,12 +175,9 @@ class RealToolsTests(TestCase):
 
 
 @requires_ffmpeg
-class SampleFramesTests(TestCase):
+class SampleFramesTests(SimpleTestCase):
     def setUp(self):
-        user = User.objects.create_user(username="alice", password="p")
-        self.clip = FileService.create_file(
-            owner=user, name="clip.webm", content=ContentFile(clip_bytes("clip.webm"))
-        ).content.path
+        self.clip = _local_file(self, "clip.webm", clip_bytes("clip.webm"))
 
     def _sample(self, path=None, **kwargs):
         frames = []

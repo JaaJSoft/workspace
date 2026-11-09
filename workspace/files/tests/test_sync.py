@@ -1,12 +1,14 @@
 """Tests for FileSyncService disk <-> DB synchronization."""
 
-import os
-
-from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import SuspiciousFileOperation
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
+from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
+from workspace.files.services import FileService
 from workspace.files.sync import FileSyncService
 
 User = get_user_model()
@@ -28,15 +30,10 @@ class FileSyncServiceStoragePrefixTests(TestCase):
             password="pass",
         )
 
-    def _user_root(self):
-        return os.path.join(settings.MEDIA_ROOT, "files", "users", self.user.username)
-
     def _write(self, *parts, contents=b"data"):
-        full = os.path.join(self._user_root(), *parts)
-        os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "wb") as fh:
-            fh.write(contents)
-        return full
+        name = "/".join(["files", "users", self.user.username, *parts])
+        default_storage.replace(name, ContentFile(contents))
+        return name
 
     def test_recursive_sync_registers_files_under_canonical_prefix(self):
         self._write("report.pdf", contents=b"%PDF-1.4 test")
@@ -94,3 +91,35 @@ class FileSyncServiceStoragePrefixTests(TestCase):
 
         f.refresh_from_db()
         self.assertIsNone(f.deleted_at)
+
+
+class SyncUnsafeUsernameTests(IsolatedMediaRootMixin, TestCase):
+    """A username that is not a plain path segment must not widen the walk.
+
+    New accounts cannot be named ``..`` any more, but one named so before that
+    rule still is, and its root, ``files/users/..``, is the parent of every
+    other user's tree: a sync that followed it would register their files as
+    the account's own.
+    """
+
+    def setUp(self):
+        super().setUp()
+        alice = User.objects.create_user(username="alice", password="pw")
+        FileService.create_file(
+            alice, "secret.txt", content=ContentFile(b"alice's secret")
+        )
+        self.intruder = User.objects.create_user(username="intruder", password="pw")
+        User.objects.filter(pk=self.intruder.pk).update(username="..")
+        self.intruder.refresh_from_db()
+
+    def test_the_recursive_sync_adopts_nothing(self):
+        with self.assertRaises(SuspiciousFileOperation):
+            FileSyncService().sync_user_recursive(self.intruder)
+
+        self.assertFalse(File.objects.filter(owner=self.intruder).exists())
+
+    def test_the_shallow_sync_adopts_nothing(self):
+        with self.assertRaises(SuspiciousFileOperation):
+            FileSyncService().sync_folder_shallow(self.intruder)
+
+        self.assertFalse(File.objects.filter(owner=self.intruder).exists())

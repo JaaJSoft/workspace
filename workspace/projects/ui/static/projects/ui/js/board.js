@@ -299,7 +299,11 @@ function projectBoard(config) {
     currentView: config.view || 'board',
     collapsed: window.sidebarPreference.initial(),
     dragging: null,
+    // Save is guarded per opening of the new-task dialog: a create still
+    // pending from an earlier opening neither blocks the new one nor gets
+    // to close or reset it when it answers.
     creatingTask: false,
+    _taskDialogOpenings: window.latestOnly(),
     // Each drop's refresh would render the server's order as of that
     // reorder, over the optimistic DOM of any drop made since.
     _reorders: window.latestOnly(),
@@ -1020,6 +1024,8 @@ function projectBoard(config) {
 
     newTask(statusUuid) {
       if (!config.writable) return;
+      this._taskDialogOpenings.start();
+      this.creatingTask = false;
       this.form = emptyTaskForm();
       this.form.status = statusUuid;
       this.formError = '';
@@ -1252,6 +1258,7 @@ function projectBoard(config) {
 
     async saveTask() {
       if (this.creatingTask) return;
+      const opening = this._taskDialogOpenings.join();
       this.creatingTask = true;
       try {
         const resp = await fetch(config.apiBase + '/tasks', {
@@ -1274,16 +1281,26 @@ function projectBoard(config) {
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
           const detail = data.start_date && data.start_date[0];
-          this.formError = detail || 'Could not save the task.';
+          this._taskSaveFailed(opening, detail);
           return;
         }
-        this.$refs.taskDialog.close();
+        // The task exists whichever opening asked for it, so the board
+        // shows it; only the dialog belongs to the opening.
+        if (opening.isCurrent()) this.$refs.taskDialog.close();
         this.refresh();
       } catch (e) {
-        this.formError = 'Could not save the task.';
+        this._taskSaveFailed(opening);
       } finally {
-        this.creatingTask = false;
+        if (opening.isCurrent()) this.creatingTask = false;
       }
+    },
+
+    // The dialog of a superseded opening shows another draft now, so its
+    // failure goes to a toast instead of that draft's error line.
+    _taskSaveFailed(opening, detail) {
+      const message = detail || 'Could not save the task.';
+      if (opening.isCurrent()) this.formError = message;
+      else if (window.AppAlert) AppAlert.error(message);
     },
   };
 }

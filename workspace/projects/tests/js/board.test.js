@@ -1774,3 +1774,81 @@ test('a superseded reorder answering last does not refresh again', async () => {
   await first;
   assert.equal(calls.filter((call) => call === 'refresh').length, 1);
 });
+
+function dialogBoard(calls) {
+  const board = savingBoard(calls);
+  board.$refs = {
+    taskDialog: {
+      close: () => calls.push('close'),
+      showModal: () => calls.push('open'),
+    },
+  };
+  return board;
+}
+
+test('a create pending from an earlier opening does not disable Save on reopen', async () => {
+  const calls = [];
+  const answer = deferredFetch(calls);
+  const board = dialogBoard(calls);
+  board.newTask('s1');
+  board.form.title = 'First';
+  const first = board.saveTask();
+  board.newTask('s1');
+  assert.equal(board.creatingTask, false);
+  board.form.title = 'Second';
+  const second = board.saveTask();
+  assert.equal(
+    calls.filter((call) => call === 'POST /api/tasks').length,
+    2
+  );
+  answer.forEach((resolve) => resolve());
+  await Promise.all([first, second]);
+});
+
+test('a stale create answering leaves the reopened dialog alone', async () => {
+  const calls = [];
+  const answer = deferredFetch(calls);
+  const board = dialogBoard(calls);
+  board.newTask('s1');
+  board.form.title = 'First';
+  const first = board.saveTask();
+  board.newTask('s1');
+  board.form.title = 'Second';
+  const second = board.saveTask();
+  answer[0]();
+  await first;
+  // The first task exists, so the board shows it, but the dialog stays open
+  // and Save stays guarded for the create still in flight.
+  assert.deepStrictEqual(Array.from(calls), [
+    'open',
+    'POST /api/tasks',
+    'open',
+    'POST /api/tasks',
+    'refresh',
+  ]);
+  assert.equal(board.creatingTask, true);
+  assert.equal(board.form.title, 'Second');
+  answer[1]();
+  await second;
+  assert.deepStrictEqual(Array.from(calls).slice(-2), ['close', 'refresh']);
+  assert.equal(board.creatingTask, false);
+});
+
+test('a stale create failing toasts instead of flagging the reopened draft', async () => {
+  const calls = [];
+  const alerts = [];
+  ctx.AppAlert = { error: (message) => alerts.push(message) };
+  const board = dialogBoard(calls);
+  let fail;
+  ctx.fetch = () => new Promise((resolve) => {
+    fail = () => resolve({ ok: false, json: async () => ({}) });
+  });
+  board.newTask('s1');
+  const first = board.saveTask();
+  board.newTask('s1');
+  fail();
+  await first;
+  assert.equal(board.formError, '');
+  assert.equal(board.creatingTask, false);
+  assert.deepStrictEqual(Array.from(alerts), ['Could not save the task.']);
+});

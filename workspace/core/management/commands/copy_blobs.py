@@ -28,6 +28,7 @@ BLOB_ROOTS = (
     "people",  # contact photos
     "faces",  # face crops
     "photos",  # album previews and video remuxes
+    "video-frames",  # the frames a video is searched by
 )
 
 # Object stores report modification times to the second: a copy is only known

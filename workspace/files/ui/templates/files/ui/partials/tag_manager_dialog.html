@@ -21,7 +21,7 @@ and the tag_dialog partial on the same page for create/edit.
         {% include "ui/partials/dialog_header.html" with icon="tags" title=tags_title subtitle_expr=count_js close_expr="closeTagManager()" class="mb-3" only %}
       {% endwith %}
     {% endwith %}
-    <label class="input input-sm flex items-center gap-2 mb-2">
+    <label class="input input-sm flex items-center gap-2 w-full mb-2">
       <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
       <input
         type="search"

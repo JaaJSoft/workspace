@@ -65,11 +65,6 @@
   --color-module-content: var(--module-content);
 }
 
-/* Tailwind 4 applies hover: only on devices that can hover. Several actions
-   are revealed on hover alone and have no touch path yet (#1480), so keep
-   hover: unconditional until they do. */
-@custom-variant hover (&:hover);
-
 /* Tailwind 4 defaults borders to currentColor. A border without an explicit
    color takes the theme's base-300 instead, which follows light and dark. */
 @layer base {

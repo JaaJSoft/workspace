@@ -151,7 +151,7 @@
           x-cloak
         ></i>
         <span
-          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:opacity-100! transition-opacity shrink-0"
+          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:opacity-100! [@media(hover:none)]:opacity-40 transition-opacity shrink-0"
           @click.stop="openCtxMenu($event, 'note', { uuid: note.uuid, name: note.name, is_favorite: note.is_favorite, parent: note.parent })"
         >
           <i data-lucide="ellipsis-vertical" class="w-3.5 h-3.5"></i>

@@ -22,13 +22,21 @@
     >
       <div class="scale-150">{% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}</div>
       <!-- Camera overlay for group admins -->
+      {# A touch screen cannot hover: the overlay shrinks to a corner badge that stays on, over an avatar left visible. #}
       <template x-if="isGroupAdmin()">
         <div
-          class="absolute inset-0 scale-150 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity"
+          class="absolute inset-0 scale-150 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity [@media(hover:none)]:opacity-100 [@media(hover:none)]:bg-transparent [@media(hover:none)]:items-end [@media(hover:none)]:justify-end"
           @click="$refs.groupAvatarInput.click()"
           title="Change group avatar"
         >
-          <i data-lucide="camera" class="w-4 h-4 text-white"></i>
+          <span
+            class="flex rounded-full [@media(hover:none)]:bg-black/60 [@media(hover:none)]:p-0.5"
+          >
+            <i
+              data-lucide="camera"
+              class="w-4 h-4 [@media(hover:none)]:w-2.5 [@media(hover:none)]:h-2.5 text-white"
+            ></i>
+          </span>
         </div>
       </template>
     </div>
@@ -209,7 +217,7 @@
         <button
           type="button"
           x-show="isGroupAdmin() && (member.role !== 'admin' || groupAdminCount() > 1)"
-          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity"
+          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
           @click="setMemberRole(member.user.id, member.role === 'admin' ? 'member' : 'admin')"
           :title="member.role === 'admin' ? 'Remove admin' : 'Make admin'"
         >
@@ -222,7 +230,7 @@
         <button
           type="button"
           x-show="isGroupAdmin() && !isGroupLinkedConversation() && member.user.id !== currentUserId"
-          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-error transition-opacity"
+          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 text-error transition-opacity"
           @click="removeMember(member.user.id)"
           title="Remove from group"
         >
@@ -271,7 +279,7 @@
           </div>
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity shrink-0"
+            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 text-base-content/50 hover:text-error transition-opacity shrink-0"
             @click.stop="unpinMessage(pin.message_uuid)"
             title="Unpin"
           >
@@ -587,7 +595,7 @@
               </div>
               <!-- Actions -->
               <div
-                class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                class="flex gap-0.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0"
               >
                 <button
                   type="button"
@@ -694,7 +702,7 @@
               <!-- Actions -->
               <div
                 x-show="goal.can_manage"
-                class="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0"
+                class="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0"
               >
                 <button
                   type="button"
@@ -786,7 +794,7 @@
               <!-- Actions -->
               <div
                 x-show="sched.can_manage"
-                class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                class="flex gap-0.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0"
               >
                 <button
                   type="button"

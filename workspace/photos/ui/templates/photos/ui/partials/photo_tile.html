@@ -171,7 +171,10 @@
     that stays on a favorite, an empty one on hover otherwise, and the menu
     button. The star follows data-favorite, so a toggle from either place
     only flips the attribute. Nothing hovers on a touch screen: the empty
-    star stays away there (the menu has the toggle).
+    star stays away there (the menu has the toggle), and the menu button
+    shows on a selected tile only - a long press selects one - rather than
+    on every tile of the grid, where a tap on it would steal the tap that
+    opens the photo.
   {% endcomment %}
   {% if file.can_favorite %}
     <div class="absolute top-2 right-2 z-10">
@@ -197,7 +200,7 @@
   {% endif %}
   <button
     type="button"
-    class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus:opacity-100"
+    class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:hidden [@media(hover:none)]:group-data-[selected='1']:inline-flex [@media(hover:none)]:group-data-[selected='1']:opacity-100"
     title="More actions"
     aria-label="More actions for {{ file.name }}"
     aria-haspopup="menu"

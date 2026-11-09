@@ -105,6 +105,31 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         with f.content.open("rb") as handle:
             self.assertEqual(handle.read(), b"new")
 
+    def test_a_late_save_finds_a_file_trashed_before_its_folder(self):
+        """A file trashed on its own keeps its trash directory when its folder
+        is trashed after it, and the file that took its name rides inside the
+        folder's: the late save must not land on that one."""
+        docs = FileService.create_folder(self.user, "Docs")
+        first = self._make_file("a.txt", parent=docs, content=b"first")
+        loaded = File.objects.get(pk=first.pk)
+        self._trash(first)
+        second = self._make_file("a.txt", parent=docs, content=b"second")
+        self._trash(docs)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.update_content(
+                loaded, ContentFile(b"late", name="a.txt"), acting_user=self.user
+            )
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.content.name, f"trash/users/bob/{first.uuid}/a.txt")
+        self.assertEqual(second.content.name, f"trash/users/bob/{docs.uuid}/Docs/a.txt")
+        with first.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"late")
+        with second.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"second")
+
     def test_the_name_on_disk_is_the_one_the_trash_view_shows(self):
         f = self._make_file("Quarterly Report.pdf")
 

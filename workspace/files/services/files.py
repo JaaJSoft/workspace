@@ -716,20 +716,23 @@ class FileService:
         file_type = refine_with_name(detection.label, name or file_obj.name)
         content_field = File._meta.get_field("content")
 
-        def blob_path(instance):
-            if instance.deleted_at is not None:
-                return _storage.node_storage_path(instance)
+        def blob_path(row):
+            # In the trash the row is the only record of where the blob went:
+            # a file trashed on its own keeps its trash directory when its
+            # folder is trashed after it, and the file that took its name
+            # rides inside the folder's.
+            if row.deleted_at is not None and row.content:
+                return row.content.name
+            if row.deleted_at is not None:
+                return _storage.node_storage_path(row)
+            # Where the file's own name puts its blob, whatever the upload
+            # was called.
             return content_field.storage.get_available_name(
-                content_field.generate_filename(instance, instance.name),
+                content_field.generate_filename(row, row.name),
                 max_length=content_field.max_length,
             )
 
-        # Where the file's own name puts its blob, whatever the upload was
-        # called. Resolved early because the row write has to name the path in
-        # the same statement that claims the row.
-        storage_path = blob_path(file_obj)
         fields = {
-            "content": storage_path,
             "content_hash": upload_hash(content),
             "size": content.size,
             "mime_type": mime_type or detection.mime_type,
@@ -745,11 +748,15 @@ class FileService:
         }
         with transaction.atomic():
             FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
+            # The path comes from the row as claimed, not from the instance
+            # the caller loaded: a rename, a move or a trip to the trash that
+            # committed since has the blob somewhere else, and the claim left
+            # ``content`` as that move wrote it.
             current = FileService._claimed_row(file_obj)
-            if _location(current) != _location(file_obj):
-                storage_path = blob_path(current)
+            storage_path = blob_path(current)
+            if current.content.name != storage_path:
                 File.objects.filter(pk=file_obj.pk).update(content=storage_path)
-                fields["content"] = storage_path
+            fields["content"] = storage_path
             stored = content_field.storage.replace(storage_path, content)
             if stored != storage_path:
                 # A storage that renames around a collision moved the blob; the

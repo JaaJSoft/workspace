@@ -58,7 +58,11 @@ class ViewerPagerTests(PlaywrightTestCase):
         next_button = viewer.locator("[data-viewer-pager-next]")
         self.assertTrue(prev_button.is_visible())
         self.assertTrue(next_button.is_visible())
-        panel_top = viewer.locator("div:has(> #viewer-panel)").bounding_box()["y"]
+        # The header shows before the file does: the panel's wrapper stays
+        # hidden, and has no box, until the content has loaded.
+        panel = viewer.locator("div:has(> #viewer-panel)")
+        panel.wait_for(state="visible")
+        panel_top = panel.bounding_box()["y"]
         self.assertLess(next_button.bounding_box()["y"], panel_top)
 
         next_button.click()

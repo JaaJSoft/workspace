@@ -315,6 +315,66 @@ class SettledAnnouncementTests(PipelineTestCase):
         self.assertEqual(f.processing_status, Status.READY)
 
 
+@patch("workspace.files.sse_provider.push_file_event")
+class StepAnnouncementTests(PipelineTestCase):
+    """A step that declares an event pushes it as soon as it stored its result."""
+
+    def _announcing(self, name, *, stores=True, order=registry.DEFAULT_ORDER):
+        def process(file_obj):
+            self.journal.append((name, "process", file_obj.pk))
+            return stores
+
+        register_processor(
+            name,
+            applies_to=lambda f: True,
+            pending=File.objects.none,
+            process=process,
+            order=order,
+            announce="preview_ready",
+        )
+
+    def test_the_event_goes_out_before_the_later_steps_run(self, push):
+        push.side_effect = lambda file_obj, event_type, actor: self.journal.append(
+            ("push", event_type, file_obj.pk)
+        )
+        self._announcing("thumbs", order=10)
+        self._processor("slow")
+        f = self._upload()
+
+        run_pipeline(f.uuid)
+
+        self.assertEqual(
+            self.journal,
+            [
+                ("thumbs", "process", f.pk),
+                ("push", "preview_ready", f.pk),
+                ("slow", "process", f.pk),
+                ("push", "processing_settled", f.pk),
+            ],
+        )
+
+    def test_a_step_that_stored_nothing_announces_nothing(self, push):
+        self._announcing("thumbs", stores=False)
+        f = self._upload()
+
+        run_pipeline(f.uuid)
+
+        self.assertEqual(
+            [call.args[1] for call in push.call_args_list], ["processing_settled"]
+        )
+
+    def test_a_failed_announcement_does_not_stop_the_pipeline(self, push):
+        push.side_effect = ConnectionError("cache down")
+        self._announcing("thumbs", order=10)
+        self._processor("slow")
+        f = self._upload()
+
+        with self.assertLogs("workspace.files.services.processors", "ERROR"):
+            self.assertEqual(run_pipeline(f.uuid), Status.READY)
+
+        self.assertIn(("slow", "process", f.pk), self.journal)
+
+
 class PipelineDispatchTests(PipelineTestCase):
     def test_subscribed_to_uploads_and_content_replacements(self):
         for action in (FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED):

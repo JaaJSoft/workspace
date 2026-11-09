@@ -19,6 +19,9 @@ register_processor(
     applies_to=is_thumbnail_candidate,
     pending=pending_thumbnails_qs,
     process=refresh_thumbnail,
-    # Right behind the scan: the preview is what a user waits for.
+    # Right behind the scan: the preview is what a user waits for, so the
+    # listing is told as soon as it is drawn rather than once every later
+    # processor has run.
     order=10,
+    announce="preview_ready",
 )

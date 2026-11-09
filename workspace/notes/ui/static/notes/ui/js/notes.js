@@ -870,12 +870,7 @@ window.notesApp = function notesApp(config) {
             // mount once the note is deleted.
             this.teardownViewerPanel();
 
-            const resp = await fetch('/api/v1/files/' + this.selectedNote.uuid, {
-                method: 'DELETE',
-                headers: { 'X-CSRFToken': getCSRFToken() },
-            });
-
-            if (resp.ok) {
+            if (await this._fileOperation('trash', this.selectedNote.uuid)) {
                 const uuid = this.selectedNote.uuid;
                 this.notes = this.notes.filter(function(n) { return n.uuid !== uuid; });
                 this.closeNote();
@@ -895,11 +890,8 @@ window.notesApp = function notesApp(config) {
             }
             this.togglingFavorite = true;
             const isFav = note.is_favorite;
-            const resp = await fetch('/api/v1/files/' + note.uuid + '/favorite', {
-                method: isFav ? 'DELETE' : 'POST',
-                headers: { 'X-CSRFToken': getCSRFToken() },
-            });
-            if (resp.ok) {
+            const done = await window.fileActions.setFavorite([note.uuid], !isFav).catch(function() { return []; });
+            if (done.length) {
                 note.is_favorite = !isFav;
                 if (this.activeView === 'favorites' && isFav) {
                     const idx = this.notes.findIndex(function(n) { return n.uuid === note.uuid; });
@@ -1006,11 +998,8 @@ window.notesApp = function notesApp(config) {
                     iconClass: 'bg-error/10 text-error',
                 }).then(function(ok) {
                     if (!ok) return;
-                    fetch('/api/v1/files/' + uuid, {
-                        method: 'DELETE',
-                        headers: { 'X-CSRFToken': getCSRFToken() },
-                    }).then(function(resp) {
-                        if (!resp.ok) return;
+                    self._fileOperation('trash', uuid).then(function(trashed) {
+                        if (!trashed) return;
                         self.notes = self.notes.filter(function(n) { return n.uuid !== uuid; });
                         if (self.selectedNote && self.selectedNote.uuid === uuid) {
                             self.teardownViewerPanel();
@@ -1035,15 +1024,7 @@ window.notesApp = function notesApp(config) {
             });
             if (!folder) return;
 
-            const resp = await fetch('/api/v1/files/' + uuid, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken(),
-                },
-                body: JSON.stringify({ parent: folder.uuid }),
-            });
-            if (resp.ok) {
+            if (await this._fileOperation('move', uuid, { target: folder.uuid || null })) {
                 // Remove from current list if we're in a folder view and the note moved out
                 const self = this;
                 if (this.activeView === 'folder' || this.activeView === 'group_folder') {
@@ -1053,6 +1034,18 @@ window.notesApp = function notesApp(config) {
                     }
                 }
                 this.refreshSidebar();
+            }
+        },
+
+        // Run a batch operation on one note or folder; whether it went through.
+        async _fileOperation(kind, uuid, options) {
+            try {
+                const report = await window.fileOperations.run(kind, [uuid], options);
+                window.fileOperations.announce(report);
+                return window.operationDoneUuids(report, [uuid]).length > 0;
+            } catch (error) {
+                window.AppAlert.error(error.message);
+                return false;
             }
         },
 
@@ -1080,11 +1073,8 @@ window.notesApp = function notesApp(config) {
                     iconClass: 'bg-error/10 text-error',
                 }).then(function(ok) {
                     if (!ok) return;
-                    fetch('/api/v1/files/' + uuid, {
-                        method: 'DELETE',
-                        headers: { 'X-CSRFToken': getCSRFToken() },
-                    }).then(function(resp) {
-                        if (resp.ok) self.refreshSidebar();
+                    self._fileOperation('trash', uuid).then(function(trashed) {
+                        if (trashed) self.refreshSidebar();
                     });
                 });
             } else if (action.id === 'create_subfolder') {

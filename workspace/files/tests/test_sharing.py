@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShare
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -306,8 +307,12 @@ class ShareAPITests(APITestCase):
             shared_with=self.other_user,
         )
         self.client.force_authenticate(user=self.other_user)
-        resp = self.client.delete(f"/api/v1/files/{self.file.uuid}")
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        resp = run_operation(self.client, "trash", [self.file])
+        self.assertEqual(
+            outcome_of(resp), ({"failed": 1}, [(self.file.name, "not_allowed")])
+        )
+        self.file.refresh_from_db()
+        self.assertIsNone(self.file.deleted_at)
 
     # --- Permissions ---
 
@@ -430,8 +435,12 @@ class ShareAPITests(APITestCase):
             permission="rw",
         )
         self.client.force_authenticate(user=self.other_user)
-        resp = self.client.delete(f"/api/v1/files/{self.file.uuid}")
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        resp = run_operation(self.client, "trash", [self.file])
+        self.assertEqual(
+            outcome_of(resp), ({"failed": 1}, [(self.file.name, "not_allowed")])
+        )
+        self.file.refresh_from_db()
+        self.assertIsNone(self.file.deleted_at)
 
     # --- Favorites on shared files ---
 
@@ -442,9 +451,12 @@ class ShareAPITests(APITestCase):
             shared_with=self.other_user,
         )
         self.client.force_authenticate(user=self.other_user)
-        resp = self.client.post(f"/api/v1/files/{self.file.uuid}/favorite")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp.data["is_favorite"])
+        resp = self.client.post(
+            "/api/v1/files/favorites",
+            {"items": [str(self.file.uuid)], "value": True},
+            format="json",
+        )
+        self.assertEqual(resp.json()["items"], [str(self.file.uuid)])
 
     def test_shared_user_can_unfavorite(self):
         from workspace.files.models import FileFavorite
@@ -456,14 +468,22 @@ class ShareAPITests(APITestCase):
         )
         FileFavorite.objects.create(owner=self.other_user, file=self.file)
         self.client.force_authenticate(user=self.other_user)
-        resp = self.client.delete(f"/api/v1/files/{self.file.uuid}/favorite")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertFalse(resp.data["is_favorite"])
+        resp = self.client.post(
+            "/api/v1/files/favorites",
+            {"items": [str(self.file.uuid)], "value": False},
+            format="json",
+        )
+        self.assertEqual(resp.json()["items"], [str(self.file.uuid)])
+        self.assertFalse(FileFavorite.objects.filter(owner=self.other_user).exists())
 
     def test_unshared_user_cannot_favorite(self):
         self.client.force_authenticate(user=self.other_user)
-        resp = self.client.post(f"/api/v1/files/{self.file.uuid}/favorite")
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        resp = self.client.post(
+            "/api/v1/files/favorites",
+            {"items": [str(self.file.uuid)], "value": True},
+            format="json",
+        )
+        self.assertEqual(resp.json()["items"], [])
 
     def test_shared_favorite_appears_in_favorites_list(self):
         from workspace.files.models import FileFavorite

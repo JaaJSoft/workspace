@@ -1703,6 +1703,11 @@ class FileOperation(models.Model):
     class Kind(models.TextChoices):
         MOVE = "move", "Move"
         COPY = "copy", "Copy"
+        TRASH = "trash", "Trash"
+        RESTORE = "restore", "Restore"
+        PURGE = "purge", "Purge"
+        EMPTY_TRASH = "empty_trash", "Empty trash"
+        EXTRACT = "extract", "Extract"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

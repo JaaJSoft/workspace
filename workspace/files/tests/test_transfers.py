@@ -8,12 +8,11 @@ from django.utils import timezone
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileScan, FileShare, UserStorageQuota
 from workspace.files.services import FileService
+from workspace.files.services.refusals import Refusal, Refused
 from workspace.files.services.shortcuts import create_shortcut
 from workspace.files.services.transfers import (
     OnConflict,
     Outcome,
-    Refusal,
-    TransferRefused,
     copy_item,
     move_item,
 )
@@ -60,7 +59,7 @@ class TransferFixture(TestCase):
         self.report = _file(self.alice, "report.txt", self.src)
 
     def assertRefused(self, reason, transfer, *args, **kwargs):
-        with self.assertRaises(TransferRefused) as caught:
+        with self.assertRaises(Refused) as caught:
             transfer(*args, **kwargs)
         self.assertEqual(caught.exception.reason, reason)
         return caught.exception

@@ -8,6 +8,7 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShare
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.notifications.models import Notification
 from workspace.users.services.settings import set_setting
 
@@ -127,8 +128,8 @@ class NotificationLanguageTests(APITestCase):
             FileShare.objects.create(
                 file=self.file, shared_by=self.actor, shared_with=reader
             )
-        response = self.client.delete(f"/api/v1/files/{self.file.uuid}")
-        self.assertEqual(response.status_code, 204)
+        response = run_operation(self.client, "trash", [self.file])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertEqual(
             self._title_for(self.reader_fr), "actor a supprimé «\xa0doc.txt\xa0»"
         )

@@ -485,27 +485,10 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
-    async deleteItem(uuid) {
-      this._startLoading(uuid);
-      try {
-        const response = await fetch(`/api/v1/files/${uuid}`, {
-          method: 'DELETE',
-          headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
-        });
-        if (response.ok) {
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-        } else {
-          window.AppAlert.error(gettext('Failed to delete'));
-        }
-      } catch (error) {
-        window.AppAlert.error(gettext('Failed to delete'));
-      } finally {
-        this._stopLoading(uuid);
-      }
+    deleteItem(uuid) {
+      return this._runOperation('trash', [uuid]);
     },
+
 
     async confirmRestore(uuid, name, nodeType) {
       const confirmed = await AppDialog.confirm({
@@ -521,27 +504,10 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
-    async restoreItem(uuid) {
-      this._startLoading(uuid);
-      try {
-        const response = await fetch(`/api/v1/files/${uuid}/restore`, {
-          method: 'POST',
-          headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
-        });
-        if (response.ok) {
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-        } else {
-          window.AppAlert.error(gettext('Failed to restore'));
-        }
-      } catch (error) {
-        window.AppAlert.error(gettext('Failed to restore'));
-      } finally {
-        this._stopLoading(uuid);
-      }
+    restoreItem(uuid) {
+      return this._runOperation('restore', [uuid]);
     },
+
 
     async confirmPurge(uuid, name, nodeType) {
       const confirmed = await AppDialog.confirm({
@@ -557,27 +523,10 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
-    async purgeItem(uuid) {
-      this._startLoading(uuid);
-      try {
-        const response = await fetch(`/api/v1/files/${uuid}/purge`, {
-          method: 'DELETE',
-          headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
-        });
-        if (response.ok) {
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-        } else {
-          window.AppAlert.error(gettext('Failed to delete permanently'));
-        }
-      } catch (error) {
-        window.AppAlert.error(gettext('Failed to delete permanently'));
-      } finally {
-        this._stopLoading(uuid);
-      }
+    purgeItem(uuid) {
+      return this._runOperation('purge', [uuid]);
     },
+
 
     async confirmCleanTrash() {
       const confirmed = await AppDialog.confirm({
@@ -589,60 +538,45 @@ window.fileBrowser = function fileBrowser() {
         iconClass: 'bg-error/10 text-error'
       });
       if (confirmed) {
-        this.cleanTrash(true);
+        this.emptyTrash();
       }
     },
 
-    async cleanTrash(force = false) {
+    async emptyTrash() {
       this.cleaningTrash = true;
-      const url = force ? '/api/v1/files/trash/clean?force=1' : '/api/v1/files/trash/clean';
       try {
-        const response = await fetch(url, {
-          method: 'DELETE',
-          headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
-        });
-        if (response.ok) {
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-        } else {
-          window.AppAlert.error(gettext('Failed to clean trash'));
-        }
-      } catch (error) {
-        window.AppAlert.error(gettext('Failed to clean trash'));
+        await this._runOperation('empty_trash', []);
       } finally {
         this.cleaningTrash = false;
       }
     },
 
-    async toggleFavorite(uuid, isFavorite) {
-      if (!uuid) return;
-      this._startLoading(uuid);
+    // Runs a batch operation on *uuids*, greying their rows while it goes,
+    // and tells how it ended. *items* replaces the bare uuids when each one
+    // carries a conflict choice; *summary* words a success worth announcing.
+    // The listing refreshes on `file-operation-finished`, wherever the
+    // operation was started. Returns the report, or null when refused.
+    async _runOperation(kind, uuids, { target, items, summary } = {}) {
+      this._startLoading(...uuids);
       try {
-        const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
-          method: isFavorite ? 'DELETE' : 'POST',
-          headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
-        });
-        if (response.ok) {
-          this.refreshFolderBrowser();
-          return;
-        }
-        let data = {};
-        try {
-          data = await response.json();
-        } catch (error) {
-          data = {};
-        }
-        window.AppAlert.error(data.detail || gettext('Failed to update favorites'));
+        const options = target === undefined ? {} : { target };
+        const report = await window.fileOperations.run(kind, items || uuids, options);
+        window.fileOperations.announce(report, { summary });
+        return report;
       } catch (error) {
-        window.AppAlert.error(gettext('Failed to update favorites'));
+        window.AppAlert.error(error.message || gettext('Something went wrong'));
+        return null;
       } finally {
-        this._stopLoading(uuid);
+        this._stopLoading(...uuids);
       }
     },
+
+
+    async toggleFavorite(uuid, isFavorite) {
+      if (!uuid) return;
+      await this._mark(window.fileActions.setFavorite, [uuid], !isFavorite, gettext('Failed to update favorites'));
+    },
+
 
     // Blurs the previews for everyone who can open the files, or stops
     // blurring them.
@@ -678,32 +612,9 @@ window.fileBrowser = function fileBrowser() {
 
     async togglePin(uuid, isPinned) {
       if (!uuid) return;
-      this._startLoading(uuid);
-      try {
-        const response = await fetch(`/api/v1/files/${uuid}/pin`, {
-          method: isPinned ? 'DELETE' : 'POST',
-          headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
-        });
-        if (response.ok) {
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-          return;
-        }
-        let data = {};
-        try {
-          data = await response.json();
-        } catch (error) {
-          data = {};
-        }
-        window.AppAlert.error(data.detail || gettext('Failed to update pin'));
-      } catch (error) {
-        window.AppAlert.error(gettext('Failed to update pin'));
-      } finally {
-        this._stopLoading(uuid);
-      }
+      await this._mark(window.fileActions.setPinned, [uuid], !isPinned, gettext('Failed to update pin'));
     },
+
 
     // Bulk actions
     async bulkDeleteItems(uuids) {
@@ -730,92 +641,55 @@ window.fileBrowser = function fileBrowser() {
         if (!confirmed) return;
       }
 
-      this._startLoading(...uuids);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const uuid of uuids) {
-        try {
-          const response = await fetch(`/api/v1/files/${uuid}`, {
-            method: 'DELETE',
-            headers: { 'X-CSRFToken': getCSRFToken() }
-          });
-          if (response.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } catch (error) {
-          errorCount++;
-        }
-      }
-
-      if (errorCount > 0) {
-        window.AppAlert.warning(interpolate(
-          gettext('Deleted %(success)s items, %(failed)s failed'),
-          { success: successCount, failed: errorCount },
+      await this._runOperation('trash', uuids, {
+        summary: (report) => interpolate(
+          ngettext('Deleted %(count)s item', 'Deleted %(count)s items', report.counts.done || 0),
+          { count: report.counts.done || 0 },
           true
-        ));
-      } else {
-        window.AppAlert.success(interpolate(
-          ngettext('Deleted %(count)s item', 'Deleted %(count)s items', successCount),
-          { count: successCount },
-          true
-        ));
-      }
-
-      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        ),
+      });
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
-      this.refreshFolderBrowser();
-      this._stopLoading(...uuids);
     },
 
     async bulkToggleFavorite(uuids, add) {
       if (!uuids || uuids.length === 0) return;
-
-      this._startLoading(...uuids);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const uuid of uuids) {
-        try {
-          const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
-            method: add ? 'POST' : 'DELETE',
-            headers: { 'X-CSRFToken': getCSRFToken() }
-          });
-          if (response.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } catch (error) {
-          errorCount++;
-        }
+      const done = await this._mark(window.fileActions.setFavorite, uuids, add, gettext('Failed to update favorites'));
+      if (done) {
+        const success = done.length;
+        this._announceMarks(success, uuids.length - success, add
+          ? { done: ngettext('Added to favorites: %(count)s item', 'Added to favorites: %(count)s items', success),
+              partial: gettext('Added to favorites: %(success)s succeeded, %(failed)s failed') }
+          : { done: ngettext('Removed from favorites: %(count)s item', 'Removed from favorites: %(count)s items', success),
+              partial: gettext('Removed from favorites: %(success)s succeeded, %(failed)s failed') });
       }
-
-      const counts = { success: successCount, failed: errorCount, count: successCount };
-      if (errorCount > 0) {
-        window.AppAlert.warning(interpolate(
-          add
-            ? gettext('Added to favorites: %(success)s succeeded, %(failed)s failed')
-            : gettext('Removed from favorites: %(success)s succeeded, %(failed)s failed'),
-          counts,
-          true
-        ));
-      } else {
-        window.AppAlert.success(interpolate(
-          add
-            ? ngettext('Added to favorites: %(count)s item', 'Added to favorites: %(count)s items', successCount)
-            : ngettext('Removed from favorites: %(count)s item', 'Removed from favorites: %(count)s items', successCount),
-          counts,
-          true
-        ));
-      }
-
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
-      this.refreshFolderBrowser();
-      this._stopLoading(...uuids);
     },
+
+    // Mark or unmark *uuids* in one request, greying their rows meanwhile.
+    // Resolves to the uuids now as asked, or null when the request failed.
+    async _mark(setter, uuids, value, failure) {
+      this._startLoading(...uuids);
+      try {
+        const done = await setter(uuids, value);
+        window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        this.refreshFolderBrowser();
+        return done;
+      } catch (error) {
+        window.AppAlert.error(error.message || failure);
+        return null;
+      } finally {
+        this._stopLoading(...uuids);
+      }
+    },
+
+    _announceMarks(success, failed, { done, partial }) {
+      if (failed) {
+        window.AppAlert.warning(interpolate(partial, { success, failed }, true));
+      } else {
+        window.AppAlert.success(interpolate(done, { count: success }, true));
+      }
+    },
+
 
     async bulkRestoreItems(uuids) {
       if (!uuids || uuids.length === 0) return;
@@ -831,44 +705,14 @@ window.fileBrowser = function fileBrowser() {
       });
       if (!confirmed) return;
 
-      this._startLoading(...uuids);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const uuid of uuids) {
-        try {
-          const response = await fetch(`/api/v1/files/${uuid}/restore`, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': getCSRFToken() }
-          });
-          if (response.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } catch (error) {
-          errorCount++;
-        }
-      }
-
-      if (errorCount > 0) {
-        window.AppAlert.warning(interpolate(
-          gettext('Restored %(success)s items, %(failed)s failed'),
-          { success: successCount, failed: errorCount },
+      await this._runOperation('restore', uuids, {
+        summary: (report) => interpolate(
+          ngettext('Restored %(count)s item', 'Restored %(count)s items', report.counts.done || 0),
+          { count: report.counts.done || 0 },
           true
-        ));
-      } else {
-        window.AppAlert.success(interpolate(
-          ngettext('Restored %(count)s item', 'Restored %(count)s items', successCount),
-          { count: successCount },
-          true
-        ));
-      }
-
-      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        ),
+      });
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
-      this.refreshFolderBrowser();
-      this._stopLoading(...uuids);
     },
 
     async bulkPurgeItems(uuids) {
@@ -893,44 +737,18 @@ window.fileBrowser = function fileBrowser() {
       });
       if (!confirmed) return;
 
-      this._startLoading(...uuids);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const uuid of uuids) {
-        try {
-          const response = await fetch(`/api/v1/files/${uuid}/purge`, {
-            method: 'DELETE',
-            headers: { 'X-CSRFToken': getCSRFToken() }
-          });
-          if (response.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } catch (error) {
-          errorCount++;
-        }
-      }
-
-      if (errorCount > 0) {
-        window.AppAlert.warning(interpolate(
-          gettext('Permanently deleted %(success)s items, %(failed)s failed'),
-          { success: successCount, failed: errorCount },
+      await this._runOperation('purge', uuids, {
+        summary: (report) => interpolate(
+          ngettext(
+            'Permanently deleted %(count)s item',
+            'Permanently deleted %(count)s items',
+            report.counts.done || 0
+          ),
+          { count: report.counts.done || 0 },
           true
-        ));
-      } else {
-        window.AppAlert.success(interpolate(
-          ngettext('Permanently deleted %(count)s item', 'Permanently deleted %(count)s items', successCount),
-          { count: successCount },
-          true
-        ));
-      }
-
-      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        ),
+      });
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
-      this.refreshFolderBrowser();
-      this._stopLoading(...uuids);
     },
 
     bulkDownload(uuids) {
@@ -939,51 +757,18 @@ window.fileBrowser = function fileBrowser() {
 
     async bulkTogglePin(uuids, add) {
       if (!uuids || uuids.length === 0) return;
-
-      this._startLoading(...uuids);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const uuid of uuids) {
-        try {
-          const response = await fetch(`/api/v1/files/${uuid}/pin`, {
-            method: add ? 'POST' : 'DELETE',
-            headers: { 'X-CSRFToken': getCSRFToken() }
-          });
-          if (response.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } catch (error) {
-          errorCount++;
-        }
+      const done = await this._mark(window.fileActions.setPinned, uuids, add, gettext('Failed to update pin'));
+      if (done) {
+        const success = done.length;
+        this._announceMarks(success, uuids.length - success, add
+          ? { done: ngettext('Pinned %(count)s item', 'Pinned %(count)s items', success),
+              partial: gettext('Pinned %(success)s items, %(failed)s failed') }
+          : { done: ngettext('Unpinned %(count)s item', 'Unpinned %(count)s items', success),
+              partial: gettext('Unpinned %(success)s items, %(failed)s failed') });
       }
-
-      const counts = { success: successCount, failed: errorCount, count: successCount };
-      if (errorCount > 0) {
-        window.AppAlert.warning(interpolate(
-          add
-            ? gettext('Pinned %(success)s items, %(failed)s failed')
-            : gettext('Unpinned %(success)s items, %(failed)s failed'),
-          counts,
-          true
-        ));
-      } else {
-        window.AppAlert.success(interpolate(
-          add
-            ? ngettext('Pinned %(count)s item', 'Pinned %(count)s items', successCount)
-            : ngettext('Unpinned %(count)s item', 'Unpinned %(count)s items', successCount),
-          counts,
-          true
-        ));
-      }
-
-      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
-      this.refreshFolderBrowser();
-      this._stopLoading(...uuids);
     },
+
 
     // Clipboard operations
     cutToClipboard(items) {
@@ -1085,63 +870,19 @@ window.fileBrowser = function fileBrowser() {
         targetFolderId,
       });
 
-      const itemUuids = items.map(i => i.uuid);
-      this._startLoading(...itemUuids);
-      const outcome = { done: 0, replaced: 0, renamed: 0, skipped: 0, failed: 0 };
-      let firstError = '';
-
-      for (const item of items) {
-        const onConflict = decisions.get(item);
-        if (onConflict === 'skip') {
-          outcome.skipped++;
-          continue;
-        }
-        const payload = { parent: targetFolderId };
-        if (onConflict) {
-          payload.on_conflict = onConflict;
-        } else if (collidable.includes(item)) {
-          // No collision at pre-check time. If one appears before the request
-          // lands, surface it rather than let the copy default silently rename.
-          payload.on_conflict = 'error';
-        }
-        try {
-          const response = await fetch(
-            isCopy ? `/api/v1/files/${item.uuid}/copy` : `/api/v1/files/${item.uuid}`,
-            {
-              method: isCopy ? 'POST' : 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-              body: JSON.stringify(payload),
-            }
-          );
-          let body = {};
-          try { body = await response.json(); } catch (_) {}
-          if (!response.ok) {
-            outcome.failed++;
-            firstError = firstError || window.fileActions.firstErrorMessage(body);
-          } else if (isCopy ? response.status === 200 : body.uuid && body.uuid !== item.uuid) {
-            // A copy answers 201 unless the existing file took the content;
-            // a move answers with the moved row unless another row took it.
-            outcome.replaced++;
-          } else if (onConflict && body.name && body.name !== item.name) {
-            outcome.renamed++;
-          } else {
-            outcome.done++;
-          }
-        } catch (error) {
-          outcome.failed++;
-        }
-      }
-
-      const summary = this._pasteSummary(isCopy, outcome);
-      if (outcome.failed > 0) {
-        window.AppAlert.warning(firstError ? `${summary} - ${firstError}` : summary);
-      } else if (summary) {
-        window.AppAlert.success(summary);
-      }
-
-      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-      this.refreshFolderBrowser();
-      this._stopLoading(...itemUuids);
+      // A collision decided as 'skip' is the server's to skip, so it counts
+      // with the rest. An item with no collision at pre-check time still
+      // refuses one that appears before its turn, rather than let the copy
+      // default rename it silently.
+      const payload = items.map((item) => {
+        const onConflict = decisions.get(item) || (collidable.includes(item) ? 'error' : null);
+        return onConflict ? { uuid: item.uuid, on_conflict: onConflict } : { uuid: item.uuid };
+      });
+      await this._runOperation(isCopy ? 'copy' : 'move', items.map((item) => item.uuid), {
+        target: targetFolderId,
+        items: payload,
+        summary: (report) => this._pasteSummary(isCopy, report.counts),
+      });
     },
 
     async createShortcut(uuid, name) {
@@ -1199,68 +940,17 @@ window.fileBrowser = function fileBrowser() {
       });
       if (!folder) return;
 
-      try {
-        const resp = await fetch(`/api/v1/files/${uuid}/extract`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken(),
-          },
-          body: JSON.stringify({ destination_uuid: folder.uuid }),
-        });
-        if (!resp.ok) {
-          const body = await resp.json().catch(() => ({}));
-          window.AppAlert.error(body.detail || gettext('Extraction failed'));
-          return;
-        }
-        const data = await resp.json();
-        window.AppAlert.success(interpolate(
-          ngettext('Extracted %(count)s item', 'Extracted %(count)s items', data.files_created),
-          { count: data.files_created },
-          true
-        ));
-
-        // If the user is currently viewing the destination folder, refresh.
-        // Normalise both sides to null so root (uuid=null) compares against
-        // an empty currentFolder ('' from the dataset) consistently.
-        const destId = folder.uuid || null;
-        const currentId = this.currentFolder || null;
-        if (destId === currentId) {
-          this.refreshFolderBrowser();
-        }
-      } catch (e) {
-        window.AppAlert.error(gettext('Extraction failed'));
-      }
+      await this._runOperation('extract', [uuid], {
+        target: folder.uuid || null,
+        summary: () => interpolate(gettext('"%(name)s" extracted'), { name }, true),
+      });
     },
 
     async pinFolder(uuid) {
       if (!uuid) return;
-      this._startLoading(uuid);
-      try {
-        const response = await fetch(`/api/v1/files/${uuid}/pin`, {
-          method: 'POST',
-          headers: {
-            'X-CSRFToken': getCSRFToken()
-          }
-        });
-        if (response.ok) {
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-          return;
-        }
-        let data = {};
-        try {
-          data = await response.json();
-        } catch (error) {
-          data = {};
-        }
-        window.AppAlert.error(data.detail || gettext('Failed to pin folder'));
-      } catch (error) {
-        window.AppAlert.error(gettext('Failed to pin folder'));
-      } finally {
-        this._stopLoading(uuid);
-      }
+      await this._mark(window.fileActions.setPinned, [uuid], true, gettext('Failed to pin folder'));
     },
+
 
     async syncAndRefreshFolderBrowser() {
       try {
@@ -1367,6 +1057,13 @@ window.fileBrowser = function fileBrowser() {
         if (!document.querySelector(`#folder-browser [data-uuid="${CSS.escape(uuid)}"]`)) return;
         clearTimeout(this._processingRefreshTimer);
         this._processingRefreshTimer = setTimeout(() => this.refreshFolderBrowser(), 400);
+      });
+
+      // Whoever started it - this page, another tab's panel, a page reload -
+      // what an operation changed shows once it is over.
+      window.addEventListener('file-operation-finished', () => {
+        window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        this.refreshFolderBrowser();
       });
 
       // Listen for form submissions from dialogs

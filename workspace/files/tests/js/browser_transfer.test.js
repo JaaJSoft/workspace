@@ -1,28 +1,38 @@
 'use strict';
 
 // Moving and copying items - the paste of a cut/copied clipboard and the
-// drop of a dragged selection share one transfer routine. These tests pin
-// the requests it sends and the summary it announces.
+// drop of a dragged selection share one transfer routine, which hands the
+// whole selection to one batch operation. These tests pin the operation it
+// asks for and the summary it announces.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
-function jsonResponse(status, body) {
-  return { ok: status >= 200 && status < 300, status, json: async () => body };
+const OPERATIONS = '/api/v1/files/operations';
+
+// What the server reports once the operation is over.
+function finished(kind, counts, errors = []) {
+  return {
+    uuid: 'op-1', kind, status: 'completed', target: null, target_name: '',
+    total: 1, processed: 1, bytes_total: null, bytes_done: 0, counts, errors,
+    cancel_requested: false,
+  };
 }
 
-function makeBrowser({ currentFolder = '', clipboard = {}, respond } = {}) {
+function makeBrowser({ currentFolder = '', clipboard = {}, report }) {
   const alerts = [];
   const requests = [];
   const events = [];
   const ctx = loadScripts([
+    'workspace/files/ui/static/files/ui/js/file_operations.js',
     'workspace/files/ui/static/files/ui/js/file_actions.js',
     'workspace/files/ui/static/files/ui/js/browser.js',
   ], {
     tagsMixin: () => ({ toggleFileTag: async () => {} }),
     propertiesPanelMixin: () => ({}),
     document: {
+      addEventListener: () => {},
       getElementById: (id) =>
         id === 'folder-browser' ? { dataset: { folder: currentFolder } } : null,
       querySelector: () => null,
@@ -35,12 +45,15 @@ function makeBrowser({ currentFolder = '', clipboard = {}, respond } = {}) {
     addEventListener: () => {},
     dispatchEvent: (event) => { events.push(event.type); return true; },
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
-    fetch: async (url, options = {}) => {
-      const body = options.body ? JSON.parse(options.body) : null;
-      requests.push({ url, method: options.method || 'GET', body });
-      return respond(url, options.method || 'GET', body);
-    },
   });
+  const store = ctx.createFileOperations({
+    request: async (url, { method, body }) => {
+      requests.push([method, url, body === undefined ? null : JSON.parse(JSON.stringify(body))]);
+      return method === 'POST' ? { ok: true, status: 202, body: report } : { ok: true, status: 204, body: null };
+    },
+    notify: (type) => events.push(type),
+  });
+  ctx.Alpine = { store: () => store };
   ctx.AppAlert = {
     info: (m) => alerts.push(['info', m]),
     success: (m) => alerts.push(['success', m]),
@@ -52,65 +65,61 @@ function makeBrowser({ currentFolder = '', clipboard = {}, respond } = {}) {
     getItems: () => [], isCopy: () => false, ...clipboard,
   };
   const browser = ctx.fileBrowser();
-  browser.$ajax = (url, options) => { events.push(`ajax:${options.target}`); };
-  return { browser, alerts, requests, events };
+  const posted = () => requests.filter(([method]) => method === 'POST').map(([, url, body]) => [url, body]);
+  return { browser, alerts, posted, events };
 }
 
-test('pasting cut items moves each one into the current folder', async () => {
+test('pasting cut items moves them all in one operation into the current folder', async () => {
   const items = [
     { uuid: 'a', name: 'report.pdf', nodeType: 'file', sourceFolder: 'src' },
     { uuid: 'b', name: 'Archive', nodeType: 'folder', sourceFolder: 'src' },
   ];
-  const { browser, alerts, requests, events } = makeBrowser({
+  const { browser, alerts, posted, events } = makeBrowser({
     currentFolder: 'target',
     clipboard: { getItems: () => items, isCopy: () => false },
-    respond: (url) => {
-      const uuid = url.split('/').pop();
-      return jsonResponse(200, { uuid, name: items.find((i) => i.uuid === uuid).name });
-    },
+    report: finished('move', { done: 2 }),
   });
 
   await browser.pasteFromClipboard();
 
-  assert.deepEqual(Array.from(requests, (r) => [r.method, r.url, { ...r.body }]), [
-    ['PATCH', '/api/v1/files/a', { parent: 'target', on_conflict: 'rename' }],
-    ['PATCH', '/api/v1/files/b', { parent: 'target' }],
-  ]);
+  assert.deepEqual(posted(), [[OPERATIONS, {
+    kind: 'move',
+    items: [{ uuid: 'a', on_conflict: 'rename' }, { uuid: 'b' }],
+    target: 'target',
+  }]]);
   assert.deepEqual(Array.from(alerts), [['success', 'Moved 2 items']]);
   assert.ok(events.includes('clipboard-cleared'), 'a cut clipboard is spent by the paste');
-  assert.ok(events.includes('ajax:folder-browser'), 'the listing is refreshed');
+  assert.ok(events.includes('file-operation-finished'), 'the listing hears about the end');
 });
 
-test('pasting copied items posts a copy and keeps the clipboard', async () => {
+test('pasting copied items copies them and keeps the clipboard', async () => {
   const items = [{ uuid: 'a', name: 'report.pdf', nodeType: 'file', sourceFolder: 'target' }];
-  const { browser, alerts, requests, events } = makeBrowser({
+  const { browser, alerts, posted, events } = makeBrowser({
     currentFolder: 'target',
     clipboard: { getItems: () => items, isCopy: () => true },
-    respond: () => jsonResponse(201, { uuid: 'a2', name: 'report (Copy).pdf' }),
+    report: finished('copy', { done: 1 }),
   });
 
   await browser.pasteFromClipboard();
 
-  assert.deepEqual(Array.from(requests, (r) => [r.method, r.url, { ...r.body }]), [
-    ['POST', '/api/v1/files/a/copy', { parent: 'target' }],
-  ]);
+  assert.deepEqual(posted(), [[OPERATIONS, { kind: 'copy', items: [{ uuid: 'a' }], target: 'target' }]]);
   assert.deepEqual(Array.from(alerts), [['success', 'Copied 1 item']]);
   assert.ok(!events.includes('clipboard-cleared'), 'a copied clipboard can be pasted again');
 });
 
-test('a refused move surfaces the server reason', async () => {
+test('an item the server turned down surfaces its reason', async () => {
   const items = [{ uuid: 'a', name: 'Archive', nodeType: 'folder', sourceFolder: 'src' }];
   const { browser, alerts } = makeBrowser({
     currentFolder: 'target',
     clipboard: { getItems: () => items, isCopy: () => false },
-    respond: () => jsonResponse(400, { parent: ['Cannot move a folder into itself.'] }),
+    report: finished('move', { failed: 1 }, [
+      { uuid: 'a', name: 'Archive', reason: 'into_itself', message: 'A folder cannot go inside itself.' },
+    ]),
   });
 
   await browser.pasteFromClipboard();
 
-  assert.deepEqual(Array.from(alerts), [
-    ['warning', '1 failed - Cannot move a folder into itself.'],
-  ]);
+  assert.deepEqual(Array.from(alerts), [['warning', '1 failed - A folder cannot go inside itself.']]);
 });
 
 test('a drop moves the dragged items into the target folder and clears the selection', async () => {
@@ -118,48 +127,61 @@ test('a drop moves the dragged items into the target folder and clears the selec
     { uuid: 'a', name: 'report.pdf', nodeType: 'file', sourceFolder: 'src' },
     { uuid: 'b', name: 'Archive', nodeType: 'folder', sourceFolder: 'src' },
   ];
-  const { browser, alerts, requests, events } = makeBrowser({
+  const { browser, alerts, posted, events } = makeBrowser({
     currentFolder: 'src',
-    respond: (url) => {
-      const uuid = url.split('/').pop();
-      return jsonResponse(200, { uuid, name: items.find((i) => i.uuid === uuid).name });
-    },
+    report: finished('move', { done: 2 }),
   });
 
   await browser.moveItemsTo(items, 'dest');
 
-  assert.deepEqual(Array.from(requests, (r) => [r.method, r.url, { ...r.body }]), [
-    ['PATCH', '/api/v1/files/a', { parent: 'dest', on_conflict: 'rename' }],
-    ['PATCH', '/api/v1/files/b', { parent: 'dest' }],
-  ]);
+  assert.deepEqual(posted(), [[OPERATIONS, {
+    kind: 'move',
+    items: [{ uuid: 'a', on_conflict: 'rename' }, { uuid: 'b' }],
+    target: 'dest',
+  }]]);
   assert.deepEqual(Array.from(alerts), [['success', 'Moved 2 items']]);
   assert.ok(events.includes('clear-file-selection'));
-  assert.ok(events.includes('ajax:folder-browser'), 'the listing is refreshed');
   assert.ok(!events.includes('clipboard-cleared'), 'a drop never touches the clipboard');
 });
 
-test('dropping onto the root sends a null parent', async () => {
+test('dropping onto the root names the root as the destination', async () => {
   const items = [{ uuid: 'b', name: 'Archive', nodeType: 'folder', sourceFolder: 'src' }];
-  const { browser, requests } = makeBrowser({
-    currentFolder: 'src',
-    respond: () => jsonResponse(200, { uuid: 'b', name: 'Archive' }),
-  });
+  const { browser, posted } = makeBrowser({ currentFolder: 'src', report: finished('move', { done: 1 }) });
+
   await browser.moveItemsTo(items, null);
-  assert.deepEqual(Array.from(requests, (r) => [r.method, r.url, { ...r.body }]), [
-    ['PATCH', '/api/v1/files/b', { parent: null }],
-  ]);
+
+  assert.deepEqual(posted(), [[OPERATIONS, { kind: 'move', items: [{ uuid: 'b' }], target: null }]]);
 });
 
 test('a dropped file whose origin is unknown is still checked against the root', async () => {
   // Items dragged from a listing that is not a folder carry no sourceFolder:
   // the paste routine must not mistake that for "already at the root".
   const items = [{ uuid: 'a', name: 'report.pdf', nodeType: 'file' }];
-  const { browser, requests } = makeBrowser({
-    currentFolder: '',
-    respond: () => jsonResponse(200, { uuid: 'a', name: 'report.pdf' }),
-  });
+  const { browser, posted } = makeBrowser({ currentFolder: '', report: finished('move', { done: 1 }) });
+
   await browser.moveItemsTo(items, null);
-  assert.deepEqual(Array.from(requests, (r) => [r.method, r.url, { ...r.body }]), [
-    ['PATCH', '/api/v1/files/a', { parent: null, on_conflict: 'rename' }],
-  ]);
+
+  assert.deepEqual(posted(), [[OPERATIONS, {
+    kind: 'move', items: [{ uuid: 'a', on_conflict: 'rename' }], target: null,
+  }]]);
+});
+
+test('a bulk trash is one operation and announces what went', async () => {
+  const { browser, alerts, posted, events } = makeBrowser({ report: finished('trash', { done: 2 }) });
+  browser._getItemsFromUuids = () => [];
+
+  await browser.bulkDeleteItems(['a', 'b']);
+
+  assert.deepEqual(posted(), [[OPERATIONS, { kind: 'trash', items: [{ uuid: 'a' }, { uuid: 'b' }] }]]);
+  assert.deepEqual(Array.from(alerts), [['success', 'Deleted 2 items']]);
+  assert.ok(events.includes('clear-file-selection'));
+});
+
+test('emptying the trash names no items', async () => {
+  const { browser, posted } = makeBrowser({ report: finished('empty_trash', { done: 4 }) });
+
+  await browser.emptyTrash();
+
+  assert.deepEqual(posted(), [[OPERATIONS, { kind: 'empty_trash' }]]);
+  assert.equal(browser.cleaningTrash, false);
 });

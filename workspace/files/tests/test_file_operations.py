@@ -1,4 +1,6 @@
+import io
 import uuid
+import zipfile
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -12,6 +14,7 @@ from django.utils import timezone
 
 from workspace.files.models import File, FileOperation, FileShare
 from workspace.files.services import FileService, operations
+from workspace.files.services import extract as extract_module
 from workspace.files.services.operations import (
     Slice,
     TargetUnavailable,
@@ -30,6 +33,11 @@ User = get_user_model()
 
 COPY = FileOperation.Kind.COPY
 MOVE = FileOperation.Kind.MOVE
+TRASH = FileOperation.Kind.TRASH
+RESTORE = FileOperation.Kind.RESTORE
+PURGE = FileOperation.Kind.PURGE
+EMPTY_TRASH = FileOperation.Kind.EMPTY_TRASH
+EXTRACT = FileOperation.Kind.EXTRACT
 Status = FileOperation.Status
 
 
@@ -660,3 +668,165 @@ class TaskTests(OperationFixture):
         requeue.assert_called_once_with(args=[str(operation.pk)], countdown=0)
         operation.refresh_from_db()
         self.assertEqual(operation.processed, 1)
+
+
+def _zip(entries):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, data in entries:
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            archive.writestr(info, data)
+    return buffer.getvalue()
+
+
+class TrashKindsTests(OperationFixture):
+    def trashed(self, *nodes):
+        for node in nodes:
+            FileService.soft_delete(node, acting_user=node.owner)
+            node.refresh_from_db()
+        return nodes
+
+    def test_a_trash_batch_trashes_every_item_it_may(self):
+        team = Group.objects.create(name="Design")
+        self.alice.groups.add(team)
+        team_root = FileService.create_folder(self.alice, "Design", group=team)
+        operation = self.start(TRASH, [*self.files, team_root], None)
+
+        self.run_to_end(operation)
+
+        self.assertEqual(operation.counts, {"done": 3, "failed": 1})
+        self.assertEqual(
+            operation.errors,
+            [{"uuid": str(team_root.pk), "name": "Design", "reason": "not_allowed"}],
+        )
+        self.assertEqual(_names(self.src), [])
+        self.assertIsNotNone(File.objects.get(pk=self.files[0].pk).deleted_at)
+
+    def test_items_of_a_trash_batch_carry_no_conflict_choice(self):
+        operation = self.start(TRASH, self.files[:1], None)
+        self.assertEqual(operation.items, [{"uuid": str(self.files[0].pk)}])
+        self.assertIsNone(operation.target_uuid)
+
+    def test_a_restore_batch_brings_items_back(self):
+        self.trashed(*self.files)
+        operation = self.start(RESTORE, self.files, None)
+
+        self.run_to_end(operation)
+
+        self.assertEqual(operation.counts, {"done": 3})
+        self.assertEqual(_names(self.src), ["a.txt", "b.txt", "c.txt"])
+
+    def test_a_restore_batch_looks_for_items_in_the_trash_only(self):
+        operation = self.start(RESTORE, self.files[:1], None)
+
+        self.run_to_end(operation)
+
+        self.assertEqual(operation.errors[0]["reason"], "not_found")
+
+    def test_a_purge_batch_deletes_trashed_items_for_good(self):
+        self.trashed(*self.files[:2])
+        operation = self.start(PURGE, self.files, None)
+
+        self.run_to_end(operation)
+
+        self.assertEqual(operation.counts, {"done": 2, "failed": 1})
+        self.assertEqual(operation.errors[0]["uuid"], str(self.files[2].pk))
+        self.assertEqual(operation.errors[0]["reason"], "not_found")
+        self.assertFalse(
+            File.objects.filter(pk__in=[f.pk for f in self.files[:2]]).exists()
+        )
+
+    def test_someone_elses_trash_answers_like_nothing(self):
+        theirs = _file(self.bob, "theirs.txt", None)
+        self.trashed(theirs)
+        operation = self.start(PURGE, [theirs, uuid.uuid4()], None)
+
+        self.run_to_end(operation)
+
+        hidden, absent = operation.errors
+        self.assertEqual({**hidden, "uuid": None}, {**absent, "uuid": None})
+        self.assertTrue(File.objects.filter(pk=theirs.pk).exists())
+
+    def test_emptying_the_trash_lists_what_the_user_trashed_at_its_top(self):
+        self.trashed(self.src)
+        loose = _file(self.alice, "loose.txt", self.dst)
+        self.trashed(loose)
+        theirs = _file(self.bob, "theirs.txt", None)
+        self.trashed(theirs)
+
+        operation = create_operation(self.alice, EMPTY_TRASH, [])
+
+        self.assertEqual(
+            sorted(item["uuid"] for item in operation.items),
+            sorted([str(self.src.pk), str(loose.pk)]),
+        )
+        self.run_to_end(operation)
+        self.assertEqual(operation.counts, {"done": 2})
+        self.assertFalse(
+            File.objects.filter(owner=self.alice, deleted_at__isnull=False).exists()
+        )
+        self.assertTrue(File.objects.filter(pk=theirs.pk).exists())
+
+    def test_emptying_the_trash_leaves_what_other_members_trashed(self):
+        team = Group.objects.create(name="Design")
+        self.alice.groups.add(team)
+        self.bob.groups.add(team)
+        team_root = FileService.create_folder(self.alice, "Design", group=team)
+        theirs = FileService.create_file(
+            self.bob,
+            "theirs.txt",
+            parent=team_root,
+            group=team,
+            content=ContentFile(b"x", name="theirs.txt"),
+        )
+        self.trashed(theirs)
+
+        operation = create_operation(self.alice, EMPTY_TRASH, [])
+
+        self.assertEqual(operation.items, [])
+        self.run_to_end(operation)
+        self.assertEqual(operation.status, Status.COMPLETED)
+        self.assertTrue(File.objects.filter(pk=theirs.pk).exists())
+
+
+class ExtractKindTests(OperationFixture):
+    def archive(self, payload, name="archive.zip"):
+        node = _file(self.alice, name, self.src, payload)
+        node.type = "zip"
+        node.save(update_fields=["type"])
+        return node
+
+    def test_an_archive_is_extracted_into_the_destination(self):
+        archive = self.archive(_zip([("one.txt", b"1"), ("sub/two.txt", b"2")]))
+        operation = self.start(EXTRACT, [archive], self.dst)
+
+        self.run_to_end(operation)
+
+        self.assertEqual(operation.counts, {"done": 1})
+        self.assertEqual(_names(self.dst), ["one.txt", "sub"])
+
+    def test_an_unreadable_archive_is_reported_without_its_contents(self):
+        archive = self.archive(b"PK\x03\x04 garbage")
+        operation = self.start(EXTRACT, [archive], self.dst)
+
+        with self.assertLogs(extract_module.logger, level="INFO"):
+            self.run_to_end(operation)
+
+        self.assertEqual(operation.errors[0]["reason"], "archive_invalid")
+        self.assertEqual(_names(self.dst), [])
+
+    def test_an_archive_over_the_size_limit_is_refused(self):
+        archive = self.archive(_zip([("big.txt", b"x" * 1000)]))
+        operation = self.start(EXTRACT, [archive], self.dst)
+
+        with self.settings(FILES_EXTRACT_MAX_BYTES=10):
+            self.run_to_end(operation)
+
+        self.assertEqual(operation.errors[0]["reason"], "archive_too_large")
+
+    def test_only_an_archive_is_extracted(self):
+        operation = self.start(EXTRACT, self.files[:1], self.dst)
+
+        self.run_to_end(operation)
+
+        self.assertEqual(operation.errors[0]["reason"], "not_allowed")

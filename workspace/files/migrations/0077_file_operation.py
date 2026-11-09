@@ -8,7 +8,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("files", "0076_retype_ebooks"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -31,7 +30,16 @@ class Migration(migrations.Migration):
                 (
                     "kind",
                     models.CharField(
-                        choices=[("move", "Move"), ("copy", "Copy")], max_length=16
+                        choices=[
+                            ("move", "Move"),
+                            ("copy", "Copy"),
+                            ("trash", "Trash"),
+                            ("restore", "Restore"),
+                            ("purge", "Purge"),
+                            ("empty_trash", "Empty trash"),
+                            ("extract", "Extract"),
+                        ],
+                        max_length=16,
                     ),
                 ),
                 (

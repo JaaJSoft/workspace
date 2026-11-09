@@ -26,6 +26,7 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
       'workspace/photos/ui/static/photos/ui/js/capture_details.js',
       'workspace/photos/ui/static/photos/ui/js/timeline_sentinel.js',
       'workspace/photos/ui/static/photos/ui/js/photos.js',
+      'workspace/files/ui/static/files/ui/js/file_operations.js',
     ],
     {
       sidebarPreference: { initial: () => collapsed, save: (m, v) => saved.push([m, v]) },
@@ -45,9 +46,49 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
       URLSearchParams,
       navHistory: { push() {}, replace() {}, returnTo() {}, state: () => ({}) },
       ...extra,
+      // file_operations.js registers its store on load.
+      document: {
+        addEventListener() {},
+        ...(extra.document || { getElementById: () => null, querySelector: () => null }),
+      },
     },
   );
   return { ctx, saved, dispatched, observers };
+}
+
+// Answers every batch operation as finished, failing the items in *failed*;
+// returns the [kind, uuids] of each operation asked for.
+function withOperations(ctx, failed = []) {
+  const asked = [];
+  const store = ctx.createFileOperations({
+    request: async (url, { method, body }) => {
+      if (method !== 'POST') return { ok: true, status: 204, body: null };
+      const uuids = body.items.map((item) => item.uuid);
+      asked.push([body.kind, uuids]);
+      const errors = uuids.filter((uuid) => failed.includes(uuid)).map((uuid) => ({
+        uuid, name: uuid, reason: 'not_allowed', message: 'Not allowed.',
+      }));
+      const counts = { done: uuids.length - errors.length };
+      if (errors.length) counts.failed = errors.length;
+      return {
+        ok: true,
+        status: 202,
+        body: { uuid: 'op', kind: body.kind, status: 'completed', total: uuids.length, processed: uuids.length, counts, errors },
+      };
+    },
+  });
+  ctx.Alpine = { store: () => store };
+  return asked;
+}
+
+// Records each favorite request; refuses the uuids in *refused*.
+function favoriteActions(requests, refused = []) {
+  return {
+    async setFavorite(uuids, favorite) {
+      requests.push([Array.from(uuids), favorite]);
+      return Array.from(uuids).filter((uuid) => !refused.includes(uuid));
+    },
+  };
 }
 
 test('the stored preference collapses the sidebar on desktop only', () => {
@@ -398,8 +439,7 @@ test('favoriting flips the tile star once the server agrees', async () => {
   const requests = [];
   const shown = tile();
   const app = load({
-    fetch: (url, opts) => { requests.push([url, opts.method]); return Promise.resolve({ ok: true }); },
-    getCSRFToken: () => 't',
+    fileActions: favoriteActions(requests),
     document: { getElementById: () => null, querySelector: () => shown },
   }).ctx.photosApp();
 
@@ -407,18 +447,14 @@ test('favoriting flips the tile star once the server agrees', async () => {
   assert.equal(shown.dataset.favorite, '1');
   await app.toggleFavorite('u1', true);
   assert.equal(shown.dataset.favorite, '0');
-  assert.deepEqual(requests, [
-    ['/api/v1/files/u1/favorite', 'POST'],
-    ['/api/v1/files/u1/favorite', 'DELETE'],
-  ]);
+  assert.deepEqual(requests, [[['u1'], true], [['u1'], false]]);
 });
 
 test('a refused favorite leaves the star alone', async () => {
   const errors = [];
   const shown = tile();
   const app = load({
-    fetch: () => Promise.resolve({ ok: false }),
-    getCSRFToken: () => 't',
+    fileActions: favoriteActions([], ['u1']),
     AppAlert: { error: (m) => errors.push(m) },
     document: { getElementById: () => null, querySelector: () => shown },
   }).ctx.photosApp();
@@ -441,19 +477,18 @@ test('trashing removes the tile, and the day once it is empty', async () => {
   const day = { tiles: 1, removed: false, querySelector() { return this.tiles ? {} : null; } };
   day.remove = () => { day.removed = true; };
   const shown = removableTile(day);
-  const requests = [];
-  const app = load({
+  const { ctx } = load({
     AppDialog: { confirm: () => Promise.resolve(true) },
-    fetch: (url, opts) => { requests.push([url, opts.method]); return Promise.resolve({ ok: true }); },
-    getCSRFToken: () => 't',
     document: { getElementById: () => null, querySelector: () => shown },
-  }).ctx.photosApp();
+  });
+  const asked = withOperations(ctx);
+  const app = ctx.photosApp();
   app.showPropertiesPanel = true;
   app.propertiesUuid = 'u1';
 
   await app.trashPhoto('u1', 'beach.jpg');
 
-  assert.deepEqual(requests, [['/api/v1/files/u1', 'DELETE']]);
+  assert.deepEqual(asked, [['trash', ['u1']]]);
   assert.equal(shown.removed, true);
   assert.equal(day.removed, true);
   assert.equal(app.showPropertiesPanel, false);
@@ -488,14 +523,13 @@ test('the tile star toggles the favorite and flips itself', async () => {
   const requests = [];
   const { shown, button } = starButton({ canFavorite: '1', favorite: '1' });
   const app = load({
-    fetch: (url, opts) => { requests.push([url, opts.method]); return Promise.resolve({ ok: true }); },
-    getCSRFToken: () => 't',
+    fileActions: favoriteActions(requests),
     document: { getElementById: () => null, querySelector: () => shown },
   }).ctx.photosApp();
 
   await app.toggleTileFavorite(button);
 
-  assert.deepEqual(requests, [['/api/v1/files/u1/favorite', 'DELETE']]);
+  assert.deepEqual(requests, [[['u1'], false]]);
   assert.equal(shown.dataset.favorite, '0');
   assert.equal(shown.dataset.busy, undefined);
 });
@@ -517,14 +551,15 @@ test('a second click while the first is on its way is ignored', async () => {
   let finish;
   const { shown, button } = starButton({ canFavorite: '1' });
   const app = load({
-    fetch: () => { calls += 1; return new Promise((r) => { finish = r; }); },
-    getCSRFToken: () => 't',
+    fileActions: {
+      setFavorite: (uuids) => { calls += 1; return new Promise((r) => { finish = () => r(Array.from(uuids)); }); },
+    },
     document: { getElementById: () => null, querySelector: () => shown },
   }).ctx.photosApp();
 
   const first = app.toggleTileFavorite(button);
   await app.toggleTileFavorite(button);
-  finish({ ok: true });
+  finish();
   await first;
 
   assert.equal(calls, 1);
@@ -1152,11 +1187,7 @@ test('favoriting the selection flips the stars it could and reports the rest', a
   const alerts = [];
   const app = load({
     document: page.document,
-    getCSRFToken: () => 't',
-    fetch: (url, opts) => {
-      requests.push([opts.method, url]);
-      return Promise.resolve({ ok: !url.includes('/b/') });
-    },
+    fileActions: favoriteActions(requests, ['b']),
     AppAlert: { success: (m) => alerts.push(['success', m]), warning: (m) => alerts.push(['warning', m]) },
   }).ctx.photosApp();
   app.selectAll();
@@ -1165,7 +1196,7 @@ test('favoriting the selection flips the stars it could and reports the rest', a
 
   await app.favoriteSelection();
 
-  assert.deepEqual(requests.map((r) => r[0]), ['POST', 'POST', 'POST']);
+  assert.deepEqual(requests, [[['a', 'b', 'c'], true]], 'one request for the whole selection');
   assert.equal(page.tiles.a.dataset.favorite, '1');
   assert.equal(page.tiles.b.dataset.favorite, '0');
   assert.deepEqual(Object.keys(app._actionsCache), ['b']);
@@ -1174,13 +1205,12 @@ test('favoriting the selection flips the stars it could and reports the rest', a
   assert.equal(app.selectionBusy, false);
 });
 
-test('unfavoriting the selection sends deletes', async () => {
+test('unfavoriting the selection asks to take the mark off', async () => {
   const page = grid(['a']);
   const requests = [];
   const app = load({
     document: page.document,
-    getCSRFToken: () => 't',
-    fetch: (url, opts) => { requests.push([opts.method, url]); return Promise.resolve({ ok: true }); },
+    fileActions: favoriteActions(requests),
     AppAlert: { success() {} },
   }).ctx.photosApp();
   app.selectAll();
@@ -1188,7 +1218,7 @@ test('unfavoriting the selection sends deletes', async () => {
 
   await app.favoriteSelection();
 
-  assert.deepEqual(requests, [['DELETE', '/api/v1/files/a/favorite']]);
+  assert.deepEqual(requests, [[['a'], false]]);
   assert.equal(page.tiles.a.dataset.favorite, '0');
 });
 
@@ -1238,16 +1268,15 @@ test('trashing the selection removes the tiles the server accepted', async () =>
   page.document.querySelector = (selector) => (
     selector === '#timeline-grid [data-uuid]' ? page.tiles.b : byUuid(selector)
   );
-  const requests = [];
   const refreshed = [];
-  const app = load({
+  const { ctx } = load({
     document: page.document,
-    getCSRFToken: () => 't',
     AppDialog: { confirm: () => Promise.resolve(true) },
-    fetch: (url, opts) => { requests.push([opts.method, url]); return Promise.resolve({ ok: url.endsWith('/a') }); },
     AppAlert: { warning() {} },
     location: { href: '/photos' },
-  }).ctx.photosApp();
+  });
+  const asked = withOperations(ctx, ['b']);
+  const app = ctx.photosApp();
   app.$ajax = (url, opts) => { refreshed.push(Array.from(opts.targets)); return Promise.resolve(); };
   app.selectAll();
   app.selectionActions = [BULK('delete')];
@@ -1257,7 +1286,7 @@ test('trashing the selection removes the tiles the server accepted', async () =>
   await app.trashSelection();
   await app._refreshing;
 
-  assert.deepEqual(requests, [['DELETE', '/api/v1/files/a'], ['DELETE', '/api/v1/files/b']]);
+  assert.deepEqual(asked, [['trash', ['a', 'b']]], 'one operation for the whole selection');
   assert.equal(page.tiles.a.removed, true);
   assert.equal(page.tiles.b.removed, undefined);
   assert.equal(app.showPropertiesPanel, false);

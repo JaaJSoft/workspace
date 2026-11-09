@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 from workspace.files.models import File, FileComment, FileShare
 from workspace.files.services.comments import notify_comment_added
 from workspace.files.services.share_notifications import notify_share_targets
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.notifications.models import Notification
 from workspace.notifications.services import notifications as notif_services
 from workspace.users.services.settings import set_setting
@@ -345,8 +346,8 @@ class DestroyNotificationTests(FileNotificationTestBase):
             shared_by=self.owner,
             shared_with=self.recipient,
         )
-        resp = self.client.delete(f"/api/v1/files/{self.file.uuid}")
-        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        resp = run_operation(self.client, "trash", [self.file])
+        self.assertEqual(outcome_of(resp), ({"done": 1}, []))
         notifs = self._notifs_for(self.recipient)
         self.assertEqual(notifs.count(), 1)
         n = notifs.first()
@@ -370,7 +371,7 @@ class DestroyNotificationTests(FileNotificationTestBase):
             shared_by=self.owner,
             shared_with=third_user,
         )
-        self.client.delete(f"/api/v1/files/{self.file.uuid}")
+        run_operation(self.client, "trash", [self.file])
         self.assertEqual(self._notifs_for(self.recipient).count(), 1)
         self.assertEqual(self._notifs_for(third_user).count(), 1)
 

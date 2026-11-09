@@ -29,6 +29,7 @@ from workspace.files.services import FilePermission, FileService
 from workspace.files.services.events import recent_feed_events
 from workspace.files.services.sharing import create_share_link, share_file
 from workspace.files.tests import test_webdav
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.notifications.models import Notification
 from workspace.projects.services.projects import create_project
 
@@ -222,10 +223,12 @@ class FormerMemberApiTests(_DepartureFixture, APITestCase):
         FileService.soft_delete(self.alice_note, acting_user=self.bob)
 
         listed = self.client.get("/api/v1/files/trash")
-        cleaned = self.client.delete("/api/v1/files/trash/clean?force=true")
+        cleaned = run_operation(self.client, "empty_trash")
+        purged = run_operation(self.client, "purge", [self.alice_note])
 
         self.assertEqual(listed.json(), [])
-        self.assertEqual(cleaned.json()["deleted"], 0)
+        self.assertEqual(cleaned.json()["total"], 0)
+        self.assertEqual(outcome_of(purged), ({"failed": 1}, [("", "not_found")]))
         self.assertTrue(File.objects.filter(pk=self.alice_note.pk).exists())
 
 

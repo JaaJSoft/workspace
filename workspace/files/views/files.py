@@ -3,8 +3,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models import Q
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.utils import translation
@@ -18,8 +16,8 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
-from rest_framework import status, viewsets
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework import mixins, status, viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from workspace.common.booleans import is_truthy
@@ -31,19 +29,16 @@ from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.announcements import announce_replaced
 from workspace.files.services.content_hash import find_duplicates
-from workspace.files.services.files import GroupRootFolder
 from workspace.files.services.locking import conflicting_lock, precondition_hash
-from workspace.notifications.services.notifications import notify, notify_many
-from workspace.users.services.settings import get_user_language, in_recipient_languages
+from workspace.notifications.services.notifications import notify
+from workspace.users.services.settings import get_user_language
 
 from ..models import File
 from ..serializers import FileSerializer, locked_payload
 from ..viewsets.actions import ActionsMixin
 from ..viewsets.comments import CommentsMixin
 from ..viewsets.content import ContentMixin
-from ..viewsets.copy import CopyMixin
 from ..viewsets.events import EventsMixin
-from ..viewsets.extract import ExtractMixin
 from ..viewsets.favorites import FavoritesMixin
 from ..viewsets.image_edit import ImageEditMixin
 from ..viewsets.share import ShareMixin
@@ -253,21 +248,10 @@ def duplicate_entries(instance):
             ),
         },
     ),
-    destroy=extend_schema(
-        summary="Delete file or folder",
-        description=(
-            "Delete a file or folder. Deleting a folder cascades to its children."
-        ),
-        responses={
-            204: OpenApiResponse(description="Deleted."),
-        },
-    ),
 )
 @extend_schema(tags=["Files"])
 class FileViewSet(
     CacheControlMixin,
-    CopyMixin,
-    ExtractMixin,
     ContentMixin,
     TrashMixin,
     FavoritesMixin,
@@ -278,7 +262,11 @@ class FileViewSet(
     CommentsMixin,
     ActionsMixin,
     EventsMixin,
-    viewsets.ModelViewSet,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.ListModelMixin,
+    viewsets.GenericViewSet,
 ):
     """
     ViewSet for managing files and folders in a tree structure.
@@ -287,7 +275,8 @@ class FileViewSet(
     retrieve: Get a specific file/folder
     create: Create a new file/folder
     update: Update a file/folder
-    destroy: Delete a file/folder (cascades to children)
+    Moving, copying, trashing, restoring and purging go through batch
+    operations (``/api/v1/files/operations``).
     """
 
     serializer_class = FileSerializer
@@ -589,11 +578,6 @@ class FileViewSet(
             headers=self.get_success_headers(data),
         )
 
-    def perform_update(self, serializer):
-        serializer.save()
-        if getattr(serializer, "replaced_existing", False):
-            announce_replaced(serializer.instance, self.request.user)
-
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
 
@@ -842,29 +826,3 @@ class FileViewSet(
                         source=file_obj,
                     )
             return Response(serializer.data)
-
-    def perform_destroy(self, instance):
-        try:
-            FileService.soft_delete(instance, acting_user=self.request.user)
-        except GroupRootFolder as exc:
-            raise PermissionDenied(
-                _("A group's root folder cannot be deleted.")
-            ) from exc
-        shared_users = User.objects.filter(
-            Q(received_shares__file=instance)
-            | Q(groups__received_file_shares__file=instance)
-            | Q(
-                project_memberships__left_at__isnull=True,
-                project_memberships__project__received_file_shares__file=instance,
-            )
-            | Q(groups__projects__received_file_shares__file=instance)
-        ).distinct()
-        with transaction.atomic():
-            for users in in_recipient_languages(shared_users):
-                notify_many(
-                    recipients=users,
-                    origin="files",
-                    title=_('%(actor)s deleted "%(name)s"')
-                    % {"actor": self.request.user.username, "name": instance.name},
-                    actor=self.request.user,
-                )

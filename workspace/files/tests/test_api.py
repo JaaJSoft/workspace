@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -273,14 +274,52 @@ class FileAPITests(APITestCase):
             parent=folder1,
         )
 
-        response = self.client.patch(
-            f"/api/v1/files/{file.uuid}", {"parent": str(folder2.uuid)}
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(str(response.data["parent"]), str(folder2.uuid))
+        response = run_operation(self.client, "move", [file], folder2)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         file.refresh_from_db()
         self.assertEqual(file.path, "Folder2/file.txt")
+
+    def test_patch_refuses_to_move(self):
+        """Moves go through operations: a PATCH that changes the parent is refused."""
+        folder = File.objects.create(
+            owner=self.user, name="Folder", node_type=File.NodeType.FOLDER
+        )
+        file = File.objects.create(
+            owner=self.user, name="file.txt", node_type=File.NodeType.FILE
+        )
+
+        response = self.client.patch(
+            f"/api/v1/files/{file.uuid}",
+            {"parent": str(folder.uuid), "name": "renamed.txt"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("parent", response.json())
+        file.refresh_from_db()
+        self.assertEqual((file.parent_id, file.name), (None, "file.txt"))
+
+    def test_patch_accepts_the_parent_it_already_has(self):
+        folder = File.objects.create(
+            owner=self.user, name="Folder", node_type=File.NodeType.FOLDER
+        )
+        file = File.objects.create(
+            owner=self.user,
+            name="file.txt",
+            node_type=File.NodeType.FILE,
+            parent=folder,
+        )
+
+        response = self.client.patch(
+            f"/api/v1/files/{file.uuid}",
+            {"parent": str(folder.uuid), "name": "renamed.txt"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        file.refresh_from_db()
+        self.assertEqual((file.parent_id, file.name), (folder.pk, "renamed.txt"))
 
     def test_patch_same_parent_is_noop(self):
         """PATCH with the file's existing parent must succeed without error.
@@ -310,54 +349,6 @@ class FileAPITests(APITestCase):
         file.refresh_from_db()
         self.assertEqual(file.parent_id, folder.uuid)
 
-    def test_patch_parent_and_content_together(self):
-        """A single PATCH with both `parent` and `content` must apply both.
-
-        Order matters in the serializer: move runs first (so the file's
-        storage path resolves under the new parent), then content is
-        written. Regression guard: a previous arrangement could leave the
-        new bytes at the old storage path or skip the move entirely.
-        """
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
-        src = File.objects.create(
-            owner=self.user,
-            name="Src",
-            node_type=File.NodeType.FOLDER,
-        )
-        dest = File.objects.create(
-            owner=self.user,
-            name="Dest",
-            node_type=File.NodeType.FOLDER,
-        )
-        file = File.objects.create(
-            owner=self.user,
-            name="note.txt",
-            node_type=File.NodeType.FILE,
-            parent=src,
-        )
-        file.content = ContentFile(b"old", name="note.txt")
-        file.save()
-
-        new_content = SimpleUploadedFile(
-            "note.txt",
-            b"new bytes here",
-            content_type="text/plain",
-        )
-        response = self.client.patch(
-            f"/api/v1/files/{file.uuid}",
-            {"parent": str(dest.uuid), "content": new_content},
-            format="multipart",
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        file.refresh_from_db()
-        self.assertEqual(file.parent_id, dest.uuid)
-        self.assertEqual(file.size, len(b"new bytes here"))
-        # Read back to confirm the bytes actually live at the storage path
-        # the row points at - not at the old src/ location.
-        with file.content.storage.open(file.content.name, "rb") as fh:
-            self.assertEqual(fh.read(), b"new bytes here")
-
     def test_move_file_to_root(self):
         """Test moving a file to root (parent=null)."""
         folder = File.objects.create(
@@ -370,11 +361,8 @@ class FileAPITests(APITestCase):
             parent=folder,
         )
 
-        response = self.client.patch(
-            f"/api/v1/files/{file.uuid}", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIsNone(response.data["parent"])
+        response = run_operation(self.client, "move", [file], None)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         file.refresh_from_db()
         self.assertEqual(file.path, "file.txt")
@@ -384,11 +372,21 @@ class FileAPITests(APITestCase):
         file = File.objects.create(
             owner=self.user, name="todelete.txt", node_type=File.NodeType.FILE
         )
-        response = self.client.delete(f"/api/v1/files/{file.uuid}")
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        response = run_operation(self.client, "trash", [file])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         file.refresh_from_db()
         self.assertIsNotNone(file.deleted_at)
+
+    def test_delete_is_not_a_route(self):
+        """Trashing goes through operations: DELETE on a file is not allowed."""
+        file = File.objects.create(
+            owner=self.user, name="kept.txt", node_type=File.NodeType.FILE
+        )
+        response = self.client.delete(f"/api/v1/files/{file.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        file.refresh_from_db()
+        self.assertIsNone(file.deleted_at)
 
     def test_cannot_access_other_user_files(self):
         """Test that users cannot access other users' files."""

@@ -1,9 +1,12 @@
 """Batch file operations, run off-request one item at a time.
 
-A request only records what was asked (:func:`create_operation`); a worker
-then walks the list in time slices (:func:`run_slice`), reporting progress to
-the owner as it goes. Each item is decided when its turn comes, against the
-rights and the folders of that moment - never against what the request saw.
+Every action a user takes on files they picked - move, copy, trash, restore,
+purge, extract, emptying the trash - is an operation. A request only records
+what was asked (:func:`create_operation`); a worker then walks the list in
+time slices (:func:`run_slice`), reporting progress to the owner as it goes.
+Each item is decided when its turn comes, by the per-item service of its
+kind, against the rights and the folders of that moment - never against what
+the request saw.
 """
 
 import logging
@@ -19,15 +22,12 @@ from workspace.core.sse_registry import push_user_event
 
 from ..models import File, FileOperation
 from ..sse_provider import SLUG
+from .extract import extract_item
 from .files import FileService
 from .quota import subtree_bytes
-from .transfers import (
-    OnConflict,
-    Refusal,
-    TransferRefused,
-    copy_item,
-    move_item,
-)
+from .refusals import Refusal, Refused
+from .transfers import OnConflict, Outcome, copy_item, move_item
+from .trash import purge_item, restore_item, trash_item
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,16 @@ NOT_FOUND = "not_found"
 TIMEOUT = "timeout"
 FAILED = "failed"
 
-_DEFAULT_ON_CONFLICT = {
-    FileOperation.Kind.COPY: OnConflict.RENAME,
-    FileOperation.Kind.MOVE: OnConflict.ERROR,
-}
+Kind = FileOperation.Kind
+
+# Kinds that put something into a destination folder.
+TARGETED_KINDS = frozenset({Kind.MOVE, Kind.COPY, Kind.EXTRACT})
+# Kinds that only take a name collision into account.
+TRANSFER_KINDS = frozenset({Kind.MOVE, Kind.COPY})
+# Kinds whose items are in the trash.
+TRASHED_KINDS = frozenset({Kind.RESTORE, Kind.PURGE, Kind.EMPTY_TRASH})
+
+_DEFAULT_ON_CONFLICT = {Kind.COPY: OnConflict.RENAME, Kind.MOVE: OnConflict.ERROR}
 
 
 class TargetUnavailable(Exception):
@@ -73,16 +79,17 @@ class _Stopped(Exception):
     """Raised from a checkpoint to abandon the item in flight."""
 
 
-def create_operation(user, kind, items, target_uuid):
+def create_operation(user, kind, items, target_uuid=None):
     """Record a batch for *user* and return it, still pending.
 
     *items* is a list of ``{"uuid", "on_conflict"}`` whose shape the caller
-    validated. Only the destination is judged here: whether each item exists
-    and may be transferred is the runner's call, so that an item out of reach
-    and an item that does not exist end up reported the same way.
+    validated; emptying the trash takes none and lists the user's trash here.
+    Only the destination is judged now: whether each item exists and may be
+    acted on is the runner's call, so that an item out of reach and an item
+    that does not exist end up reported the same way.
     """
     target = None
-    if target_uuid is not None:
+    if kind in TARGETED_KINDS and target_uuid is not None:
         target = File.objects.filter(pk=target_uuid).first()
         if target is None or not FileService.can_create_in(user, target):
             raise TargetUnavailable
@@ -91,20 +98,36 @@ def create_operation(user, kind, items, target_uuid):
     ).count()
     if active >= MAX_ACTIVE_PER_USER:
         raise TooManyOperations
-    default = _DEFAULT_ON_CONFLICT[kind]
+    if kind == Kind.EMPTY_TRASH:
+        items = [{"uuid": pk} for pk in _trash_roots(user)]
+    default = _DEFAULT_ON_CONFLICT.get(kind)
     return FileOperation.objects.create(
         owner=user,
         kind=kind,
         target_uuid=target.pk if target is not None else None,
         target_name=target.name if target is not None else "",
-        items=[
-            {
-                "uuid": str(item["uuid"]),
-                "on_conflict": str(item.get("on_conflict") or default),
-            }
-            for item in items
-        ],
+        items=[_stored_item(item, default) for item in items],
         total=len(items),
+    )
+
+
+def _stored_item(item, default_on_conflict):
+    stored = {"uuid": str(item["uuid"])}
+    if default_on_conflict is not None:
+        stored["on_conflict"] = str(item.get("on_conflict") or default_on_conflict)
+    return stored
+
+
+def _trash_roots(user):
+    """The trashed nodes of *user* that emptying their trash purges.
+
+    Only their own: the trash also lists what other members of their groups
+    trashed, and emptying it must not destroy that. A node inside another of
+    their trashed folders goes with that folder.
+    """
+    trashed = FileService.owned_files_qs(user).filter(deleted_at__isnull=False)
+    return list(
+        trashed.exclude(parent__in=trashed.values("pk")).values_list("pk", flat=True)
     )
 
 
@@ -215,7 +238,8 @@ class _Runner:
     def __init__(self, operation):
         self.operation = operation
         self.user = operation.owner
-        self.measures_bytes = operation.kind == FileOperation.Kind.COPY
+        self.measures_bytes = operation.kind == Kind.COPY
+        self.in_trash = operation.kind in TRASHED_KINDS
         self._deadline = monotonic() + SLICE_SECONDS
         self._last_tick = monotonic()
         self._yield = False
@@ -263,15 +287,22 @@ class _Runner:
 
     def _process(self, item):
         operation = self.operation
-        node = File.objects.filter(pk=item["uuid"], deleted_at__isnull=True).first()
-        if node is None or FileService.get_permission(self.user, node) is None:
+        node = File.objects.filter(
+            pk=item["uuid"], deleted_at__isnull=not self.in_trash
+        ).first()
+        permission = (
+            FileService.trash_permission
+            if self.in_trash
+            else FileService.get_permission
+        )
+        if node is None or permission(self.user, node) is None:
             self._record_failure(item, None, NOT_FOUND)
             return
         self._bytes_before = operation.bytes_done
         self._item_weight = _weight(node) if self.measures_bytes else 0
         try:
-            outcome = self._transfer(node, item["on_conflict"])
-        except TransferRefused as refusal:
+            outcome = self._act(node, item)
+        except Refused as refusal:
             self._record_failure(item, node, refusal.reason)
         except _Stopped:
             operation.bytes_done = self._bytes_before
@@ -287,22 +318,40 @@ class _Runner:
             self._count(outcome)
         operation.bytes_done = self._bytes_before + self._item_weight
 
-    def _transfer(self, node, on_conflict):
-        operation = self.operation
-        target = None
-        if operation.target_uuid is not None:
-            # Read again for every item: the folder may have been trashed, or
-            # the user's access to it withdrawn, since the previous one.
-            target = File.objects.filter(pk=operation.target_uuid).first()
-            if target is None:
-                raise TransferRefused(Refusal.TARGET)
-        if operation.kind == FileOperation.Kind.COPY:
-            result = copy_item(
-                self.user, node, target, on_conflict, checkpoint=self._copied
-            )
+    def _act(self, node, item):
+        """Hand *node* to the service of the operation's kind."""
+        user = self.user
+        kind = self.operation.kind
+        if kind == Kind.COPY:
+            return copy_item(
+                user, node, self._target(), item["on_conflict"], checkpoint=self._copied
+            ).outcome
+        if kind == Kind.MOVE:
+            return move_item(user, node, self._target(), item["on_conflict"]).outcome
+        if kind == Kind.EXTRACT:
+            extract_item(user, node, self._target())
+        elif kind == Kind.TRASH:
+            trash_item(user, node)
+        elif kind == Kind.RESTORE:
+            restore_item(user, node)
         else:
-            result = move_item(self.user, node, target, on_conflict)
-        return result.outcome
+            purge_item(user, node)
+        return Outcome.DONE
+
+    def _target(self):
+        """The destination folder, read again for every item.
+
+        It may have been trashed, or the user's access to it withdrawn, since
+        the previous one: a destination that is gone refuses the item, it
+        never turns into the root.
+        """
+        target_uuid = self.operation.target_uuid
+        if target_uuid is None:
+            return None
+        target = File.objects.filter(pk=target_uuid).first()
+        if target is None:
+            raise Refused(Refusal.TARGET)
+        return target
 
     def _copied(self, node):
         """Checkpoint of a copy: one more node of the item in flight exists."""

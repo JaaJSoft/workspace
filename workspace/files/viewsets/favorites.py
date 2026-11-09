@@ -1,89 +1,42 @@
-"""Favorite + pin actions for FileViewSet."""
+"""Favorites and pinned folders for FileViewSet."""
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from workspace.files.models import File, FileFavorite, PinnedFolder
-from workspace.files.serializers import PinnedReorderSerializer
+from workspace.files.models import File, PinnedFolder
+from workspace.files.serializers import (
+    FileMarksResultSerializer,
+    FileMarksSerializer,
+    PinnedReorderSerializer,
+)
 from workspace.files.services import FileService
+from workspace.files.services.marks import set_favorite, set_pinned
 from workspace.files.services.pins import visible_pins
 
 
 class FavoritesMixin:
-    """Adds favorite, pin, pinned, pinned_reorder actions."""
+    """Adds the favorites and pinned folders endpoints."""
 
     @extend_schema(
-        summary="Favorite or unfavorite a file/folder",
-        description="POST to add to favorites, DELETE to remove from favorites.",
-        responses={
-            200: OpenApiResponse(description="Favorite status updated."),
-        },
+        summary="Add to favorites or remove from them",
+        description=(
+            "Mark the given files and folders as the caller's favorites, or "
+            "take them out. The answer lists the items that are now as asked; "
+            "an item the caller may not mark is left out of it, exactly like "
+            "an item that does not exist."
+        ),
+        request=FileMarksSerializer,
+        responses={200: FileMarksResultSerializer},
     )
-    @action(detail=True, methods=["post", "delete"], url_path="favorite")
-    def favorite(self, request, uuid=None):
-        """Add or remove a file/folder from favorites."""
-        from workspace.files.actions import ActionRegistry
-
-        file_obj, perm = self._resolve_file_with_access(uuid)
-        if not ActionRegistry.is_action_available(
-            "toggle_favorite",
-            request.user,
-            file_obj,
-            permission=perm,
-        ):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        if request.method == "POST":
-            FileFavorite.objects.get_or_create(owner=request.user, file=file_obj)
-            return Response({"is_favorite": True}, status=status.HTTP_200_OK)
-        FileFavorite.objects.filter(owner=request.user, file=file_obj).delete()
-        return Response({"is_favorite": False}, status=status.HTTP_200_OK)
-
-    @extend_schema(
-        summary="Pin or unpin a folder from sidebar",
-        description="POST to pin, DELETE to unpin a folder from the sidebar.",
-        responses={
-            200: OpenApiResponse(description="Pin status updated."),
-            400: OpenApiResponse(description="Not a folder."),
-        },
-    )
-    @action(detail=True, methods=["post", "delete"], url_path="pin")
-    def pin(self, request, uuid=None):
-        """Pin or unpin a folder from the sidebar."""
-        from workspace.files.actions import ActionRegistry
-
-        file_obj = self.get_object()
-        # Distinguish "wrong shape" (400) from "not allowed for this user/state"
-        # (403). The action also blocks group-root folders, deleted files and
-        # users without EDIT permission, so the 400 message would have lied.
-        if file_obj.node_type != File.NodeType.FOLDER:
-            return Response(
-                {"detail": "Only folders can be pinned."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        perm = FileService.get_permission(request.user, file_obj)
-        if not ActionRegistry.is_action_available(
-            "toggle_pin",
-            request.user,
-            file_obj,
-            permission=perm,
-        ):
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        if request.method == "POST":
-            max_pos = (
-                PinnedFolder.objects.filter(owner=request.user)
-                .order_by("-position")
-                .values_list("position", flat=True)
-                .first()
-            )
-            position = (max_pos or 0) + 1
-            PinnedFolder.objects.get_or_create(
-                owner=request.user, folder=file_obj, defaults={"position": position}
-            )
-            return Response({"is_pinned": True}, status=status.HTTP_200_OK)
-        PinnedFolder.objects.filter(owner=request.user, folder=file_obj).delete()
-        return Response({"is_pinned": False}, status=status.HTTP_200_OK)
+    @action(detail=False, methods=["post"], url_path="favorites")
+    def favorites(self, request):
+        serializer = FileMarksSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        done = set_favorite(request.user, data["items"], data["value"])
+        return Response({"items": done})
 
     @extend_schema(
         summary="List pinned folders",
@@ -108,6 +61,26 @@ class FavoritesMixin:
         folders = sorted(queryset, key=lambda f: order_map.get(f.pk, 0))
         serializer = self.get_serializer(folders, many=True)
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Pin folders to the sidebar or unpin them",
+        description=(
+            "Pin the given folders to the caller's sidebar, after the "
+            "existing pins and in the order given, or unpin them. The answer "
+            "lists the folders that are now as asked; an item the caller may "
+            "not pin - a file, a group's root folder, a folder out of reach - "
+            "is left out of it, exactly like an item that does not exist."
+        ),
+        request=FileMarksSerializer,
+        responses={200: FileMarksResultSerializer},
+    )
+    @pinned.mapping.post
+    def set_pins(self, request):
+        serializer = FileMarksSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        done = set_pinned(request.user, data["items"], data["value"])
+        return Response({"items": done})
 
     @extend_schema(
         summary="Reorder pinned folders",

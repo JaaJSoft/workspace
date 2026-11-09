@@ -25,9 +25,13 @@ class FavoriteAPITests(APITestCase):
             owner=self.user, name="favme.txt", node_type=File.NodeType.FILE
         )
 
-        response = self.client.post(f"/api/v1/files/{file.uuid}/favorite")
+        response = self.client.post(
+            "/api/v1/files/favorites",
+            {"items": [str(file.uuid)], "value": True},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data["is_favorite"])
+        self.assertEqual(response.json()["items"], [str(file.uuid)])
 
         self.assertTrue(
             FileFavorite.objects.filter(owner=self.user, file=file).exists()
@@ -40,9 +44,12 @@ class FavoriteAPITests(APITestCase):
         )
         FileFavorite.objects.create(owner=self.user, file=file)
 
-        response = self.client.delete(f"/api/v1/files/{file.uuid}/favorite")
+        response = self.client.post(
+            "/api/v1/files/favorites",
+            {"items": [str(file.uuid)], "value": False},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(response.data["is_favorite"])
 
         self.assertFalse(
             FileFavorite.objects.filter(owner=self.user, file=file).exists()
@@ -79,9 +86,13 @@ class PinnedFolderAPITests(APITestCase):
             owner=self.user, name="PinMe", node_type=File.NodeType.FOLDER
         )
 
-        response = self.client.post(f"/api/v1/files/{folder.uuid}/pin")
+        response = self.client.post(
+            "/api/v1/files/pinned",
+            {"items": [str(folder.uuid)], "value": True},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data["is_pinned"])
+        self.assertEqual(response.json()["items"], [str(folder.uuid)])
 
         self.assertTrue(
             PinnedFolder.objects.filter(owner=self.user, folder=folder).exists()
@@ -94,9 +105,13 @@ class PinnedFolderAPITests(APITestCase):
         )
         PinnedFolder.objects.create(owner=self.user, folder=folder)
 
-        response = self.client.delete(f"/api/v1/files/{folder.uuid}/pin")
+        response = self.client.post(
+            "/api/v1/files/pinned",
+            {"items": [str(folder.uuid)], "value": False},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(response.data["is_pinned"])
+        self.assertFalse(PinnedFolder.objects.filter(owner=self.user).exists())
 
     def test_cannot_pin_file(self):
         """Test that files cannot be pinned."""
@@ -104,8 +119,13 @@ class PinnedFolderAPITests(APITestCase):
             owner=self.user, name="notafolder.txt", node_type=File.NodeType.FILE
         )
 
-        response = self.client.post(f"/api/v1/files/{file.uuid}/pin")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(
+            "/api/v1/files/pinned",
+            {"items": [str(file.uuid)], "value": True},
+            format="json",
+        )
+        self.assertEqual(response.json()["items"], [])
+        self.assertFalse(PinnedFolder.objects.filter(owner=self.user).exists())
 
     def test_list_pinned_folders(self):
         """Test listing pinned folders."""

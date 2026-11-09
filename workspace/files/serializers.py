@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 
-from django.db import transaction
 from django.db.models.manager import BaseManager
 from django.utils.translation import gettext, gettext_lazy
 from drf_spectacular.types import OpenApiTypes
@@ -14,7 +13,6 @@ from workspace.files.services._names import (
     FILE_NAME_TAKEN,
     FOLDER_NAME_TAKEN,
     NameTaken,
-    find_node_conflict,
 )
 from workspace.files.services.files import GroupMismatch
 from workspace.files.services.image_edits import (
@@ -27,7 +25,12 @@ from workspace.files.services.locking import (
     StaleContent,
     conflicting_lock,
 )
-from workspace.files.services.operations import MAX_ITEMS
+from workspace.files.services.operations import (
+    MAX_ITEMS,
+    TARGETED_KINDS,
+    TRANSFER_KINDS,
+)
+from workspace.files.services.refusals import Refusal
 from workspace.files.services.scanning.policy import QuarantinedSource
 from workspace.files.services.shortcuts import (
     UNAVAILABLE,
@@ -36,7 +39,7 @@ from workspace.files.services.shortcuts import (
     create_shortcut,
     resolution_of,
 )
-from workspace.files.services.transfers import OnConflict, Refusal
+from workspace.files.services.transfers import OnConflict
 from workspace.files.services.uploads import CHUNK_SIZE
 
 from .models import File, FileComment, FileOperation, UploadSession, canonical_name
@@ -300,11 +303,10 @@ class FileSerializer(serializers.ModelSerializer):
         required=False,
         help_text=(
             "What to do when a file with the same name already exists in the "
-            "target folder, on creation or on a move (a request that changes "
-            "'parent'): 'error' rejects the request (default), 'rename' stores "
-            "the file under a free 'name (Copy).ext' variant, 'replace' writes "
-            "the content into the existing file and answers 200 with it - on a "
-            "move the moved file then goes to the trash."
+            "target folder, on creation: 'error' rejects the request "
+            "(default), 'rename' stores the file under a free 'name "
+            "(Copy).ext' variant, 'replace' writes the content into the "
+            "existing file and answers 200 with it."
         ),
     )
 
@@ -561,10 +563,10 @@ class FileSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         # A request knob, never a model attribute: pop it before the
-        # ModelSerializer machinery sees it. Only creation and moves honour
-        # it; a plain rename keeps rejecting collisions.
+        # ModelSerializer machinery sees it. Only creation honours it; a
+        # rename keeps rejecting collisions.
         on_conflict = attrs.pop("on_conflict", "error")
-        if self.instance is not None and "parent" not in attrs:
+        if self.instance is not None:
             on_conflict = "error"
         self._on_conflict = on_conflict
         if self.instance is not None:
@@ -587,6 +589,12 @@ class FileSerializer(serializers.ModelSerializer):
 
             if "group" in initial_data:
                 errors["group"] = "Group cannot be changed directly."
+
+            # Unchanged is not a move: a client may send the row back whole.
+            if "parent" in attrs and attrs.pop("parent") != self.instance.parent:
+                errors["parent"] = gettext(
+                    "Move items through /api/v1/files/operations."
+                )
 
             if "shortcut_target" in attrs:
                 errors["shortcut_target"] = "This field is immutable."
@@ -626,62 +634,24 @@ class FileSerializer(serializers.ModelSerializer):
                     {"group": ["The group must be the parent folder's group."]}
                 ) from error
 
-        # Validate parent assignment via FileService
-        if "parent" in attrs and instance is not None:
-            try:
-                FileService.validate_move_target(
-                    instance, attrs["parent"], user=self.context["request"].user
-                )
-            except ValueError as e:
-                raise serializers.ValidationError({"parent": e.args[0]}) from e
-
-        if (
-            node_type == File.NodeType.SHORTCUT
-            and instance is not None
-            and "parent" in attrs
-            and on_conflict == "rename"
-        ):
-            self._rename_moved_shortcut(instance, attrs)
-
         # Validate file name uniqueness via FileService
         if node_type == File.NodeType.FILE:
             name = attrs.get("name") or (instance.name if instance else None)
-            parent = (
-                attrs.get("parent")
-                if "parent" in attrs
-                else (instance.parent if instance else None)
-            )
+            parent = instance.parent if instance else attrs.get("parent")
             owner = instance.owner if instance else self.context["request"].user
             if name:
                 conflict = FileService.find_name_conflict(
                     owner, parent, name, exclude_pk=instance.pk if instance else None
                 )
-                if conflict is not None:
-                    if on_conflict == "rename":
-                        # A create picks the free name at its INSERT, from the
-                        # name asked for. A moved file is renamed before it
-                        # leaves, so the new name has to be free in its
-                        # current folder too.
-                        if instance is not None:
-                            attrs["name"] = FileService.available_file_name(
-                                owner, parent, name, avoiding=(instance.parent,)
-                            )
-                    elif on_conflict == "replace":
-                        if instance is None and attrs.get("content") is None:
+                # A create told to rename picks the free name at its INSERT.
+                if conflict is not None and on_conflict != "rename":
+                    if on_conflict == "replace":
+                        if attrs.get("content") is None:
                             raise serializers.ValidationError(
                                 {
                                     "content": gettext(
                                         "Content is required to replace "
                                         "the existing file."
-                                    )
-                                }
-                            )
-                        if instance is not None and not instance.content:
-                            raise serializers.ValidationError(
-                                {
-                                    "content": gettext(
-                                        "This file has no content to "
-                                        "replace the existing one with."
                                     )
                                 }
                             )
@@ -697,22 +667,6 @@ class FileSerializer(serializers.ModelSerializer):
                         )
 
         return super().validate(attrs)
-
-    @staticmethod
-    def _rename_moved_shortcut(shortcut, attrs):
-        """Pick a free name in the destination for a shortcut moved there.
-
-        Any node holding the name counts, not only a file: nothing a shortcut
-        lands on can be replaced, so the only other way out is the move's
-        refusal. Like a moved file, the new name must fit the current folder
-        too, which it is renamed in before it leaves.
-        """
-        name = attrs.get("name") or shortcut.name
-        parent = attrs["parent"]
-        if find_node_conflict(shortcut.owner, parent, name, exclude_pk=shortcut.pk):
-            attrs["name"] = FileService.available_file_name(
-                shortcut.owner, parent, name, avoiding=(shortcut.parent,)
-            )
 
     @staticmethod
     def _validate_shortcut_shape(node_type, attrs, on_conflict):
@@ -848,28 +802,6 @@ class FileSerializer(serializers.ModelSerializer):
         self.replaced_existing = True
         return instance
 
-    def _replace_on_move(self, moved, target):
-        """A move onto a same-name file: that file takes the moved one's content.
-
-        The moved row then goes to the trash rather than being deleted or
-        squeezed into the target's storage slot: trashed blobs stay where
-        they are, so it remains restorable in its original folder.
-        """
-        user = self.context["request"].user
-        ensure_replaceable(user, target)
-
-        instance = FileService.annotate_for_serializer(
-            File.objects.filter(pk=target.pk), user
-        ).first()
-        # No expectation goes down: a precondition on this request describes
-        # the file being moved, not the one it is landing on.
-        with content_write_refusals():
-            FileService.replace_content_from(instance, moved, acting_user=user)
-        FileService.soft_delete(moved, acting_user=user)
-        self.replaced_existing = True
-        return instance
-
-    @transaction.atomic
     def update(self, instance, validated_data):
         # Pop content + caller-supplied mime_type so they go through FileService
         # rather than the default ModelSerializer assignment loop.
@@ -890,17 +822,6 @@ class FileSerializer(serializers.ModelSerializer):
             if instance.name != new_name:
                 with name_refusals():
                     FileService.rename(instance, new_name, acting_user=acting_user)
-
-        # Handle move via FileService (storage moves). Pop so super().update()
-        # below doesn't re-assign parent + re-save — FileService.move() already
-        # does both, and noops when the parent is unchanged.
-        if "parent" in validated_data:
-            new_parent = validated_data.pop("parent")
-            replace_target = getattr(self, "_replace_target", None)
-            if replace_target is not None:
-                return self._replace_on_move(instance, replace_target)
-            with name_refusals():
-                FileService.move(instance, new_parent, acting_user=acting_user)
 
         # DRF's update() ends in a bare save(), which writes every column back
         # from an instance loaded when the request began. A PATCH that only
@@ -1030,6 +951,25 @@ class ImageRotateSerializer(serializers.Serializer):
     quarter_turns = serializers.ChoiceField(choices=(-1, 1))
 
 
+class FileMarksSerializer(serializers.Serializer):
+    items = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False,
+        max_length=MAX_ITEMS,
+        help_text="Files and folders to mark or unmark.",
+    )
+    value = serializers.BooleanField(
+        help_text="True to add the mark, false to take it off."
+    )
+
+
+class FileMarksResultSerializer(serializers.Serializer):
+    items = serializers.ListField(
+        child=serializers.UUIDField(),
+        help_text="The items that are now as asked.",
+    )
+
+
 class PinnedReorderSerializer(serializers.Serializer):
     """Validate the payload of ``POST /api/v1/files/pinned/reorder``.
 
@@ -1146,7 +1086,12 @@ OPERATION_ERROR_MESSAGES = {
     Refusal.STALE: gettext_lazy("The existing file changed in the meantime."),
     Refusal.QUARANTINED: gettext_lazy("File is quarantined."),
     Refusal.QUOTA: gettext_lazy("There is not enough storage space left."),
-    Refusal.GROUP_ROOT: gettext_lazy("The root folder of a group cannot be moved."),
+    Refusal.GROUP_ROOT: gettext_lazy("The root folder of a group stays where it is."),
+    Refusal.ARCHIVE_TOO_LARGE: gettext_lazy("The archive is too large to extract."),
+    Refusal.ARCHIVE_TOO_MANY_ENTRIES: gettext_lazy(
+        "The archive holds too many entries to extract."
+    ),
+    Refusal.ARCHIVE_INVALID: gettext_lazy("The archive cannot be read."),
 }
 
 
@@ -1158,27 +1103,61 @@ class FileOperationItemSerializer(serializers.Serializer):
         help_text=(
             "What to do when the destination already holds the name: 'rename', "
             "'replace', 'skip' or 'error'. Defaults to 'rename' for a copy and "
-            "to 'error' for a move."
+            "to 'error' for a move; no other kind takes it."
         ),
     )
 
 
 class FileOperationCreateSerializer(serializers.Serializer):
     kind = serializers.ChoiceField(choices=FileOperation.Kind.choices)
-    # Required on purpose: a client that forgot it must not have its files
-    # sent to the root.
     target = serializers.UUIDField(
-        allow_null=True, help_text="Destination folder; null for the root."
+        allow_null=True,
+        required=False,
+        help_text=(
+            "Destination folder of a move, a copy or an extraction, null for "
+            "the root. Required for those kinds, refused for the others."
+        ),
     )
     items = FileOperationItemSerializer(
-        many=True, allow_empty=False, max_length=MAX_ITEMS
+        many=True,
+        max_length=MAX_ITEMS,
+        required=False,
+        help_text=(
+            "The files and folders to act on. Emptying the trash takes none: "
+            "it acts on the caller's whole trash."
+        ),
     )
 
-    def validate_items(self, value):
-        uuids = [item["uuid"] for item in value]
-        if len(set(uuids)) != len(uuids):
-            raise serializers.ValidationError(gettext("An item is listed twice."))
-        return value
+    def validate(self, attrs):
+        kind = attrs["kind"]
+        items = attrs.get("items", [])
+        errors = {}
+        if kind in TARGETED_KINDS:
+            # A client that forgot the destination must not have its files
+            # sent to the root.
+            if "target" not in attrs:
+                errors["target"] = [self.fields["target"].error_messages["required"]]
+        elif attrs.get("target") is not None:
+            errors["target"] = [gettext("This kind of operation has no destination.")]
+        if kind == FileOperation.Kind.EMPTY_TRASH:
+            if items:
+                errors["items"] = [gettext("Emptying the trash takes no items.")]
+        elif not items:
+            errors["items"] = [gettext("Pick at least one item.")]
+        else:
+            uuids = [item["uuid"] for item in items]
+            if len(set(uuids)) != len(uuids):
+                errors["items"] = [gettext("An item is listed twice.")]
+            elif kind not in TRANSFER_KINDS and any(
+                "on_conflict" in item for item in items
+            ):
+                errors["items"] = [
+                    gettext("Only a move or a copy takes a conflict choice.")
+                ]
+        if errors:
+            raise serializers.ValidationError(errors)
+        attrs["items"] = items
+        return attrs
 
 
 class FileOperationSerializer(serializers.ModelSerializer):

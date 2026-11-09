@@ -45,16 +45,43 @@ window.fileActions = {
         });
     },
 
-    // DRF answers either {detail: "..."} or {field: ["..."]}; surface the
-    // first human-readable message from whichever shape came back.
+    // DRF answers either {detail: "..."} or {field: ["..."]}, nested under
+    // the index of an item in a list; surface the first human-readable
+    // message from whichever shape came back.
     firstErrorMessage: function(body) {
         if (!body || typeof body !== 'object') return gettext('Unknown error');
         if (typeof body.detail === 'string') return body.detail;
         for (const value of Object.values(body)) {
             if (typeof value === 'string') return value;
             if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+            if (value && typeof value === 'object') return window.fileActions.firstErrorMessage(value);
         }
         return gettext('Unknown error');
+    },
+
+    // ── Favorites and pins ───────────────────────────────
+
+    // Both resolve to the uuids now as asked: one the user may not mark is
+    // left out, the way an unknown one is.
+    setFavorite: function(uuids, favorite) {
+        return window.fileActions._mark('/api/v1/files/favorites', uuids, favorite);
+    },
+
+    setPinned: function(uuids, pinned) {
+        return window.fileActions._mark('/api/v1/files/pinned', uuids, pinned);
+    },
+
+    _mark: function(url, uuids, value) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ items: uuids, value: value }),
+        }).then(function(resp) {
+            return resp.json().catch(function() { return {}; }).then(function(body) {
+                if (!resp.ok) throw new Error(window.fileActions.firstErrorMessage(body));
+                return body.items;
+            });
+        });
     },
 
     // ── Shortcuts ────────────────────────────────────────

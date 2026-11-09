@@ -44,12 +44,13 @@ class FileOperationListView(APIView):
     @extend_schema(
         summary="Start a batch operation",
         description=(
-            "Move or copy several items into a folder. The request only "
-            "records the batch: a worker goes through it one item at a time, "
-            "and progress reaches the caller as 'operation' events on the "
-            "files event stream. An item that cannot go through - out of "
-            "reach, locked, name taken - is reported in 'errors' and the "
-            "rest carries on."
+            "Move, copy, trash, restore, purge or extract the given items, "
+            "or empty the caller's trash. This is the only way to do any of "
+            "these. The request only records the batch: a worker goes "
+            "through it one item at a time, and progress reaches the caller "
+            "as 'operation' events on the files event stream. An item that "
+            "cannot go through - out of reach, locked, name taken - is "
+            "reported in 'errors' and the rest carries on."
         ),
         request=FileOperationCreateSerializer,
         responses={
@@ -64,7 +65,7 @@ class FileOperationListView(APIView):
         data = serializer.validated_data
         try:
             operation = operations.create_operation(
-                request.user, data["kind"], data["items"], data["target"]
+                request.user, data["kind"], data["items"], data.get("target")
             )
         except operations.TargetUnavailable as error:
             # Same answer whether the folder is missing or out of reach.

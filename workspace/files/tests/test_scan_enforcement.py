@@ -10,6 +10,7 @@ from workspace.files.models import File, FileScan
 from workspace.files.search import search_files
 from workspace.files.services import FileService
 from workspace.files.services.search_index import index_file
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.tests.test_actions import actions_of
 
 User = get_user_model()
@@ -599,11 +600,11 @@ class CopyEnforcementTests(APITestCase):
 
     @override_settings(**BLOCKING)
     def test_rest_copy_of_an_infected_file_is_forbidden(self):
-        resp = self.client.post(
-            f"/api/v1/files/{self.infected.uuid}/copy", {}, format="json"
-        )
+        resp = run_operation(self.client, "copy", [self.infected], None)
 
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            outcome_of(resp), ({"failed": 1}, [(self.infected.name, "not_allowed")])
+        )
         self.assertEqual(File.objects.filter(name__startswith="bad").count(), 1)
 
     @override_settings(**BLOCKING)
@@ -689,11 +690,9 @@ class CopyEnforcementTests(APITestCase):
             scanned_at="2026-08-30T12:00:00Z",
         )
 
-        resp = self.client.post(
-            f"/api/v1/files/{archive.uuid}/extract",
-            {"destination_uuid": None},
-            format="json",
-        )
+        resp = run_operation(self.client, "extract", [archive], None)
 
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            outcome_of(resp), ({"failed": 1}, [("bad.zip", "quarantined")])
+        )
         self.assertFalse(File.objects.filter(name="payload.txt").exists())

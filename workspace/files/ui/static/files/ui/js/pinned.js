@@ -102,23 +102,13 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
       try {
         const data = JSON.parse(raw);
         if (!data.uuid) return;
-        const response = await fetch(`/api/v1/files/${data.uuid}/pin`, {
-          method: 'POST',
-          headers: { 'X-CSRFToken': getCSRFToken() }
-        });
-        if (response.ok) {
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
-        } else {
-          let errData = {};
-          try { errData = await response.json(); } catch (e) {}
-          if (window.AppAlert) {
-            window.AppAlert.show({ type: 'error', message: errData.detail || gettext('Failed to pin folder'), duration: 5000 });
-          }
-        }
+        const pinned = await window.fileActions.setPinned([data.uuid], true);
+        if (!pinned.length) throw new Error(gettext('This folder cannot be pinned'));
+        window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
       } catch (error) {
         if (window.AppAlert) {
-          window.AppAlert.show({ type: 'error', message: gettext('Failed to pin folder'), duration: 5000 });
+          window.AppAlert.show({ type: 'error', message: error.message || gettext('Failed to pin folder'), duration: 5000 });
         }
       }
     },

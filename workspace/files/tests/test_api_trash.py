@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -52,8 +53,8 @@ class TrashAPITests(APITestCase):
         file.refresh_from_db()
         self.assertIsNotNone(file.deleted_at)
 
-        response = self.client.post(f"/api/v1/files/{file.uuid}/restore")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = run_operation(self.client, "restore", [file])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         file.refresh_from_db()
         self.assertIsNone(file.deleted_at)
@@ -66,8 +67,8 @@ class TrashAPITests(APITestCase):
         file.delete()
         uuid = file.uuid
 
-        response = self.client.delete(f"/api/v1/files/{uuid}/purge")
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        response = run_operation(self.client, "purge", [uuid])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         self.assertFalse(File.objects.filter(uuid=uuid).exists())
 
@@ -77,8 +78,10 @@ class TrashAPITests(APITestCase):
             owner=self.user, name="active.txt", node_type=File.NodeType.FILE
         )
 
-        response = self.client.delete(f"/api/v1/files/{file.uuid}/purge")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = run_operation(self.client, "purge", [file])
+        # A purge only looks in the trash: a live file is not one of its items.
+        self.assertEqual(outcome_of(response), ({"failed": 1}, [("", "not_found")]))
+        self.assertTrue(File.objects.filter(pk=file.pk).exists())
 
     def test_clean_trash(self):
         """Test cleaning trash with force option."""
@@ -87,8 +90,7 @@ class TrashAPITests(APITestCase):
         )
         file.delete()
 
-        response = self.client.delete("/api/v1/files/trash/clean?force=1")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["deleted"], 1)
+        response = run_operation(self.client, "empty_trash")
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         self.assertFalse(File.objects.filter(uuid=file.uuid).exists())

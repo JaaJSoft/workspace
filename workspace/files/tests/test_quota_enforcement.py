@@ -18,6 +18,7 @@ from workspace.files.models import (
     UserStorageQuota,
 )
 from workspace.files.services import FileService, quota
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.webdav.resources import FolderResource, RootCollection
 
 User = get_user_model()
@@ -854,17 +855,17 @@ class OverQuotaTrashTests(APITestCase):
         UserStorageQuota.objects.create(user=self.user, quota_bytes=0)
 
     def test_restore_from_trash_is_never_refused(self):
-        response = self.client.post(f"/api/v1/files/{self.file.uuid}/restore")
-        self.assertEqual(response.status_code, 200)
+        response = run_operation(self.client, "restore", [self.file])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.file.refresh_from_db()
         self.assertIsNone(self.file.deleted_at)
 
     def test_emptying_the_trash_frees_the_bucket(self):
-        response = self.client.delete("/api/v1/files/trash/clean?force=1")
-        self.assertEqual(response.status_code, 200)
+        response = run_operation(self.client, "empty_trash")
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertEqual(quota.personal_usage(self.user), 0)
 
     def test_purging_a_single_item_is_never_refused(self):
-        response = self.client.delete(f"/api/v1/files/{self.file.uuid}/purge")
-        self.assertEqual(response.status_code, 204)
+        response = run_operation(self.client, "purge", [self.file])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertEqual(quota.personal_usage(self.user), 0)

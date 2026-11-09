@@ -306,3 +306,66 @@ class DismissAndCancelTests(OperationApiFixture):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "running")
         self.assertTrue(response.json()["cancel_requested"])
+
+
+class KindShapeTests(OperationApiFixture):
+    """What each kind of operation takes besides its items."""
+
+    def test_a_kind_without_destination_refuses_one(self):
+        for kind in ("trash", "restore", "purge"):
+            with self.subTest(kind):
+                response = self.post(self.body(kind=kind))
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("target", response.json())
+
+    def test_a_kind_without_destination_needs_none(self):
+        response = self.post({"kind": "trash", "items": [{"uuid": str(self.a.pk)}]})
+
+        self.assertEqual(response.status_code, 202)
+        self.assertIsNone(response.json()["target"])
+
+    def test_an_extraction_needs_a_destination(self):
+        body = self.body(kind="extract", nodes=[self.a])
+        del body["target"]
+
+        response = self.post(body)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("target", response.json())
+
+    def test_only_a_transfer_takes_a_conflict_choice(self):
+        response = self.post(
+            {
+                "kind": "trash",
+                "items": [{"uuid": str(self.a.pk), "on_conflict": "skip"}],
+            }
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("items", response.json())
+
+    def test_emptying_the_trash_takes_no_items(self):
+        response = self.post(
+            {"kind": "empty_trash", "items": [{"uuid": str(self.a.pk)}]}
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("items", response.json())
+
+    def test_emptying_the_trash_runs_on_the_callers_trash(self):
+        FileService.soft_delete(self.src, acting_user=self.alice)
+        self.queued.side_effect = _run_now
+
+        response = self.post({"kind": "empty_trash"})
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["status"], "completed")
+        self.assertEqual(response.json()["counts"], {"done": 1})
+        self.assertFalse(File.objects.filter(pk=self.a.pk).exists())
+
+    def test_every_other_kind_needs_items(self):
+        for kind in ("trash", "restore", "purge"):
+            with self.subTest(kind):
+                response = self.post({"kind": kind, "items": []})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("items", response.json())

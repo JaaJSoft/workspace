@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.tests.test_actions import actions_of
 from workspace.notes.services import journal
 from workspace.users.services.settings import set_setting
@@ -102,11 +103,10 @@ class JournalRenameGateTests(APITestCase):
         self.assertNotEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_move_journal_note_allowed(self):
-        resp = self.client.patch(
-            f"/api/v1/files/{self.journal_note.uuid}",
-            {"parent": str(self.other_folder.uuid)},
+        resp = run_operation(
+            self.client, "move", [self.journal_note], self.other_folder
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(outcome_of(resp), ({"done": 1}, []))
         self.journal_note.refresh_from_db()
         self.assertEqual(self.journal_note.parent_id, self.other_folder.uuid)
 

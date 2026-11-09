@@ -61,14 +61,14 @@ function makeShell({ properties = false, favoriteOk = true } = {}) {
           actionCalls.push({ uuids: Array.from(uuids), answer });
           return answer.promise;
         },
+        async setFavorite(uuids, favorite) {
+          requests.push({ uuids: Array.from(uuids), favorite });
+          return favoriteOk ? Array.from(uuids) : [];
+        },
       },
       document: {
         getElementById: (id) => (id === 'viewer-panel' ? panel : null),
         querySelector: () => null,
-      },
-      fetch: async (url, opts) => {
-        requests.push({ url, method: opts && opts.method });
-        return { ok: favoriteOk };
       },
       getCSRFToken: () => 'token',
       AppAlert: { error: (message) => alerts.push(message) },
@@ -276,9 +276,9 @@ test('starring the file tells the page, unstarring too', async () => {
   await shell.toggleFavorite();
   assert.equal(shell.isFavorite, false);
 
-  assert.deepEqual(requests.map((r) => ({ ...r })), [
-    { url: '/api/v1/files/a/favorite', method: 'POST' },
-    { url: '/api/v1/files/a/favorite', method: 'DELETE' },
+  assert.deepEqual(requests.map((r) => ({ ...r, uuids: [...r.uuids] })), [
+    { uuids: ['a'], favorite: true },
+    { uuids: ['a'], favorite: false },
   ]);
   assert.deepEqual(shown(events, 'file-favorite-changed'), [
     { uuid: 'a', isFavorite: true },

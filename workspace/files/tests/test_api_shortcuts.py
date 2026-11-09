@@ -22,6 +22,7 @@ from workspace.files.services.public_links import resolve_within
 from workspace.files.services.search_index import index_file
 from workspace.files.services.sharing import create_share_link, share_file
 from workspace.files.services.shortcuts import create_shortcut
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import FolderResource, RootCollection
 
@@ -233,13 +234,11 @@ class ShortcutUpdateApiTests(ShortcutApiFixtures, APITestCase):
         self.url = f"/api/v1/files/{self.shortcut.uuid}"
 
     def test_rename_and_move(self):
-        response = self.client.patch(
-            self.url,
-            {"name": "Q3.pdf", "parent": str(self.team_root.uuid)},
-            format="json",
-        )
-
+        response = self.client.patch(self.url, {"name": "Q3.pdf"}, format="json")
         self.assertEqual(response.status_code, 200, response.content)
+        moved = run_operation(self.client, "move", [self.shortcut], self.team_root)
+
+        self.assertEqual(outcome_of(moved), ({"done": 1}, []))
         self.shortcut.refresh_from_db()
         self.assertEqual(self.shortcut.name, "Q3.pdf")
         self.assertEqual(self.shortcut.group_id, self.team.pk)
@@ -247,13 +246,15 @@ class ShortcutUpdateApiTests(ShortcutApiFixtures, APITestCase):
 
     def test_a_move_onto_a_taken_name_renames_when_asked(self):
         # The report itself holds "report.pdf" at the root.
-        refused = self.client.patch(self.url, {"parent": None}, format="json")
-        renamed = self.client.patch(
-            self.url, {"parent": None, "on_conflict": "rename"}, format="json"
+        refused = run_operation(self.client, "move", [self.shortcut], None)
+        renamed = run_operation(
+            self.client, "move", [self.shortcut], None, on_conflict="rename"
         )
 
-        self.assertEqual(refused.status_code, 400)
-        self.assertEqual(renamed.status_code, 200, renamed.content)
+        self.assertEqual(
+            outcome_of(refused), ({"failed": 1}, [("report.pdf", "name_taken")])
+        )
+        self.assertEqual(outcome_of(renamed), ({"renamed": 1}, []))
         self.shortcut.refresh_from_db()
         self.assertEqual(
             (self.shortcut.name, self.shortcut.parent_id), ("report (Copy).pdf", None)
@@ -279,30 +280,29 @@ class ShortcutUpdateApiTests(ShortcutApiFixtures, APITestCase):
         self.assertIn("content", response.json())
 
     def test_trash_restore_and_purge(self):
-        self.assertEqual(self.client.delete(self.url).status_code, 204)
-        restore = self.client.post(f"{self.url}/restore")
-        self.assertEqual(restore.status_code, 200, restore.content)
-        self.assertEqual(self.client.delete(self.url).status_code, 204)
-        purge = self.client.delete(f"{self.url}/purge")
-        self.assertEqual(purge.status_code, 204, purge.content)
+        for kind in ("trash", "restore", "trash", "purge"):
+            response = run_operation(self.client, kind, [self.shortcut])
+            self.assertEqual(outcome_of(response), ({"done": 1}, []), kind)
 
         self.assertFalse(File.objects.filter(pk=self.shortcut.pk).exists())
         self.assertTrue(File.objects.filter(pk=self.report.pk).exists())
 
     def test_copy_makes_another_shortcut(self):
-        response = self.client.post(
-            f"{self.url}/copy", {"parent": str(self.team_root.uuid)}, format="json"
-        )
+        response = run_operation(self.client, "copy", [self.shortcut], self.team_root)
 
-        self.assertEqual(response.status_code, 201, response.content)
-        copied = File.objects.get(uuid=response.json()["uuid"])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
+        copied = File.objects.get(parent=self.team_root, name=self.shortcut.name)
         self.assertEqual(copied.node_type, File.NodeType.SHORTCUT)
         self.assertEqual(copied.shortcut_target_id, self.report.pk)
 
     def test_favorite(self):
-        response = self.client.post(f"{self.url}/favorite")
+        response = self.client.post(
+            "/api/v1/files/favorites",
+            {"items": [str(self.shortcut.uuid)], "value": True},
+            format="json",
+        )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [str(self.shortcut.uuid)])
 
 
 class ShortcutReadApiTests(ShortcutApiFixtures, APITestCase):

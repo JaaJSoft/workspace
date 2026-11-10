@@ -13,7 +13,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.files.models import File, FileScan, MediaInfo
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.event_dispatch import run_handlers
 from workspace.files.services.media_info import (
     is_probe_candidate,
@@ -64,7 +65,7 @@ class MediaInfoTestCase(TestCase):
         self.user = User.objects.create_user(username="alice", password="p")
 
     def _upload(self, name, data=None):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user,
             name=name,
             content=ContentFile(clip_bytes(name) if data is None else data, name=name),
@@ -166,9 +167,7 @@ class PendingTests(MediaInfoTestCase):
         probe_file(f)
         self.assertEqual(self._pending(), set())
 
-        FileService.update_content(
-            f, ContentFile(clip_bytes("clip_hevc.mp4"), name="clip.webm")
-        )
+        update_content(f, ContentFile(clip_bytes("clip_hevc.mp4"), name="clip.webm"))
 
         self.assertEqual(self._pending(), {f.pk})
 
@@ -245,7 +244,7 @@ class PipelineTests(MediaInfoTestCase):
     @patch("workspace.files.services.ffmpeg.probe", return_value=_REPORT)
     def test_trashed_before_the_pipeline_ran_is_skipped(self, probe):
         f = self._upload("clip.webm")
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
         f.refresh_from_db()
 
         run_pipeline(f.uuid)

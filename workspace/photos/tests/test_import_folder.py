@@ -5,7 +5,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.photos.services.import_folder import (
     ensure_import_folder,
     import_folder,
@@ -53,15 +53,15 @@ class ImportFolderServiceTests(ImportFolderTestCase):
         )
 
     def test_an_existing_pictures_folder_is_reused(self):
-        existing = FileService.create_folder(self.user, "Pictures")
+        existing = tree.create_folder(self.user, "Pictures")
 
         self.assertEqual(ensure_import_folder(self.user).pk, existing.pk)
         self.assertEqual(self._root_pictures_folders().count(), 1)
 
     def test_a_trashed_chosen_folder_falls_back_to_the_default_one(self):
-        chosen = FileService.create_folder(self.user, "Camera")
+        chosen = tree.create_folder(self.user, "Camera")
         set_setting(self.user, "photos", "import_folder", str(chosen.pk))
-        FileService.soft_delete(chosen, acting_user=self.user)
+        trash.soft_delete(chosen, acting_user=self.user)
 
         self.assertIsNone(import_folder(self.user))
         self.assertEqual(ensure_import_folder(self.user).name, "Pictures")
@@ -96,8 +96,8 @@ class ImportFolderApiTests(ImportFolderTestCase):
         self.assertEqual(response.json()["uuid"], str(folder.pk))
 
     def test_put_chooses_a_personal_folder(self):
-        camera = FileService.create_folder(self.user, "Camera")
-        roll = FileService.create_folder(self.user, "Roll", parent=camera)
+        camera = tree.create_folder(self.user, "Camera")
+        roll = tree.create_folder(self.user, "Roll", parent=camera)
 
         response = self.client.put(
             API, {"folder": str(roll.pk)}, content_type="application/json"
@@ -111,7 +111,7 @@ class ImportFolderApiTests(ImportFolderTestCase):
     def test_put_chooses_a_folder_of_one_of_the_users_groups(self):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
-        shared = FileService.create_folder(self.bob, "Holidays", group=family)
+        shared = tree.create_folder(self.bob, "Holidays", group=family)
 
         response = self.client.put(
             API, {"folder": str(shared.pk)}, content_type="application/json"
@@ -121,8 +121,8 @@ class ImportFolderApiTests(ImportFolderTestCase):
         self.assertEqual(response.json()["group"], "Family")
 
     def test_put_refuses_a_folder_the_user_cannot_add_files_to(self):
-        others = FileService.create_folder(self.bob, "Private")
-        a_file = FileService.create_file(
+        others = tree.create_folder(self.bob, "Private")
+        a_file = tree.create_file(
             self.user, "note.txt", content=ContentFile(b"x", name="note.txt")
         )
 
@@ -136,7 +136,7 @@ class ImportFolderApiTests(ImportFolderTestCase):
         self.assertIsNone(get_setting(self.user, "photos", "import_folder"))
 
     def test_put_refuses_a_body_that_is_not_an_object(self):
-        folder = FileService.create_folder(self.user, "Camera")
+        folder = tree.create_folder(self.user, "Camera")
 
         for body in ([str(folder.pk)], "Camera", 1):
             with self.subTest(body=body):

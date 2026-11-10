@@ -112,6 +112,16 @@ def is_blocked(file_obj):
     return not override_applies(scan, file_obj)
 
 
+def check_copy_allowed(file_obj):
+    """Raise ``QuarantinedSource`` when *file_obj*'s bytes may not be copied.
+
+    A copy is a new row with no scan verdict of its own, so a blocked
+    file copied anywhere would come back out unblocked.
+    """
+    if is_blocked(file_obj):
+        raise QuarantinedSource()
+
+
 def blocked_reason(file_obj):
     """A short human-readable reason, or None when access is allowed."""
     if not is_blocked(file_obj):

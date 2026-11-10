@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -17,9 +17,7 @@ class PropertiesPanelQueryCountTests(TestCase):
         self.owner = User.objects.create_user(
             username="props_owner", email="props@test.com", password="x"
         )
-        self.file = FileService.create_file(
-            self.owner, "doc.txt", acting_user=self.owner
-        )
+        self.file = tree.create_file(self.owner, "doc.txt", acting_user=self.owner)
         self.client.force_login(self.owner)
 
     def test_owner_is_joined_not_fetched_during_render(self):

@@ -26,7 +26,9 @@ from wsgidav.dav_error import DAVError
 from workspace.common.storage.s3 import MIN_PART_SIZE
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.content_writes import update_content
+from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.resources import FileResource, FolderResource
 
@@ -37,7 +39,7 @@ def deep_folder(user):
     """A folder whose key is a few bytes short of the 1024 S3 allows."""
     parent = None
     for depth in range(4):
-        parent = FileService.create_folder(user, f"{depth}" + "x" * 249, parent=parent)
+        parent = tree.create_folder(user, f"{depth}" + "x" * 249, parent=parent)
     return parent
 
 
@@ -47,7 +49,7 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.user = User.objects.create_user(username="alice", password="pw")
 
     def upload(self, name, data, parent=None):
-        return FileService.create_file(
+        return tree.create_file(
             self.user, name, parent=parent, content=ContentFile(data, name=name)
         )
 
@@ -64,16 +66,16 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertEqual(self.read(f), b"hello")
 
     def test_an_empty_folder_is_kept(self):
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
 
         self.assertEqual(self.keys(), ["files/users/alice/Docs/"])
 
     def test_renaming_a_folder_moves_its_blobs(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(docs, "Archive")
+            tree.rename(docs, "Archive")
 
         self.assertEqual(
             self.keys(),
@@ -82,7 +84,7 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertEqual(self.read(f), b"a")
 
     def test_a_folder_rename_that_cannot_move_its_blobs_changes_nothing(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
         self.upload("b.txt", b"b", parent=docs)
         before = self.keys()
@@ -100,7 +102,7 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
             mock.patch.object(backend, "_copy", copy_once),
             self.assertRaises(OSError),
         ):
-            FileService.rename(docs, "Archive")
+            tree.rename(docs, "Archive")
 
         docs.refresh_from_db()
         self.assertEqual(docs.name, "Docs")
@@ -110,11 +112,11 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
     def test_a_rename_rolled_back_after_the_move_keeps_the_originals(self):
         """The rows go back to the originals, which are still there: the
         copies the move made are left as duplicates, never as a gap."""
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
 
         with self.captureOnCommitCallbacks(execute=True), transaction.atomic():
-            FileService.rename(docs, "Archive")
+            tree.rename(docs, "Archive")
             # The request fails after the move: its transaction rolls back.
             transaction.set_rollback(True)
 
@@ -124,12 +126,12 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertIn("files/users/alice/Docs/a.txt", self.keys())
 
     def test_moving_a_folder_moves_its_blobs(self):
-        docs = FileService.create_folder(self.user, "Docs")
-        archive = FileService.create_folder(self.user, "Archive")
+        docs = tree.create_folder(self.user, "Docs")
+        archive = tree.create_folder(self.user, "Archive")
         f = self.upload("a.txt", b"a", parent=docs)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.move(docs, archive)
+            tree.move(docs, archive)
 
         self.assertEqual(
             self.keys(),
@@ -142,12 +144,12 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertEqual(self.read(f), b"a")
 
     def test_renaming_then_moving_a_file(self):
-        archive = FileService.create_folder(self.user, "Archive")
+        archive = tree.create_folder(self.user, "Archive")
         f = self.upload("a.txt", b"a")
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(f, "b.txt")
-            FileService.move(f, archive)
+            tree.rename(f, "b.txt")
+            tree.move(f, archive)
 
         self.assertEqual(
             self.keys(),
@@ -177,26 +179,26 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         claims the rows first holds such a write back until it commits; one
         let through mid-copy would land on a source after its copy was taken,
         and go with that source when the move commits."""
-        docs = FileService.create_folder(self.user, "Docs")
-        archive = FileService.create_folder(self.user, "Archive")
+        docs = tree.create_folder(self.user, "Docs")
+        archive = tree.create_folder(self.user, "Archive")
         f = self.upload("a.txt", b"a", parent=docs)
         cases = [
             (
                 "folder rename",
-                lambda: FileService.rename(docs, "Papers"),
+                lambda: tree.rename(docs, "Papers"),
                 "Papers/a.txt",
             ),
             (
                 "folder move",
-                lambda: FileService.move(docs, archive),
+                lambda: tree.move(docs, archive),
                 "Archive/Papers/a.txt",
             ),
             (
                 "file rename",
-                lambda: FileService.rename(f, "b.txt"),
+                lambda: tree.rename(f, "b.txt"),
                 "Archive/Papers/b.txt",
             ),
-            ("file move", lambda: FileService.move(f, None), "b.txt"),
+            ("file move", lambda: tree.move(f, None), "b.txt"),
         ]
         for label, move, destination in cases:
             with self.subTest(label):
@@ -208,15 +210,13 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertEqual(self.read(f), b"a")
 
     def test_a_save_that_waited_on_a_folder_move_follows_it(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"old", parent=docs)
         loaded = File.objects.get(pk=f.pk)
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(docs, "Archive")
+            tree.rename(docs, "Archive")
 
-        FileService.update_content(
-            loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
-        )
+        update_content(loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user)
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, "files/users/alice/Archive/a.txt")
@@ -230,11 +230,9 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         f = self.upload("a.txt", b"old")
         loaded = File.objects.get(pk=f.pk)
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(f, "b.txt")
+            tree.rename(f, "b.txt")
 
-        FileService.update_content(
-            loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
-        )
+        update_content(loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user)
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, "files/users/alice/b.txt")
@@ -254,11 +252,11 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertFalse(File.objects.filter(name="y" * 100).exists())
 
     def test_trash_then_restore(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.soft_delete(docs)
+            trash.soft_delete(docs)
         self.assertEqual(
             self.keys(),
             [
@@ -270,17 +268,17 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
 
         docs.refresh_from_db()
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.restore(docs)
+            trash.restore(docs)
         self.assertEqual(
             self.keys(), ["files/users/alice/Docs/", "files/users/alice/Docs/a.txt"]
         )
         self.assertEqual(self.read(f), b"a")
 
     def test_copying_a_folder(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         self.upload("a.txt", b"a", parent=docs)
 
-        copied = FileService.copy(docs, None, self.user)
+        copied = tree.copy(docs, None, self.user)
 
         copied_file = File.objects.get(parent=copied, name="a.txt")
         self.assertEqual(self.read(copied_file), b"a")
@@ -288,19 +286,17 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertIn("files/users/alice/Docs/a.txt", self.keys())
 
     def test_a_hard_delete_removes_the_blobs(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         self.upload("a.txt", b"a", parent=docs)
 
-        FileService.hard_delete(docs)
+        hard_delete_tree(docs)
 
         self.assertEqual(self.keys(), [])
 
     def test_replacing_the_content(self):
         f = self.upload("doc.txt", b"old")
 
-        FileService.update_content(
-            f, ContentFile(b"new", name="doc.txt"), name="doc.txt"
-        )
+        update_content(f, ContentFile(b"new", name="doc.txt"), name="doc.txt")
 
         self.assertEqual(self.keys(), ["files/users/alice/doc.txt"])
         self.assertEqual(self.read(f), b"new")
@@ -395,8 +391,8 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
     def test_an_upload_the_file_was_moved_under_is_refused(self):
         """Its bytes are staged under the path the file had when the PUT began,
         which the move empties once it commits."""
-        docs = FileService.create_folder(self.user, "Docs")
-        f = FileService.create_file(
+        docs = tree.create_folder(self.user, "Docs")
+        f = tree.create_file(
             self.user, "a.txt", parent=docs, content=ContentFile(b"old", name="a.txt")
         )
         resource = self._resource("/Docs/a.txt", f)
@@ -404,7 +400,7 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
         buf.write(b"new")
         buf.close()
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(docs, "Archive")
+            tree.rename(docs, "Archive")
 
         with self.assertRaises(DAVError) as refused:
             resource.end_write(with_errors=False)
@@ -431,15 +427,15 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
         self.assertFalse(File.objects.filter(name="y" * 100).exists())
 
     def test_a_new_file_refused_because_its_folder_moved_leaves_nothing(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         # The empty row a PUT of a new file creates before its first byte.
-        placeholder = FileService.create_file(self.user, "a.txt", parent=docs)
+        placeholder = tree.create_file(self.user, "a.txt", parent=docs)
         resource = self._resource("/Docs/a.txt", placeholder)
         buf = resource.begin_write()
         buf.write(b"new")
         buf.close()
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(docs, "Archive")
+            tree.rename(docs, "Archive")
 
         with self.assertRaises(DAVError) as refused:
             resource.end_write(with_errors=False)

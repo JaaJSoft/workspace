@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from workspace.core.module_registry import SearchScope
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.models import HiddenFile, PhotoEmbedding
 from workspace.photos.search import search_by_description_entry, search_photos
 from workspace.photos.services import similarity
@@ -96,7 +96,7 @@ class SimilarViewTests(RankedViewTestCase):
     def test_the_library_tabs_keep_the_ranking(self):
         team = Group.objects.create(name="Team")
         self.user.groups.add(team)
-        folder = FileService.create_folder(owner=self.user, name="Team", group=team)
+        folder = tree.create_folder(owner=self.user, name="Team", group=team)
         library_photo(self.user, "team.jpg", RED, parent=folder)
 
         response = self.client.get(f"/photos?similar={self.red.pk}&scope=all")
@@ -334,7 +334,7 @@ class GlobalSearchEntryTests(TestCase):
         team = Group.objects.create(name="Team")
         for member in (self.user, bob):
             member.groups.add(team)
-        folder = FileService.create_folder(owner=bob, name="Team", group=team)
+        folder = tree.create_folder(owner=bob, name="Team", group=team)
         return library_photo(bob, "team.jpg", RED, parent=folder)
 
     def _entries(self, scope):

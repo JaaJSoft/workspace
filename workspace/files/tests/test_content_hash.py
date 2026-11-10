@@ -13,13 +13,17 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.content_hash import (
     find_duplicates,
     hash_storage_file,
     hash_stream,
     pending_hash_qs,
     refresh_content_hash,
+)
+from workspace.files.services.content_writes import (
+    replace_content_storage,
+    update_content,
 )
 from workspace.files.services.processors import get_processor
 from workspace.files.sync import FileSyncService
@@ -66,7 +70,7 @@ class WritePathHashTests(TestCase):
         self.user = User.objects.create_user(username="hasher", password="pass")
 
     def test_create_file_hashes_uploaded_content(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "hello.txt", content=ContentFile(HELLO, name="hello.txt")
         )
         self.assertEqual(f.content_hash, HELLO_SHA256)
@@ -75,28 +79,28 @@ class WritePathHashTests(TestCase):
             self.assertEqual(fh.read(), HELLO)
 
     def test_create_file_without_content_has_no_hash(self):
-        f = FileService.create_file(self.user, "empty.txt")
+        f = tree.create_file(self.user, "empty.txt")
         self.assertEqual(f.content_hash, "")
 
     def test_folder_has_no_hash(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         self.assertEqual(folder.content_hash, "")
 
     def test_update_content_refreshes_hash(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
-        FileService.update_content(
+        update_content(
             f, ContentFile(b"edited", name="note.txt"), acting_user=self.user
         )
         f.refresh_from_db()
         self.assertEqual(f.content_hash, _sha256(b"edited"))
 
     def test_replace_content_storage_stores_the_streamed_hash(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
-        FileService.replace_content_storage(
+        replace_content_storage(
             f,
             storage_path=f.content.name,
             size=6,
@@ -107,27 +111,27 @@ class WritePathHashTests(TestCase):
         self.assertEqual(f.content_hash, _sha256(b"edited"))
 
     def test_copy_carries_the_source_hash(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
-        folder = FileService.create_folder(self.user, "Copies")
-        copied = FileService.copy(f, folder, self.user, acting_user=self.user)
+        folder = tree.create_folder(self.user, "Copies")
+        copied = tree.copy(f, folder, self.user, acting_user=self.user)
         self.assertEqual(copied.content_hash, HELLO_SHA256)
 
     def test_copy_of_a_legacy_row_computes_the_hash(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
         File.objects.filter(pk=f.pk).update(content_hash="")
         f.refresh_from_db()
-        folder = FileService.create_folder(self.user, "Copies")
-        copied = FileService.copy(f, folder, self.user, acting_user=self.user)
+        folder = tree.create_folder(self.user, "Copies")
+        copied = tree.copy(f, folder, self.user, acting_user=self.user)
         self.assertEqual(copied.content_hash, HELLO_SHA256)
 
     def test_register_disk_file_hashes_the_blob(self):
         path = default_storage.save("hash-test/on-disk.txt", ContentFile(HELLO))
         try:
-            f = FileService.register_disk_file(
+            f = tree.register_disk_file(
                 self.user, "on-disk.txt", None, path, size=len(HELLO)
             )
             self.assertEqual(f.content_hash, HELLO_SHA256)
@@ -135,7 +139,7 @@ class WritePathHashTests(TestCase):
             default_storage.delete(path)
 
     def test_register_disk_file_survives_a_missing_blob(self):
-        f = FileService.register_disk_file(
+        f = tree.register_disk_file(
             self.user, "ghost.txt", None, "hash-test/ghost.txt", size=None
         )
         self.assertEqual(f.content_hash, "")
@@ -144,7 +148,7 @@ class WritePathHashTests(TestCase):
 class WebDavHashTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="davhash", password="pass")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.user, "test.txt", content=ContentFile(HELLO, name="test.txt")
         )
         self.res = FileResource("/test.txt", _make_environ(user=self.user), self.file)
@@ -182,17 +186,17 @@ class FindDuplicatesTests(TestCase):
         self.group = Group.objects.create(name="Marketing")
         self.user.groups.add(self.group)
         self.other.groups.add(self.group)
-        self.group_root = FileService.create_folder(
+        self.group_root = tree.create_folder(
             self.user, "Marketing Files", group=self.group
         )
 
     def _upload(self, owner, name, data=HELLO, parent=None):
-        return FileService.create_file(
+        return tree.create_file(
             owner, name, parent=parent, content=ContentFile(data, name=name)
         )
 
     def test_finds_own_personal_file_with_same_content(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         existing = self._upload(self.user, "a.txt", parent=folder)
         new = self._upload(self.user, "b.txt")
         self.assertEqual(list(find_duplicates(new)), [existing])
@@ -209,7 +213,7 @@ class FindDuplicatesTests(TestCase):
 
     def test_ignores_trashed_files(self):
         existing = self._upload(self.user, "a.txt")
-        FileService.soft_delete(existing, acting_user=self.user)
+        trash.soft_delete(existing, acting_user=self.user)
         new = self._upload(self.user, "b.txt")
         self.assertEqual(list(find_duplicates(new)), [])
 
@@ -218,9 +222,7 @@ class FindDuplicatesTests(TestCase):
         self._upload(self.user, "personal.txt")
         other_group = Group.objects.create(name="Sales")
         self.user.groups.add(other_group)
-        other_root = FileService.create_folder(
-            self.user, "Sales Files", group=other_group
-        )
+        other_root = tree.create_folder(self.user, "Sales Files", group=other_group)
         self._upload(self.user, "sales.txt", parent=other_root)
         # ...but a teammate's file in the same group folder does.
         teammate = self._upload(self.other, "shared.txt", parent=self.group_root)
@@ -235,7 +237,7 @@ class FindDuplicatesTests(TestCase):
 
     def test_row_without_hash_has_no_duplicates(self):
         self._upload(self.user, "a.txt")
-        new = FileService.create_file(self.user, "empty.txt")
+        new = tree.create_file(self.user, "empty.txt")
         self.assertEqual(list(find_duplicates(new)), [])
 
     def test_same_hash_but_different_size_is_not_a_duplicate(self):
@@ -270,7 +272,7 @@ class UploadDuplicateApiTests(APITestCase):
         self.assertEqual(response.data["duplicates"], [])
 
     def test_second_upload_of_identical_content_reports_where_it_lives(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         first = self._post("a.txt", parent=folder)
         second = self._post("copy.txt")
         self.assertEqual(second.status_code, 201, second.content)
@@ -291,7 +293,7 @@ class UploadDuplicateApiTests(APITestCase):
         self.assertEqual(len({r.content.name for r in rows}), 2)
 
     def test_another_users_identical_file_is_not_revealed(self):
-        FileService.create_file(
+        tree.create_file(
             self.other, "secret.txt", content=ContentFile(HELLO, name="secret.txt")
         )
         response = self._post("a.txt")
@@ -299,7 +301,7 @@ class UploadDuplicateApiTests(APITestCase):
         self.assertEqual(response.data["duplicates"], [])
 
     def test_content_update_refreshes_hash(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
         response = self.client.patch(
@@ -312,7 +314,7 @@ class UploadDuplicateApiTests(APITestCase):
         self.assertEqual(f.content_hash, _sha256(b"edited"))
 
     def test_clearing_content_clears_the_hash(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
         response = self.client.patch(
@@ -336,9 +338,7 @@ class ContentHashCatchUpTests(TestCase):
         self.user = User.objects.create_user(username="backfill", password="pass")
 
     def _legacy_file(self, name, data):
-        f = FileService.create_file(
-            self.user, name, content=ContentFile(data, name=name)
-        )
+        f = tree.create_file(self.user, name, content=ContentFile(data, name=name))
         File.objects.filter(pk=f.pk).update(content_hash="")
         f.refresh_from_db()
         return f
@@ -355,18 +355,18 @@ class ContentHashCatchUpTests(TestCase):
         self.assertEqual(run_catch_up("content_hash"), 0)
 
     def test_leaves_existing_hashes_and_folders_alone(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "new.txt", content=ContentFile(b"x", name="new.txt")
         )
         File.objects.filter(pk=f.pk).update(content_hash="f" * 64)
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
 
         self.assertEqual(run_catch_up("content_hash"), 0)
         f.refresh_from_db()
         self.assertEqual(f.content_hash, "f" * 64)
 
     def test_reanalyze_corrects_a_wrong_hash(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "new.txt", content=ContentFile(HELLO, name="new.txt")
         )
         File.objects.filter(pk=f.pk).update(content_hash="f" * 64)

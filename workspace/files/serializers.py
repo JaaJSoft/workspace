@@ -17,13 +17,8 @@ from workspace.files.queries import (
     reads_full_path,
     visible_path,
 )
-from workspace.files.services import FileService
-from workspace.files.services._names import (
-    FILE_NAME_TAKEN,
-    FOLDER_NAME_TAKEN,
-    NameTaken,
-)
-from workspace.files.services.files import GroupMismatch
+from workspace.files.services import tree
+from workspace.files.services.content_writes import clear_content, update_content
 from workspace.files.services.image_edits import (
     ROTATIONS,
     edit_problem,
@@ -33,6 +28,12 @@ from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
     conflicting_lock,
+)
+from workspace.files.services.names import (
+    FILE_NAME_TAKEN,
+    FOLDER_NAME_TAKEN,
+    NameTaken,
+    find_name_conflict,
 )
 from workspace.files.services.operations import (
     MAX_ITEMS,
@@ -49,6 +50,7 @@ from workspace.files.services.shortcuts import (
     resolution_of,
 )
 from workspace.files.services.transfers import OnConflict, move_item
+from workspace.files.services.tree import GroupMismatch
 from workspace.files.services.uploads import CHUNK_SIZE
 
 from .models import File, FileComment, FileOperation, UploadSession, canonical_name
@@ -653,19 +655,19 @@ class FileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"parent": [message]})
         if instance is None:
             try:
-                FileService.node_group(parent, attrs.get("group"))
+                tree.node_group(parent, attrs.get("group"))
             except GroupMismatch as error:
                 raise serializers.ValidationError(
                     {"group": ["The group must be the parent folder's group."]}
                 ) from error
 
-        # Validate file name uniqueness via FileService
+        # Validate file name uniqueness
         if node_type == File.NodeType.FILE:
             name = attrs.get("name") or (instance.name if instance else None)
             parent = instance.parent if instance else attrs.get("parent")
             owner = instance.owner if instance else self.context["request"].user
             if name:
-                conflict = FileService.find_name_conflict(
+                conflict = find_name_conflict(
                     owner, parent, name, exclude_pk=instance.pk if instance else None
                 )
                 # A create told to rename picks the free name at its INSERT.
@@ -757,7 +759,7 @@ class FileSerializer(serializers.ModelSerializer):
             instance = self._create_shortcut(owner, validated_data)
         elif node_type == File.NodeType.FOLDER:
             with name_refusals():
-                instance = FileService.create_folder(
+                instance = tree.create_folder(
                     owner=owner,
                     name=validated_data["name"],
                     parent=validated_data.get("parent"),
@@ -768,7 +770,7 @@ class FileSerializer(serializers.ModelSerializer):
                 )
         else:
             try:
-                instance = FileService.create_file(
+                instance = tree.create_file(
                     owner=owner,
                     name=validated_data["name"],
                     parent=validated_data.get("parent"),
@@ -786,7 +788,7 @@ class FileSerializer(serializers.ModelSerializer):
                     self._on_conflict == "replace"
                     and validated_data.get("content") is not None
                 ):
-                    winner = FileService.find_name_conflict(
+                    winner = find_name_conflict(
                         owner, validated_data.get("parent"), validated_data["name"]
                     )
                 if winner is None:
@@ -816,7 +818,7 @@ class FileSerializer(serializers.ModelSerializer):
             File.objects.filter(pk=target.pk), user
         ).first()
         with content_write_refusals():
-            FileService.update_content(
+            update_content(
                 instance,
                 validated_data["content"],
                 name=instance.name,
@@ -828,7 +830,7 @@ class FileSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
-        # Pop content + caller-supplied mime_type so they go through FileService
+        # Pop content + caller-supplied mime_type so they go through the content services
         # rather than the default ModelSerializer assignment loop.
         content_provided = "content" in validated_data
         uploaded = validated_data.pop("content", None)
@@ -862,7 +864,7 @@ class FileSerializer(serializers.ModelSerializer):
                 # it goes through the same conditional statement rather than a
                 # bare save() a lock taken meanwhile would never see.
                 with content_write_refusals():
-                    FileService.clear_content(
+                    clear_content(
                         instance,
                         acting_user=acting_user,
                         expected_hash=self.context.get("expected_content_hash"),
@@ -873,7 +875,7 @@ class FileSerializer(serializers.ModelSerializer):
                 # database decides it, which is the half that holds under two
                 # writers racing with the same expectation.
                 with content_write_refusals():
-                    FileService.update_content(
+                    update_content(
                         instance,
                         uploaded,
                         name=instance.name,

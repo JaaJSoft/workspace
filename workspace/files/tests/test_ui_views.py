@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from workspace.core.module_registry import registry
 from workspace.files.models import File, FileScan, FileShareLink
+from workspace.files.services import trash
 from workspace.files.ui.views import SHARED_FOLDER_PAGE_SIZE
 from workspace.users.services.settings import set_setting
 
@@ -197,7 +198,7 @@ class SharedLinkPageTests(TestCase):
         self.assertEqual(self.client.get("/files/shared/nope").status_code, 404)
 
     def test_a_trashed_target_is_a_404(self):
-        self.doc.soft_delete()
+        trash.trash_subtree(self.doc)
         resp = self.client.get(f"/files/shared/{self.link.token}")
         self.assertEqual(resp.status_code, 404)
 
@@ -546,7 +547,7 @@ class SharedFolderListingTests(TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_a_trashed_descendant_is_a_404(self):
-        self.sub.soft_delete()
+        trash.trash_subtree(self.sub)
         resp = self.client.get(
             f"/files/shared/{self.read_link.token}", {"node": str(self.sub.uuid)}
         )
@@ -808,7 +809,7 @@ class SharedFileSiblingTests(TestCase):
         self.assertEqual(self._open(self.c).context["next_url"], "")
 
     def test_neighbours_stay_inside_the_same_folder_and_skip_the_trash(self):
-        self.c.soft_delete()
+        trash.trash_subtree(self.c)
         resp = self._open(self.b)
         self.assertEqual(resp.context["next_url"], "")
         self.assertEqual(resp.context["sibling_total"], 2)

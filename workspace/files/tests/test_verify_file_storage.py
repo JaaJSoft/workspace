@@ -9,7 +9,7 @@ from django.test import TestCase
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 
 User = get_user_model()
 
@@ -21,8 +21,8 @@ class VerifyFileStorageCases:
         super().setUp()
         self.user = User.objects.create_user(username="alice", password="pw")
         self.storage = File._meta.get_field("content").storage
-        self.docs = FileService.create_folder(self.user, "Docs")
-        self.file = FileService.create_file(
+        self.docs = tree.create_folder(self.user, "Docs")
+        self.file = tree.create_file(
             self.user, "a.txt", parent=self.docs, content=ContentFile(b"a")
         )
 
@@ -32,12 +32,10 @@ class VerifyFileStorageCases:
         return output.getvalue()
 
     def test_a_tree_that_mirrors_its_rows(self):
-        trashed = FileService.create_folder(self.user, "Old")
-        FileService.create_file(
-            self.user, "b.txt", parent=trashed, content=ContentFile(b"b")
-        )
+        trashed = tree.create_folder(self.user, "Old")
+        tree.create_file(self.user, "b.txt", parent=trashed, content=ContentFile(b"b"))
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.soft_delete(trashed)
+            trash.soft_delete(trashed)
 
         output = self.verify()
 
@@ -71,7 +69,7 @@ class VerifyFileStorageCases:
         self.assertIn("1 blob(s) off their file's tree path", output)
 
     def test_a_folder_without_a_directory_can_be_given_one(self):
-        empty = FileService.create_folder(self.user, "Empty")
+        empty = tree.create_folder(self.user, "Empty")
         self.storage.remove_dir_if_empty("files/users/alice/Empty")
 
         output = self.verify("--repair")
@@ -140,7 +138,7 @@ class VerifyFileStorageCases:
         self.assertIn("0 name(s) stored decomposed", output)
 
     def test_repair_settles_a_move_left_unfinished(self):
-        FileService.rename(self.docs, "Archive")  # the commit hook never runs
+        tree.rename(self.docs, "Archive")  # the commit hook never runs
         self.assertIn("1 move(s) not finished yet", self.verify())
 
         output = self.verify("--repair", "--settle-after", "0")
@@ -150,7 +148,7 @@ class VerifyFileStorageCases:
         self.assertIn("0 blob(s) no file points at", output)
 
     def test_repair_leaves_a_recent_move_alone(self):
-        FileService.rename(self.docs, "Archive")
+        tree.rename(self.docs, "Archive")
 
         output = self.verify("--repair")
 

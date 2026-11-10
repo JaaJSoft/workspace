@@ -8,7 +8,8 @@ from django.test import TestCase
 from PIL import Image
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import run_pipeline
 from workspace.files.services.thumbnails.generation import (
     get_thumbnail_path,
@@ -40,7 +41,7 @@ class ThumbnailPipelineTests(TestCase):
             pass
 
     def test_image_create_generates_thumbnail_and_sets_flag(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="pic.png",
             content=ContentFile(_png_bytes(), name="pic.png"),
@@ -59,7 +60,7 @@ class ThumbnailPipelineTests(TestCase):
         self.assertTrue(default_storage.exists(get_thumbnail_path(f.uuid)))
 
     def test_content_replaced_generates_thumbnail_and_sets_flag(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="pic3.png",
             content=ContentFile(_png_bytes(), name="pic3.png"),
@@ -79,7 +80,7 @@ class ThumbnailPipelineTests(TestCase):
 
     @patch("workspace.files.sse_provider.push_file_event")
     def test_a_drawn_thumbnail_is_announced_before_the_file_settles(self, push):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="pic4.png",
             content=ContentFile(_png_bytes(), name="pic4.png"),
@@ -93,7 +94,7 @@ class ThumbnailPipelineTests(TestCase):
         self.assertEqual(events, ["preview_ready", "processing_settled"])
 
     def test_non_image_is_skipped(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="note.txt",
             content=ContentFile(b"hello", name="note.txt"),
@@ -110,7 +111,7 @@ class ThumbnailPipelineTests(TestCase):
         self.assertFalse(default_storage.exists(get_thumbnail_path(f.uuid)))
 
     def test_trashed_file_is_skipped(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="pic2.png",
             content=ContentFile(_png_bytes(), name="pic2.png"),
@@ -118,7 +119,7 @@ class ThumbnailPipelineTests(TestCase):
         )
         f.type = "png"
         f.save(update_fields=["type"])
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
         f.refresh_from_db()
         self.addCleanup(self._cleanup, f.uuid)
 
@@ -135,7 +136,7 @@ class ThumbnailFlagWriteTests(TestCase):
         cls.user = User.objects.create_user(username="th-flag", password="p")
 
     def setUp(self):
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             owner=self.user,
             name="before.png",
             content=ContentFile(_png_bytes(), name="before.png"),
@@ -158,9 +159,7 @@ class ThumbnailFlagWriteTests(TestCase):
 
     def test_a_rename_during_the_draw_keeps_its_path(self):
         self._refresh_while(
-            lambda current: FileService.rename(
-                current, "after.png", acting_user=self.user
-            )
+            lambda current: tree.rename(current, "after.png", acting_user=self.user)
         )
 
         row = File.objects.get(pk=self.file.pk)
@@ -172,7 +171,7 @@ class ThumbnailFlagWriteTests(TestCase):
         """The replacement cleared the flag; the late draw of the old bytes
         must leave it cleared, so the new bytes still get a thumbnail."""
         stored = self._refresh_while(
-            lambda current: FileService.update_content(
+            lambda current: update_content(
                 current,
                 ContentFile(_png_bytes((40, 30)), name="before.png"),
                 acting_user=self.user,

@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.refusals import Refused
 from workspace.files.services.transfers import OnConflict, move_item
 from workspace.users.services.settings import get_user_timezone
@@ -117,4 +117,4 @@ def _child_folder(user, parent, name):
     )
     if existing is not None:
         return existing
-    return FileService.create_folder(user, name, parent=parent, acting_user=user)
+    return tree.create_folder(user, name, parent=parent, acting_user=user)

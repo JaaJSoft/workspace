@@ -5,7 +5,7 @@ from django.test import TestCase
 from workspace.core.module_registry import SearchScope
 from workspace.files.models import File, FileShare
 from workspace.files.search import search_files
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.search_index import index_file
 from workspace.files.services.sharing import share_file
 
@@ -21,7 +21,7 @@ class SearchFilesScopeTests(TestCase):
         bob = User.objects.create_user(username="bob", password="x")
         team = Group.objects.create(name="Team")
         self.alice.groups.add(team)
-        team_root = FileService.create_folder(owner=bob, name="Team", group=team)
+        team_root = tree.create_folder(owner=bob, name="Team", group=team)
 
         self.personal = self._file("budget-alice.ods", self.alice)
         self.own_group_file = self._file(

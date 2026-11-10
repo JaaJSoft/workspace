@@ -492,7 +492,7 @@ class SeedRealPhotosTests(FacesTestMixin, TestCase):
         """The library is only marked imported by CREDITS.txt, written last:
         photos left behind by a failed run made the next one fail on their
         names."""
-        create_file = self.seeder.FileService.create_file
+        create_file = self.seeder.tree.create_file
         calls = []
 
         def failing_second_time(*args, **kwargs):
@@ -503,7 +503,7 @@ class SeedRealPhotosTests(FacesTestMixin, TestCase):
 
         with (
             patch.object(
-                self.seeder.FileService, "create_file", side_effect=failing_second_time
+                self.seeder.tree, "create_file", side_effect=failing_second_time
             ),
             self.assertRaises(OSError),
             redirect_stdout(io.StringIO()),

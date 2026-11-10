@@ -19,7 +19,8 @@ from workspace.common.tests.office_fixtures import (
 )
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import DocumentInfo, File, FileScan, ProcessingFailure
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.document_info import (
     is_document_candidate,
     pending_qs,
@@ -57,7 +58,7 @@ class DocumentInfoTestCase(TestCase):
         self.user = User.objects.create_user(username="alice", password="p")
 
     def _upload(self, name, data):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
 
@@ -221,7 +222,7 @@ class PendingTests(DocumentInfoTestCase):
         read_document_info(f)
         self.assertEqual(self._pending(), set())
 
-        FileService.update_content(
+        update_content(
             f,
             ContentFile(
                 make_docx(["new"], properties={"title": "Rewritten"}),

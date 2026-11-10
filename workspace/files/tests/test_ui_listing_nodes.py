@@ -13,7 +13,7 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.ui.views import LISTING_NODES_LIMIT
 from workspace.users.services.settings import set_setting
 
@@ -25,7 +25,7 @@ class ListingNodesFixtures:
         super().setUp()
         self.alice = User.objects.create_user(username="alice", password="x")
         self.bob = User.objects.create_user(username="bob", password="x")
-        self.docs = FileService.create_folder(self.alice, "Docs")
+        self.docs = tree.create_folder(self.alice, "Docs")
         self.report = self.file(self.alice, "report.txt", parent=self.docs)
         self.notes = self.file(self.alice, "notes.txt", parent=self.docs)
         self.client.force_login(self.alice)
@@ -108,7 +108,7 @@ class ListingNodesTests(ListingNodesFixtures, TestCase):
         self.assertIsNone(self.item(html, self.report))
 
     def test_the_trash_answers_for_trashed_nodes(self):
-        FileService.soft_delete(self.report, acting_user=self.alice)
+        trash.soft_delete(self.report, acting_user=self.alice)
 
         html = self.nodes("/files/trash", self.report.uuid).content.decode()
         elsewhere = self.nodes(
@@ -180,7 +180,7 @@ class ListingNodesAccessTests(ListingNodesFixtures, TestCase):
         self.assertIsNotNone(self.item(hidden.content.decode(), self.report))
 
     def test_a_folder_out_of_reach_answers_like_a_missing_one(self):
-        private = FileService.create_folder(self.bob, "Private")
+        private = tree.create_folder(self.bob, "Private")
         inside = self.file(self.bob, "inside.txt", parent=private)
 
         hidden = self.nodes(f"/files/{private.uuid}", inside.uuid)
@@ -192,7 +192,7 @@ class ListingNodesAccessTests(ListingNodesFixtures, TestCase):
     def test_a_group_folder_answers_its_members_only(self):
         team = Group.objects.create(name="Team")
         self.bob.groups.add(team)
-        root = FileService.create_folder(owner=self.bob, name="Team", group=team)
+        root = tree.create_folder(owner=self.bob, name="Team", group=team)
         shared = File.objects.create(
             owner=self.bob,
             name="plan.txt",

@@ -13,8 +13,8 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from workspace.files.models import File
-from workspace.files.services import FileService
 from workspace.files.services import processors as registry
+from workspace.files.services import tree
 from workspace.files.services.processors import (
     pending_ids,
     queue_files,
@@ -84,7 +84,7 @@ class CatchUpTestCase(TestCase):
         self.addCleanup(cache.clear)
 
     def _upload(self, name):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user, name=name, content=ContentFile(b"x", name=name)
         )
 

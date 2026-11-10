@@ -13,6 +13,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileEvent, FileShare, FileShareLink
+from workspace.files.services import trash
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -178,7 +179,7 @@ class FileEventDeleteRestoreTests(APITestCase):
         self.assertEqual(events[0].actor, self.user)
 
     def test_restore_emits_restored_event(self):
-        self.file.soft_delete()
+        trash.trash_subtree(self.file)
 
         response = run_operation(self.client, "restore", [self.file])
 

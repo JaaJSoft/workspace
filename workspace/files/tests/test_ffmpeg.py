@@ -10,7 +10,7 @@ from PIL import Image
 
 from workspace.common.storage.backend import temporary_copy
 from workspace.common.tests.media import local_storage_only
-from workspace.files.services import FileService, ffmpeg
+from workspace.files.services import ffmpeg, tree
 
 from .videos import clip_bytes, requires_ffmpeg
 
@@ -55,7 +55,7 @@ class LocalPathTests(TestCase):
 
     @local_storage_only
     def test_local_storage_hands_out_the_blob_itself(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="clip.webm", content=ContentFile(b"bytes")
         )
 
@@ -63,7 +63,7 @@ class LocalPathTests(TestCase):
             self.assertEqual(path, f.content.path)
 
     def test_a_missing_blob_is_file_not_found(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="clip.webm", content=ContentFile(b"bytes")
         )
         f.content.storage.delete(f.content.name)

@@ -11,8 +11,9 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.queries import can_access, user_files_qs, user_group_files_qs
-from workspace.files.services import FileService
-from workspace.files.services._storage_ops import folder_storage_path
+from workspace.files.services import trash, tree
+from workspace.files.services.names import check_name_available
+from workspace.files.services.storage_ops import node_storage_path
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.ui.views import build_breadcrumbs
 
@@ -67,7 +68,7 @@ class GroupFolderModelTests(TestCase):
             node_type=File.NodeType.FOLDER,
             group=self.group,
         )
-        old.soft_delete()
+        trash.trash_subtree(old)
         new = File.objects.create(
             owner=self.user,
             name="Marketing Files v2",
@@ -106,11 +107,11 @@ class GroupStoragePathTests(TestCase):
             group=self.group,
         )
 
-    def test_folder_storage_path_for_group_folder(self):
-        path = folder_storage_path(self.root)
+    def test_storage_path_for_group_folder(self):
+        path = node_storage_path(self.root)
         self.assertEqual(path, "files/groups/Marketing Files")
 
-    def test_folder_storage_path_for_group_subfolder(self):
+    def test_storage_path_for_group_subfolder(self):
         sub = File.objects.create(
             owner=self.user,
             name="Reports",
@@ -118,16 +119,16 @@ class GroupStoragePathTests(TestCase):
             parent=self.root,
             group=self.group,
         )
-        path = folder_storage_path(sub)
+        path = node_storage_path(sub)
         self.assertEqual(path, "files/groups/Marketing Files/Reports")
 
-    def test_folder_storage_path_personal_unchanged(self):
+    def test_storage_path_personal_unchanged(self):
         personal = File.objects.create(
             owner=self.user,
             name="Personal",
             node_type=File.NodeType.FOLDER,
         )
-        path = folder_storage_path(personal)
+        path = node_storage_path(personal)
         self.assertEqual(path, "files/users/alice/Personal")
 
     def test_file_upload_path_for_group_file(self):
@@ -289,25 +290,25 @@ class GroupPropagationOnCreateTests(TestCase):
         )
 
     def test_create_file_inherits_group_from_parent(self):
-        f = FileService.create_file(self.user, "report.txt", parent=self.root)
+        f = tree.create_file(self.user, "report.txt", parent=self.root)
         self.assertEqual(f.group_id, self.group.id)
 
     def test_create_folder_inherits_group_from_parent(self):
-        sub = FileService.create_folder(self.user, "Reports", parent=self.root)
+        sub = tree.create_folder(self.user, "Reports", parent=self.root)
         self.assertEqual(sub.group_id, self.group.id)
 
     def test_create_file_no_group_when_personal(self):
-        f = FileService.create_file(self.user, "personal.txt")
+        f = tree.create_file(self.user, "personal.txt")
         self.assertIsNone(f.group_id)
 
     def test_create_folder_explicit_group_for_root(self):
         group2 = Group.objects.create(name="Sales")
-        root2 = FileService.create_folder(self.user, "Sales", group=group2)
+        root2 = tree.create_folder(self.user, "Sales", group=group2)
         self.assertEqual(root2.group_id, group2.id)
 
     def test_nested_creation_propagates_group(self):
-        sub = FileService.create_folder(self.user, "Sub", parent=self.root)
-        f = FileService.create_file(self.user, "deep.txt", parent=sub)
+        sub = tree.create_folder(self.user, "Sub", parent=self.root)
+        f = tree.create_file(self.user, "deep.txt", parent=sub)
         self.assertEqual(f.group_id, self.group.id)
 
 
@@ -339,7 +340,7 @@ class GroupMoveTests(TestCase):
             parent=folder,
             mime_type="text/plain",
         )
-        FileService.propagate_group(folder, self.group)
+        tree.propagate_group(folder, self.group)
         folder.refresh_from_db()
         child.refresh_from_db()
         self.assertEqual(folder.group_id, self.group.id)
@@ -361,31 +362,31 @@ class GroupMoveTests(TestCase):
             group=self.group,
             mime_type="text/plain",
         )
-        FileService.propagate_group(folder, None)
+        tree.propagate_group(folder, None)
         folder.refresh_from_db()
         child.refresh_from_db()
         self.assertIsNone(folder.group_id)
         self.assertIsNone(child.group_id)
 
     def test_move_personal_to_group_sets_group(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.alice,
             "doc.txt",
             content=ContentFile(b"hello", name="doc.txt"),
         )
-        FileService.move(f, self.group_root, acting_user=self.alice)
+        tree.move(f, self.group_root, acting_user=self.alice)
         f.refresh_from_db()
         self.assertEqual(f.group_id, self.group.id)
 
     def test_move_group_to_personal_clears_group_and_changes_owner(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.alice,
             "doc.txt",
             parent=self.group_root,
             content=ContentFile(b"hello", name="doc.txt"),
         )
-        personal_folder = FileService.create_folder(self.bob, "My Stuff")
-        FileService.move(f, personal_folder, acting_user=self.bob)
+        personal_folder = tree.create_folder(self.bob, "My Stuff")
+        tree.move(f, personal_folder, acting_user=self.bob)
         f.refresh_from_db()
         self.assertIsNone(f.group_id)
         self.assertEqual(f.owner_id, self.bob.id)
@@ -413,7 +414,7 @@ class GroupValidationTests(TestCase):
             node_type=File.NodeType.FILE,
             mime_type="text/plain",
         )
-        FileService.validate_move_target(personal, self.group_root, user=self.bob)
+        tree.validate_move_target(personal, self.group_root, user=self.bob)
 
     def test_move_to_group_folder_denied_for_outsider(self):
         personal = File.objects.create(
@@ -423,9 +424,7 @@ class GroupValidationTests(TestCase):
             mime_type="text/plain",
         )
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(
-                personal, self.group_root, user=self.outsider
-            )
+            tree.validate_move_target(personal, self.group_root, user=self.outsider)
 
     def test_move_to_group_folder_denied_when_user_missing(self):
         # Without a user we cannot prove group membership, so authorization
@@ -437,7 +436,7 @@ class GroupValidationTests(TestCase):
             mime_type="text/plain",
         )
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(personal, self.group_root)
+            tree.validate_move_target(personal, self.group_root)
 
     def test_move_from_group_to_personal_allowed(self):
         group_file = File.objects.create(
@@ -453,7 +452,7 @@ class GroupValidationTests(TestCase):
             name="Personal",
             node_type=File.NodeType.FOLDER,
         )
-        FileService.validate_move_target(group_file, bob_folder, user=self.bob)
+        tree.validate_move_target(group_file, bob_folder, user=self.bob)
 
     def test_check_name_available_in_group_folder(self):
         File.objects.create(
@@ -465,7 +464,7 @@ class GroupValidationTests(TestCase):
             mime_type="text/plain",
         )
         with self.assertRaises(ValueError):
-            FileService.check_name_available(
+            check_name_available(
                 self.bob,
                 self.group_root,
                 "report.txt",

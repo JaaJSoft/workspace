@@ -21,8 +21,8 @@ from workspace.common.text import caseless
 
 from ..models import File
 from ..queries import can_create_in
-from ._names import sibling_nodes
-from .files import FileService
+from . import tree
+from .names import sibling_nodes
 from .quota import check_write_allowed, remaining_bytes
 from .refusals import (
     Refusal,
@@ -31,6 +31,7 @@ from .refusals import (
     require_action,
     require_destination,
 )
+from .scanning.policy import check_copy_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ def _stream_entry_to_tempfile(zf, info, leaf, total_bytes, max_bytes):
         tmp.seek(0)
         # UploadedFile.size is a plain attribute set in __init__, NOT
         # recomputed from the underlying file after writes - leaving it at 0
-        # made FileService.create_file persist size=0 for every extracted
+        # made tree.create_file persist size=0 for every extracted
         # entry. Set the real byte count, mirroring what Django's
         # TemporaryFileUploadHandler.file_complete does after an upload.
         tmp.size = entry_bytes
@@ -135,7 +136,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         raise ValueError("Source is not a file")
     if file_obj.type not in ZIP_LABELS:
         raise ValueError("Not a ZIP archive")
-    FileService.check_copy_allowed(file_obj)
+    check_copy_allowed(file_obj)
 
     max_bytes = getattr(settings, "FILES_EXTRACT_MAX_BYTES", 2 * 1024 * 1024 * 1024)
     max_entries = getattr(settings, "FILES_EXTRACT_MAX_ENTRIES", 10_000)
@@ -229,7 +230,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                                     group=dest_group,
                                     additional_bytes=tmp.size,
                                 )
-                            new_file = FileService.create_file(
+                            new_file = tree.create_file(
                                 acting_user,
                                 leaf,
                                 parent=parent,
@@ -303,7 +304,7 @@ def _ensure_folder_chain(parts, folder_cache, acting_user):
         if existing is not None and not can_create_in(acting_user, existing):
             raise ValueError("Cannot extract into a folder you cannot edit")
         if existing is None:
-            existing = FileService.create_folder(
+            existing = tree.create_folder(
                 acting_user,
                 segment,
                 parent=current,

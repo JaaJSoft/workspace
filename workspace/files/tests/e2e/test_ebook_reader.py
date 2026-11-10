@@ -15,7 +15,7 @@ from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import FileShareLink
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.ebooks import (
     cbz_bytes,
     epub_bytes,
@@ -41,7 +41,7 @@ class EbookReaderTests(PlaywrightTestCase):
         self.user = self.create_user(username="reader")
 
     def _open(self, data, name="book.epub"):
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
         self.login_as(self.user)
@@ -120,7 +120,7 @@ class EbookReaderTests(PlaywrightTestCase):
         self.assertTrue(page_drawn())
 
     def test_a_book_that_cannot_be_read_says_so(self):
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=self.user,
             name="broken.epub",
             content=ContentFile(b"PK\x03\x04 not a book", name="broken.epub"),
@@ -138,7 +138,7 @@ class EbookReaderTests(PlaywrightTestCase):
         # A same-origin URL serving JavaScript: a file anyone can publish
         # behind a public link. A policy allowing the site's own scripts by
         # origin would run it in the chapter, with the reader's session.
-        script = FileService.create_file(
+        script = tree.create_file(
             owner=self.user,
             name="payload.js",
             content=ContentFile(

@@ -9,7 +9,7 @@ from django.test import TestCase
 from workspace.core.module_registry import SearchScope, registry
 from workspace.core.services.search import search_modules
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.search_index import index_file
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import Album
@@ -94,7 +94,7 @@ class SearchPhotosTests(TestCase):
         bob = User.objects.create_user(username="bob", password="p")
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
-        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        root = tree.create_folder(owner=bob, name="Family", group=family)
         f = make_photo(
             bob, "sunset-family.jpg", datetime(2024, 7, 14, tzinfo=UTC), parent=root
         )
@@ -106,7 +106,7 @@ class SearchPhotosTests(TestCase):
 
     def test_a_shared_photo_is_found_without_its_owners_folder(self):
         bob = User.objects.create_user(username="bob", password="p")
-        folder = FileService.create_folder(owner=bob, name="Bob private")
+        folder = tree.create_folder(owner=bob, name="Bob private")
         f = make_photo(
             bob, "sunset-shared.jpg", datetime(2024, 7, 14, tzinfo=UTC), parent=folder
         )
@@ -226,7 +226,7 @@ class SearchPhotosScopeTests(TestCase):
         day = datetime(2024, 7, 14, tzinfo=UTC)
 
         make_photo(self.user, "sunset-mine.jpg", day)
-        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        root = tree.create_folder(owner=bob, name="Family", group=family)
         make_photo(bob, "sunset-family.jpg", day, parent=root)
         shared = make_photo(bob, "sunset-shared.jpg", day)
         share_file(

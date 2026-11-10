@@ -3,14 +3,14 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.models import FileLink
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.processors import run_pipeline
 
 User = get_user_model()
 
 
 def _make_markdown(user, name, body=""):
-    f = FileService.create_file(
+    f = tree.create_file(
         owner=user,
         name=name,
         content=ContentFile(body.encode("utf-8"), name=name),
@@ -44,7 +44,7 @@ class LinkPipelineTests(TestCase):
     def test_trashed_file_is_skipped(self):
         b = _make_markdown(self.user, "B.md", "# B")
         a = _make_markdown(self.user, "A.md", f"[B](/notes?file={b.uuid})")
-        FileService.soft_delete(a, acting_user=self.user)
+        trash.soft_delete(a, acting_user=self.user)
         a.refresh_from_db()
         run_pipeline(a.uuid)
         self.assertEqual(FileLink.objects.filter(source=a).count(), 0)

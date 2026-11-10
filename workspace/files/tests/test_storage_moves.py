@@ -13,7 +13,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -21,9 +21,9 @@ User = get_user_model()
 class FailedStorageMoveTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="mover", password="pw")
-        self.docs = FileService.create_folder(self.user, "Docs")
-        self.archive = FileService.create_folder(self.user, "Archive")
-        self.file = FileService.create_file(
+        self.docs = tree.create_folder(self.user, "Docs")
+        self.archive = tree.create_folder(self.user, "Archive")
+        self.file = tree.create_file(
             self.user, "a.txt", parent=self.docs, content=ContentFile(b"a")
         )
 
@@ -42,7 +42,7 @@ class FailedStorageMoveTests(TestCase):
 
     def test_a_folder_rename(self):
         with self._renames_fail(), self.assertRaises(OSError):
-            FileService.rename(self.docs, "Renamed")
+            tree.rename(self.docs, "Renamed")
 
         self.docs.refresh_from_db()
         self.assertEqual(self.docs.name, "Docs")
@@ -50,7 +50,7 @@ class FailedStorageMoveTests(TestCase):
 
     def test_a_folder_move(self):
         with self._renames_fail(), self.assertRaises(OSError):
-            FileService.move(self.docs, self.archive)
+            tree.move(self.docs, self.archive)
 
         self.docs.refresh_from_db()
         self.assertIsNone(self.docs.parent_id)
@@ -58,7 +58,7 @@ class FailedStorageMoveTests(TestCase):
 
     def test_a_file_move(self):
         with self._renames_fail(), self.assertRaises(OSError):
-            FileService.move(self.file, self.archive)
+            tree.move(self.file, self.archive)
 
         self.file.refresh_from_db()
         self.assertEqual(self.file.parent_id, self.docs.pk)

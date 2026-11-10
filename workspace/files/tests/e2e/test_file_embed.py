@@ -19,7 +19,7 @@ from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import File, FileShare
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 
 from ._share_fixtures import build_shared_tree
 
@@ -79,13 +79,13 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.owner = self.create_user(username="embedder")
-        self.photo = FileService.create_file(
+        self.photo = tree.create_file(
             self.owner,
             "photo.png",
             content=ContentFile(_png_bytes(), name="photo.png"),
             mime_type="image/png",
         )
-        self.pdf = FileService.create_file(
+        self.pdf = tree.create_file(
             self.owner,
             "report.pdf",
             content=ContentFile(b"%PDF-1.4\n%%EOF\n", name="report.pdf"),
@@ -94,7 +94,7 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         self.login_as(self.owner)
 
     def _note(self, body, name="Embeds.md"):
-        return FileService.create_file(
+        return tree.create_file(
             self.owner,
             name,
             content=ContentFile(body.encode(), name=name),
@@ -279,7 +279,7 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
 
     def test_renamed_source_shows_its_new_name(self):
         note = self._note(f"{_embed(self.pdf)}\n")
-        FileService.rename(self.pdf, "final.pdf")
+        tree.rename(self.pdf, "final.pdf")
         self._open(note)
         preview = self._preview_of(self.pdf)
         expect(preview).to_have_attribute("state", "ready", timeout=10000)
@@ -310,7 +310,7 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
 
     def test_trashed_target_renders_a_fallback(self):
         note = self._note(f"{_embed(self.pdf)}\n")
-        self.pdf.soft_delete()
+        trash.trash_subtree(self.pdf)
         self._open(note)
         preview = self._preview_of(self.pdf)
         expect(preview).to_have_attribute("state", "ready", timeout=10000)
@@ -386,11 +386,11 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
         self.assertLess(saved.index(_embed(self.pdf)), saved.index("Second paragraph."))
 
     def test_note_dragged_from_the_list_is_embedded(self):
-        folder = FileService.create_folder(self.owner, "Notes")
+        folder = tree.create_folder(self.owner, "Notes")
         host = self._note("# Host\n\nDrop below.\n", name="Host.md")
-        FileService.move(host, folder)
+        tree.move(host, folder)
         dragged = self._note("# Dragged\n", name="Dragged.md")
-        FileService.move(dragged, folder)
+        tree.move(dragged, folder)
         editor = self._open(host)
         row = self.page.locator(f'[data-note-uuid="{dragged.uuid}"]')
         expect(row).to_be_visible(timeout=10000)
@@ -412,7 +412,7 @@ class FileEmbedFilesListingTests(RealDragMixin, PlaywrightTestCase):
 
     def test_movable_file_row_drags_as_a_file_reference(self):
         user = self.create_user(username="lister")
-        f = FileService.create_file(
+        f = tree.create_file(
             user,
             "report.pdf",
             content=ContentFile(b"%PDF-1.4\n%%EOF\n", name="report.pdf"),
@@ -441,7 +441,7 @@ class FileEmbedPublicLinkTests(PlaywrightTestCase):
 
     def test_anonymous_visitor_sees_placeholders(self):
         build_shared_tree(self)
-        photo = FileService.create_file(
+        photo = tree.create_file(
             self.owner,
             "private.png",
             content=ContentFile(_png_bytes(), name="private.png"),

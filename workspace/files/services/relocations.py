@@ -32,6 +32,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 
 from ..models import File
+from ..storage_layout import GROUPS_ROOT, USERS_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +271,7 @@ def _folder_at(directory):
     """
     parts = directory.split("/")
     folders = File.objects.filter(node_type=File.NodeType.FOLDER)
-    if parts[:2] == ["files", "users"]:
+    if parts[:2] == USERS_ROOT.split("/"):
         if len(parts) < 4:
             return True
         return folders.filter(
@@ -279,7 +280,7 @@ def _folder_at(directory):
             path="/".join(parts[3:]),
             deleted_at__isnull=True,
         ).exists()
-    if parts[:2] == ["files", "groups"]:
+    if parts[:2] == GROUPS_ROOT.split("/"):
         if len(parts) < 3:
             return True
         return folders.filter(

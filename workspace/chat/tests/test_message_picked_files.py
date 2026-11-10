@@ -15,7 +15,7 @@ from rest_framework.test import APITestCase
 
 from workspace.chat.models import Conversation, ConversationMember, MessageAttachment
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -37,7 +37,7 @@ class MessagePickedFilesTests(APITestCase):
         self.client.force_authenticate(self.user)
 
     def _make_file(self, owner, name="doc.txt", content=b"hello"):
-        return FileService.create_file(
+        return tree.create_file(
             owner,
             name,
             content=SimpleUploadedFile(name, content, content_type="text/plain"),
@@ -94,7 +94,7 @@ class MessagePickedFilesTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_folder_is_rejected(self, _push, _sse):
-        folder = FileService.create_folder(self.user, "Stuff")
+        folder = tree.create_folder(self.user, "Stuff")
         resp = self._post([folder.uuid])
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 

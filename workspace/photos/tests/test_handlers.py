@@ -5,7 +5,8 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.event_dispatch import run_handlers
 from workspace.files.services.processors import get_processor, run_pipeline
 from workspace.photos.models import MediaItem
@@ -73,9 +74,7 @@ class UploadDispatchTests(TestCase):
         f = self._write(lambda: upload(self.user, "scan.png", png_bytes()))
 
         self._write(
-            lambda: FileService.rename(
-                f, "1998-07-12 Wedding.png", acting_user=self.user
-            )
+            lambda: tree.rename(f, "1998-07-12 Wedding.png", acting_user=self.user)
         )
 
         photo = MediaItem.objects.get(file=f)
@@ -85,14 +84,12 @@ class UploadDispatchTests(TestCase):
     def test_a_photo_dated_by_its_name_follows_a_rename(self):
         f = self._write(lambda: upload(self.user, "2020-01-02.png", png_bytes()))
 
-        self._write(
-            lambda: FileService.rename(f, "2021-03-04.png", acting_user=self.user)
-        )
+        self._write(lambda: tree.rename(f, "2021-03-04.png", acting_user=self.user))
         self.assertEqual(
             MediaItem.objects.get(file=f).taken_at, datetime(2021, 3, 4, 12, tzinfo=UTC)
         )
 
-        self._write(lambda: FileService.rename(f, "beach.png", acting_user=self.user))
+        self._write(lambda: tree.rename(f, "beach.png", acting_user=self.user))
         photo = MediaItem.objects.get(file=f)
         self.assertIsNone(photo.taken_at)
         self.assertFalse(photo.taken_at_from_name)
@@ -106,9 +103,7 @@ class UploadDispatchTests(TestCase):
             )
         )
 
-        self._write(
-            lambda: FileService.rename(f, "2020-01-02.jpg", acting_user=self.user)
-        )
+        self._write(lambda: tree.rename(f, "2020-01-02.jpg", acting_user=self.user))
 
         self.assertEqual(
             MediaItem.objects.get(file=f).taken_at,
@@ -121,7 +116,7 @@ class UploadDispatchTests(TestCase):
         )
 
         self._write(
-            lambda: FileService.update_content(
+            lambda: update_content(
                 f,
                 ContentFile(jpeg_bytes(taken="2025:01:02 09:00:00"), name="a.jpg"),
                 acting_user=self.user,
@@ -140,7 +135,7 @@ class PipelineTests(TestCase):
 
     def test_trashed_before_the_pipeline_ran_is_skipped(self):
         f = upload(self.user, "a.jpg")
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
         f.refresh_from_db()
 
         run_pipeline(f.uuid)
@@ -150,7 +145,7 @@ class PipelineTests(TestCase):
     def test_a_photo_overwritten_with_something_else_leaves_the_library(self):
         f = upload(self.user, "a.jpg")
         analyze_media(f)
-        FileService.update_content(f, ContentFile(b"plain text now", name="a.jpg"))
+        update_content(f, ContentFile(b"plain text now", name="a.jpg"))
         f.refresh_from_db()
         self.assertNotEqual(f.type, "jpeg")
 

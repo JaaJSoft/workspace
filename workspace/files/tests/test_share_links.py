@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShareLink
+from workspace.files.services import trash
 
 User = get_user_model()
 
@@ -217,7 +218,7 @@ class PublicShareLinkAPITests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_410_GONE)
 
     def test_get_metadata_soft_deleted_file(self):
-        self.file.soft_delete()
+        trash.trash_subtree(self.file)
         resp = self.client.get(f"/api/v1/files/shared/{self.link.token}")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 

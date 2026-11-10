@@ -12,7 +12,7 @@ from __future__ import annotations
 from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.rasters import heic_bytes
 
 
@@ -20,7 +20,7 @@ class HeicViewerTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="heic")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             owner=self.user,
             name="IMG_0001.HEIC",
             content=ContentFile(heic_bytes(size=(96, 64)), name="IMG_0001.HEIC"),

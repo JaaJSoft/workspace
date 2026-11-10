@@ -132,7 +132,7 @@ def build_file_graph(
     # exact same DTO the rest of the API returns for a file (uuid, type, icon,
     # is_favorite, parent, ...). annotate_for_serializer already supplied the
     # annotations the serializer requires, so this stays N+1-free. Imported
-    # lazily: serializers imports FileService, so a module-level import here
+    # lazily: serializers imports the services, so a module-level import here
     # would be circular.
     from ..serializers import FileSerializer
 

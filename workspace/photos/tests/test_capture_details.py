@@ -9,7 +9,7 @@ from django.test import TestCase
 from PIL import ExifTags
 
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import analyze_media, redate_from_name
@@ -402,7 +402,7 @@ class CaptureDetailsApiTests(TestCase):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
         self.bob.groups.add(family)
-        root = FileService.create_folder(owner=self.bob, name="Family", group=family)
+        root = tree.create_folder(owner=self.bob, name="Family", group=family)
         picnic = make_photo(self.bob, "picnic.jpg", _at(2024, 7, 14), parent=root)
 
         response = self._post(
@@ -414,7 +414,7 @@ class CaptureDetailsApiTests(TestCase):
 
     def test_a_trashed_photo_cannot_be_corrected(self):
         a = make_photo(self.user, "a.jpg", _at(2024, 7, 14))
-        FileService.soft_delete(a, acting_user=self.user)
+        trash.soft_delete(a, acting_user=self.user)
 
         response = self._post({"uuids": [str(a.uuid)], "location_mode": "clear"})
 

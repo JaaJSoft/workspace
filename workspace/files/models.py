@@ -19,6 +19,8 @@ from django.utils.translation import gettext_lazy, pgettext_lazy
 from workspace.common.text import caseless
 from workspace.common.uuids import uuid_v7_or_v4
 
+from .storage_layout import live_path
+
 User = get_user_model()
 
 
@@ -74,22 +76,12 @@ def files_storage():
 
 
 def file_upload_path(instance, filename):
-    """Generate upload path based on the node's position in the tree.
+    """Where a blob named *filename* goes: in the live directory of its node.
 
-    Uses ``instance.path`` (set by ``File.save()`` before
-    ``super().save()`` runs) to avoid walking the parent FK chain.
-    Group files are stored under ``files/groups/<group_name>/...``.
-    Personal files are stored under ``files/users/<username>/...``.
+    The FileField's ``upload_to``. The services pass the node's own name, so
+    a blob's key is its node's ``live_path``.
     """
-    if instance.group_id:
-        root = "files/groups"
-    else:
-        root = "files/users/" + instance.owner.username
-
-    if instance.path:
-        parent_parts = instance.path.split("/")[:-1]
-        return posixpath.join(root, *parent_parts, filename)
-    return posixpath.join(root, filename)
+    return posixpath.join(posixpath.dirname(live_path(instance)), filename)
 
 
 class CaselessKeyField(models.CharField):
@@ -441,7 +433,7 @@ class File(models.Model):
                 name="unique_group_root_folder",
             ),
             # One live node per name and folder, caselessly, scoped like
-            # services._names.sibling_nodes. A file's blob path derives from
+            # services.names.sibling_nodes. A file's blob path derives from
             # its name, so this is also what keeps two live files off one
             # blob. The INSERT is the lock that a check-then-save cannot be:
             # two creates racing for the same free name both pass the check.
@@ -476,7 +468,7 @@ class File(models.Model):
             ),
         ]
 
-    # The constraints above, which services._names turns into a name clash.
+    # The constraints above, which services.names turns into a name clash.
     LIVE_NAME_CONSTRAINTS = (
         "file_unique_live_group_name",
         "file_unique_live_personal_name",
@@ -660,125 +652,15 @@ class File(models.Model):
         )
         return own | below if include_self else below
 
-    @transaction.atomic
-    def soft_delete(self, deleted_at=None):
-        """Trash this node and its subtree, moving the bytes out of the tree.
-
-        The storage move is last: the name a trashed node used to occupy has
-        to be free for the next file to claim, and leaving the bytes there
-        would let that file overwrite them.
-        """
-        # Imported lazily: the services package imports this module.
-        from workspace.files.services import _storage_ops as _storage
-
-        if deleted_at is None:
-            deleted_at = timezone.now()
-
-        source = _storage.current_node_path(self)
-        count = File.objects.filter(
-            self._descendant_filter(),
-            deleted_at__isnull=True,
-        ).update(deleted_at=deleted_at)
-        if not count:
-            return 0
-
-        self.deleted_at = deleted_at
-        if source:
-            _storage.move_node_storage(self, source, _storage.trash_node_path(self))
-        return count
-
-    def _restore_parents(self):
-        parent_id = self.parent_id
-        restored_ids = []
-        while parent_id:
-            parent = (
-                File.objects.filter(pk=parent_id)
-                .values("pk", "parent_id", "deleted_at")
-                .first()
-            )
-            if not parent or parent["deleted_at"] is None:
-                break
-            restored_ids.append(parent["pk"])
-            parent_id = parent["parent_id"]
-        if restored_ids:
-            File.objects.filter(pk__in=restored_ids).update(deleted_at=None)
-        return len(restored_ids)
-
-    @transaction.atomic
-    def restore(self):
-        """Bring this node back into the live tree, bytes included.
-
-        The node that physically moves is the outermost trashed node of the
-        chain - restoring a file whose folder was trashed brings the folder
-        back too, which is what ``_restore_parents`` already did in the
-        database.
-        """
-        from workspace.files.services import _storage_ops as _storage
-        from workspace.files.services._names import (
-            CLAIM_ATTEMPTS,
-            NameTaken,
-            available_node_name,
-            find_node_conflict,
-            name_claim,
-        )
-        from workspace.files.services._trash import trash_root_of
-
-        if self.deleted_at is None and self.node_type != self.NodeType.FOLDER:
-            return 0
-
-        root = trash_root_of(self)
-        if root is not None and root.pk == self.pk:
-            # Same row: work through one instance, or the rename below and
-            # the save() after it would fight over ``name`` and ``path``.
-            root = self
-        source = _storage.current_node_path(root) if root is not None else None
-        trashed_at = self.deleted_at
-        root_trashed_at = root.deleted_at if root is not None else None
-        claimant = root or self
-
-        for _ in range(CLAIM_ATTEMPTS):
-            if root is not None and find_node_conflict(
-                root.owner, root.parent, root.name, exclude_pk=root.pk
-            ):
-                # Something took the name while the node sat in the trash.
-                root.name = available_node_name(
-                    root.owner, root.parent, root.name, root.node_type
-                )
-                root.save(update_fields=["name"])
-            try:
-                with name_claim(claimant.owner, claimant.parent, claimant.name):
-                    updated = self._bring_back(trashed_at)
-                    self._restore_parents()
-                break
-            except NameTaken:
-                continue  # taken between the check and the write: pick again
-        else:
-            raise NameTaken()
-        self.deleted_at = None
-
-        if root is not None and source:
-            root.deleted_at = None
-            _storage.move_node_storage(root, source, _storage.live_node_path(root))
-            _storage.reconcile_trashed_children(root, root_trashed_at)
-        return updated
-
-    def _bring_back(self, trashed_at):
-        if self.node_type != self.NodeType.FOLDER:
-            return File.objects.filter(pk=self.pk).update(deleted_at=None)
-        subtree = File.objects.filter(self._descendant_filter())
-        if trashed_at is not None:
-            # What was trashed with the folder. A child deleted on its own
-            # before it stays in the trash - its name may well be taken by
-            # the node created to replace it.
-            subtree = subtree.filter(deleted_at=trashed_at)
-        return subtree.update(deleted_at=None)
-
     def delete(self, *args, **kwargs):
         """Soft-delete by default; pass hard=True to permanently delete."""
         hard = kwargs.pop("hard", False)
         if hard:
             return super().delete(*args, **kwargs)
-        return self.soft_delete()
+        # Imported lazily: the services package imports this module.
+        from workspace.files.services.trash import trash_subtree
+
+        return trash_subtree(self)
 
 
 class FileFavorite(models.Model):
@@ -1025,7 +907,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
     cleanup also runs on queryset and cascade deletes.
     """
     # Imported lazily: the services package imports this module.
-    from workspace.files.services._storage_ops import delete_node_storage
+    from workspace.files.services.storage_ops import delete_node_storage
 
     delete_node_storage(instance)
 
@@ -1048,9 +930,9 @@ def unindex_file_on_delete(sender, instance, **kwargs):
 def soft_delete_group_files(sender, instance, **kwargs):
     """Trash all files belonging to this group before it is deleted."""
     # Imported lazily: the services package imports this module.
-    from workspace.files.services import FileService
+    from workspace.files.services.trash import trash_group_files
 
-    FileService.trash_group_files(instance)
+    trash_group_files(instance)
 
 
 def _generate_share_link_token():

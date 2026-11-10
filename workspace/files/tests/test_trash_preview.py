@@ -12,7 +12,7 @@ from rest_framework.test import APITestCase
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileShare
 from workspace.files.queries import FilePermission
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
 User = get_user_model()
@@ -22,7 +22,7 @@ class TrashedFilePreviewTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="alice", password="pass")
         self.other = User.objects.create_user(username="bob", password="pass")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.owner,
             "notes.txt",
             content=ContentFile(b"trashed bytes", name="notes.txt"),
@@ -36,7 +36,7 @@ class TrashedFilePreviewTests(APITestCase):
         default_storage.save(
             get_thumbnail_path(self.file.uuid), ContentFile(b"fake-webp-bytes")
         )
-        FileService.soft_delete(self.file, acting_user=self.owner)
+        trash.soft_delete(self.file, acting_user=self.owner)
         self.file.refresh_from_db()
 
     def _body(self, resp):
@@ -93,7 +93,7 @@ class TrashedFilePreviewTests(APITestCase):
 class LiveFileViewerTests(APITestCase):
     def test_a_live_file_stays_editable_in_the_viewer(self):
         owner = User.objects.create_user(username="carol", password="pass")
-        live = FileService.create_file(
+        live = tree.create_file(
             owner, "live.txt", content=ContentFile(b"live", name="live.txt")
         )
         self.client.force_login(owner)

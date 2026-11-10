@@ -10,8 +10,13 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileEvent, FileScan, ProcessingFailure
-from workspace.files.services import FileService
 from workspace.files.services import processors as registry
+from workspace.files.services import trash, tree
+from workspace.files.services.content_writes import (
+    clear_content,
+    replace_content_storage,
+    update_content,
+)
 from workspace.files.services.event_dispatch import _HANDLERS
 from workspace.files.services.processing_failures import MAX_ATTEMPTS
 from workspace.files.services.processors import (
@@ -81,7 +86,7 @@ class PipelineTestCase(TestCase):
         return FakeProcessor(self.journal, name, **kwargs).register(**register)
 
     def _upload(self, name="a.txt", body=b"x"):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user, name=name, content=ContentFile(body, name=name)
         )
 
@@ -96,12 +101,12 @@ class WritePathStatusTests(PipelineTestCase):
         self.assertEqual(self._status(self._upload()), Status.PENDING)
 
     def test_a_file_created_empty_is_ready(self):
-        f = FileService.create_file(owner=self.user, name="empty.txt")
+        f = tree.create_file(owner=self.user, name="empty.txt")
 
         self.assertEqual(self._status(f), Status.READY)
 
     def test_a_folder_is_ready(self):
-        folder = FileService.create_folder(owner=self.user, name="docs")
+        folder = tree.create_folder(owner=self.user, name="docs")
 
         self.assertEqual(self._status(folder), Status.READY)
 
@@ -109,7 +114,7 @@ class WritePathStatusTests(PipelineTestCase):
         f = self._upload()
         File.objects.filter(pk=f.pk).update(processing_status=Status.READY)
 
-        FileService.update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
+        update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
 
         self.assertEqual(self._status(f), Status.PENDING)
 
@@ -117,7 +122,7 @@ class WritePathStatusTests(PipelineTestCase):
         f = self._upload()
         File.objects.filter(pk=f.pk).update(processing_status=Status.READY)
 
-        FileService.replace_content_storage(
+        replace_content_storage(
             f, storage_path=f.content.name, size=1, content_hash="0" * 64
         )
 
@@ -126,7 +131,7 @@ class WritePathStatusTests(PipelineTestCase):
     def test_emptying_the_content_leaves_nothing_to_process(self):
         f = self._upload()
 
-        FileService.clear_content(f)
+        clear_content(f)
 
         self.assertEqual(self._status(f), Status.READY)
 
@@ -140,7 +145,7 @@ class WritePathStatusTests(PipelineTestCase):
                 last_attempt_at=timezone.now(),
             )
 
-        FileService.update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
+        update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
 
         self.assertFalse(ProcessingFailure.objects.exists())
 
@@ -217,9 +222,7 @@ class RunPipelineTests(PipelineTestCase):
         call the new bytes ready."""
 
         def replace_then_process(file_obj):
-            FileService.update_content(
-                file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt"
-            )
+            update_content(file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt")
             self.journal.append(("first", "process", file_obj.pk))
             return True
 
@@ -242,7 +245,7 @@ class RunPipelineTests(PipelineTestCase):
     def test_a_trashed_file_is_left_for_after_its_restore(self):
         self._processor("any")
         f = self._upload()
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
 
         self.assertIsNone(run_pipeline(f.uuid))
 
@@ -252,7 +255,7 @@ class RunPipelineTests(PipelineTestCase):
 
     def test_nothing_to_run_on(self):
         self._processor("any")
-        folder = FileService.create_folder(owner=self.user, name="docs")
+        folder = tree.create_folder(owner=self.user, name="docs")
 
         for file_uuid in (folder.uuid, "00000000-0000-0000-0000-000000000000", "nope"):
             with self.subTest(file_uuid=file_uuid):
@@ -286,9 +289,7 @@ class SettledAnnouncementTests(PipelineTestCase):
         """The replacement's own pipeline settles the new bytes and announces them."""
 
         def replace(file_obj):
-            FileService.update_content(
-                file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt"
-            )
+            update_content(file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt")
             return True
 
         register_processor(
@@ -391,7 +392,7 @@ class PipelineDispatchTests(PipelineTestCase):
         delay.assert_called_once_with(str(f.pk))
 
     def test_a_folder_queues_nothing(self):
-        folder = FileService.create_folder(owner=self.user, name="docs")
+        folder = tree.create_folder(owner=self.user, name="docs")
         event = FileEvent(file=folder, action=FileEvent.Action.CREATED)
 
         with patch.object(process_file, "delay") as delay:
@@ -441,7 +442,7 @@ class StalledPipelineTests(PipelineTestCase):
         ready = self._upload("ready.txt")
         File.objects.filter(pk=ready.pk).update(processing_status=Status.READY)
         trashed = self._upload("trashed.txt")
-        FileService.soft_delete(trashed, acting_user=self.user)
+        trash.soft_delete(trashed, acting_user=self.user)
         for f in (ready, trashed):
             self._age(f, STALLED_AFTER + timedelta(minutes=1))
 
@@ -521,7 +522,7 @@ class ProcessingStatusApiTests(APITestCase):
         return resp.json()["processing_status"]
 
     def test_an_upload_reads_pending_until_its_pipeline_ran(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="a.txt", content=ContentFile(b"x", name="a.txt")
         )
         self.assertEqual(self._status(f), "pending")
@@ -532,7 +533,7 @@ class ProcessingStatusApiTests(APITestCase):
 
     @override_settings(FILES_MALWARE_SCAN_ENABLED=True)
     def test_a_quarantined_file_reads_quarantined(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="a.txt", content=ContentFile(b"x", name="a.txt")
         )
         File.objects.filter(pk=f.pk).update(processing_status=Status.READY)

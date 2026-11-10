@@ -14,7 +14,7 @@ from django.core.files.base import ContentFile
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 
 class MarkdownViewerOpenTests(PlaywrightTestCase):
@@ -24,7 +24,7 @@ class MarkdownViewerOpenTests(PlaywrightTestCase):
         self.login_as(self.user)
 
     def _assert_opening_saves_nothing(self, body):
-        note = FileService.create_file(
+        note = tree.create_file(
             self.user,
             "Ends.md",
             content=ContentFile(body.encode(), name="Ends.md"),
@@ -52,7 +52,7 @@ class MarkdownViewerOpenTests(PlaywrightTestCase):
         self._assert_opening_saves_nothing("# Code\n\n```py\nprint(1)\n```\n")
 
     def test_note_ending_with_a_file_embed(self):
-        pdf = FileService.create_file(
+        pdf = tree.create_file(
             self.user,
             "report.pdf",
             content=ContentFile(b"%PDF-1.4\n%%EOF\n", name="report.pdf"),

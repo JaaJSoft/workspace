@@ -12,7 +12,7 @@ from django.core.files.storage import default_storage
 from django.test import TestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -44,7 +44,7 @@ class StreamedBlobMoveTests(TestCase):
         def rename():
             # Object storage drops the source once the move commits.
             with self.captureOnCommitCallbacks(execute=True):
-                FileService.rename(self.file, "renamed.mp4")
+                tree.rename(self.file, "renamed.mp4")
 
         peak = self._peak_during(rename)
 

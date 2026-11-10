@@ -117,7 +117,7 @@ def purge_staged_blobs():
     from django.core.files.storage import storages
 
     from workspace.files.services import uploads
-    from workspace.files.services._names import purge_staged
+    from workspace.files.services.names import purge_staged
 
     before = timezone.now() - STAGED_BLOB_TTL
     purged = (

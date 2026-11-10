@@ -2,7 +2,7 @@
 
 `_ensure_default_folders` runs on every notes UI page load. On a legacy
 account (root-level "Journal" folder), it re-parents Journal under Notes.
-This test class verifies that re-parenting goes through the FileService so
+This test class verifies that re-parenting goes through ``tree.move`` so
 descendant content storage paths follow the move on disk.
 """
 
@@ -16,7 +16,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.refusals import Refusal, Refused
 from workspace.notes.ui.views import _ensure_default_folders
 from workspace.users.services.settings import get_setting
@@ -42,16 +42,16 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         when re-parented under Notes.
 
         Regression: the migration used a raw `parent = ...; save()` which
-        bypassed FileService.move() and left the note's bytes orphaned at
+        bypassed tree.move() and left the note's bytes orphaned at
         the root-level path while the DB row pointed under Notes/Journal.
         """
-        journal = FileService.create_folder(
+        journal = tree.create_folder(
             self.user,
             "Journal",
             icon="book-open",
             color="success",
         )
-        note = FileService.create_file(
+        note = tree.create_file(
             self.user,
             "2026-04-26.md",
             parent=journal,
@@ -78,9 +78,9 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         self.assertEqual(journal.parent.name, "Notes")
 
     def test_a_root_journal_stays_when_notes_holds_one_already(self):
-        root_journal = FileService.create_folder(self.user, "Journal")
-        notes = FileService.create_folder(self.user, "Notes")
-        inner_journal = FileService.create_folder(self.user, "Journal", parent=notes)
+        root_journal = tree.create_folder(self.user, "Journal")
+        notes = tree.create_folder(self.user, "Notes")
+        inner_journal = tree.create_folder(self.user, "Journal", parent=notes)
 
         _ensure_default_folders(self.user)
 
@@ -92,7 +92,7 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         )
 
     def test_a_root_journal_that_cannot_move_stays_the_journal(self):
-        root_journal = FileService.create_folder(self.user, "Journal")
+        root_journal = tree.create_folder(self.user, "Journal")
 
         with patch(
             "workspace.notes.ui.views.move_item",

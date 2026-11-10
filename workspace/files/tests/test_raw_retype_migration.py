@@ -12,7 +12,7 @@ from PIL import Image
 
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File, ProcessingFailure
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.rasters import dng_bytes
 
 migration = importlib.import_module(
@@ -28,7 +28,7 @@ class RetypeCameraRawsTests(TestCase):
 
     def _stored_as(self, name, data, file_type="tiff"):
         """A file as the old detection left it, with its thumbnail drawn."""
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
         File.objects.filter(pk=file_obj.pk).update(

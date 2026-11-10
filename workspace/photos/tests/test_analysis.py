@@ -10,7 +10,8 @@ from PIL import ExifTags, Image
 from PIL.TiffImagePlugin import IFDRational
 
 from workspace.files.models import File, FileScan
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.tests.rasters import dng_bytes, heic_bytes
 from workspace.files.tests.videos import clip_bytes, requires_ffmpeg
 from workspace.photos.models import MediaItem
@@ -144,7 +145,7 @@ class AnalyzePhotoTests(TestCase):
     def test_replaced_bytes_without_exif_clear_the_previous_values(self):
         f = upload(self.user, "a.jpg", _shot_jpeg())
         analyze_media(f)
-        FileService.update_content(f, ContentFile(jpeg_bytes(), name="a.jpg"))
+        update_content(f, ContentFile(jpeg_bytes(), name="a.jpg"))
         f.refresh_from_db()
 
         photo = analyze_media(f)
@@ -175,7 +176,7 @@ class AnalyzePhotoTests(TestCase):
         f = upload(self.user, "upload.tmp.png", png_bytes())
 
         def rename_while_reading(stream, **kwargs):
-            FileService.rename(File.objects.get(pk=f.pk), "2024-07-14.png")
+            tree.rename(File.objects.get(pk=f.pk), "2024-07-14.png")
             return PhotoMetadata()
 
         with patch(
@@ -313,7 +314,7 @@ class PendingPhotosTests(TestCase):
         f = upload(self.user, "a.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))
         analyze_media(f)
 
-        FileService.update_content(
+        update_content(
             f, ContentFile(jpeg_bytes(taken="2025:01:01 10:00:00"), name="a.jpg")
         )
 
@@ -331,13 +332,13 @@ class PendingPhotosTests(TestCase):
 
     def test_trashed_image_is_not_pending(self):
         f = upload(self.user, "a.jpg")
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
 
         self.assertEqual(self._pending(), set())
 
     def test_other_files_are_not_pending(self):
         upload(self.user, "a.txt", b"text")
-        FileService.create_folder(owner=self.user, name="Pictures")
+        tree.create_folder(owner=self.user, name="Pictures")
 
         self.assertEqual(self._pending(), set())
 
@@ -423,9 +424,7 @@ class AnalyzeVideoTests(TestCase):
     def test_a_video_keeps_nothing_of_the_photo_it_replaced(self):
         f = upload(self.user, "a.jpg", _shot_jpeg())
         analyze_media(f)
-        FileService.update_content(
-            f, ContentFile(clip_bytes("clip.webm"), name="a.jpg")
-        )
+        update_content(f, ContentFile(clip_bytes("clip.webm"), name="a.jpg"))
         f.refresh_from_db()
 
         with patch("workspace.files.services.ffmpeg.FFPROBE", None):
@@ -471,9 +470,7 @@ class AnalyzeVideoTests(TestCase):
     def test_a_photo_replaced_by_a_video_becomes_a_video(self):
         f = upload(self.user, "a.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))
         analyze_media(f)
-        FileService.update_content(
-            f, ContentFile(clip_bytes("clip.webm"), name="a.jpg")
-        )
+        update_content(f, ContentFile(clip_bytes("clip.webm"), name="a.jpg"))
         f.refresh_from_db()
 
         with patch("workspace.files.services.ffmpeg.FFPROBE", None):

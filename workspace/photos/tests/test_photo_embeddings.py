@@ -11,7 +11,9 @@ from workspace.common.vectors import nearest
 from workspace.common.vectors.encoding import from_bytes
 from workspace.core.services.admin_dashboard import embedding_backend_health_card
 from workspace.files.models import File, FileEvent, FileScan
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.content_writes import update_content
+from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.services.processors import get_processor
 from workspace.files.ui.viewers import AudioViewer
 from workspace.photos.indexes import PHOTO_EMBEDDINGS
@@ -111,9 +113,7 @@ class EmbedPhotoTests(TestCase):
         photo = upload(self.user, "a.jpg", jpeg_bytes(color=RED))
         before = _vector_of(*embed_file(photo))
 
-        FileService.update_content(
-            photo, ContentFile(jpeg_bytes(color=BLUE), name="a.jpg")
-        )
+        update_content(photo, ContentFile(jpeg_bytes(color=BLUE), name="a.jpg"))
         photo.refresh_from_db()
         self.assertIn(photo, pending_embeddings_qs())
         after = _vector_of(*embed_file(photo))
@@ -154,7 +154,7 @@ class EmbedPhotoTests(TestCase):
     def test_a_group_folders_photo_is_embedded_in_its_uploaders_partition(self):
         team = Group.objects.create(name="Team")
         self.user.groups.add(team)
-        folder = FileService.create_folder(owner=self.user, name="Team", group=team)
+        folder = tree.create_folder(owner=self.user, name="Team", group=team)
         photo = upload(self.user, "a.jpg", parent=folder)
 
         self.assertTrue(is_embedding_candidate(photo))
@@ -165,7 +165,7 @@ class EmbedPhotoTests(TestCase):
         (row,) = embed_file(photo)
         vector = _vector_of(row)
 
-        FileService.hard_delete(photo)
+        hard_delete_tree(photo)
 
         self.assertFalse(PhotoEmbedding.objects.exists())
         self.assertEqual(

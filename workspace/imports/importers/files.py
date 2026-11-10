@@ -21,9 +21,10 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs
-from workspace.files.services import FileService, quota
-from workspace.files.services._names import available_file_name, find_name_conflict
+from workspace.files.services import quota, tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.locking import LockConflict
+from workspace.files.services.names import available_file_name, find_name_conflict
 from workspace.files.services.quota import QuotaExceeded
 
 from ..models import ImportJobItem
@@ -38,7 +39,7 @@ ON_CONFLICT_SKIP = "skip"
 ON_CONFLICT_RENAME = "rename"
 ON_CONFLICT_REPLACE = "replace"
 
-# Remote bytes are spooled before they reach FileService, which needs a
+# Remote bytes are spooled before they reach ``tree.create_file``, which needs a
 # seekable stream (type detection, hashing and the storage write are three
 # passes). Small files stay in memory, bigger ones go through a temp file.
 _SPOOL_MAX_MEMORY = 8 * 1024 * 1024
@@ -416,7 +417,7 @@ class FilesImporter(Importer):
         )
         if existing is not None:
             return existing
-        folder = FileService.create_folder(ctx.owner, name, parent)
+        folder = tree.create_folder(ctx.owner, name, parent)
         ctx.stat("folders")
         return folder
 
@@ -450,7 +451,7 @@ class FilesImporter(Importer):
             # recognise and would import a second time.
             with transaction.atomic():
                 if existing is not None:
-                    file_obj = FileService.update_content(
+                    file_obj = update_content(
                         existing,
                         content,
                         name=name,
@@ -458,7 +459,7 @@ class FilesImporter(Importer):
                         acting_user=ctx.owner,
                     )
                 else:
-                    file_obj = FileService.create_file(
+                    file_obj = tree.create_file(
                         ctx.owner,
                         name,
                         parent,

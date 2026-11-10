@@ -32,7 +32,7 @@ from workspace.files.queries import (
     get_permission,
     get_permissions_bulk,
 )
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.events import recent_feed_events
 from workspace.files.services.sharing import create_share_link, share_file
 from workspace.files.tests import test_webdav
@@ -50,17 +50,15 @@ class _DepartureFixture:
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         self.bob.groups.add(self.team)
-        self.root = FileService.create_folder(self.bob, "TeamRoot", group=self.team)
-        self.alice_sub = FileService.create_folder(
-            self.alice, "AliceSub", parent=self.root
-        )
-        self.alice_note = FileService.create_file(
+        self.root = tree.create_folder(self.bob, "TeamRoot", group=self.team)
+        self.alice_sub = tree.create_folder(self.alice, "AliceSub", parent=self.root)
+        self.alice_note = tree.create_file(
             self.alice,
             "alice.txt",
             parent=self.alice_sub,
             content=ContentFile(b"mine", name="alice.txt"),
         )
-        self.bob_secret = FileService.create_file(
+        self.bob_secret = tree.create_file(
             self.bob,
             "secret.txt",
             parent=self.alice_sub,
@@ -95,7 +93,7 @@ class OwnerPermissionTests(_DepartureFixture, TestCase):
         self.assertEqual(set(permissions.values()), {None})
 
     def test_a_former_member_loses_their_trashed_group_nodes(self):
-        FileService.soft_delete(self.alice_note, acting_user=self.alice)
+        trash.soft_delete(self.alice_note, acting_user=self.alice)
         self.alice_note.refresh_from_db()
         self.alice.groups.remove(self.team)
 
@@ -116,14 +114,14 @@ class OwnerPermissionTests(_DepartureFixture, TestCase):
         self.assertFalse(by_ids & group_nodes)
 
     def test_personal_nodes_stay_managed(self):
-        mine = FileService.create_folder(self.alice, "Mine")
+        mine = tree.create_folder(self.alice, "Mine")
         self.alice.groups.remove(self.team)
 
         self.assertEqual(get_permission(self.alice, mine), FilePermission.MANAGE)
         self.assertIn(mine.pk, set(accessible_file_ids(self.alice)))
 
     def test_dashboard_feed_skips_events_on_their_former_group_nodes(self):
-        FileService.rename(self.alice_note, "renamed.txt", acting_user=self.bob)
+        tree.rename(self.alice_note, "renamed.txt", acting_user=self.bob)
         before = recent_feed_events(
             FILE_FEED_Q, viewer=self.alice, exclude_actor_id=self.alice.pk
         )
@@ -142,7 +140,7 @@ class OwnActivityTests(_DepartureFixture, TestCase):
 
     def setUp(self):
         self._fixture()
-        self.mine = FileService.create_file(
+        self.mine = tree.create_file(
             self.alice, "mine.txt", content=ContentFile(b"x", name="mine.txt")
         )
         self.provider = FilesActivityProvider()
@@ -225,7 +223,7 @@ class FormerMemberApiTests(_DepartureFixture, APITestCase):
         self.assertFalse(FileShareLink.objects.exists())
 
     def test_trash_neither_lists_nor_purges_their_former_group_nodes(self):
-        FileService.soft_delete(self.alice_note, acting_user=self.bob)
+        trash.soft_delete(self.alice_note, acting_user=self.bob)
 
         listed = self.client.get("/api/v1/files/trash")
         cleaned = run_operation(self.client, "empty_trash")
@@ -258,7 +256,7 @@ class PublicLinkRevocationTests(_DepartureFixture, APITestCase):
     def setUp(self):
         self._fixture()
         self.link = create_share_link(self.alice_sub, acting_user=self.alice)
-        self.mine = FileService.create_folder(self.alice, "Mine")
+        self.mine = tree.create_folder(self.alice, "Mine")
         self.personal_link = create_share_link(self.mine, acting_user=self.alice)
         self.bob_link = create_share_link(self.root, acting_user=self.bob)
 
@@ -329,7 +327,7 @@ class ShareRevocationTests(_DepartureFixture, TestCase):
             permission=rw,
             acting_user=self.alice,
         )
-        mine = FileService.create_file(
+        mine = tree.create_file(
             self.alice, "mine.txt", content=ContentFile(b"x", name="mine.txt")
         )
         self.personal, _, _ = share_file(
@@ -419,7 +417,7 @@ class FormerMemberSharingMigrationTests(_DepartureFixture, TestCase):
         self._fixture()
         stale = create_share_link(self.alice_sub, acting_user=self.alice)
         personal = create_share_link(
-            FileService.create_folder(self.alice, "Mine"), acting_user=self.alice
+            tree.create_folder(self.alice, "Mine"), acting_user=self.alice
         )
         member = create_share_link(self.root, acting_user=self.bob)
         carol = User.objects.create_user(username="carol", password="pass123")
@@ -427,7 +425,7 @@ class FormerMemberSharingMigrationTests(_DepartureFixture, TestCase):
             self.alice_note, target_user=carol, permission="ro", acting_user=self.alice
         )
         personal_share, _, _ = share_file(
-            FileService.create_file(
+            tree.create_file(
                 self.alice, "mine.txt", content=ContentFile(b"x", name="mine.txt")
             ),
             target_user=carol,

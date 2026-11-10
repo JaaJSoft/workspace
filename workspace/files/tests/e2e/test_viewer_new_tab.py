@@ -13,7 +13,7 @@ from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.common.tests.pdf_fixtures import make_pdf
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.ebooks import epub_bytes
 
 
@@ -24,7 +24,7 @@ class ViewerNewTabTests(PlaywrightTestCase):
         self.login_as(self.user)
 
     def _open(self, name, data):
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
         self.page.goto(f"{self.live_server_url}/files?open={file_obj.uuid}")

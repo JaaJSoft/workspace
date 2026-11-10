@@ -21,8 +21,9 @@ from rest_framework.test import APITestCase
 
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
-from workspace.files.services import FileService
-from workspace.files.services._trash import trash_dir
+from workspace.files.services import trash, tree
+from workspace.files.services.hard_delete import hard_delete_tree
+from workspace.files.services.trash_paths import trash_dir
 from workspace.files.tasks import purge_trash
 from workspace.files.tests.operations import outcome_of, run_operation
 
@@ -60,19 +61,19 @@ class HardDeleteBatchingTests(APITestCase):
 
     def _build_tree(self, name="Big"):
         """A trashed folder holding 110 rows over three levels, with blobs."""
-        root = FileService.create_folder(self.user, name)
+        root = tree.create_folder(self.user, name)
         for i in range(5):
-            sub = FileService.create_folder(self.user, f"sub{i}", root)
-            deep = FileService.create_folder(self.user, "deep", sub)
+            sub = tree.create_folder(self.user, f"sub{i}", root)
+            deep = tree.create_folder(self.user, "deep", sub)
             for parent in (sub, deep):
                 for j in range(10):
-                    FileService.create_file(
+                    tree.create_file(
                         self.user,
                         f"f{j}.txt",
                         parent,
                         content=ContentFile(b"bytes", name=f"f{j}.txt"),
                     )
-        FileService.soft_delete(root, acting_user=self.user)
+        trash.soft_delete(root, acting_user=self.user)
         root.refresh_from_db()
         return root
 
@@ -121,14 +122,14 @@ class HardDeleteBatchingTests(APITestCase):
         self.assertFalse(default_storage.exists(self._trash_dir_on_disk(root)))
 
     def test_purging_a_folder_spares_a_trashed_folder_with_the_same_path(self):
-        first = FileService.create_folder(self.user, "Docs")
-        FileService.create_file(self.user, "a.txt", first)
-        FileService.soft_delete(first, acting_user=self.user)
-        second = FileService.create_folder(self.user, "Docs")
-        kept = FileService.create_file(self.user, "b.txt", second)
-        FileService.soft_delete(second, acting_user=self.user)
+        first = tree.create_folder(self.user, "Docs")
+        tree.create_file(self.user, "a.txt", first)
+        trash.soft_delete(first, acting_user=self.user)
+        second = tree.create_folder(self.user, "Docs")
+        kept = tree.create_file(self.user, "b.txt", second)
+        trash.soft_delete(second, acting_user=self.user)
 
-        FileService.hard_delete(first, acting_user=self.user)
+        hard_delete_tree(first)
 
         self.assertFalse(File.objects.filter(pk=first.pk).exists())
         self.assertTrue(File.objects.filter(pk=second.pk).exists())

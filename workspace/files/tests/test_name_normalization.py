@@ -16,7 +16,8 @@ from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.shortcuts import create_shortcut
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.provider import WorkspaceDAVProvider
@@ -56,7 +57,7 @@ class NameFormsTestCase(IsolatedMediaRootMixin, TestCase):
 
 class ServiceNameTests(NameFormsTestCase):
     def test_a_decomposed_name_is_stored_composed(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, DECOMPOSED, content=ContentFile(b"x", name=DECOMPOSED)
         )
 
@@ -65,42 +66,42 @@ class ServiceNameTests(NameFormsTestCase):
         self.assertEqual(self.blobs("files/users/nfc"), [COMPOSED])
 
     def test_a_decomposed_folder_name_is_stored_composed(self):
-        folder = FileService.create_folder(self.user, FOLDER_DECOMPOSED)
+        folder = tree.create_folder(self.user, FOLDER_DECOMPOSED)
 
         self.assertEqual(folder.name, FOLDER_COMPOSED)
         self.assertEqual(self.blobs("files/users/nfc"), [FOLDER_COMPOSED])
 
     def test_a_shortcut_named_decomposed_is_stored_composed(self):
-        target = FileService.create_file(self.user, "target.txt")
+        target = tree.create_file(self.user, "target.txt")
 
         shortcut = create_shortcut(self.user, target, None, name=DECOMPOSED)
 
         self.assertEqual(shortcut.name, COMPOSED)
 
     def test_the_two_forms_of_a_name_are_one_name(self):
-        FileService.create_file(self.user, COMPOSED)
+        tree.create_file(self.user, COMPOSED)
 
         with self.assertRaises(ValueError):
-            FileService.create_file(self.user, DECOMPOSED)
+            tree.create_file(self.user, DECOMPOSED)
 
     def test_renaming_to_the_other_form_changes_nothing(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, COMPOSED, content=ContentFile(b"x", name=COMPOSED)
         )
 
-        FileService.rename(f, DECOMPOSED)
+        tree.rename(f, DECOMPOSED)
 
         f.refresh_from_db()
         self.assertEqual(f.name, COMPOSED)
         self.assertEqual(self.blobs("files/users/nfc"), [COMPOSED])
 
     def test_a_rename_stores_the_new_name_composed(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "a.txt", content=ContentFile(b"x", name="a.txt")
         )
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(f, DECOMPOSED)
+            tree.rename(f, DECOMPOSED)
 
         f.refresh_from_db()
         self.assertEqual(f.name, COMPOSED)
@@ -109,7 +110,7 @@ class ServiceNameTests(NameFormsTestCase):
 
     def test_a_copy_of_a_decomposed_name_is_composed(self):
         """A row named before names were composed copies into the new form."""
-        source = FileService.create_file(
+        source = tree.create_file(
             self.user, "a.txt", content=ContentFile(b"x", name="a.txt")
         )
         decomposed_key = f"files/users/nfc/{DECOMPOSED}"
@@ -118,9 +119,9 @@ class ServiceNameTests(NameFormsTestCase):
             name=DECOMPOSED, path=DECOMPOSED, content=decomposed_key
         )
         source.refresh_from_db()
-        target = FileService.create_folder(self.user, "Copies")
+        target = tree.create_folder(self.user, "Copies")
 
-        copied = FileService.copy(source, target, self.user)
+        copied = tree.copy(source, target, self.user)
 
         self.assertEqual(copied.name, COMPOSED)
         self.assertEqual(copied.content.name, f"files/users/nfc/Copies/{COMPOSED}")
@@ -129,11 +130,11 @@ class ServiceNameTests(NameFormsTestCase):
         """Whatever the upload is called: a "REPORT.TXT" written over
         "report.txt" (the names match case-insensitively) or the same name
         sent decomposed."""
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "report.txt", content=ContentFile(b"old", name="report.txt")
         )
 
-        FileService.update_content(f, ContentFile(b"new", name="REPORT.TXT"))
+        update_content(f, ContentFile(b"new", name="REPORT.TXT"))
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, "files/users/nfc/report.txt")
@@ -145,7 +146,7 @@ class ServiceNameTests(NameFormsTestCase):
 class ApiNameTests(NameFormsTestCase):
     def setUp(self):
         super().setUp()
-        self.existing = FileService.create_file(
+        self.existing = tree.create_file(
             self.user, COMPOSED, content=ContentFile(b"old", name=COMPOSED)
         )
         self.client.force_login(self.user)
@@ -209,7 +210,7 @@ class SyncNameTests(NameFormsTestCase):
         self.assertEqual(child.content.name, f"files/users/nfc/{FOLDER_COMPOSED}/a.txt")
 
     def test_a_row_named_decomposed_still_matches_its_entry(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "a.txt", content=ContentFile(b"x", name="a.txt")
         )
         decomposed_key = f"files/users/nfc/{DECOMPOSED}"
@@ -245,8 +246,8 @@ class SyncNameTests(NameFormsTestCase):
 class WebDavNameTests(NameFormsTestCase):
     def setUp(self):
         super().setUp()
-        self.folder = FileService.create_folder(self.user, "Docs")
-        self.file = FileService.create_file(
+        self.folder = tree.create_folder(self.user, "Docs")
+        self.file = tree.create_file(
             self.user,
             COMPOSED,
             parent=self.folder,

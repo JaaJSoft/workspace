@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -20,9 +20,7 @@ class StorageNameTests(TestCase):
         self.user = User.objects.create_user(username="namer", password="pw")
 
     def upload(self, name, data):
-        return FileService.create_file(
-            self.user, name, content=ContentFile(data, name=name)
-        )
+        return tree.create_file(self.user, name, content=ContentFile(data, name=name))
 
     def read(self, file_obj):
         file_obj.refresh_from_db()
@@ -37,8 +35,8 @@ class StorageNameTests(TestCase):
         self.assertEqual(self.read(second), b"second")
 
     def test_the_blob_sits_at_the_node_tree_path(self):
-        folder = FileService.create_folder(self.user, "My Docs")
-        f = FileService.create_file(
+        folder = tree.create_folder(self.user, "My Docs")
+        f = tree.create_file(
             self.user,
             "a+b (1).txt",
             parent=folder,

@@ -1,7 +1,7 @@
 from django.utils.translation import gettext_lazy as _
 
 from workspace.files.queries import FilePermission
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.image_edits import can_edit_type
 from workspace.files.services.scanning.policy import is_blocked
 
@@ -22,7 +22,7 @@ class RenameAction(BaseFileAction):
         if file_obj.deleted_at is not None:
             return False
         # Cannot rename a root group folder
-        if FileService.is_group_root(file_obj):
+        if tree.is_group_root(file_obj):
             return False
         # Journal notes are auto-named by date; renaming would break the
         # "today's note" auto-selection logic in the notes UI.
@@ -49,7 +49,7 @@ class CutAction(BaseFileAction):
         if file_obj.deleted_at is not None:
             return False
         # Cannot cut a root group folder (structural, one per group)
-        if FileService.is_group_root(file_obj):
+        if tree.is_group_root(file_obj):
             return False
         return permission is not None and permission >= FilePermission.EDIT
 
@@ -68,7 +68,7 @@ class CopyAction(BaseFileAction):
         if file_obj.deleted_at is not None:
             return False
         # Cannot copy a root group folder (structural, one per group)
-        if FileService.is_group_root(file_obj):
+        if tree.is_group_root(file_obj):
             return False
         # A copy would carry the bytes out of quarantine.
         if is_blocked(file_obj):

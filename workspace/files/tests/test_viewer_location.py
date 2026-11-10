@@ -13,7 +13,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 
 User = get_user_model()
 
@@ -27,12 +27,12 @@ class ViewerLocationTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="alice", password="pass")
         self.other = User.objects.create_user(username="bob", password="pass")
-        self.photos = FileService.create_folder(self.owner, "Photos")
-        self.trip = FileService.create_folder(self.owner, "Brittany 2019", self.photos)
+        self.photos = tree.create_folder(self.owner, "Photos")
+        self.trip = tree.create_folder(self.owner, "Brittany 2019", self.photos)
         self.file = self._file("beach.txt", self.trip)
 
     def _file(self, name, parent=None, owner=None):
-        return FileService.create_file(
+        return tree.create_file(
             owner or self.owner,
             name,
             parent,
@@ -75,8 +75,8 @@ class ViewerLocationTests(TestCase):
         group = Group.objects.create(name="Family")
         self.owner.groups.add(group)
         self.other.groups.add(group)
-        root = FileService.create_folder(self.owner, "Family", group=group)
-        wedding = FileService.create_folder(self.owner, "Wedding", root)
+        root = tree.create_folder(self.owner, "Family", group=group)
+        wedding = tree.create_folder(self.owner, "Wedding", root)
         photo = self._file("cake.txt", wedding)
 
         self.assertEqual(
@@ -101,6 +101,6 @@ class ViewerLocationTests(TestCase):
         )
 
     def test_a_trashed_file_names_no_folder(self):
-        FileService.soft_delete(self.file, acting_user=self.owner)
+        trash.soft_delete(self.file, acting_user=self.owner)
 
         self.assertIsNone(self._location(self.owner, self.file))

@@ -8,7 +8,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from workspace.files.models import File, GroupStorageQuota, UserStorageQuota
-from workspace.files.services import FileService, quota
+from workspace.files.services import quota, trash, tree
+from workspace.files.services.hard_delete import hard_delete_tree
 
 User = get_user_model()
 
@@ -21,12 +22,10 @@ class BucketUsageTests(TestCase):
         self.other = User.objects.create_user(username="other", password="pw")
         self.group = Group.objects.create(name="Design")
         self.user.groups.add(self.group)
-        self.group_root = FileService.create_folder(
-            self.user, "Design", group=self.group
-        )
+        self.group_root = tree.create_folder(self.user, "Design", group=self.group)
 
     def _upload(self, name, payload, parent=None, owner=None):
-        return FileService.create_file(
+        return tree.create_file(
             owner or self.user,
             name,
             parent=parent,
@@ -44,12 +43,12 @@ class BucketUsageTests(TestCase):
 
     def test_trashed_files_keep_counting(self):
         f = self._upload("a.txt", b"12345")
-        FileService.soft_delete(f)
+        trash.soft_delete(f)
         self.assertEqual(quota.personal_usage(self.user), 5)
 
     def test_hard_deleting_frees_the_bucket(self):
         f = self._upload("a.txt", b"12345")
-        FileService.hard_delete(f)
+        hard_delete_tree(f)
         self.assertEqual(quota.personal_usage(self.user), 0)
 
     def test_group_files_count_against_the_group_only(self):
@@ -58,7 +57,7 @@ class BucketUsageTests(TestCase):
         self.assertEqual(quota.personal_usage(self.user), 0)
 
     def test_folders_do_not_count(self):
-        FileService.create_folder(self.user, "empty")
+        tree.create_folder(self.user, "empty")
         self.assertEqual(quota.personal_usage(self.user), 0)
 
     def test_a_folder_row_with_a_size_still_does_not_count(self):
@@ -74,7 +73,7 @@ class BucketUsageTests(TestCase):
         self._upload("a.txt", b"12345")
         self._upload("note.md", b"# hello")
         trashed = self._upload("gone.txt", b"999")
-        FileService.soft_delete(trashed)
+        trash.soft_delete(trashed)
         self._upload("team.txt", b"1234567890", parent=self.group_root)
         self._upload("theirs.txt", b"77", owner=self.other)
 
@@ -96,7 +95,7 @@ class RemainingBytesTests(TestCase):
         self.group = Group.objects.create(name="Design")
 
     def test_personal_remaining_is_quota_minus_usage(self):
-        FileService.create_file(
+        tree.create_file(
             self.user, "a.txt", content=ContentFile(b"x" * 1024, name="a.txt")
         )
         self.assertEqual(
@@ -118,13 +117,13 @@ class SurfacesAgreeTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(username="surfaces", password="pw")
-        FileService.create_file(
+        tree.create_file(
             self.user, "a.txt", content=ContentFile(b"x" * 2048, name="a.txt")
         )
-        trashed = FileService.create_file(
+        trashed = tree.create_file(
             self.user, "b.txt", content=ContentFile(b"y" * 512, name="b.txt")
         )
-        FileService.soft_delete(trashed)
+        trash.soft_delete(trashed)
 
     def test_storage_analysis_reports_the_bucket_usage(self):
         from workspace.files.services.storage_analysis import analyze_storage
@@ -132,9 +131,6 @@ class SurfacesAgreeTests(TestCase):
         analysis = analyze_storage(self.user, None)
         self.assertEqual(analysis["quota_used"], quota.personal_usage(self.user))
         self.assertEqual(analysis["quota"], quota.effective_quota(self.user))
-
-    def test_file_service_no_longer_exposes_its_own_total(self):
-        self.assertFalse(hasattr(FileService, "storage_used"))
 
 
 class UsageQueryCountTests(TestCase):
@@ -193,13 +189,13 @@ class GaugeContextTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="gauge", password="pw")
         self.client.force_login(self.user)
-        FileService.create_file(
+        tree.create_file(
             self.user, "note.md", content=ContentFile(b"# hello", name="note.md")
         )
-        trashed = FileService.create_file(
+        trashed = tree.create_file(
             self.user, "gone.txt", content=ContentFile(b"12345", name="gone.txt")
         )
-        FileService.soft_delete(trashed)
+        trash.soft_delete(trashed)
 
     def test_the_dashboard_gauge_uses_the_bucket_usage(self):
         response = self.client.get(reverse("dashboard:index"))

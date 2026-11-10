@@ -7,7 +7,7 @@ from django.core.files.storage import default_storage
 from django.test import TestCase, override_settings
 
 from workspace.common.vectors.encoding import from_bytes
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.models import Appearance, AppearanceAnalysis
 from workspace.photos.services import appearances
 from workspace.photos.services.appearances import (
@@ -124,7 +124,7 @@ class AnalyzeAppearancesTests(FacesTestMixin, TestCase):
     def test_nothing_is_read_from_a_group_folder(self):
         group = Group.objects.create(name="Team")
         self.user.groups.add(group)
-        folder = FileService.create_folder(owner=self.user, name="Team", group=group)
+        folder = tree.create_folder(owner=self.user, name="Team", group=group)
         photo = upload(self.user, "pair.png", torso_png((STANDING, RED)), parent=folder)
 
         self.assertFalse(is_appearance_candidate(photo))

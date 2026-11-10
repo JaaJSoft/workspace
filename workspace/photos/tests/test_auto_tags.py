@@ -12,7 +12,8 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.models import File, FileTag, Tag
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import get_processor
 from workspace.photos.models import PhotoEmbedding
 from workspace.photos.services import auto_tags, photo_embeddings
@@ -133,7 +134,7 @@ class ClassicTagTests(AutoTagTestCase):
         photo = library_photo(self.user, "photo.jpg", BLUE)
         self.assertEqual(_tags(photo), set())
 
-        FileService.update_content(photo, ContentFile(jpeg_bytes(color=RED)))
+        update_content(photo, ContentFile(jpeg_bytes(color=RED)))
         embed_file(photo)
 
         self.assertEqual(_tags(photo), {("Red", FileTag.Source.AUTO)})
@@ -141,7 +142,7 @@ class ClassicTagTests(AutoTagTestCase):
     def test_a_group_photo_is_never_tagged(self):
         team = Group.objects.create(name="Team")
         self.user.groups.add(team)
-        folder = FileService.create_folder(owner=self.user, name="Team", group=team)
+        folder = tree.create_folder(owner=self.user, name="Team", group=team)
 
         red = library_photo(self.user, "red.jpg", RED, parent=folder)
 

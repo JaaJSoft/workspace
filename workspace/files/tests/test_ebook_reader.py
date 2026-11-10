@@ -14,7 +14,7 @@ from django.core.files.base import ContentFile
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.ebooks import epub_bytes
 from workspace.files.ui.viewers import EbookViewer
 
@@ -111,7 +111,7 @@ class ReaderPageTests(TestCase):
 class EbookViewerTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="reader", password="pass")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             owner=self.user,
             name="Long & winding.epub",
             content=ContentFile(epub_bytes(), name="book.epub"),

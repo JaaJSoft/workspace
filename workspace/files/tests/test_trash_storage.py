@@ -15,7 +15,10 @@ from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.content_writes import update_content
+from workspace.files.services.hard_delete import hard_delete_tree
+from workspace.files.services.names import check_name_available
 
 User = get_user_model()
 
@@ -25,15 +28,15 @@ class TrashStorageTestCase(IsolatedMediaRootMixin, TestCase):
 
     def _trash(self, node):
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.soft_delete(node, acting_user=self.user)
+            trash.soft_delete(node, acting_user=self.user)
 
     def _restore(self, node):
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.restore(node, acting_user=self.user)
+            trash.restore(node, acting_user=self.user)
 
     def _purge(self, node):
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.hard_delete(node, acting_user=self.user)
+            hard_delete_tree(node)
 
 
 class TrashStorageLayoutTests(TrashStorageTestCase):
@@ -50,7 +53,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         )
 
     def _make_file(self, name, parent=None, content=b"bytes"):
-        return FileService.create_file(
+        return tree.create_file(
             self.user, name, parent=parent, content=ContentFile(content, name=name)
         )
 
@@ -72,7 +75,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self._trash(f)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.update_content(
+            update_content(
                 loaded, ContentFile(b"new", name="report.pdf"), acting_user=self.user
             )
 
@@ -86,13 +89,13 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self._make_file("report.pdf", content=b"another")
 
     def test_a_save_that_waited_on_its_folders_trash_lands_inside_it(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         f = self._make_file("a.txt", parent=docs, content=b"old")
         loaded = File.objects.get(pk=f.pk)
         self._trash(docs)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.update_content(
+            update_content(
                 loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
             )
 
@@ -109,7 +112,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         """A file trashed on its own keeps its trash directory when its folder
         is trashed after it, and the file that took its name rides inside the
         folder's: the late save must not land on that one."""
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         first = self._make_file("a.txt", parent=docs, content=b"first")
         loaded = File.objects.get(pk=first.pk)
         self._trash(first)
@@ -117,7 +120,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self._trash(docs)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.update_content(
+            update_content(
                 loaded, ContentFile(b"late", name="a.txt"), acting_user=self.user
             )
 
@@ -139,8 +142,8 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self.assertEqual(posixpath.basename(f.content.name), "Quarterly Report.pdf")
 
     def test_a_trashed_folder_keeps_its_subtree_inside(self):
-        folder = FileService.create_folder(self.user, "Docs")
-        sub = FileService.create_folder(self.user, "Sub", parent=folder)
+        folder = tree.create_folder(self.user, "Docs")
+        sub = tree.create_folder(self.user, "Sub", parent=folder)
         deep = self._make_file("deep.txt", parent=sub)
 
         self._trash(folder)
@@ -153,7 +156,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self.assertEqual(self._blobs(), [deep.content.name])
 
     def test_only_the_outermost_trashed_node_gets_a_directory(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         inner = self._make_file("deep.txt", parent=folder)
 
         self._trash(folder)
@@ -164,7 +167,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self.assertNotIn(str(inner.uuid), inner.content.name)
 
     def test_restoring_puts_the_bytes_back_in_the_live_tree(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         deep = self._make_file("deep.txt", parent=folder)
         self._trash(folder)
 
@@ -175,7 +178,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self.assertEqual(self._blobs(), ["files/users/bob/Docs/deep.txt"])
 
     def test_restoring_a_file_brings_its_folder_out_of_the_trash(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         wanted = self._make_file("wanted.txt", parent=folder)
         other = self._make_file("other.txt", parent=folder)
         self._trash(folder)
@@ -205,10 +208,10 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         )
 
     def test_two_trashed_namesakes_keep_separate_directories(self):
-        first = FileService.create_folder(self.user, "Docs")
+        first = tree.create_folder(self.user, "Docs")
         old = self._make_file("deep.txt", parent=first, content=b"FIRST")
         self._trash(first)
-        second = FileService.create_folder(self.user, "Docs")
+        second = tree.create_folder(self.user, "Docs")
         new = self._make_file("deep.txt", parent=second, content=b"SECOND")
         self._trash(second)
 
@@ -225,10 +228,10 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         # Both folders carry the path "Docs", so resolving the trash root by
         # path hands back whichever row the lookup happens to keep - here the
         # younger one, whose directory has nothing to do with this file.
-        first = FileService.create_folder(self.user, "Docs")
+        first = tree.create_folder(self.user, "Docs")
         older = self._make_file("deep.txt", parent=first, content=b"FIRST")
         self._trash(first)
-        second = FileService.create_folder(self.user, "Docs")
+        second = tree.create_folder(self.user, "Docs")
         younger = self._make_file("deep.txt", parent=second, content=b"SECOND")
         self._trash(second)
 
@@ -266,10 +269,10 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         )
 
     def test_a_restored_folder_is_renamed_the_same_way(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         inner = self._make_file("deep.txt", parent=folder)
         self._trash(folder)
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
 
         self._restore(folder)
 
@@ -279,7 +282,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self.assertEqual(inner.content.name, "files/users/bob/Docs (Copy)/deep.txt")
 
     def test_purging_a_trashed_node_removes_its_trash_directory(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         self._make_file("deep.txt", parent=folder)
         self._trash(folder)
 
@@ -289,7 +292,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self.assertFalse(default_storage.is_dir(f"trash/users/bob/{folder.uuid}"))
 
     def test_an_empty_folder_trashes_and_restores_without_a_directory(self):
-        folder = FileService.create_folder(self.user, "Empty")
+        folder = tree.create_folder(self.user, "Empty")
         default_storage.remove_dir_if_empty("files/users/bob/Empty")
 
         self._trash(folder)
@@ -305,10 +308,10 @@ class GroupTrashStorageTests(TrashStorageTestCase):
         self.user = User.objects.create_user(username="alice", password="pass")
         self.group = Group.objects.create(name="Marketing")
         self.user.groups.add(self.group)
-        self.root = FileService.create_folder(self.user, "Marketing", group=self.group)
+        self.root = tree.create_folder(self.user, "Marketing", group=self.group)
 
     def test_a_trashed_group_file_leaves_the_shared_tree(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "report.pdf",
             parent=self.root,
@@ -324,7 +327,7 @@ class GroupTrashStorageTests(TrashStorageTestCase):
     def test_a_teammate_can_take_the_freed_name(self):
         mate = User.objects.create_user(username="carol", password="pass")
         mate.groups.add(self.group)
-        first = FileService.create_file(
+        first = tree.create_file(
             self.user,
             "report.pdf",
             parent=self.root,
@@ -332,7 +335,7 @@ class GroupTrashStorageTests(TrashStorageTestCase):
         )
         self._trash(first)
 
-        second = FileService.create_file(
+        second = tree.create_file(
             mate,
             "report.pdf",
             parent=self.root,
@@ -346,7 +349,7 @@ class GroupTrashStorageTests(TrashStorageTestCase):
             self.assertEqual(fh.read(), b"THEIRS")
 
     def test_deleting_the_group_trashes_its_files_out_of_the_tree(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "report.pdf",
             parent=self.root,
@@ -370,35 +373,29 @@ class NameCollisionTests(TrashStorageTestCase):
         self.user = User.objects.create_user(username="dave", password="pass")
 
     def test_two_folders_cannot_share_a_name_in_one_parent(self):
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
         with self.assertRaises(ValueError):
-            FileService.create_folder(self.user, "Docs")
+            tree.create_folder(self.user, "Docs")
 
     def test_a_file_cannot_take_a_sibling_folders_name(self):
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
         with self.assertRaises(ValueError):
-            FileService.create_file(
-                self.user, "Docs", content=ContentFile(b"x", name="Docs")
-            )
+            tree.create_file(self.user, "Docs", content=ContentFile(b"x", name="Docs"))
 
     def test_a_folder_cannot_take_a_sibling_files_name(self):
-        FileService.create_file(
-            self.user, "Docs", content=ContentFile(b"x", name="Docs")
-        )
+        tree.create_file(self.user, "Docs", content=ContentFile(b"x", name="Docs"))
         with self.assertRaises(ValueError):
-            FileService.create_folder(self.user, "Docs")
+            tree.create_folder(self.user, "Docs")
 
     def test_a_personal_root_does_not_compete_with_a_group_root(self):
         # files/users/<name>/Marketing and files/groups/Marketing are two
         # directories, so the same name in both is not a collision.
         group = Group.objects.create(name="Marketing")
         self.user.groups.add(group)
-        FileService.create_folder(self.user, "Marketing", group=group)
+        tree.create_folder(self.user, "Marketing", group=group)
 
-        FileService.check_name_available(
-            self.user, None, "Marketing", File.NodeType.FOLDER
-        )
-        FileService.create_folder(self.user, "Marketing")
+        check_name_available(self.user, None, "Marketing", File.NodeType.FOLDER)
+        tree.create_folder(self.user, "Marketing")
 
         self.assertEqual(
             File.objects.filter(
@@ -408,13 +405,13 @@ class NameCollisionTests(TrashStorageTestCase):
         )
 
     def test_the_same_name_is_fine_in_two_different_folders(self):
-        a = FileService.create_folder(self.user, "A")
-        b = FileService.create_folder(self.user, "B")
-        FileService.create_folder(self.user, "Docs", parent=a)
-        FileService.create_folder(self.user, "Docs", parent=b)
+        a = tree.create_folder(self.user, "A")
+        b = tree.create_folder(self.user, "B")
+        tree.create_folder(self.user, "Docs", parent=a)
+        tree.create_folder(self.user, "Docs", parent=b)
         self.assertEqual(File.objects.filter(name="Docs", owner=self.user).count(), 2)
 
     def test_a_trashed_name_is_free_again(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         self._trash(folder)
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")

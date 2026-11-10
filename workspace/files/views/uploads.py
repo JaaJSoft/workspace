@@ -22,8 +22,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.files.queries import annotate_for_serializer, can_create_in
-from workspace.files.services import FileService, uploads
+from workspace.files.services import tree, uploads
 from workspace.files.services.announcements import announce_replaced
+from workspace.files.services.content_writes import update_content
+from workspace.files.services.names import check_name_available, find_name_conflict
 from workspace.files.services.quota import check_write_allowed
 
 from ..models import File, UploadSession
@@ -36,7 +38,7 @@ from ..serializers import (
     name_refusals,
     name_taken_error,
 )
-from ..services._names import NameTaken
+from ..services.names import NameTaken
 from .files import duplicate_entries
 
 _CONTENT_RANGE = re.compile(r"^bytes (\d+)-(\d+)/(\d+|\*)$")
@@ -105,18 +107,16 @@ class UploadSessionListView(APIView):
         name, on_conflict = data["name"], data["on_conflict"]
         if on_conflict == UploadSession.OnConflict.ERROR:
             try:
-                FileService.check_name_available(user, parent, name, File.NodeType.FILE)
+                check_name_available(user, parent, name, File.NodeType.FILE)
             except NameTaken as error:
                 raise name_taken_error(error) from error
         elif on_conflict == UploadSession.OnConflict.REPLACE:
-            target = FileService.find_name_conflict(user, parent, name)
+            target = find_name_conflict(user, parent, name)
             if target is not None:
                 ensure_replaceable(user, target)
             else:
                 try:
-                    FileService.check_name_available(
-                        user, parent, name, File.NodeType.FILE
-                    )
+                    check_name_available(user, parent, name, File.NodeType.FILE)
                 except NameTaken as error:
                     raise name_taken_error(error) from error
 
@@ -327,7 +327,7 @@ class UploadSessionFinalizeView(APIView):
         """
         target = None
         if session.on_conflict == UploadSession.OnConflict.REPLACE:
-            target = FileService.find_name_conflict(user, parent, session.name)
+            target = find_name_conflict(user, parent, session.name)
         if target is not None:
             ensure_replaceable(user, target)
             check_write_allowed(
@@ -337,7 +337,7 @@ class UploadSessionFinalizeView(APIView):
                 excluding=session,
             )
             with content_write_refusals():
-                FileService.update_content(
+                update_content(
                     target,
                     content,
                     name=target.name,
@@ -353,7 +353,7 @@ class UploadSessionFinalizeView(APIView):
             excluding=session,
         )
         with name_refusals():
-            file_obj = FileService.create_file(
+            file_obj = tree.create_file(
                 owner=user,
                 name=session.name,
                 parent=parent,

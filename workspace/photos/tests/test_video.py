@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.videos import clip_bytes, requires_ffmpeg
 from workspace.photos.services.video import VideoMetadata, parse_report, read_metadata
 
@@ -240,7 +240,7 @@ class LocationTests(SimpleTestCase):
 class ReadMetadataTests(TestCase):
     def test_what_an_iphone_writes(self):
         user = User.objects.create_user(username="alice", password="p")
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=user,
             name="clip_iphone.mov",
             content=ContentFile(clip_bytes("clip_iphone.mov")),

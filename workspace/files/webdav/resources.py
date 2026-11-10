@@ -23,13 +23,13 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 from workspace.common.logging import scrub
 from workspace.files.models import (
     File,
-    file_upload_path,
     files_storage,
     name_forms,
 )
 from workspace.files.queries import FilePermission, accessible_files_q, get_permission
-from workspace.files.services import FileService, quota
+from workspace.files.services import quota, tree
 from workspace.files.services.content_hash import new_hasher
+from workspace.files.services.content_writes import replace_content_storage
 from workspace.files.services.locking import (
     LockConflict,
     Relocated,
@@ -44,6 +44,7 @@ from workspace.files.services.transfers import (
     move_onto,
 )
 from workspace.files.services.trash import trash_item
+from workspace.files.storage_layout import live_path
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +259,7 @@ class _Collection(DAVCollection):
         ).first()
         if file_obj is None:
             _require_permission(self._user, self._file, FilePermission.EDIT, "PUT")
-            file_obj = FileService.create_file(
+            file_obj = tree.create_file(
                 self._user,
                 name,
                 parent=self._file,
@@ -270,7 +271,7 @@ class _Collection(DAVCollection):
     @_refuse_overlong_names
     def create_collection(self, name):
         _require_permission(self._user, self._file, FilePermission.EDIT, "MKCOL")
-        FileService.create_folder(
+        tree.create_folder(
             self._user,
             name,
             parent=self._file,
@@ -336,7 +337,7 @@ class FolderResource(_Collection):
         if self.environ.get("HTTP_DEPTH") == "0":
             # The collection without its members: an empty folder.
             _require_permission(self._user, dest_parent, FilePermission.EDIT, "COPY")
-            FileService.create_folder(
+            tree.create_folder(
                 self._user, dest_parts[-1], parent=dest_parent, acting_user=self._user
             )
             return
@@ -448,7 +449,7 @@ class FileResource(DAVNonCollection):
             self._file.content_hash if if_match and if_match != "*" else None
         )
 
-        storage_path = file_upload_path(self._file, self._file.name)
+        storage_path = live_path(self._file)
         self._storage_path = storage_path
         self._write_buf = _StreamingWriteBuffer(
             self._file.content.storage.staged_writer(storage_path),
@@ -533,7 +534,7 @@ class FileResource(DAVNonCollection):
                         scrub(self.path),
                         username,
                     )
-                    self._file = FileService.create_file(
+                    self._file = tree.create_file(
                         self._user,
                         self._file.name,
                         parent=self._file.parent,
@@ -544,11 +545,10 @@ class FileResource(DAVNonCollection):
                 # blob somewhere else.
                 if (
                     self._file.deleted_at is not None
-                    or file_upload_path(self._file, self._file.name)
-                    != self._storage_path
+                    or live_path(self._file) != self._storage_path
                 ):
                     raise Relocated()
-                FileService.replace_content_storage(
+                replace_content_storage(
                     self._file,
                     storage_path=self._storage_path,
                     size=buf.size,
@@ -758,8 +758,8 @@ def _inside_copied_tree(environ, dest_path):
     """Whether *dest_path* lies in a folder this COPY already copied whole."""
     dest = "/".join(_dest_parts(dest_path))
     return any(
-        dest.startswith(f"{tree}/")
-        for tree in environ.get("workspace.copied_trees", ())
+        dest.startswith(f"{copied}/")
+        for copied in environ.get("workspace.copied_trees", ())
     )
 
 

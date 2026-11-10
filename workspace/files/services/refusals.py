@@ -10,11 +10,11 @@ from contextlib import contextmanager
 from enum import StrEnum
 
 from ..queries import can_create_in, get_permission, trash_permission
-from ._names import NameTaken
-from .files import GroupRootFolder
 from .locking import LockConflict, Relocated, StaleContent, conflicting_lock
+from .names import NameTaken
 from .quota import QuotaExceeded
 from .scanning.policy import QuarantinedSource
+from .tree import GroupRootFolder
 
 
 class Refusal(StrEnum):

@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.projects.models import TaskAttachment, TaskEvent
 from workspace.projects.services.tasks import create_task
 from workspace.projects.tests.base import ProjectTestMixin
@@ -31,7 +31,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
             att.file.delete(save=False)
 
     def _make_file(self, owner, name="doc.txt", content=b"hello"):
-        return FileService.create_file(
+        return tree.create_file(
             owner,
             name,
             content=SimpleUploadedFile(name, content, content_type="text/plain"),

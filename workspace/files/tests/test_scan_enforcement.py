@@ -8,7 +8,8 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileScan
 from workspace.files.search import search_files
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.content_writes import replace_content_from
 from workspace.files.services.search_index import index_file
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.tests.test_actions import actions_of
@@ -624,28 +625,26 @@ class CopyEnforcementTests(APITestCase):
     @override_settings(**BLOCKING)
     def test_service_copy_of_an_infected_file_raises(self):
         with self.assertRaisesRegex(Exception, "quarantined"):
-            FileService.copy(self.infected, None, self.user, acting_user=self.user)
+            tree.copy(self.infected, None, self.user, acting_user=self.user)
         self.assertEqual(File.objects.filter(name__startswith="bad").count(), 1)
 
     @override_settings(**BLOCKING)
     def test_folder_copy_leaves_infected_children_behind(self):
         folder = self._folder_with_children()
 
-        copied = FileService.copy(folder, None, self.user, acting_user=self.user)
+        copied = tree.copy(folder, None, self.user, acting_user=self.user)
 
         names = set(File.objects.filter(parent=copied).values_list("name", flat=True))
         self.assertEqual(names, {"child_good.txt"})
 
     @override_settings(**BLOCKING)
     def test_replacing_content_from_an_infected_file_raises(self):
-        target = FileService.create_file(
+        target = tree.create_file(
             self.user, "target.txt", content=ContentFile(b"clean", name="target.txt")
         )
 
         with self.assertRaisesRegex(Exception, "quarantined"):
-            FileService.replace_content_from(
-                target, self.infected, acting_user=self.user
-            )
+            replace_content_from(target, self.infected, acting_user=self.user)
         target.refresh_from_db()
         with target.content.open("rb") as fh:
             self.assertEqual(fh.read(), b"clean")
@@ -676,7 +675,7 @@ class CopyEnforcementTests(APITestCase):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("payload.txt", b"payload")
-        archive = FileService.create_file(
+        archive = tree.create_file(
             self.user,
             "bad.zip",
             content=ContentFile(buf.getvalue(), name="bad.zip"),

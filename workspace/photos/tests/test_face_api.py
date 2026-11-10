@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from workspace.files.services import FileService
+from workspace.files.services import trash
 from workspace.photos.models import Face, FaceCluster
 from workspace.photos.services.analysis import analyze_media
 from workspace.photos.services.face_analysis import analyze_faces
@@ -72,7 +72,7 @@ class ClusterListTests(FaceApiTestCase):
         self.assertEqual([c["uuid"] for c in hidden], [str(self.bob.pk)])
 
     def test_a_trashed_photo_no_longer_counts(self):
-        FileService.soft_delete(self.photos["bob.png"], acting_user=self.user)
+        trash.soft_delete(self.photos["bob.png"], acting_user=self.user)
 
         (_alice, bob) = self.client.get(CLUSTERS).json()
 

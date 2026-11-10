@@ -528,7 +528,7 @@ class RecentFeedEventsTests(TestCase):
     def test_moving_a_team_file_to_personal_keeps_its_owners_events_visible(self):
         """Bob's events on a team file become someone else's events once Alice
         moves the file into her own space: her dashboard must still show them."""
-        from workspace.files.services import FileService
+        from workspace.files.services import tree
 
         doc = self._file(self.bob, "doc.txt", group=self.team)
         bobs = self._event(doc, self.bob)
@@ -536,7 +536,7 @@ class RecentFeedEventsTests(TestCase):
         mine = File.objects.create(
             owner=self.alice, name="Mine", node_type=File.NodeType.FOLDER
         )
-        FileService.move(doc, mine, acting_user=self.alice)
+        tree.move(doc, mine, acting_user=self.alice)
 
         self.assertEqual(self._feed(self.alice, 5, 0, self.alice.id), [bobs.pk])
 

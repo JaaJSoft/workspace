@@ -11,7 +11,7 @@ from django.utils import timezone
 from PIL import Image
 
 from workspace.files.models import File, FileScan, ProcessingFailure
-from workspace.files.services import FileService, ffmpeg
+from workspace.files.services import ffmpeg, tree
 from workspace.files.services.processors import get_processor, run_processor
 from workspace.files.services.thumbnails import poster
 from workspace.files.services.thumbnails.generation import (
@@ -49,7 +49,7 @@ class VideoThumbnailTestCase(TestCase):
         self.user = User.objects.create_user(username="alice", password="p")
 
     def _video(self, name="clip.webm", data=None, *, viewer=""):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name=name,
             content=ContentFile(clip_bytes(name) if data is None else data),

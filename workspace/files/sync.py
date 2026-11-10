@@ -10,9 +10,10 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 from workspace.files.models import File, canonical_name
 from workspace.files.queries import user_files_qs
-from workspace.files.services import FileService, relocations
-from workspace.files.services._storage_ops import unique_copy_name
+from workspace.files.services import relocations, trash, tree
 from workspace.files.services.shortcuts import rename_aside
+from workspace.files.services.storage_ops import unique_copy_name
+from workspace.files.storage_layout import user_root
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,7 @@ class FileSyncService:
     def sync_user_recursive(self, user) -> SyncResult:
         """Full recursive sync for a single user."""
         result = SyncResult()
-        storage_prefix = f"files/users/{user.username}"
+        storage_prefix = user_root(user.username)
 
         if not default_storage.is_dir(storage_prefix):
             return result
@@ -224,7 +225,7 @@ class FileSyncService:
         """Sync immediate children of a specific folder (or root if None)."""
         result = SyncResult()
 
-        storage_prefix = f"files/users/{user.username}"
+        storage_prefix = user_root(user.username)
         if parent_db is not None:
             storage_prefix = f"{storage_prefix}/{parent_db.path or parent_db.name}"
 
@@ -371,7 +372,7 @@ class FileSyncService:
             try:
                 # Dated when the sync started, so every node it trashes in one
                 # run shares one moment.
-                count = FileService.soft_delete(
+                count = trash.soft_delete(
                     db_record,
                     acting_user=user,
                     deleted_at=now,
@@ -463,7 +464,7 @@ class FileSyncService:
                         "a sibling holds the name" if holder else "names are composed",
                     )
                 if is_dir:
-                    created = FileService.create_folder(
+                    created = tree.create_folder(
                         user, name, parent_db, acting_user=user
                     )
                     index.add(created)
@@ -475,7 +476,7 @@ class FileSyncService:
                     except OSError:
                         size = None
 
-                    created = FileService.register_disk_file(
+                    created = tree.register_disk_file(
                         user,
                         name,
                         parent_db,
@@ -506,7 +507,7 @@ class FileSyncService:
             result.renames_followed += 1
             return
         try:
-            FileService.rename(db_record, new_name, acting_user=user)
+            tree.rename(db_record, new_name, acting_user=user)
         except Exception as e:
             # The rename rolled back, not the attributes it set on the row.
             db_record.refresh_from_db()

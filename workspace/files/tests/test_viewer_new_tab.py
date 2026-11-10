@@ -17,7 +17,7 @@ from PIL import Image
 
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import FileShareLink
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.ebooks import epub_bytes
 from workspace.files.ui.viewers import (
     AudioViewer,
@@ -75,7 +75,7 @@ class NewTabMarkerTests(TestCase):
         self.client.force_login(self.user)
 
     def _file(self, name, data):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
 
@@ -116,7 +116,7 @@ class SharedPageNewTabTests(TestCase):
         self.owner = User.objects.create_user(username="sharer", password="x")
 
     def _shared(self, name, data):
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=self.owner, name=name, content=ContentFile(data, name=name)
         )
         link = FileShareLink.objects.create(

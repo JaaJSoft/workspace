@@ -17,7 +17,7 @@ from rest_framework.test import APITestCase
 
 from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File
-from workspace.files.services import FileService, _names
+from workspace.files.services import names, tree
 
 User = get_user_model()
 
@@ -25,8 +25,8 @@ User = get_user_model()
 @contextmanager
 def competitor_after_check(name, create):
     """Run *create* once the next request has found *name* free."""
-    check_name_available = _names.check_name_available
-    available_node_name = _names.available_node_name
+    check_name_available = names.check_name_available
+    available_node_name = names.available_node_name
     raced = []
 
     def race(chosen):
@@ -44,8 +44,8 @@ def competitor_after_check(name, create):
         return chosen
 
     with (
-        patch.object(_names, "check_name_available", racing_check),
-        patch.object(_names, "available_node_name", racing_pick),
+        patch.object(names, "check_name_available", racing_check),
+        patch.object(names, "available_node_name", racing_pick),
     ):
         yield raced
 
@@ -63,7 +63,7 @@ class ConcurrentCreateServiceTests(TestCase):
 
     def _win(self, name="a.txt", parent=None):
         def create():
-            self.winner = FileService.create_file(
+            self.winner = tree.create_file(
                 self.user,
                 name,
                 parent=parent,
@@ -75,7 +75,7 @@ class ConcurrentCreateServiceTests(TestCase):
     def test_the_loser_is_refused_and_the_winners_bytes_survive(self):
         with competitor_after_check("a.txt", self._win()) as raced:
             with self.assertRaisesMessage(ValueError, "same name"):
-                FileService.create_file(
+                tree.create_file(
                     self.user, "a.txt", content=ContentFile(b"loser", name="a.txt")
                 )
         self.assertTrue(raced)
@@ -85,14 +85,14 @@ class ConcurrentCreateServiceTests(TestCase):
     def test_a_case_variant_loses_too(self):
         with competitor_after_check("A.TXT", self._win("a.txt")):
             with self.assertRaisesMessage(ValueError, "same name"):
-                FileService.create_file(
+                tree.create_file(
                     self.user, "A.TXT", content=ContentFile(b"loser", name="A.TXT")
                 )
         self.assertEqual(read(self.winner), b"winner")
 
     def test_keep_both_takes_the_next_free_name(self):
         with competitor_after_check("a.txt", self._win()):
-            loser = FileService.create_file(
+            loser = tree.create_file(
                 self.user,
                 "a.txt",
                 content=ContentFile(b"loser", name="a.txt"),
@@ -106,9 +106,9 @@ class ConcurrentCreateServiceTests(TestCase):
     def test_keep_both_retries_until_a_name_sticks(self):
         # The folder holds a.txt and the batch holds a.txt and
         # "a (Copy).txt": both resolve to "a (Copy).txt" at once.
-        FileService.create_file(self.user, "a.txt", content=ContentFile(b"old"))
+        tree.create_file(self.user, "a.txt", content=ContentFile(b"old"))
         with competitor_after_check("a (Copy).txt", self._win("a (Copy).txt")):
-            loser = FileService.create_file(
+            loser = tree.create_file(
                 self.user,
                 "a.txt",
                 content=ContentFile(b"loser", name="a.txt"),
@@ -123,27 +123,27 @@ class ConcurrentCreateServiceTests(TestCase):
         teammate = User.objects.create_user(username="bob", password="pass")
         for member in (self.user, teammate):
             member.groups.add(group)
-        root = FileService.create_folder(self.user, "Team", group=group)
+        root = tree.create_folder(self.user, "Team", group=group)
 
         def create():
-            self.winner = FileService.create_file(
+            self.winner = tree.create_file(
                 teammate, "a.txt", parent=root, content=ContentFile(b"winner")
             )
 
         with competitor_after_check("a.txt", create):
             with self.assertRaisesMessage(ValueError, "same name"):
-                FileService.create_file(
+                tree.create_file(
                     self.user, "a.txt", parent=root, content=ContentFile(b"loser")
                 )
         self.assertEqual(read(self.winner), b"winner")
 
     def test_folders_race_for_one_name(self):
         def create():
-            FileService.create_folder(self.user, "Docs")
+            tree.create_folder(self.user, "Docs")
 
         with competitor_after_check("docs", create):
             with self.assertRaisesMessage(ValueError, "same name"):
-                FileService.create_folder(self.user, "docs")
+                tree.create_folder(self.user, "docs")
         self.assertEqual(File.objects.filter(name__iexact="docs").count(), 1)
 
 
@@ -154,7 +154,7 @@ class ConcurrentUploadApiTests(APITestCase):
         self.winner = None
 
     def _win(self):
-        self.winner = FileService.create_file(
+        self.winner = tree.create_file(
             self.user, "a.txt", content=ContentFile(b"winner", name="a.txt")
         )
 
@@ -178,12 +178,10 @@ class ConcurrentUploadApiTests(APITestCase):
         self.assertEqual(read(loser), b"loser")
 
     def test_keep_both_counts_on_from_the_name_that_was_asked_for(self):
-        FileService.create_file(self.user, "a.txt", content=ContentFile(b"old"))
+        tree.create_file(self.user, "a.txt", content=ContentFile(b"old"))
 
         def create():
-            FileService.create_file(
-                self.user, "a (Copy).txt", content=ContentFile(b"w")
-            )
+            tree.create_file(self.user, "a (Copy).txt", content=ContentFile(b"w"))
 
         with competitor_after_check("a (Copy).txt", create):
             response = self._post(on_conflict="rename")
@@ -215,7 +213,7 @@ class NameTakenAnswerTests(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def test_a_file_posted_over_a_folder_names_the_folder(self):
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
         response = self.client.post(
             "/api/v1/files",
             {
@@ -232,7 +230,7 @@ class NameTakenAnswerTests(APITestCase):
         )
 
     def test_a_folder_posted_over_a_file_names_the_file(self):
-        FileService.create_file(self.user, "Notes", content=ContentFile(b"x"))
+        tree.create_file(self.user, "Notes", content=ContentFile(b"x"))
         response = self.client.post(
             "/api/v1/files", {"name": "notes", "node_type": "folder"}, format="json"
         )
@@ -262,7 +260,7 @@ class ConcurrentRenameAndMoveTests(TestCase):
 
     def _win(self, name, parent=None, owner=None):
         def create():
-            self.winner = FileService.create_file(
+            self.winner = tree.create_file(
                 owner or self.user,
                 name,
                 parent=parent,
@@ -272,27 +270,27 @@ class ConcurrentRenameAndMoveTests(TestCase):
         return create
 
     def test_a_rename_that_loses_leaves_both_files_whole(self):
-        mine = FileService.create_file(self.user, "b.txt", content=ContentFile(b"mine"))
+        mine = tree.create_file(self.user, "b.txt", content=ContentFile(b"mine"))
         with competitor_after_check("c.txt", self._win("c.txt")):
             with self.assertRaisesMessage(ValueError, "same name"):
-                FileService.rename(mine, "c.txt", acting_user=self.user)
+                tree.rename(mine, "c.txt", acting_user=self.user)
         mine = File.objects.get(pk=mine.pk)
         self.assertEqual(mine.name, "b.txt")
         self.assertEqual(read(mine), b"mine")
         self.assertEqual(read_blob(self.winner), b"winner")
 
     def test_a_folder_rename_that_loses_keeps_its_contents(self):
-        folder = FileService.create_folder(self.user, "Old")
-        inside = FileService.create_file(
+        folder = tree.create_folder(self.user, "Old")
+        inside = tree.create_file(
             self.user, "x.txt", parent=folder, content=ContentFile(b"inside")
         )
 
         def create():
-            FileService.create_folder(self.user, "New")
+            tree.create_folder(self.user, "New")
 
         with competitor_after_check("New", create):
             with self.assertRaisesMessage(ValueError, "same name"):
-                FileService.rename(folder, "New", acting_user=self.user)
+                tree.rename(folder, "New", acting_user=self.user)
         self.assertEqual(read(inside), b"inside")
 
     def test_a_move_into_a_group_folder_that_loses_leaves_both_files_whole(self):
@@ -300,24 +298,24 @@ class ConcurrentRenameAndMoveTests(TestCase):
         teammate = User.objects.create_user(username="bob", password="pass")
         for member in (self.user, teammate):
             member.groups.add(group)
-        root = FileService.create_folder(self.user, "Team", group=group)
-        mine = FileService.create_file(self.user, "y.txt", content=ContentFile(b"mine"))
+        root = tree.create_folder(self.user, "Team", group=group)
+        mine = tree.create_file(self.user, "y.txt", content=ContentFile(b"mine"))
 
         with competitor_after_check("y.txt", self._win("y.txt", root, teammate)):
             with self.assertRaisesMessage(ValueError, "same name"):
-                FileService.move(mine, root, acting_user=self.user)
+                tree.move(mine, root, acting_user=self.user)
         mine = File.objects.get(pk=mine.pk)
         self.assertIsNone(mine.parent_id)
         self.assertEqual(read(mine), b"mine")
         self.assertEqual(read_blob(self.winner), b"winner")
 
     def test_a_move_that_wins_carries_a_folder_and_its_contents(self):
-        target = FileService.create_folder(self.user, "Target")
-        folder = FileService.create_folder(self.user, "Docs")
-        inside = FileService.create_file(
+        target = tree.create_folder(self.user, "Target")
+        folder = tree.create_folder(self.user, "Docs")
+        inside = tree.create_file(
             self.user, "x.txt", parent=folder, content=ContentFile(b"inside")
         )
-        FileService.move(folder, target, acting_user=self.user)
+        tree.move(folder, target, acting_user=self.user)
         inside = File.objects.get(pk=inside.pk)
         self.assertEqual(inside.path, "Target/Docs/x.txt")
         self.assertEqual(inside.content.name, "files/users/alice/Target/Docs/x.txt")
@@ -353,7 +351,7 @@ class BytesOutsideTheTransactionTests(TestCase):
 
     def test_an_upload_is_written_before_its_row(self):
         created, depths = self._depth_at_each_write(
-            lambda: FileService.create_file(
+            lambda: tree.create_file(
                 self.user, "big.bin", content=ContentFile(b"x" * 1024)
             )
         )
@@ -361,12 +359,12 @@ class BytesOutsideTheTransactionTests(TestCase):
         self.assertEqual(read(created), b"x" * 1024)
 
     def test_a_copy_is_written_before_its_row(self):
-        source = FileService.create_file(
+        source = tree.create_file(
             self.user, "big.bin", content=ContentFile(b"y" * 1024)
         )
-        folder = FileService.create_folder(self.user, "Copies")
+        folder = tree.create_folder(self.user, "Copies")
         copied, depths = self._depth_at_each_write(
-            lambda: FileService.copy(source, folder, self.user)
+            lambda: tree.copy(source, folder, self.user)
         )
         self.assertEqual(depths, [0])
         self.assertEqual(read(copied), b"y" * 1024)

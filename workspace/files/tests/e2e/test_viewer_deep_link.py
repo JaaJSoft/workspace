@@ -16,7 +16,7 @@ from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 
 class ViewerDeepLinkTests(PlaywrightTestCase):
@@ -24,8 +24,8 @@ class ViewerDeepLinkTests(PlaywrightTestCase):
         super().setUp()
         self.owner = self.create_user(username="owner")
         self.recipient = self.create_user(username="recipient")
-        folder = FileService.create_folder(self.owner, "Private")
-        self.file = FileService.create_file(
+        folder = tree.create_folder(self.owner, "Private")
+        self.file = tree.create_file(
             owner=self.owner,
             name="Minutes.txt",
             parent=folder,

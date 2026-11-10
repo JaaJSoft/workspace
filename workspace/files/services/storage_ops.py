@@ -1,8 +1,8 @@
-"""Internal storage-path helpers for the file service.
+"""Where a node's bytes sit on storage, and what moves, copies or drops them.
 
-Module-level functions extracted from FileService so the facade in
-``files.py`` stays small. Not part of the public API: callers should
-go through FileService methods, which delegate here.
+The paths a row's blob and a folder's directory derive from, live or
+trashed, and the storage half of every tree operation. Each move is
+journaled (``relocations``) from before it touches a blob.
 """
 
 import logging
@@ -18,76 +18,34 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
 from ..models import File, canonical_name
-from . import _trash, relocations
+from ..storage_layout import FILES_ROOT, live_path
+from . import relocations, trash_paths
 from .content_hash import hash_stream
 
 logger = logging.getLogger(__name__)
 
 
-def folder_storage_path(folder):
-    """Return the storage-relative directory path for *folder*.
+def node_storage_path(node):
+    """Where *node*'s bytes belong according to its row, trashed or not.
 
-    A trashed folder lives under ``trash/`` instead of the live tree; see
-    ``_trash`` for why and for the layout.
+    A trashed node lives under ``trash/`` instead of the live tree; see
+    ``trash_paths`` for why and for the layout.
     """
-    if folder.deleted_at is not None:
-        return _trash.trashed_storage_path(folder)
-    return live_folder_path(folder)
-
-
-def live_folder_path(folder):
-    """Where *folder* sits in the live tree, whatever its trash state.
-
-    Uses the pre-computed ``folder.path`` to avoid walking the parent
-    chain.  Group folders are stored under ``files/groups/<group_name>/...``.
-    Personal folders are stored under ``files/users/<username>/...``.
-    """
-    path = folder.path or folder.get_path()
-    if folder.group_id:
-        return posixpath.join("files", "groups", *path.split("/"))
-    return posixpath.join("files", "users", folder.owner.username, *path.split("/"))
-
-
-def parent_storage_path(owner, parent):
-    """Return the storage-relative directory for *parent* (or user root)."""
-    if parent:
-        return folder_storage_path(parent)
-    return posixpath.join("files", "users", owner.username)
+    if node.deleted_at is not None:
+        return trash_paths.trashed_storage_path(node)
+    return live_path(node)
 
 
 def current_node_path(node):
     """Where *node*'s bytes sit right now, according to the database."""
     if node.node_type == File.NodeType.FOLDER:
-        return folder_storage_path(node)
+        return node_storage_path(node)
     return node.content.name if node.content else None
-
-
-def live_node_path(node):
-    """Where *node* belongs in the live tree, whatever its trash state."""
-    if node.node_type == File.NodeType.FOLDER:
-        return live_folder_path(node)
-    return posixpath.join(live_parent_path(node), node.name)
-
-
-def live_parent_path(node):
-    """The live directory that should contain *node*."""
-    if node.parent_id:
-        return live_folder_path(node.parent)
-    if node.group_id:
-        return posixpath.join("files", "groups")
-    return posixpath.join("files", "users", node.owner.username)
-
-
-def node_storage_path(node):
-    """Where *node*'s bytes belong according to its row, trashed or not."""
-    if node.deleted_at is not None:
-        return _trash.trashed_storage_path(node)
-    return live_node_path(node)
 
 
 def trash_node_path(node):
     """Where *node*'s bytes go once it is trashed in its own right."""
-    return posixpath.join(_trash.trash_dir(node), node.name)
+    return posixpath.join(trash_paths.trash_dir(node), node.name)
 
 
 def reconcile_trashed_children(node, trashed_at):
@@ -117,14 +75,14 @@ def reconcile_trashed_children(node, trashed_at):
         source = (
             child.content.name
             if child.node_type == File.NodeType.FILE
-            else live_folder_path(child)
+            else live_path(child)
         )
         move_node_storage(child, source, trash_node_path(child))
 
 
 def ensure_folder_on_storage(folder):
     """Keep the folder's directory on storage, even while it is empty."""
-    default_storage.make_dir(folder_storage_path(folder))
+    default_storage.make_dir(node_storage_path(folder))
 
 
 def delete_node_storage(node):
@@ -132,7 +90,7 @@ def delete_node_storage(node):
 
     Runs from the ``pre_delete`` signal, so it covers instance, queryset and
     cascade deletes alike. Paths are resolved through the same helpers as the
-    other storage ops (``folder_storage_path``), never rebuilt by hand.
+    other storage ops (``node_storage_path``), never rebuilt by hand.
     """
     # A shortcut has nothing on storage. Its live path may well be a
     # directory, though - one nobody registered yet, or that a trashed folder
@@ -169,7 +127,7 @@ def _delete_file_storage(node):
 
 
 # The two storage roots the cleanup climb must never remove.
-_STORAGE_ROOTS = ("files", _trash.TRASH_ROOT)
+_STORAGE_ROOTS = (FILES_ROOT, trash_paths.TRASH_ROOT)
 
 
 def _remove_empty_parents(dir_path):
@@ -183,7 +141,7 @@ def _remove_empty_parents(dir_path):
 
 def _delete_folder_storage(node):
     try:
-        storage_path = folder_storage_path(node)
+        storage_path = node_storage_path(node)
         # Fail closed on '.'/'..' components: they resolve to an ancestor
         # directory, and deleting that prefix would take unrelated data with it.
         # File.save() rejects such names, but a legacy or hand-edited row
@@ -331,7 +289,7 @@ def move_node_storage(node, source, destination):
         if not node.content or not node.content.name:
             return
         if blob_held_elsewhere(default_storage, destination, node):
-            from ._names import NameTaken
+            from .names import NameTaken
 
             raise NameTaken()
         node.content.name = destination
@@ -376,9 +334,9 @@ def copy_node(node, parent, owner, _sibling_names=None, *, name=None, checkpoint
     back what it had created: half a folder under the name of the whole one is
     worse than no copy.
     """
-    # Imported here because _names imports from this module.
-    from ._names import insert_node, insert_node_keeping_both
+    # Imported here because names imports from this module.
     from .hard_delete import hard_delete_tree
+    from .names import insert_node, insert_node_keeping_both
     from .scanning.policy import exclude_blocked
 
     copied = File(
@@ -386,7 +344,7 @@ def copy_node(node, parent, owner, _sibling_names=None, *, name=None, checkpoint
         name=canonical_name(name or node.name),
         node_type=node.node_type,
         parent=parent,
-        # file_upload_path reads instance.group_id, so the group must be set
+        # The blob's path hangs from the node's group, so the group must be set
         # before save().
         group=parent.group if parent is not None else None,
         mime_type=node.mime_type,

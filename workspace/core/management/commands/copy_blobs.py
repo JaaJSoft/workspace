@@ -17,8 +17,8 @@ from workspace.common.storage.facade import BlobStorage
 
 # Every top-level directory a module stores blobs under.
 BLOB_ROOTS = (
-    "files",  # the file tree (files.models.file_upload_path)
-    "trash",  # trashed nodes (files.services._trash)
+    "files",  # the file tree (files.storage_layout)
+    "trash",  # trashed nodes (files.services.trash_paths)
     "thumbnails",  # file previews
     "chat",  # message attachments
     "mail",  # mail attachments

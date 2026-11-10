@@ -1,4 +1,4 @@
-"""Internal naming and validation helpers for the file service."""
+"""Who holds a name in a folder, and inserting a node under one."""
 
 import gc
 import logging
@@ -13,7 +13,7 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
 from ..models import File, canonical_name
-from ._storage_ops import blob_held_elsewhere, unique_copy_name
+from .storage_ops import blob_held_elsewhere, unique_copy_name
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +277,7 @@ def available_file_name(owner, parent, name, *, avoiding=()):
 def validate_move_target(file_obj, new_parent):
     """Raise ``ValueError`` if *new_parent* would put a folder inside itself.
 
-    The structural half of ``FileService.validate_move_target``, which also
+    The structural half of ``tree.validate_move_target``, which also
     decides whether the caller may write there.
     """
     if file_obj.node_type == File.NodeType.FOLDER:

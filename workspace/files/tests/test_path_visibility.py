@@ -11,7 +11,7 @@ from django.core.files.base import ContentFile
 from rest_framework.test import APITestCase
 
 from workspace.files.models import FileFavorite, FileShare
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -20,8 +20,8 @@ class PathVisibilityTests(APITestCase):
     def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="pw")
         self.bob = User.objects.create_user(username="bob", password="pw")
-        private = FileService.create_folder(self.alice, "MedicalPrivate")
-        self.doc = FileService.create_file(
+        private = tree.create_folder(self.alice, "MedicalPrivate")
+        self.doc = tree.create_file(
             self.alice,
             "note.md",
             parent=private,
@@ -74,8 +74,8 @@ class PathVisibilityTests(APITestCase):
         team = Group.objects.create(name="Team")
         self.alice.groups.add(team)
         self.bob.groups.add(team)
-        root = FileService.create_folder(self.alice, "TeamRoot", group=team)
-        sub = FileService.create_folder(self.alice, "Sub", parent=root)
+        root = tree.create_folder(self.alice, "TeamRoot", group=team)
+        sub = tree.create_folder(self.alice, "Sub", parent=root)
         self.client.force_login(self.bob)
 
         html = self.client.get(f"/files/properties/{sub.uuid}")

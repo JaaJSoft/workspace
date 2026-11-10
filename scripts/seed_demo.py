@@ -96,7 +96,7 @@ from workspace.chat.services.rendering import render_message_body  # noqa: E402
 from workspace.core import setting_keys  # noqa: E402
 from workspace.core.changelog import get_latest_version  # noqa: E402
 from workspace.files.models import File, FileEvent  # noqa: E402
-from workspace.files.services import FileService  # noqa: E402
+from workspace.files.services import tree  # noqa: E402
 from workspace.people.models import Person, PersonList  # noqa: E402
 from workspace.projects.models import (  # noqa: E402
     Project,
@@ -633,7 +633,7 @@ def build_file_tree(user, min_files, max_files, max_depth, history_days):
     with transaction.atomic():
         for name in top_pool:
             ts = _rand_past(history_days)
-            folder = FileService.create_folder(owner=user, name=name)
+            folder = tree.create_folder(owner=user, name=name)
             _backdate_file(folder, ts)
             targets.append((folder, 1, ts))
             taken[None].add(name.lower())
@@ -649,7 +649,7 @@ def build_file_tree(user, min_files, max_files, max_depth, history_days):
             name = random.choice(free)
             ts = _rand_past(history_days, until=timezone.now())
             ts = max(ts, parent_ts)  # never predate the parent folder
-            folder = FileService.create_folder(owner=user, name=name, parent=parent)
+            folder = tree.create_folder(owner=user, name=name, parent=parent)
             _backdate_file(folder, ts)
             targets.append((folder, depth + 1, ts))
             siblings.add(name.lower())
@@ -659,7 +659,7 @@ def build_file_tree(user, min_files, max_files, max_depth, history_days):
             siblings = taken[parent.pk if parent else None]
             ext, data = _make_file_content()
             name = _free_file_name(random.choice(FILE_STEMS), ext, siblings)
-            f = FileService.create_file(
+            f = tree.create_file(
                 owner=user,
                 name=name,
                 parent=parent,
@@ -1156,7 +1156,7 @@ def import_real_photos(users, count, history_days):
                 data = _with_capture_date(
                     paths[photo.photo_id].read_bytes(), photo.taken
                 )
-                f = FileService.create_file(
+                f = tree.create_file(
                     owner=user,
                     name=name,
                     parent=folder,
@@ -1171,7 +1171,7 @@ def import_real_photos(users, count, history_days):
                     *(photo.credit for photo in library),
                 ]
             )
-            f = FileService.create_file(
+            f = tree.create_file(
                 owner=user,
                 name="CREDITS.txt",
                 parent=folder,

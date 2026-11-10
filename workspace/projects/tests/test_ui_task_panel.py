@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 from django.utils.html import escapejs
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.projects.models import Label
 from workspace.projects.services.file_links import link_files
 from workspace.projects.services.links import create_link, delete_link
@@ -383,7 +383,7 @@ class TaskPanelFileLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="Anchor")
-        self.doc = FileService.create_file(
+        self.doc = tree.create_file(
             self.admin,
             "spec.md",
             content=SimpleUploadedFile("spec.md", b"# spec", content_type="text/plain"),

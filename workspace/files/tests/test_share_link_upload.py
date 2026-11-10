@@ -192,7 +192,7 @@ class ShareLinkUploadTests(APITestCase):
 
     def test_a_failed_create_releases_the_reserved_slot(self):
         with patch(
-            "workspace.files.services.files.FileService.create_file",
+            "workspace.files.services.tree.create_file",
             side_effect=QuotaExceeded(),
         ):
             resp = self.post()
@@ -257,7 +257,7 @@ class ShareLinkUploadTests(APITestCase):
 
     def test_a_full_quota_refuses_with_413_and_creates_nothing(self):
         with patch(
-            "workspace.files.services.files.check_write_allowed",
+            "workspace.files.services.tree.check_write_allowed",
             side_effect=QuotaExceeded(),
         ):
             resp = self.post()

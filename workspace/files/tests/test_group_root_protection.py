@@ -13,7 +13,7 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.tests import test_webdav
 from workspace.files.tests.operations import outcome_of, run_operation
 
@@ -28,14 +28,14 @@ class _GroupRootFixture:
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         self.bob.groups.add(self.team)
-        self.root = FileService.create_folder(self.bob, "TeamRoot", group=self.team)
-        self.bob_file = FileService.create_file(
+        self.root = tree.create_folder(self.bob, "TeamRoot", group=self.team)
+        self.bob_file = tree.create_file(
             self.bob,
             "bob.txt",
             parent=self.root,
             content=ContentFile(b"bob", name="bob.txt"),
         )
-        self.mine = FileService.create_folder(self.alice, "Mine")
+        self.mine = tree.create_folder(self.alice, "Mine")
 
     def _assert_untouched(self):
         self.root.refresh_from_db()
@@ -83,8 +83,8 @@ class GroupRootRestTests(_GroupRootFixture, APITestCase):
         self.assertFalse(File.objects.filter(parent=self.mine).exists())
 
     def test_a_folder_inside_the_group_root_still_moves_and_trashes(self):
-        sub = FileService.create_folder(self.alice, "Sub", parent=self.root)
-        other = FileService.create_folder(self.alice, "Other", parent=self.root)
+        sub = tree.create_folder(self.alice, "Sub", parent=self.root)
+        other = tree.create_folder(self.alice, "Other", parent=self.root)
 
         moved = run_operation(self.client, "move", [sub], other)
         trashed = run_operation(self.client, "trash", [other])
@@ -99,17 +99,17 @@ class GroupRootServiceTests(_GroupRootFixture, TestCase):
 
     def test_move_refuses_the_group_root(self):
         with self.assertRaises(ValueError):
-            FileService.move(self.root, self.mine, acting_user=self.alice)
+            tree.move(self.root, self.mine, acting_user=self.alice)
         self._assert_untouched()
 
     def test_soft_delete_refuses_the_group_root(self):
         with self.assertRaises(ValueError):
-            FileService.soft_delete(self.root, acting_user=self.alice)
+            trash.soft_delete(self.root, acting_user=self.alice)
         self._assert_untouched()
 
     def test_rename_refuses_the_group_root(self):
         with self.assertRaises(ValueError):
-            FileService.rename(self.root, "Renamed", acting_user=self.alice)
+            tree.rename(self.root, "Renamed", acting_user=self.alice)
         self.root.refresh_from_db()
         self.assertEqual(self.root.name, "TeamRoot")
         self._assert_untouched()

@@ -27,7 +27,7 @@ def record_event(file, actor, action, metadata=None):
     if file is None:
         return None
     # Skip unsaved instances. Real paths always persist the file before
-    # calling here; the guard is for tests that mock FileService.create_*
+    # calling here; the guard is for tests that mock ``tree.create_*``
     # to return a non-persisted File and would otherwise trigger a
     # deferred-FK violation at transaction commit.
     state = getattr(file, "_state", None)

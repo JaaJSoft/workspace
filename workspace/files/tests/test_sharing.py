@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShare
+from workspace.files.services import trash
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -244,7 +245,7 @@ class ShareAPITests(APITestCase):
             shared_by=self.user,
             shared_with=self.other_user,
         )
-        self.file.soft_delete()
+        trash.trash_subtree(self.file)
         self.client.force_authenticate(user=self.other_user)
         resp = self.client.get("/api/v1/files/shared-with-me")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)

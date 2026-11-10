@@ -2,7 +2,7 @@
 
 Every write path is covered by the one registration: REST upload, WebDAV
 end_write, the office editor's save, archive extraction, imports and the "save
-to files" actions all funnel through FileService and record a CREATED or
+to files" actions all funnel through the tree services and record a CREATED or
 CONTENT_REPLACED event, which queues the upload pipeline. The scan runs first
 there, so the processors after it see the verdict before reading the bytes.
 The hourly catch-up scans whatever that path missed.

@@ -10,7 +10,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.files.models import File, FileEvent, UserStorageQuota
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.wopi.tokens import mint_access_token
 
 User = get_user_model()
@@ -24,7 +25,7 @@ class WopiViewTestBase(TestCase):
         self.other = User.objects.create_user(
             username="wopi_other", email="other@test.com", password="pw"
         )
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             owner=self.owner,
             name="report.docx",
             content=SimpleUploadedFile(
@@ -183,7 +184,7 @@ class PutFileTests(WopiViewTestBase):
         reload instead of overwriting whoever moved it.
         """
         opened_at = self.file.content_hash
-        FileService.update_content(
+        update_content(
             File.objects.get(pk=self.file.pk),
             SimpleUploadedFile("report.docx", b"somebody else's revision"),
             name="report.docx",

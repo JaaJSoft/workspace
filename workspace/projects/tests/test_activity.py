@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.projects.activity import ProjectsActivityProvider
 from workspace.projects.models import ProjectMember, TaskEvent
 from workspace.projects.services.file_links import link_files
@@ -101,7 +101,7 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         self.assertEqual(stats["completed_tasks"], 0)
 
     def test_file_event_names_the_file(self):
-        doc = FileService.create_file(
+        doc = tree.create_file(
             self.admin,
             "spec.md",
             content=SimpleUploadedFile("spec.md", b"# spec", content_type="text/plain"),

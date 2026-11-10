@@ -8,7 +8,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs, user_group_files_qs
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.refusals import Refusal, Refused
 from workspace.files.services.transfers import move_item
 from workspace.users.services.settings import get_setting, set_setting
@@ -82,7 +82,7 @@ def _ensure_default_folders(user):
         notes_folder = folders.filter(name="Notes", parent__isnull=True).first()
 
     if not notes_folder:
-        notes_folder = FileService.create_folder(
+        notes_folder = tree.create_folder(
             user,
             "Notes",
             icon="notebook-pen",
@@ -121,7 +121,7 @@ def _ensure_default_folders(user):
         ).first()
 
     if not journal_folder:
-        journal_folder = FileService.create_folder(
+        journal_folder = tree.create_folder(
             user,
             "Journal",
             parent=notes_folder,

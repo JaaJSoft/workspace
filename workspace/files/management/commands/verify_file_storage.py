@@ -6,7 +6,6 @@ That is what makes a bucket or a media directory readable without the
 database, and what the sync relies on; nothing else checks it.
 """
 
-import posixpath
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand, CommandError
@@ -14,13 +13,12 @@ from django.db import transaction
 
 from workspace.common.logging import scrub
 from workspace.files.models import File, canonical_name
-from workspace.files.services import FileService, _storage_ops, _trash, relocations
-
-
-def _expected_blob(node):
-    if node.deleted_at is not None:
-        return _trash.trashed_storage_path(node)
-    return posixpath.join(_storage_ops.live_parent_path(node), node.name)
+from workspace.files.services import (
+    relocations,
+    storage_ops,
+    trash_paths,
+    tree,
+)
 
 
 class Command(BaseCommand):
@@ -66,7 +64,7 @@ class Command(BaseCommand):
 
         storage = File._meta.get_field("content").storage
         blobs, directories = set(), set()
-        for root in ("files", _trash.TRASH_ROOT):
+        for root in ("files", trash_paths.TRASH_ROOT):
             if storage.is_dir(root):
                 blobs.update(blob.name for blob in storage.iter_blobs(root))
                 directories.update(storage.iter_dirs(root))
@@ -77,7 +75,7 @@ class Command(BaseCommand):
             if node.deleted_at is None and node.name != canonical_name(node.name):
                 decomposed.append(f"{node.pk} {node.path}")
             if node.node_type == File.NodeType.FOLDER:
-                if _storage_ops.folder_storage_path(node) not in directories:
+                if storage_ops.node_storage_path(node) not in directories:
                     dirless.append(node)
                 continue
             if not node.content:
@@ -86,8 +84,10 @@ class Command(BaseCommand):
             referenced.add(name)
             if name not in blobs:
                 missing.append(f"{node.pk} {name}")
-            elif name != _expected_blob(node):
-                misplaced.append(f"{node.pk} {name} (expected {_expected_blob(node)})")
+            elif name != storage_ops.node_storage_path(node):
+                misplaced.append(
+                    f"{node.pk} {name} (expected {storage_ops.node_storage_path(node)})"
+                )
         orphans = sorted(blobs - referenced)
         pending = relocations.entries()
 
@@ -96,7 +96,7 @@ class Command(BaseCommand):
         self._report("blob(s) no file points at", orphans, limit)
         self._report(
             "folder(s) without a directory",
-            [f"{node.pk} {_storage_ops.folder_storage_path(node)}" for node in dirless],
+            [f"{node.pk} {storage_ops.node_storage_path(node)}" for node in dirless],
             limit,
         )
         self._report("name(s) stored decomposed", decomposed, limit)
@@ -111,7 +111,7 @@ class Command(BaseCommand):
 
         if dirless and options["repair"]:
             for node in dirless:
-                storage.make_dir(_storage_ops.folder_storage_path(node))
+                storage.make_dir(storage_ops.node_storage_path(node))
             self.stdout.write(f"Created {len(dirless)} folder directory(ies).")
         if missing:
             raise CommandError(f"{len(missing)} file(s) point at a blob that is gone.")
@@ -140,7 +140,7 @@ class Command(BaseCommand):
         for pk, path in sorted(decomposed, key=lambda row: -row[1].count("/")):
             node = File.objects.select_related("owner", "parent__owner").get(pk=pk)
             try:
-                FileService.rename(node, canonical_name(node.name))
+                tree.rename(node, canonical_name(node.name))
                 renamed += 1
             except ValueError as exc:
                 refused.append(f"{pk} {path}: {exc}")
@@ -155,13 +155,13 @@ class Command(BaseCommand):
         for node in (
             files.exclude(content="").order_by("path").iterator(chunk_size=2000)
         ):
-            name, expected = node.content.name, _expected_blob(node)
+            name, expected = node.content.name, storage_ops.node_storage_path(node)
             if name == expected:
                 continue
             if not storage.exists(expected):
                 if storage.exists(name):
                     with transaction.atomic():
-                        _storage_ops.move_node_storage(node, name, expected)
+                        storage_ops.move_node_storage(node, name, expected)
                     moved += 1
             elif (
                 not storage.exists(name)

@@ -12,7 +12,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.ui.viewers import VIEWER_PANEL_ID
 
 User = get_user_model()
@@ -33,7 +33,7 @@ class ViewerPanelWrapperTests(TestCase):
         )
 
     def test_a_rendered_viewer_is_wrapped_in_the_panel(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="note.txt",
             content=SimpleUploadedFile(
@@ -49,9 +49,7 @@ class ViewerPanelWrapperTests(TestCase):
 
     def test_an_error_body_is_wrapped_in_the_panel(self):
         """A 400 must still merge into the panel, not vanish client-side."""
-        folder = FileService.create_folder(
-            owner=self.user, name="Docs", acting_user=self.user
-        )
+        folder = tree.create_folder(owner=self.user, name="Docs", acting_user=self.user)
         resp = self._get(folder)
         self.assertEqual(resp.status_code, 400)
         self.assertIn(PANEL_OPENING, resp.content.decode())

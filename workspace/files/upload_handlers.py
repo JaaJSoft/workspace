@@ -10,7 +10,7 @@ class HashingTemporaryFileUploadHandler(TemporaryFileUploadHandler):
     """Spool to ``FILE_UPLOAD_TEMP_DIR``, hashing the bytes on the way in.
 
     The digest lands on the upload as ``content_hash``, which spares
-    ``FileService`` a second full read of the file. Bytes reach the disk in
+    ``tree.create_file`` a second full read of the file. Bytes reach the disk in
     ``DEFAULT_CHUNK_SIZE`` writes rather than the parser's 64 KB chunks, as on
     the WebDAV path: on replicated storage every write is a round trip.
     """

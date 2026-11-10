@@ -31,7 +31,7 @@ MAX_UPLOAD_NAME_LENGTH = MAX_NAME_LENGTH - _RENAME_SUFFIX_HEADROOM
 
 
 def scope_q(root):
-    """Rows sharing *root*'s name namespace, as ``_names.sibling_nodes`` defines it.
+    """Rows sharing *root*'s name namespace, as ``names.sibling_nodes`` defines it.
 
     A group folder's children each carry their creator as ``owner``, so scoping
     a group root by owner would hide every file a second member added. Outside a

@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File, MediaInfo, ProcessingFailure
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.rasters import avif_bytes, heic_bytes
 from workspace.files.tests.videos import clip_bytes
 
@@ -37,7 +37,7 @@ class RetypeIsoMediaImagesTests(TestCase):
 
     def _stored_as_mp4(self, name, data):
         """A file as the old detection left it: typed as an MP4 video."""
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
         File.objects.filter(pk=file_obj.pk).update(

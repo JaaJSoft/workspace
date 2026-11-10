@@ -7,7 +7,8 @@ from django.test import TestCase
 
 from workspace.files.models import FileShare
 from workspace.files.queries import FilePermission, get_permission
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.services.sharing import share_file
 from workspace.projects.models import TaskEvent, TaskFileLink
 from workspace.projects.services.file_links import (
@@ -22,7 +23,7 @@ from .base import ProjectTestMixin
 
 
 def make_file(owner, name, content=b"hello"):
-    return FileService.create_file(
+    return tree.create_file(
         owner,
         name,
         content=SimpleUploadedFile(name, content, content_type="text/plain"),
@@ -206,7 +207,7 @@ class UnlinkFileTests(ProjectTestMixin, TestCase):
         self.assertFalse(TaskFileLink.objects.exists())
 
     def test_hard_deleting_the_file_drops_the_link(self):
-        FileService.hard_delete(self.doc)
+        hard_delete_tree(self.doc)
         self.assertFalse(TaskFileLink.objects.exists())
 
 
@@ -231,11 +232,11 @@ class FileLinksForTaskTests(ProjectTestMixin, TestCase):
         self.assertIn("type_icon", item)
 
     def test_rename_follows_through(self):
-        FileService.rename(self.doc, "renamed.md")
+        tree.rename(self.doc, "renamed.md")
         (item,) = file_links_for_task(self.task)
         self.assertEqual(item["name"], "renamed.md")
 
     def test_trashed_file_stays_listed_and_flagged(self):
-        FileService.soft_delete(self.doc)
+        trash.soft_delete(self.doc)
         (item,) = file_links_for_task(self.task)
         self.assertTrue(item["in_trash"])

@@ -10,7 +10,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from workspace.common.vectors import nearest
 from workspace.core.services.admin_dashboard import face_backend_health_card
 from workspace.files.models import File, FileEvent
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Face, FaceAnalysis, FaceCluster
 from workspace.photos.services.face_analysis import analyze_faces
@@ -142,7 +142,7 @@ class MovedPhotoTests(FacesTestMixin, TestCase):
     def test_a_photo_moved_to_a_group_folder_loses_its_faces(self):
         group = Group.objects.create(name="Team")
         self.user.groups.add(group)
-        folder = FileService.create_folder(owner=self.user, name="Team", group=group)
+        folder = tree.create_folder(owner=self.user, name="Team", group=group)
         File.objects.filter(pk=self.photo.pk).update(parent=folder, group=group)
 
         with self.captureOnCommitCallbacks(execute=True):
@@ -153,13 +153,13 @@ class MovedPhotoTests(FacesTestMixin, TestCase):
         self.assertFalse(default_storage.exists(self.crop))
 
     def test_a_folder_moved_to_a_group_folder_takes_its_photos_faces_away(self):
-        folder = FileService.create_folder(owner=self.user, name="Holidays")
-        FileService.move(self.photo, folder, acting_user=self.user)
+        folder = tree.create_folder(owner=self.user, name="Holidays")
+        tree.move(self.photo, folder, acting_user=self.user)
         group = Group.objects.create(name="Team")
         self.user.groups.add(group)
-        team = FileService.create_folder(owner=self.user, name="Team", group=group)
+        team = tree.create_folder(owner=self.user, name="Team", group=group)
         folder.refresh_from_db()
-        FileService.move(folder, team, acting_user=self.user)
+        tree.move(folder, team, acting_user=self.user)
         folder.refresh_from_db()
 
         self.photo.refresh_from_db()
@@ -188,7 +188,7 @@ class MovedPhotoTests(FacesTestMixin, TestCase):
         delay.assert_called_once_with(str(self.photo.pk))
 
     def test_a_photo_moved_between_personal_folders_keeps_its_faces(self):
-        folder = FileService.create_folder(owner=self.user, name="Holidays")
+        folder = tree.create_folder(owner=self.user, name="Holidays")
         File.objects.filter(pk=self.photo.pk).update(parent=folder)
 
         follow_moved_photo(self._moved())

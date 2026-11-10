@@ -14,7 +14,7 @@ from django.core.files.base import ContentFile
 from rest_framework.test import APITestCase
 
 from workspace.files.models import FileEvent
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.sharing import (
     create_share_link,
     revoke_share_link,
@@ -54,8 +54,8 @@ class TimelineVisibilityTests(APITestCase):
         self.dave = User.objects.create_user(username="dave_revoked", password="pw")
         self.hr = Group.objects.create(name="HR-confidential")
 
-        private = FileService.create_folder(self.alice, "MedicalPrivate")
-        self.source = source = FileService.create_file(
+        private = tree.create_folder(self.alice, "MedicalPrivate")
+        self.source = source = tree.create_file(
             self.alice,
             "Secret-source.md",
             parent=private,
@@ -63,7 +63,7 @@ class TimelineVisibilityTests(APITestCase):
         )
         # Copied beside its source, so the copy is named "Secret-source (Copy).md"
         # and only the event metadata carries the source's name.
-        self.doc = FileService.copy(source, private, self.alice, acting_user=self.alice)
+        self.doc = tree.copy(source, private, self.alice, acting_user=self.alice)
         for user in (self.bob, self.carol, self.dave):
             share_file(
                 self.doc, target_user=user, permission="ro", acting_user=self.alice
@@ -77,7 +77,7 @@ class TimelineVisibilityTests(APITestCase):
         unshare_file(self.doc, target_user=self.dave, acting_user=self.alice)
         link = create_share_link(self.doc, acting_user=self.alice)
         revoke_share_link(self.doc, link_uuid=link.uuid, acting_user=self.alice)
-        FileService.rename(self.doc, "renamed.md", acting_user=self.alice)
+        tree.rename(self.doc, "renamed.md", acting_user=self.alice)
 
     def tearDown(self):
         cache.clear()
@@ -132,8 +132,8 @@ class TimelineVisibilityTests(APITestCase):
         team = Group.objects.create(name="Team")
         self.alice.groups.add(team)
         self.bob.groups.add(team)
-        root = FileService.create_folder(self.alice, "TeamRoot", group=team)
-        self.doc = FileService.create_file(
+        root = tree.create_folder(self.alice, "TeamRoot", group=team)
+        self.doc = tree.create_file(
             self.alice,
             "team.md",
             parent=root,

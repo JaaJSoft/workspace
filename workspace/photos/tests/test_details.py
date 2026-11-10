@@ -7,7 +7,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from workspace.files.models import MediaInfo
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import MediaItem
 from workspace.photos.services.details import photo_details
@@ -215,7 +215,7 @@ class PhotoPropertiesSectionTests(TestCase):
         self.assertNotIn('data-properties-section="photo"', self._panel(f))
 
     def test_hidden_for_other_files(self):
-        f = FileService.create_file(self.user, "notes.txt", acting_user=self.user)
+        f = tree.create_file(self.user, "notes.txt", acting_user=self.user)
 
         self.assertNotIn('data-properties-section="photo"', self._panel(f))
 

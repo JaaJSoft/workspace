@@ -18,7 +18,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShareLink
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -231,7 +231,7 @@ class WebDAVActiveTypesTests(TestCase):
         return captured["status"], captured["headers"]
 
     def _create(self, name, mime_type, payload=SCRIPTED):
-        FileService.create_file(
+        tree.create_file(
             self.user,
             name,
             content=ContentFile(payload, name=name),
@@ -266,7 +266,7 @@ class WebDAVActiveTypesTests(TestCase):
         self._assert_sandboxed(headers)
 
     def test_a_folder_listing_is_left_alone(self):
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
         code, headers = self._get("/Docs/", "PROPFIND", HTTP_DEPTH="1")
         self.assertEqual(code, 207)
         self.assertNotIn("content-security-policy", headers)

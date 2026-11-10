@@ -12,7 +12,7 @@ from __future__ import annotations
 from django.core.files.base import ContentFile
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.rasters import dng_bytes
 
 
@@ -21,7 +21,7 @@ class RawViewerTests(PlaywrightTestCase):
         super().setUp()
         self.user = self.create_user(username="raw")
         data = dng_bytes(orientation=6, preview_size=(96, 64))
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             owner=self.user,
             name="IMG_0001.DNG",
             content=ContentFile(data, name="IMG_0001.DNG"),

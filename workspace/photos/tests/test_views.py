@@ -12,7 +12,8 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.files.models import FileFavorite, FileScan, FileShare, FileTag, Tag
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
+from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import Album, MediaItem
 from workspace.photos.services.albums import create_album
@@ -82,7 +83,7 @@ class IndexTests(PhotosViewTestCase):
         make_photo(bob, "bobs.jpg", _at(2024, 7, 14, 12))
         group = Group.objects.create(name="Family")
         self.user.groups.add(group)
-        group_root = FileService.create_folder(owner=bob, name="Family", group=group)
+        group_root = tree.create_folder(owner=bob, name="Family", group=group)
         make_photo(bob, "family.jpg", _at(2024, 7, 14, 13), parent=group_root)
 
         self.assertEqual(self._tiles(self.client.get("/photos")), [str(mine.uuid)])
@@ -148,11 +149,11 @@ class TrashTests(PhotosViewTestCase):
         f = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
         row = MediaItem.objects.get(file=f)
 
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
         self.assertEqual(self._tiles(self.client.get("/photos")), [])
 
         f.refresh_from_db()
-        FileService.restore(f, acting_user=self.user)
+        trash.restore(f, acting_user=self.user)
         self.assertEqual(self._tiles(self.client.get("/photos")), [str(f.uuid)])
 
         after = MediaItem.objects.get(file=f)
@@ -162,17 +163,17 @@ class TrashTests(PhotosViewTestCase):
         )
 
     def test_trashing_a_folder_hides_the_photos_in_it(self):
-        folder = FileService.create_folder(owner=self.user, name="Holidays")
+        folder = tree.create_folder(owner=self.user, name="Holidays")
         make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12), parent=folder)
 
-        FileService.soft_delete(folder, acting_user=self.user)
+        trash.soft_delete(folder, acting_user=self.user)
 
         self.assertEqual(self._tiles(self.client.get("/photos")), [])
 
     def test_hard_deletion_cascades(self):
         f = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
 
-        FileService.hard_delete(f, acting_user=self.user)
+        hard_delete_tree(f)
 
         self.assertFalse(MediaItem.objects.exists())
 
@@ -375,7 +376,7 @@ class MediaTypeTabsTests(PhotosViewTestCase):
         self.assertContains(response, 'href="/photos?type=video&amp;date=2024"')
 
     def test_no_tabs_while_the_view_holds_a_single_kind(self):
-        self.surf.soft_delete()
+        trash.trash_subtree(self.surf)
 
         response = self.client.get("/photos")
 
@@ -383,7 +384,7 @@ class MediaTypeTabsTests(PhotosViewTestCase):
         self.assertNotContains(response, 'aria-label="Media type"')
 
     def test_the_tabs_stay_once_a_type_is_picked(self):
-        self.surf.soft_delete()
+        trash.trash_subtree(self.surf)
 
         response = self.client.get("/photos?type=video")
 
@@ -485,9 +486,7 @@ class ScopeTabsTests(PhotosViewTestCase):
         self.family = Group.objects.create(name="Family")
         self.user.groups.add(self.family)
         self.mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14, 12))
-        root = FileService.create_folder(
-            owner=self.bob, name="Family", group=self.family
-        )
+        root = tree.create_folder(owner=self.bob, name="Family", group=self.family)
         self.family_photo = make_photo(
             self.bob, "family.jpg", _at(2024, 7, 13, 12), parent=root
         )
@@ -534,7 +533,7 @@ class ScopeTabsTests(PhotosViewTestCase):
         )
 
     def test_no_tabs_when_there_is_nothing_to_switch_to(self):
-        self.family_photo.parent.soft_delete()
+        trash.trash_subtree(self.family_photo.parent)
 
         response = self.client.get("/photos")
 
@@ -617,7 +616,7 @@ class FilesLinkTests(PhotosViewTestCase):
         return match[1].replace("&amp;", "&")
 
     def test_own_photo_opens_in_its_folder(self):
-        folder = FileService.create_folder(owner=self.user, name="Holidays")
+        folder = tree.create_folder(owner=self.user, name="Holidays")
         f = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12), parent=folder)
 
         response = self.client.get("/photos")
@@ -637,7 +636,7 @@ class FilesLinkTests(PhotosViewTestCase):
         bob = User.objects.create_user(username="bob", password="p")
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
-        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        root = tree.create_folder(owner=bob, name="Family", group=family)
         f = make_photo(bob, "family.jpg", _at(2024, 7, 14, 12), parent=root)
 
         response = self.client.get("/photos?scope=all")
@@ -648,7 +647,7 @@ class FilesLinkTests(PhotosViewTestCase):
 
     def test_photo_shared_on_its_own_opens_in_shared_with_me(self):
         carol = User.objects.create_user(username="carol", password="p")
-        private = FileService.create_folder(owner=carol, name="Private")
+        private = tree.create_folder(owner=carol, name="Private")
         f = make_photo(carol, "shared.jpg", _at(2024, 7, 14, 12), parent=private)
         share_file(
             f,
@@ -766,7 +765,7 @@ class AlbumPageTests(PhotosViewTestCase):
         )
 
     def test_a_trashed_photo_drops_out_of_the_album(self):
-        FileService.soft_delete(self.first, acting_user=self.user)
+        trash.soft_delete(self.first, acting_user=self.user)
 
         response = self.client.get(self.url)
 

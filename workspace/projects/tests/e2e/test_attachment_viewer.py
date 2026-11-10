@@ -16,7 +16,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.projects.services.attachments import create_attachments
 from workspace.projects.services.file_links import link_files
 from workspace.projects.services.projects import create_project
@@ -39,7 +39,7 @@ class TaskAttachmentViewerTests(PlaywrightTestCase):
             [SimpleUploadedFile("mockup.png", PNG_1PX, content_type="image/png")],
             [],
         )
-        self.linked = FileService.create_file(
+        self.linked = tree.create_file(
             self.user,
             "logo.png",
             content=SimpleUploadedFile("logo.png", PNG_1PX, content_type="image/png"),

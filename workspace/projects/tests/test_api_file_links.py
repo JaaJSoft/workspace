@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.sharing import share_file
 from workspace.projects.models import TaskEvent, TaskFileLink
 from workspace.projects.services.file_links import link_files
@@ -24,7 +24,7 @@ class TaskFileLinkApiTests(ProjectTestMixin, APITestCase):
         self.url = f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/files"
 
     def _make_file(self, owner, name="doc.txt", content=b"hello"):
-        return FileService.create_file(
+        return tree.create_file(
             owner,
             name,
             content=SimpleUploadedFile(name, content, content_type="text/plain"),

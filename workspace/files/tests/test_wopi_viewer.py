@@ -7,7 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -26,7 +26,7 @@ class OfficeViewerRenderTests(TestCase):
             username="office_user", email="office@test.com", password="pw"
         )
         self.client.force_login(self.user)
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             owner=self.user,
             name="report.docx",
             content=SimpleUploadedFile(

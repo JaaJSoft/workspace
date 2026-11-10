@@ -35,7 +35,8 @@ from workspace.files.models import (
     GroupStorageQuota,
     UserStorageQuota,
 )
-from workspace.files.services import FileService, quota
+from workspace.files.services import quota, trash, tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.webdav.dc import DjangoBasicDomainController
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import (
@@ -167,26 +168,24 @@ class ProviderTests(TestCase):
         self.assertIsNone(res)
 
     def test_file_path_returns_file_resource(self):
-        FileService.create_file(self.user, "doc.txt", mime_type="text/plain")
+        tree.create_file(self.user, "doc.txt", mime_type="text/plain")
         res = self.provider.get_resource_inst("/doc.txt", self.environ)
         self.assertIsInstance(res, FileResource)
 
     def test_folder_path_returns_folder_resource(self):
-        FileService.create_folder(self.user, "Photos")
+        tree.create_folder(self.user, "Photos")
         res = self.provider.get_resource_inst("/Photos", self.environ)
         self.assertIsInstance(res, FolderResource)
 
     def test_nested_path_resolved(self):
-        folder = FileService.create_folder(self.user, "A")
-        FileService.create_file(
-            self.user, "b.txt", parent=folder, mime_type="text/plain"
-        )
+        folder = tree.create_folder(self.user, "A")
+        tree.create_file(self.user, "b.txt", parent=folder, mime_type="text/plain")
         res = self.provider.get_resource_inst("/A/b.txt", self.environ)
         self.assertIsInstance(res, FileResource)
 
     def test_soft_deleted_file_not_resolved(self):
-        f = FileService.create_file(self.user, "gone.txt", mime_type="text/plain")
-        f.soft_delete()
+        f = tree.create_file(self.user, "gone.txt", mime_type="text/plain")
+        trash.trash_subtree(f)
         res = self.provider.get_resource_inst("/gone.txt", self.environ)
         self.assertIsNone(res)
 
@@ -196,7 +195,7 @@ class ProviderTests(TestCase):
         self.assertIsNone(res)
 
     def test_trailing_slash_stripped(self):
-        FileService.create_folder(self.user, "Stuff")
+        tree.create_folder(self.user, "Stuff")
         res = self.provider.get_resource_inst("/Stuff/", self.environ)
         self.assertIsInstance(res, FolderResource)
 
@@ -205,7 +204,7 @@ class ProviderTests(TestCase):
         other = User.objects.create_user(
             username="other", email="o@test.com", password="p"
         )
-        FileService.create_file(other, "secret.txt", mime_type="text/plain")
+        tree.create_file(other, "secret.txt", mime_type="text/plain")
         res = self.provider.get_resource_inst("/secret.txt", self.environ)
         self.assertIsNone(res)
 
@@ -227,21 +226,21 @@ class RootCollectionTests(TestCase):
         self.assertEqual(self.root.get_member_names(), [])
 
     def test_member_names_lists_root_items(self):
-        FileService.create_folder(self.user, "A")
-        FileService.create_file(self.user, "b.txt", mime_type="text/plain")
+        tree.create_folder(self.user, "A")
+        tree.create_file(self.user, "b.txt", mime_type="text/plain")
         names = self.root.get_member_names()
         self.assertIn("A", names)
         self.assertIn("b.txt", names)
         self.assertEqual(len(names), 2)
 
     def test_member_names_excludes_deleted(self):
-        f = FileService.create_file(self.user, "gone.txt", mime_type="text/plain")
-        f.soft_delete()
+        f = tree.create_file(self.user, "gone.txt", mime_type="text/plain")
+        trash.trash_subtree(f)
         self.assertEqual(self.root.get_member_names(), [])
 
     def test_a_file_shared_with_several_people_is_listed_once(self):
         """The access filter joins the shares, one row per share of a file."""
-        shared = FileService.create_file(self.user, "shared.txt")
+        shared = tree.create_file(self.user, "shared.txt")
         for name in ("bob", "carol"):
             recipient = User.objects.create_user(username=name, password="pass")
             FileShare.objects.create(
@@ -252,20 +251,18 @@ class RootCollectionTests(TestCase):
         self.assertEqual(len(self.root.get_member_list()), 1)
 
     def test_member_names_excludes_nested(self):
-        folder = FileService.create_folder(self.user, "Dir")
-        FileService.create_file(
-            self.user, "child.txt", parent=folder, mime_type="text/plain"
-        )
+        folder = tree.create_folder(self.user, "Dir")
+        tree.create_file(self.user, "child.txt", parent=folder, mime_type="text/plain")
         names = self.root.get_member_names()
         self.assertEqual(names, ["Dir"])
 
     def test_get_member_folder(self):
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
         member = self.root.get_member("Docs")
         self.assertIsInstance(member, FolderResource)
 
     def test_get_member_file(self):
-        FileService.create_file(self.user, "a.txt", mime_type="text/plain")
+        tree.create_file(self.user, "a.txt", mime_type="text/plain")
         member = self.root.get_member("a.txt")
         self.assertIsInstance(member, FileResource)
 
@@ -279,7 +276,7 @@ class RootCollectionTests(TestCase):
 
     def test_create_empty_resource_reuses_existing(self):
         """Concurrent PUT retry must reuse the existing file, not create a duplicate."""
-        existing = FileService.create_file(self.user, "dup.txt", parent=None)
+        existing = tree.create_file(self.user, "dup.txt", parent=None)
         res = self.root.create_empty_resource("dup.txt")
         self.assertIsInstance(res, FileResource)
         self.assertEqual(
@@ -312,11 +309,11 @@ class FolderResourceTests(TestCase):
             username="davfold", email="fold@test.com", password="pass"
         )
         self.environ = _make_environ(user=self.user)
-        self.folder = FileService.create_folder(self.user, "Docs")
+        self.folder = tree.create_folder(self.user, "Docs")
         self.res = FolderResource("/Docs", self.environ, self.folder)
 
     def test_a_file_shared_with_several_people_is_listed_once(self):
-        shared = FileService.create_file(self.user, "shared.txt", parent=self.folder)
+        shared = tree.create_file(self.user, "shared.txt", parent=self.folder)
         for name in ("bob", "carol"):
             recipient = User.objects.create_user(username=name, password="pass")
             FileShare.objects.create(
@@ -337,25 +334,21 @@ class FolderResourceTests(TestCase):
         )
 
     def test_member_names(self):
-        FileService.create_file(
-            self.user, "a.txt", parent=self.folder, mime_type="text/plain"
-        )
-        FileService.create_folder(self.user, "Sub", parent=self.folder)
+        tree.create_file(self.user, "a.txt", parent=self.folder, mime_type="text/plain")
+        tree.create_folder(self.user, "Sub", parent=self.folder)
         names = self.res.get_member_names()
         self.assertCountEqual(names, ["a.txt", "Sub"])
 
     def test_member_names_excludes_deleted(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "del.txt", parent=self.folder, mime_type="text/plain"
         )
-        f.soft_delete()
+        trash.trash_subtree(f)
         self.assertEqual(self.res.get_member_names(), [])
 
     def test_get_member_returns_correct_type(self):
-        FileService.create_file(
-            self.user, "f.txt", parent=self.folder, mime_type="text/plain"
-        )
-        FileService.create_folder(self.user, "D", parent=self.folder)
+        tree.create_file(self.user, "f.txt", parent=self.folder, mime_type="text/plain")
+        tree.create_folder(self.user, "D", parent=self.folder)
         self.assertIsInstance(self.res.get_member("f.txt"), FileResource)
         self.assertIsInstance(self.res.get_member("D"), FolderResource)
         self.assertIsNone(self.res.get_member("nope"))
@@ -371,7 +364,7 @@ class FolderResourceTests(TestCase):
 
     def test_create_empty_resource_reuses_existing(self):
         """Concurrent PUT retry must reuse the existing file in the folder."""
-        existing = FileService.create_file(self.user, "dup.txt", parent=self.folder)
+        existing = tree.create_file(self.user, "dup.txt", parent=self.folder)
         res = self.res.create_empty_resource("dup.txt")
         self.assertEqual(
             File.objects.filter(
@@ -392,8 +385,8 @@ class FolderResourceTests(TestCase):
         )
         other.groups.add(group)
 
-        group_folder = FileService.create_folder(self.user, "Shared", group=group)
-        existing = FileService.create_file(
+        group_folder = tree.create_folder(self.user, "Shared", group=group)
+        existing = tree.create_file(
             other,
             "report.txt",
             parent=group_folder,
@@ -435,7 +428,7 @@ class FolderResourceTests(TestCase):
         self.assertTrue(self.res.support_recursive_delete())
 
     def test_move_recursive(self):
-        target = FileService.create_folder(self.user, "Target")
+        target = tree.create_folder(self.user, "Target")
         self.res.move_recursive("/Target/Renamed")
         self.folder.refresh_from_db()
         self.assertEqual(self.folder.name, "Renamed")
@@ -451,7 +444,7 @@ class FolderResourceTests(TestCase):
 
     def test_copy_move_single_copies(self):
         """copy_move_single always copies (used by WsgiDAV's copy flow)."""
-        target = FileService.create_folder(self.user, "Dest")
+        target = tree.create_folder(self.user, "Dest")
         self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
         self.assertTrue(
             File.objects.filter(
@@ -470,10 +463,10 @@ class FolderResourceTests(TestCase):
         """WsgiDAV's copy loop visits every descendant after the folder: the
         folder hook copies the tree in one go, and the visits that follow
         find it done instead of copying each child a second time."""
-        child = FileService.create_file(
+        child = tree.create_file(
             self.user, "child.txt", parent=self.folder, mime_type="text/plain"
         )
-        target = FileService.create_folder(self.user, "Dest")
+        target = tree.create_folder(self.user, "Dest")
 
         self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
         child_res = FileResource(f"{self.res.path}/child.txt", self.res.environ, child)
@@ -492,10 +485,10 @@ class FolderResourceTests(TestCase):
         )
 
     def test_a_depth_0_copy_creates_the_collection_without_its_members(self):
-        FileService.create_file(
+        tree.create_file(
             self.user, "child.txt", parent=self.folder, mime_type="text/plain"
         )
-        target = FileService.create_folder(self.user, "Dest")
+        target = tree.create_folder(self.user, "Dest")
         self.res.environ["HTTP_DEPTH"] = "0"
 
         self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
@@ -508,7 +501,7 @@ class FolderResourceMoveStorageTests(TestCase):
     """Tests for FolderResource.move_recursive against real FileSystemStorage.
 
     Verifies that descendant content storage paths follow the move (which
-    requires going through FileService.move() rather than touching .parent
+    requires going through tree.move() rather than touching .parent
     directly).
     """
 
@@ -522,9 +515,9 @@ class FolderResourceMoveStorageTests(TestCase):
 
     def test_move_recursive_migrates_descendant_content(self):
         """Moving a folder via WebDAV must update descendant content paths."""
-        src = FileService.create_folder(self.user, "Src")
-        FileService.create_folder(self.user, "Dest")
-        note = FileService.create_file(
+        src = tree.create_folder(self.user, "Src")
+        tree.create_folder(self.user, "Dest")
+        note = tree.create_file(
             self.user,
             "note.txt",
             parent=src,
@@ -551,11 +544,11 @@ class FolderResourceMoveStorageTests(TestCase):
         moving collides with the sibling's directory on storage (os.rename
         refuses) while descendant content paths get rewritten anyway,
         leaving every child pointing at a path that was never created."""
-        a = FileService.create_folder(self.user, "A")
-        b = FileService.create_folder(self.user, "B")
-        sub = FileService.create_folder(self.user, "Sub", parent=a)
-        FileService.create_folder(self.user, "Target", parent=a)
-        note = FileService.create_file(
+        a = tree.create_folder(self.user, "A")
+        b = tree.create_folder(self.user, "B")
+        sub = tree.create_folder(self.user, "Sub", parent=a)
+        tree.create_folder(self.user, "Target", parent=a)
+        note = tree.create_file(
             self.user,
             "note.txt",
             parent=sub,
@@ -580,15 +573,15 @@ class FolderResourceMoveStorageTests(TestCase):
     def test_move_file_with_rename_keeps_colliding_sibling(self):
         """MOVE /A/x.txt -> /B/y.txt while /A/y.txt exists must leave the
         sibling untouched and carry x's content to the destination."""
-        a = FileService.create_folder(self.user, "A")
-        FileService.create_folder(self.user, "B")
-        x = FileService.create_file(
+        a = tree.create_folder(self.user, "A")
+        tree.create_folder(self.user, "B")
+        x = tree.create_file(
             self.user,
             "x.txt",
             parent=a,
             content=ContentFile(b"xdata", name="x.txt"),
         )
-        sibling = FileService.create_file(
+        sibling = tree.create_file(
             self.user,
             "y.txt",
             parent=a,
@@ -627,7 +620,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         )
         self.environ = _make_environ(user=self.user)
         content = ContentFile(b"hello world", name="test.txt")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.user, "test.txt", content=content, mime_type="text/plain"
         )
         self.res = FileResource("/test.txt", self.environ, self.file)
@@ -649,7 +642,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertEqual(data, b"hello world")
 
     def test_get_content_empty_file(self):
-        empty = FileService.create_file(self.user, "empty.txt", mime_type="text/plain")
+        empty = tree.create_file(self.user, "empty.txt", mime_type="text/plain")
         res = FileResource("/empty.txt", self.environ, empty)
         stream = res.get_content()
         self.assertEqual(stream.read(), b"")
@@ -735,7 +728,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf = res.begin_write(content_type="text/plain")
         buf.write(b"my upload")
         buf.close()
-        FileService.update_content(
+        update_content(
             File.objects.get(pk=self.file.pk),
             ContentFile(b"somebody else's save", name="test.txt"),
             name="test.txt",
@@ -754,7 +747,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf = self.res.begin_write(content_type="text/plain")
         buf.write(b"my upload")
         buf.close()
-        FileService.update_content(
+        update_content(
             File.objects.get(pk=self.file.pk),
             ContentFile(b"somebody else's save", name="test.txt"),
             name="test.txt",
@@ -766,7 +759,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
             self.assertEqual(fh.read(), b"my upload")
 
     def test_end_write_with_errors_on_new_file(self):
-        new = FileService.create_file(self.user, "fail.txt", mime_type="text/plain")
+        new = tree.create_file(self.user, "fail.txt", mime_type="text/plain")
         res = FileResource("/fail.txt", self.environ, new)
         buf = res.begin_write()
         buf.write(b"data")
@@ -786,7 +779,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         """Incomplete transfer (size < Content-Length) must not save."""
         from wsgidav.dav_error import DAVError
 
-        new = FileService.create_file(self.user, "partial.txt", mime_type="text/plain")
+        new = tree.create_file(self.user, "partial.txt", mime_type="text/plain")
         # Simulate Content-Length = 1000 but only 100 bytes received
         env = _make_environ(user=self.user, CONTENT_LENGTH="1000")
         res = FileResource("/partial.txt", env, new)
@@ -803,7 +796,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         so child destinations arrive as '/Dest//name' during folder copies.
         The empty segment must not break parent resolution (the copy would
         silently land at the root)."""
-        target = FileService.create_folder(self.user, "Dest")
+        target = tree.create_folder(self.user, "Dest")
         self.res.copy_move_single("/Dest//copy.txt", is_move=False)
         copy = File.objects.get(
             owner=self.user, name="copy.txt", deleted_at__isnull=True
@@ -849,8 +842,8 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     def test_an_upload_refused_because_its_folder_moved_leaves_no_partial_file(self):
         """Its bytes wait outside the user's tree: the rename does not carry
         them into the renamed folder, where the sync would adopt them."""
-        docs = FileService.create_folder(self.user, "Docs")
-        f = FileService.create_file(
+        docs = tree.create_folder(self.user, "Docs")
+        f = tree.create_file(
             self.user, "a.txt", parent=docs, content=ContentFile(b"old", name="a.txt")
         )
         res = FileResource("/Docs/a.txt", self.environ, f)
@@ -858,7 +851,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf.write(b"new")
         buf.close()
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.rename(docs, "Archive")
+            tree.rename(docs, "Archive")
 
         with self.assertRaises(DAVError) as refused:
             res.end_write(with_errors=False)
@@ -873,9 +866,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf.write(b"new")
         buf.close()
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.soft_delete(
-                File.objects.get(pk=self.file.pk), acting_user=self.user
-            )
+            trash.soft_delete(File.objects.get(pk=self.file.pk), acting_user=self.user)
 
         with self.assertRaises(DAVError) as refused:
             self.res.end_write(with_errors=False)
@@ -935,9 +926,8 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf.close()
 
         with (
-            mock.patch.object(
-                FileService,
-                "replace_content_storage",
+            mock.patch(
+                "workspace.files.webdav.resources.replace_content_storage",
                 side_effect=DatabaseError("the database went away"),
             ),
             self.assertRaises(DatabaseError),
@@ -964,14 +954,14 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
 
     def test_delete_noop_after_move(self):
         """After copy_move_single(is_move=True), delete() is a no-op."""
-        FileService.create_folder(self.user, "Dest")
+        tree.create_folder(self.user, "Dest")
         self.res.copy_move_single("/Dest/test.txt", is_move=True)
         self.res.delete()  # should be a no-op
         self.file.refresh_from_db()
         self.assertIsNone(self.file.deleted_at)
 
     def test_copy_move_single_move(self):
-        folder = FileService.create_folder(self.user, "Target")
+        folder = tree.create_folder(self.user, "Target")
         self.res.copy_move_single("/Target/moved.txt", is_move=True)
         self.file.refresh_from_db()
         self.assertEqual(self.file.name, "moved.txt")
@@ -990,11 +980,11 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     def test_copy_move_single_move_migrates_content_storage(self):
         """A WebDAV MOVE on a file must migrate its bytes on disk.
 
-        Regression: bypassing FileService.move() left the bytes at the old
+        Regression: bypassing tree.move() left the bytes at the old
         storage path while the DB row pointed at the new parent — subsequent
         reads served stale storage state.
         """
-        FileService.create_folder(self.user, "Target")
+        tree.create_folder(self.user, "Target")
         old_name = self.file.content.name
         self.assertTrue(default_storage.is_file(old_name))
 
@@ -1010,7 +1000,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertFalse(default_storage.is_file(old_name))
 
     def test_copy_move_single_copy(self):
-        folder = FileService.create_folder(self.user, "CopyDest")
+        folder = tree.create_folder(self.user, "CopyDest")
         self.res.copy_move_single("/CopyDest/copy.txt", is_move=False)
         copy = File.objects.get(
             owner=self.user,
@@ -1046,7 +1036,7 @@ class WebDavQuarantineTests(TestCase):
         )
         self.environ = _make_environ(user=self.user)
         content = ContentFile(b"hello world", name="test.txt")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.user, "test.txt", content=content, mime_type="text/plain"
         )
         FileScan.objects.create(
@@ -1091,24 +1081,24 @@ class ResolveParentTests(TestCase):
         self.assertIsNone(_resolve_parent(self.user, []))
 
     def test_single_folder(self):
-        folder = FileService.create_folder(self.user, "A")
+        folder = tree.create_folder(self.user, "A")
         self.assertEqual(_resolve_parent(self.user, ["A"]), folder)
 
     def test_nested_folders(self):
-        a = FileService.create_folder(self.user, "A")
-        b = FileService.create_folder(self.user, "B", parent=a)
+        a = tree.create_folder(self.user, "A")
+        b = tree.create_folder(self.user, "B", parent=a)
         self.assertEqual(_resolve_parent(self.user, ["A", "B"]), b)
 
     def test_nonexistent_returns_none(self):
         self.assertIsNone(_resolve_parent(self.user, ["X"]))
 
     def test_file_not_treated_as_folder(self):
-        FileService.create_file(self.user, "f.txt", mime_type="text/plain")
+        tree.create_file(self.user, "f.txt", mime_type="text/plain")
         self.assertIsNone(_resolve_parent(self.user, ["f.txt"]))
 
     def test_deleted_folder_not_resolved(self):
-        folder = FileService.create_folder(self.user, "Del")
-        folder.soft_delete()
+        folder = tree.create_folder(self.user, "Del")
+        trash.trash_subtree(folder)
         self.assertIsNone(_resolve_parent(self.user, ["Del"]))
 
 
@@ -1348,7 +1338,7 @@ class WebDAVIntegrationTests(TestCase):
     def test_propfind_infinite_depth_is_refused(self):
         """Depth: infinity would build the multistatus of the whole library
         in the worker's memory; RFC 4918 lets a server refuse it."""
-        FileService.create_folder(self.user, "F1")
+        tree.create_folder(self.user, "F1")
         code, _, body = self._request("PROPFIND", "/", headers={"Depth": "infinity"})
         self.assertEqual(code, 403)
         self.assertIn(b"propfind-finite-depth", body)
@@ -1365,8 +1355,8 @@ class WebDAVIntegrationTests(TestCase):
         self.assertEqual(code, 401)
 
     def test_propfind_root_lists_members(self):
-        FileService.create_folder(self.user, "F1")
-        FileService.create_file(self.user, "a.txt", mime_type="text/plain")
+        tree.create_folder(self.user, "F1")
+        tree.create_file(self.user, "a.txt", mime_type="text/plain")
         code, _, body = self._request("PROPFIND", "/", headers={"Depth": "1"})
         self.assertEqual(code, 207)
         body_str = body.decode("utf-8", errors="replace")
@@ -1374,8 +1364,8 @@ class WebDAVIntegrationTests(TestCase):
         self.assertIn("a.txt", body_str)
 
     def test_propfind_excludes_deleted(self):
-        f = FileService.create_file(self.user, "gone.txt", mime_type="text/plain")
-        f.soft_delete()
+        f = tree.create_file(self.user, "gone.txt", mime_type="text/plain")
+        trash.trash_subtree(f)
         code, _, body = self._request("PROPFIND", "/", headers={"Depth": "1"})
         self.assertEqual(code, 207)
         self.assertNotIn(b"gone.txt", body)
@@ -1471,7 +1461,7 @@ class WebDAVIntegrationTests(TestCase):
         ``util.checked_etag``), but this test pins the contract from
         the wire side so a regression in either layer surfaces.
         """
-        FileService.create_file(self.user, "tagged.txt", mime_type="text/plain")
+        tree.create_file(self.user, "tagged.txt", mime_type="text/plain")
         code, headers, _ = self._request("HEAD", "/tagged.txt")
         self.assertEqual(code, 200)
         etag = headers.get("ETag") or headers.get("Etag") or headers.get("etag")
@@ -1495,7 +1485,7 @@ class WebDAVIntegrationTests(TestCase):
         )
 
     def test_mkcol_nested(self):
-        FileService.create_folder(self.user, "Parent")
+        tree.create_folder(self.user, "Parent")
         code, _, _ = self._request("MKCOL", "/Parent/Child/")
         self.assertEqual(code, 201)
         parent = File.objects.get(owner=self.user, name="Parent")
@@ -1522,25 +1512,21 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_get_returns_content(self):
         content = ContentFile(b"file data here", name="data.txt")
-        FileService.create_file(
-            self.user, "data.txt", content=content, mime_type="text/plain"
-        )
+        tree.create_file(self.user, "data.txt", content=content, mime_type="text/plain")
         code, hdrs, body = self._request("GET", "/data.txt")
         self.assertEqual(code, 200)
         self.assertEqual(body, b"file data here")
 
     def test_put_overwrite(self):
         content = ContentFile(b"old", name="ow.txt")
-        FileService.create_file(
-            self.user, "ow.txt", content=content, mime_type="text/plain"
-        )
+        tree.create_file(self.user, "ow.txt", content=content, mime_type="text/plain")
         code, _, _ = self._request("PUT", "/ow.txt", body=b"new content")
         self.assertEqual(code, 204)
         f = File.objects.get(owner=self.user, name="ow.txt", deleted_at__isnull=True)
         self.assertEqual(f.size, 11)
 
     def test_put_in_subfolder(self):
-        FileService.create_folder(self.user, "Sub")
+        tree.create_folder(self.user, "Sub")
         code, _, _ = self._request("PUT", "/Sub/note.txt", body=b"note")
         self.assertEqual(code, 201)
         parent = File.objects.get(owner=self.user, name="Sub")
@@ -1555,17 +1541,15 @@ class WebDAVIntegrationTests(TestCase):
     # ── DELETE ──
 
     def test_delete_file(self):
-        FileService.create_file(self.user, "del.txt", mime_type="text/plain")
+        tree.create_file(self.user, "del.txt", mime_type="text/plain")
         code, _, _ = self._request("DELETE", "/del.txt")
         self.assertEqual(code, 204)
         f = File.objects.get(owner=self.user, name="del.txt")
         self.assertIsNotNone(f.deleted_at)
 
     def test_delete_folder(self):
-        folder = FileService.create_folder(self.user, "RmDir")
-        FileService.create_file(
-            self.user, "inside.txt", parent=folder, mime_type="text/plain"
-        )
+        folder = tree.create_folder(self.user, "RmDir")
+        tree.create_file(self.user, "inside.txt", parent=folder, mime_type="text/plain")
         code, _, _ = self._request("DELETE", "/RmDir/")
         self.assertEqual(code, 204)
         folder.refresh_from_db()
@@ -1579,10 +1563,8 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_move_file(self):
         content = ContentFile(b"move me", name="src.txt")
-        FileService.create_file(
-            self.user, "src.txt", content=content, mime_type="text/plain"
-        )
-        FileService.create_folder(self.user, "Dest")
+        tree.create_file(self.user, "src.txt", content=content, mime_type="text/plain")
+        tree.create_folder(self.user, "Dest")
 
         code, _, _ = self._request(
             "MOVE",
@@ -1611,14 +1593,14 @@ class WebDAVIntegrationTests(TestCase):
         self.assertEqual(moved.size, 7)
 
     def test_move_folder(self):
-        folder = FileService.create_folder(self.user, "ToMove")
-        FileService.create_file(
+        folder = tree.create_folder(self.user, "ToMove")
+        tree.create_file(
             self.user,
             "child.txt",
             parent=folder,
             content=ContentFile(b"c", name="child.txt"),
         )
-        FileService.create_folder(self.user, "Into")
+        tree.create_folder(self.user, "Into")
 
         code, _, _ = self._request(
             "MOVE",
@@ -1643,9 +1625,7 @@ class WebDAVIntegrationTests(TestCase):
     def test_move_file_rename_in_place(self):
         """MOVE with same parent and new name = rename."""
         content = ContentFile(b"data", name="old.txt")
-        FileService.create_file(
-            self.user, "old.txt", content=content, mime_type="text/plain"
-        )
+        tree.create_file(self.user, "old.txt", content=content, mime_type="text/plain")
         code, _, _ = self._request(
             "MOVE",
             "/old.txt",
@@ -1668,7 +1648,7 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_move_folder_rename_in_place(self):
         """MOVE on a folder with same parent and new name = rename."""
-        FileService.create_folder(self.user, "Old")
+        tree.create_folder(self.user, "Old")
         code, _, _ = self._request(
             "MOVE",
             "/Old/",
@@ -1693,8 +1673,8 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_move_file_subfolder_to_root(self):
         """MOVE a file from a subfolder back to the root collection."""
-        sub = FileService.create_folder(self.user, "Sub")
-        FileService.create_file(
+        sub = tree.create_folder(self.user, "Sub")
+        tree.create_file(
             self.user,
             "x.txt",
             parent=sub,
@@ -1724,9 +1704,9 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_move_file_between_sibling_folders(self):
         """MOVE a file from one folder to a sibling folder."""
-        a = FileService.create_folder(self.user, "A")
-        b = FileService.create_folder(self.user, "B")
-        FileService.create_file(
+        a = tree.create_folder(self.user, "A")
+        b = tree.create_folder(self.user, "B")
+        tree.create_file(
             self.user,
             "doc.txt",
             parent=a,
@@ -1756,9 +1736,9 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_move_file_with_rename_to_other_folder(self):
         """MOVE that combines a parent change and a name change."""
-        a = FileService.create_folder(self.user, "A")
-        b = FileService.create_folder(self.user, "B")
-        FileService.create_file(
+        a = tree.create_folder(self.user, "A")
+        b = tree.create_folder(self.user, "B")
+        tree.create_file(
             self.user,
             "old.txt",
             parent=a,
@@ -1789,13 +1769,13 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_move_overwrite_default_replaces_destination(self):
         """MOVE without ``Overwrite`` header defaults to overwrite (RFC 4918 §10.6)."""
-        FileService.create_file(
+        tree.create_file(
             self.user,
             "src.txt",
             content=ContentFile(b"new", name="src.txt"),
             mime_type="text/plain",
         )
-        FileService.create_file(
+        tree.create_file(
             self.user,
             "dest.txt",
             content=ContentFile(b"old", name="dest.txt"),
@@ -1824,13 +1804,13 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_move_overwrite_false_with_existing_destination_returns_412(self):
         """MOVE with ``Overwrite: F`` to an existing target must return 412 (RFC 4918 §10.6)."""
-        FileService.create_file(
+        tree.create_file(
             self.user,
             "src.txt",
             content=ContentFile(b"a", name="src.txt"),
             mime_type="text/plain",
         )
-        FileService.create_file(
+        tree.create_file(
             self.user,
             "dest.txt",
             content=ContentFile(b"b", name="dest.txt"),
@@ -1865,9 +1845,7 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_copy_file(self):
         content = ContentFile(b"copy me", name="orig.txt")
-        FileService.create_file(
-            self.user, "orig.txt", content=content, mime_type="text/plain"
-        )
+        tree.create_file(self.user, "orig.txt", content=content, mime_type="text/plain")
         code, _, _ = self._request(
             "COPY",
             "/orig.txt",
@@ -1950,7 +1928,7 @@ class WebDAVIntegrationTests(TestCase):
         other = User.objects.create_user(
             username="other2", email="o2@test.com", password="p"
         )
-        FileService.create_file(other, "secret.txt", mime_type="text/plain")
+        tree.create_file(other, "secret.txt", mime_type="text/plain")
         code, _, body = self._request("PROPFIND", "/", headers={"Depth": "1"})
         self.assertEqual(code, 207)
         self.assertNotIn(b"secret.txt", body)
@@ -1977,7 +1955,7 @@ class WebDAVIntegrationTests(TestCase):
         other = User.objects.create_user(
             username="davholder", email="hold@test.com", password="p"
         )
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             self.user,
             name,
             content=ContentFile(body, name=name),
@@ -2011,7 +1989,7 @@ class WebDAVIntegrationTests(TestCase):
         self.assertEqual(body, b"fresh")
 
     def test_put_allowed_for_the_lock_holder(self):
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             self.user,
             "mine.txt",
             content=ContentFile(b"old", name="mine.txt"),
@@ -2051,9 +2029,7 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_dav_lock_takes_the_app_lock(self):
         """A DAV lock is the same lock the browser editor reads."""
-        file_obj = FileService.create_file(
-            self.user, "word.docx", mime_type="text/plain"
-        )
+        file_obj = tree.create_file(self.user, "word.docx", mime_type="text/plain")
         code, headers, _ = self._request(
             "LOCK",
             "/word.docx",
@@ -2069,9 +2045,7 @@ class WebDAVIntegrationTests(TestCase):
         self.assertTrue(file_obj.is_locked())
 
     def test_dav_unlock_releases_the_app_lock(self):
-        file_obj = FileService.create_file(
-            self.user, "word2.docx", mime_type="text/plain"
-        )
+        file_obj = tree.create_file(self.user, "word2.docx", mime_type="text/plain")
         _, headers, _ = self._request(
             "LOCK",
             "/word2.docx",
@@ -2116,7 +2090,7 @@ class WebDAVIntegrationTests(TestCase):
         return int(body.split(b"quota-used-bytes>")[1].split(b"<")[0])
 
     def test_move_over_a_file_replaces_its_content_in_place(self):
-        dest = FileService.create_file(
+        dest = tree.create_file(
             self.user,
             "report.odt",
             content=ContentFile(b"old", name="report.odt"),
@@ -2165,7 +2139,7 @@ class WebDAVIntegrationTests(TestCase):
     def test_move_over_a_file_in_a_full_bucket_answers_507(self):
         group = Group.objects.create(name="Design")
         self.user.groups.add(group)
-        FileService.create_folder(self.user, "Design", group=group)
+        tree.create_folder(self.user, "Design", group=group)
         self._request("PUT", "/Design/logo.svg", body=b"tiny")
         GroupStorageQuota.objects.create(group=group, quota_bytes=10)
         self._request("PUT", "/logo.svg", body=b"far too big for the group")
@@ -2187,7 +2161,7 @@ class WebDAVIntegrationTests(TestCase):
         owner = User.objects.create_user(
             username="davsharer", email="sharer@test.com", password="p"
         )
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner, name, content=ContentFile(body, name=name), mime_type="text/plain"
         )
         FileShare.objects.create(
@@ -2232,7 +2206,10 @@ class WebDAVIntegrationTests(TestCase):
         dest = File.objects.get(owner=self.user, name="report.odt")
         temp = File.objects.get(owner=self.user, name=".report.odt.tmp")
 
-        with patch.object(FileService, "hard_delete", side_effect=OSError("disk")):
+        with patch(
+            "workspace.files.services.content_writes.hard_delete_tree",
+            side_effect=OSError("disk"),
+        ):
             code, _, _ = self._request(
                 "MOVE",
                 "/.report.odt.tmp",

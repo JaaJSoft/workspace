@@ -11,7 +11,7 @@ from django.test import TestCase
 
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File, SearchIndexState
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.ebooks import EBOOK_FORMATS
 from workspace.files.services.search_index import index_file, pending_search_qs
 from workspace.files.tests.ebooks import cbz_bytes, fb2_bytes, fbz_bytes, mobi_bytes
@@ -27,7 +27,7 @@ class RetypeEbooksTests(TestCase):
 
     def _stored_as(self, name, data, file_type, mime_type="application/octet-stream"):
         """A file as the old detection left it."""
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
         File.objects.filter(pk=file_obj.pk).update(

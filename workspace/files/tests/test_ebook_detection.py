@@ -14,7 +14,8 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.ebooks import EBOOK_FORMATS, EBOOK_LABELS
 from workspace.files.services.filetype import get_icon, get_viewer
 from workspace.files.tests.ebooks import (
@@ -41,7 +42,7 @@ class EbookDetectionTests(TestCase):
         self.user = User.objects.create_user(username="ebooks", password="x")
 
     def _upload(self, name, data):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
 
@@ -104,7 +105,7 @@ class EbookDetectionTests(TestCase):
     def test_replacing_the_content_detects_it_again(self):
         file_obj = self._upload("comic.cbz", _zip({"readme.txt": b"not yet"}))
 
-        FileService.update_content(file_obj, ContentFile(cbz_bytes(), name="comic.cbz"))
+        update_content(file_obj, ContentFile(cbz_bytes(), name="comic.cbz"))
 
         file_obj.refresh_from_db()
         self._assert_ebook(file_obj, "cbz")

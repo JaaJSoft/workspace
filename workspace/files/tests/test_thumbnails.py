@@ -14,7 +14,7 @@ from django.core.files.storage import default_storage
 from django.test import TestCase
 from PIL import ExifTags, Image
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_MAX_SIZE,
     generate_thumbnail,
@@ -39,7 +39,7 @@ class GenerateThumbnailOutputTests(TestCase):
         cls.user = User.objects.create_user(username="thumbgen", password="p")
 
     def _make_file(self, name, data, ftype, mime):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name=name,
             content=ContentFile(data, name=name),
@@ -125,7 +125,7 @@ class GenerateThumbnailOutputTests(TestCase):
         # Not forced through _make_file: the upload's own detection has to
         # read the photo as an image for the thumbnail to be generated.
         name = "IMG_0001.HEIC"
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name=name,
             content=ContentFile(heic_bytes(size=(1000, 500)), name=name),
@@ -138,7 +138,7 @@ class GenerateThumbnailOutputTests(TestCase):
 
     def test_raw_upload_gets_a_thumbnail_of_its_preview(self):
         name = "IMG_0001.DNG"
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name=name,
             content=ContentFile(dng_bytes(preview_size=(1000, 500)), name=name),

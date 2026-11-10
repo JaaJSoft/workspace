@@ -51,7 +51,7 @@ class FileSerializerIsViewableTests(APITestCase):
 
 
 class FileSerializerCreateTests(APITestCase):
-    """Tests for FileSerializer.create — ensures it delegates to FileService."""
+    """Tests for FileSerializer.create — ensures it delegates to the tree services."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -75,9 +75,9 @@ class FileSerializerCreateTests(APITestCase):
         self.assertEqual(response.data["name"], "TestFolder")
         self.assertEqual(response.data["node_type"], "folder")
 
-    @patch("workspace.files.serializers.FileService.create_folder")
+    @patch("workspace.files.services.tree.create_folder")
     def test_create_folder_calls_create_folder(self, mock_create_folder):
-        """Verify FileService.create_folder is called with correct args."""
+        """Verify tree.create_folder is called with correct args."""
         mock_folder = File(owner=self.user, name="Docs", node_type=File.NodeType.FOLDER)
         mock_folder.uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
         mock_create_folder.return_value = mock_folder
@@ -97,9 +97,9 @@ class FileSerializerCreateTests(APITestCase):
         self.assertEqual(call_kwargs.kwargs["name"], "Docs")
         self.assertEqual(call_kwargs.kwargs["owner"], self.user)
 
-    @patch("workspace.files.serializers.FileService.create_folder")
+    @patch("workspace.files.services.tree.create_folder")
     def test_create_folder_passes_icon_and_color(self, mock_create_folder):
-        """Icon and color must be forwarded to FileService.create_folder."""
+        """Icon and color must be forwarded to tree.create_folder."""
         mock_folder = File(
             owner=self.user,
             name="Notes",
@@ -126,9 +126,9 @@ class FileSerializerCreateTests(APITestCase):
         self.assertEqual(call_kwargs["icon"], "book")
         self.assertEqual(call_kwargs["color"], "success")
 
-    @patch("workspace.files.serializers.FileService.create_folder")
+    @patch("workspace.files.services.tree.create_folder")
     def test_create_nested_folder_passes_parent(self, mock_create_folder):
-        """Parent folder must be forwarded to FileService.create_folder."""
+        """Parent folder must be forwarded to tree.create_folder."""
         parent = File.objects.create(
             owner=self.user, name="Root", node_type=File.NodeType.FOLDER
         )
@@ -154,7 +154,7 @@ class FileSerializerCreateTests(APITestCase):
     def test_create_folder_creates_directory_on_disk(self):
         """Folder creation via API must create the directory on storage."""
         with patch(
-            "workspace.files.services._storage_ops.ensure_folder_on_storage"
+            "workspace.files.services.storage_ops.ensure_folder_on_storage"
         ) as mock_ensure:
             response = self.client.post(
                 "/api/v1/files",
@@ -172,9 +172,9 @@ class FileSerializerCreateTests(APITestCase):
 
     # ── File creation ─────────────────────────────────────
 
-    @patch("workspace.files.serializers.FileService.create_file")
+    @patch("workspace.files.services.tree.create_file")
     def test_create_file_calls_create_file(self, mock_create_file):
-        """Verify FileService.create_file is called for file nodes."""
+        """Verify tree.create_file is called for file nodes."""
         mock_file = File(
             owner=self.user,
             name="note.md",
@@ -220,8 +220,8 @@ class FileSerializerCreateTests(APITestCase):
     # ── Validation ────────────────────────────────────────
 
     def test_create_folder_does_not_call_create_file(self):
-        """Folder creation must not invoke FileService.create_file."""
-        with patch("workspace.files.serializers.FileService.create_file") as mock_file:
+        """Folder creation must not invoke tree.create_file."""
+        with patch("workspace.files.services.tree.create_file") as mock_file:
             self.client.post(
                 "/api/v1/files",
                 {
@@ -234,10 +234,8 @@ class FileSerializerCreateTests(APITestCase):
         mock_file.assert_not_called()
 
     def test_create_file_does_not_call_create_folder(self):
-        """File creation must not invoke FileService.create_folder."""
-        with patch(
-            "workspace.files.serializers.FileService.create_folder"
-        ) as mock_folder:
+        """File creation must not invoke tree.create_folder."""
+        with patch("workspace.files.services.tree.create_folder") as mock_folder:
             self.client.post(
                 "/api/v1/files",
                 {

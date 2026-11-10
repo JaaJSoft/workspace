@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.imports.models import ImportConnection
 from workspace.imports.providers.base import (
     AuthenticationFailed,
@@ -276,11 +276,11 @@ class AgainstOurOwnServerTests(TestCase):
         from workspace.wsgi import application
 
         self.remote_user = User.objects.create_user(username="bob", password="bobpw")
-        docs = FileService.create_folder(self.remote_user, "Documents")
-        FileService.create_file(
+        docs = tree.create_folder(self.remote_user, "Documents")
+        tree.create_file(
             self.remote_user, "notes.txt", docs, content=ContentFile(b"hello import")
         )
-        FileService.create_file(
+        tree.create_file(
             self.remote_user, "root.md", None, content=ContentFile(b"# root")
         )
         self.transport = httpx2.WSGITransport(app=application)
@@ -316,7 +316,7 @@ class AgainstOurOwnServerTests(TestCase):
         """Entry ids are decoded names; the request URL must re-encode them
         in full or a literal "%3A" (Logseq's ":" on disk), a "?" or a "#"
         point at another resource - a 404 for a file that is right there."""
-        awkward = FileService.create_folder(self.remote_user, "100% sure")
+        awkward = tree.create_folder(self.remote_user, "100% sure")
         # No non-ASCII name here: httpx2's WSGI transport hands PATH_INFO over
         # as UTF-8 where WSGI expects latin-1, which trips WsgiDAV before our
         # code runs - a test-transport artifact, not a server behaviour.
@@ -324,7 +324,7 @@ class AgainstOurOwnServerTests(TestCase):
         if os.name != "nt":
             names.append("what?.txt")  # a Windows disk refuses the name
         for name in names:
-            FileService.create_file(
+            tree.create_file(
                 self.remote_user, name, awkward, content=ContentFile(name.encode())
             )
         source = self._source()

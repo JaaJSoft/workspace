@@ -13,7 +13,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db import DatabaseError
+from django.db import DatabaseError, connection
+from django.db.backends.base.base import BaseDatabaseWrapper
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
@@ -238,6 +239,18 @@ class RootCollectionTests(TestCase):
         f.soft_delete()
         self.assertEqual(self.root.get_member_names(), [])
 
+    def test_a_file_shared_with_several_people_is_listed_once(self):
+        """The access filter joins the shares, one row per share of a file."""
+        shared = FileService.create_file(self.user, "shared.txt")
+        for name in ("bob", "carol"):
+            recipient = User.objects.create_user(username=name, password="pass")
+            FileShare.objects.create(
+                file=shared, shared_by=self.user, shared_with=recipient
+            )
+
+        self.assertEqual(self.root.get_member_names(), ["shared.txt"])
+        self.assertEqual(len(self.root.get_member_list()), 1)
+
     def test_member_names_excludes_nested(self):
         folder = FileService.create_folder(self.user, "Dir")
         FileService.create_file(
@@ -301,6 +314,16 @@ class FolderResourceTests(TestCase):
         self.environ = _make_environ(user=self.user)
         self.folder = FileService.create_folder(self.user, "Docs")
         self.res = FolderResource("/Docs", self.environ, self.folder)
+
+    def test_a_file_shared_with_several_people_is_listed_once(self):
+        shared = FileService.create_file(self.user, "shared.txt", parent=self.folder)
+        for name in ("bob", "carol"):
+            recipient = User.objects.create_user(username=name, password="pass")
+            FileShare.objects.create(
+                file=shared, shared_by=self.user, shared_with=recipient
+            )
+
+        self.assertEqual(self.res.get_member_names(), ["shared.txt"])
 
     def test_display_info(self):
         self.assertEqual(self.res.get_display_info(), {"type": "Directory"})
@@ -1385,15 +1408,44 @@ class WebDAVIntegrationTests(TestCase):
         self.assertNotIn("<D:displayname></D:displayname>", body_str)
         self.assertNotIn("<D:displayname/>", body_str)
 
+    def test_request_releases_its_database_connection(self):
+        """The connection a request used is closed once its response is served.
+
+        /dav is served outside Django's handler, which is what closes a
+        request's connection: under gevent each request has its own, and one
+        left open stays until a garbage collection finds it.
+        """
+        events = []
+
+        def record_query(execute, sql, params, many, context):
+            events.append("query")
+            return execute(sql, params, many, context)
+
+        def record_close(wrapper):
+            events.append("close")
+
+        with (
+            patch.object(
+                BaseDatabaseWrapper, "close_if_unusable_or_obsolete", record_close
+            ),
+            connection.execute_wrapper(record_query),
+        ):
+            code, _, _ = self._request("PROPFIND", "/", headers={"Depth": "1"})
+
+        self.assertEqual(code, 207)
+        self.assertIn("query", events)
+        # Before the first query, authentication included: a connection the
+        # database dropped must not answer it.
+        self.assertEqual(events[0], "close")
+        self.assertEqual(events[-1], "close")
+
     def test_lock_response_content_type_is_xml(self):
         """LOCK response Content-Type must be a valid media type.
 
-        WsgiDAV 4.3.3 has a typo (``application; charset=utf-8`` —
-        missing ``/xml``) that davfs2 treats as a fatal protocol
-        error, abandoning the locked resource and returning EIO on
-        the subsequent ``open(O_CREAT)``.  Our app factory wraps
-        wsgidav with a middleware that rewrites the header; this
-        test pins the contract from the wire.
+        davfs2 treats a malformed one as a fatal protocol error, abandons
+        the resource it just locked and returns EIO on the ``open(O_CREAT)``
+        that follows - which wsgidav 4.3.3 caused by sending
+        ``application; charset=utf-8``.
         """
         code, headers, _ = self._request(
             "LOCK",

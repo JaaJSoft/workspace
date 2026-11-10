@@ -29,8 +29,8 @@ from workspace.common.uuids import (
     UuidBatchError,
     parse_uuid_batch,
 )
+from workspace.files.queries import annotate_for_serializer
 from workspace.files.serializers import FileSerializer
-from workspace.files.services import FileService
 from workspace.people.queries import reachable_person, user_persons
 from workspace.people.services.persons import create_person
 
@@ -281,7 +281,7 @@ class FaceClusterViewSet(
     @action(detail=True, methods=["get"])
     def photos(self, request, pk=None):
         cluster = self.get_object()
-        files = FileService.annotate_for_serializer(
+        files = annotate_for_serializer(
             cluster_photos(request.user, cluster), request.user
         ).order_by(F("media_item__taken_at").desc(nulls_last=True), "-created_at")
         paginator = OptInLimitOffsetPagination()

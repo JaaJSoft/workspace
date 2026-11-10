@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import File, FileShare
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 from workspace.files.services.storage_analysis import (
     CATEGORY_SLICES,
     DUPLICATE_COPIES_LIMIT,

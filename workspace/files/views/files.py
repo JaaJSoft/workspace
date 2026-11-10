@@ -26,7 +26,15 @@ from workspace.common.mixins import CacheControlMixin
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import (
+    FilePermission,
+    accessible_files_q,
+    annotate_for_serializer,
+    can_access,
+    get_permission,
+    restorable_files_qs,
+    user_group_files_qs,
+)
 from workspace.files.services.announcements import announce_replaced
 from workspace.files.services.content_hash import find_duplicates
 from workspace.files.services.locking import conflicting_lock, precondition_hash
@@ -358,7 +366,7 @@ class FileViewSet(
             raise ValidationError({"exclude_descendants_of": "Must be a valid UUID."})
         excluded = (
             File.objects.filter(
-                FileService.accessible_files_q(self.request.user),
+                accessible_files_q(self.request.user),
                 uuid=excluded_uuid,
                 deleted_at__isnull=True,
             )
@@ -435,7 +443,7 @@ class FileViewSet(
         file_obj = files.first()
         if not file_obj:
             raise Http404
-        perm = FileService.get_permission(self.request.user, file_obj)
+        perm = get_permission(self.request.user, file_obj)
         if perm is None:
             raise Http404
         return file_obj, perm
@@ -468,9 +476,9 @@ class FileViewSet(
         """Filter by current user's files."""
         # Favorites: include owned, shared-with-me, and group files
         if self.action == "list" and self._is_favorites_query():
-            return FileService.annotate_for_serializer(
+            return annotate_for_serializer(
                 File.objects.filter(
-                    FileService.accessible_files_q(self.request.user),
+                    accessible_files_q(self.request.user),
                     deleted_at__isnull=True,
                     favorites__owner=self.request.user,
                 ),
@@ -478,8 +486,8 @@ class FileViewSet(
             ).distinct()
 
         if self.action == "list" and self._is_groups_query():
-            return FileService.annotate_for_serializer(
-                FileService.user_group_files_qs(self.request.user).filter(
+            return annotate_for_serializer(
+                user_group_files_qs(self.request.user).filter(
                     parent__isnull=True,
                     node_type=File.NodeType.FOLDER,
                 ),
@@ -516,21 +524,19 @@ class FileViewSet(
             )
             if ancestor:
                 qs = qs.filter(ancestor._descendant_filter(include_self=False))
-            return FileService.annotate_for_serializer(qs, self.request.user)
+            return annotate_for_serializer(qs, self.request.user)
 
         if self.action in {"restore", "purge"}:
-            return FileService.annotate_for_serializer(
-                FileService.restorable_files_qs(self.request.user), self.request.user
+            return annotate_for_serializer(
+                restorable_files_qs(self.request.user), self.request.user
             )
         if self.action == "trash" or (self.action == "list" and self._is_trash_query()):
-            return FileService.annotate_for_serializer(
-                FileService.restorable_files_qs(self.request.user).filter(
-                    deleted_at__isnull=False
-                ),
+            return annotate_for_serializer(
+                restorable_files_qs(self.request.user).filter(deleted_at__isnull=False),
                 self.request.user,
             )
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
-        queryset = FileService.annotate_for_serializer(queryset, self.request.user)
+        queryset = annotate_for_serializer(queryset, self.request.user)
         if self._is_trash_query():
             return queryset.filter(deleted_at__isnull=False)
         queryset = queryset.filter(deleted_at__isnull=True)
@@ -558,13 +564,13 @@ class FileViewSet(
             # The fallback queryset is annotated the same way as get_queryset()
             # so FileSerializer can render it without hitting missing-annotation
             # errors.
-            file_obj = FileService.annotate_for_serializer(
+            file_obj = annotate_for_serializer(
                 File.objects.filter(uuid=uuid, deleted_at__isnull=True),
                 self.request.user,
             ).first()
             if (
                 file_obj
-                and (FileService.get_permission(self.request.user, file_obj) or 0)
+                and (get_permission(self.request.user, file_obj) or 0)
                 >= FilePermission.EDIT
             ):
                 return file_obj
@@ -661,7 +667,7 @@ class FileViewSet(
         if not hasattr(request, "_files_write_target"):
             request._files_write_target = (
                 File.objects.filter(
-                    FileService.accessible_files_q(request.user),
+                    accessible_files_q(request.user),
                     uuid=uuid,
                     deleted_at__isnull=True,
                 )
@@ -775,14 +781,13 @@ class FileViewSet(
         except Http404:
             # Check rw shared access
             uuid = kwargs.get("uuid")
-            file_obj = FileService.annotate_for_serializer(
+            file_obj = annotate_for_serializer(
                 File.objects.filter(uuid=uuid, deleted_at__isnull=True),
                 request.user,
             ).first()
             if (
                 not file_obj
-                or FileService.get_permission(request.user, file_obj)
-                != FilePermission.WRITE
+                or get_permission(request.user, file_obj) != FilePermission.WRITE
             ):
                 raise
             # Only allow content update - reject any other fields
@@ -811,7 +816,7 @@ class FileViewSet(
                 request.user.username,
                 exclude_user_id=request.user.pk,
             )
-            if FileService.can_access(file_obj.owner, file_obj):
+            if can_access(file_obj.owner, file_obj):
                 with translation.override(get_user_language(file_obj.owner)):
                     notify(
                         recipient=file_obj.owner,

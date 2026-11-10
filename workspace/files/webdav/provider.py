@@ -2,11 +2,10 @@
 
 import logging
 
-from django.db import close_old_connections
 from wsgidav.dav_provider import DAVProvider
 
 from workspace.files.models import name_forms
-from workspace.files.services import FileService
+from workspace.files.queries import accessible_files_q
 
 from .resources import FileResource, FolderResource, RootCollection, dav_nodes
 
@@ -20,8 +19,6 @@ class WorkspaceDAVProvider(DAVProvider):
         super().__init__()
 
     def get_resource_inst(self, path, environ):
-        close_old_connections()
-
         user = self._get_user(environ)
         if user is None:
             return None
@@ -39,7 +36,7 @@ class WorkspaceDAVProvider(DAVProvider):
         # that can arise from concurrent PUT requests (race in
         # create_empty_resource).
         file_obj = dav_nodes(
-            FileService.accessible_files_q(user),
+            accessible_files_q(user),
             path__in=name_forms("/".join(parts)),
         ).first()
 
@@ -61,7 +58,7 @@ class WorkspaceDAVProvider(DAVProvider):
         (1 query).  Falls back to a segment-by-segment walk only when
         the parent path lookup also misses (e.g. stale ``path`` field).
         """
-        accessible = FileService.accessible_files_q(user)
+        accessible = accessible_files_q(user)
 
         if len(parts) == 1:
             return dav_nodes(

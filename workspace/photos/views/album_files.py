@@ -3,7 +3,7 @@
 A member may see items they cannot open in Files (``queries.album_files``),
 so these endpoints serve them after checking the file is an item of that
 album the caller sees: a file outside it is a 404 whatever the caller can
-open elsewhere. ``FileService`` and the Files endpoints are never widened.
+open elsewhere. ``files.queries`` and the Files endpoints are never widened.
 
 The helpers at the top are shared with the public link endpoints
 (``album_links``), which check a token instead of a membership.

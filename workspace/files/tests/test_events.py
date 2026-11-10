@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.models import File, FileEvent
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 from workspace.files.services.events import (
     events_for_file,
     record_event,

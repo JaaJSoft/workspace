@@ -10,6 +10,7 @@ from django.db import transaction
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
+from workspace.files.queries import user_files_qs, user_group_files_qs
 from workspace.files.services import FileService
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -20,9 +21,9 @@ DEFAULT_NAME = "Pictures"
 
 def _writable_folders(user):
     """The folders *user* can add files to: their own and their groups'."""
-    return (
-        FileService.user_files_qs(user) | FileService.user_group_files_qs(user)
-    ).filter(node_type=File.NodeType.FOLDER)
+    return (user_files_qs(user) | user_group_files_qs(user)).filter(
+        node_type=File.NodeType.FOLDER
+    )
 
 
 def writable_folder(user, folder_uuid):
@@ -35,7 +36,7 @@ def writable_folder(user, folder_uuid):
 
 def _default_folder(user):
     return (
-        FileService.user_files_qs(user)
+        user_files_qs(user)
         .filter(node_type=File.NodeType.FOLDER, parent__isnull=True, name=DEFAULT_NAME)
         .first()
     )

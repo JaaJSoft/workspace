@@ -14,6 +14,7 @@ from rest_framework.test import APIClient, APIRequestFactory, APITestCase
 
 from workspace.core.sse_registry import read_user_events
 from workspace.files.models import File, FileShare
+from workspace.files.queries import annotate_for_serializer
 from workspace.files.serializers import FileLocked, FileSerializer
 from workspace.files.services import FileService
 from workspace.files.services.locking import LockConflict
@@ -385,7 +386,7 @@ class LockedContentWriteTests(APITestCase):
         factory = APIRequestFactory()
         request = Request(factory.patch(self._url()))
         request.user = self.owner
-        instance = FileService.annotate_for_serializer(
+        instance = annotate_for_serializer(
             File.objects.filter(pk=self.file.pk), self.owner
         ).first()
         serializer = FileSerializer(

@@ -14,6 +14,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
 from workspace.files.models import File
+from workspace.files.queries import user_group_files_qs
 from workspace.files.services import FileService
 
 User = get_user_model()
@@ -49,7 +50,7 @@ class CopyIntoGroupFolderTests(TestCase):
 
     def test_copy_is_visible_to_another_group_member(self):
         copied = FileService.copy(self._file(), self.group_root, self.user)
-        visible = FileService.user_group_files_qs(self.teammate)
+        visible = user_group_files_qs(self.teammate)
         self.assertTrue(visible.filter(pk=copied.pk).exists())
 
     def test_folder_copy_propagates_the_group_to_descendants(self):

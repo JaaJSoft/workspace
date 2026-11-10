@@ -28,16 +28,16 @@ class NotesActivityProvider(ActivityProvider):
         """IDs of files the viewer can access (owned + group + shared).
 
         Event access follows file access, so visibility is derived from the
-        centralized ``FileService.accessible_file_ids`` rather than a local
+        centralized ``accessible_file_ids`` rather than a local
         reimplementation. That helper does not filter ``deleted_at``, so
         events on trashed notes stay reachable for users who can see them.
         """
         from django.contrib.auth import get_user_model
 
-        from workspace.files.services import FileService
+        from workspace.files.queries import accessible_file_ids
 
         viewer = get_user_model().objects.get(pk=viewer_id)
-        return FileService.accessible_file_ids(viewer)
+        return accessible_file_ids(viewer)
 
     @staticmethod
     def _is_own_view(user_id, viewer_id):
@@ -51,20 +51,20 @@ class NotesActivityProvider(ActivityProvider):
         The owner's own view is no exception: the notes they created in a
         group they have left are no longer theirs to see.
         """
-        from workspace.files.services import FileService
+        from workspace.files.queries import owned_files_q
 
         if self._is_own_view(user_id, viewer_id):
-            return FileService.owned_files_q(user_id)
+            return owned_files_q(user_id)
         if viewer_id is None:
             return Q()
         return Q(pk__in=self._viewer_accessible_file_ids(viewer_id))
 
     def _event_visibility_filter(self, user_id, viewer_id):
         """Restrict a FileEvent queryset to events on notes visible to viewer."""
-        from workspace.files.services import FileService
+        from workspace.files.queries import owned_files_qs
 
         if self._is_own_view(user_id, viewer_id):
-            return Q(file__in=FileService.owned_files_qs(user_id))
+            return Q(file__in=owned_files_qs(user_id))
         if viewer_id is None:
             return Q()
         return Q(file_id__in=self._viewer_accessible_file_ids(viewer_id))
@@ -102,12 +102,12 @@ class NotesActivityProvider(ActivityProvider):
         from django.contrib.auth import get_user_model
 
         from workspace.files.models import NOTE_FEED_Q
-        from workspace.files.services import FileService
+        from workspace.files.queries import owned_files_q
         from workspace.files.services.events import recent_feed_events
 
         feed_q, viewer = NOTE_FEED_Q, None
         if self._is_own_view(user_id, viewer_id):
-            feed_q &= FileService.owned_files_q(user_id)
+            feed_q &= owned_files_q(user_id)
         elif viewer_id is not None:
             viewer = get_user_model().objects.get(pk=viewer_id)
         feed = recent_feed_events(

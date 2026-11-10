@@ -23,6 +23,7 @@ from django.utils.translation import gettext, gettext_lazy
 from workspace.common.text import fold_text
 
 from ..models import File
+from ..queries import get_permission, reads_full_path, visible_path
 
 LARGEST_FILES_LIMIT = 20
 DUPLICATE_GROUPS_LIMIT = 20
@@ -108,14 +109,12 @@ class StorageScope:
     user: object
     folder: File | None
     # The viewer's permission on ``folder``, which decides the paths they may
-    # read (``FileService.reads_full_path``). The personal root is their own.
+    # read (``reads_full_path``). The personal root is their own.
     permission: int | None = None
 
     @property
     def full_paths(self):
-        from .files import FileService
-
-        return self.folder is None or FileService.reads_full_path(self.permission)
+        return self.folder is None or reads_full_path(self.permission)
 
     @property
     def query_field(self):
@@ -392,10 +391,8 @@ def analyze_storage(user, folder=None, *, category=None, query=None):
     narrow the largest-files list (and *query* the duplicate groups); the
     totals, categories and sub-folders always describe the whole subtree.
     """
-    from .files import FileService
-
     query = (query or "").strip()[:QUERY_MAX_LENGTH] or None
-    permission = None if folder is None else FileService.get_permission(user, folder)
+    permission = None if folder is None else get_permission(user, folder)
     scope = StorageScope(user=user, folder=folder, permission=permission)
     totals = _totals(_files(scope))
     folder_count = (
@@ -409,7 +406,7 @@ def analyze_storage(user, folder=None, *, category=None, query=None):
             {
                 "uuid": str(folder.uuid),
                 "name": folder.name,
-                "path": FileService.visible_path(folder, permission),
+                "path": visible_path(folder, permission),
                 # Above a shared root sits the owner's private tree.
                 "parent": (
                     str(folder.parent_id)

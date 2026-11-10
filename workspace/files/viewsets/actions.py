@@ -14,9 +14,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from workspace.files.models import File, FileFavorite, FileShare, PinnedFolder
+from workspace.files.queries import (
+    accessible_files_q,
+    annotate_for_serializer,
+    trash_permissions_bulk,
+)
 from workspace.files.sensitivity import with_sensitivity
 from workspace.files.serializers import FileSerializer
-from workspace.files.services import FileService
 from workspace.files.services.shortcuts import attach_resolutions
 
 logger = logging.getLogger(__name__)
@@ -90,7 +94,7 @@ class ActionsMixin:
             with_scan(
                 with_sensitivity(
                     File.objects.filter(
-                        FileService.accessible_files_q(request.user),
+                        accessible_files_q(request.user),
                         uuid__in=uuids,
                     )
                 )
@@ -108,7 +112,7 @@ class ActionsMixin:
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        permissions = FileService.trash_permissions_bulk(request.user, file_objects)
+        permissions = trash_permissions_bulk(request.user, file_objects)
         # What open_target reads: the shortcuts' targets, under the caller's
         # own permission on each.
         attach_resolutions(request.user, file_objects)
@@ -166,9 +170,7 @@ class ActionsMixin:
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
         )
-        queryset = FileService.annotate_for_serializer(
-            queryset, request.user
-        ).name_ordered()
+        queryset = annotate_for_serializer(queryset, request.user).name_ordered()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 

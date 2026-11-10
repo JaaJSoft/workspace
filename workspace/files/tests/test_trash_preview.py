@@ -11,7 +11,8 @@ from rest_framework.test import APITestCase
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileShare
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission
+from workspace.files.services import FileService
 from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
 User = get_user_model()

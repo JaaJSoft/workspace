@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import File
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 from workspace.users.services.settings import set_setting
 
 from .test_actions import _make_file, _make_folder

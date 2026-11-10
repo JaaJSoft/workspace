@@ -13,7 +13,7 @@ from rest_framework.response import Response
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission, accessible_files_q, get_permission
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class SyncMixin:
         # acquire/release locks on files they have no rights to.
         file_obj = (
             File.objects.filter(
-                FileService.accessible_files_q(request.user),
+                accessible_files_q(request.user),
                 uuid=uuid,
                 deleted_at__isnull=True,
             )
@@ -111,8 +111,7 @@ class SyncMixin:
         # to write - as for a WebDAV LOCK or a WOPI one. Reading it does not.
         if (
             request.method != "GET"
-            and (FileService.get_permission(request.user, file_obj) or 0)
-            < FilePermission.WRITE
+            and (get_permission(request.user, file_obj) or 0) < FilePermission.WRITE
         ):
             return Response(status=status.HTTP_403_FORBIDDEN)
 

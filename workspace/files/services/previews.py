@@ -12,8 +12,8 @@ tell it apart from a file that does not exist.
 from __future__ import annotations
 
 from ..models import File
+from ..queries import get_permissions_bulk
 from ..sensitivity import with_sensitivity
-from . import FileService
 from .scanning.policy import is_blocked, with_scan
 
 OK = "ok"
@@ -53,7 +53,7 @@ def previewable_files(user, uuids):
     files = list(
         with_scan(with_sensitivity(File.objects.filter(uuid__in=set(uuids)))).order_by()
     )
-    permissions = FileService.get_permissions_bulk(user, files)
+    permissions = get_permissions_bulk(user, files)
     found = {}
     for file_obj in files:
         if permissions.get(file_obj.pk) is None:

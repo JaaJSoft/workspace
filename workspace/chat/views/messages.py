@@ -149,7 +149,7 @@ class MessageListView(CacheControlMixin, APIView):
         request=MessageCreateSerializer,
     )
     def post(self, request, conversation_id):
-        from workspace.files.services.files import FileService
+        from workspace.files.queries import resolve_accessible_files
 
         # Lazy import to avoid circular dependency with views.py
         from .conversations import _trigger_bot_response
@@ -222,9 +222,7 @@ class MessageListView(CacheControlMixin, APIView):
 
         picked_files = []
         if file_uuids:
-            picked_files = FileService.resolve_accessible_files(
-                request.user, file_uuids
-            )
+            picked_files = resolve_accessible_files(request.user, file_uuids)
             if picked_files is None:
                 return Response(
                     {"detail": "One or more files not found or not accessible."},

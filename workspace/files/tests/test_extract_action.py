@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import File
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 
 User = get_user_model()
 

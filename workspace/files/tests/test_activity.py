@@ -423,10 +423,10 @@ class RecentFeedEventsTests(TestCase):
         return event
 
     def _expected(self, viewer, limit, offset, exclude_actor_id=None):
-        from workspace.files.services import FileService
+        from workspace.files.queries import accessible_file_ids
 
         qs = FileEvent.objects.filter(
-            file_id__in=FileService.accessible_file_ids(viewer),
+            file_id__in=accessible_file_ids(viewer),
             file__node_type=File.NodeType.FILE,
         ).exclude(file__mime_type="text/markdown")
         if exclude_actor_id is not None:

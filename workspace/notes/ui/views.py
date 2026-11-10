@@ -7,6 +7,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
+from workspace.files.queries import user_files_qs, user_group_files_qs
 from workspace.files.services import FileService
 from workspace.files.services.refusals import Refusal, Refused
 from workspace.files.services.transfers import move_item
@@ -32,12 +33,10 @@ def _get_root_folders(qs):
 
 
 def _sidebar_context(user):
-    personal_qs = FileService.user_files_qs(user).filter(node_type=File.NodeType.FOLDER)
+    personal_qs = user_files_qs(user).filter(node_type=File.NodeType.FOLDER)
     folders = _get_root_folders(personal_qs)
 
-    group_qs = FileService.user_group_files_qs(user).filter(
-        node_type=File.NodeType.FOLDER
-    )
+    group_qs = user_group_files_qs(user).filter(node_type=File.NodeType.FOLDER)
     group_folders = _get_root_folders(group_qs)
 
     # Groups without a root folder yet (for create dialog)
@@ -66,7 +65,7 @@ def _ensure_default_folders(user):
     Migrates legacy root-level Journal folders into Notes/.
     """
     prefs = get_setting(user, "notes", "preferences", default={}) or {}
-    user_files = FileService.user_files_qs(user)
+    user_files = user_files_qs(user)
     folders = user_files.filter(node_type=File.NodeType.FOLDER)
     changed = False
 

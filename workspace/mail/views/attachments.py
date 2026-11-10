@@ -76,6 +76,7 @@ class MailAttachmentSaveToFilesView(APIView):
         from django.core.files.base import File as DjangoFile
 
         from workspace.files.models import File
+        from workspace.files.queries import user_files_qs
         from workspace.files.services.files import FileService
 
         try:
@@ -102,7 +103,7 @@ class MailAttachmentSaveToFilesView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             try:
-                parent = FileService.user_files_qs(request.user).get(
+                parent = user_files_qs(request.user).get(
                     uuid=folder_uuid,
                     node_type=File.NodeType.FOLDER,
                 )

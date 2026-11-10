@@ -16,8 +16,8 @@ from workspace.common.uuids import (
 
 from ..actions import ActionRegistry
 from ..models import File
+from ..queries import accessible_files_q, get_permissions_bulk
 from ..sensitivity import mark_sensitive, with_sensitivity
-from ..services import FileService
 
 # A selection of a few long trips; the limit only bounds one request.
 MAX_FILES = 2000
@@ -72,14 +72,12 @@ class SensitiveFilesView(APIView):
 
         files = list(
             with_sensitivity(
-                File.objects.filter(
-                    FileService.accessible_files_q(request.user), uuid__in=uuids
-                )
+                File.objects.filter(accessible_files_q(request.user), uuid__in=uuids)
             ).distinct()
         )
         if len(files) != len(set(uuids)):
             return _refused("One or more files not found.", status.HTTP_404_NOT_FOUND)
-        permissions = FileService.get_permissions_bulk(request.user, files)
+        permissions = get_permissions_bulk(request.user, files)
         for file_obj in files:
             if not ActionRegistry.is_action_available(
                 "toggle_sensitive",

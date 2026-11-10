@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File, FileShare, FileShareLink
-from workspace.files.services import FileService
+from workspace.files.queries import get_permission
 from workspace.files.services.share_notifications import notify_share_targets
 from workspace.files.services.sharing import (
     create_share_link as service_create_share_link,
@@ -94,7 +94,7 @@ class ShareMixin:
         from workspace.files.actions import ActionRegistry
 
         file_obj = self.get_object()
-        perm = FileService.get_permission(request.user, file_obj)
+        perm = get_permission(request.user, file_obj)
 
         # Sharing with a user is file-only: ShareAction.node_types also covers
         # folders now, for the public-link path, so that check alone is not

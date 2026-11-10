@@ -1,6 +1,6 @@
 from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchTag
-from workspace.files.services import FileService
+from workspace.files.queries import user_files_qs
 from workspace.files.services.scanning.policy import exclude_blocked
 from workspace.files.services.search_index import FILES_FTS, match_type_for
 
@@ -11,7 +11,7 @@ def search_notes(query, user, limit):
     # hit would cost the page a row instead of being replaced by the next one.
     qs = apply_fulltext(
         exclude_blocked(
-            FileService.user_files_qs(user)
+            user_files_qs(user)
             .select_related("parent")
             .filter(mime_type="text/markdown")
         ),

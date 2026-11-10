@@ -154,7 +154,7 @@ class FileSerializerCreateTests(APITestCase):
     def test_create_folder_creates_directory_on_disk(self):
         """Folder creation via API must create the directory on storage."""
         with patch(
-            "workspace.files.services.files.FileService._ensure_folder_on_storage"
+            "workspace.files.services._storage_ops.ensure_folder_on_storage"
         ) as mock_ensure:
             response = self.client.post(
                 "/api/v1/files",
@@ -260,12 +260,10 @@ class FileSerializerTypeDisplayTests(APITestCase):
         )
 
     def _data(self, **kwargs):
-        from workspace.files.services import FileService
+        from workspace.files.queries import annotate_for_serializer
 
         node = File.objects.create(owner=self.user, **kwargs)
-        qs = FileService.annotate_for_serializer(
-            File.objects.filter(pk=node.pk), self.user
-        )
+        qs = annotate_for_serializer(File.objects.filter(pk=node.pk), self.user)
         return FileSerializer(qs.get()).data
 
     def test_file_icon_and_color_come_from_the_registry(self):

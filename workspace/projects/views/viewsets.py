@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.files.services import FileService
+from workspace.files.queries import resolve_accessible_files
 
 from ..models import (
     Epic,
@@ -1220,7 +1220,7 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        picked = FileService.resolve_accessible_files(request.user, file_uuids)
+        picked = resolve_accessible_files(request.user, file_uuids)
         if picked is None:
             return Response(
                 {"detail": "One or more files not found or not accessible."},
@@ -1300,7 +1300,7 @@ class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         self._require_writable()
         serializer = TaskFileLinkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        files = FileService.resolve_accessible_files(
+        files = resolve_accessible_files(
             request.user, serializer.validated_data["file_uuids"]
         )
         if files is None:

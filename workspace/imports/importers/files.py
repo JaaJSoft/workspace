@@ -20,6 +20,7 @@ from rest_framework import serializers
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
 from workspace.files.models import File
+from workspace.files.queries import user_files_qs
 from workspace.files.services import FileService, quota
 from workspace.files.services._names import available_file_name, find_name_conflict
 from workspace.files.services.locking import LockConflict
@@ -69,7 +70,7 @@ class FilesImportOptionsSerializer(serializers.Serializer):
             return None
         owner = self.context["owner"]
         exists = (
-            FileService.user_files_qs(owner)
+            user_files_qs(owner)
             .filter(uuid=value, node_type=File.NodeType.FOLDER)
             .exists()
         )
@@ -119,7 +120,7 @@ class FilesImporter(Importer):
         alive = set()
         for chunk in batched(target_uuids, 500, strict=False):
             alive.update(
-                FileService.user_files_qs(owner)
+                user_files_qs(owner)
                 .filter(uuid__in=chunk)
                 .values_list("uuid", flat=True)
             )
@@ -360,7 +361,7 @@ class FilesImporter(Importer):
         if folder_id is None:
             return None
         folder = (
-            FileService.user_files_qs(ctx.owner)
+            user_files_qs(ctx.owner)
             .filter(uuid=folder_id, node_type=File.NodeType.FOLDER)
             .first()
         )
@@ -374,7 +375,7 @@ class FilesImporter(Importer):
         destination = None
         if ctx.options.get("destination"):
             destination = (
-                FileService.user_files_qs(ctx.owner)
+                user_files_qs(ctx.owner)
                 .filter(uuid=ctx.options["destination"], node_type=File.NodeType.FOLDER)
                 .first()
             )
@@ -384,7 +385,7 @@ class FilesImporter(Importer):
             return destination
         if ctx.stats.get("root_folder"):
             existing = (
-                FileService.user_files_qs(ctx.owner)
+                user_files_qs(ctx.owner)
                 .filter(uuid=ctx.stats["root_folder"], node_type=File.NodeType.FOLDER)
                 .first()
             )
@@ -407,7 +408,7 @@ class FilesImporter(Importer):
         """
         name = safe_local_name(name)
         existing = (
-            FileService.user_files_qs(ctx.owner)
+            user_files_qs(ctx.owner)
             .filter(
                 parent=parent, node_type=File.NodeType.FOLDER, name_key=caseless(name)
             )

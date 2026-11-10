@@ -76,7 +76,7 @@ def accessible_entries_q(user):
     """Q filter over the entries of every vault *user* can open.
 
     Does NOT filter ``deleted_at``: the trash is a legitimate view, so the
-    caller decides. Mirrors ``FileService.accessible_files_q``.
+    caller decides. Mirrors ``accessible_files_q``.
     """
     return Q(vault_id__in=user_vault_ids(user))
 

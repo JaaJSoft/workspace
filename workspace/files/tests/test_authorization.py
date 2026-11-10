@@ -4,7 +4,16 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.models import File, FileShare
-from workspace.files.services.files import FilePermission, FileService
+from workspace.files.queries import (
+    FilePermission,
+    accessible_file_ids,
+    accessible_files_q,
+    can_access,
+    can_create_in,
+    get_permission,
+    user_files_qs,
+    user_group_files_qs,
+)
 
 User = get_user_model()
 
@@ -41,22 +50,22 @@ class FileAuthzMixin:
 class AccessibleFilesQTests(FileAuthzMixin, TestCase):
     def test_includes_owned_files(self):
         f = self._make_file(self.alice)
-        qs = File.objects.filter(FileService.accessible_files_q(self.alice))
+        qs = File.objects.filter(accessible_files_q(self.alice))
         self.assertIn(f, list(qs))
 
     def test_excludes_other_users_files(self):
         f = self._make_file(self.bob)
-        qs = File.objects.filter(FileService.accessible_files_q(self.alice))
+        qs = File.objects.filter(accessible_files_q(self.alice))
         self.assertNotIn(f, list(qs))
 
     def test_includes_group_files(self):
         f = self._make_file(self.bob, group=self.group)
-        qs = File.objects.filter(FileService.accessible_files_q(self.alice))
+        qs = File.objects.filter(accessible_files_q(self.alice))
         self.assertIn(f, list(qs))
 
     def test_excludes_group_files_when_not_member(self):
         f = self._make_file(self.alice, group=self.group)
-        qs = File.objects.filter(FileService.accessible_files_q(self.bob))
+        qs = File.objects.filter(accessible_files_q(self.bob))
         # Bob is not in the group, but alice owns it - bob should not see it
         # unless it's shared. Bob is not the owner either.
         self.assertNotIn(f, list(qs))
@@ -69,7 +78,7 @@ class AccessibleFilesQTests(FileAuthzMixin, TestCase):
             shared_with=self.alice,
             permission="ro",
         )
-        qs = File.objects.filter(FileService.accessible_files_q(self.alice))
+        qs = File.objects.filter(accessible_files_q(self.alice))
         self.assertIn(f, list(qs))
 
     def test_includes_deleted_files_owned(self):
@@ -77,7 +86,7 @@ class AccessibleFilesQTests(FileAuthzMixin, TestCase):
         f = self._make_file(self.alice)
         f.deleted_at = timezone.now()
         f.save()
-        qs = File.objects.filter(FileService.accessible_files_q(self.alice))
+        qs = File.objects.filter(accessible_files_q(self.alice))
         self.assertIn(f, list(qs))
 
     def test_no_duplicates_when_owned_and_shared(self):
@@ -88,7 +97,7 @@ class AccessibleFilesQTests(FileAuthzMixin, TestCase):
             shared_with=self.alice,
             permission="rw",
         )
-        qs = File.objects.filter(FileService.accessible_files_q(self.alice))
+        qs = File.objects.filter(accessible_files_q(self.alice))
         self.assertEqual(qs.distinct().count(), 1)
 
 
@@ -105,13 +114,11 @@ class AccessibleFileIdsTests(FileAuthzMixin, TestCase):
 
     def _q_ids(self, user):
         return set(
-            File.objects.filter(FileService.accessible_files_q(user)).values_list(
-                "pk", flat=True
-            )
+            File.objects.filter(accessible_files_q(user)).values_list("pk", flat=True)
         )
 
     def _union_ids(self, user):
-        return set(FileService.accessible_file_ids(user))
+        return set(accessible_file_ids(user))
 
     def test_includes_owned_files(self):
         f = self._make_file(self.alice)
@@ -144,7 +151,7 @@ class AccessibleFileIdsTests(FileAuthzMixin, TestCase):
 
     def test_usable_as_in_subquery(self):
         f = self._make_file(self.alice)
-        qs = File.objects.filter(pk__in=FileService.accessible_file_ids(self.alice))
+        qs = File.objects.filter(pk__in=accessible_file_ids(self.alice))
         self.assertIn(f, list(qs))
 
     def test_equivalent_to_accessible_files_q(self):
@@ -192,9 +199,7 @@ class AccessibleFileIdsTests(FileAuthzMixin, TestCase):
             f.deleted_at = timezone.now()
             f.save()
 
-        live_ids = set(
-            FileService.accessible_file_ids(self.alice, include_deleted=False)
-        )
+        live_ids = set(accessible_file_ids(self.alice, include_deleted=False))
         self.assertEqual(
             live_ids,
             {group_root.pk, live_owned.pk, live_group.pk, live_shared.pk},
@@ -204,7 +209,7 @@ class AccessibleFileIdsTests(FileAuthzMixin, TestCase):
             live_ids,
             set(
                 File.objects.filter(
-                    FileService.accessible_files_q(self.alice),
+                    accessible_files_q(self.alice),
                     deleted_at__isnull=True,
                 ).values_list("pk", flat=True)
             ),
@@ -217,24 +222,24 @@ class AccessibleFileIdsTests(FileAuthzMixin, TestCase):
 class UserFilesQsTests(FileAuthzMixin, TestCase):
     def test_includes_owned_personal_files(self):
         f = self._make_file(self.alice)
-        qs = FileService.user_files_qs(self.alice)
+        qs = user_files_qs(self.alice)
         self.assertIn(f, list(qs))
 
     def test_excludes_group_files(self):
         f = self._make_file(self.alice, group=self.group)
-        qs = FileService.user_files_qs(self.alice)
+        qs = user_files_qs(self.alice)
         self.assertNotIn(f, list(qs))
 
     def test_excludes_deleted_files(self):
         f = self._make_file(self.alice)
         f.deleted_at = timezone.now()
         f.save()
-        qs = FileService.user_files_qs(self.alice)
+        qs = user_files_qs(self.alice)
         self.assertNotIn(f, list(qs))
 
     def test_excludes_other_users_files(self):
         self._make_file(self.bob)
-        qs = FileService.user_files_qs(self.alice)
+        qs = user_files_qs(self.alice)
         self.assertEqual(qs.count(), 0)
 
 
@@ -244,25 +249,25 @@ class UserFilesQsTests(FileAuthzMixin, TestCase):
 class UserGroupFilesQsTests(FileAuthzMixin, TestCase):
     def test_includes_group_files_for_member(self):
         f = self._make_file(self.bob, group=self.group)
-        qs = FileService.user_group_files_qs(self.alice)
+        qs = user_group_files_qs(self.alice)
         self.assertIn(f, list(qs))
 
     def test_excludes_files_from_non_member_groups(self):
         other_group = Group.objects.create(name="Design")
         f = self._make_file(self.bob, group=other_group)
-        qs = FileService.user_group_files_qs(self.alice)
+        qs = user_group_files_qs(self.alice)
         self.assertNotIn(f, list(qs))
 
     def test_excludes_deleted_group_files(self):
         f = self._make_file(self.bob, group=self.group)
         f.deleted_at = timezone.now()
         f.save()
-        qs = FileService.user_group_files_qs(self.alice)
+        qs = user_group_files_qs(self.alice)
         self.assertNotIn(f, list(qs))
 
     def test_excludes_personal_files(self):
         self._make_file(self.alice)
-        qs = FileService.user_group_files_qs(self.alice)
+        qs = user_group_files_qs(self.alice)
         self.assertEqual(qs.count(), 0)
 
 
@@ -272,13 +277,11 @@ class UserGroupFilesQsTests(FileAuthzMixin, TestCase):
 class GetPermissionTests(FileAuthzMixin, TestCase):
     def test_owner_gets_manage(self):
         f = self._make_file(self.alice)
-        self.assertEqual(
-            FileService.get_permission(self.alice, f), FilePermission.MANAGE
-        )
+        self.assertEqual(get_permission(self.alice, f), FilePermission.MANAGE)
 
     def test_group_member_gets_edit(self):
         f = self._make_file(self.bob, group=self.group)
-        self.assertEqual(FileService.get_permission(self.alice, f), FilePermission.EDIT)
+        self.assertEqual(get_permission(self.alice, f), FilePermission.EDIT)
 
     def test_shared_rw_gets_write(self):
         f = self._make_file(self.bob)
@@ -288,9 +291,7 @@ class GetPermissionTests(FileAuthzMixin, TestCase):
             shared_with=self.alice,
             permission="rw",
         )
-        self.assertEqual(
-            FileService.get_permission(self.alice, f), FilePermission.WRITE
-        )
+        self.assertEqual(get_permission(self.alice, f), FilePermission.WRITE)
 
     def test_shared_ro_gets_view(self):
         f = self._make_file(self.bob)
@@ -300,25 +301,23 @@ class GetPermissionTests(FileAuthzMixin, TestCase):
             shared_with=self.alice,
             permission="ro",
         )
-        self.assertEqual(FileService.get_permission(self.alice, f), FilePermission.VIEW)
+        self.assertEqual(get_permission(self.alice, f), FilePermission.VIEW)
 
     def test_no_relation_returns_none(self):
         f = self._make_file(self.bob)
-        self.assertIsNone(FileService.get_permission(self.alice, f))
+        self.assertIsNone(get_permission(self.alice, f))
 
     def test_deleted_file_returns_none_for_non_owner(self):
         f = self._make_file(self.bob, group=self.group)
         f.deleted_at = timezone.now()
         f.save()
-        self.assertIsNone(FileService.get_permission(self.alice, f))
+        self.assertIsNone(get_permission(self.alice, f))
 
     def test_owner_still_sees_deleted_files(self):
         f = self._make_file(self.alice)
         f.deleted_at = timezone.now()
         f.save()
-        self.assertEqual(
-            FileService.get_permission(self.alice, f), FilePermission.MANAGE
-        )
+        self.assertEqual(get_permission(self.alice, f), FilePermission.MANAGE)
 
     def test_permission_ordering(self):
         """Permissions should be comparable: MANAGE > EDIT > WRITE > VIEW."""
@@ -333,11 +332,11 @@ class GetPermissionTests(FileAuthzMixin, TestCase):
 class CanAccessTests(FileAuthzMixin, TestCase):
     def test_owner_can_access(self):
         f = self._make_file(self.alice)
-        self.assertTrue(FileService.can_access(self.alice, f))
+        self.assertTrue(can_access(self.alice, f))
 
     def test_group_member_can_access(self):
         f = self._make_file(self.bob, group=self.group)
-        self.assertTrue(FileService.can_access(self.alice, f))
+        self.assertTrue(can_access(self.alice, f))
 
     def test_shared_user_can_access(self):
         f = self._make_file(self.bob)
@@ -347,17 +346,17 @@ class CanAccessTests(FileAuthzMixin, TestCase):
             shared_with=self.alice,
             permission="ro",
         )
-        self.assertTrue(FileService.can_access(self.alice, f))
+        self.assertTrue(can_access(self.alice, f))
 
     def test_unrelated_user_cannot_access(self):
         f = self._make_file(self.bob)
-        self.assertFalse(FileService.can_access(self.alice, f))
+        self.assertFalse(can_access(self.alice, f))
 
     def test_deleted_file_not_accessible_to_non_owner(self):
         f = self._make_file(self.bob, group=self.group)
         f.deleted_at = timezone.now()
         f.save()
-        self.assertFalse(FileService.can_access(self.alice, f))
+        self.assertFalse(can_access(self.alice, f))
 
 
 # ── can_create_in ──────────────────────────────────────────────
@@ -366,29 +365,29 @@ class CanAccessTests(FileAuthzMixin, TestCase):
 class CanCreateInTests(FileAuthzMixin, TestCase):
     def test_owner_can_create_in_own_folder(self):
         folder = self._make_folder(self.alice)
-        self.assertTrue(FileService.can_create_in(self.alice, folder))
+        self.assertTrue(can_create_in(self.alice, folder))
 
     def test_group_member_can_create_in_group_folder(self):
         folder = self._make_folder(self.bob, group=self.group)
-        self.assertTrue(FileService.can_create_in(self.alice, folder))
+        self.assertTrue(can_create_in(self.alice, folder))
 
     def test_unrelated_user_cannot_create(self):
         folder = self._make_folder(self.bob)
-        self.assertFalse(FileService.can_create_in(self.alice, folder))
+        self.assertFalse(can_create_in(self.alice, folder))
 
     def test_read_write_share_cannot_create(self):
         folder = self._make_folder(self.bob)
         FileShare.objects.create(
             file=folder, shared_by=self.bob, shared_with=self.alice, permission="rw"
         )
-        self.assertFalse(FileService.can_create_in(self.alice, folder))
+        self.assertFalse(can_create_in(self.alice, folder))
 
     def test_owner_cannot_create_in_trashed_folder(self):
         folder = self._make_folder(self.alice)
         folder.deleted_at = timezone.now()
         folder.save()
-        self.assertFalse(FileService.can_create_in(self.alice, folder))
+        self.assertFalse(can_create_in(self.alice, folder))
 
     def test_owner_cannot_create_under_a_file(self):
         f = self._make_file(self.alice)
-        self.assertFalse(FileService.can_create_in(self.alice, f))
+        self.assertFalse(can_create_in(self.alice, f))

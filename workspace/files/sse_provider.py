@@ -10,7 +10,7 @@ class FilesSSEProvider(MailboxSSEProvider):
 def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):
     """Push an SSE event to every user who can reach this file.
 
-    Every access branch of ``FileService._access_branches`` has to be here:
+    Every access branch of ``_access_branches`` has to be here:
     a file in a group folder reaches its group members through the group,
     with no ``FileShare`` row naming them, a group share reaches them through
     the group it names, a project share through the project's members, and

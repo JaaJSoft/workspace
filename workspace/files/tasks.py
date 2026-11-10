@@ -35,10 +35,8 @@ SYNC_USER_LOCK_TTL = max(int(2 * getattr(settings, "FILES_SYNC_INTERVAL", 1800))
 _INDEX_PAGE_SIZE = 500
 
 
-@shared_task(
-    name="files.sync_all_users", priority=LOW_PRIORITY, bind=True, max_retries=0
-)
-def sync_all_users(self):
+@shared_task(name="files.sync_all_users", priority=LOW_PRIORITY)
+def sync_all_users():
     """Dispatch a per-user sync task for every active user.
 
     Fanning out (rather than walking every user in this task) lets the
@@ -65,10 +63,8 @@ def sync_all_users(self):
     return {"users_dispatched": dispatched, "enqueue_failures": failed}
 
 
-@shared_task(
-    name="files.sync_user_files", priority=LOW_PRIORITY, bind=True, max_retries=0
-)
-def sync_user_files(self, user_id):
+@shared_task(name="files.sync_user_files", priority=LOW_PRIORITY)
+def sync_user_files(user_id):
     """Full recursive disk <-> DB sync for a single user.
 
     Guarded by an advisory lock: successive beat ticks would otherwise
@@ -104,40 +100,37 @@ def sync_user_files(self, user_id):
 # Staged bytes are written by the request that stages them (an upload spool
 # renamed into the staging area keeps the mtime of its last chunk), and that
 # request moves, commits or deletes them before it ends: bytes untouched for a
-# day belong to a worker that died.
+# day belong to a worker that died. A resumable upload is refreshed by each
+# chunk: one untouched for as long was abandoned.
 STAGED_BLOB_TTL = timedelta(days=1)
 
 
-@shared_task(
-    name="files.purge_staged_blobs",
-    priority=BACKGROUND_PRIORITY,
-    bind=True,
-    max_retries=0,
-)
-def purge_staged_blobs(self):
-    """Delete what a killed worker staged and never moved into place.
+@shared_task(name="files.purge_staged_blobs", priority=BACKGROUND_PRIORITY)
+def purge_staged_blobs():
+    """Delete what a killed worker or a client that left never moved into place.
 
-    Both kinds: the bytes of a new file waiting for its row, and a write
-    waiting for its commit (a ``.part`` file, or a multipart upload on object
-    storage).
+    The bytes of a new file waiting for its row, a write waiting for its
+    commit (a ``.part`` file, or a multipart upload on object storage), and
+    the resumable uploads nobody came back to, which also hands back the
+    quota they reserved.
     """
     from django.core.files.storage import storages
 
+    from workspace.files.services import uploads
     from workspace.files.services._names import purge_staged
 
     before = timezone.now() - STAGED_BLOB_TTL
-    purged = purge_staged(before) + storages["files"].purge_staged(before)
+    purged = (
+        purge_staged(before)
+        + storages["files"].purge_staged(before)
+        + uploads.purge_expired(before)
+    )
     if purged:
         logger.info("Removed %d stale staged blobs", purged)
     return {"purged": purged}
 
 
-@shared_task(
-    name="files.run_file_operation",
-    priority=INTERACTIVE_PRIORITY,
-    bind=True,
-    max_retries=0,
-)
+@shared_task(name="files.run_file_operation", priority=INTERACTIVE_PRIORITY, bind=True)
 def run_file_operation(self, operation_uuid):
     """Run a batch operation slice by slice.
 
@@ -160,9 +153,7 @@ def run_file_operation(self, operation_uuid):
 
 
 @shared_task(
-    name="files.sweep_file_operations",
-    priority=BACKGROUND_PRIORITY,
-    ignore_result=True,
+    name="files.sweep_file_operations", priority=BACKGROUND_PRIORITY, ignore_result=True
 )
 def sweep_file_operations():
     """Close the operations a dead worker left open, drop the old reports."""
@@ -174,10 +165,8 @@ def sweep_file_operations():
     return {"failed": failed, "purged": operations.purge_finished_operations()}
 
 
-@shared_task(
-    name="files.purge_trash", priority=BACKGROUND_PRIORITY, bind=True, max_retries=0
-)
-def purge_trash(self):
+@shared_task(name="files.purge_trash", priority=BACKGROUND_PRIORITY)
+def purge_trash():
     """Hard-delete files that have been in trash longer than TRASH_RETENTION_DAYS."""
     from workspace.files.models import File
     from workspace.files.services.hard_delete import hard_delete_in_batches
@@ -220,13 +209,8 @@ def purge_trash(self):
     }
 
 
-@shared_task(
-    name="files.settle_relocations",
-    priority=BACKGROUND_PRIORITY,
-    bind=True,
-    max_retries=0,
-)
-def settle_relocations(self):
+@shared_task(name="files.settle_relocations", priority=BACKGROUND_PRIORITY)
+def settle_relocations():
     """Finish or undo the moves a dead worker or a rolled-back transaction
     left half done, once they are old enough to be no one's any more."""
     from workspace.files.services.relocations import settle_stale
@@ -264,10 +248,8 @@ CATCH_UP_LIMIT = 20_000
 CATCH_UP_EXPIRY_SHARE = 0.9
 
 
-@shared_task(
-    name="files.catch_up", priority=BACKGROUND_PRIORITY, bind=True, max_retries=0
-)
-def catch_up(self, names=None):
+@shared_task(name="files.catch_up", priority=BACKGROUND_PRIORITY)
+def catch_up(names=None):
     """Queue the pending files of every processor, or of the processors in *names*.
 
     A full pass (no *names*) also queues the upload pipeline again for the
@@ -302,20 +284,16 @@ def catch_up(self, names=None):
 
 
 @shared_task(
-    name="files.catch_up_file",
-    priority=BACKGROUND_PRIORITY,
-    bind=True,
-    max_retries=0,
-    ignore_result=True,
+    name="files.catch_up_file", priority=BACKGROUND_PRIORITY, ignore_result=True
 )
-def catch_up_file(self, name, file_uuid, reanalyze=False):
+def catch_up_file(name, file_uuid, reanalyze=False):
     """Run processor *name* on one file.
 
     Unless *reanalyze*, a file that is no longer pending is skipped without
     reading its blob: its upload event may have processed it while this task
     waited in the queue.
 
-    max_retries=0 on purpose: a blob that cannot be read now will not be read
+    Never retried: a blob that cannot be read now will not be read
     on a retry a few seconds later either, and the hourly catch-up already
     comes back for it.
     """
@@ -341,11 +319,9 @@ def catch_up_file(self, name, file_uuid, reanalyze=False):
 @shared_task(
     name="files.redraw_edited_thumbnail",
     priority=INTERACTIVE_PRIORITY,
-    bind=True,
-    max_retries=0,
     ignore_result=True,
 )
-def redraw_edited_thumbnail(self, file_uuid):
+def redraw_edited_thumbnail(file_uuid):
     """Draw the thumbnail of an image just rotated or cropped, then tell its
     open listings (``processing_settled``) so they fetch it.
 
@@ -373,10 +349,8 @@ def redraw_edited_thumbnail(self, file_uuid):
     return {"status": "ok" if stored else "failed"}
 
 
-@shared_task(
-    name="files.sync_folder", priority=NORMAL_PRIORITY, bind=True, max_retries=0
-)
-def sync_folder(self, user_id, folder_uuid=None):
+@shared_task(name="files.sync_folder", priority=NORMAL_PRIORITY)
+def sync_folder(user_id, folder_uuid=None):
     """Shallow sync for a single folder. Can be triggered via API."""
     from workspace.files.models import File
     from workspace.files.sync import FileSyncService
@@ -385,9 +359,9 @@ def sync_folder(self, user_id, folder_uuid=None):
     parent_db = None
 
     if folder_uuid:
-        from workspace.files.services import FileService
+        from workspace.files.queries import user_files_qs
 
-        parent_db = FileService.user_files_qs(user).get(
+        parent_db = user_files_qs(user).get(
             uuid=folder_uuid,
             node_type=File.NodeType.FOLDER,
         )
@@ -400,29 +374,19 @@ def sync_folder(self, user_id, folder_uuid=None):
     }
 
 
-@shared_task(
-    name="files.run_file_event_handlers",
-    priority=NORMAL_PRIORITY,
-    bind=True,
-    max_retries=0,
-)
-def run_file_event_handlers(self, event_uuid):
+@shared_task(name="files.run_file_event_handlers", priority=NORMAL_PRIORITY)
+def run_file_event_handlers(event_uuid):
     """Run the registered handlers for a recorded FileEvent (off-request)."""
     from workspace.files.services.event_dispatch import run_handlers
 
     run_handlers(event_uuid)
 
 
-@shared_task(
-    name="files.process_file",
-    priority=NORMAL_PRIORITY,
-    bind=True,
-    max_retries=0,
-)
-def process_file(self, file_uuid):
+@shared_task(name="files.process_file", priority=NORMAL_PRIORITY)
+def process_file(file_uuid):
     """Run the upload pipeline on one file whose content just landed.
 
-    max_retries=0 on purpose: each processor keeps its own failure ledger, and
+    Never retried: each processor keeps its own failure ledger, and
     the hourly catch-up comes back for a file the pipeline never settled.
     """
     from workspace.files.services.processors import run_pipeline
@@ -431,16 +395,11 @@ def process_file(self, file_uuid):
     return {"status": status or "skipped"}
 
 
-@shared_task(
-    name="files.index_search_document",
-    priority=NORMAL_PRIORITY,
-    bind=True,
-    max_retries=0,
-)
-def index_search_document(self, file_uuid, include_descendants=False):
+@shared_task(name="files.index_search_document", priority=NORMAL_PRIORITY)
+def index_search_document(file_uuid, include_descendants=False):
     """Extract *file_uuid*'s text and write its full-text search document.
 
-    max_retries=0 on purpose: an extractor that cannot read a blob will not
+    Never retried: an extractor that cannot read a blob will not
     read it on the next attempt either, and a permanently unindexable file
     must never turn into a retry loop. The hourly catch-up comes back for a
     file whose document is missing or stale.
@@ -489,11 +448,11 @@ def index_search_document(self, file_uuid, include_descendants=False):
     return {"status": "ok", "indexed": indexed, "failed": skipped}
 
 
-@shared_task(name="files.scan_file", priority=NORMAL_PRIORITY, bind=True, max_retries=0)
-def scan_file(self, file_uuid):
+@shared_task(name="files.scan_file", priority=NORMAL_PRIORITY)
+def scan_file(file_uuid):
     """Scan one file's content for malware and record the verdict.
 
-    max_retries=0 on purpose: a daemon that is down will be down on the next
+    Never retried: a daemon that is down will be down on the next
     attempt too, and a permanently unscannable file must never turn into a
     retry loop. The hourly catch-up comes back for a file left without a
     current verdict.

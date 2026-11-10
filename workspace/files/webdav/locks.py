@@ -26,7 +26,7 @@ from wsgidav.lock_man.lock_manager import LockManager
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.queries import accessible_files_q
 from workspace.files.services.locking import conflicting_lock
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ def _dav_file(url, principal):
         return None, user
     file_obj = (
         File.objects.filter(
-            FileService.accessible_files_q(user),
+            accessible_files_q(user),
             path=path,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,

@@ -6,7 +6,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from workspace.files.models import FileShare
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission, get_permission
+from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.projects.models import TaskEvent, TaskFileLink
 from workspace.projects.services.file_links import (
@@ -45,15 +46,11 @@ class LinkFilesTests(ProjectTestMixin, TestCase):
         self.assertEqual(link.created_by, self.admin)
         # The member never had a share of their own: the project share is
         # what lets them open it.
-        self.assertEqual(
-            FileService.get_permission(self.member, self.doc), FilePermission.VIEW
-        )
+        self.assertEqual(get_permission(self.member, self.doc), FilePermission.VIEW)
 
     def test_link_with_write_permission(self):
         link_files(self.admin, self.task, [self.doc], permission="rw")
-        self.assertEqual(
-            FileService.get_permission(self.member, self.doc), FilePermission.WRITE
-        )
+        self.assertEqual(get_permission(self.member, self.doc), FilePermission.WRITE)
 
     def test_link_records_an_event_per_file(self):
         other = make_file(self.admin, "notes.txt")
@@ -147,7 +144,7 @@ class UnlinkFileTests(ProjectTestMixin, TestCase):
         unlink_file(self.link, actor=self.member)
         self.assertFalse(TaskFileLink.objects.exists())
         self.assertFalse(FileShare.objects.exists())
-        self.assertIsNone(FileService.get_permission(self.member, self.doc))
+        self.assertIsNone(get_permission(self.member, self.doc))
         event = self.task.events.get(type=TaskEvent.Type.FILE_UNLINKED)
         self.assertEqual(event.actor, self.member)
         self.assertEqual(event.to_value, "spec.md")

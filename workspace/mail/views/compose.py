@@ -46,9 +46,9 @@ class MailSendView(APIView):
         file_uuids = d.get("file_uuids", [])
         ws_files = []
         if file_uuids:
-            from workspace.files.services.files import FileService
+            from workspace.files.queries import resolve_accessible_files
 
-            ws_files = FileService.resolve_accessible_files(request.user, file_uuids)
+            ws_files = resolve_accessible_files(request.user, file_uuids)
             if ws_files is None:
                 return Response(
                     {

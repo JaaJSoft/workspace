@@ -8,7 +8,7 @@ answer exactly like an item that does not exist.
 from django.db.models import Max
 
 from ..models import File, FileFavorite, PinnedFolder
-from .files import FileService
+from ..queries import get_permissions_bulk
 
 
 def set_favorite(user, uuids, favorite):
@@ -57,7 +57,7 @@ def _markable(user, uuids, action_id):
     from workspace.files.actions import ActionRegistry
 
     nodes = list(File.objects.filter(pk__in=uuids, deleted_at__isnull=True))
-    permissions = FileService.get_permissions_bulk(user, nodes)
+    permissions = get_permissions_bulk(user, nodes)
     return [
         node
         for node in nodes

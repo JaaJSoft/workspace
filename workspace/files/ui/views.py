@@ -18,13 +18,26 @@ from django.views.decorators.http import require_GET
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.properties_sections import render_properties_sections
+from workspace.files.queries import (
+    FilePermission,
+    accessible_files_q,
+    can_access,
+    get_permission,
+    owned_files_qs,
+    reads_full_path,
+    restorable_files_qs,
+    trash_permission,
+    user_files_qs,
+    user_group_files_qs,
+    visible_ancestors,
+    visible_path,
+)
 from workspace.files.sensitivity import (
     DEFAULT_BLUR,
     blur_preference,
     sensitive_level,
     with_sensitivity,
 )
-from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
 from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.files.services.pins import visible_pins
@@ -95,7 +108,7 @@ def present_shortcuts(user, nodes):
         node.shortcut_state = resolution.state
         node.resolved_target = target
         node.shortcut_target_path = (
-            FileService.visible_path(target, resolution.permission) if target else ""
+            visible_path(target, resolution.permission) if target else ""
         )
         node.shortcut_opens = opens_as(user, resolution) or ""
         if resolution.state == ShortcutState.OK:
@@ -112,7 +125,7 @@ def present_shortcuts(user, nodes):
 def build_breadcrumbs(folder, user=None):
     """Build breadcrumb trail from the root to *folder*.
 
-    The ancestors are the ones *user* may see (``FileService.visible_ancestors``):
+    The ancestors are the ones *user* may see (``visible_ancestors``):
     a folder shared with them starts its trail at the highest folder they can
     open, under their own root rather than the group's.
     """
@@ -127,12 +140,12 @@ def build_breadcrumbs(folder, user=None):
             "data": {"drop-folder": str(f.uuid), "drop-folder-name": f.name},
         }
 
-    permission = FileService.get_permission(user, folder) if user else None
-    ancestors = FileService.visible_ancestors(user, folder, permission) if user else []
+    permission = get_permission(user, folder) if user else None
+    ancestors = visible_ancestors(user, folder, permission) if user else []
     breadcrumbs = [_crumb(f) for f in ancestors]
     breadcrumbs.append(_crumb(folder))
 
-    if folder.group_id and FileService.reads_full_path(permission):
+    if folder.group_id and reads_full_path(permission):
         breadcrumbs.insert(0, {"label": _("Groups"), "icon": "users"})
     else:
         label = user.get_full_name() or user.username if user else _("My Files")
@@ -178,7 +191,7 @@ def _resolve_listing(request, folder=None, is_trash_view=False):
     if not folder:
         return None, None, None
     current_folder = File.objects.filter(
-        FileService.accessible_files_q(request.user),
+        accessible_files_q(request.user),
         uuid=folder,
         node_type=File.NodeType.FOLDER,
         deleted_at__isnull=True,
@@ -191,11 +204,7 @@ def _resolve_listing(request, folder=None, is_trash_view=False):
 def _listing_nodes(user, active_tag, active_special, current_folder):
     """The nodes of a listing as *user* may see them, in listing order."""
     if active_tag is not None:
-        return (
-            FileService.user_files_qs(user)
-            .filter(file_tags__tag=active_tag)
-            .folders_first()
-        )
+        return user_files_qs(user).filter(file_tags__tag=active_tag).folders_first()
     if active_special == "shared":
         shared_file_ids = FileShare.objects.reaching(user).values_list(
             "file_id", flat=True
@@ -207,7 +216,7 @@ def _listing_nodes(user, active_tag, active_special, current_folder):
         ).name_ordered()
     if active_special == "trash":
         return (
-            FileService.restorable_files_qs(user)
+            restorable_files_qs(user)
             .filter(deleted_at__isnull=False)
             .filter(Q(parent__isnull=True) | Q(parent__deleted_at__isnull=True))
             .name_ordered("-deleted_at")
@@ -215,7 +224,7 @@ def _listing_nodes(user, active_tag, active_special, current_folder):
     if active_special == "favorites":
         return (
             File.objects.filter(
-                FileService.accessible_files_q(user),
+                accessible_files_q(user),
                 deleted_at__isnull=True,
                 favorites__owner=user,
             )
@@ -224,7 +233,7 @@ def _listing_nodes(user, active_tag, active_special, current_folder):
         )
     if active_special == "recent":
         return (
-            FileService.owned_files_qs(user)
+            owned_files_qs(user)
             .filter(deleted_at__isnull=True)
             .name_ordered("-updated_at")
         )
@@ -235,12 +244,8 @@ def _listing_nodes(user, active_tag, active_special, current_folder):
             parent=current_folder,
         ).folders_first()
     if current_folder:
-        return (
-            FileService.user_files_qs(user)
-            .filter(parent=current_folder)
-            .folders_first()
-        )
-    return FileService.user_files_qs(user).filter(parent__isnull=True).folders_first()
+        return user_files_qs(user).filter(parent=current_folder).folders_first()
+    return user_files_qs(user).filter(parent__isnull=True).folders_first()
 
 
 def _present_nodes(user, nodes, active_special):
@@ -434,7 +439,7 @@ def _build_context(request, folder=None, is_trash_view=False):
 
     # Group folders the user has access to
     group_folders = (
-        FileService.user_group_files_qs(request.user)
+        user_group_files_qs(request.user)
         .filter(
             parent__isnull=True,
             node_type=File.NodeType.FOLDER,
@@ -570,7 +575,7 @@ def properties(request, uuid):
     if not file_obj:
         raise Http404
 
-    perm = FileService.get_permission(request.user, file_obj)
+    perm = get_permission(request.user, file_obj)
     if perm is None:
         raise Http404
     is_owner = perm >= FilePermission.MANAGE
@@ -649,7 +654,7 @@ def properties(request, uuid):
         {
             "sections": render_properties_sections(request, request.user, file_obj),
             "file": file_obj,
-            "file_path": FileService.visible_path(file_obj, perm),
+            "file_path": visible_path(file_obj, perm),
             "is_owner": is_owner,
             "is_favorite": is_favorite,
             "is_pinned": is_pinned,
@@ -673,7 +678,7 @@ def storage(request, uuid=None):
         folder = File.objects.filter(
             uuid=uuid, deleted_at__isnull=True, node_type=File.NodeType.FOLDER
         ).first()
-        if folder is None or FileService.get_permission(request.user, folder) is None:
+        if folder is None or get_permission(request.user, folder) is None:
             raise Http404
     category = request.GET.get("category") or None
     if category is not None and category not in CATEGORY_META:
@@ -744,7 +749,7 @@ def events(request, uuid):
     file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
         raise Http404
-    permission = FileService.get_permission(request.user, file_obj)
+    permission = get_permission(request.user, file_obj)
     if permission is None:
         raise Http404
 
@@ -824,7 +829,7 @@ def pinned_folders(request):
 def group_folders_sidebar(request):
     """Return group folders partial for Alpine AJAX refresh."""
     group_folders = (
-        FileService.user_group_files_qs(request.user)
+        user_group_files_qs(request.user)
         .filter(
             parent__isnull=True,
             node_type=File.NodeType.FOLDER,
@@ -862,7 +867,7 @@ def view_file(request, uuid):
     if not file_obj:
         raise Http404
 
-    perm = FileService.trash_permission(request.user, file_obj)
+    perm = trash_permission(request.user, file_obj)
     if perm is None:
         raise Http404
     user_can_edit = perm >= FilePermission.WRITE and file_obj.deleted_at is None
@@ -953,15 +958,15 @@ def view_file(request, uuid):
 def _viewer_location_marker(user, file_obj, permission):
     """The hidden element the viewer header reads the file's folder from.
 
-    The folders are the ones *user* may see (``FileService.visible_ancestors``):
+    The folders are the ones *user* may see (``visible_ancestors``):
     a share recipient gets the shared folders under "Shared with me" and no
     link, since Files lists none of those folders' content for them.
     """
     if file_obj.deleted_at is not None:
         return ""
-    ancestors = FileService.visible_ancestors(user, file_obj, permission)
+    ancestors = visible_ancestors(user, file_obj, permission)
     names = [folder.name for folder in ancestors]
-    if not FileService.reads_full_path(permission):
+    if not reads_full_path(permission):
         space, labels, url = "shared", [_("Shared with me"), *names], ""
     elif file_obj.group_id:
         space, labels = "group", names
@@ -1047,7 +1052,7 @@ def file_card(request, uuid):
         .prefetch_related(viewer_file_tags(request.user))
         .first()
     )
-    if not file_obj or not FileService.can_access(request.user, file_obj):
+    if not file_obj or not can_access(request.user, file_obj):
         raise Http404
 
     from workspace.files.services.excerpt import first_content_line

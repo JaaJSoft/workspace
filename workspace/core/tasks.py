@@ -3,15 +3,12 @@
 import logging
 import os
 import time
-from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
 from django.db import connection
-from django.utils import timezone
 
 from workspace.common.task_priority import BACKGROUND_PRIORITY, LOW_PRIORITY
-from workspace.files.services.uploads import purge_expired
 
 logger = logging.getLogger(__name__)
 
@@ -163,11 +160,8 @@ def purge_stale_uploads():
     ``FILE_UPLOAD_TEMP_DIR`` sits on the persistent volume, which no restart
     empties. Only Django's own ``tmp*.upload*`` names are touched, in case the
     directory is shared with something else.
-
-    Resumable uploads abandoned for as long go too, with their spool, which
-    also hands back the quota they reserved.
     """
-    removed = purge_expired(timezone.now() - timedelta(seconds=STALE_UPLOAD_SECONDS))
+    removed = 0
     cutoff = time.time() - STALE_UPLOAD_SECONDS
     try:
         entries = list(os.scandir(settings.FILE_UPLOAD_TEMP_DIR))

@@ -4,18 +4,20 @@ import os
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
-from django.test import SimpleTestCase
+from django.test import TestCase
 from django.utils import timezone
 
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
-from workspace.files.models import File
+from workspace.files.models import File, UploadSession
+from workspace.files.services import uploads
 from workspace.files.services._names import _staged
 from workspace.files.tasks import STAGED_BLOB_TTL, purge_staged_blobs
 
 
-class PurgeStagedBlobsTests(IsolatedMediaRootMixin, SimpleTestCase):
+class PurgeStagedBlobsTests(IsolatedMediaRootMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.storage = File._meta.get_field("content").storage
@@ -85,3 +87,32 @@ class PurgeStagedBlobsTests(IsolatedMediaRootMixin, SimpleTestCase):
         self.assertFalse(os.path.exists(abandoned._temp_path))
         live.commit()
         self.assertTrue(storage.exists("files/users/alice/new.bin"))
+
+    def test_an_abandoned_resumable_upload_goes_with_its_spool(self):
+        user = get_user_model().objects.create_user(username="alice", password="pw")
+        session = uploads.open_session(
+            user, name="video.mp4", parent=None, size=10, on_conflict="error"
+        )[0]
+        spool = uploads.spool_path(session)
+        self.addCleanup(uploads.abort, session)
+        UploadSession.objects.filter(pk=session.pk).update(
+            updated_at=timezone.now() - STAGED_BLOB_TTL - timedelta(minutes=1)
+        )
+
+        purged = purge_staged_blobs.run()
+
+        self.assertEqual(purged, {"purged": 1})
+        self.assertFalse(UploadSession.objects.exists())
+        self.assertFalse(os.path.exists(spool))
+
+    def test_a_resumable_upload_still_in_progress_stays(self):
+        user = get_user_model().objects.create_user(username="alice", password="pw")
+        session = uploads.open_session(
+            user, name="video.mp4", parent=None, size=10, on_conflict="error"
+        )[0]
+        self.addCleanup(uploads.abort, session)
+
+        purged = purge_staged_blobs.run()
+
+        self.assertEqual(purged, {"purged": 0})
+        self.assertTrue(UploadSession.objects.filter(pk=session.pk).exists())

@@ -100,24 +100,31 @@ def sync_user_files(user_id):
 # Staged bytes are written by the request that stages them (an upload spool
 # renamed into the staging area keeps the mtime of its last chunk), and that
 # request moves, commits or deletes them before it ends: bytes untouched for a
-# day belong to a worker that died.
+# day belong to a worker that died. A resumable upload is refreshed by each
+# chunk: one untouched for as long was abandoned.
 STAGED_BLOB_TTL = timedelta(days=1)
 
 
 @shared_task(name="files.purge_staged_blobs", priority=BACKGROUND_PRIORITY)
 def purge_staged_blobs():
-    """Delete what a killed worker staged and never moved into place.
+    """Delete what a killed worker or a client that left never moved into place.
 
-    Both kinds: the bytes of a new file waiting for its row, and a write
-    waiting for its commit (a ``.part`` file, or a multipart upload on object
-    storage).
+    The bytes of a new file waiting for its row, a write waiting for its
+    commit (a ``.part`` file, or a multipart upload on object storage), and
+    the resumable uploads nobody came back to, which also hands back the
+    quota they reserved.
     """
     from django.core.files.storage import storages
 
+    from workspace.files.services import uploads
     from workspace.files.services._names import purge_staged
 
     before = timezone.now() - STAGED_BLOB_TTL
-    purged = purge_staged(before) + storages["files"].purge_staged(before)
+    purged = (
+        purge_staged(before)
+        + storages["files"].purge_staged(before)
+        + uploads.purge_expired(before)
+    )
     if purged:
         logger.info("Removed %d stale staged blobs", purged)
     return {"purged": purged}

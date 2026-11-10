@@ -14,7 +14,7 @@ from django.db import transaction
 from ..models import File, canonical_name
 from ._names import NameTaken, find_node_conflict
 from .announcements import announce_replaced
-from .files import FilePermission, FileService, GroupRootFolder
+from .files import FilePermission, FileService, GroupRootFolder, new_owner_on_move
 from .refusals import (
     Refusal,
     Refused,
@@ -167,10 +167,8 @@ def _move(user, node, parent, on_conflict, name):
             raise Refused(Refusal.TARGET) from error
     require_unlocked(user, node)
 
-    # A node leaving a group folder becomes the mover's own, so the names it
-    # competes with are theirs - the rule FileService.move applies.
-    leaving_group = node.group_id and (parent is None or not parent.group_id)
-    owner = user if leaving_group else node.owner
+    # The names it competes with are those of whoever owns it once moved.
+    owner = new_owner_on_move(node, parent, user) or node.owner
 
     outcome = Outcome.DONE
     if node.node_type == File.NodeType.FILE:

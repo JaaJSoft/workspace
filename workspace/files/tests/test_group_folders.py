@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services._storage_ops import folder_storage_path
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.ui.views import build_breadcrumbs
 
@@ -105,7 +106,7 @@ class GroupStoragePathTests(TestCase):
         )
 
     def test_folder_storage_path_for_group_folder(self):
-        path = FileService._folder_storage_path(self.root)
+        path = folder_storage_path(self.root)
         self.assertEqual(path, "files/groups/Marketing Files")
 
     def test_folder_storage_path_for_group_subfolder(self):
@@ -116,7 +117,7 @@ class GroupStoragePathTests(TestCase):
             parent=self.root,
             group=self.group,
         )
-        path = FileService._folder_storage_path(sub)
+        path = folder_storage_path(sub)
         self.assertEqual(path, "files/groups/Marketing Files/Reports")
 
     def test_folder_storage_path_personal_unchanged(self):
@@ -125,7 +126,7 @@ class GroupStoragePathTests(TestCase):
             name="Personal",
             node_type=File.NodeType.FOLDER,
         )
-        path = FileService._folder_storage_path(personal)
+        path = folder_storage_path(personal)
         self.assertEqual(path, "files/users/alice/Personal")
 
     def test_file_upload_path_for_group_file(self):

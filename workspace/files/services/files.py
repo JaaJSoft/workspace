@@ -80,6 +80,29 @@ def _bucket(file_obj):
     return ("user", file_obj.owner_id)
 
 
+def new_owner_on_move(file_obj, new_parent, acting_user):
+    """Who a move under *new_parent* hands *file_obj* to, or None.
+
+    A node leaving a group folder becomes the personal node of whoever moved
+    it; any other move leaves its owner alone.
+    """
+    leaves_group = file_obj.group_id and not (
+        new_parent is not None and new_parent.group_id
+    )
+    return acting_user if (leaves_group and acting_user) else None
+
+
+def _content_fields(**fields):
+    """The columns a content write sets: *fields*, which describe the new
+    bytes, and the reset of what was derived from the previous ones."""
+    return {
+        **fields,
+        "has_thumbnail": False,
+        "image_edit": None,
+        "updated_at": timezone.now(),
+    }
+
+
 def _put_back_blobs(storage, source_path, storage_path, backup_path, moved, backed_up):
     """Undo ``move_content_from``'s storage moves after its rows rolled back."""
     try:
@@ -467,7 +490,7 @@ class FileService:
         )
         with transaction.atomic():
             _name_helpers.insert_node(folder)
-            FileService._ensure_folder_on_storage(folder)
+            _storage.ensure_folder_on_storage(folder)
         record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
         return folder
 
@@ -546,10 +569,7 @@ class FileService:
         """Raise ``QuotaExceeded`` when moving *file_obj* under *new_parent* would not fit."""
         new_group = new_parent.group if new_parent else None
         old_group = file_obj.group
-
-        new_owner = (
-            acting_user if (old_group and not new_group and acting_user) else None
-        )
+        new_owner = new_owner_on_move(file_obj, new_parent, acting_user)
 
         # Only a group change moves bytes between buckets. The owner charged
         # is the one the move will assign, not necessarily the current one.
@@ -577,12 +597,8 @@ class FileService:
         new_group = new_parent.group if new_parent else None
         old_group = file_obj.group
 
-        # A node leaving a group folder becomes the personal node of whoever
-        # moved it, so the destination namespace is theirs, not the current
-        # owner's.
-        new_owner = (
-            acting_user if (old_group and not new_group and acting_user) else None
-        )
+        # The destination namespace is the new owner's, not the current one's.
+        new_owner = new_owner_on_move(file_obj, new_parent, acting_user)
 
         _name_helpers.check_name_available(
             new_owner or file_obj.owner,
@@ -603,7 +619,7 @@ class FileService:
         ):
             file_obj.parent = new_parent
             file_obj.save(update_fields=["parent"])
-            if old_group and not new_group and new_owner:
+            if new_owner:
                 # Before the group change: the subtree is found through the
                 # group, and its rows belong to every member who added one.
                 # The old owner's events become foreign to the new one: an
@@ -754,20 +770,17 @@ class FileService:
                 max_length=content_field.max_length,
             )
 
-        fields = {
-            "content_hash": upload_hash(content),
-            "size": content.size,
-            "mime_type": mime_type or detection.mime_type,
-            "type": file_type,
-            "category": detection.group or "unknown",
-            "viewer": pin_viewer_for_upload(
+        fields = _content_fields(
+            content_hash=upload_hash(content),
+            size=content.size,
+            mime_type=mime_type or detection.mime_type,
+            type=file_type,
+            category=detection.group or "unknown",
+            viewer=pin_viewer_for_upload(
                 file_type, mime_type or getattr(content, "content_type", None)
             ),
-            "has_thumbnail": False,
-            "image_edit": None,
-            "processing_status": File.ProcessingStatus.PENDING,
-            "updated_at": timezone.now(),
-        }
+            processing_status=File.ProcessingStatus.PENDING,
+        )
         with transaction.atomic():
             FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
             # The path comes from the row as claimed, not from the instance
@@ -866,15 +879,12 @@ class FileService:
         also did: the row stops pointing at it and the storage sweep collects
         it, which is what keeps a refused write from touching storage at all.
         """
-        fields = {
-            "content": "",
-            "content_hash": "",
-            "size": None,
-            "has_thumbnail": False,
-            "image_edit": None,
-            "processing_status": File.ProcessingStatus.READY,
-            "updated_at": timezone.now(),
-        }
+        fields = _content_fields(
+            content="",
+            content_hash="",
+            size=None,
+            processing_status=File.ProcessingStatus.READY,
+        )
         FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
         for field, value in fields.items():
             setattr(file_obj, field, value)
@@ -990,18 +1000,15 @@ class FileService:
         from workspace.files.services.detection import detect_from_name
 
         detection = detect_from_name(file_obj.name)
-        fields = {
-            "content": storage_path,
-            "content_hash": content_hash,
-            "size": size,
-            "mime_type": detection.mime_type,
-            "type": detection.label,
-            "category": detection.group or "unknown",
-            "has_thumbnail": False,
-            "image_edit": None,
-            "processing_status": File.ProcessingStatus.PENDING,
-            "updated_at": timezone.now(),
-        }
+        fields = _content_fields(
+            content=storage_path,
+            content_hash=content_hash,
+            size=size,
+            mime_type=detection.mime_type,
+            type=detection.label,
+            category=detection.group or "unknown",
+            processing_status=File.ProcessingStatus.PENDING,
+        )
         with transaction.atomic():
             FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
             if _location(FileService._claimed_row(file_obj)) != _location(file_obj):
@@ -1317,14 +1324,6 @@ class FileService:
     # Reading
     # ------------------------------------------------------------------
 
-    _IMAGE_MIME_PREFIXES = (
-        "image/png",
-        "image/jpeg",
-        "image/gif",
-        "image/webp",
-        "image/svg+xml",
-    )
-
     @staticmethod
     def read_text_content(file_obj, *, max_bytes=32_768):
         """Read and return the text content of a file."""
@@ -1334,24 +1333,3 @@ class FileService:
     def read_image_content(file_obj, *, max_bytes=10_485_760):
         """Read and return the raw bytes of an image file."""
         return _content_helpers.read_image_content(file_obj, max_bytes=max_bytes)
-
-    # ------------------------------------------------------------------
-    # Internal helpers (kept on the class so existing test patches at
-    # ``workspace.files.services.files.FileService._<helper>`` keep working)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _folder_storage_path(folder):
-        return _storage.folder_storage_path(folder)
-
-    @staticmethod
-    def _ensure_folder_on_storage(folder):
-        return _storage.ensure_folder_on_storage(folder)
-
-    @staticmethod
-    def _parent_storage_path(owner, parent):
-        return _storage.parent_storage_path(owner, parent)
-
-    @staticmethod
-    def _unique_copy_name(base_name, node_type, existing_names):
-        return _storage.unique_copy_name(base_name, node_type, existing_names)

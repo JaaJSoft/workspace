@@ -22,7 +22,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
-from workspace.files.models import File, FileEvent
+from workspace.files.models import File, FileEvent, FileShare
 from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.shortcuts import create_shortcut
 
@@ -1017,3 +1017,26 @@ class SyncFolderScopeTests(SyncReconciliationTestCase):
             disk_sync.sync_folder_level(self.user, self.group_folder)
 
         self.assertFalse(File.objects.filter(parent=self.group_folder).exists())
+
+    def test_the_service_refuses_another_users_folder(self):
+        other = User.objects.create_user(username="other", password="pass")
+        theirs = tree.create_folder(other, "Team")
+
+        with self.assertRaises(disk_sync.NotPersonalFolder):
+            disk_sync.sync_folder_level(self.user, theirs)
+
+        self.assertFalse(File.objects.filter(parent=theirs).exists())
+
+    def test_a_folder_shared_with_the_caller_is_not_found(self):
+        """A share grants WRITE at most, which the action does not open a
+        folder for: it answers as for a folder that does not exist."""
+        other = User.objects.create_user(username="other", password="pass")
+        theirs = tree.create_folder(other, "Team")
+        FileShare.objects.create(
+            file=theirs, shared_by=other, shared_with=self.user, permission="rw"
+        )
+
+        response = self.client.post(f"/api/v1/files/{theirs.uuid}/sync")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(File.objects.filter(parent=theirs).exists())

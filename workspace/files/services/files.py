@@ -1035,18 +1035,41 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def soft_delete(file_obj, *, acting_user=None):
-        """Soft-delete a file or folder (cascades to descendants)."""
+    def soft_delete(file_obj, *, acting_user=None, deleted_at=None, details=None):
+        """Soft-delete a file or folder (cascades to descendants).
+
+        *deleted_at* defaults to now; *details* go into the recorded event.
+        """
         if FileService.is_group_root(file_obj):
             raise GroupRootFolder(gettext("A group's root folder cannot be deleted."))
-        count = file_obj.soft_delete()
+        return FileService._trash(file_obj, acting_user, deleted_at, details)
+
+    @staticmethod
+    def trash_group_files(group):
+        """Trash everything *group* holds, its root folders included.
+
+        Only for the group's own deletion: a root folder stays as long as its
+        group exists. Through the root folders rather than in one queryset
+        update: trashing a node moves its bytes out of the live tree.
+        """
+        now = timezone.now()
+        roots = File.objects.filter(
+            group=group, deleted_at__isnull=True, parent__isnull=True
+        ).select_related("owner")
+        for root in roots:
+            FileService._trash(root, None, now, None)
+        # Anything the group owns outside those roots (legacy rows re-parented
+        # by hand) still has to leave the live listing.
+        File.objects.filter(group=group, deleted_at__isnull=True).update(deleted_at=now)
+
+    @staticmethod
+    def _trash(file_obj, acting_user, deleted_at, details):
+        count = file_obj.soft_delete(deleted_at=deleted_at)
         record_event(
             file_obj,
             acting_user,
             FileEvent.Action.DELETED,
-            {
-                "cascade_count": count,
-            },
+            {"cascade_count": count, **(details or {})},
         )
         return count
 

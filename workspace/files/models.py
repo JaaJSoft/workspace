@@ -1046,23 +1046,11 @@ def unindex_file_on_delete(sender, instance, **kwargs):
 
 @receiver(pre_delete, sender="auth.Group")
 def soft_delete_group_files(sender, instance, **kwargs):
-    """Soft-delete all files belonging to this group before it is deleted.
+    """Trash all files belonging to this group before it is deleted."""
+    # Imported lazily: the services package imports this module.
+    from workspace.files.services import FileService
 
-    Through the root folders rather than in one queryset update: trashing a
-    node moves its bytes out of the live tree, and only the model method
-    does that.
-    """
-    now = timezone.now()
-    roots = File.objects.filter(
-        group=instance,
-        deleted_at__isnull=True,
-        parent__isnull=True,
-    ).select_related("owner")
-    for root in roots:
-        root.soft_delete(deleted_at=now)
-    # Anything the group owns outside those roots (legacy rows re-parented by
-    # hand) still has to leave the live listing.
-    File.objects.filter(group=instance, deleted_at__isnull=True).update(deleted_at=now)
+    FileService.trash_group_files(instance)
 
 
 def _generate_share_link_token():

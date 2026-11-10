@@ -368,22 +368,13 @@ class FileSyncService:
                 continue
 
             try:
-                # Bypass FileService.soft_delete here: we already have a custom
-                # *deleted_at* (the moment sync started, ``now``), and we still
-                # want a single FileEvent for traceability. Calling the model
-                # directly + recording the event ourselves preserves both.
-                from workspace.files.models import FileEvent
-                from workspace.files.services.events import record_event
-
-                count = db_record.soft_delete(deleted_at=now)
-                record_event(
+                # Dated when the sync started, so every node it trashes in one
+                # run shares one moment.
+                count = FileService.soft_delete(
                     db_record,
-                    user,
-                    FileEvent.Action.DELETED,
-                    {
-                        "cascade_count": count,
-                        "detected_by_sync": True,
-                    },
+                    acting_user=user,
+                    deleted_at=now,
+                    details={"detected_by_sync": True},
                 )
                 self.log.info(
                     "Soft-deleted %s: %s (%d records)", node_type, scrub(name), count

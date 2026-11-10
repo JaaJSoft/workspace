@@ -239,6 +239,18 @@ class RootCollectionTests(TestCase):
         f.soft_delete()
         self.assertEqual(self.root.get_member_names(), [])
 
+    def test_a_file_shared_with_several_people_is_listed_once(self):
+        """The access filter joins the shares, one row per share of a file."""
+        shared = FileService.create_file(self.user, "shared.txt")
+        for name in ("bob", "carol"):
+            recipient = User.objects.create_user(username=name, password="pass")
+            FileShare.objects.create(
+                file=shared, shared_by=self.user, shared_with=recipient
+            )
+
+        self.assertEqual(self.root.get_member_names(), ["shared.txt"])
+        self.assertEqual(len(self.root.get_member_list()), 1)
+
     def test_member_names_excludes_nested(self):
         folder = FileService.create_folder(self.user, "Dir")
         FileService.create_file(
@@ -302,6 +314,16 @@ class FolderResourceTests(TestCase):
         self.environ = _make_environ(user=self.user)
         self.folder = FileService.create_folder(self.user, "Docs")
         self.res = FolderResource("/Docs", self.environ, self.folder)
+
+    def test_a_file_shared_with_several_people_is_listed_once(self):
+        shared = FileService.create_file(self.user, "shared.txt", parent=self.folder)
+        for name in ("bob", "carol"):
+            recipient = User.objects.create_user(username=name, password="pass")
+            FileShare.objects.create(
+                file=shared, shared_by=self.user, shared_with=recipient
+            )
+
+        self.assertEqual(self.res.get_member_names(), ["shared.txt"])
 
     def test_display_info(self):
         self.assertEqual(self.res.get_display_info(), {"type": "Directory"})

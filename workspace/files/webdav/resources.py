@@ -227,11 +227,13 @@ class _Collection(DAVCollection):
 
     def _members(self):
         if not hasattr(self, "_members_cache"):
+            # The access filter joins the shares: a node comes back once per
+            # share it has.
             self._members_cache = list(
                 dav_nodes(
                     accessible_files_q(self._user),
                     parent=self._file,
-                )
+                ).distinct()
             )
         return self._members_cache
 

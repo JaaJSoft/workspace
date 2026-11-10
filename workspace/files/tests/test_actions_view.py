@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.actions import ActionRegistry
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 
 from .test_actions import _make_file, _make_folder
 

@@ -26,7 +26,7 @@ from workspace.common.stored_content import (
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
 from workspace.files.models import File, FileScan
-from workspace.files.services import FileService
+from workspace.files.queries import accessible_files_q
 from workspace.files.services.downloads import signed_redirect
 from workspace.files.services.image_edits import downloads_edited, render_edited
 from workspace.files.services.scanning.policy import (
@@ -440,7 +440,7 @@ class ContentMixin:
                 )
             file_objects.extend(
                 File.objects.filter(
-                    FileService.accessible_files_q(request.user),
+                    accessible_files_q(request.user),
                     uuid__in=chunk,
                     deleted_at__isnull=True,
                 )

@@ -22,9 +22,15 @@ from django.utils import timezone
 from workspace.core.sse_registry import push_user_event
 
 from ..models import File, FileOperation
+from ..queries import (
+    can_create_in,
+    get_permission,
+    get_permissions_bulk,
+    owned_files_qs,
+    trash_permission,
+)
 from ..sse_provider import SLUG
 from .extract import extract_item
-from .files import FileService
 from .quota import subtree_bytes
 from .refusals import Refusal, Refused
 from .transfers import OnConflict, Outcome, copy_item, move_item
@@ -89,7 +95,7 @@ def create_operation(user, kind, items, target_uuid=None):
     target = None
     if kind in TARGETED_KINDS and target_uuid is not None:
         target = File.objects.filter(pk=target_uuid).first()
-        if target is None or not FileService.can_create_in(user, target):
+        if target is None or not can_create_in(user, target):
             raise TargetUnavailable
     active = FileOperation.objects.filter(
         owner=user, status__in=FileOperation.ACTIVE_STATUSES
@@ -123,7 +129,7 @@ def _trash_roots(user):
     trashed, and emptying it must not destroy that. A node inside another of
     their trashed folders goes with that folder.
     """
-    trashed = FileService.owned_files_qs(user).filter(deleted_at__isnull=False)
+    trashed = owned_files_qs(user).filter(deleted_at__isnull=False)
     return list(
         trashed.exclude(parent__in=trashed.values("pk")).values_list("pk", flat=True)
     )
@@ -289,7 +295,7 @@ class _Runner:
         uuids = [item["uuid"] for item in self.operation.items]
         for batch in batched(uuids, _MEASURE_BATCH, strict=False):
             nodes = list(File.objects.filter(pk__in=batch, deleted_at__isnull=True))
-            permissions = FileService.get_permissions_bulk(self.user, nodes)
+            permissions = get_permissions_bulk(self.user, nodes)
             total += sum(
                 _weight(node) for node in nodes if permissions[node.pk] is not None
             )
@@ -300,11 +306,7 @@ class _Runner:
         node = File.objects.filter(
             pk=item["uuid"], deleted_at__isnull=not self.in_trash
         ).first()
-        permission = (
-            FileService.trash_permission
-            if self.in_trash
-            else FileService.get_permission
-        )
+        permission = trash_permission if self.in_trash else get_permission
         if node is None or permission(self.user, node) is None:
             self._record_failure(item, None, NOT_FOUND)
             return

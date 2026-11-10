@@ -17,7 +17,14 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileEvent, FileShare
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import (
+    FilePermission,
+    accessible_file_ids,
+    accessible_files_q,
+    get_permission,
+    get_permissions_bulk,
+)
+from workspace.files.services import FileService
 from workspace.files.services.comments import mentionable_users
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.sse_provider import FilesSSEProvider, push_file_event
@@ -105,30 +112,26 @@ class FileShareTargetConstraintTests(GroupShareFixtures, TestCase):
 class GroupSharePermissionTests(GroupShareFixtures, TestCase):
     def test_ro_group_share_grants_view_to_members(self):
         self._share_with_team("ro")
-        self.assertEqual(
-            FileService.get_permission(self.member, self.file), FilePermission.VIEW
-        )
+        self.assertEqual(get_permission(self.member, self.file), FilePermission.VIEW)
 
     def test_rw_group_share_grants_write_to_members(self):
         self._share_with_team("rw")
-        self.assertEqual(
-            FileService.get_permission(self.member, self.file), FilePermission.WRITE
-        )
+        self.assertEqual(get_permission(self.member, self.file), FilePermission.WRITE)
 
     def test_non_member_gets_nothing(self):
         self._share_with_team("rw")
-        self.assertIsNone(FileService.get_permission(self.outsider, self.file))
+        self.assertIsNone(get_permission(self.outsider, self.file))
 
     def test_leaving_the_group_revokes_access(self):
         self._share_with_team("rw")
         self.member.groups.remove(self.team)
-        self.assertIsNone(FileService.get_permission(self.member, self.file))
+        self.assertIsNone(get_permission(self.member, self.file))
 
     def test_joining_the_group_grants_access(self):
         self._share_with_team("rw")
         self.outsider.groups.add(self.team)
         self.assertEqual(
-            FileService.get_permission(self.outsider, self.file),
+            get_permission(self.outsider, self.file),
             FilePermission.WRITE,
         )
 
@@ -140,15 +143,13 @@ class GroupSharePermissionTests(GroupShareFixtures, TestCase):
             shared_with=self.member,
             permission="rw",
         )
-        self.assertEqual(
-            FileService.get_permission(self.member, self.file), FilePermission.WRITE
-        )
+        self.assertEqual(get_permission(self.member, self.file), FilePermission.WRITE)
 
     def test_trashed_file_is_not_reachable_through_a_group_share(self):
         self._share_with_team("rw")
         FileService.soft_delete(self.file, acting_user=self.owner)
         self.file.refresh_from_db()
-        self.assertIsNone(FileService.get_permission(self.member, self.file))
+        self.assertIsNone(get_permission(self.member, self.file))
 
     def test_bulk_resolution_mixes_targets_in_one_pass(self):
         other = File.objects.create(
@@ -158,7 +159,7 @@ class GroupSharePermissionTests(GroupShareFixtures, TestCase):
         FileShare.objects.create(
             file=other, shared_by=self.owner, shared_with=self.member, permission="rw"
         )
-        perms = FileService.get_permissions_bulk(self.member, [self.file, other])
+        perms = get_permissions_bulk(self.member, [self.file, other])
         self.assertEqual(perms[self.file.pk], FilePermission.VIEW)
         self.assertEqual(perms[other.pk], FilePermission.WRITE)
 
@@ -166,26 +167,24 @@ class GroupSharePermissionTests(GroupShareFixtures, TestCase):
 class GroupShareAccessQuerysetTests(GroupShareFixtures, TestCase):
     def test_accessible_files_q_includes_group_shared_file(self):
         self._share_with_team()
-        qs = File.objects.filter(FileService.accessible_files_q(self.member))
+        qs = File.objects.filter(accessible_files_q(self.member))
         self.assertIn(self.file, qs)
-        qs = File.objects.filter(FileService.accessible_files_q(self.outsider))
+        qs = File.objects.filter(accessible_files_q(self.outsider))
         self.assertNotIn(self.file, qs)
 
     def test_accessible_file_ids_includes_group_shared_file(self):
         self._share_with_team()
-        self.assertIn(self.file.pk, set(FileService.accessible_file_ids(self.member)))
-        self.assertNotIn(
-            self.file.pk, set(FileService.accessible_file_ids(self.outsider))
-        )
+        self.assertIn(self.file.pk, set(accessible_file_ids(self.member)))
+        self.assertNotIn(self.file.pk, set(accessible_file_ids(self.outsider)))
 
     def test_no_duplicates_when_shared_with_user_and_group(self):
         self._share_with_team()
         FileShare.objects.create(
             file=self.file, shared_by=self.owner, shared_with=self.member
         )
-        qs = File.objects.filter(FileService.accessible_files_q(self.member))
+        qs = File.objects.filter(accessible_files_q(self.member))
         self.assertEqual(qs.distinct().count(), 1)
-        self.assertEqual(len(list(FileService.accessible_file_ids(self.member))), 1)
+        self.assertEqual(len(list(accessible_file_ids(self.member))), 1)
 
 
 class GroupShareServiceTests(GroupShareFixtures, TestCase):

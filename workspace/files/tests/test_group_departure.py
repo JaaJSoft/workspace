@@ -25,7 +25,14 @@ from workspace.files.models import (
     FileShare,
     FileShareLink,
 )
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import (
+    FilePermission,
+    accessible_file_ids,
+    accessible_files_q,
+    get_permission,
+    get_permissions_bulk,
+)
+from workspace.files.services import FileService
 from workspace.files.services.events import recent_feed_events
 from workspace.files.services.sharing import create_share_link, share_file
 from workspace.files.tests import test_webdav
@@ -70,18 +77,18 @@ class OwnerPermissionTests(_DepartureFixture, TestCase):
 
     def test_a_member_manages_the_group_nodes_they_created(self):
         self.assertEqual(
-            FileService.get_permission(self.alice, self.alice_sub),
+            get_permission(self.alice, self.alice_sub),
             FilePermission.MANAGE,
         )
         self.assertEqual(
-            FileService.get_permission(self.alice, self.bob_secret),
+            get_permission(self.alice, self.bob_secret),
             FilePermission.EDIT,
         )
 
     def test_a_former_member_loses_the_group_nodes_they_created(self):
         self.alice.groups.remove(self.team)
 
-        permissions = FileService.get_permissions_bulk(
+        permissions = get_permissions_bulk(
             self.alice, [self.alice_sub, self.alice_note, self.bob_secret]
         )
 
@@ -92,18 +99,18 @@ class OwnerPermissionTests(_DepartureFixture, TestCase):
         self.alice_note.refresh_from_db()
         self.alice.groups.remove(self.team)
 
-        self.assertIsNone(FileService.get_permission(self.alice, self.alice_note))
+        self.assertIsNone(get_permission(self.alice, self.alice_note))
 
     def test_access_querysets_drop_them_too(self):
         self.alice.groups.remove(self.team)
         group_nodes = {self.alice_sub.pk, self.alice_note.pk, self.bob_secret.pk}
 
         by_q = set(
-            File.objects.filter(FileService.accessible_files_q(self.alice))
+            File.objects.filter(accessible_files_q(self.alice))
             .values_list("pk", flat=True)
             .distinct()
         )
-        by_ids = set(FileService.accessible_file_ids(self.alice))
+        by_ids = set(accessible_file_ids(self.alice))
 
         self.assertFalse(by_q & group_nodes)
         self.assertFalse(by_ids & group_nodes)
@@ -112,10 +119,8 @@ class OwnerPermissionTests(_DepartureFixture, TestCase):
         mine = FileService.create_folder(self.alice, "Mine")
         self.alice.groups.remove(self.team)
 
-        self.assertEqual(
-            FileService.get_permission(self.alice, mine), FilePermission.MANAGE
-        )
-        self.assertIn(mine.pk, set(FileService.accessible_file_ids(self.alice)))
+        self.assertEqual(get_permission(self.alice, mine), FilePermission.MANAGE)
+        self.assertIn(mine.pk, set(accessible_file_ids(self.alice)))
 
     def test_dashboard_feed_skips_events_on_their_former_group_nodes(self):
         FileService.rename(self.alice_note, "renamed.txt", acting_user=self.bob)
@@ -338,7 +343,7 @@ class ShareRevocationTests(_DepartureFixture, TestCase):
     def _assert_only_alices_group_shares_revoked(self):
         remaining = set(FileShare.objects.values_list("pk", flat=True))
         self.assertEqual(remaining, {self.personal.pk, self.bobs.pk})
-        self.assertIsNone(FileService.get_permission(self.carol, self.alice_note))
+        self.assertIsNone(get_permission(self.carol, self.alice_note))
 
     def test_removing_the_user_from_the_group_revokes_their_shares_there(self):
         self.alice.groups.remove(self.team)

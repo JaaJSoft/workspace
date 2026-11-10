@@ -469,32 +469,35 @@ owned, subscribed = visible_calendars(user)
 events = Event.objects.filter(visible_events_q(user), title__icontains=query)
 ```
 
-#### Files - `workspace.files.services.FileService`
+#### Files - `workspace.files.queries`
 
 ```python
-from workspace.files.services import FileService
+from workspace.files.queries import (
+    accessible_files_q, can_access, get_permission, owned_files_qs,
+    restorable_files_qs, user_files_qs, user_group_files_qs,
+)
 
 # All accessible files (owned + group + shared) - returns Q filter, does NOT filter deleted_at:
-q = FileService.accessible_files_q(user)
+q = accessible_files_q(user)
 
 # Personal files only (owned, non-deleted, no group):
-qs = FileService.user_files_qs(user)
+qs = user_files_qs(user)
 
 # Nodes the user owns and still manages (personal + group nodes of groups they are still in), deleted_at NOT filtered:
-qs = FileService.owned_files_qs(user)
+qs = owned_files_qs(user)
 
 # Trashed nodes the user may restore (personal + every node of their groups), deleted_at NOT filtered;
 # trash_permission(user, file_obj) is get_permission with EDIT on the group's trashed nodes for its members:
-qs = FileService.restorable_files_qs(user)
+qs = restorable_files_qs(user)
 
 # Group files only (non-deleted, from user's groups):
-qs = FileService.user_group_files_qs(user)
+qs = user_group_files_qs(user)
 
 # Single-file permission check - returns FilePermission (MANAGE/EDIT/WRITE/VIEW) or None:
-perm = FileService.get_permission(user, file_obj)
+perm = get_permission(user, file_obj)
 
 # Quick boolean access check:
-if FileService.can_access(user, file_obj):
+if can_access(user, file_obj):
     ...
 ```
 
@@ -527,14 +530,14 @@ from workspace.photos.queries import (
 
 files = library_files(user)          # the user's personal analyzed photos and videos, as live File rows
 files = library_files(user, SHARED)  # photos other people shared with the user (directly, via a group or a project)
-files = library_files(user, ALL)     # every photo the user can open (FileService.accessible_file_ids)
+files = library_files(user, ALL)     # every photo the user can open (files.queries.accessible_file_ids)
 files = library_files(user, group)   # one group's folder; empty for a group the user is not in
 tags = library_tags(user, scope)     # the user's tags carried by a photo in scope, with photo_count
 groups = library_groups(user)        # the user's groups whose folder holds a photo
 shared = has_shared_photos(user)     # whether the Shared with me tab has anything to show
 ```
 
-The scopes start from the `FileService` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `MediaItem` row, and quarantined files are excluded. A raster image or a video without a `MediaItem` row has not been analyzed yet; it is not in the library. `MediaItem.media_type` tells photos and videos apart, and a video container pinned to the audio viewer (a voice recording) is neither.
+The scopes start from the `files.queries` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `MediaItem` row, and quarantined files are excluded. A raster image or a video without a `MediaItem` row has not been analyzed yet; it is not in the library. `MediaItem.media_type` tells photos and videos apart, and a video container pinned to the audio viewer (a voice recording) is neither.
 
 Albums have their own helpers in the same module:
 

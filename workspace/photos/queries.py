@@ -1,7 +1,7 @@
 """Access helpers for the photo library.
 
 The library is a way of reading files the user can already open, so access is
-the files module's: every queryset here starts from a ``FileService`` helper
+the files module's: every queryset here starts from a ``files.queries`` helper
 or from ``FileShare.objects.reaching``.
 
 A *scope* picks which of those files the library reads: ``MINE`` (the
@@ -14,7 +14,7 @@ share reaches) see the items each contributor vouches for, the files the
 contributor could share in Files anyway, plus any item they can open
 themselves. An item whose file went to the trash, was quarantined, or that
 nobody in reach may pass on drops out of the album instead of leaking
-through it. Album-scoped endpoints serve those files, never ``FileService``.
+through it. Album-scoped endpoints serve those files, never ``files.queries``.
 
 Faces and their clusters are the user's own and only ever in their personal
 photos and videos (see services/face_analysis.py); the helpers at the end
@@ -42,7 +42,11 @@ from django.db.models.functions import Lower, RowNumber, StrIndex
 from django.db.models.lookups import Exact
 
 from workspace.files.models import File, FileShare, Tag
-from workspace.files.services import FileService
+from workspace.files.queries import (
+    accessible_file_ids,
+    user_files_qs,
+    user_group_files_qs,
+)
 from workspace.files.services.scanning.policy import exclude_blocked
 from workspace.people.queries import user_persons
 from workspace.photos.models import (
@@ -119,7 +123,7 @@ def _visibility(user, files, hidden):
 
 def _scoped_media(user, scope, hidden=False):
     if scope == MINE:
-        files = FileService.user_files_qs(user)
+        files = user_files_qs(user)
     elif scope == SHARED:
         # Sharing with someone is file-only, so the share rows are the whole
         # answer: no folder to descend into.
@@ -129,12 +133,12 @@ def _scoped_media(user, scope, hidden=False):
         ).exclude(owner=user)
     elif scope == ALL:
         files = File.objects.filter(
-            pk__in=FileService.accessible_file_ids(user, include_deleted=False)
+            pk__in=accessible_file_ids(user, include_deleted=False)
         )
     else:
         # Narrowed from the user's own groups, so a group they left, or never
         # joined, reads as empty rather than as someone else's folder.
-        files = FileService.user_group_files_qs(user).filter(group=scope)
+        files = user_group_files_qs(user).filter(group=scope)
     return _visibility(user, _media(files), hidden)
 
 
@@ -178,7 +182,7 @@ def library_tags(user, scope=MINE):
 def library_groups(user):
     """The user's groups whose folder holds at least one photo, by name."""
     group_photos = _visibility(
-        user, _media(FileService.user_group_files_qs(user)), hidden=False
+        user, _media(user_group_files_qs(user)), hidden=False
     ).filter(media_item__isnull=False)
     return Group.objects.filter(pk__in=group_photos.values("group_id")).order_by(
         Lower("name")
@@ -192,16 +196,16 @@ def has_shared_photos(user):
 
 def _folders(user):
     """The live folders of *user*'s own tree and of their groups'."""
-    return (
-        FileService.user_files_qs(user) | FileService.user_group_files_qs(user)
-    ).filter(node_type=File.NodeType.FOLDER)
+    return (user_files_qs(user) | user_group_files_qs(user)).filter(
+        node_type=File.NodeType.FOLDER
+    )
 
 
 def hideable_files(user):
     """What *user* may hide: the photos and videos they can open, and their
     own and their groups' folders. Trashed files excluded."""
     reachable = File.objects.filter(
-        pk__in=FileService.accessible_file_ids(user, include_deleted=False)
+        pk__in=accessible_file_ids(user, include_deleted=False)
     )
     return File.objects.filter(
         Q(pk__in=library_candidates(reachable).values("pk"))
@@ -394,7 +398,7 @@ def visible_album_items(user, albums):
         album__in=albums, file_id__in=media.values("pk")
     ).filter(
         vouched_items_q()
-        | Q(file_id__in=FileService.accessible_file_ids(user, include_deleted=False))
+        | Q(file_id__in=accessible_file_ids(user, include_deleted=False))
     )
 
 
@@ -426,7 +430,7 @@ def album_files(user, album):
 def contributable_files(user):
     """The photos and videos *user* may add to an album as an invited
     member: their own and their groups', the files they can vouch for."""
-    files = FileService.user_files_qs(user) | FileService.user_group_files_qs(user)
+    files = user_files_qs(user) | user_group_files_qs(user)
     return _visibility(user, _media(files), hidden=False).filter(
         media_item__isnull=False
     )
@@ -599,11 +603,7 @@ def face_progress(user):
         pending_faces_qs,
     )
 
-    total = (
-        exclude_blocked(face_candidates(FileService.user_files_qs(user)))
-        .with_blob()
-        .count()
-    )
+    total = exclude_blocked(face_candidates(user_files_qs(user))).with_blob().count()
     pending = (
         pending_faces_qs().filter(owner=user).count() if faces_enabled(user) else total
     )

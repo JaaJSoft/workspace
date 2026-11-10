@@ -1,6 +1,7 @@
 from django.utils.translation import gettext_lazy as _
 
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission
+from workspace.files.services import FileService
 from workspace.files.services.image_edits import can_edit_type
 from workspace.files.services.scanning.policy import is_blocked
 

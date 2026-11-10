@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.queries import accessible_files_q, get_permissions_bulk
 from workspace.files.services.scanning.policy import exclude_blocked
 from workspace.users.services.settings import get_user_timezone
 
@@ -95,7 +95,7 @@ class CaptureDetailsView(APIView):
         files = list(
             exclude_blocked(
                 File.objects.filter(
-                    FileService.accessible_files_q(request.user),
+                    accessible_files_q(request.user),
                     uuid__in=uuids,
                     media_item__isnull=False,
                 )
@@ -106,7 +106,7 @@ class CaptureDetailsView(APIView):
                 {"detail": "One or more photos not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        permissions = FileService.get_permissions_bulk(request.user, files)
+        permissions = get_permissions_bulk(request.user, files)
         if not all(
             capture_details.can_edit_capture_details(f, permissions[f.pk])
             for f in files

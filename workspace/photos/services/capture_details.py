@@ -15,7 +15,7 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 
 from ..models import MediaItem
 

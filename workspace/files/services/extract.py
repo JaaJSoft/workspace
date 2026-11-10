@@ -20,6 +20,7 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
 from ..models import File
+from ..queries import can_create_in
 from ._names import sibling_nodes
 from .files import FileService
 from .quota import check_write_allowed, remaining_bytes
@@ -299,9 +300,7 @@ def _ensure_folder_chain(parts, folder_cache, acting_user):
             .filter(name_key=caseless(segment), node_type=File.NodeType.FOLDER)
             .first()
         )
-        if existing is not None and not FileService.can_create_in(
-            acting_user, existing
-        ):
+        if existing is not None and not can_create_in(acting_user, existing):
             raise ValueError("Cannot extract into a folder you cannot edit")
         if existing is None:
             existing = FileService.create_folder(

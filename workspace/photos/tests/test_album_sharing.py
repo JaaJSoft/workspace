@@ -11,7 +11,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.queries import get_permission
 from workspace.files.services.sharing import share_file
 from workspace.notifications.models import Notification
 from workspace.photos.actions import AlbumActionRegistry
@@ -173,7 +173,7 @@ class AlbumVisibilityTests(SharingTestCase):
     def test_a_member_sees_the_owners_photos_they_cannot_open_in_files(self):
         self.share()
 
-        self.assertIsNone(FileService.get_permission(self.bob, self.photo))
+        self.assertIsNone(get_permission(self.bob, self.photo))
         self.assertEqual(list(album_files(self.bob, self.album)), [self.photo])
 
     def test_an_outsider_sees_nothing(self):

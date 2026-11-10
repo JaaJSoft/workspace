@@ -9,6 +9,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
 from workspace.files.models import File, canonical_name
+from workspace.files.queries import user_files_qs
 from workspace.files.services import FileService, relocations
 from workspace.files.services._storage_ops import unique_copy_name
 from workspace.files.services.shortcuts import rename_aside
@@ -75,7 +76,7 @@ class _NodeIndex:
     def for_subtree(cls, user):
         """Index every personal row the user owns, live and trashed."""
         index = cls()
-        live = _live_nodes(FileService.user_files_qs(user))
+        live = _live_nodes(user_files_qs(user))
         trashed = File.objects.filter(owner=user, deleted_at__isnull=False).values_list(
             "name", "node_type", "parent_id"
         )
@@ -86,7 +87,7 @@ class _NodeIndex:
     def for_level(cls, user, parent_db):
         """Index a single directory level - the shallow, on-demand path."""
         index = cls()
-        live = _live_nodes(FileService.user_files_qs(user).filter(parent=parent_db))
+        live = _live_nodes(user_files_qs(user).filter(parent=parent_db))
         trashed = File.objects.filter(
             owner=user, parent=parent_db, deleted_at__isnull=False
         ).values_list("name", "node_type", "parent_id")

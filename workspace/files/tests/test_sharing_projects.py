@@ -16,7 +16,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileEvent, FileShare
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import (
+    FilePermission,
+    accessible_file_ids,
+    accessible_files_q,
+    get_permission,
+)
+from workspace.files.services import FileService
 from workspace.files.services.comments import mentionable_users
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.sse_provider import FilesSSEProvider, push_file_event
@@ -81,34 +87,30 @@ class ProjectShareConstraintTests(ProjectShareFixtures, TestCase):
 class ProjectSharePermissionTests(ProjectShareFixtures, TestCase):
     def test_member_gets_view_through_the_project(self):
         self._share_with_project()
-        self.assertEqual(
-            FileService.get_permission(self.member, self.file), FilePermission.VIEW
-        )
+        self.assertEqual(get_permission(self.member, self.file), FilePermission.VIEW)
 
     def test_group_member_gets_write_through_the_project(self):
         self._share_with_project("rw")
-        self.assertEqual(
-            FileService.get_permission(self.grouped, self.file), FilePermission.WRITE
-        )
+        self.assertEqual(get_permission(self.grouped, self.file), FilePermission.WRITE)
 
     def test_outsider_gets_nothing(self):
         self._share_with_project("rw")
-        self.assertIsNone(FileService.get_permission(self.outsider, self.file))
+        self.assertIsNone(get_permission(self.outsider, self.file))
 
     def test_leaving_the_project_revokes_access(self):
         self._share_with_project()
         remove_member(self.membership)
-        self.assertIsNone(FileService.get_permission(self.member, self.file))
+        self.assertIsNone(get_permission(self.member, self.file))
 
     def test_accessible_files_include_the_project_share(self):
         self._share_with_project()
-        accessible = File.objects.filter(FileService.accessible_files_q(self.member))
+        accessible = File.objects.filter(accessible_files_q(self.member))
         self.assertIn(self.file, accessible)
-        ids = set(FileService.accessible_file_ids(self.member))
+        ids = set(accessible_file_ids(self.member))
         self.assertIn(self.file.pk, ids)
         self.assertNotIn(
             self.file,
-            File.objects.filter(FileService.accessible_files_q(self.outsider)),
+            File.objects.filter(accessible_files_q(self.outsider)),
         )
 
 

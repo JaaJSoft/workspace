@@ -12,6 +12,7 @@ from django.db import transaction
 from django.db.models import Q
 
 from ..models import File, FileEvent
+from ..queries import FilePermission, access_arms, accessible_file_ids
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +98,6 @@ _MANAGER_ONLY_METADATA = ("source_name", "source_uuid")
 
 
 def _is_manager(permission):
-    from .files import FilePermission
-
     return permission is not None and permission >= FilePermission.MANAGE
 
 
@@ -151,9 +150,7 @@ def _feed_arms(viewer, exclude_actor_id):
     someone else, and dropped from every other arm: ranked by their newest
     event, they would surface the very events the feed hides.
     """
-    from .files import FileService
-
-    arms = [{}] if viewer is None else FileService.access_arms(viewer)
+    arms = [{}] if viewer is None else access_arms(viewer)
     if exclude_actor_id is None or (
         viewer is not None and viewer.pk != exclude_actor_id
     ):
@@ -184,7 +181,7 @@ def recent_feed_events(
 
     *feed_q* is ``FILE_FEED_Q`` or ``NOTE_FEED_Q``. *owner_id* narrows to one
     user's files; *viewer* (``None`` for no access check) narrows to the files
-    they can access, per ``FileService.access_arms``; *exclude_actor_id* drops
+    they can access, per ``access_arms``; *exclude_actor_id* drops
     that user's events (system events, with no actor, stay).
 
     Each arm yields a batch of its files ranked by newest event, through the
@@ -197,8 +194,6 @@ def recent_feed_events(
     event), the batch widens until the page fills, then gives way to a read
     of the whole accessible set.
     """
-    from .files import FileService
-
     needed = offset + limit
     if needed <= 0:
         return []
@@ -232,7 +227,7 @@ def recent_feed_events(
         batch *= 4
 
     if viewer is not None:
-        files = files.filter(pk__in=FileService.accessible_file_ids(viewer))
+        files = files.filter(pk__in=accessible_file_ids(viewer))
     return list(events.filter(file__in=files)[offset:needed])
 
 

@@ -27,9 +27,9 @@ from workspace.files.models import (
     files_storage,
     name_forms,
 )
+from workspace.files.queries import FilePermission, accessible_files_q, get_permission
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
-from workspace.files.services.files import FilePermission
 from workspace.files.services.locking import (
     LockConflict,
     Relocated,
@@ -68,7 +68,7 @@ def _require_permission(user, file_obj, level, verb):
     """
     if file_obj is None:
         return
-    permission = FileService.get_permission(user, file_obj)
+    permission = get_permission(user, file_obj)
     if permission is None or permission < level:
         raise DAVError(HTTP_FORBIDDEN, f"{verb} is not allowed here")
 
@@ -229,7 +229,7 @@ class _Collection(DAVCollection):
         if not hasattr(self, "_members_cache"):
             self._members_cache = list(
                 dav_nodes(
-                    FileService.accessible_files_q(self._user),
+                    accessible_files_q(self._user),
                     parent=self._file,
                 )
             )
@@ -248,7 +248,7 @@ class _Collection(DAVCollection):
         # Through accessible_files_q, so a file another member created in a
         # group folder is found too, not just those self._user owns.
         file_obj = File.objects.filter(
-            FileService.accessible_files_q(self._user),
+            accessible_files_q(self._user),
             name__in=name_forms(name),
             parent=self._file,
             node_type=File.NodeType.FILE,
@@ -649,7 +649,7 @@ class FileResource(DAVNonCollection):
         believe it owns a file the browser editor is holding. A user who may
         not write the file has no business locking others out of it either.
         """
-        permission = FileService.get_permission(self._user, self._file)
+        permission = get_permission(self._user, self._file)
         if permission is None or permission < FilePermission.WRITE:
             return True
         return conflicting_lock(self._file, self._user) is not None
@@ -767,7 +767,7 @@ def _resolve_parent(user, path_parts):
         return None
     target_path = "/".join(path_parts)
     return File.objects.filter(
-        FileService.accessible_files_q(user),
+        accessible_files_q(user),
         path__in=name_forms(target_path),
         node_type=File.NodeType.FOLDER,
         deleted_at__isnull=True,

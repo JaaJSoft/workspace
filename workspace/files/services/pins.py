@@ -3,7 +3,7 @@
 from django.db.models import Exists, OuterRef
 
 from ..models import FileFavorite, PinnedFolder
-from .files import FileService
+from ..queries import accessible_file_ids
 
 
 def visible_pins(user):
@@ -19,7 +19,7 @@ def visible_pins(user):
     return (
         PinnedFolder.objects.filter(
             owner=user,
-            folder_id__in=FileService.accessible_file_ids(user, include_deleted=False),
+            folder_id__in=accessible_file_ids(user, include_deleted=False),
         )
         .select_related("folder")
         .annotate(

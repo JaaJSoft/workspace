@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.queries import get_permissions_bulk
 from workspace.files.services.filetype import get_color, get_icon
 from workspace.files.services.sharing import share_file, unshare_file
 
@@ -39,7 +39,7 @@ def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
     unique constraint is the backstop on backends where the locks do not
     serialize, and a duplicate is then skipped rather than surfaced.
     """
-    permissions = FileService.get_permissions_bulk(user, files)
+    permissions = get_permissions_bulk(user, files)
     for file_obj in files:
         if not ActionRegistry.is_action_available(
             "share", user, file_obj, permission=permissions.get(file_obj.pk)

@@ -6,12 +6,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from workspace.files.models import File, PinnedFolder
+from workspace.files.queries import annotate_for_serializer
 from workspace.files.serializers import (
     FileMarksResultSerializer,
     FileMarksSerializer,
     PinnedReorderSerializer,
 )
-from workspace.files.services import FileService
 from workspace.files.services.marks import set_favorite, set_pinned
 from workspace.files.services.pins import visible_pins
 
@@ -53,7 +53,7 @@ class FavoritesMixin:
         )
         # ``self.get_queryset()`` is owner-scoped (group__isnull=True) and would
         # silently drop any pinned group folder.
-        queryset = FileService.annotate_for_serializer(
+        queryset = annotate_for_serializer(
             File.objects.filter(pk__in=folder_ids), request.user
         )
         # Preserve pin order

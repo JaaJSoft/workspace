@@ -20,10 +20,16 @@ from enum import StrEnum
 
 from ..actions.base import UNRESOLVED
 from ..models import File, FileEvent, canonical_name
+from ..queries import (
+    FilePermission,
+    get_permission,
+    get_permissions_bulk,
+    trash_permissions_bulk,
+)
 from . import _names as _name_helpers
 from ._storage_ops import unique_copy_name
 from .events import record_event
-from .files import FilePermission, FileService, GroupMismatch
+from .files import FileService, GroupMismatch
 from .scanning.policy import with_scan
 
 
@@ -79,10 +85,7 @@ def create_shortcut(
     name = canonical_name(name or target.name)
     if target.node_type == File.NodeType.SHORTCUT:
         target = target.shortcut_target
-    if (
-        target.deleted_at is not None
-        or FileService.get_permission(owner, target) is None
-    ):
+    if target.deleted_at is not None or get_permission(owner, target) is None:
         raise TargetUnreachable()
 
     group = FileService.node_group(parent, group)
@@ -133,7 +136,7 @@ def resolve_shortcuts(user, nodes):
     """``{shortcut.pk: ShortcutResolution}`` for the shortcuts among *nodes*.
 
     One query for the targets and the permission lookups of
-    ``FileService.get_permissions_bulk`` for the whole batch, whatever its
+    ``get_permissions_bulk`` for the whole batch, whatever its
     size. A trashed target is reported as such only to whoever the trash
     shows it to (``trash_permissions_bulk``): its owner, or a member of its
     group. A share recipient learns nothing more than that it is unavailable.
@@ -149,8 +152,8 @@ def resolve_shortcuts(user, nodes):
     }
     live = [target for target in targets.values() if target.deleted_at is None]
     trashed = [target for target in targets.values() if target.deleted_at is not None]
-    permissions = FileService.get_permissions_bulk(user, live)
-    permissions.update(FileService.trash_permissions_bulk(user, trashed))
+    permissions = get_permissions_bulk(user, live)
+    permissions.update(trash_permissions_bulk(user, trashed))
 
     resolutions = {}
     for shortcut in shortcuts:

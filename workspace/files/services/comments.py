@@ -16,7 +16,7 @@ User = get_user_model()
 def mentionable_users(file_obj):
     """Users who can see *file_obj*: owner, group members, share targets.
 
-    Mirrors the access branches of ``FileService`` (owned / group folder /
+    Mirrors the access branches of ``files.queries`` (owned / group folder /
     shared with a user / shared with a group / shared with a project); keep
     the two in sync. Sorted by username for stable autocomplete lists.
     """

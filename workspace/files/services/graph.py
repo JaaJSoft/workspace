@@ -12,14 +12,19 @@ from __future__ import annotations
 from django.db.models import Q
 
 from ..models import File, FileLink
-from . import FileService
+from ..queries import (
+    accessible_file_ids,
+    accessible_files_q,
+    annotate_for_serializer,
+    user_files_qs,
+)
 
 
 def _folder(user, folder_uuid):
     """Return a folder among the user's accessible files, or None."""
     return (
         File.objects.filter(
-            FileService.accessible_files_q(user),
+            accessible_files_q(user),
             uuid=folder_uuid,
             deleted_at__isnull=True,
         )
@@ -74,10 +79,10 @@ def build_file_graph(
         # accessible_file_ids docstring). The pk__in form also can't fan out
         # duplicate rows, unlike the accessible_files_q shares join.
         base = File.objects.filter(
-            pk__in=FileService.accessible_file_ids(user, include_deleted=False)
+            pk__in=accessible_file_ids(user, include_deleted=False)
         )
     else:
-        base = FileService.user_files_qs(user)
+        base = user_files_qs(user)
 
     base = base.filter(node_type=File.NodeType.FILE)
     if file_type:
@@ -111,7 +116,7 @@ def build_file_graph(
     if attachments and file_type:
         linked = (
             File.objects.filter(
-                pk__in=FileService.accessible_file_ids(user, include_deleted=False),
+                pk__in=accessible_file_ids(user, include_deleted=False),
                 node_type=File.NodeType.FILE,
                 incoming_links__source__in=base.values("pk"),
             )
@@ -121,7 +126,7 @@ def build_file_graph(
         node_ids = File.objects.filter(
             Q(pk__in=base.values("pk")) | Q(pk__in=linked.values("pk"))
         ).values("pk")
-    base = FileService.annotate_for_serializer(base, user)
+    base = annotate_for_serializer(base, user)
 
     # Serialize nodes with the canonical FileSerializer so a graph node is the
     # exact same DTO the rest of the API returns for a file (uuid, type, icon,
@@ -133,7 +138,7 @@ def build_file_graph(
 
     files = list(base)
     if linked is not None:
-        files += FileService.annotate_for_serializer(linked, user)
+        files += annotate_for_serializer(linked, user)
     nodes = FileSerializer(files, many=True).data
 
     edges = [

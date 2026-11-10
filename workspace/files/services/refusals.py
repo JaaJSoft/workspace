@@ -9,8 +9,9 @@ exception the refusal came from stays reachable as ``__cause__``.
 from contextlib import contextmanager
 from enum import StrEnum
 
+from ..queries import can_create_in, get_permission, trash_permission
 from ._names import NameTaken
-from .files import FileService, GroupRootFolder
+from .files import GroupRootFolder
 from .locking import LockConflict, Relocated, StaleContent, conflicting_lock
 from .quota import QuotaExceeded
 from .scanning.policy import QuarantinedSource
@@ -75,9 +76,7 @@ def require_action(action_id, user, node, *, in_trash=False):
     from workspace.files.actions import ActionRegistry
 
     permission = (
-        FileService.trash_permission(user, node)
-        if in_trash
-        else FileService.get_permission(user, node)
+        trash_permission(user, node) if in_trash else get_permission(user, node)
     )
     if not ActionRegistry.is_action_available(
         action_id, user, node, permission=permission
@@ -87,7 +86,7 @@ def require_action(action_id, user, node, *, in_trash=False):
 
 def require_destination(user, parent):
     """Refuse unless *user* may add to *parent* (None is their own root)."""
-    if parent is not None and not FileService.can_create_in(user, parent):
+    if parent is not None and not can_create_in(user, parent):
         raise Refused(Refusal.TARGET)
 
 

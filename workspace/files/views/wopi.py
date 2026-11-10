@@ -30,7 +30,8 @@ from django.views.decorators.debug import sensitive_variables
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission, get_permission
+from workspace.files.services import FileService
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -65,7 +66,7 @@ def _authenticate(request, uuid):
     )
     if file_obj is None:
         raise Http404
-    perm = FileService.get_permission(user, file_obj)
+    perm = get_permission(user, file_obj)
     if perm is None:
         raise Http404
     can_write = token_can_write and perm >= FilePermission.WRITE

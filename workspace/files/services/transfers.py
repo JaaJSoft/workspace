@@ -12,9 +12,10 @@ from enum import StrEnum
 from django.db import transaction
 
 from ..models import File, canonical_name
+from ..queries import FilePermission, get_permission
 from ._names import NameTaken, find_node_conflict
 from .announcements import announce_replaced
-from .files import FilePermission, FileService, GroupRootFolder, new_owner_on_move
+from .files import FileService, GroupRootFolder, new_owner_on_move
 from .refusals import (
     Refusal,
     Refused,
@@ -60,7 +61,7 @@ def _require_target(user, node, parent):
 def _require_replaceable(user, existing, source):
     if not source.content:
         raise Refused(Refusal.NO_CONTENT)
-    permission = FileService.get_permission(user, existing)
+    permission = get_permission(user, existing)
     if permission is None or permission < FilePermission.WRITE:
         raise Refused(Refusal.NOT_REPLACEABLE)
     require_unlocked(user, existing)

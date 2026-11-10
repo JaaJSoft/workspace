@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.files.services import FileService
+from workspace.files.queries import user_files_qs
 from workspace.files.services.tags import (
     TagMergeError,
     merge_tags,
@@ -84,7 +84,7 @@ class FileTagView(APIView):
     @extend_schema(summary="Add a tag to a file", tags=["Files - Tags"])
     def post(self, request, file_uuid):
         file_obj = get_object_or_404(
-            FileService.user_files_qs(request.user),
+            user_files_qs(request.user),
             uuid=file_uuid,
         )
         tag_uuid_raw = request.data.get("tag")
@@ -113,7 +113,7 @@ class FileTagView(APIView):
     @extend_schema(summary="Remove a tag from a file", tags=["Files - Tags"])
     def delete(self, request, file_uuid, tag_uuid):
         file_obj = get_object_or_404(
-            FileService.user_files_qs(request.user),
+            user_files_qs(request.user),
             uuid=file_uuid,
         )
         ft = FileTag.objects.filter(file=file_obj, tag__uuid=tag_uuid).first()

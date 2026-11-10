@@ -260,12 +260,10 @@ class FileSerializerTypeDisplayTests(APITestCase):
         )
 
     def _data(self, **kwargs):
-        from workspace.files.services import FileService
+        from workspace.files.queries import annotate_for_serializer
 
         node = File.objects.create(owner=self.user, **kwargs)
-        qs = FileService.annotate_for_serializer(
-            File.objects.filter(pk=node.pk), self.user
-        )
+        qs = annotate_for_serializer(File.objects.filter(pk=node.pk), self.user)
         return FileSerializer(qs.get()).data
 
     def test_file_icon_and_color_come_from_the_registry(self):

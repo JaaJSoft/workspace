@@ -1,3 +1,3 @@
-from .files import FilePermission, FileService
+from .files import FileService
 
-__all__ = ["FilePermission", "FileService"]
+__all__ = ["FileService"]

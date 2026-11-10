@@ -13,7 +13,8 @@ from django.core.files.base import ContentFile
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission, get_permission, trash_permission
+from workspace.files.services import FileService
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -123,13 +124,9 @@ class GroupTrashTests(APITestCase):
         FileService.soft_delete(self.folder, acting_user=self.bob)
         self.folder.refresh_from_db()
 
-        self.assertEqual(
-            FileService.trash_permission(self.alice, self.folder), FilePermission.EDIT
-        )
-        self.assertIsNone(FileService.get_permission(self.alice, self.folder))
-        self.assertEqual(
-            FileService.trash_permission(self.alice, self.root), FilePermission.EDIT
-        )
+        self.assertEqual(trash_permission(self.alice, self.folder), FilePermission.EDIT)
+        self.assertIsNone(get_permission(self.alice, self.folder))
+        self.assertEqual(trash_permission(self.alice, self.root), FilePermission.EDIT)
 
     def _assert_locked_out(self, user):
         self.client.force_authenticate(user)

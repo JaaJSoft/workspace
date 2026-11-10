@@ -42,7 +42,7 @@ from django.utils import timezone
 from workspace.common.uuids import UUID_PATTERN
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileFavorite
-from workspace.files.services import FileService
+from workspace.files.queries import get_permissions_bulk
 from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.photos.models import AlbumItem
 from workspace.photos.services.capture_details import can_edit_capture_details
@@ -252,7 +252,7 @@ def mark_tile_actions(photos, user, permissions=None):
     unless the caller already has them.
     """
     if permissions is None:
-        permissions = FileService.get_permissions_bulk(user, photos)
+        permissions = get_permissions_bulk(user, photos)
     for photo in photos:
         permission = permissions[photo.pk]
         photo.can_favorite = ActionRegistry.is_action_available(
@@ -289,7 +289,7 @@ def mark_album_tiles(photos, user, album, role):
     from workspace.photos.actions import AlbumActionRegistry
     from workspace.photos.queries import CONTRIBUTOR, MANAGER, OWNER
 
-    permissions = FileService.get_permissions_bulk(user, photos)
+    permissions = get_permissions_bulk(user, photos)
     mark_tile_actions(photos, user, permissions)
     download = AlbumActionRegistry.is_action_available(
         "download", user, album, role=role

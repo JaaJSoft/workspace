@@ -8,7 +8,16 @@ from rest_framework import serializers
 from rest_framework.exceptions import APIException, PermissionDenied
 
 from workspace.common.services.mentions import render_comment_body
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import (
+    FilePermission,
+    accessible_files_q,
+    annotate_for_serializer,
+    can_create_in,
+    get_permission,
+    reads_full_path,
+    visible_path,
+)
+from workspace.files.services import FileService
 from workspace.files.services._names import (
     FILE_NAME_TAKEN,
     FOLDER_NAME_TAKEN,
@@ -135,7 +144,7 @@ def content_write_refusals():
 
 def ensure_replaceable(user, target):
     """Raise unless *user* may overwrite *target*'s content right now."""
-    permission = FileService.get_permission(user, target)
+    permission = get_permission(user, target)
     if permission is None or permission < FilePermission.WRITE:
         raise PermissionDenied(gettext("You cannot replace the existing file."))
     ensure_unlocked(user, target)
@@ -166,7 +175,7 @@ def _require_annotation(obj, name):
 
     ``FileSerializer`` deliberately has no DB fallback when an annotation is
     missing — callers must pipe their queryset through
-    ``FileService.annotate_for_serializer`` before handing it to the serializer.
+    ``annotate_for_serializer`` before handing it to the serializer.
     This helper turns a missing annotation into a clear exception instead of a
     silent N+1.
     """
@@ -175,7 +184,7 @@ def _require_annotation(obj, name):
     except AttributeError as exc:
         raise AttributeError(
             f"FileSerializer requires the {name!r} annotation. "
-            f"Use FileService.annotate_for_serializer(qs, user) on the queryset."
+            f"Use annotate_for_serializer(qs, user) on the queryset."
         ) from exc
 
 
@@ -219,7 +228,7 @@ class ReachableNodeField(serializers.PrimaryKeyRelatedField):
         # distinct: the share branches of the access filter join one row per
         # share, and get() would find a node shared twice two times.
         return File.objects.filter(
-            FileService.accessible_files_q(user), deleted_at__isnull=True
+            accessible_files_q(user), deleted_at__isnull=True
         ).distinct()
 
 
@@ -465,7 +474,7 @@ class FileSerializer(serializers.ModelSerializer):
         target = resolution.target
         if target is None:
             return {"state": resolution.state, "target": None}
-        reads_full_path = FileService.reads_full_path(resolution.permission)
+        full_path_readable = reads_full_path(resolution.permission)
         return {
             "state": resolution.state,
             "target": {
@@ -476,10 +485,10 @@ class FileSerializer(serializers.ModelSerializer):
                 # owner's: neither their names nor their uuids.
                 "parent": (
                     str(target.parent_id)
-                    if reads_full_path and target.parent_id
+                    if full_path_readable and target.parent_id
                     else None
                 ),
-                "path": FileService.visible_path(target, resolution.permission),
+                "path": visible_path(target, resolution.permission),
                 "mime_type": target.mime_type,
                 "type": target.type,
                 "category": target.category,
@@ -632,7 +641,7 @@ class FileSerializer(serializers.ModelSerializer):
         if (
             instance is None
             and parent is not None
-            and not FileService.can_create_in(self.context["request"].user, parent)
+            and not can_create_in(self.context["request"].user, parent)
         ):
             # Same answer as a UUID that matches no row: the refusal must not
             # reveal that someone else's folder exists.
@@ -803,7 +812,7 @@ class FileSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         ensure_replaceable(user, target)
 
-        instance = FileService.annotate_for_serializer(
+        instance = annotate_for_serializer(
             File.objects.filter(pk=target.pk), user
         ).first()
         with content_write_refusals():

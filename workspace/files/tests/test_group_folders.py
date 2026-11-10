@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.queries import can_access, user_files_qs, user_group_files_qs
 from workspace.files.services import FileService
 from workspace.files.services._storage_ops import folder_storage_path
 from workspace.files.tests.operations import outcome_of, run_operation
@@ -243,24 +244,24 @@ class GroupAccessControlTests(TestCase):
         )
 
     def test_can_access_group_file_as_member(self):
-        self.assertTrue(FileService.can_access(self.bob, self.group_file))
+        self.assertTrue(can_access(self.bob, self.group_file))
 
     def test_can_access_group_folder_as_member(self):
-        self.assertTrue(FileService.can_access(self.bob, self.root))
+        self.assertTrue(can_access(self.bob, self.root))
 
     def test_cannot_access_group_file_as_outsider(self):
-        self.assertFalse(FileService.can_access(self.outsider, self.group_file))
+        self.assertFalse(can_access(self.outsider, self.group_file))
 
     def test_can_access_group_file_as_owner(self):
-        self.assertTrue(FileService.can_access(self.alice, self.group_file))
+        self.assertTrue(can_access(self.alice, self.group_file))
 
     def test_user_group_files_qs_returns_group_files(self):
-        qs = FileService.user_group_files_qs(self.bob)
+        qs = user_group_files_qs(self.bob)
         self.assertIn(self.root, qs)
         self.assertIn(self.group_file, qs)
 
     def test_user_group_files_qs_excludes_non_member(self):
-        qs = FileService.user_group_files_qs(self.outsider)
+        qs = user_group_files_qs(self.outsider)
         self.assertEqual(qs.count(), 0)
 
     def test_user_files_qs_excludes_group_files(self):
@@ -270,7 +271,7 @@ class GroupAccessControlTests(TestCase):
             node_type=File.NodeType.FILE,
             mime_type="text/plain",
         )
-        qs = FileService.user_files_qs(self.bob)
+        qs = user_files_qs(self.bob)
         self.assertIn(personal, qs)
         self.assertNotIn(self.group_file, qs)
 

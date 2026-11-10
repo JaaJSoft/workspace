@@ -3,7 +3,7 @@
 sync_user_files and sync_folder delegate the actual disk work to
 FileSyncService, which we mock. The tests focus on real orchestration
 logic: active-user filtering, fan-out and its lock guard, access control
-via FileService.user_files_qs, and argument passing.
+via user_files_qs, and argument passing.
 
 purge_trash is not mocked at all — it runs the real ORM filter against
 File rows created by the test.

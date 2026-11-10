@@ -12,7 +12,7 @@ from rest_framework.test import APITestCase
 from workspace.files.actions import ActionRegistry
 from workspace.files.actions.base import ActionCategory
 from workspace.files.models import File, FileFavorite, FileShare
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 
 MANAGE = FilePermission.MANAGE
 EDIT = FilePermission.EDIT

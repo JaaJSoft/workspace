@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import File, FileShare, FileTag, Tag
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission, get_permission
 
 User = get_user_model()
 
@@ -167,7 +167,7 @@ class ManageTagsActionTests(TestCase):
 
     def _available(self, user, file_obj):
         return self.action.is_available(
-            user, file_obj, permission=FileService.get_permission(user, file_obj)
+            user, file_obj, permission=get_permission(user, file_obj)
         )
 
     def test_available_on_own_personal_file(self):
@@ -196,9 +196,7 @@ class ManageTagsActionTests(TestCase):
             shared_by=self.other,
         )
 
-        self.assertEqual(
-            FileService.get_permission(self.user, file_obj), FilePermission.WRITE
-        )
+        self.assertEqual(get_permission(self.user, file_obj), FilePermission.WRITE)
         self.assertFalse(self._available(self.user, file_obj))
 
     def test_unavailable_on_trashed_file(self):

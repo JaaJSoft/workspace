@@ -3,7 +3,7 @@ from django.utils.translation import gettext as _
 from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.queries import accessible_file_ids, user_files_qs
 from workspace.files.services.scanning.policy import exclude_blocked
 from workspace.files.services.search_index import FILES_FTS, match_type_for
 
@@ -20,7 +20,7 @@ def reachable_parent_ids(user, nodes):
         return set()
     return set(
         File.objects.filter(pk__in=parent_ids)
-        .filter(pk__in=FileService.accessible_file_ids(user, include_deleted=False))
+        .filter(pk__in=accessible_file_ids(user, include_deleted=False))
         .values_list("pk", flat=True)
     )
 
@@ -34,10 +34,10 @@ def in_browsable_tree(f, user, reachable_parents):
 
 def search_files(query, user, limit, scope=SearchScope.ALL):
     if scope == SearchScope.MINE:
-        files = FileService.user_files_qs(user)
+        files = user_files_qs(user)
     else:
         files = File.objects.filter(
-            pk__in=FileService.accessible_file_ids(user, include_deleted=False)
+            pk__in=accessible_file_ids(user, include_deleted=False)
         )
     # A hit lands on the node it names, and a shortcut has nothing to show.
     files = files.exclude(node_type=File.NodeType.SHORTCUT)

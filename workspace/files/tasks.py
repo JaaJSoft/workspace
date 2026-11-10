@@ -359,9 +359,9 @@ def sync_folder(user_id, folder_uuid=None):
     parent_db = None
 
     if folder_uuid:
-        from workspace.files.services import FileService
+        from workspace.files.queries import user_files_qs
 
-        parent_db = FileService.user_files_qs(user).get(
+        parent_db = user_files_qs(user).get(
             uuid=folder_uuid,
             node_type=File.NodeType.FOLDER,
         )

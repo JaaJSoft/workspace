@@ -14,6 +14,7 @@ from django.urls import reverse
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileEvent, FileShare
+from workspace.files.queries import get_permission
 from workspace.files.services import FileService
 from workspace.files.services._names import NameTaken
 from workspace.files.services.files import GroupMismatch
@@ -166,7 +167,7 @@ class ResolveShortcutsTests(ShortcutFixtures, TestCase):
         self.assertEqual(resolution.state, ShortcutState.UNAVAILABLE)
         self.assertIsNone(resolution.target)
         self.assertIsNone(resolution.permission)
-        self.assertIsNone(FileService.get_permission(self.bob, self.report))
+        self.assertIsNone(get_permission(self.bob, self.report))
 
     def test_access_follows_the_share(self):
         share_file(

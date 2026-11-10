@@ -21,6 +21,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.files.queries import annotate_for_serializer, can_create_in
 from workspace.files.services import FileService, uploads
 from workspace.files.services.announcements import announce_replaced
 from workspace.files.services.quota import check_write_allowed
@@ -49,7 +50,7 @@ def _offset_response(detail, offset, code):
 
 def _writable_folder(user, parent):
     """*parent* when *user* may add files to it, else None."""
-    if parent is None or not FileService.can_create_in(user, parent):
+    if parent is None or not can_create_in(user, parent):
         return None
     return parent
 
@@ -367,7 +368,7 @@ class UploadSessionFinalizeView(APIView):
     def _answer(request, file_obj, *, replaced):
         instance = None
         if file_obj is not None:
-            instance = FileService.annotate_for_serializer(
+            instance = annotate_for_serializer(
                 File.objects.filter(pk=file_obj.pk, deleted_at__isnull=True),
                 request.user,
             ).first()

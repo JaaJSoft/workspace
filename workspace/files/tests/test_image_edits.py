@@ -18,7 +18,8 @@ from rest_framework.test import APITestCase
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import File, FileShare
-from workspace.files.services import FilePermission, FileService
+from workspace.files.queries import FilePermission
+from workspace.files.services import FileService
 from workspace.files.services._storage_ops import copy_node
 from workspace.files.services.image_edits import (
     apply_edit,

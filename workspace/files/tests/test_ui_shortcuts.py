@@ -13,6 +13,7 @@ from django.test.utils import CaptureQueriesContext
 from workspace.files.actions import ActionRegistry
 from workspace.files.ai_tools import FilesToolProvider
 from workspace.files.models import FileShare
+from workspace.files.queries import get_permission
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.files.services.shortcuts import create_shortcut
@@ -208,7 +209,7 @@ class CreateShortcutActionTests(ShortcutBrowserFixtures, TestCase):
             "create_shortcut",
             user,
             node,
-            permission=FileService.get_permission(user, node),
+            permission=get_permission(user, node),
         )
 
     def test_offered_on_whatever_the_user_can_open(self):

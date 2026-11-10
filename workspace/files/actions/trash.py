@@ -1,6 +1,6 @@
 from django.utils.translation import gettext_lazy as _
 
-from workspace.files.services import FilePermission
+from workspace.files.queries import FilePermission
 
 from . import ActionRegistry
 from .base import UNRESOLVED, ActionCategory, BaseFileAction

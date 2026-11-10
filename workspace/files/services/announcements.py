@@ -3,7 +3,7 @@
 from django.utils import translation
 from django.utils.translation import gettext as _
 
-from workspace.files.services import FileService
+from workspace.files.queries import can_access
 from workspace.notifications.services.notifications import notify
 from workspace.users.services.settings import get_user_language
 
@@ -18,9 +18,7 @@ def announce_replaced(instance, actor):
         actor.username,
         exclude_user_id=actor.pk,
     )
-    if instance.owner_id != actor.pk and FileService.can_access(
-        instance.owner, instance
-    ):
+    if instance.owner_id != actor.pk and can_access(instance.owner, instance):
         with translation.override(get_user_language(instance.owner)):
             notify(
                 recipient=instance.owner,

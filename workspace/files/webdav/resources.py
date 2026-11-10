@@ -200,8 +200,10 @@ class _StreamingWriteBuffer:
         self._writer.abort()
 
 
-class RootCollection(DAVCollection):
-    """Virtual root representing the user's top-level files/folders."""
+class _Collection(DAVCollection):
+    """A folder of the tree, or the user's root when ``_file`` is None."""
+
+    _file = None
 
     def __init__(self, path, environ):
         super().__init__(path, environ)
@@ -210,47 +212,28 @@ class RootCollection(DAVCollection):
     def get_display_info(self):
         return {"type": "Directory"}
 
-    def get_creation_date(self):
-        # davfs2 marks the directory cache invalid when the parent
-        # collection lacks ``creationdate`` / ``getlastmodified`` —
-        # readdir then returns EINVAL and open(O_CREAT) returns EIO.
-        # Use the user's join date: stable, never zero, no extra query.
-        return self._user.date_joined.timestamp()
-
-    def get_last_modified(self):
-        return self._user.date_joined.timestamp()
-
-    def get_display_name(self):
-        # WsgiDAV defaults to the URL basename, which is empty for the
-        # root collection — Windows Mini-Redirector then shows a blank
-        # entry in Explorer.  A static label avoids that.
-        return "workspace"
-
     def get_member_names(self):
-        self._prefetch_members()
-        return [f.name for f in self._members_cache]
+        return [f.name for f in self._members()]
 
     def get_member(self, name):
-        self._prefetch_members()
         forms = name_forms(name)
-        for f in self._members_cache:
+        for f in self._members():
             if f.name in forms:
                 return self._wrap(f)
         return None
 
     def get_member_list(self):
-        self._prefetch_members()
-        return [self._wrap(f) for f in self._members_cache]
+        return [self._wrap(f) for f in self._members()]
 
-    def _prefetch_members(self):
-        if hasattr(self, "_members_cache"):
-            return
-        self._members_cache = list(
-            dav_nodes(
-                FileService.accessible_files_q(self._user),
-                parent__isnull=True,
+    def _members(self):
+        if not hasattr(self, "_members_cache"):
+            self._members_cache = list(
+                dav_nodes(
+                    FileService.accessible_files_q(self._user),
+                    parent=self._file,
+                )
             )
-        )
+        return self._members_cache
 
     def _wrap(self, file_obj):
         child_path = self.path.rstrip("/") + "/" + file_obj.name
@@ -262,95 +245,8 @@ class RootCollection(DAVCollection):
     def create_empty_resource(self, name):
         # Reuse an existing file to avoid duplicates from concurrent PUTs
         # (e.g. Windows retries while a slow upload is still in progress).
-        file_obj = File.objects.filter(
-            FileService.accessible_files_q(self._user),
-            name__in=name_forms(name),
-            parent__isnull=True,
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-        ).first()
-        if file_obj is None:
-            file_obj = FileService.create_file(
-                self._user,
-                name,
-                parent=None,
-                acting_user=self._user,
-            )
-        child_path = self.path.rstrip("/") + "/" + name
-        return FileResource(child_path, self.environ, file_obj)
-
-    @_refuse_overlong_names
-    def create_collection(self, name):
-        FileService.create_folder(self._user, name, parent=None, acting_user=self._user)
-        return True
-
-    def get_used_bytes(self):
-        return _advertised_space(self.environ, self._user, None)[0]
-
-    def get_available_bytes(self):
-        return _advertised_space(self.environ, self._user, None)[1]
-
-
-class FolderResource(DAVCollection):
-    """Wraps a ``File(node_type=FOLDER)`` instance."""
-
-    def __init__(self, path, environ, file_obj):
-        super().__init__(path, environ)
-        self._file = file_obj
-        self._user = environ["workspace.user"]
-
-    def get_display_info(self):
-        return {"type": "Directory"}
-
-    def get_creation_date(self):
-        return self._file.created_at.timestamp()
-
-    def get_last_modified(self):
-        return self._file.updated_at.timestamp()
-
-    def get_used_bytes(self):
-        return _advertised_space(self.environ, self._user, self._file.group_id)[0]
-
-    def get_available_bytes(self):
-        return _advertised_space(self.environ, self._user, self._file.group_id)[1]
-
-    def get_member_names(self):
-        self._prefetch_members()
-        return [f.name for f in self._members_cache]
-
-    def get_member(self, name):
-        self._prefetch_members()
-        forms = name_forms(name)
-        for f in self._members_cache:
-            if f.name in forms:
-                return self._wrap(f)
-        return None
-
-    def get_member_list(self):
-        self._prefetch_members()
-        return [self._wrap(f) for f in self._members_cache]
-
-    def _prefetch_members(self):
-        if hasattr(self, "_members_cache"):
-            return
-        self._members_cache = list(
-            dav_nodes(
-                FileService.accessible_files_q(self._user),
-                parent=self._file,
-            )
-        )
-
-    def _wrap(self, file_obj):
-        child_path = self.path.rstrip("/") + "/" + file_obj.name
-        if file_obj.is_folder():
-            return FolderResource(child_path, self.environ, file_obj)
-        return FileResource(child_path, self.environ, file_obj)
-
-    @_refuse_overlong_names
-    def create_empty_resource(self, name):
-        # Reuse an existing file to avoid duplicates from concurrent PUTs.
-        # Use accessible_files_q so we also find files created by other
-        # members in group folders — not just files owned by self._user.
+        # Through accessible_files_q, so a file another member created in a
+        # group folder is found too, not just those self._user owns.
         file_obj = File.objects.filter(
             FileService.accessible_files_q(self._user),
             name__in=name_forms(name),
@@ -379,6 +275,49 @@ class FolderResource(DAVCollection):
             acting_user=self._user,
         )
         return True
+
+    def _group_id(self):
+        return self._file.group_id if self._file is not None else None
+
+    def get_used_bytes(self):
+        return _advertised_space(self.environ, self._user, self._group_id())[0]
+
+    def get_available_bytes(self):
+        return _advertised_space(self.environ, self._user, self._group_id())[1]
+
+
+class RootCollection(_Collection):
+    """Virtual root representing the user's top-level files/folders."""
+
+    def get_creation_date(self):
+        # davfs2 marks the directory cache invalid when the parent
+        # collection lacks ``creationdate`` / ``getlastmodified`` —
+        # readdir then returns EINVAL and open(O_CREAT) returns EIO.
+        # Use the user's join date: stable, never zero, no extra query.
+        return self._user.date_joined.timestamp()
+
+    def get_last_modified(self):
+        return self._user.date_joined.timestamp()
+
+    def get_display_name(self):
+        # WsgiDAV defaults to the URL basename, which is empty for the
+        # root collection — Windows Mini-Redirector then shows a blank
+        # entry in Explorer.  A static label avoids that.
+        return "workspace"
+
+
+class FolderResource(_Collection):
+    """Wraps a ``File(node_type=FOLDER)`` instance."""
+
+    def __init__(self, path, environ, file_obj):
+        super().__init__(path, environ)
+        self._file = file_obj
+
+    def get_creation_date(self):
+        return self._file.created_at.timestamp()
+
+    def get_last_modified(self):
+        return self._file.updated_at.timestamp()
 
     def delete(self):
         with _dav_refusals("DELETE"):

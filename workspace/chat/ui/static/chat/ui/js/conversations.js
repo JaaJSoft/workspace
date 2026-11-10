@@ -280,7 +280,10 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       // Double $nextTick: first lets Alpine render, second lets the browser layout
       this.$nextTick(() => {
         this.$nextTick(() => {
-          this.scrollToBottom();
+          // The requests above took their time: a reader who went up the
+          // conversation meanwhile, or loaded an older page, is no longer at
+          // its end and must not be taken back there.
+          if (this._isNearBottom()) this.scrollToBottom();
           this.getMessageInput()?.focus();
         });
       });

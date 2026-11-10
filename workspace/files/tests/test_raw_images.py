@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import TemporaryUploadedFile
 from django.test import TestCase
 from PIL import ExifTags, Image, ImageOps, UnidentifiedImageError
 
-from workspace.files.services import FileService, raw_images
+from workspace.files.services import raw_images, tree
 from workspace.files.services.detection import detect_from_name, detect_from_stream
 from workspace.files.services.image_edits import render_edited
 from workspace.files.tests.rasters import dng_bytes
@@ -98,7 +98,7 @@ class RawDecodingTests(TestCase):
 
     def test_an_edited_raw_downloads_as_a_jpeg_with_its_exif(self):
         user = User.objects.create_user(username="rawedit", password="x")
-        file_obj = FileService.create_file(
+        file_obj = tree.create_file(
             owner=user,
             name="IMG_0001.DNG",
             content=ContentFile(dng_bytes(), name="IMG_0001.DNG"),

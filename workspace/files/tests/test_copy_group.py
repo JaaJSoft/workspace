@@ -15,7 +15,7 @@ from django.test import TestCase, override_settings
 
 from workspace.files.models import File
 from workspace.files.queries import user_group_files_qs
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -27,48 +27,46 @@ class CopyIntoGroupFolderTests(TestCase):
         self.group = Group.objects.create(name="Design")
         self.user.groups.add(self.group)
         self.teammate.groups.add(self.group)
-        self.group_root = FileService.create_folder(
-            self.user, "Design", group=self.group
-        )
+        self.group_root = tree.create_folder(self.user, "Design", group=self.group)
 
     def _file(self, name="note.txt", parent=None):
-        return FileService.create_file(
+        return tree.create_file(
             self.user, name, parent=parent, content=ContentFile(b"hello", name=name)
         )
 
     def test_copy_joins_the_destination_group(self):
-        copied = FileService.copy(self._file(), self.group_root, self.user)
+        copied = tree.copy(self._file(), self.group_root, self.user)
         copied.refresh_from_db()
         self.assertEqual(copied.group_id, self.group.pk)
 
     def test_copied_blob_lands_under_the_group_storage_root(self):
-        copied = FileService.copy(self._file(), self.group_root, self.user)
+        copied = tree.copy(self._file(), self.group_root, self.user)
         self.assertTrue(
             copied.content.name.startswith("files/groups/"),
             f"blob stored at {copied.content.name}",
         )
 
     def test_copy_is_visible_to_another_group_member(self):
-        copied = FileService.copy(self._file(), self.group_root, self.user)
+        copied = tree.copy(self._file(), self.group_root, self.user)
         visible = user_group_files_qs(self.teammate)
         self.assertTrue(visible.filter(pk=copied.pk).exists())
 
     def test_folder_copy_propagates_the_group_to_descendants(self):
-        folder = FileService.create_folder(self.user, "docs")
+        folder = tree.create_folder(self.user, "docs")
         self._file("child.txt", parent=folder)
-        copied = FileService.copy(folder, self.group_root, self.user)
+        copied = tree.copy(folder, self.group_root, self.user)
         child = File.objects.get(parent=copied, name="child.txt")
         self.assertEqual(child.group_id, self.group.pk)
 
     def test_copy_out_of_a_group_into_the_personal_tree_clears_the_group(self):
-        source = FileService.create_file(
+        source = tree.create_file(
             self.user,
             "shared.txt",
             parent=self.group_root,
             content=ContentFile(b"hello", name="shared.txt"),
         )
-        personal = FileService.create_folder(self.user, "mine")
-        copied = FileService.copy(source, personal, self.user)
+        personal = tree.create_folder(self.user, "mine")
+        copied = tree.copy(source, personal, self.user)
         copied.refresh_from_db()
         self.assertIsNone(copied.group_id)
 
@@ -96,12 +94,10 @@ class CopyNameCollisionInGroupTests(TestCase):
         self.group = Group.objects.create(name="Design")
         self.bob.groups.add(self.group)
         self.alice.groups.add(self.group)
-        self.group_root = FileService.create_folder(
-            self.bob, "Design", group=self.group
-        )
+        self.group_root = tree.create_folder(self.bob, "Design", group=self.group)
 
     def _file(self, owner, name, payload, parent=None):
-        return FileService.create_file(
+        return tree.create_file(
             owner, name, parent=parent, content=ContentFile(payload, name=name)
         )
 
@@ -109,7 +105,7 @@ class CopyNameCollisionInGroupTests(TestCase):
         bobs = self._file(self.bob, "report.pdf", b"BOB-ORIGINAL", self.group_root)
         alices = self._file(self.alice, "report.pdf", b"ALICE-COPY")
 
-        copied = FileService.copy(alices, self.group_root, self.alice)
+        copied = tree.copy(alices, self.group_root, self.alice)
 
         bobs.refresh_from_db()
         with bobs.content.open("rb") as fh:
@@ -117,15 +113,13 @@ class CopyNameCollisionInGroupTests(TestCase):
         self.assertNotEqual(copied.content.name, bobs.content.name)
 
     def test_a_copied_folder_does_not_merge_into_a_teammate_folder(self):
-        bobs_folder = FileService.create_folder(
-            self.bob, "specs", parent=self.group_root
-        )
+        bobs_folder = tree.create_folder(self.bob, "specs", parent=self.group_root)
         bobs_child = self._file(self.bob, "spec.txt", b"BOB-ORIGINAL", bobs_folder)
 
-        alices_folder = FileService.create_folder(self.alice, "specs")
+        alices_folder = tree.create_folder(self.alice, "specs")
         self._file(self.alice, "spec.txt", b"ALICE-COPY", alices_folder)
 
-        copied = FileService.copy(alices_folder, self.group_root, self.alice)
+        copied = tree.copy(alices_folder, self.group_root, self.alice)
 
         self.assertNotEqual(copied.pk, bobs_folder.pk)
         self.assertNotEqual(copied.name, bobs_folder.name)

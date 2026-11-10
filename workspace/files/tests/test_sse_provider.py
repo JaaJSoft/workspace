@@ -3,7 +3,7 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.sse_provider import FilesSSEProvider, push_file_event
 
 User = get_user_model()
@@ -14,7 +14,7 @@ class FilesSseMailboxTests(TestCase):
         cache.clear()
         self.owner = User.objects.create_user(username="owner", password="pw")
         self.other = User.objects.create_user(username="other", password="pw")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.owner, "a.txt", None, content=ContentFile(b"a")
         )
 

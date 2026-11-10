@@ -38,7 +38,10 @@ or when the user asks to read, open, view, or see a specific file. \
 A scan with no text layer has nothing to return, and says so."""
         from workspace.files.models import File
         from workspace.files.queries import can_access
-        from workspace.files.services import FileService
+        from workspace.files.services.content_reading import (
+            read_image_content,
+            read_text_content,
+        )
         from workspace.files.services.scanning.policy import is_blocked
 
         file_obj = File.objects.filter(uuid=args.uuid).select_related("owner").first()
@@ -51,7 +54,7 @@ A scan with no text layer has nothing to return, and says so."""
         if is_blocked(file_obj):
             return "File is quarantined."
         # Try image first
-        raw, mime = FileService.read_image_content(file_obj)
+        raw, mime = read_image_content(file_obj)
         if raw is not None:
             return json.dumps(
                 {
@@ -62,7 +65,7 @@ A scan with no text layer has nothing to return, and says so."""
             )
 
         # Fall back to text
-        text = FileService.read_text_content(file_obj, max_bytes=32_768)
+        text = read_text_content(file_obj, max_bytes=32_768)
         if text is None:
             return f'Cannot read "{file_obj.name}" — unsupported file type.'
         header = f"File: {file_obj.name}"

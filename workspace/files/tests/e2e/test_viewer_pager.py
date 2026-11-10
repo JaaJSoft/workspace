@@ -15,7 +15,7 @@ from django.core.files.base import ContentFile
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import FileShareLink
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 PHONE = {"width": 390, "height": 844}
 DESKTOP = {"width": 1280, "height": 900}
@@ -25,9 +25,9 @@ class ViewerPagerTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="pager")
-        self.folder = FileService.create_folder(owner=self.user, name="Notes")
+        self.folder = tree.create_folder(owner=self.user, name="Notes")
         self.files = [
-            FileService.create_file(
+            tree.create_file(
                 owner=self.user,
                 parent=self.folder,
                 name=name,
@@ -82,7 +82,7 @@ class ViewerPagerTests(PlaywrightTestCase):
         # favorite, new tab, download, properties, close), which leaves the
         # title column its narrowest.
         pdfs = [
-            FileService.create_file(
+            tree.create_file(
                 owner=self.user,
                 parent=self.folder,
                 name=name,

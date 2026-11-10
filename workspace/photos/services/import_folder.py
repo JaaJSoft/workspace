@@ -11,7 +11,7 @@ from django.db import transaction
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs, user_group_files_qs
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.users.services.settings import get_setting, set_setting
 
 MODULE = "photos"
@@ -57,7 +57,7 @@ def ensure_import_folder(user):
     """The folder imports go to, creating the default one when missing."""
     folder = import_folder(user)
     if folder is None:
-        folder = FileService.create_folder(
+        folder = tree.create_folder(
             user, DEFAULT_NAME, icon="image", color="primary", acting_user=user
         )
     if get_setting(user, MODULE, IMPORT_FOLDER) != str(folder.uuid):

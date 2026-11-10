@@ -11,7 +11,7 @@ from django.test import TestCase
 
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 
 migration = importlib.import_module(
     "workspace.files.migrations.0063_resolve_duplicate_names"
@@ -91,20 +91,20 @@ class LiveNameConstraintTests(TestCase):
 class RestoreFolderTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")
-        self.folder = FileService.create_folder(self.user, "Docs")
+        self.folder = tree.create_folder(self.user, "Docs")
 
     def test_restoring_a_folder_leaves_a_child_trashed_on_its_own_in_the_trash(self):
-        old = FileService.create_file(
+        old = tree.create_file(
             self.user, "a.txt", parent=self.folder, content=ContentFile(b"old")
         )
-        FileService.soft_delete(old, acting_user=self.user)
-        new = FileService.create_file(
+        trash.soft_delete(old, acting_user=self.user)
+        new = tree.create_file(
             self.user, "a.txt", parent=self.folder, content=ContentFile(b"new")
         )
-        FileService.soft_delete(self.folder, acting_user=self.user)
+        trash.soft_delete(self.folder, acting_user=self.user)
 
         self.folder.refresh_from_db()
-        FileService.restore(self.folder, acting_user=self.user)
+        trash.restore(self.folder, acting_user=self.user)
 
         new.refresh_from_db()
         old.refresh_from_db()
@@ -116,36 +116,34 @@ class RestoreFolderTests(TestCase):
             self.assertEqual(fh.read(), b"old")
 
         # Back in the trash list on its own, and restorable from there.
-        FileService.soft_delete(new, acting_user=self.user)
-        FileService.restore(old, acting_user=self.user)
+        trash.soft_delete(new, acting_user=self.user)
+        trash.restore(old, acting_user=self.user)
         old.refresh_from_db()
         self.assertIsNone(old.deleted_at)
         with old.content.open("rb") as fh:
             self.assertEqual(fh.read(), b"old")
 
     def test_a_folder_trashed_on_its_own_stays_out_of_its_replacement(self):
-        root = FileService.create_folder(self.user, "R")
-        old = FileService.create_folder(self.user, "C", parent=root)
-        FileService.create_file(
-            self.user, "c1.txt", parent=old, content=ContentFile(b"1")
-        )
-        FileService.soft_delete(old, acting_user=self.user)
-        new = FileService.create_folder(self.user, "C", parent=root)
-        c2 = FileService.create_file(
+        root = tree.create_folder(self.user, "R")
+        old = tree.create_folder(self.user, "C", parent=root)
+        tree.create_file(self.user, "c1.txt", parent=old, content=ContentFile(b"1"))
+        trash.soft_delete(old, acting_user=self.user)
+        new = tree.create_folder(self.user, "C", parent=root)
+        c2 = tree.create_file(
             self.user, "c2.txt", parent=new, content=ContentFile(b"2")
         )
-        FileService.soft_delete(root, acting_user=self.user)
+        trash.soft_delete(root, acting_user=self.user)
 
         root.refresh_from_db()
-        FileService.restore(root, acting_user=self.user)
+        trash.restore(root, acting_user=self.user)
 
         old.refresh_from_db()
         self.assertIsNotNone(old.deleted_at)
         self.assertEqual(read(c2), b"2")
 
-        FileService.soft_delete(new, acting_user=self.user)
+        trash.soft_delete(new, acting_user=self.user)
         old.refresh_from_db()
-        FileService.restore(old, acting_user=self.user)
+        trash.restore(old, acting_user=self.user)
         c1 = File.objects.get(name="c1.txt")
         self.assertIsNone(c1.deleted_at)
         self.assertEqual(read(c1), b"1")
@@ -155,10 +153,10 @@ class RestoreFolderTests(TestCase):
 
         from workspace.files.services import names
 
-        trashed = FileService.create_file(
+        trashed = tree.create_file(
             self.user, "a.txt", parent=self.folder, content=ContentFile(b"old")
         )
-        FileService.soft_delete(trashed, acting_user=self.user)
+        trash.soft_delete(trashed, acting_user=self.user)
         find_node_conflict = names.find_node_conflict
         raced = []
 
@@ -166,14 +164,14 @@ class RestoreFolderTests(TestCase):
             conflict = find_node_conflict(*args, **kwargs)
             if not raced:
                 raced.append(None)
-                raced[0] = FileService.create_file(
+                raced[0] = tree.create_file(
                     self.user, "a.txt", parent=self.folder, content=ContentFile(b"new")
                 )
             return conflict
 
         trashed.refresh_from_db()
         with patch.object(names, "find_node_conflict", racing_find):
-            FileService.restore(trashed, acting_user=self.user)
+            trash.restore(trashed, acting_user=self.user)
 
         trashed.refresh_from_db()
         self.assertEqual(trashed.name, "a (Copy).txt")

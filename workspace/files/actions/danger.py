@@ -1,7 +1,7 @@
 from django.utils.translation import gettext_lazy as _
 
 from workspace.files.queries import FilePermission
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 from . import ActionRegistry
 from .base import UNRESOLVED, ActionCategory, BaseFileAction
@@ -22,6 +22,6 @@ class DeleteAction(BaseFileAction):
         if file_obj.deleted_at is not None:
             return False
         # Cannot delete a root group folder
-        if FileService.is_group_root(file_obj):
+        if tree.is_group_root(file_obj):
             return False
         return permission is not None and permission >= FilePermission.EDIT

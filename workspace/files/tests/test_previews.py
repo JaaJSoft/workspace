@@ -18,7 +18,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from workspace.files.models import File, FileScan, FileShare
-from workspace.files.services import previews
+from workspace.files.services import previews, trash
 from workspace.files.ui.viewers import (
     MAX_PREVIEWS,
     VIEWER_PANEL_ID,
@@ -107,7 +107,7 @@ class PreviewableFilesTests(TestCase):
         FileShare.objects.create(
             file=self.pdf, shared_by=self.owner, shared_with=self.reader
         )
-        self.pdf.soft_delete()
+        trash.trash_subtree(self.pdf)
         self.assertEqual(
             self._states(self.owner, self.pdf), {self.pdf.uuid: previews.TRASHED}
         )
@@ -232,7 +232,7 @@ class FilePreviewsViewTests(TestCase):
         self.assertEqual(response.content, b"")
 
     def test_trashed_file_shows_a_placeholder_and_no_content(self):
-        self.pdf.soft_delete()
+        trash.trash_subtree(self.pdf)
         html = self._get(("fp-1", self.pdf.uuid)).content.decode()
         self.assertIn("file-preview-trashed", html)
         self.assertIn("report.pdf", html)

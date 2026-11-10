@@ -13,10 +13,15 @@ from django.db import transaction
 
 from ..models import File, canonical_name
 from ..queries import FilePermission, get_permission
+from . import tree
 from .announcements import announce_replaced
 from .content_writes import move_content_from, replace_content_from
-from .files import FileService, GroupRootFolder, new_owner_on_move
-from .names import NameTaken, find_node_conflict
+from .names import (
+    NameTaken,
+    available_file_name,
+    find_name_conflict,
+    find_node_conflict,
+)
 from .refusals import (
     Refusal,
     Refused,
@@ -25,6 +30,7 @@ from .refusals import (
     require_destination,
     require_unlocked,
 )
+from .tree import GroupRootFolder, new_owner_on_move
 
 
 class OnConflict(StrEnum):
@@ -81,16 +87,14 @@ def copy_item(
 
     *name* defaults to the node's own. Only a file can replace, skip or be
     refused on a taken name; a folder or a shortcut is always stored under a
-    free one. *checkpoint* is handed to ``FileService.copy``.
+    free one. *checkpoint* is handed to ``tree.copy``.
     """
     require_action("copy", user, node)
     _require_target(user, node, parent)
     wanted = canonical_name(name) if name is not None else node.name
 
     if on_conflict != OnConflict.RENAME and node.node_type == File.NodeType.FILE:
-        existing = FileService.find_name_conflict(
-            user, parent, wanted, exclude_pk=node.pk
-        )
+        existing = find_name_conflict(user, parent, wanted, exclude_pk=node.pk)
         if existing is not None:
             if on_conflict == OnConflict.SKIP:
                 return TransferResult(Outcome.SKIPPED, None)
@@ -103,7 +107,7 @@ def copy_item(
             return TransferResult(Outcome.REPLACED, existing)
 
     with refusals():
-        copied = FileService.copy(
+        copied = tree.copy(
             node, parent, user, name=wanted, acting_user=user, checkpoint=checkpoint
         )
     # A duplicate made next to its source is named "(Copy)" by design: that
@@ -162,7 +166,7 @@ def _move(user, node, parent, on_conflict, name):
     if not staying:
         _require_target(user, node, parent)
         try:
-            FileService.validate_move_target(node, parent, user=user)
+            tree.validate_move_target(node, parent, user=user)
         except GroupRootFolder as error:
             raise Refused(Refusal.GROUP_ROOT) from error
         except ValueError as error:
@@ -174,9 +178,7 @@ def _move(user, node, parent, on_conflict, name):
 
     outcome = Outcome.DONE
     if node.node_type == File.NodeType.FILE:
-        conflict = FileService.find_name_conflict(
-            owner, parent, wanted, exclude_pk=node.pk
-        )
+        conflict = find_name_conflict(owner, parent, wanted, exclude_pk=node.pk)
     else:
         conflict = find_node_conflict(owner, parent, wanted, exclude_pk=node.pk)
 
@@ -198,9 +200,7 @@ def _move(user, node, parent, on_conflict, name):
             )
         # Renamed before it leaves, so the name has to be free in the folder
         # it is still in as well.
-        wanted = FileService.available_file_name(
-            owner, parent, wanted, avoiding=(node.parent,)
-        )
+        wanted = available_file_name(owner, parent, wanted, avoiding=(node.parent,))
         outcome = Outcome.RENAMED
 
     try:
@@ -223,18 +223,18 @@ def _relocate(user, node, parent, name, staying):
     destination was checked for the new name already.
     """
     if staying:
-        FileService.rename(node, name, acting_user=user)
+        tree.rename(node, name, acting_user=user)
         return
     # The rename moves the blob outside any transaction, so whatever would
     # refuse the move must refuse before it.
-    FileService.check_move_allowed(node, parent, acting_user=user)
+    tree.check_move_allowed(node, parent, acting_user=user)
     renaming = name != node.name
     rename_first = not (
         renaming
         and find_node_conflict(node.owner, node.parent, name, exclude_pk=node.pk)
     )
     if renaming and rename_first:
-        FileService.rename(node, name, acting_user=user)
-    FileService.move(node, parent, acting_user=user)
+        tree.rename(node, name, acting_user=user)
+    tree.move(node, parent, acting_user=user)
     if renaming and not rename_first:
-        FileService.rename(node, name, acting_user=user)
+        tree.rename(node, name, acting_user=user)

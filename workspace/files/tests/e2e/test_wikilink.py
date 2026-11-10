@@ -13,7 +13,7 @@ from django.core.files.base import ContentFile
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 # Hardcoded because StaticLiveServerTestCase serves original (unhashed) static
 # paths through the staticfiles finders, regardless of production storage.
@@ -53,13 +53,13 @@ class WikilinkEditorTests(PlaywrightTestCase):
         super().setUp()
         self.user = self.create_user(username="wikilink")
         self.login_as(self.user)
-        self.alpha = FileService.create_file(
+        self.alpha = tree.create_file(
             self.user,
             "Alpha.md",
             content=ContentFile(b"# Alpha\n\nStart typing here.\n", name="Alpha.md"),
             mime_type="text/markdown",
         )
-        self.beta = FileService.create_file(
+        self.beta = tree.create_file(
             self.user,
             "Beta Target.md",
             # Markdown-shaped body so the content sniffer labels it 'markdown'

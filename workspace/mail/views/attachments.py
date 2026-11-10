@@ -77,7 +77,7 @@ class MailAttachmentSaveToFilesView(APIView):
 
         from workspace.files.models import File
         from workspace.files.queries import user_files_qs
-        from workspace.files.services.files import FileService
+        from workspace.files.services import tree
 
         try:
             attachment = MailAttachment.objects.select_related(
@@ -128,7 +128,7 @@ class MailAttachmentSaveToFilesView(APIView):
         try:
             src = attachment.content.open("rb")
             with src as f:
-                file_obj = FileService.create_file(
+                file_obj = tree.create_file(
                     owner=request.user,
                     name=attachment.filename,
                     parent=parent,

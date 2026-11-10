@@ -11,7 +11,7 @@ from django.utils import timezone
 from PIL import ExifTags, Image
 
 from workspace.files.models import MediaInfo
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.videos import clip_bytes
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import ANALYSIS_VERSIONS
@@ -65,7 +65,7 @@ def png_bytes(size=(32, 32)):
 def upload(owner, name, data=None, *, parent=None):
     """A file created the way an upload creates it (CREATED event included)."""
     data = jpeg_bytes() if data is None else data
-    return FileService.create_file(
+    return tree.create_file(
         owner=owner,
         name=name,
         parent=parent,

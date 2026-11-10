@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from workspace.files.models import File, FileLink, FileLinkState
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.links import (
     EXTRACTOR_VERSION,
     extract_link_targets,
@@ -24,7 +24,7 @@ User = get_user_model()
 
 def _make_markdown(user, name, body=""):
     """Create a markdown File whose ``type`` is forced to 'markdown'."""
-    f = FileService.create_file(
+    f = tree.create_file(
         owner=user,
         name=name,
         content=ContentFile(body.encode("utf-8"), name=name),
@@ -184,7 +184,7 @@ class ReconcileFileLinksTests(TestCase):
         self.assertEqual(FileLink.objects.filter(source=a).count(), 1)
 
     def test_embed_creates_edge_to_any_file_type(self):
-        pdf = FileService.create_file(
+        pdf = tree.create_file(
             owner=self.user,
             name="report.pdf",
             content=ContentFile(b"%PDF-1.4\n", name="report.pdf"),
@@ -214,7 +214,7 @@ class ReconcileFileLinksTests(TestCase):
 
     def test_non_markdown_is_skipped(self):
         b = _make_markdown(self.user, "B.md", "# B")
-        txt = FileService.create_file(
+        txt = tree.create_file(
             owner=self.user,
             name="note.txt",
             content=ContentFile(f"[B](/notes?file={b.uuid})".encode(), name="note.txt"),
@@ -271,7 +271,7 @@ class FileLinksCatchUpTests(TestCase):
             self.assertEqual(self._pending(), {a.pk})
 
     def test_other_files_are_never_pending(self):
-        FileService.create_file(
+        tree.create_file(
             owner=self.user,
             name="note.txt",
             content=ContentFile(b"text", name="note.txt"),

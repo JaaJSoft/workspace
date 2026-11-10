@@ -109,7 +109,7 @@ class AttachmentSaveToFilesView(APIView):
     def post(self, request, attachment_id):
         from django.core.files.base import File as DjangoFile
 
-        from workspace.files.services.files import FileService
+        from workspace.files.services import tree
 
         try:
             attachment = MessageAttachment.objects.select_related("message").get(
@@ -163,7 +163,7 @@ class AttachmentSaveToFilesView(APIView):
         #
         # The try/except scopes only the source-blob open: a vanished blob
         # is the user-visible "Attachment not found" 404 path. Storage
-        # failures from FileService.create_file (disk full, perm denied)
+        # failures from tree.create_file (disk full, perm denied)
         # must surface as 5xx, not be silently rewritten to a 404 that hides
         # the real problem. A quota refusal is different: it answers 413 on
         # its own, through DRF's handler.
@@ -179,7 +179,7 @@ class AttachmentSaveToFilesView(APIView):
             )
 
         with src as f:
-            file_obj = FileService.create_file(
+            file_obj = tree.create_file(
                 owner=request.user,
                 name=attachment.original_name,
                 parent=parent,

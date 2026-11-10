@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShare
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -146,7 +146,7 @@ class FileModelTests(TestCase):
         folder.refresh_from_db()
         self.assertIsNotNone(folder.deleted_at)
 
-        folder.restore()
+        trash.restore_subtree(folder)
         folder.refresh_from_db()
         self.assertIsNone(folder.deleted_at)
 
@@ -162,7 +162,7 @@ class FileModelTests(TestCase):
         folder.delete()
         folder.refresh_from_db()
 
-        folder.restore()
+        trash.restore_subtree(folder)
         folder.refresh_from_db()
         child.refresh_from_db()
 
@@ -331,7 +331,7 @@ class FileAPITests(APITestCase):
         """PATCH with the file's existing parent must succeed without error.
 
         The serializer no longer short-circuits on parent equality before
-        calling FileService.move() - move() handles the noop internally.
+        calling tree.move() - move() handles the noop internally.
         Regression guard for that contract.
         """
         folder = File.objects.create(
@@ -433,7 +433,7 @@ class FileAPITests(APITestCase):
     def test_delete_refuses_a_groups_root_folder(self):
         group = Group.objects.create(name="Design")
         self.user.groups.add(group)
-        root = FileService.create_folder(self.user, "Design", group=group)
+        root = tree.create_folder(self.user, "Design", group=group)
 
         response = self.client.delete(f"/api/v1/files/{root.uuid}")
 
@@ -703,7 +703,7 @@ class EdgeCaseTests(APITestCase):
         self.assertIsNotNone(child.deleted_at)
 
         # Restore child - should also restore parent
-        child.restore()
+        trash.restore_subtree(child)
         parent.refresh_from_db()
         child.refresh_from_db()
 

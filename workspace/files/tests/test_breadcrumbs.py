@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.files.models import FileShare
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -20,8 +20,8 @@ class BreadcrumbVisibilityTests(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="pw")
         self.bob = User.objects.create_user(username="bob", password="pw")
-        self.private = FileService.create_folder(self.alice, "MedicalPrivate")
-        self.shared = FileService.create_folder(
+        self.private = tree.create_folder(self.alice, "MedicalPrivate")
+        self.shared = tree.create_folder(
             self.alice, "SharedReports", parent=self.private
         )
 
@@ -50,8 +50,8 @@ class BreadcrumbVisibilityTests(TestCase):
     def test_a_group_folder_shared_outside_the_group_hides_the_group_tree(self):
         team = Group.objects.create(name="Team")
         self.alice.groups.add(team)
-        root = FileService.create_folder(self.alice, "TeamRootSecret", group=team)
-        sub = FileService.create_folder(self.alice, "TeamShared", parent=root)
+        root = tree.create_folder(self.alice, "TeamRootSecret", group=team)
+        sub = tree.create_folder(self.alice, "TeamShared", parent=root)
         self._share(sub, self.bob)
         self.client.force_login(self.bob)
 
@@ -83,8 +83,8 @@ class BreadcrumbVisibilityTests(TestCase):
         team = Group.objects.create(name="Team")
         self.alice.groups.add(team)
         self.bob.groups.add(team)
-        root = FileService.create_folder(self.alice, "TeamRootVisible", group=team)
-        sub = FileService.create_folder(self.alice, "Sub", parent=root)
+        root = tree.create_folder(self.alice, "TeamRootVisible", group=team)
+        sub = tree.create_folder(self.alice, "Sub", parent=root)
         self.client.force_login(self.bob)
 
         response = self.client.get(f"/files/{sub.uuid}")

@@ -628,7 +628,7 @@ def run_library(index, library, photos, paths, *, keep):
     from django.core.files.base import ContentFile
 
     from workspace.celery import app
-    from workspace.files.services import FileService
+    from workspace.files.services import tree
     from workspace.photos.models import Face
     from workspace.photos.services import face_grouping
     from workspace.photos.services.face_analysis import analyze_faces
@@ -640,14 +640,14 @@ def run_library(index, library, photos, paths, *, keep):
         password=BENCH_PASSWORD if keep else None,
         first_name=photos[0].author[:150],
     )
-    folder = FileService.create_folder(owner=user, name="Pictures")
+    folder = tree.create_folder(owner=user, name="Pictures")
     files = []
     for photo in photos:
         path = paths[photo.photo_id]
         data = path.read_bytes()
         name = f"{photo.taken[:10]} {photo.photo_id}{path.suffix}"
         files.append(
-            FileService.create_file(
+            tree.create_file(
                 owner=user,
                 name=name,
                 parent=folder,

@@ -10,7 +10,7 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 from workspace.files.models import File, canonical_name
 from workspace.files.queries import user_files_qs
-from workspace.files.services import FileService, relocations
+from workspace.files.services import relocations, trash, tree
 from workspace.files.services.shortcuts import rename_aside
 from workspace.files.services.storage_ops import unique_copy_name
 
@@ -371,7 +371,7 @@ class FileSyncService:
             try:
                 # Dated when the sync started, so every node it trashes in one
                 # run shares one moment.
-                count = FileService.soft_delete(
+                count = trash.soft_delete(
                     db_record,
                     acting_user=user,
                     deleted_at=now,
@@ -463,7 +463,7 @@ class FileSyncService:
                         "a sibling holds the name" if holder else "names are composed",
                     )
                 if is_dir:
-                    created = FileService.create_folder(
+                    created = tree.create_folder(
                         user, name, parent_db, acting_user=user
                     )
                     index.add(created)
@@ -475,7 +475,7 @@ class FileSyncService:
                     except OSError:
                         size = None
 
-                    created = FileService.register_disk_file(
+                    created = tree.register_disk_file(
                         user,
                         name,
                         parent_db,
@@ -506,7 +506,7 @@ class FileSyncService:
             result.renames_followed += 1
             return
         try:
-            FileService.rename(db_record, new_name, acting_user=user)
+            tree.rename(db_record, new_name, acting_user=user)
         except Exception as e:
             # The rename rolled back, not the attributes it set on the row.
             db_record.refresh_from_db()

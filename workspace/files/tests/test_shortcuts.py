@@ -15,8 +15,8 @@ from django.urls import reverse
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileEvent, FileShare
 from workspace.files.queries import get_permission
-from workspace.files.services import FileService
-from workspace.files.services.files import GroupMismatch
+from workspace.files.services import trash, tree
+from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.services.names import NameTaken
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.services.shortcuts import (
@@ -25,6 +25,7 @@ from workspace.files.services.shortcuts import (
     create_shortcut,
     resolve_shortcuts,
 )
+from workspace.files.services.tree import GroupMismatch
 from workspace.files.sync import FileSyncService
 
 User = get_user_model()
@@ -39,16 +40,16 @@ class ShortcutFixtures:
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         self.bob.groups.add(self.team)
-        self.team_root = FileService.create_folder(
+        self.team_root = tree.create_folder(
             owner=self.alice, name="Team", group=self.team
         )
-        self.report = FileService.create_file(
+        self.report = tree.create_file(
             self.alice,
             "report.pdf",
             content=ContentFile(b"%PDF-1.4 report", name="report.pdf"),
         )
-        self.alice_docs = FileService.create_folder(self.alice, "Docs")
-        self.bob_inbox = FileService.create_folder(self.bob, "Inbox")
+        self.alice_docs = tree.create_folder(self.alice, "Docs")
+        self.bob_inbox = tree.create_folder(self.bob, "Inbox")
 
 
 class CreateShortcutTests(ShortcutFixtures, TestCase):
@@ -81,7 +82,7 @@ class CreateShortcutTests(ShortcutFixtures, TestCase):
         self.assertFalse(File.objects.filter(node_type=File.NodeType.SHORTCUT).exists())
 
     def test_a_trashed_target_is_refused(self):
-        FileService.soft_delete(self.report, acting_user=self.alice)
+        trash.soft_delete(self.report, acting_user=self.alice)
 
         with self.assertRaises(TargetUnreachable):
             create_shortcut(self.alice, self.report, self.alice_docs)
@@ -202,14 +203,14 @@ class ResolveShortcutsTests(ShortcutFixtures, TestCase):
         own = create_shortcut(self.alice, self.report, self.alice_docs)
         received = create_shortcut(self.bob, self.report, self.bob_inbox)
 
-        FileService.soft_delete(self.report, acting_user=self.alice)
+        trash.soft_delete(self.report, acting_user=self.alice)
 
         self.assertEqual(self._resolve(self.alice, own).state, ShortcutState.TRASHED)
         self.assertEqual(
             self._resolve(self.bob, received).state, ShortcutState.UNAVAILABLE
         )
 
-        FileService.restore(self.report, acting_user=self.alice)
+        trash.restore(self.report, acting_user=self.alice)
         self.assertEqual(self._resolve(self.bob, received).state, ShortcutState.OK)
 
     def test_a_batch_resolves_in_a_bounded_number_of_queries(self):
@@ -224,14 +225,14 @@ class ResolveShortcutsTests(ShortcutFixtures, TestCase):
             for i in range(count):
                 name = f"{batch}-{i}"
                 if i % 3 == 1:
-                    target = FileService.create_file(self.alice, f"{name}.txt")
+                    target = tree.create_file(self.alice, f"{name}.txt")
                 else:
-                    target = FileService.create_file(
+                    target = tree.create_file(
                         self.alice, f"{name}.txt", parent=self.team_root
                     )
                 shortcuts.append(create_shortcut(self.alice, target, self.alice_docs))
                 if i % 3 == 2:
-                    FileService.soft_delete(target, acting_user=self.alice)
+                    trash.soft_delete(target, acting_user=self.alice)
             with CaptureQueriesContext(connection) as queries:
                 resolve_shortcuts(self.bob, shortcuts)
             return len(queries)
@@ -278,7 +279,7 @@ class ShortcutModelValidationTests(ShortcutFixtures, TestCase):
 class ShortcutAdminTests(ShortcutFixtures, TestCase):
     def test_the_change_page_does_not_list_every_node_as_a_target(self):
         root = User.objects.create_superuser(username="root", password="x")
-        unrelated = FileService.create_file(self.bob, "unrelated.txt")
+        unrelated = tree.create_file(self.bob, "unrelated.txt")
         shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
         self.client.force_login(root)
 
@@ -301,28 +302,28 @@ class ShortcutTreeTests(ShortcutFixtures, TestCase):
         own = create_shortcut(self.alice, self.report, self.alice_docs)
         received = create_shortcut(self.bob, self.report, self.bob_inbox)
 
-        FileService.hard_delete(self.report)
+        hard_delete_tree(self.report)
 
         self.assertFalse(File.objects.filter(pk__in=[own.pk, received.pk]).exists())
 
     def test_trashing_and_restoring_a_shortcut_leaves_its_target_alone(self):
         shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
 
-        FileService.soft_delete(shortcut, acting_user=self.alice)
+        trash.soft_delete(shortcut, acting_user=self.alice)
         shortcut.refresh_from_db()
         self.report.refresh_from_db()
         self.assertIsNotNone(shortcut.deleted_at)
         self.assertIsNone(self.report.deleted_at)
 
-        FileService.restore(shortcut, acting_user=self.alice)
+        trash.restore(shortcut, acting_user=self.alice)
         shortcut.refresh_from_db()
         self.assertIsNone(shortcut.deleted_at)
 
     def test_rename_and_move_touch_the_shortcut_only(self):
         shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
 
-        FileService.rename(shortcut, "Q3.pdf", acting_user=self.alice)
-        FileService.move(shortcut, None, acting_user=self.alice)
+        tree.rename(shortcut, "Q3.pdf", acting_user=self.alice)
+        tree.move(shortcut, None, acting_user=self.alice)
 
         shortcut.refresh_from_db()
         self.report.refresh_from_db()
@@ -333,7 +334,7 @@ class ShortcutTreeTests(ShortcutFixtures, TestCase):
     def test_a_copied_shortcut_points_at_the_same_target(self):
         shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
 
-        copied = FileService.copy(shortcut, None, self.alice, acting_user=self.alice)
+        copied = tree.copy(shortcut, None, self.alice, acting_user=self.alice)
 
         copied.refresh_from_db()
         self.assertEqual(copied.node_type, File.NodeType.SHORTCUT)
@@ -343,7 +344,7 @@ class ShortcutTreeTests(ShortcutFixtures, TestCase):
     def test_a_copied_folder_carries_its_shortcuts(self):
         create_shortcut(self.alice, self.report, self.alice_docs)
 
-        copied = FileService.copy(
+        copied = tree.copy(
             self.alice_docs, self.team_root, self.alice, acting_user=self.alice
         )
 
@@ -379,6 +380,6 @@ class ShortcutStorageTests(IsolatedMediaRootMixin, ShortcutFixtures, TestCase):
             handle.write(b"keep")
         shortcut = create_shortcut(self.alice, self.alice_docs, None, name="Archive")
 
-        FileService.hard_delete(shortcut)
+        hard_delete_tree(shortcut)
 
         self.assertTrue(os.path.exists(os.path.join(stray, "keep.txt")))

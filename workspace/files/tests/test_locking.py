@@ -16,7 +16,7 @@ from workspace.core.sse_registry import read_user_events
 from workspace.files.models import File, FileShare
 from workspace.files.queries import annotate_for_serializer
 from workspace.files.serializers import FileLocked, FileSerializer
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.locking import LockConflict
 from workspace.files.sse_provider import push_file_event
@@ -314,7 +314,7 @@ class LockedContentWriteTests(APITestCase):
             email="holder@test.com",
             password="pass123",
         )
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.owner,
             "doc.md",
             content=ContentFile(b"original", name="doc.md"),
@@ -416,7 +416,7 @@ class StaleWriteTests(APITestCase):
             email="stale@test.com",
             password="pass123",
         )
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.user,
             "note.md",
             content=ContentFile(b"first", name="note.md"),
@@ -588,7 +588,7 @@ class WriteGuardScopeTests(APITestCase):
             email="scopeoutsider@test.com",
             password="pass123",
         )
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.owner,
             "secret.md",
             content=ContentFile(b"private", name="secret.md"),
@@ -665,7 +665,7 @@ class ConcurrentWriteTests(APITestCase):
             email="rival@test.com",
             password="pass123",
         )
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.user,
             "race.md",
             content=ContentFile(b"first", name="race.md"),
@@ -894,7 +894,7 @@ class ConcurrentWriteTests(APITestCase):
         self._rival_saves()
         rival = File.objects.get(pk=self.file.pk)
 
-        FileService.rename(renaming, "renamed.md", acting_user=self.user)
+        tree.rename(renaming, "renamed.md", acting_user=self.user)
 
         stored = File.objects.get(pk=self.file.pk)
         self.assertEqual(stored.name, "renamed.md")
@@ -904,12 +904,12 @@ class ConcurrentWriteTests(APITestCase):
             self.assertEqual(handle.read(), b"the rival's paragraphs")
 
     def test_a_move_does_not_revert_a_content_write(self):
-        target = FileService.create_folder(self.user, "elsewhere")
+        target = tree.create_folder(self.user, "elsewhere")
         moving = File.objects.get(pk=self.file.pk)
         self._rival_saves()
         rival = File.objects.get(pk=self.file.pk)
 
-        FileService.move(moving, target, acting_user=self.user)
+        tree.move(moving, target, acting_user=self.user)
 
         stored = File.objects.get(pk=self.file.pk)
         self.assertEqual(stored.parent_id, target.pk)
@@ -922,7 +922,7 @@ class ConcurrentWriteTests(APITestCase):
         renaming = File.objects.get(pk=self.file.pk)
         self._lock_for_the_rival()
 
-        FileService.rename(renaming, "renamed.md", acting_user=self.user)
+        tree.rename(renaming, "renamed.md", acting_user=self.user)
 
         stored = File.objects.get(pk=self.file.pk)
         self.assertEqual(stored.locked_by_id, self.rival.pk)
@@ -976,7 +976,7 @@ class LockNeedsWriteAccessTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pass123")
         self.reader = User.objects.create_user(username="reader", password="pass123")
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.owner, "doc.txt", content=ContentFile(b"v1", name="doc.txt")
         )
         FileShare.objects.create(

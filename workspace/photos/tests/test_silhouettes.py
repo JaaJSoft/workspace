@@ -7,7 +7,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from workspace.common.vectors.encoding import to_bytes
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Appearance, Face, FaceCluster
 from workspace.photos.services import appearance_review
@@ -53,7 +53,7 @@ class SilhouetteSetupMixin(FacesTestMixin):
         opt_in(self.user)
         self.lea = contact(self.user, "Léa")
         self.noah = contact(self.user, "Noah")
-        self.holidays = FileService.create_folder(owner=self.user, name="Holidays")
+        self.holidays = tree.create_folder(owner=self.user, name="Holidays")
         self._photos = 0
 
     def photo(self, folder=None, taken=NOON):
@@ -135,7 +135,7 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
         self.assertIsNone(self.group_of(row).guess)
 
     def test_no_guess_in_a_folder_with_too_few_photos_of_them(self):
-        trip = FileService.create_folder(owner=self.user, name="Trip")
+        trip = tree.create_folder(owner=self.user, name="Trip")
         self.face_of(self.lea, RED, folder=trip)
         self.face_of(self.lea, folder=trip)
         row = self.alone(RED, folder=trip)
@@ -154,7 +154,7 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
         self.assertEqual(self.group_of(row).guess.person, self.lea)
 
     def test_another_folders_photos_say_nothing(self):
-        trip = FileService.create_folder(owner=self.user, name="Trip")
+        trip = tree.create_folder(owner=self.user, name="Trip")
         for _ in range(3):
             self.face_of(self.lea, folder=trip)
         # Léa is the folder's person, but never seen in red there.

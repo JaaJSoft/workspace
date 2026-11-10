@@ -15,7 +15,7 @@ from rest_framework.test import APITestCase
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.names import NameTaken
 from workspace.files.sync import FileSyncService
@@ -43,10 +43,10 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(username="alice", password="pass")
-        self.folder = FileService.create_folder(self.user, "Docs")
+        self.folder = tree.create_folder(self.user, "Docs")
 
     def _create(self, name, data, **kwargs):
-        return FileService.create_file(
+        return tree.create_file(
             self.user, name, parent=self.folder, content=ContentFile(data), **kwargs
         )
 
@@ -66,14 +66,14 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
         spaced = self._create("a b.txt", b"spaced")
         other = self._create("x.txt", b"x")
 
-        FileService.rename(other, "a_b.txt")
+        tree.rename(other, "a_b.txt")
 
         self.assertEqual(read(spaced), b"spaced")
         self.assertEqual(read(other), b"x")
 
     def test_a_backslash_cannot_reach_into_a_sibling_folder(self):
-        sub = FileService.create_folder(self.user, "a", parent=self.folder)
-        victim = FileService.create_file(
+        sub = tree.create_folder(self.user, "a", parent=self.folder)
+        victim = tree.create_file(
             self.user, "b.txt", parent=sub, content=ContentFile(b"victim")
         )
 
@@ -130,7 +130,7 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
     def test_a_rename_refreshes_the_key_the_constraint_compares(self):
         renamed = self._create("a.txt", b"x")
 
-        FileService.rename(renamed, COMPOSED)
+        tree.rename(renamed, COMPOSED)
 
         renamed.refresh_from_db()
         self.assertEqual(renamed.name_key, "été.txt")

@@ -46,7 +46,7 @@ from django.test import LiveServerTestCase
 from django.test.testcases import LiveServerThread
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -445,7 +445,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_mount_sees_preexisting_file(self):
         """File created server-side is visible via ``stat`` on the mount."""
-        FileService.create_file(self.user, "preexisting.txt", mime_type="text/plain")
+        tree.create_file(self.user, "preexisting.txt", mime_type="text/plain")
         # Stat-based check — works even though readdir doesn't.
         self.assertTrue(
             self._wait_until(
@@ -586,8 +586,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         (PROPFIND Depth 0) rather than ``iterdir()`` (broken by the
         davfs2/getdents64 kernel-side limitation).
         """
-        FileService.create_folder(self.user, "DirA")
-        FileService.create_file(self.user, "fileA.txt", mime_type="text/plain")
+        tree.create_folder(self.user, "DirA")
+        tree.create_file(self.user, "fileA.txt", mime_type="text/plain")
         for name, kind in (("DirA", "is_dir"), ("fileA.txt", "is_file")):
             ok = self._wait_until(
                 lambda n=name: (self.mp / n).exists(),
@@ -603,7 +603,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_rm_soft_deletes_file(self):
         """``rm foo`` → DELETE → File.deleted_at is set."""
-        FileService.create_file(self.user, "to_remove.txt", mime_type="text/plain")
+        tree.create_file(self.user, "to_remove.txt", mime_type="text/plain")
         self.assertTrue(
             self._wait_until(
                 lambda: (self.mp / "to_remove.txt").exists(),
@@ -624,7 +624,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         )
 
     def test_rmdir_removes_empty_folder(self):
-        FileService.create_folder(self.user, "tobedel")
+        tree.create_folder(self.user, "tobedel")
         self.assertTrue(
             self._wait_until(
                 lambda: (self.mp / "tobedel").exists(),
@@ -670,7 +670,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_mv_into_subfolder(self):
         """``mv file folder/`` → MOVE across folders → parent updated."""
-        FileService.create_folder(self.user, "Inbox")
+        tree.create_folder(self.user, "Inbox")
         src = self.mp / "letter.txt"
         src.write_bytes(b"hi")
         self._wait_for_file(owner=self.user, name="letter.txt", size=2)
@@ -699,7 +699,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_mv_from_subfolder_to_root(self):
         """``mv folder/file .`` → MOVE → file ends up parentless."""
-        FileService.create_folder(self.user, "Outbox")
+        tree.create_folder(self.user, "Outbox")
         outbox = File.objects.get(
             owner=self.user,
             name="Outbox",
@@ -738,8 +738,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_mv_between_sibling_folders(self):
         """``mv A/file B/file`` → MOVE → parent switches from A to B."""
-        FileService.create_folder(self.user, "A")
-        FileService.create_folder(self.user, "B")
+        tree.create_folder(self.user, "A")
+        tree.create_folder(self.user, "B")
         a = File.objects.get(owner=self.user, name="A", deleted_at__isnull=True)
         b = File.objects.get(owner=self.user, name="B", deleted_at__isnull=True)
         for name in ("A", "B"):
@@ -772,8 +772,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_mv_with_rename_across_folders(self):
         """``mv A/old.txt B/new.txt`` → MOVE → parent and name change together."""
-        FileService.create_folder(self.user, "A")
-        FileService.create_folder(self.user, "B")
+        tree.create_folder(self.user, "A")
+        tree.create_folder(self.user, "B")
         a = File.objects.get(owner=self.user, name="A", deleted_at__isnull=True)
         b = File.objects.get(owner=self.user, name="B", deleted_at__isnull=True)
         for name in ("A", "B"):
@@ -806,7 +806,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_mv_renames_folder_in_place(self):
         """``mv old new`` on a folder → MOVE → folder renamed, parent unchanged."""
-        FileService.create_folder(self.user, "OldName")
+        tree.create_folder(self.user, "OldName")
         self.assertTrue(
             self._wait_until(
                 lambda: (self.mp / "OldName").exists(),
@@ -831,8 +831,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     def test_mv_folder_into_another_folder(self):
         """``mv A B/`` → MOVE → folder A becomes a child of B with its content."""
-        FileService.create_folder(self.user, "Movable")
-        FileService.create_folder(self.user, "Parent")
+        tree.create_folder(self.user, "Movable")
+        tree.create_folder(self.user, "Parent")
         movable = File.objects.get(
             owner=self.user,
             name="Movable",

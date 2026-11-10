@@ -17,7 +17,7 @@ from django.core.cache import cache
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.tests.images import make_photo, make_video
 
 TILES = "#timeline-grid [data-uuid]"
@@ -33,7 +33,7 @@ class PhotosLoadingOverlayTests(PlaywrightTestCase):
         self.family = Group.objects.create(name="Family")
         self.user.groups.add(self.family)
         bob = self.create_user(username="bob")
-        root = FileService.create_folder(owner=bob, name="Family", group=self.family)
+        root = tree.create_folder(owner=bob, name="Family", group=self.family)
         make_photo(bob, "family.jpg", datetime(2024, 7, 9, 12, tzinfo=UTC), parent=root)
         self.login_as(self.user)
 

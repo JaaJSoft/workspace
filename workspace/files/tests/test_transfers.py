@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileScan, FileShare, UserStorageQuota
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.quota import QuotaExceeded
 from workspace.files.services.refusals import Refusal, Refused
 from workspace.files.services.shortcuts import create_shortcut
@@ -30,7 +30,7 @@ def _bytes(file_obj):
 
 
 def _file(owner, name, parent, body=b"source"):
-    return FileService.create_file(
+    return tree.create_file(
         owner, name, parent=parent, content=ContentFile(body, name=name)
     )
 
@@ -57,8 +57,8 @@ class TransferFixture(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="pass")
         self.bob = User.objects.create_user(username="bob", password="pass")
-        self.src = FileService.create_folder(self.alice, "Src")
-        self.dst = FileService.create_folder(self.alice, "Dst")
+        self.src = tree.create_folder(self.alice, "Src")
+        self.dst = tree.create_folder(self.alice, "Dst")
         self.report = _file(self.alice, "report.txt", self.src)
 
     def assertRefused(self, reason, transfer, *args, **kwargs):
@@ -141,8 +141,8 @@ class CopyItemTests(TransferFixture):
         self.assertEqual(_names(self.dst), ["report.txt"])
 
     def test_a_folder_never_replaces_the_one_holding_its_name(self):
-        _file(self.alice, "inside.txt", FileService.create_folder(self.alice, "Docs"))
-        taken = FileService.create_folder(self.alice, "Docs", parent=self.dst)
+        _file(self.alice, "inside.txt", tree.create_folder(self.alice, "Docs"))
+        taken = tree.create_folder(self.alice, "Docs", parent=self.dst)
         docs = File.objects.get(name="Docs", parent__isnull=True)
 
         result = copy_item(self.alice, docs, self.dst, OnConflict.REPLACE)
@@ -153,7 +153,7 @@ class CopyItemTests(TransferFixture):
         self.assertEqual(_names(taken), [])
 
     def test_a_folder_cannot_be_copied_into_itself(self):
-        inner = FileService.create_folder(self.alice, "Inner", parent=self.src)
+        inner = tree.create_folder(self.alice, "Inner", parent=self.src)
 
         self.assertRefused(
             Refusal.INTO_ITSELF, copy_item, self.alice, self.src, self.src
@@ -161,13 +161,13 @@ class CopyItemTests(TransferFixture):
         self.assertRefused(Refusal.INTO_ITSELF, copy_item, self.alice, self.src, inner)
 
     def test_a_folder_out_of_reach_is_no_destination(self):
-        theirs = FileService.create_folder(self.bob, "Private")
+        theirs = tree.create_folder(self.bob, "Private")
 
         self.assertRefused(Refusal.TARGET, copy_item, self.alice, self.report, theirs)
         self.assertEqual(_names(theirs), [])
 
     def test_a_read_only_folder_is_no_destination(self):
-        theirs = FileService.create_folder(self.bob, "Shared")
+        theirs = tree.create_folder(self.bob, "Shared")
         FileShare.objects.create(
             file=theirs,
             shared_by=self.bob,
@@ -178,7 +178,7 @@ class CopyItemTests(TransferFixture):
         self.assertRefused(Refusal.TARGET, copy_item, self.alice, self.report, theirs)
 
     def test_a_trashed_folder_is_no_destination(self):
-        FileService.soft_delete(self.dst, acting_user=self.alice)
+        trash.soft_delete(self.dst, acting_user=self.alice)
         self.dst.refresh_from_db()
 
         self.assertRefused(Refusal.TARGET, copy_item, self.alice, self.report, self.dst)
@@ -228,7 +228,7 @@ class CopyItemTests(TransferFixture):
         group = Group.objects.create(name="Design")
         self.alice.groups.add(group)
         self.bob.groups.add(group)
-        root = FileService.create_folder(self.bob, "Design", group=group)
+        root = tree.create_folder(self.bob, "Design", group=group)
         theirs = _file(self.bob, "report.txt", root, b"theirs")
         _lock(theirs, self.bob)
 
@@ -263,7 +263,7 @@ class CopyUnderANameTests(TransferFixture):
         self.assertEqual(_bytes(result.node), b"source")
 
     def test_a_file_without_content_is_copied_too(self):
-        empty = FileService.create_file(self.alice, "empty.txt", parent=self.src)
+        empty = tree.create_file(self.alice, "empty.txt", parent=self.src)
 
         result = copy_item(self.alice, empty, self.dst, name="empty copy.txt")
 
@@ -436,7 +436,7 @@ class MoveItemTests(TransferFixture):
 
     def test_a_move_refused_by_the_quota_leaves_the_name_alone(self):
         with patch.object(
-            FileService, "check_move_allowed", side_effect=QuotaExceeded("full")
+            tree, "check_move_allowed", side_effect=QuotaExceeded("full")
         ):
             self.assertRefused(
                 Refusal.QUOTA,
@@ -464,8 +464,8 @@ class MoveItemTests(TransferFixture):
         self.assertEqual(_bytes(self.report), b"source")
 
     def test_a_folder_does_not_merge_into_the_one_holding_its_name(self):
-        docs = FileService.create_folder(self.alice, "Docs", parent=self.src)
-        FileService.create_folder(self.alice, "Docs", parent=self.dst)
+        docs = tree.create_folder(self.alice, "Docs", parent=self.src)
+        tree.create_folder(self.alice, "Docs", parent=self.dst)
 
         for on_conflict in (OnConflict.ERROR, OnConflict.REPLACE):
             with self.subTest(on_conflict=on_conflict):
@@ -486,8 +486,8 @@ class MoveItemTests(TransferFixture):
         self.assertEqual(_names(self.dst), ["Docs", "Docs (Copy)"])
 
     def test_skip_covers_a_folder_holding_the_name(self):
-        docs = FileService.create_folder(self.alice, "Docs", parent=self.src)
-        FileService.create_folder(self.alice, "Docs", parent=self.dst)
+        docs = tree.create_folder(self.alice, "Docs", parent=self.src)
+        tree.create_folder(self.alice, "Docs", parent=self.dst)
 
         result = move_item(self.alice, docs, self.dst, OnConflict.SKIP)
 
@@ -496,12 +496,12 @@ class MoveItemTests(TransferFixture):
         self.assertEqual(docs.parent_id, self.src.pk)
 
     def test_a_folder_cannot_move_into_itself(self):
-        inner = FileService.create_folder(self.alice, "Inner", parent=self.src)
+        inner = tree.create_folder(self.alice, "Inner", parent=self.src)
 
         self.assertRefused(Refusal.INTO_ITSELF, move_item, self.alice, self.src, inner)
 
     def test_a_folder_out_of_reach_is_no_destination(self):
-        theirs = FileService.create_folder(self.bob, "Private")
+        theirs = tree.create_folder(self.bob, "Private")
 
         self.assertRefused(Refusal.TARGET, move_item, self.alice, self.report, theirs)
         self.report.refresh_from_db()
@@ -547,7 +547,7 @@ class GroupMoveTests(TransferFixture):
         self.group = Group.objects.create(name="Design")
         self.alice.groups.add(self.group)
         self.bob.groups.add(self.group)
-        self.root = FileService.create_folder(self.bob, "Design", group=self.group)
+        self.root = tree.create_folder(self.bob, "Design", group=self.group)
         self.theirs = _file(self.bob, "brief.txt", self.root, b"theirs")
 
     def test_the_root_folder_of_a_group_stays_where_it_is(self):

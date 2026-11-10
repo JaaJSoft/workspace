@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.files.models import FileFavorite, FileTag, Tag
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.imports.services import file_metadata
 
 User = get_user_model()
@@ -11,8 +11,8 @@ User = get_user_model()
 class MarkFavoritesTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pw")
-        self.a = FileService.create_folder(self.user, "a")
-        self.b = FileService.create_folder(self.user, "b")
+        self.a = tree.create_folder(self.user, "a")
+        self.b = tree.create_folder(self.user, "b")
 
     def test_favorites_every_file_once(self):
         self.assertEqual(
@@ -40,7 +40,7 @@ class MarkFavoritesTests(TestCase):
 class ApplyTagTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pw")
-        self.file = FileService.create_folder(self.user, "a")
+        self.file = tree.create_folder(self.user, "a")
 
     def test_creates_the_tag_on_first_use_and_attaches_it(self):
         self.assertEqual(

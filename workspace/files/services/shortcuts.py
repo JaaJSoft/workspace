@@ -27,10 +27,11 @@ from ..queries import (
     trash_permissions_bulk,
 )
 from . import names as _name_helpers
+from . import tree
 from .events import record_event
-from .files import FileService, GroupMismatch
 from .scanning.policy import with_scan
 from .storage_ops import unique_copy_name
+from .tree import GroupMismatch
 
 
 class ShortcutState(StrEnum):
@@ -77,7 +78,7 @@ def create_shortcut(
 
     *owner* must be able to open *target*, or ``TargetUnreachable`` is raised;
     whether they may write into *parent* is the caller's check, as for
-    ``FileService.create_file``. A shortcut to a shortcut points at the
+    ``tree.create_file``. A shortcut to a shortcut points at the
     latter's target, so a chain never forms. *name* defaults to the name of
     the node the caller picked. A taken name raises ``NameTaken`` unless
     ``keep_both`` asks for the first free ``name (Copy N)``.
@@ -88,7 +89,7 @@ def create_shortcut(
     if target.deleted_at is not None or get_permission(owner, target) is None:
         raise TargetUnreachable()
 
-    group = FileService.node_group(parent, group)
+    group = tree.node_group(parent, group)
     if parent is None and group is not None:
         # A group node at the root is the group's root folder.
         raise GroupMismatch()
@@ -129,7 +130,7 @@ def rename_aside(shortcut, *, keep_free=(), acting_user=None):
     )
     taken.update(keep_free)
     name = unique_copy_name(shortcut.name, File.NodeType.SHORTCUT, taken)
-    return FileService.rename(shortcut, name, acting_user=acting_user)
+    return tree.rename(shortcut, name, acting_user=acting_user)
 
 
 def resolve_shortcuts(user, nodes):

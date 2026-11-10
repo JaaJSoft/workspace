@@ -14,7 +14,7 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.mail.models import MailAccount
 from workspace.mail.tests.smtp_recorder import RecordingSMTP
 
@@ -57,7 +57,7 @@ class SendPickedFilesTests(APITestCase):
     ):
         server = RecordingSMTP()
         mock_connect.return_value = server
-        src = FileService.create_file(
+        src = tree.create_file(
             self.user,
             "report.txt",
             content=SimpleUploadedFile(
@@ -75,7 +75,7 @@ class SendPickedFilesTests(APITestCase):
     def test_foreign_file_rejects_the_send(self, mock_connect, _append, _sync):
         server = RecordingSMTP()
         mock_connect.return_value = server
-        src = FileService.create_file(
+        src = tree.create_file(
             self.other,
             "secret.txt",
             content=SimpleUploadedFile("secret.txt", b"x", content_type="text/plain"),
@@ -97,7 +97,7 @@ class SendPickedFilesTests(APITestCase):
     ):
         server = RecordingSMTP()
         mock_connect.return_value = server
-        picked = FileService.create_file(
+        picked = tree.create_file(
             self.user,
             "big.bin",
             content=SimpleUploadedFile("big.bin", b"x" * (12 * 1024 * 1024)),
@@ -129,7 +129,7 @@ class SendPickedFilesTests(APITestCase):
     ):
         server = RecordingSMTP()
         mock_connect.return_value = server
-        src = FileService.create_file(
+        src = tree.create_file(
             self.user,
             "report.txt",
             content=SimpleUploadedFile("report.txt", b"quarterly numbers"),

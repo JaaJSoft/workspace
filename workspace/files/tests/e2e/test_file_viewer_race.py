@@ -24,7 +24,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -35,7 +35,7 @@ class FileViewerRaceTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="viewer-race")
-        self.text_file = FileService.create_file(
+        self.text_file = tree.create_file(
             owner=self.user,
             name="alpha.txt",
             content=SimpleUploadedFile(
@@ -43,7 +43,7 @@ class FileViewerRaceTests(PlaywrightTestCase):
             ),
             acting_user=self.user,
         )
-        self.image_file = FileService.create_file(
+        self.image_file = tree.create_file(
             owner=self.user,
             name="bravo.png",
             content=SimpleUploadedFile("bravo.png", PNG_1PX, content_type="image/png"),

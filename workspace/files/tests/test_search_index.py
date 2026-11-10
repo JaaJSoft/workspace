@@ -14,7 +14,7 @@ from workspace.common.search import apply_fulltext, fts5_available
 from workspace.common.tests.office_fixtures import make_docx
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File, FileEvent, SearchIndexState
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.processors import get_processor
 from workspace.files.services.search_index import (
     EXTRACTOR_VERSION,
@@ -194,9 +194,7 @@ class PendingSearchTests(TestCase):
         self.user = User.objects.create_user(username="alice", password="pw")
 
     def _note(self, name="old.md", body=b"x"):
-        return FileService.create_file(
-            self.user, name, content=ContentFile(body, name=name)
-        )
+        return tree.create_file(self.user, name, content=ContentFile(body, name=name))
 
     def _pending(self, **kwargs):
         return set(pending_search_qs(**kwargs).values_list("pk", flat=True))
@@ -238,12 +236,12 @@ class PendingSearchTests(TestCase):
             self.assertEqual(self._pending(), {note.pk})
 
     def test_folders_are_indexed_by_name(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         self.assertEqual(self._pending(), {folder.pk})
 
     def test_trashed_files_are_not_pending(self):
         note = self._note()
-        note.soft_delete()
+        trash.trash_subtree(note)
         self.assertEqual(self._pending(), set())
 
     def test_unindexing_makes_the_file_pending_again(self):
@@ -613,7 +611,7 @@ class DocumentBackfillTests(_FtsTestCase):
 @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
 class WopiSaveReindexTests(_FtsTestCase):
     def test_saving_through_the_office_editor_reindexes_the_new_body(self):
-        report = FileService.create_file(
+        report = tree.create_file(
             owner=self.user,
             name="report.docx",
             content=SimpleUploadedFile(

@@ -22,7 +22,7 @@ from workspace.files.queries import (
     accessible_files_q,
     get_permission,
 )
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.comments import mentionable_users
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.sse_provider import FilesSSEProvider, push_file_event
@@ -44,7 +44,7 @@ class ProjectShareFixtures:
         self.team = Group.objects.create(name="Team")
         self.grouped.groups.add(self.team)
         self.project.groups.add(self.team)
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.owner, "doc.txt", content=ContentFile(b"hello"), mime_type="text/plain"
         )
 

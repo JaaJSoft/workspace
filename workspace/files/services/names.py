@@ -277,7 +277,7 @@ def available_file_name(owner, parent, name, *, avoiding=()):
 def validate_move_target(file_obj, new_parent):
     """Raise ``ValueError`` if *new_parent* would put a folder inside itself.
 
-    The structural half of ``FileService.validate_move_target``, which also
+    The structural half of ``tree.validate_move_target``, which also
     decides whether the caller may write there.
     """
     if file_obj.node_type == File.NodeType.FOLDER:

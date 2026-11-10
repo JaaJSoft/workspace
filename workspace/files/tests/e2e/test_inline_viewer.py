@@ -18,7 +18,7 @@ from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import FileFavorite
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.users.services.settings import set_setting
 
 PNG_1PX = base64.b64decode(
@@ -32,9 +32,9 @@ class InlineViewerTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="inline-viewer")
-        self.folder = FileService.create_folder(self.user, "Trip")
+        self.folder = tree.create_folder(self.user, "Trip")
         self.images = [
-            FileService.create_file(
+            tree.create_file(
                 owner=self.user,
                 name=name,
                 parent=self.folder,

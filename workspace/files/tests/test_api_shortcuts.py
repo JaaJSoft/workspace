@@ -16,7 +16,7 @@ from rest_framework.test import APITestCase
 from workspace.core.module_registry import SearchScope
 from workspace.files.models import File, FileShare
 from workspace.files.search import search_files
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.filetype import get_icon
 from workspace.files.services.public_links import resolve_within
 from workspace.files.services.search_index import index_file
@@ -39,17 +39,17 @@ class ShortcutApiFixtures:
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         self.bob.groups.add(self.team)
-        self.team_root = FileService.create_folder(
+        self.team_root = tree.create_folder(
             owner=self.alice, name="Team", group=self.team
         )
-        self.report = FileService.create_file(
+        self.report = tree.create_file(
             self.alice,
             "report.pdf",
             content=ContentFile(b"%PDF-1.4 report", name="report.pdf"),
             mime_type="application/pdf",
         )
-        self.alice_docs = FileService.create_folder(self.alice, "Docs")
-        self.bob_inbox = FileService.create_folder(self.bob, "Inbox")
+        self.alice_docs = tree.create_folder(self.alice, "Docs")
+        self.bob_inbox = tree.create_folder(self.bob, "Inbox")
 
     def _post_shortcut(self, user, target, parent=None, **extra):
         self.client.force_authenticate(user=user)
@@ -101,7 +101,7 @@ class CreateShortcutApiTests(ShortcutApiFixtures, APITestCase):
         self.assertEqual(target["path"], "report.pdf")
 
     def test_a_shared_file_keeps_its_owners_folders_to_itself(self):
-        plan = FileService.create_file(
+        plan = tree.create_file(
             self.alice,
             "plan.pdf",
             parent=self.alice_docs,
@@ -322,7 +322,7 @@ class ShortcutReadApiTests(ShortcutApiFixtures, APITestCase):
 
     def test_a_trashed_target_is_reported_to_its_owner(self):
         create_shortcut(self.alice, self.report, self.alice_docs)
-        FileService.soft_delete(self.report, acting_user=self.alice)
+        trash.soft_delete(self.report, acting_user=self.alice)
         self.client.force_authenticate(user=self.alice)
 
         response = self.client.get(f"/api/v1/files?parent={self.alice_docs.uuid}")
@@ -336,7 +336,7 @@ class ShortcutReadApiTests(ShortcutApiFixtures, APITestCase):
         # a group file he can open, a private file of Alice's he cannot, or
         # a group file in the trash.
         self.client.force_authenticate(user=self.bob)
-        listed = FileService.create_folder(self.alice, "Links", parent=self.team_root)
+        listed = tree.create_folder(self.alice, "Links", parent=self.team_root)
         url = f"/api/v1/files?parent={listed.uuid}"
         batches = iter(range(100))
 
@@ -345,14 +345,12 @@ class ShortcutReadApiTests(ShortcutApiFixtures, APITestCase):
             for i in range(count):
                 name = f"{batch}-{i}.txt"
                 if i % 3 == 1:
-                    target = FileService.create_file(self.alice, name)
+                    target = tree.create_file(self.alice, name)
                 else:
-                    target = FileService.create_file(
-                        self.alice, name, parent=self.team_root
-                    )
+                    target = tree.create_file(self.alice, name, parent=self.team_root)
                 create_shortcut(self.alice, target, listed)
                 if i % 3 == 2:
-                    FileService.soft_delete(target, acting_user=self.alice)
+                    trash.soft_delete(target, acting_user=self.alice)
             with CaptureQueriesContext(connection) as queries:
                 self.assertEqual(self.client.get(url).status_code, 200)
             return len(queries)
@@ -457,7 +455,7 @@ class ShortcutActionsTests(ShortcutApiFixtures, APITestCase):
 
     def test_a_trashed_shortcut_offers_the_trash_actions(self):
         shortcut = create_shortcut(self.alice, self.report, self.alice_docs)
-        FileService.soft_delete(shortcut, acting_user=self.alice)
+        trash.soft_delete(shortcut, acting_user=self.alice)
 
         ids = self._action_ids(self.alice, shortcut)
 
@@ -491,7 +489,7 @@ class ShortcutOutsideTheApiTests(ShortcutApiFixtures, TestCase):
 
     def test_search_hits_name_nodes_not_shortcuts(self):
         shortcut = create_shortcut(self.alice, self.report, None, name="budget link")
-        budget = FileService.create_file(self.alice, "budget.ods")
+        budget = tree.create_file(self.alice, "budget.ods")
         index_file(shortcut)
         index_file(budget)
 

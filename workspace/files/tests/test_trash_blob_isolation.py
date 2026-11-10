@@ -18,8 +18,9 @@ from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.content_writes import update_content
+from workspace.files.services.hard_delete import hard_delete_tree
 
 User = get_user_model()
 
@@ -33,7 +34,7 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
         self.user = User.objects.create_user(username="trasher", password="pass")
 
     def _make(self, name, content, parent=None):
-        return FileService.create_file(
+        return tree.create_file(
             self.user,
             name,
             parent=parent,
@@ -42,7 +43,7 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
 
     def _trashed(self, name="report.pdf", content=TRASHED, parent=None):
         f = self._make(name, content, parent=parent)
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
         return f
 
     def _bytes_of(self, file_obj):
@@ -54,7 +55,7 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
         trashed = self._trashed()
         live = self._make("report.pdf", LIVE)
 
-        FileService.restore(trashed, acting_user=self.user)
+        trash.restore(trashed, acting_user=self.user)
 
         self.assertEqual(self._bytes_of(trashed), TRASHED)
         self.assertEqual(self._bytes_of(live), LIVE)
@@ -63,30 +64,30 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
         trashed = self._trashed()
         live = self._make("draft.pdf", LIVE)
 
-        FileService.rename(live, "report.pdf", acting_user=self.user)
-        FileService.restore(trashed, acting_user=self.user)
+        tree.rename(live, "report.pdf", acting_user=self.user)
+        trash.restore(trashed, acting_user=self.user)
 
         self.assertEqual(self._bytes_of(trashed), TRASHED)
         self.assertEqual(self._bytes_of(live), LIVE)
 
     def test_moving_a_file_next_to_a_trashed_namesake_spares_its_bytes(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         trashed = self._trashed(parent=folder)
         live = self._make("report.pdf", LIVE)
 
-        FileService.move(live, folder, acting_user=self.user)
-        FileService.restore(trashed, acting_user=self.user)
+        tree.move(live, folder, acting_user=self.user)
+        trash.restore(trashed, acting_user=self.user)
 
         self.assertEqual(self._bytes_of(trashed), TRASHED)
         self.assertEqual(self._bytes_of(live), LIVE)
 
     def test_copying_a_file_onto_a_trashed_name_spares_its_bytes(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         trashed = self._trashed(parent=folder)
         source = self._make("report.pdf", LIVE)
 
-        copied = FileService.copy(source, folder, self.user, acting_user=self.user)
-        FileService.restore(trashed, acting_user=self.user)
+        copied = tree.copy(source, folder, self.user, acting_user=self.user)
+        trash.restore(trashed, acting_user=self.user)
 
         self.assertEqual(self._bytes_of(trashed), TRASHED)
         self.assertEqual(self._bytes_of(copied), LIVE)
@@ -98,21 +99,21 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
         update_content(
             live, ContentFile(LIVE, name="report.pdf"), acting_user=self.user
         )
-        FileService.restore(trashed, acting_user=self.user)
+        trash.restore(trashed, acting_user=self.user)
 
         self.assertEqual(self._bytes_of(trashed), TRASHED)
         self.assertEqual(self._bytes_of(live), LIVE)
 
     def test_a_file_trashed_inside_a_trashed_folder_survives_the_round_trip(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         inner = self._make("report.pdf", TRASHED, parent=folder)
-        FileService.soft_delete(folder, acting_user=self.user)
+        trash.soft_delete(folder, acting_user=self.user)
 
         # The name is free again, so a new Docs/report.pdf can be created.
-        new_folder = FileService.create_folder(self.user, "Docs")
+        new_folder = tree.create_folder(self.user, "Docs")
         rival = self._make("report.pdf", LIVE, parent=new_folder)
 
-        FileService.restore(folder, acting_user=self.user)
+        trash.restore(folder, acting_user=self.user)
 
         self.assertEqual(self._bytes_of(inner), TRASHED)
         self.assertEqual(self._bytes_of(rival), LIVE)
@@ -125,14 +126,14 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
         self.assertEqual(self._bytes_of(second), b"SECOND")
 
     def test_no_two_rows_share_a_storage_path(self):
-        folder = FileService.create_folder(self.user, "Docs")
+        folder = tree.create_folder(self.user, "Docs")
         self._trashed()
         self._trashed()
         self._trashed(parent=folder)
         self._make("report.pdf", LIVE)
         self._make("report.pdf", LIVE, parent=folder)
         other = User.objects.create_user(username="stranger", password="pass")
-        FileService.create_file(
+        tree.create_file(
             other, "report.pdf", content=ContentFile(LIVE, name="report.pdf")
         )
 
@@ -148,7 +149,7 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
         trashed = self._trashed()
         live = self._make("report.pdf", LIVE)
 
-        FileService.hard_delete(trashed, acting_user=self.user)
+        hard_delete_tree(trashed)
 
         self.assertEqual(self._bytes_of(live), LIVE)
         self.assertTrue(default_storage.is_file(live.content.name))

@@ -13,7 +13,7 @@ from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.shortcuts import create_shortcut
 
 
@@ -21,15 +21,15 @@ class ShortcutBrowserTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="alice")
-        self.reports = FileService.create_folder(self.user, "Reports")
-        self.notes = FileService.create_file(
+        self.reports = tree.create_folder(self.user, "Reports")
+        self.notes = tree.create_file(
             self.user,
             "notes.txt",
             parent=self.reports,
             content=ContentFile(b"minutes", name="notes.txt"),
             mime_type="text/plain",
         )
-        self.links = FileService.create_folder(self.user, "Links")
+        self.links = tree.create_folder(self.user, "Links")
         self.folder_shortcut = create_shortcut(
             self.user, self.reports, None, name="Reports link"
         )
@@ -107,7 +107,7 @@ class ShortcutBrowserTests(PlaywrightTestCase):
         expect(self.page.locator("#folder-browser h1")).to_have_text("Reports")
 
     def test_a_shortcut_whose_target_is_gone_opens_nothing(self):
-        FileService.soft_delete(self.notes, acting_user=self.user)
+        trash.soft_delete(self.notes, acting_user=self.user)
         self.open_listing()
 
         self.row(self.file_shortcut).locator('td[data-col="size"]').click()

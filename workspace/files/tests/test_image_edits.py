@@ -19,7 +19,7 @@ from rest_framework.test import APITestCase
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import File, FileShare
 from workspace.files.queries import FilePermission
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.image_edits import (
     apply_edit,
@@ -144,7 +144,7 @@ class ApplyEditTests(SimpleTestCase):
 
 class ImageEditTestMixin:
     def _photo(self, owner, size=(2000, 1000)):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=owner,
             name="photo.jpg",
             content=ContentFile(_jpeg(_halves(size)), name="photo.jpg"),
@@ -355,7 +355,7 @@ class ImageEditApiTests(ImageEditTestMixin, APITestCase):
         self.assertIsNone(self.file.image_edit)
 
     def test_a_document_cannot_be_edited(self):
-        doc = FileService.create_file(
+        doc = tree.create_file(
             owner=self.owner,
             name="notes.txt",
             content=ContentFile(b"hello", name="notes.txt"),

@@ -15,7 +15,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from workspace.files.models import GroupStorageQuota, UserStorageQuota
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.quota import group_usage, personal_usage
 
 User = get_user_model()
@@ -74,7 +74,7 @@ class QuotaAdminTests(TestCase):
         one_row = self._query_count(url)
         for i in range(10):
             member = User.objects.create_user(username=f"m{i}", password="pw")
-            FileService.create_file(
+            tree.create_file(
                 member, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
             )
             UserStorageQuota.objects.create(user=member, quota_bytes=5 * KB)
@@ -91,7 +91,7 @@ class QuotaAdminTests(TestCase):
         self.assertEqual(self._query_count(url), one_row)
 
     def test_the_changelist_reports_the_same_usage_as_the_helper(self):
-        FileService.create_file(
+        tree.create_file(
             self.admin, "a.bin", content=ContentFile(b"x" * (3 * KB), name="a.bin")
         )
         UserStorageQuota.objects.create(user=self.admin, quota_bytes=5 * KB)
@@ -103,7 +103,7 @@ class QuotaAdminTests(TestCase):
     def test_the_quota_change_page_reports_usage_without_an_annotation(self):
         """The change form builds its object outside the annotated changelist
         queryset, so the column has to fall back to the aggregate."""
-        FileService.create_file(
+        tree.create_file(
             self.admin, "a.bin", content=ContentFile(b"x" * (3 * KB), name="a.bin")
         )
         row = UserStorageQuota.objects.create(user=self.admin, quota_bytes=5 * KB)
@@ -115,7 +115,7 @@ class QuotaAdminTests(TestCase):
         )
 
     def test_an_unlimited_row_reads_as_unlimited_on_the_changelist(self):
-        FileService.create_file(
+        tree.create_file(
             self.admin, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
         )
         UserStorageQuota.objects.create(user=self.admin, quota_bytes=None)
@@ -147,7 +147,7 @@ class StorageQuotaReportTests(TestCase):
         # Created while the default (effectively unlimited) quota applies -
         # the lowered limit below is only for the report call itself.
         self.user = User.objects.create_user(username="hoarder", password="pw")
-        FileService.create_file(
+        tree.create_file(
             self.user, "a.bin", content=ContentFile(b"x" * (3 * KB), name="a.bin")
         )
 
@@ -167,7 +167,7 @@ class StorageQuotaReportTests(TestCase):
 
         for i in range(5):
             member = User.objects.create_user(username=f"u{i}", password="pw")
-            FileService.create_file(
+            tree.create_file(
                 member, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
             )
             Group.objects.create(name=f"g{i}")
@@ -178,8 +178,8 @@ class StorageQuotaReportTests(TestCase):
     def test_the_report_totals_match_the_per_bucket_helpers(self):
         group = Group.objects.create(name="Design")
         self.user.groups.add(group)
-        root = FileService.create_folder(self.user, "Design", group=group)
-        FileService.create_file(
+        root = tree.create_folder(self.user, "Design", group=group)
+        tree.create_file(
             self.user,
             "t.bin",
             parent=root,

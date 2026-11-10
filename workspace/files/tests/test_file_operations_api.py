@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workspace.files.models import File, FileOperation
-from workspace.files.services import FileService, operations
+from workspace.files.services import operations, trash, tree
 from workspace.files.tasks import run_file_operation
 
 User = get_user_model()
@@ -18,7 +18,7 @@ URL = "/api/v1/files/operations"
 
 
 def _file(owner, name, parent, body=b"source"):
-    return FileService.create_file(
+    return tree.create_file(
         owner, name, parent=parent, content=ContentFile(body, name=name)
     )
 
@@ -32,8 +32,8 @@ class OperationApiFixture(TestCase):
         cache.clear()
         self.alice = User.objects.create_user(username="alice", password="pass")
         self.bob = User.objects.create_user(username="bob", password="pass")
-        self.src = FileService.create_folder(self.alice, "Src")
-        self.dst = FileService.create_folder(self.alice, "Dst")
+        self.src = tree.create_folder(self.alice, "Src")
+        self.dst = tree.create_folder(self.alice, "Dst")
         self.a = _file(self.alice, "a.txt", self.src, b"a")
         self.b = _file(self.alice, "b.txt", self.src, b"bb")
         self.client = APIClient()
@@ -152,7 +152,7 @@ class StartOperationTests(OperationApiFixture):
         self.queued.assert_not_called()
 
     def test_a_folder_out_of_reach_answers_like_one_that_does_not_exist(self):
-        theirs = FileService.create_folder(self.bob, "Private")
+        theirs = tree.create_folder(self.bob, "Private")
 
         hidden = self.post(self.body(target=str(theirs.pk)))
         absent = self.post(self.body(target=str(uuid.uuid4())))
@@ -353,7 +353,7 @@ class KindShapeTests(OperationApiFixture):
         self.assertIn("items", response.json())
 
     def test_emptying_the_trash_runs_on_the_callers_trash(self):
-        FileService.soft_delete(self.src, acting_user=self.alice)
+        trash.soft_delete(self.src, acting_user=self.alice)
         self.queued.side_effect = _run_now
 
         response = self.post({"kind": "empty_trash"})

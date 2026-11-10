@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from workspace.files.models import FileScan, FileShare
 from workspace.files.queries import resolve_accessible_files
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 BLOCKING = {
@@ -29,7 +29,7 @@ class ResolveAccessibleFilesTests(TestCase):
         self.other = User.objects.create_user(username="o", password="p")
 
     def _make_file(self, owner, name="doc.txt"):
-        return FileService.create_file(
+        return tree.create_file(
             owner,
             name,
             content=SimpleUploadedFile(name, b"x", content_type="text/plain"),
@@ -71,7 +71,7 @@ class ResolveAccessibleFilesTests(TestCase):
         self.assertIsNone(resolve_accessible_files(self.user, [owned.uuid]))
 
     def test_folder_returns_none(self):
-        folder = FileService.create_folder(self.user, "Stuff")
+        folder = tree.create_folder(self.user, "Stuff")
         self.assertIsNone(resolve_accessible_files(self.user, [folder.uuid]))
 
     def _infected(self, name="bad.txt"):

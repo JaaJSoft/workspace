@@ -8,7 +8,8 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
+from workspace.files.services.names import available_file_name
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -23,12 +24,12 @@ def _bytes(file_obj):
 class AvailableFileNameAvoidingTests(TestCase):
     def test_avoids_names_taken_in_other_folders_too(self):
         user = User.objects.create_user(username="alice", password="pass")
-        src = FileService.create_folder(user, "Src")
-        dst = FileService.create_folder(user, "Dst")
-        FileService.create_file(user, "report.pdf", parent=dst)
-        FileService.create_file(user, "report (Copy).pdf", parent=src)
+        src = tree.create_folder(user, "Src")
+        dst = tree.create_folder(user, "Dst")
+        tree.create_file(user, "report.pdf", parent=dst)
+        tree.create_file(user, "report (Copy).pdf", parent=src)
         self.assertEqual(
-            FileService.available_file_name(user, dst, "report.pdf", avoiding=(src,)),
+            available_file_name(user, dst, "report.pdf", avoiding=(src,)),
             "report (Copy 2).pdf",
         )
 
@@ -37,15 +38,15 @@ class CopyOnConflictApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")
         self.client.force_authenticate(user=self.user)
-        self.src = FileService.create_folder(self.user, "Src")
-        self.dst = FileService.create_folder(self.user, "Dst")
-        self.source = FileService.create_file(
+        self.src = tree.create_folder(self.user, "Src")
+        self.dst = tree.create_folder(self.user, "Dst")
+        self.source = tree.create_file(
             self.user,
             "report.txt",
             parent=self.src,
             content=ContentFile(b"source", name="report.txt"),
         )
-        self.existing = FileService.create_file(
+        self.existing = tree.create_file(
             self.user,
             "report.txt",
             parent=self.dst,
@@ -84,7 +85,7 @@ class CopyOnConflictApiTests(APITestCase):
         self.assertEqual(File.objects.filter(parent=self.dst).count(), 1)
 
     def test_replace_without_collision_just_copies(self):
-        empty = FileService.create_folder(self.user, "Empty")
+        empty = tree.create_folder(self.user, "Empty")
         response = self._copy(empty, on_conflict="replace")
         self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertEqual(self._names(empty), {"report.txt"})
@@ -108,15 +109,15 @@ class MoveOnConflictApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")
         self.client.force_authenticate(user=self.user)
-        self.src = FileService.create_folder(self.user, "Src")
-        self.dst = FileService.create_folder(self.user, "Dst")
-        self.moved = FileService.create_file(
+        self.src = tree.create_folder(self.user, "Src")
+        self.dst = tree.create_folder(self.user, "Dst")
+        self.moved = tree.create_file(
             self.user,
             "report.txt",
             parent=self.src,
             content=ContentFile(b"moved", name="report.txt"),
         )
-        self.existing = FileService.create_file(
+        self.existing = tree.create_file(
             self.user,
             "report.txt",
             parent=self.dst,
@@ -136,7 +137,7 @@ class MoveOnConflictApiTests(APITestCase):
 
     def test_rename_moves_under_a_free_name(self):
         # Taken in the source folder too: the file is renamed before it moves.
-        FileService.create_file(self.user, "report (Copy).txt", parent=self.src)
+        tree.create_file(self.user, "report (Copy).txt", parent=self.src)
         response = self._move(on_conflict="rename")
         self.assertEqual(outcome_of(response), ({"renamed": 1}, []))
         self.moved.refresh_from_db()
@@ -152,7 +153,7 @@ class MoveOnConflictApiTests(APITestCase):
         self.assertFalse(File.objects.filter(pk=self.moved.pk).exists())
 
     def test_on_conflict_is_ignored_on_a_plain_rename(self):
-        other = FileService.create_file(self.user, "other.txt", parent=self.dst)
+        other = tree.create_file(self.user, "other.txt", parent=self.dst)
         response = self.client.patch(
             f"/api/v1/files/{other.uuid}",
             {"name": "report.txt", "on_conflict": "rename"},
@@ -174,17 +175,15 @@ class GroupReplaceTests(APITestCase):
         self.user.groups.add(group)
         self.other.groups.add(group)
         self.client.force_authenticate(user=self.user)
-        self.root = FileService.create_folder(
-            self.other, "Marketing Files", group=group
-        )
-        self.src = FileService.create_folder(self.user, "Drafts", parent=self.root)
-        self.mine = FileService.create_file(
+        self.root = tree.create_folder(self.other, "Marketing Files", group=group)
+        self.src = tree.create_folder(self.user, "Drafts", parent=self.root)
+        self.mine = tree.create_file(
             self.user,
             "plan.txt",
             parent=self.src,
             content=ContentFile(b"mine", name="plan.txt"),
         )
-        self.theirs = FileService.create_file(
+        self.theirs = tree.create_file(
             self.other,
             "plan.txt",
             parent=self.root,

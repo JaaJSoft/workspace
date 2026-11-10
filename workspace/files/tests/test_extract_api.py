@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -42,11 +42,11 @@ class ExtractApiTests(APITestCase):
             username="alice", email="alice@example.com", password="pw"
         )
         self.client.force_authenticate(user=self.user)
-        self.dest = FileService.create_folder(self.user, "dest")
+        self.dest = tree.create_folder(self.user, "dest")
 
     def _make_archive(self, payload=None, mime="application/zip", name="archive.zip"):
         payload = payload if payload is not None else _make_zip([("hello.txt", b"hi")])
-        return FileService.create_file(
+        return tree.create_file(
             self.user,
             name,
             parent=None,
@@ -90,7 +90,7 @@ class ExtractApiTests(APITestCase):
         other = User.objects.create_user(
             username="bob", email="bob@example.com", password="pw"
         )
-        their_folder = FileService.create_folder(other, "theirs")
+        their_folder = tree.create_folder(other, "theirs")
         archive = self._make_archive()
 
         hidden = self._extract(archive, their_folder)

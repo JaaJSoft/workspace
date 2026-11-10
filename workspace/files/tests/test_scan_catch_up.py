@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import File, FileScan
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import get_processor
 from workspace.files.services.scanning.base import ScanVerdict
@@ -31,10 +31,8 @@ class PendingScanTests(TestCase):
         self.user = User.objects.create_user(username="cmd", password="p")
 
     def _file(self, name, body=b"body"):
-        """Created through FileService, which is what computes content_hash."""
-        return FileService.create_file(
-            self.user, name, content=ContentFile(body, name=name)
-        )
+        """Created through ``tree.create_file``, which is what computes content_hash."""
+        return tree.create_file(self.user, name, content=ContentFile(body, name=name))
 
     def _scanned_file(self, name, *, verdict_hash=None):
         f = self._file(name)

@@ -13,8 +13,8 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.models import File, FileOperation, FileShare
-from workspace.files.services import FileService, operations
 from workspace.files.services import extract as extract_module
+from workspace.files.services import operations, trash, tree
 from workspace.files.services.operations import (
     Slice,
     TargetUnavailable,
@@ -42,7 +42,7 @@ Status = FileOperation.Status
 
 
 def _file(owner, name, parent, body=b"source"):
-    return FileService.create_file(
+    return tree.create_file(
         owner, name, parent=parent, content=ContentFile(body, name=name)
     )
 
@@ -60,8 +60,8 @@ class OperationFixture(TestCase):
         cache.clear()
         self.alice = User.objects.create_user(username="alice", password="pass")
         self.bob = User.objects.create_user(username="bob", password="pass")
-        self.src = FileService.create_folder(self.alice, "Src")
-        self.dst = FileService.create_folder(self.alice, "Dst")
+        self.src = tree.create_folder(self.alice, "Src")
+        self.dst = tree.create_folder(self.alice, "Dst")
         self.files = [
             _file(self.alice, name, self.src, body)
             for name, body in (("a.txt", b"a"), ("b.txt", b"bb"), ("c.txt", b"ccc"))
@@ -121,11 +121,11 @@ class CreateOperationTests(OperationFixture):
         self.assertEqual(operation.target_name, "")
 
     def test_a_folder_out_of_reach_is_no_destination(self):
-        theirs = FileService.create_folder(self.bob, "Private")
-        read_only = FileService.create_folder(self.bob, "Shown")
+        theirs = tree.create_folder(self.bob, "Private")
+        read_only = tree.create_folder(self.bob, "Shown")
         self.share(read_only, self.bob, self.alice, FileShare.Permission.READ_ONLY)
-        trashed = FileService.create_folder(self.alice, "Gone")
-        FileService.soft_delete(trashed, acting_user=self.alice)
+        trashed = tree.create_folder(self.alice, "Gone")
+        trash.soft_delete(trashed, acting_user=self.alice)
 
         for label, target_uuid in (
             ("unknown", uuid.uuid4()),
@@ -147,7 +147,7 @@ class CreateOperationTests(OperationFixture):
             with self.assertRaises(TooManyOperations):
                 self.start(MOVE, self.files[2:], self.dst)
 
-            theirs = FileService.create_folder(self.bob, "Theirs")
+            theirs = tree.create_folder(self.bob, "Theirs")
             self.start(MOVE, [uuid.uuid4()], theirs, user=self.bob)
 
             self.run_to_end(first)
@@ -231,7 +231,7 @@ class RunMoveTests(OperationFixture):
         self.assertEqual(theirs.owner_id, self.bob.pk)
 
     def test_a_trashed_item_is_reported_as_gone(self):
-        FileService.soft_delete(self.files[0], acting_user=self.alice)
+        trash.soft_delete(self.files[0], acting_user=self.alice)
         operation = self.start(MOVE, self.files[:1], self.dst)
 
         self.run_to_end(operation)
@@ -277,7 +277,7 @@ class DestinationGoneTests(OperationFixture):
 
     def test_destination_trashed_before_the_run(self):
         operation = self.start(MOVE, self.files, self.dst)
-        FileService.soft_delete(self.dst, acting_user=self.alice)
+        trash.soft_delete(self.dst, acting_user=self.alice)
 
         self.run_to_end(operation)
 
@@ -295,7 +295,7 @@ class DestinationGoneTests(OperationFixture):
         team = Group.objects.create(name="Design")
         self.alice.groups.add(team)
         self.bob.groups.add(team)
-        shared = FileService.create_folder(self.bob, "Design", group=team)
+        shared = tree.create_folder(self.bob, "Design", group=team)
         operation = self.start(COPY, self.files, shared)
         self.alice.groups.remove(team)
 
@@ -322,7 +322,7 @@ class DestinationGoneTests(OperationFixture):
 
 class RunCopyTests(OperationFixture):
     def test_the_bytes_to_write_are_measured_and_all_accounted_for(self):
-        folder = FileService.create_folder(self.alice, "Album", parent=self.src)
+        folder = tree.create_folder(self.alice, "Album", parent=self.src)
         _file(self.alice, "inside.txt", folder, b"dddd")
         operation = self.start(COPY, [*self.files, folder], self.dst)
 
@@ -346,7 +346,7 @@ class RunCopyTests(OperationFixture):
         self.assertEqual(operation.bytes_total, 1)
 
     def test_a_copy_cancelled_midway_leaves_nothing_of_the_item_in_flight(self):
-        folder = FileService.create_folder(self.alice, "Album", parent=self.src)
+        folder = tree.create_folder(self.alice, "Album", parent=self.src)
         for name in ("one.txt", "two.txt", "three.txt"):
             _file(self.alice, name, folder)
         operation = self.start(COPY, [folder], self.dst)
@@ -705,14 +705,14 @@ def _zip(entries):
 class TrashKindsTests(OperationFixture):
     def trashed(self, *nodes):
         for node in nodes:
-            FileService.soft_delete(node, acting_user=node.owner)
+            trash.soft_delete(node, acting_user=node.owner)
             node.refresh_from_db()
         return nodes
 
     def test_a_trash_batch_trashes_every_item_it_may(self):
         team = Group.objects.create(name="Design")
         self.alice.groups.add(team)
-        team_root = FileService.create_folder(self.alice, "Design", group=team)
+        team_root = tree.create_folder(self.alice, "Design", group=team)
         operation = self.start(TRASH, [*self.files, team_root], None)
 
         self.run_to_end(operation)
@@ -794,8 +794,8 @@ class TrashKindsTests(OperationFixture):
         team = Group.objects.create(name="Design")
         self.alice.groups.add(team)
         self.bob.groups.add(team)
-        team_root = FileService.create_folder(self.alice, "Design", group=team)
-        theirs = FileService.create_file(
+        team_root = tree.create_folder(self.alice, "Design", group=team)
+        theirs = tree.create_file(
             self.bob,
             "theirs.txt",
             parent=team_root,

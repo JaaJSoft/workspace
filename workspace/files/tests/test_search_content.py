@@ -21,6 +21,7 @@ from workspace.common.tests.office_fixtures import (
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File, FileShare
 from workspace.files.search import search_files
+from workspace.files.services import trash
 from workspace.files.services.search_index import index_file
 from workspace.projects.services.members import add_member
 from workspace.projects.services.projects import create_project
@@ -121,13 +122,13 @@ class SearchFilesProviderTests(ContentSearchTestCase):
 
     def test_a_trashed_file_drops_out_of_search(self):
         note = self._file(self.user, "minutes.md", b"the treasurer resigned")
-        note.soft_delete()
+        trash.trash_subtree(note)
         self.assertEqual(search_files("treasurer", self.user, limit=10), [])
 
     def test_restoring_brings_it_back(self):
         note = self._file(self.user, "minutes.md", b"the treasurer resigned")
-        note.soft_delete()
-        note.restore()
+        trash.trash_subtree(note)
+        trash.restore_subtree(note)
         self.assertEqual(
             [r.name for r in search_files("treasurer", self.user, limit=10)],
             ["minutes.md"],
@@ -233,7 +234,7 @@ class SearchFilesAccessScopeTests(ContentSearchTestCase):
     def test_a_trashed_shared_file_drops_out_of_search(self):
         doc = self._bobs_file("minutes.md")
         FileShare.objects.create(file=doc, shared_by=self.other, shared_with=self.user)
-        doc.soft_delete()
+        trash.trash_subtree(doc)
         self.assertEqual(self._search(), [])
 
 
@@ -334,7 +335,7 @@ class FileListSearchApiTests(APITestCase):
         # Trashing leaves the document in place, so the trash view - which
         # runs through the same filter backend - can still find it.
         note = self._note("minutes.md", b"the treasurer resigned")
-        note.soft_delete()
+        trash.trash_subtree(note)
         response = self.client.get("/api/v1/files/trash", {"search": "treasurer"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["name"] for row in response.data], ["minutes.md"])

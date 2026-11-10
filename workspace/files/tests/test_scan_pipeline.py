@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from PIL import Image
 
 from workspace.files.models import File, FileScan
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.processors import get_processor, run_pipeline
 from workspace.files.services.scanning.base import ScanVerdict
 
@@ -42,7 +42,7 @@ class ScanPipelineTests(TestCase):
         self.user = User.objects.create_user(username="evt", password="p")
 
     def _upload(self, name="a.txt", body=b"x"):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user, name=name, content=ContentFile(body, name=name)
         )
 
@@ -81,7 +81,7 @@ class ScanPipelineTests(TestCase):
 
     def test_a_trashed_file_is_not_scanned(self):
         f = self._upload()
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
 
         scanner = self._run(f)
 

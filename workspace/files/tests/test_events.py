@@ -65,7 +65,7 @@ class RecordEventTests(TestCase):
         self.assertIsNone(record_event(None, self.user, FileEvent.Action.CREATED))
 
     def test_record_event_skips_unsaved_file_instance(self):
-        # Defensive guard: tests that mock FileService.create_* return a
+        # Defensive guard: tests that mock ``tree.create_*`` return a
         # non-persisted File instance. Recording an event against it would
         # blow up the test transaction with a deferred-FK violation.
         unsaved = File(

@@ -206,7 +206,7 @@ def _seed_files(alex, sam, group, now):
     from django.core.files.base import ContentFile
 
     from workspace.files.models import FileEvent, FileFavorite, FileTag, PinnedFolder
-    from workspace.files.services import FileService
+    from workspace.files.services import tree
     from workspace.users.services.settings import set_setting
 
     # Tile size 2 (140px) instead of the 3 (180px) default: the mosaic
@@ -224,11 +224,9 @@ def _seed_files(alex, sam, group, now):
         )
         FileEvent.objects.filter(file=f).update(created_at=ts)
 
-    documents = FileService.create_folder(alex, "Documents")
-    photos = FileService.create_folder(
-        alex, "Photos", icon="image", color="text-warning"
-    )
-    FileService.create_folder(alex, "Archive", icon="archive", color="text-neutral")
+    documents = tree.create_folder(alex, "Documents")
+    photos = tree.create_folder(alex, "Photos", icon="image", color="text-warning")
+    tree.create_folder(alex, "Archive", icon="archive", color="text-neutral")
 
     csv = "month,revenue,expenses\nJanuary,12400,8100\nFebruary,13950,8420\nMarch,15200,9010\n"
     svg = (
@@ -258,7 +256,7 @@ def _seed_files(alex, sam, group, now):
     ]
     created = {}
     for parent, name, data, mime, days_ago in files:
-        f = FileService.create_file(
+        f = tree.create_file(
             alex, name, parent, content=ContentFile(data, name=name), mime_type=mime
         )
         backdate_file(f, now - timedelta(days=days_ago, hours=3))
@@ -294,7 +292,7 @@ def _seed_files(alex, sam, group, now):
 
     # Activity from another user, on a group drive the demo user can see:
     # the dashboard feed excludes the viewer's own actions.
-    shared = FileService.create_folder(sam, "Brand assets", group=group, icon="palette")
+    shared = tree.create_folder(sam, "Brand assets", group=group, icon="palette")
     for name, data, mime, hours_ago in [
         (
             "styleguide.md",
@@ -304,7 +302,7 @@ def _seed_files(alex, sam, group, now):
         ),
         ("banner.png", _photo_png((245, 158, 11), (249, 115, 22)), "image/png", 4),
     ]:
-        f = FileService.create_file(
+        f = tree.create_file(
             sam,
             name,
             shared,
@@ -355,7 +353,7 @@ def _seed_notes(alex, now):
     from django.core.files.base import ContentFile
 
     from workspace.files.models import File, FileTag
-    from workspace.files.services import FileService
+    from workspace.files.services import tree
     from workspace.notes.ui.views import _ensure_default_folders
 
     meeting = _seed_tags(alex, [("meeting", "#a855f7", True)])["meeting"]
@@ -388,7 +386,7 @@ def _seed_notes(alex, now):
         ),
     ]
     for parent, name, body, hours_ago in notes:
-        f = FileService.create_file(
+        f = tree.create_file(
             alex,
             name,
             parent,

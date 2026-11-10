@@ -24,7 +24,7 @@ from workspace.files.queries import (
     get_permission,
     get_permissions_bulk,
 )
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.comments import mentionable_users
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.sse_provider import FilesSSEProvider, push_file_event
@@ -41,7 +41,7 @@ class GroupShareFixtures:
         self.outsider = User.objects.create_user(username="outsider", password="pw")
         self.team = Group.objects.create(name="Team")
         self.member.groups.add(self.team)
-        self.file = FileService.create_file(
+        self.file = tree.create_file(
             self.owner, "doc.txt", content=ContentFile(b"hello"), mime_type="text/plain"
         )
 
@@ -147,7 +147,7 @@ class GroupSharePermissionTests(GroupShareFixtures, TestCase):
 
     def test_trashed_file_is_not_reachable_through_a_group_share(self):
         self._share_with_team("rw")
-        FileService.soft_delete(self.file, acting_user=self.owner)
+        trash.soft_delete(self.file, acting_user=self.owner)
         self.file.refresh_from_db()
         self.assertIsNone(get_permission(self.member, self.file))
 

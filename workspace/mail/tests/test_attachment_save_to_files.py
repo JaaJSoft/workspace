@@ -109,7 +109,7 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         """Regression: a destination-side OSError (disk full on the dest
         path, perm denied, remote storage flake) used to be lumped under
         the source-blob 404 because the try/except wrapped both
-        attachment.content.open() AND FileService.create_file. The view
+        attachment.content.open() AND tree.create_file. The view
         must only translate FileNotFoundError from the source open into
         404; destination-side errors propagate (5xx via middleware).
 

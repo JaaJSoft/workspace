@@ -14,7 +14,7 @@ from workspace.files.actions import ActionRegistry
 from workspace.files.ai_tools import FilesToolProvider
 from workspace.files.models import FileShare
 from workspace.files.queries import get_permission
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.sharing import share_file
 from workspace.files.services.shortcuts import create_shortcut
 
@@ -29,16 +29,16 @@ class ShortcutBrowserFixtures:
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         self.bob.groups.add(self.team)
-        self.team_root = FileService.create_folder(
+        self.team_root = tree.create_folder(
             owner=self.alice, name="Team", group=self.team
         )
-        self.report = FileService.create_file(
+        self.report = tree.create_file(
             self.alice,
             "report.txt",
             content=ContentFile(b"quarterly", name="report.txt"),
             mime_type="text/plain",
         )
-        self.docs = FileService.create_folder(self.alice, "Docs")
+        self.docs = tree.create_folder(self.alice, "Docs")
 
     def tearDown(self):
         cache.clear()
@@ -95,7 +95,7 @@ class ShortcutRowTests(ShortcutBrowserFixtures, TestCase):
 
     def test_a_trashed_target_is_named_as_such_and_does_not_open(self):
         create_shortcut(self.alice, self.report, self.docs, name="Report link")
-        FileService.soft_delete(self.report, acting_user=self.alice)
+        trash.soft_delete(self.report, acting_user=self.alice)
 
         html = self.listing(self.alice, self.docs)
 
@@ -109,7 +109,7 @@ class ShortcutRowTests(ShortcutBrowserFixtures, TestCase):
             permission=FileShare.Permission.READ_ONLY,
             acting_user=self.alice,
         )
-        inbox = FileService.create_folder(self.bob, "Inbox")
+        inbox = tree.create_folder(self.bob, "Inbox")
         create_shortcut(self.bob, self.report, inbox)
 
         html = self.listing(self.bob, inbox)
@@ -120,9 +120,9 @@ class ShortcutRowTests(ShortcutBrowserFixtures, TestCase):
         self.assertIn("Shortcut to /report.txt", html)
 
     def test_folders_come_first_and_shortcuts_sort_among_the_files(self):
-        FileService.create_file(self.alice, "a.txt", parent=self.docs)
-        FileService.create_file(self.alice, "c.txt", parent=self.docs)
-        FileService.create_folder(self.alice, "Zeta", parent=self.docs)
+        tree.create_file(self.alice, "a.txt", parent=self.docs)
+        tree.create_file(self.alice, "c.txt", parent=self.docs)
+        tree.create_folder(self.alice, "Zeta", parent=self.docs)
         create_shortcut(self.alice, self.team_root, self.docs, name="b link")
 
         html = self.listing(self.alice, self.docs)
@@ -131,7 +131,7 @@ class ShortcutRowTests(ShortcutBrowserFixtures, TestCase):
         self.assertEqual(names, ["Zeta", "a.txt", "b link", "c.txt"])
 
     def test_the_footer_counts_shortcuts_on_their_own(self):
-        FileService.create_file(self.alice, "a.txt", parent=self.docs)
+        tree.create_file(self.alice, "a.txt", parent=self.docs)
         create_shortcut(self.alice, self.team_root, self.docs, name="Team link")
         create_shortcut(self.alice, self.report, self.docs, name="Report link")
 
@@ -143,7 +143,7 @@ class ShortcutRowTests(ShortcutBrowserFixtures, TestCase):
 
     def test_a_listing_resolves_its_shortcuts_in_constant_queries(self):
         self.client.force_login(self.bob)
-        listed = FileService.create_folder(self.alice, "Links", parent=self.team_root)
+        listed = tree.create_folder(self.alice, "Links", parent=self.team_root)
         url = f"/files/{listed.uuid}"
         batches = iter(range(100))
 
@@ -152,11 +152,9 @@ class ShortcutRowTests(ShortcutBrowserFixtures, TestCase):
             for i in range(count):
                 name = f"{batch}-{i}.txt"
                 if i % 2:
-                    target = FileService.create_file(self.alice, name)
+                    target = tree.create_file(self.alice, name)
                 else:
-                    target = FileService.create_file(
-                        self.alice, name, parent=self.team_root
-                    )
+                    target = tree.create_file(self.alice, name, parent=self.team_root)
                 create_shortcut(self.alice, target, listed)
             with CaptureQueriesContext(connection) as queries:
                 self.assertEqual(self.client.get(url).status_code, 200)
@@ -227,8 +225,8 @@ class CreateShortcutActionTests(ShortcutBrowserFixtures, TestCase):
 
     def test_not_offered_on_a_trashed_node_a_shortcut_or_out_of_reach(self):
         shortcut = create_shortcut(self.alice, self.report, self.docs, name="Link")
-        trashed = FileService.create_file(self.alice, "old.txt")
-        FileService.soft_delete(trashed, acting_user=self.alice)
+        trashed = tree.create_file(self.alice, "old.txt")
+        trash.soft_delete(trashed, acting_user=self.alice)
         trashed.refresh_from_db()
 
         self.assertFalse(self.offered(self.alice, trashed))

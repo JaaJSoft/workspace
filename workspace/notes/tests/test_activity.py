@@ -276,16 +276,16 @@ class FormerMemberOwnActivityTests(TestCase):
         from django.contrib.auth.models import Group
         from django.core.files.base import ContentFile
 
-        from workspace.files.services import FileService
+        from workspace.files.services import tree
 
         self.alice = User.objects.create_user(username="alice", password="pass123")
         bob = User.objects.create_user(username="bob", password="pass123")
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         bob.groups.add(self.team)
-        root = FileService.create_folder(bob, "TeamRoot", group=self.team)
+        root = tree.create_folder(bob, "TeamRoot", group=self.team)
         for name, parent in (("team.md", root), ("mine.md", None)):
-            FileService.create_file(
+            tree.create_file(
                 self.alice,
                 name,
                 parent=parent,

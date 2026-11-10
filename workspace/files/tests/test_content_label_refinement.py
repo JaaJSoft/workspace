@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 
 
@@ -44,14 +44,14 @@ class RefineWithNameTest(TestCase):
 
 
 class StoredTypeHonoursExtensionTest(TestCase):
-    """End-to-end: a sparse .md created/updated through FileService is stored
+    """End-to-end: a sparse .md created/updated through the services is stored
     with ``type='markdown'``, not the ``txt`` Magika reads from the content."""
 
     def setUp(self):
         self.user = get_user_model().objects.create_user("md_detect", password="x")
 
     def test_create_file_sparse_markdown_is_tagged_markdown(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "sparse.md",
             content=ContentFile(b"# Title\n", name="sparse.md"),
@@ -60,7 +60,7 @@ class StoredTypeHonoursExtensionTest(TestCase):
         self.assertEqual(f.type, "markdown")
 
     def test_update_content_sparse_markdown_is_tagged_markdown(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "note.md",
             content=ContentFile(

@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import FileScan, FileShare, FileTag, Tag
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.sharing import share_file
 from workspace.photos.queries import (
     ALL,
@@ -36,7 +36,7 @@ class LibraryFilesTests(TestCase):
         photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14))
         upload(self.user, "unanalyzed.jpg")
         trashed = make_photo(self.user, "trashed.jpg", _at(2024, 7, 14))
-        FileService.soft_delete(trashed, acting_user=self.user)
+        trash.soft_delete(trashed, acting_user=self.user)
 
         self.assertEqual(list(library_files(self.user)), [photo])
 
@@ -115,7 +115,7 @@ class ScopeTests(TestCase):
         )
 
     def _group_photo(self, owner, group, name):
-        root = FileService.create_folder(owner=owner, name=group.name, group=group)
+        root = tree.create_folder(owner=owner, name=group.name, group=group)
         return make_photo(owner, name, _at(2024, 7, 14), parent=root)
 
     def test_mine_is_the_default(self):
@@ -157,7 +157,7 @@ class ScopeTests(TestCase):
         self.assertNotIn(self.mine, library_files(self.user, SHARED))
 
     def test_a_trashed_shared_photo_drops_out(self):
-        FileService.soft_delete(self.shared_photo, acting_user=self.carol)
+        trash.soft_delete(self.shared_photo, acting_user=self.carol)
 
         self.assertEqual(list(library_files(self.user, SHARED)), [])
         self.assertNotIn(self.shared_photo, library_files(self.user, ALL))

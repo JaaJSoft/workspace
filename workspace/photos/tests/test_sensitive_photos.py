@@ -15,7 +15,7 @@ from workspace.files.sensitivity import (
     sensitive_level,
     with_sensitivity,
 )
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.processors import get_processor
 from workspace.files.services.sharing import share_file
 from workspace.files.tests.videos import requires_ffmpeg
@@ -367,7 +367,7 @@ class MarkSensitiveTests(TestCase):
 
     def test_marks_the_library_items_and_skips_other_files(self):
         photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14))
-        note = FileService.create_file(
+        note = tree.create_file(
             owner=self.user, name="n.md", content=ContentFile(b"# hi", name="n.md")
         )
 
@@ -391,7 +391,7 @@ class MarkSensitiveTests(TestCase):
     def test_files_reads_the_level_through_its_hook(self):
         flagged = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive_level=2)
         clear = make_photo(self.user, "b.jpg", _at(2024, 7, 14))
-        note = FileService.create_file(
+        note = tree.create_file(
             owner=self.user, name="n.md", content=ContentFile(b"# hi", name="n.md")
         )
 
@@ -469,7 +469,7 @@ class SensitiveFilesApiTests(TestCase):
     def test_a_group_member_marks_a_group_photo(self):
         group = Group.objects.create(name="Family")
         group.user_set.add(self.alice, self.bob)
-        folder = FileService.create_folder(owner=self.alice, name="Family", group=group)
+        folder = tree.create_folder(owner=self.alice, name="Family", group=group)
         photo = make_photo(self.alice, "g.jpg", _at(2024, 7, 14), parent=folder)
         self.client.force_login(self.bob)
 
@@ -496,7 +496,7 @@ class SensitiveFilesApiTests(TestCase):
         self.assertEqual(_item(bobs).sensitive_level, 0)
 
     def test_a_file_outside_the_library_is_refused(self):
-        note = FileService.create_file(
+        note = tree.create_file(
             owner=self.alice, name="n.md", content=ContentFile(b"# hi", name="n.md")
         )
 

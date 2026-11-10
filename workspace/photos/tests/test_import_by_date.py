@@ -8,7 +8,7 @@ from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.models import MediaItem
 from workspace.photos.services.import_by_date import file_by_date
 from workspace.photos.services.import_folder import (
@@ -120,7 +120,7 @@ class FileByDateTests(ImportByDateTestCase):
         self.assertTrue(MediaItem.objects.filter(file=photo).exists())
 
     def test_leaves_what_is_not_at_the_top_of_the_import_folder(self):
-        elsewhere = FileService.create_folder(self.user, "Elsewhere")
+        elsewhere = tree.create_folder(self.user, "Elsewhere")
         outside = make_photo(
             self.user, "outside.jpg", _at(2024, 7, 14), parent=elsewhere
         )
@@ -164,7 +164,7 @@ class FileByDateTests(ImportByDateTestCase):
     def test_a_group_import_folder_gets_group_folders(self):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
-        root = FileService.create_folder(self.user, "Family", group=family)
+        root = tree.create_folder(self.user, "Family", group=family)
         choose_import_folder(self.user, root)
         photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=root)
 
@@ -178,7 +178,7 @@ class FileByDateTests(ImportByDateTestCase):
     def test_a_failing_file_does_not_stop_the_rest_of_the_batch(self):
         first = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=self.folder)
         second = make_photo(self.user, "b.jpg", _at(2024, 7, 15), parent=self.folder)
-        real_move = FileService.move
+        real_move = tree.move
 
         def move(file_obj, *args, **kwargs):
             if file_obj.pk == first.pk:
@@ -186,7 +186,7 @@ class FileByDateTests(ImportByDateTestCase):
             return real_move(file_obj, *args, **kwargs)
 
         with (
-            patch.object(FileService, "move", side_effect=move),
+            patch.object(tree, "move", side_effect=move),
             self.assertLogs("workspace.photos.services.import_by_date", "ERROR"),
             self.assertRaises(ExceptionGroup) as raised,
         ):
@@ -205,7 +205,7 @@ class FileByDateTests(ImportByDateTestCase):
     def test_the_task_files_nothing_for_a_user_deactivated_since(self):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
-        root = FileService.create_folder(self.user, "Family", group=family)
+        root = tree.create_folder(self.user, "Family", group=family)
         choose_import_folder(self.user, root)
         photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=root)
         self.user.is_active = False

@@ -11,7 +11,7 @@ from django.core.cache import cache
 from rest_framework.test import APITestCase
 
 from workspace.files.models import FileShare, PinnedFolder
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.pins import visible_pins
 
 User = get_user_model()
@@ -24,11 +24,9 @@ class _PinFixture:
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         self.bob.groups.add(self.team)
-        self.root = FileService.create_folder(self.bob, "TeamRoot", group=self.team)
-        self.group_sub = FileService.create_folder(
-            self.bob, "Payroll", parent=self.root
-        )
-        self.mine = FileService.create_folder(self.alice, "MyFolder")
+        self.root = tree.create_folder(self.bob, "TeamRoot", group=self.team)
+        self.group_sub = tree.create_folder(self.bob, "Payroll", parent=self.root)
+        self.mine = tree.create_folder(self.alice, "MyFolder")
         PinnedFolder.objects.create(owner=self.alice, folder=self.mine, position=1)
         PinnedFolder.objects.create(owner=self.alice, folder=self.group_sub, position=2)
 
@@ -41,7 +39,7 @@ class SharedPinVisibilityTests(_PinFixture, APITestCase):
 
     def setUp(self):
         self._fixture()
-        self.bob_private = FileService.create_folder(self.bob, "BobPrivate")
+        self.bob_private = tree.create_folder(self.bob, "BobPrivate")
         share = FileShare.objects.create(
             file=self.bob_private,
             shared_with=self.alice,

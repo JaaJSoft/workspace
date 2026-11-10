@@ -8,7 +8,7 @@ from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.sync import FileSyncService
 
 User = get_user_model()
@@ -59,9 +59,9 @@ class FileSyncServiceStoragePrefixTests(TestCase):
 
     def test_shallow_sync_inside_subfolder_registers_under_canonical_prefix(self):
         # Folder must exist in DB for shallow sync to scan its disk path.
-        from workspace.files.services import FileService
+        from workspace.files.services import tree
 
-        sub = FileService.create_folder(self.user, "Sub")
+        sub = tree.create_folder(self.user, "Sub")
 
         self._write("Sub", "inside.md", contents=b"# hi")
 
@@ -79,9 +79,9 @@ class FileSyncServiceStoragePrefixTests(TestCase):
         # missing-on-disk and soft-deleted in phase 2.
         from django.core.files.base import ContentFile
 
-        from workspace.files.services import FileService
+        from workspace.files.services import tree
 
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "keep.txt",
             content=ContentFile(b"keep me", name="keep.txt"),
@@ -105,9 +105,7 @@ class SyncUnsafeUsernameTests(IsolatedMediaRootMixin, TestCase):
     def setUp(self):
         super().setUp()
         alice = User.objects.create_user(username="alice", password="pw")
-        FileService.create_file(
-            alice, "secret.txt", content=ContentFile(b"alice's secret")
-        )
+        tree.create_file(alice, "secret.txt", content=ContentFile(b"alice's secret"))
         self.intruder = User.objects.create_user(username="intruder", password="pw")
         User.objects.filter(pk=self.intruder.pk).update(username="..")
         self.intruder.refresh_from_db()

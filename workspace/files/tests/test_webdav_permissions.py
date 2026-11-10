@@ -10,7 +10,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.models import File, FileShare
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests import test_webdav
 
 User = get_user_model()
@@ -41,7 +41,7 @@ class WebDAVSharePermissionTests(TestCase):
         return file_obj
 
     def _owned_file(self, name, body=b"theirs", parent=None):
-        return FileService.create_file(
+        return tree.create_file(
             self.owner,
             name,
             parent=parent,
@@ -55,7 +55,7 @@ class WebDAVSharePermissionTests(TestCase):
             return f.read()
 
     def _read_only_folder(self):
-        folder = FileService.create_folder(self.owner, "Shared")
+        folder = tree.create_folder(self.owner, "Shared")
         self._owned_file("doc.txt", parent=folder)
         return self._share(folder, FileShare.Permission.READ_ONLY)
 

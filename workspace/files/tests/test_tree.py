@@ -1,4 +1,4 @@
-"""Unit tests for FileService."""
+"""Unit tests for the tree services, with the names and content writes they rely on."""
 
 import os
 import posixpath
@@ -11,18 +11,19 @@ from django.test import TestCase
 
 from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.content_writes import (
     replace_content_storage,
     update_content,
 )
 from workspace.files.services.locking import Relocated
+from workspace.files.services.names import check_name_available
 
 User = get_user_model()
 
 
 class TestCreateFile(TestCase):
-    """Tests for FileService.create_file()."""
+    """Tests for tree.create_file()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -30,7 +31,7 @@ class TestCreateFile(TestCase):
         )
 
     def test_basic_creation(self):
-        f = FileService.create_file(self.user, "readme.txt", mime_type="text/plain")
+        f = tree.create_file(self.user, "readme.txt", mime_type="text/plain")
         self.assertEqual(f.name, "readme.txt")
         self.assertEqual(f.node_type, File.NodeType.FILE)
         self.assertEqual(f.owner, self.user)
@@ -38,7 +39,7 @@ class TestCreateFile(TestCase):
 
     def test_creation_with_content(self):
         content = ContentFile(b"hello world", name="hello.txt")
-        f = FileService.create_file(self.user, "hello.txt", content=content)
+        f = tree.create_file(self.user, "hello.txt", content=content)
         self.assertEqual(f.size, 11)
         self.assertTrue(f.content)
 
@@ -47,26 +48,26 @@ class TestCreateFile(TestCase):
             b'{"name": "test", "version": 1, "items": [1, 2, 3]}',
             name="data.json",
         )
-        f = FileService.create_file(self.user, "data.json", content=content)
+        f = tree.create_file(self.user, "data.json", content=content)
         self.assertIn("json", f.mime_type)
 
     def test_explicit_mime_overrides(self):
         content = ContentFile(b"data", name="file.bin")
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user, "file.bin", content=content, mime_type="application/custom"
         )
         self.assertEqual(f.mime_type, "application/custom")
 
     def test_creation_under_parent(self):
-        folder = FileService.create_folder(self.user, "docs")
-        f = FileService.create_file(
+        folder = tree.create_folder(self.user, "docs")
+        f = tree.create_file(
             self.user, "note.txt", parent=folder, mime_type="text/plain"
         )
         self.assertEqual(f.parent, folder)
 
 
 class TestCreateFolder(TestCase):
-    """Tests for FileService.create_folder()."""
+    """Tests for tree.create_folder()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -74,19 +75,19 @@ class TestCreateFolder(TestCase):
         )
 
     def test_basic_creation(self):
-        folder = FileService.create_folder(self.user, "Photos")
+        folder = tree.create_folder(self.user, "Photos")
         self.assertEqual(folder.name, "Photos")
         self.assertEqual(folder.node_type, File.NodeType.FOLDER)
         self.assertEqual(folder.owner, self.user)
 
     def test_nested_folder(self):
-        parent = FileService.create_folder(self.user, "Root")
-        child = FileService.create_folder(self.user, "Sub", parent=parent)
+        parent = tree.create_folder(self.user, "Root")
+        child = tree.create_folder(self.user, "Sub", parent=parent)
         self.assertEqual(child.parent, parent)
         self.assertEqual(child.path, "Root/Sub")
 
     def test_with_icon_and_color(self):
-        folder = FileService.create_folder(
+        folder = tree.create_folder(
             self.user, "Work", icon="briefcase", color="#ff0000"
         )
         self.assertEqual(folder.icon, "briefcase")
@@ -102,20 +103,20 @@ class TestCreateFolderOnStorage(TestCase):
         )
 
     def test_root_folder_created_on_disk(self):
-        FileService.create_folder(self.user, "Photos")
+        tree.create_folder(self.user, "Photos")
         self.assertTrue(default_storage.is_dir("files/users/storageuser/Photos"))
 
     def test_nested_folder_created_on_disk(self):
-        parent = FileService.create_folder(self.user, "Documents")
-        FileService.create_folder(self.user, "Work", parent=parent)
+        parent = tree.create_folder(self.user, "Documents")
+        tree.create_folder(self.user, "Work", parent=parent)
         self.assertTrue(
             default_storage.is_dir("files/users/storageuser/Documents/Work")
         )
 
     def test_deeply_nested_folder(self):
-        a = FileService.create_folder(self.user, "A")
-        b = FileService.create_folder(self.user, "B", parent=a)
-        FileService.create_folder(self.user, "C", parent=b)
+        a = tree.create_folder(self.user, "A")
+        b = tree.create_folder(self.user, "B", parent=a)
+        tree.create_folder(self.user, "C", parent=b)
         self.assertTrue(default_storage.is_dir("files/users/storageuser/A/B/C"))
 
     def test_silently_skipped_for_unsupported_backend(self):
@@ -124,14 +125,14 @@ class TestCreateFolderOnStorage(TestCase):
             "workspace.files.services.storage_ops.default_storage.path",
             side_effect=NotImplementedError,
         ):
-            folder = FileService.create_folder(self.user, "Ignored")
+            folder = tree.create_folder(self.user, "Ignored")
 
         self.assertEqual(folder.name, "Ignored")
         self.assertEqual(folder.node_type, File.NodeType.FOLDER)
 
 
 class TestRegisterDiskFile(TestCase):
-    """Tests for FileService.register_disk_file()."""
+    """Tests for tree.register_disk_file()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -139,7 +140,7 @@ class TestRegisterDiskFile(TestCase):
         )
 
     def test_sets_content_name_directly(self):
-        f = FileService.register_disk_file(
+        f = tree.register_disk_file(
             self.user,
             "report.pdf",
             None,
@@ -152,7 +153,7 @@ class TestRegisterDiskFile(TestCase):
         self.assertEqual(f.mime_type, "application/pdf")
 
     def test_infers_mime_when_not_provided(self):
-        f = FileService.register_disk_file(
+        f = tree.register_disk_file(
             self.user,
             "photo.jpg",
             None,
@@ -162,7 +163,7 @@ class TestRegisterDiskFile(TestCase):
 
 
 class TestRename(TestCase):
-    """Tests for FileService.rename()."""
+    """Tests for tree.rename()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -171,17 +172,17 @@ class TestRename(TestCase):
 
     def test_rename_file_updates_name(self):
         content = ContentFile(b"data", name="old.txt")
-        f = FileService.create_file(self.user, "old.txt", content=content)
-        FileService.rename(f, "new.txt")
+        f = tree.create_file(self.user, "old.txt", content=content)
+        tree.rename(f, "new.txt")
         f.refresh_from_db()
         self.assertEqual(f.name, "new.txt")
 
     def test_rename_to_a_name_without_extension_keeps_the_blob_at_that_name(self):
         """The blob lives at the node's tree path, the name it was given."""
         content = ContentFile(b"data", name="notes.txt")
-        f = FileService.create_file(self.user, "notes.txt", content=content)
+        f = tree.create_file(self.user, "notes.txt", content=content)
 
-        FileService.rename(f, "README")
+        tree.rename(f, "README")
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, f"files/users/{self.user.username}/README")
@@ -189,22 +190,22 @@ class TestRename(TestCase):
             self.assertEqual(handle.read(), b"data")
 
     def test_rename_noop_when_same_name(self):
-        f = FileService.create_file(self.user, "same.txt", mime_type="text/plain")
-        result = FileService.rename(f, "same.txt")
+        f = tree.create_file(self.user, "same.txt", mime_type="text/plain")
+        result = tree.rename(f, "same.txt")
         self.assertEqual(result.name, "same.txt")
 
     def test_rename_preserves_mime_type(self):
         """Rename does not re-infer MIME type because content didn't change."""
         content = ContentFile(b"hello", name="notes.txt")
-        f = FileService.create_file(self.user, "notes.txt", content=content)
+        f = tree.create_file(self.user, "notes.txt", content=content)
         self.assertEqual(f.mime_type, "text/plain")
-        FileService.rename(f, "notes.md")
+        tree.rename(f, "notes.md")
         f.refresh_from_db()
         self.assertEqual(f.mime_type, "text/plain")
 
     def test_rename_folder_updates_name(self):
-        folder = FileService.create_folder(self.user, "OldFolder")
-        FileService.rename(folder, "NewFolder")
+        folder = tree.create_folder(self.user, "OldFolder")
+        tree.rename(folder, "NewFolder")
         folder.refresh_from_db()
         self.assertEqual(folder.name, "NewFolder")
 
@@ -212,10 +213,10 @@ class TestRename(TestCase):
         # Layout: Docs/Sub/Docs/file.txt -- the inner "Docs" shares its name
         # with the outer "Docs". Renaming the inner one must rewrite only the
         # last segment of the storage path, not the first one matching "Docs".
-        outer = FileService.create_folder(self.user, "Docs")
-        sub = FileService.create_folder(self.user, "Sub", parent=outer)
-        inner = FileService.create_folder(self.user, "Docs", parent=sub)
-        f = FileService.create_file(
+        outer = tree.create_folder(self.user, "Docs")
+        sub = tree.create_folder(self.user, "Sub", parent=outer)
+        inner = tree.create_folder(self.user, "Docs", parent=sub)
+        f = tree.create_file(
             self.user,
             "file.txt",
             parent=inner,
@@ -226,7 +227,7 @@ class TestRename(TestCase):
             f"files/users/{self.user.username}/Docs/Sub/Docs/file.txt",
         )
 
-        FileService.rename(inner, "New")
+        tree.rename(inner, "New")
         f.refresh_from_db()
         self.assertEqual(
             f.content.name,
@@ -244,7 +245,7 @@ class TestUpdateContent(TestCase):
 
     def test_replaces_content(self):
         original = ContentFile(b"old", name="file.txt")
-        f = FileService.create_file(self.user, "file.txt", content=original)
+        f = tree.create_file(self.user, "file.txt", content=original)
         self.assertEqual(f.size, 3)
 
         new_content = ContentFile(b"new content here", name="file.txt")
@@ -254,7 +255,7 @@ class TestUpdateContent(TestCase):
 
     def test_updates_mime_type(self):
         original = ContentFile(b"text", name="file.txt")
-        f = FileService.create_file(self.user, "file.txt", content=original)
+        f = tree.create_file(self.user, "file.txt", content=original)
 
         new_content = ContentFile(
             b'{"name": "test", "version": 1, "items": [1, 2, 3]}',
@@ -266,7 +267,7 @@ class TestUpdateContent(TestCase):
 
     def test_resets_has_thumbnail(self):
         """A new content payload must invalidate any cached thumbnail."""
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "photo.png",
             content=ContentFile(b"old", name="photo.png"),
@@ -280,7 +281,7 @@ class TestUpdateContent(TestCase):
 
     def test_bumps_updated_at(self):
         """`updated_at` must advance after a content update."""
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"a", name="doc.txt"),
@@ -293,7 +294,7 @@ class TestUpdateContent(TestCase):
 
     def test_replaces_bytes_on_disk(self):
         """Reading the file back must return the new bytes, not the old."""
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"old", name="doc.txt"),
@@ -311,7 +312,7 @@ class TestUpdateContent(TestCase):
         pointing at bytes that failed to land would leave the file claiming a
         hash and a size its blob does not have.
         """
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"old", name="doc.txt"),
@@ -357,7 +358,7 @@ class TestUpdateContent(TestCase):
         are neither version leave it pointing at content that never existed -
         a mismatch no backfill can repair, unlike a hash it can recompute.
         """
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"the original bytes", name="doc.txt"),
@@ -376,7 +377,7 @@ class TestUpdateContent(TestCase):
 
     @local_storage_only
     def test_a_failed_write_leaves_no_staging_file_behind(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"the original bytes", name="doc.txt"),
@@ -390,7 +391,7 @@ class TestUpdateContent(TestCase):
         self.assertEqual(self._blobs_beside(f), ["doc.txt"])
 
     def test_a_successful_write_leaves_no_staging_file_behind(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"old", name="doc.txt"),
@@ -411,7 +412,7 @@ class TestUpdateContent(TestCase):
         holding its pre-write value stays invisible until a user reads a stale
         answer.
         """
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"old", name="doc.txt"),
@@ -431,7 +432,7 @@ class TestUpdateContent(TestCase):
 
     def test_mime_type_override_takes_precedence(self):
         """Passing `mime_type=` skips inference."""
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "data.bin",
             content=ContentFile(b"x", name="data.bin"),
@@ -456,7 +457,7 @@ class TestReplaceContentStorage(TestCase):
         )
 
     def test_updates_size_and_mime_type(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "note.md",
             content=ContentFile(b"old", name="note.md"),
@@ -472,7 +473,7 @@ class TestReplaceContentStorage(TestCase):
         self.assertIn("markdown", f.mime_type)
 
     def test_resets_has_thumbnail(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "photo.png",
             content=ContentFile(b"old", name="photo.png"),
@@ -490,7 +491,7 @@ class TestReplaceContentStorage(TestCase):
         self.assertFalse(f.has_thumbnail)
 
     def test_bumps_updated_at(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"a", name="doc.txt"),
@@ -507,7 +508,7 @@ class TestReplaceContentStorage(TestCase):
         self.assertGreater(f.updated_at, original_updated_at)
 
     def test_points_content_name_at_storage_path(self):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"a", name="doc.txt"),
@@ -524,15 +525,15 @@ class TestReplaceContentStorage(TestCase):
     def test_refused_for_a_file_moved_since_it_was_loaded(self):
         """The caller staged its bytes under a path derived from the row as it
         loaded it; a move that committed while the claim waited empties it."""
-        folder = FileService.create_folder(self.user, "Docs")
-        f = FileService.create_file(
+        folder = tree.create_folder(self.user, "Docs")
+        f = tree.create_file(
             self.user,
             "doc.txt",
             parent=folder,
             content=ContentFile(b"a", name="doc.txt"),
         )
         loaded = File.objects.get(pk=f.pk)
-        FileService.rename(folder, "Archive")
+        tree.rename(folder, "Archive")
 
         with self.assertRaises(Relocated):
             replace_content_storage(
@@ -548,13 +549,13 @@ class TestReplaceContentStorage(TestCase):
     def test_refused_for_a_file_trashed_since_it_was_loaded(self):
         """The trash leaves the tree path as it was and moves the blob all the
         same: the caller's bytes are staged under a name that is free again."""
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             "doc.txt",
             content=ContentFile(b"a", name="doc.txt"),
         )
         loaded = File.objects.get(pk=f.pk)
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
 
         with self.assertRaises(Relocated):
             replace_content_storage(
@@ -569,7 +570,7 @@ class TestReplaceContentStorage(TestCase):
 
 
 class TestCopy(TestCase):
-    """Tests for FileService.copy()."""
+    """Tests for tree.copy()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -578,35 +579,35 @@ class TestCopy(TestCase):
 
     def test_copy_file(self):
         content = ContentFile(b"hello", name="doc.txt")
-        original = FileService.create_file(
+        original = tree.create_file(
             self.user, "doc.txt", content=content, mime_type="text/plain"
         )
-        copied = FileService.copy(original, None, self.user)
+        copied = tree.copy(original, None, self.user)
         self.assertNotEqual(copied.pk, original.pk)
         self.assertEqual(copied.name, "doc (Copy).txt")
         self.assertEqual(copied.size, original.size)
 
     def test_copy_file_to_different_folder_keeps_name(self):
         content = ContentFile(b"hello", name="doc.txt")
-        original = FileService.create_file(self.user, "doc.txt", content=content)
-        target = FileService.create_folder(self.user, "Other")
-        copied = FileService.copy(original, target, self.user)
+        original = tree.create_file(self.user, "doc.txt", content=content)
+        target = tree.create_folder(self.user, "Other")
+        copied = tree.copy(original, target, self.user)
         self.assertEqual(copied.name, "doc.txt")
         self.assertEqual(copied.parent, target)
 
     def test_copy_folder_recursive(self):
-        folder = FileService.create_folder(self.user, "Src")
+        folder = tree.create_folder(self.user, "Src")
         content = ContentFile(b"data", name="child.txt")
-        FileService.create_file(self.user, "child.txt", parent=folder, content=content)
-        sub = FileService.create_folder(self.user, "SubDir", parent=folder)
-        FileService.create_file(
+        tree.create_file(self.user, "child.txt", parent=folder, content=content)
+        sub = tree.create_folder(self.user, "SubDir", parent=folder)
+        tree.create_file(
             self.user,
             "deep.txt",
             parent=sub,
             content=ContentFile(b"deep", name="deep.txt"),
         )
 
-        copied = FileService.copy(folder, None, self.user)
+        copied = tree.copy(folder, None, self.user)
         self.assertEqual(copied.name, "Src (Copy)")
         # Check children were copied
         children = File.objects.filter(parent=copied, deleted_at__isnull=True)
@@ -616,18 +617,18 @@ class TestCopy(TestCase):
         self.assertIn("SubDir", child_names)
 
     def test_copy_name_conflict_increments(self):
-        folder = FileService.create_folder(self.user, "Src")
-        original = FileService.create_folder(self.user, "A", parent=folder)
-        FileService.create_folder(self.user, "A")
-        FileService.create_folder(self.user, "A (Copy)")
+        folder = tree.create_folder(self.user, "Src")
+        original = tree.create_folder(self.user, "A", parent=folder)
+        tree.create_folder(self.user, "A")
+        tree.create_folder(self.user, "A (Copy)")
 
         # Both "A" and "A (Copy)" are taken at the root.
-        copied = FileService.copy(original, None, self.user)
+        copied = tree.copy(original, None, self.user)
         self.assertEqual(copied.name, "A (Copy 2)")
 
 
 class TestCheckNameAvailable(TestCase):
-    """Tests for FileService.check_name_available()."""
+    """Tests for check_name_available()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -635,9 +636,9 @@ class TestCheckNameAvailable(TestCase):
         )
 
     def test_raises_on_duplicate_file(self):
-        FileService.create_file(self.user, "doc.txt", mime_type="text/plain")
+        tree.create_file(self.user, "doc.txt", mime_type="text/plain")
         with self.assertRaises(ValueError):
-            FileService.check_name_available(
+            check_name_available(
                 self.user,
                 None,
                 "doc.txt",
@@ -645,9 +646,9 @@ class TestCheckNameAvailable(TestCase):
             )
 
     def test_case_insensitive(self):
-        FileService.create_file(self.user, "Doc.TXT", mime_type="text/plain")
+        tree.create_file(self.user, "Doc.TXT", mime_type="text/plain")
         with self.assertRaises(ValueError):
-            FileService.check_name_available(
+            check_name_available(
                 self.user,
                 None,
                 "doc.txt",
@@ -655,9 +656,9 @@ class TestCheckNameAvailable(TestCase):
             )
 
     def test_excludes_self_on_update(self):
-        f = FileService.create_file(self.user, "doc.txt", mime_type="text/plain")
+        f = tree.create_file(self.user, "doc.txt", mime_type="text/plain")
         # Should not raise when excluding self
-        FileService.check_name_available(
+        check_name_available(
             self.user,
             None,
             "doc.txt",
@@ -666,10 +667,10 @@ class TestCheckNameAvailable(TestCase):
         )
 
     def test_ignores_soft_deleted(self):
-        f = FileService.create_file(self.user, "deleted.txt", mime_type="text/plain")
-        f.soft_delete()
+        f = tree.create_file(self.user, "deleted.txt", mime_type="text/plain")
+        trash.trash_subtree(f)
         # Should not raise since original is soft-deleted
-        FileService.check_name_available(
+        check_name_available(
             self.user,
             None,
             "deleted.txt",
@@ -679,9 +680,9 @@ class TestCheckNameAvailable(TestCase):
     def test_folders_are_checked_too(self):
         # Two folders of the same name in one parent map to one directory on
         # storage, and files dropped in either would overwrite each other.
-        FileService.create_folder(self.user, "MyFolder")
+        tree.create_folder(self.user, "MyFolder")
         with self.assertRaises(ValueError):
-            FileService.check_name_available(
+            check_name_available(
                 self.user,
                 None,
                 "MyFolder",
@@ -691,9 +692,9 @@ class TestCheckNameAvailable(TestCase):
     def test_a_file_cannot_take_a_sibling_folders_name(self):
         # Same directory on storage: the write used to fail with a bare
         # IsADirectoryError escaping as a 500.
-        FileService.create_folder(self.user, "Docs")
+        tree.create_folder(self.user, "Docs")
         with self.assertRaises(ValueError):
-            FileService.check_name_available(
+            check_name_available(
                 self.user,
                 None,
                 "Docs",
@@ -702,7 +703,7 @@ class TestCheckNameAvailable(TestCase):
 
 
 class TestValidateMoveTarget(TestCase):
-    """Tests for FileService.validate_move_target()."""
+    """Tests for tree.validate_move_target()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -713,35 +714,35 @@ class TestValidateMoveTarget(TestCase):
         )
 
     def test_move_to_none_is_valid(self):
-        folder = FileService.create_folder(self.user, "A")
-        FileService.validate_move_target(folder, None)  # should not raise
+        folder = tree.create_folder(self.user, "A")
+        tree.validate_move_target(folder, None)  # should not raise
 
     def test_cannot_move_into_self(self):
-        folder = FileService.create_folder(self.user, "A")
+        folder = tree.create_folder(self.user, "A")
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(folder, folder)
+            tree.validate_move_target(folder, folder)
 
     def test_cannot_move_into_descendant(self):
-        parent = FileService.create_folder(self.user, "Parent")
-        child = FileService.create_folder(self.user, "Child", parent=parent)
-        grandchild = FileService.create_folder(self.user, "GrandChild", parent=child)
+        parent = tree.create_folder(self.user, "Parent")
+        child = tree.create_folder(self.user, "Child", parent=parent)
+        grandchild = tree.create_folder(self.user, "GrandChild", parent=child)
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(parent, grandchild)
+            tree.validate_move_target(parent, grandchild)
 
     def test_cannot_move_to_other_user_folder(self):
-        folder = FileService.create_folder(self.user, "Mine")
-        other_folder = FileService.create_folder(self.other_user, "Theirs")
+        folder = tree.create_folder(self.user, "Mine")
+        other_folder = tree.create_folder(self.other_user, "Theirs")
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(folder, other_folder)
+            tree.validate_move_target(folder, other_folder)
 
     def test_move_file_to_valid_folder(self):
-        f = FileService.create_file(self.user, "doc.txt", mime_type="text/plain")
-        target = FileService.create_folder(self.user, "Target")
-        FileService.validate_move_target(f, target)  # should not raise
+        f = tree.create_file(self.user, "doc.txt", mime_type="text/plain")
+        target = tree.create_folder(self.user, "Target")
+        tree.validate_move_target(f, target)  # should not raise
 
 
 class TestMoveOnStorage(TestCase):
-    """Tests for FileService.move() with physical storage operations."""
+    """Tests for tree.move() with physical storage operations."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -754,12 +755,12 @@ class TestMoveOnStorage(TestCase):
     def _move(self, node, parent):
         # Object storage drops what a move copied once its transaction commits.
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.move(node, parent)
+            tree.move(node, parent)
 
     def test_move_folder_moves_directory_on_disk(self):
-        src = FileService.create_folder(self.user, "Src")
-        dest = FileService.create_folder(self.user, "Dest")
-        child = FileService.create_folder(self.user, "Child", parent=src)
+        src = tree.create_folder(self.user, "Src")
+        dest = tree.create_folder(self.user, "Dest")
+        child = tree.create_folder(self.user, "Child", parent=src)
 
         self.assertTrue(self._is_dir("Src", "Child"))
 
@@ -769,8 +770,8 @@ class TestMoveOnStorage(TestCase):
         self.assertTrue(self._is_dir("Dest", "Child"))
 
     def test_move_folder_to_root(self):
-        parent = FileService.create_folder(self.user, "Parent")
-        child = FileService.create_folder(self.user, "Child", parent=parent)
+        parent = tree.create_folder(self.user, "Parent")
+        child = tree.create_folder(self.user, "Child", parent=parent)
 
         self.assertTrue(self._is_dir("Parent", "Child"))
 
@@ -780,9 +781,9 @@ class TestMoveOnStorage(TestCase):
         self.assertTrue(self._is_dir("Child"))
 
     def test_move_folder_updates_descendant_content_names(self):
-        src = FileService.create_folder(self.user, "Src")
-        dest = FileService.create_folder(self.user, "Dest")
-        f = FileService.create_file(
+        src = tree.create_folder(self.user, "Src")
+        dest = tree.create_folder(self.user, "Dest")
+        f = tree.create_file(
             self.user,
             "doc.txt",
             parent=src,
@@ -792,7 +793,7 @@ class TestMoveOnStorage(TestCase):
         old_content_name = f.content.name.replace("\\", "/")
         self.assertTrue(old_content_name.startswith("files/users/moveuser/Src/"))
 
-        FileService.move(src, dest)
+        tree.move(src, dest)
 
         f.refresh_from_db()
         new_content_name = f.content.name.replace("\\", "/")
@@ -802,9 +803,9 @@ class TestMoveOnStorage(TestCase):
         )
 
     def test_move_file_moves_on_disk(self):
-        src = FileService.create_folder(self.user, "Src")
-        dest = FileService.create_folder(self.user, "Dest")
-        f = FileService.create_file(
+        src = tree.create_folder(self.user, "Src")
+        dest = tree.create_folder(self.user, "Dest")
+        f = tree.create_file(
             self.user,
             "doc.txt",
             parent=src,
@@ -820,8 +821,8 @@ class TestMoveOnStorage(TestCase):
         self.assertTrue(default_storage.is_file(f.content.name))
 
     def test_move_file_to_root(self):
-        folder = FileService.create_folder(self.user, "Folder")
-        f = FileService.create_file(
+        folder = tree.create_folder(self.user, "Folder")
+        f = tree.create_file(
             self.user,
             "doc.txt",
             parent=folder,
@@ -835,14 +836,14 @@ class TestMoveOnStorage(TestCase):
         self.assertTrue(default_storage.is_file(f.content.name))
 
     def test_move_noop_when_same_parent(self):
-        folder = FileService.create_folder(self.user, "Folder")
-        f = FileService.create_file(
+        folder = tree.create_folder(self.user, "Folder")
+        f = tree.create_file(
             self.user,
             "doc.txt",
             parent=folder,
             mime_type="text/plain",
         )
         # Should not raise or change anything
-        FileService.move(f, folder)
+        tree.move(f, folder)
         f.refresh_from_db()
         self.assertEqual(f.parent, folder)

@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 
 User = get_user_model()
@@ -31,7 +31,7 @@ class FileViewerPinningTests(TestCase):
     def test_audio_only_container_is_pinned(self):
         """An .m4a is an MP4 container; Magika reads it as video."""
         content = SimpleUploadedFile("voice.m4a", MP4_HEADER, content_type="audio/mp4")
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="voice.m4a", content=content, acting_user=self.user
         )
         self.assertEqual(f.viewer, "audio")
@@ -39,7 +39,7 @@ class FileViewerPinningTests(TestCase):
     def test_detection_is_left_untouched(self):
         """The pin is a display decision: the detected category must not move."""
         content = SimpleUploadedFile("voice.m4a", MP4_HEADER, content_type="audio/mp4")
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="voice.m4a", content=content, acting_user=self.user
         )
         self.assertEqual(f.category, "video")
@@ -49,14 +49,14 @@ class FileViewerPinningTests(TestCase):
         content = SimpleUploadedFile(
             "note.txt", b"hello\n" * 40, content_type="text/plain"
         )
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="note.txt", content=content, acting_user=self.user
         )
         self.assertEqual(f.viewer, "")
 
     def test_update_content_repins(self):
         content = SimpleUploadedFile("clip.bin", MP4_HEADER, content_type="video/mp4")
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user, name="clip.bin", content=content, acting_user=self.user
         )
         self.assertEqual(f.viewer, "")
@@ -72,7 +72,7 @@ class FileViewerPinningTests(TestCase):
         """A copy carries its source's pin: the declared media type no longer
         holds the information (the row is stored as video/mp4)."""
         content = SimpleUploadedFile("clip.m4a", MP4_HEADER, content_type="video/mp4")
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="clip.m4a",
             content=content,
@@ -83,14 +83,14 @@ class FileViewerPinningTests(TestCase):
 
     def test_copy_preserves_the_pin(self):
         content = SimpleUploadedFile("voice.m4a", MP4_HEADER, content_type="audio/mp4")
-        source = FileService.create_file(
+        source = tree.create_file(
             owner=self.user, name="voice.m4a", content=content, acting_user=self.user
         )
-        folder = FileService.create_folder(
+        folder = tree.create_folder(
             owner=self.user, name="Copies", acting_user=self.user
         )
 
-        copied = FileService.copy(source, folder, self.user, acting_user=self.user)
+        copied = tree.copy(source, folder, self.user, acting_user=self.user)
 
         self.assertEqual(copied.viewer, "audio")
         self.assertNotEqual(copied.content.name, source.content.name)
@@ -106,7 +106,7 @@ class FileViewerResolutionTests(TestCase):
         self.client.force_login(self.user)
 
     def _pinned_file(self, viewer):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="voice.m4a",
             content=SimpleUploadedFile(

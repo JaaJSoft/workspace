@@ -17,7 +17,7 @@ from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import File, FileFavorite
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.tests.images import make_photo
 from workspace.users.services.settings import set_setting
 
@@ -280,7 +280,7 @@ class PhotosTimelineTests(PlaywrightTestCase):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
         bob = self.create_user(username="bob")
-        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        root = tree.create_folder(owner=bob, name="Family", group=family)
         shared = make_photo(
             bob, "family.jpg", datetime(2024, 7, 9, 12, tzinfo=UTC), parent=root
         )

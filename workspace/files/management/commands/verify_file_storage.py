@@ -14,7 +14,12 @@ from django.db import transaction
 
 from workspace.common.logging import scrub
 from workspace.files.models import File, canonical_name
-from workspace.files.services import FileService, relocations, storage_ops, trash_paths
+from workspace.files.services import (
+    relocations,
+    storage_ops,
+    trash_paths,
+    tree,
+)
 
 
 def _expected_blob(node):
@@ -140,7 +145,7 @@ class Command(BaseCommand):
         for pk, path in sorted(decomposed, key=lambda row: -row[1].count("/")):
             node = File.objects.select_related("owner", "parent__owner").get(pk=pk)
             try:
-                FileService.rename(node, canonical_name(node.name))
+                tree.rename(node, canonical_name(node.name))
                 renamed += 1
             except ValueError as exc:
                 refused.append(f"{pk} {path}: {exc}")

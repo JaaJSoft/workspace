@@ -13,7 +13,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.models import File, FileShare, FileTag, Tag
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import HiddenFile, MediaItem
 from workspace.photos.queries import (
@@ -120,10 +120,8 @@ class HiddenPhotosTests(TestCase):
 class HiddenFoldersTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
-        self.trips = FileService.create_folder(owner=self.user, name="Trips")
-        self.rome = FileService.create_folder(
-            owner=self.user, name="Rome", parent=self.trips
-        )
+        self.trips = tree.create_folder(owner=self.user, name="Trips")
+        self.rome = tree.create_folder(owner=self.user, name="Rome", parent=self.trips)
         self.colosseum = make_photo(
             self.user, "colosseum.jpg", _at(2024, 5, 1), parent=self.rome
         )
@@ -150,14 +148,12 @@ class HiddenFoldersTests(TestCase):
     def test_a_hidden_folder_follows_a_rename(self):
         hide_files(self.user, [self.rome])
 
-        FileService.rename(self.rome, "Roma", acting_user=self.user)
+        tree.rename(self.rome, "Roma", acting_user=self.user)
 
         self.assertEqual(set(library_files(self.user)), {self.boat, self.home})
 
     def test_a_sibling_sharing_the_name_prefix_stays(self):
-        rome_2 = FileService.create_folder(
-            owner=self.user, name="Rome 2", parent=self.trips
-        )
+        rome_2 = tree.create_folder(owner=self.user, name="Rome 2", parent=self.trips)
         kept = make_photo(self.user, "kept.jpg", _at(2024, 5, 5), parent=rome_2)
 
         hide_files(self.user, [self.rome])
@@ -167,8 +163,8 @@ class HiddenFoldersTests(TestCase):
 
     def test_a_wildcard_in_the_folder_name_matches_itself_only(self):
         """``_`` is a LIKE wildcard: a pattern match would hide "axb" with "a_b"."""
-        a_b = FileService.create_folder(owner=self.user, name="a_b")
-        axb = FileService.create_folder(owner=self.user, name="axb")
+        a_b = tree.create_folder(owner=self.user, name="a_b")
+        axb = tree.create_folder(owner=self.user, name="axb")
         kept = make_photo(self.user, "kept.jpg", _at(2024, 5, 5), parent=axb)
         gone = make_photo(self.user, "gone.jpg", _at(2024, 5, 6), parent=a_b)
 
@@ -180,13 +176,11 @@ class HiddenFoldersTests(TestCase):
     def test_a_personal_folder_leaves_a_group_folder_of_the_same_path_alone(self):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
-        group_root = FileService.create_folder(
-            owner=self.user, name="Family", group=family
-        )
+        group_root = tree.create_folder(owner=self.user, name="Family", group=family)
         group_photo = make_photo(
             self.user, "picnic.jpg", _at(2024, 5, 5), parent=group_root
         )
-        personal = FileService.create_folder(owner=self.user, name="Family")
+        personal = tree.create_folder(owner=self.user, name="Family")
         make_photo(self.user, "private.jpg", _at(2024, 5, 6), parent=personal)
 
         hide_files(self.user, [personal])
@@ -199,7 +193,7 @@ class HiddenFoldersTests(TestCase):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
         bob.groups.add(family)
-        group_root = FileService.create_folder(owner=bob, name="Family", group=family)
+        group_root = tree.create_folder(owner=bob, name="Family", group=family)
         group_photo = make_photo(bob, "picnic.jpg", _at(2024, 5, 5), parent=group_root)
 
         hide_files(self.user, [group_root])
@@ -210,7 +204,7 @@ class HiddenFoldersTests(TestCase):
 
     def test_another_users_folder_of_the_same_path_is_left_alone(self):
         carol = User.objects.create_user(username="carol", password="p")
-        theirs = FileService.create_folder(owner=carol, name="Trips")
+        theirs = tree.create_folder(owner=carol, name="Trips")
         shared = make_photo(carol, "shared.jpg", _at(2024, 5, 5), parent=theirs)
         share_file(
             shared,
@@ -225,9 +219,9 @@ class HiddenFoldersTests(TestCase):
 
     def test_hidden_folders_lists_the_reachable_ones_by_path(self):
         hide_files(self.user, [self.trips, self.rome])
-        trashed = FileService.create_folder(owner=self.user, name="Old")
+        trashed = tree.create_folder(owner=self.user, name="Old")
         hide_files(self.user, [trashed])
-        FileService.soft_delete(trashed, acting_user=self.user)
+        trash.soft_delete(trashed, acting_user=self.user)
 
         self.assertEqual(list(hidden_folders(self.user)), [self.trips, self.rome])
 
@@ -241,7 +235,7 @@ class HiddenFilterCostTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
-        hide_files(self.user, [FileService.create_folder(owner=self.user, name="X")])
+        hide_files(self.user, [tree.create_folder(owner=self.user, name="X")])
         photos = File.objects.bulk_create(
             File(
                 owner=self.user,
@@ -297,7 +291,7 @@ class HiddenApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
         self.client.force_login(self.user)
-        self.folder = FileService.create_folder(owner=self.user, name="Private")
+        self.folder = tree.create_folder(owner=self.user, name="Private")
         self.photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14))
 
     def _hidden(self):
@@ -375,7 +369,7 @@ class HiddenApiTests(TestCase):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
         bob.groups.add(family)
-        group_root = FileService.create_folder(owner=bob, name="Family", group=family)
+        group_root = tree.create_folder(owner=bob, name="Family", group=family)
         picnic = make_photo(bob, "picnic.jpg", _at(2024, 5, 5), parent=group_root)
         hide_files(self.user, [group_root, picnic])
         self.user.groups.remove(family)
@@ -455,7 +449,7 @@ class HiddenViewTests(TestCase):
         """What the user hid may sit in a group folder: no scope tab narrows it."""
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)
-        root = FileService.create_folder(owner=self.user, name="Family", group=family)
+        root = tree.create_folder(owner=self.user, name="Family", group=family)
         picnic = make_photo(self.user, "picnic.jpg", _at(2024, 7, 16), parent=root)
         hide_files(self.user, [picnic])
 
@@ -500,7 +494,7 @@ class HiddenViewTests(TestCase):
         self.assertContains(response, "Nothing hidden")
 
     def test_the_page_carries_the_hidden_folders(self):
-        folder = FileService.create_folder(owner=self.user, name="Private")
+        folder = tree.create_folder(owner=self.user, name="Private")
         hide_files(self.user, [folder])
 
         response = self.client.get(f"/photos?scope={MINE}")

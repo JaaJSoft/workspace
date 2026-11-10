@@ -233,11 +233,9 @@ class FileScanAdminCurrencyTests(TestCase):
     def _scanned(self, name, *, stale=False, no_hash=False):
         from django.core.files.base import ContentFile
 
-        from workspace.files.services import FileService
+        from workspace.files.services import tree
 
-        f = FileService.create_file(
-            self.owner, name, content=ContentFile(b"body", name=name)
-        )
+        f = tree.create_file(self.owner, name, content=ContentFile(b"body", name=name))
         recorded = "" if no_hash else ("0" * 64 if stale else f.content_hash)
         FileScan.objects.create(
             file=f,

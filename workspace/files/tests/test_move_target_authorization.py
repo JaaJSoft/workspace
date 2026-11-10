@@ -12,7 +12,7 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 
 User = get_user_model()
 
@@ -20,13 +20,13 @@ User = get_user_model()
 class _MoveFixture:
     def _fixture(self):
         self.alice = User.objects.create_user(username="alice", password="pass")
-        self.trashed = FileService.create_folder(self.alice, "Trashed")
-        FileService.soft_delete(self.trashed, acting_user=self.alice)
+        self.trashed = tree.create_folder(self.alice, "Trashed")
+        trash.soft_delete(self.trashed, acting_user=self.alice)
         self.trashed.refresh_from_db()
-        self.target_file = FileService.create_file(
+        self.target_file = tree.create_file(
             self.alice, "t.txt", content=ContentFile(b"t", name="t.txt")
         )
-        self.moved = FileService.create_file(
+        self.moved = tree.create_file(
             self.alice, "m.txt", content=ContentFile(b"m", name="m.txt")
         )
 
@@ -37,22 +37,20 @@ class ValidateMoveTargetTests(_MoveFixture, TestCase):
 
     def test_a_trashed_folder_is_refused(self):
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(self.moved, self.trashed, user=self.alice)
+            tree.validate_move_target(self.moved, self.trashed, user=self.alice)
 
     def test_a_file_is_refused(self):
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(
-                self.moved, self.target_file, user=self.alice
-            )
+            tree.validate_move_target(self.moved, self.target_file, user=self.alice)
 
     def test_a_former_members_own_group_folder_is_refused(self):
         team = Group.objects.create(name="Team")
         self.alice.groups.add(team)
-        root = FileService.create_folder(self.alice, "TeamRoot", group=team)
+        root = tree.create_folder(self.alice, "TeamRoot", group=team)
         self.alice.groups.remove(team)
 
         with self.assertRaises(ValueError):
-            FileService.validate_move_target(self.moved, root, user=self.alice)
+            tree.validate_move_target(self.moved, root, user=self.alice)
 
 
 class MoveTargetApiTests(_MoveFixture, APITestCase):

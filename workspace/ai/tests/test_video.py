@@ -14,7 +14,7 @@ from django.test import SimpleTestCase, TestCase
 from PIL import Image
 
 from workspace.ai.services.video import extract_video_frames
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.tests.videos import clip_bytes, requires_ffmpeg
 
 User = get_user_model()
@@ -65,9 +65,7 @@ class ExtractVideoFramesTests(TestCase):
         self.user = User.objects.create_user(username="alice", password="p")
 
     def _attachment(self, name, data):
-        stored = FileService.create_file(
-            owner=self.user, name=name, content=ContentFile(data)
-        )
+        stored = tree.create_file(owner=self.user, name=name, content=ContentFile(data))
         return _Attachment(stored.content, name)
 
     def test_a_short_video_is_one_frame_per_second(self):

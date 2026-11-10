@@ -94,7 +94,7 @@ class CopyAPITests(APITestCase):
         cascade through the test client. The service-level call exercises
         the same copy_node code path without that infrastructure noise.
         """
-        from workspace.files.services.files import FileService
+        from workspace.files.services import tree
 
         file = File(
             owner=self.user,
@@ -117,7 +117,7 @@ class CopyAPITests(APITestCase):
             ),
         ):
             with self.assertRaises(OSError):
-                FileService.copy(file, None, self.user)
+                tree.copy(file, None, self.user)
 
         misattributed = [
             call

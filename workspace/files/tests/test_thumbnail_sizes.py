@@ -14,7 +14,7 @@ from rest_framework.test import APITestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileShareLink
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_SIZES,
     delete_thumbnail,
@@ -53,7 +53,7 @@ class ThumbnailSizesGenerationTests(IsolatedMediaRootMixin, APITestCase):
     def _photo(self):
         buf = io.BytesIO()
         Image.new("RGB", (2000, 1500), (10, 120, 200)).save(buf, format="JPEG")
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name="big.jpg",
             content=ContentFile(buf.getvalue(), name="big.jpg"),

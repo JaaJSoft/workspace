@@ -19,7 +19,7 @@ from rest_framework.test import APITestCase
 
 from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File, UploadSession
-from workspace.files.services import FileService, quota, uploads
+from workspace.files.services import quota, trash, tree, uploads
 
 User = get_user_model()
 
@@ -95,10 +95,10 @@ class OpenSessionTests(UploadSessionApiMixin, APITestCase):
         self.assertEqual(response.status_code, 201, response.content)
 
     def test_a_folder_the_user_cannot_add_to_is_refused(self):
-        theirs = FileService.create_folder(self.other, "Private")
-        trashed = FileService.create_folder(self.user, "Old")
-        FileService.soft_delete(trashed)
-        a_file = FileService.create_file(
+        theirs = tree.create_folder(self.other, "Private")
+        trashed = tree.create_folder(self.user, "Old")
+        trash.soft_delete(trashed)
+        a_file = tree.create_file(
             self.user, "a.txt", content=ContentFile(b"a", name="a.txt")
         )
 
@@ -112,7 +112,7 @@ class OpenSessionTests(UploadSessionApiMixin, APITestCase):
     def test_a_group_folder_takes_uploads_from_its_members(self):
         group = Group.objects.create(name="Team")
         self.user.groups.add(group)
-        root = FileService.create_folder(self.other, "Team", group=group)
+        root = tree.create_folder(self.other, "Team", group=group)
 
         response = self._open(parent=root)
 
@@ -120,7 +120,7 @@ class OpenSessionTests(UploadSessionApiMixin, APITestCase):
         self.assertEqual(UploadSession.objects.get().group, group)
 
     def test_a_taken_name_is_refused_before_any_byte_is_sent(self):
-        FileService.create_file(
+        tree.create_file(
             self.user, "video.mp4", content=ContentFile(b"v1", name="video.mp4")
         )
 
@@ -130,7 +130,7 @@ class OpenSessionTests(UploadSessionApiMixin, APITestCase):
         self.assertIn("name", response.data)
 
     def test_a_taken_name_is_accepted_when_told_what_to_do_with_it(self):
-        FileService.create_file(
+        tree.create_file(
             self.user, "video.mp4", content=ContentFile(b"v1", name="video.mp4")
         )
 
@@ -323,7 +323,7 @@ class AppendServiceTests(TestCase):
 
     def _finish(self):
         with uploads.finished_upload(self.session) as content:
-            return FileService.create_file(
+            return tree.create_file(
                 self.user, "video.mp4", content=content, check_quota=False
             )
 
@@ -375,7 +375,7 @@ class FinalizeTests(UploadSessionApiMixin, APITestCase):
         self.client.force_authenticate(self.user)
 
     def test_the_file_is_stored_with_its_content_and_hash(self):
-        folder = FileService.create_folder(self.user, "Videos")
+        folder = tree.create_folder(self.user, "Videos")
 
         response = self._upload(parent=folder, mime_type="video/mp4")
 
@@ -450,7 +450,7 @@ class FinalizeTests(UploadSessionApiMixin, APITestCase):
     def test_a_name_taken_during_the_transfer_is_refused_by_default(self):
         uuid = self._open().data["uuid"]
         self._send(uuid)
-        FileService.create_file(
+        tree.create_file(
             self.user, "video.mp4", content=ContentFile(b"v1", name="video.mp4")
         )
 
@@ -460,7 +460,7 @@ class FinalizeTests(UploadSessionApiMixin, APITestCase):
         self.assertIn("name", response.data)
 
     def test_rename_keeps_both(self):
-        FileService.create_file(
+        tree.create_file(
             self.user, "video.mp4", content=ContentFile(b"v1", name="video.mp4")
         )
 
@@ -470,7 +470,7 @@ class FinalizeTests(UploadSessionApiMixin, APITestCase):
         self.assertEqual(response.data["name"], "video (Copy).mp4")
 
     def test_replace_writes_into_the_existing_file(self):
-        existing = FileService.create_file(
+        existing = tree.create_file(
             self.user, "video.mp4", content=ContentFile(b"v1", name="video.mp4")
         )
 
@@ -483,10 +483,10 @@ class FinalizeTests(UploadSessionApiMixin, APITestCase):
         self.assertEqual(existing.content_hash, DATA_SHA256)
 
     def test_a_folder_trashed_during_the_transfer_is_refused(self):
-        folder = FileService.create_folder(self.user, "Videos")
+        folder = tree.create_folder(self.user, "Videos")
         uuid = self._open(parent=folder).data["uuid"]
         self._send(uuid)
-        FileService.soft_delete(folder)
+        trash.soft_delete(folder)
 
         response = self._finalize(uuid)
 

@@ -11,7 +11,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.files.models import FileScan
-from workspace.files.services import FileService
+from workspace.files.services import trash
 from workspace.people.models import Person
 from workspace.people.services.avatar import avatar_path
 from workspace.people.services.persons import (
@@ -675,7 +675,7 @@ class CoverOutOfLibraryTests(FaceApiTestCase):
         self.assertFalse(default_storage.exists(avatar_path(self.contact)))
 
     def test_the_avatar_action_refuses_a_trashed_cover(self):
-        FileService.soft_delete(self.photos["alice-1.png"], acting_user=self.user)
+        trash.soft_delete(self.photos["alice-1.png"], acting_user=self.user)
 
         self._assert_refused()
 
@@ -692,7 +692,7 @@ class CoverOutOfLibraryTests(FaceApiTestCase):
         self._assert_refused()
 
     def test_a_contact_created_from_a_cluster_skips_a_trashed_cover(self):
-        FileService.soft_delete(self.photos["alice-1.png"], acting_user=self.user)
+        trash.soft_delete(self.photos["alice-1.png"], acting_user=self.user)
 
         response = _patch(
             self.client, f"{CLUSTERS}/{self.alice.pk}", {"new_person": "Ann"}

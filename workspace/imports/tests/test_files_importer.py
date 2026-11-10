@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import File, FileFavorite, FileTag, Tag
-from workspace.files.services import FileService, quota
+from workspace.files.services import quota, trash, tree
 from workspace.imports.importers.base import ImportContext, JobFailed, Outcome
 from workspace.imports.importers.files import FilesImporter
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
@@ -158,7 +158,7 @@ class FilesImporterTests(ImporterTestCase):
         self.assertTrue(self.provider.last_source.closed)
 
     def test_source_path_and_destination_without_root_folder(self):
-        dest = FileService.create_folder(self.user, "Inbox")
+        dest = tree.create_folder(self.user, "Inbox")
         job = self._job(
             source_path="/Docs", destination=str(dest.uuid), create_root_folder=False
         )
@@ -169,8 +169,8 @@ class FilesImporterTests(ImporterTestCase):
         )
 
     def test_same_name_folders_are_reused(self):
-        root = FileService.create_folder(self.user, "Nextcloud import")
-        FileService.create_folder(self.user, "Docs", root)
+        root = tree.create_folder(self.user, "Nextcloud import")
+        tree.create_folder(self.user, "Docs", root)
         self._run(self._job())
         self.assertEqual(
             File.objects.filter(
@@ -180,10 +180,8 @@ class FilesImporterTests(ImporterTestCase):
         )
 
     def test_conflict_rename_is_the_default(self):
-        root = FileService.create_folder(self.user, "Nextcloud import")
-        FileService.create_file(
-            self.user, "readme.txt", root, content=ContentFile(b"mine")
-        )
+        root = tree.create_folder(self.user, "Nextcloud import")
+        tree.create_file(self.user, "readme.txt", root, content=ContentFile(b"mine"))
         job = self._job()
         self._run(job)
         names = sorted(
@@ -194,8 +192,8 @@ class FilesImporterTests(ImporterTestCase):
         self.assertEqual(job.stats["files"]["files"], 3)
 
     def test_conflict_skip(self):
-        root = FileService.create_folder(self.user, "Nextcloud import")
-        mine = FileService.create_file(
+        root = tree.create_folder(self.user, "Nextcloud import")
+        mine = tree.create_file(
             self.user, "readme.txt", root, content=ContentFile(b"mine")
         )
         job = self._job(on_conflict="skip")
@@ -210,8 +208,8 @@ class FilesImporterTests(ImporterTestCase):
         self.assertEqual(item.target_uuid, mine.uuid)
 
     def test_conflict_replace(self):
-        root = FileService.create_folder(self.user, "Nextcloud import")
-        mine = FileService.create_file(
+        root = tree.create_folder(self.user, "Nextcloud import")
+        mine = tree.create_file(
             self.user, "readme.txt", root, content=ContentFile(b"mine")
         )
         self._run(self._job(on_conflict="replace"))
@@ -231,8 +229,8 @@ class FilesImporterTests(ImporterTestCase):
         holder = User.objects.create_user(
             username="holder", email="holder@test.com", password="pw"
         )
-        root = FileService.create_folder(self.user, "Nextcloud import")
-        mine = FileService.create_file(
+        root = tree.create_folder(self.user, "Nextcloud import")
+        mine = tree.create_file(
             self.user, "readme.txt", root, content=ContentFile(b"mine")
         )
         now = timezone.now()
@@ -262,8 +260,8 @@ class FilesImporterTests(ImporterTestCase):
         holder = User.objects.create_user(
             username="holder2", email="holder2@test.com", password="pw"
         )
-        root = FileService.create_folder(self.user, "Nextcloud import")
-        mine = FileService.create_file(
+        root = tree.create_folder(self.user, "Nextcloud import")
+        mine = tree.create_file(
             self.user, "readme.txt", root, content=ContentFile(b"mine")
         )
         now = timezone.now()
@@ -297,7 +295,7 @@ class FilesImporterTests(ImporterTestCase):
 
     def test_a_job_with_other_options_does_not_inherit_the_done_list(self):
         self._run(self._job())
-        other = FileService.create_folder(self.user, "Elsewhere")
+        other = tree.create_folder(self.user, "Elsewhere")
         job = self._job(destination=str(other.uuid), create_root_folder=False)
         self._run(job)
         self.assertEqual(job.stats["files"]["files"], 3)
@@ -308,7 +306,7 @@ class FilesImporterTests(ImporterTestCase):
     def test_a_locally_deleted_file_is_imported_again(self):
         self._run(self._job())
         gone = File.objects.get(owner=self.user, name="report.pdf")
-        FileService.soft_delete(gone)
+        trash.soft_delete(gone)
         job = self._job()
         self._run(job)
         self.assertEqual(job.stats["files"]["files"], 1)
@@ -353,7 +351,7 @@ class FilesImporterTests(ImporterTestCase):
         from workspace.files.services.quota import QuotaExceeded
 
         with patch(
-            "workspace.imports.importers.files.FileService.create_file",
+            "workspace.files.services.tree.create_file",
             side_effect=QuotaExceeded("Your personal storage is full."),
         ):
             with self.assertRaisesRegex(JobFailed, "full"):
@@ -447,7 +445,7 @@ class FilesImporterTests(ImporterTestCase):
     def test_storage_layer_errors_are_recorded_per_entry_and_the_job_goes_on(self):
         job = self._job()
         with patch(
-            "workspace.imports.importers.files.FileService.create_file",
+            "workspace.files.services.tree.create_file",
             side_effect=ValueError("bad name"),
         ):
             self.assertIs(self._run(job), Outcome.DONE)
@@ -476,8 +474,8 @@ class FilesImporterTests(ImporterTestCase):
         self.assertTrue(root.name.startswith("Nextcloud-Home"))
 
     def test_replaced_file_keeps_a_fresh_modification_stamp(self):
-        root = FileService.create_folder(self.user, "Nextcloud import")
-        mine = FileService.create_file(
+        root = tree.create_folder(self.user, "Nextcloud import")
+        mine = tree.create_file(
             self.user, "readme.txt", root, content=ContentFile(b"mine")
         )
         before = mine.updated_at
@@ -740,7 +738,7 @@ class MetadataPhaseTests(ImporterTestCase):
     def test_a_favorite_whose_local_file_is_gone_is_ignored(self):
         self.provider.favorites = ["/readme.txt"]
         self.assertIs(self._run(self._job()), Outcome.DONE)
-        FileService.soft_delete(self._files()["readme.txt"], acting_user=self.user)
+        trash.soft_delete(self._files()["readme.txt"], acting_user=self.user)
         FileFavorite.objects.all().delete()
         # Gone from the remote too, so the second run has nothing to re-import
         # and only the stale mapping is left to match against.
@@ -754,7 +752,7 @@ class MetadataPhaseTests(ImporterTestCase):
     def test_a_favorite_follows_a_file_imported_again_after_a_local_delete(self):
         self.provider.favorites = ["/readme.txt"]
         self.assertIs(self._run(self._job()), Outcome.DONE)
-        FileService.soft_delete(self._files()["readme.txt"], acting_user=self.user)
+        trash.soft_delete(self._files()["readme.txt"], acting_user=self.user)
         FileFavorite.objects.all().delete()
 
         self.assertIs(self._run(self._job()), Outcome.DONE)

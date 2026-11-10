@@ -8,7 +8,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.models import MediaItem
 from workspace.photos.services.preferences import (
     display_preferences,
@@ -166,9 +166,7 @@ class DefaultScopeTests(PreferencesTestCase):
         self.family = Group.objects.create(name="Family")
         self.user.groups.add(self.family)
         self.mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14, 12))
-        root = FileService.create_folder(
-            owner=self.bob, name="Family", group=self.family
-        )
+        root = tree.create_folder(owner=self.bob, name="Family", group=self.family)
         self.family_photo = make_photo(
             self.bob, "family.jpg", _at(2024, 7, 13, 12), parent=root
         )

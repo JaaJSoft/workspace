@@ -721,7 +721,7 @@ class FileViewSet(
         case before a byte of the upload is read, and it is the only check a
         write that carries no content (a rename under ``If-Match``) ever gets.
         A content write is decided again by the conditional UPDATE that writes
-        the row in ``FileService``, which is what holds when two callers race
+        the row in ``content_writes``, which is what holds when two callers race
         with the same expectation.
 
         Optional by design: a caller that sends no precondition (an upload, an

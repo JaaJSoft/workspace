@@ -18,9 +18,10 @@ from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.files.models import File, FileEvent, FileShareLink
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.downloads import signed_redirect
 from workspace.files.services.events import record_event
+from workspace.files.services.names import available_file_name
 from workspace.files.services.public_links import (
     resolve_within,
     sanitize_upload_name,
@@ -527,13 +528,13 @@ class SharedFolderUploadView(APIView):
     @staticmethod
     def _store(link, upload, request, target):
         root = link.file
-        name = FileService.available_file_name(
+        name = available_file_name(
             root.owner, target, sanitize_upload_name(upload.name)
         )
         # acting_user is the anonymous request user on purpose: record_event
         # normalises it to NULL, so the audit trail never claims the owner
         # uploaded what a stranger dropped.
-        node = FileService.create_file(
+        node = tree.create_file(
             root.owner,
             name,
             parent=target,

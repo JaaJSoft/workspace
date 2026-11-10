@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.ebooks import EBOOK_FORMATS, EBOOK_LABELS
 from workspace.files.services.filetype import get_icon, get_viewer
@@ -42,7 +42,7 @@ class EbookDetectionTests(TestCase):
         self.user = User.objects.create_user(username="ebooks", password="x")
 
     def _upload(self, name, data):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user, name=name, content=ContentFile(data, name=name)
         )
 

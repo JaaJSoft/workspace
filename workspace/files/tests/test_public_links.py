@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from workspace.files.models import File, FileShareLink
+from workspace.files.services import trash
 from workspace.files.services.public_links import (
     MAX_UPLOAD_NAME_LENGTH,
     resolve_within,
@@ -58,11 +59,11 @@ class ResolveWithinTests(TestCase):
         )
 
     def test_a_trashed_descendant_does_not_resolve(self):
-        self.inside.soft_delete()
+        trash.trash_subtree(self.inside)
         self.assertIsNone(resolve_within(self.link, str(self.inside.uuid)))
 
     def test_trashing_an_ancestor_hides_its_children(self):
-        self.sub.soft_delete()
+        trash.trash_subtree(self.sub)
         self.assertIsNone(resolve_within(self.link, str(self.inside.uuid)))
 
     def test_another_users_node_with_a_colliding_path_does_not_resolve(self):

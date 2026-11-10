@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.photos.models import HiddenFile, PhotoEmbedding
 from workspace.photos.queries import ALL, MINE
 from workspace.photos.services import similarity
@@ -98,12 +98,12 @@ class SimilarPhotosTests(TestCase):
     def test_trashed_and_hidden_photos_drop_out(self):
         trashed = library_photo(self.user, "trashed.jpg", RED)
         hidden = library_photo(self.user, "hidden.jpg", RED)
-        FileService.soft_delete(trashed)
+        trash.soft_delete(trashed)
         HiddenFile.objects.create(owner=self.user, file=hidden)
 
         self.assertEqual(similar_photos(self.user, self.red), [])
 
-        FileService.restore(trashed)
+        trash.restore(trashed)
         self.assertEqual(self._ids(similar_photos(self.user, self.red)), [trashed.pk])
 
     def test_an_embedding_of_another_model_is_never_compared(self):
@@ -117,7 +117,7 @@ class SimilarPhotosTests(TestCase):
         bob = User.objects.create_user(username="bob", password="p")
         for member in (self.user, bob):
             member.groups.add(team)
-        folder = FileService.create_folder(owner=bob, name="Team", group=team)
+        folder = tree.create_folder(owner=bob, name="Team", group=team)
         bobs = library_photo(bob, "red.jpg", RED, parent=folder)
 
         self.assertEqual(

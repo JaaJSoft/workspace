@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from workspace.files.models import FileShareLink
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -25,7 +25,7 @@ class ViewerSizeCapTests(TestCase):
         self.client.force_login(self.user)
 
     def _file(self, name, payload=PAYLOAD):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user,
             name=name,
             content=SimpleUploadedFile(name, payload, content_type="text/plain"),

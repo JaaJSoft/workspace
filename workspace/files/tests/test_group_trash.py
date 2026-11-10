@@ -14,7 +14,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.queries import FilePermission, get_permission, trash_permission
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -28,21 +28,21 @@ class GroupTrashTests(APITestCase):
         self.team = Group.objects.create(name="Team")
         self.alice.groups.add(self.team)
         self.bob.groups.add(self.team)
-        self.root = FileService.create_folder(self.bob, "TeamRoot", group=self.team)
-        self.folder = FileService.create_folder(self.bob, "Docs", parent=self.root)
-        self.doc = FileService.create_file(
+        self.root = tree.create_folder(self.bob, "TeamRoot", group=self.team)
+        self.folder = tree.create_folder(self.bob, "Docs", parent=self.root)
+        self.doc = tree.create_file(
             self.bob,
             "doc.txt",
             parent=self.folder,
             content=ContentFile(b"hello", name="doc.txt"),
         )
-        self.loose = FileService.create_file(
+        self.loose = tree.create_file(
             self.bob,
             "loose.txt",
             parent=self.root,
             content=ContentFile(b"loose", name="loose.txt"),
         )
-        FileService.soft_delete(self.loose, acting_user=self.bob)
+        trash.soft_delete(self.loose, acting_user=self.bob)
         self.loose.refresh_from_db()
         self.client.force_authenticate(self.alice)
 
@@ -61,7 +61,7 @@ class GroupTrashTests(APITestCase):
         self.assertEqual(self.loose.parent_id, self.root.pk)
 
     def test_restoring_below_a_trashed_folder_brings_the_folder_back(self):
-        FileService.soft_delete(self.folder, acting_user=self.bob)
+        trash.soft_delete(self.folder, acting_user=self.bob)
         self.doc.refresh_from_db()
 
         response = run_operation(self.client, "restore", [self.doc])
@@ -88,13 +88,13 @@ class GroupTrashTests(APITestCase):
         self.assertEqual([n.name for n in ui.context["nodes"]], ["loose.txt"])
 
     def test_emptying_the_trash_leaves_other_members_nodes(self):
-        mine = FileService.create_file(
+        mine = tree.create_file(
             self.alice,
             "mine.txt",
             parent=self.root,
             content=ContentFile(b"mine", name="mine.txt"),
         )
-        FileService.soft_delete(mine, acting_user=self.alice)
+        trash.soft_delete(mine, acting_user=self.alice)
 
         response = run_operation(self.client, "empty_trash")
 
@@ -121,7 +121,7 @@ class GroupTrashTests(APITestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_trash_rights_stop_at_the_trash(self):
-        FileService.soft_delete(self.folder, acting_user=self.bob)
+        trash.soft_delete(self.folder, acting_user=self.bob)
         self.folder.refresh_from_db()
 
         self.assertEqual(trash_permission(self.alice, self.folder), FilePermission.EDIT)

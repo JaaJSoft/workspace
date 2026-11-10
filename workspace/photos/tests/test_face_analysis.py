@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from workspace.common.vectors import nearest
 from workspace.common.vectors.encoding import from_bytes
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Face, FaceAnalysis, FaceCluster
 from workspace.photos.services.detection.base import DetectedFace
@@ -158,7 +158,7 @@ class CandidateTests(FacesTestMixin, TestCase):
         opt_in(self.user)
         group = Group.objects.create(name="Team")
         self.user.groups.add(group)
-        folder = FileService.create_folder(owner=self.user, name="Team", group=group)
+        folder = tree.create_folder(owner=self.user, name="Team", group=group)
         photo = upload(
             self.user, "team.png", faces_png((ALICE, (40, 50, 100))), parent=folder
         )

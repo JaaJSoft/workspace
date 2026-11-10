@@ -6,7 +6,8 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import FileScan, FileShare
-from workspace.files.services import FileService
+from workspace.files.services import trash
+from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.photos.models import Album, AlbumItem
 from workspace.photos.queries import (
@@ -106,7 +107,7 @@ class AlbumItemsTests(TestCase):
     def test_a_hard_deleted_file_leaves_every_album(self):
         album = create_album(self.user, "Summer", files=[self.a, self.b])
 
-        FileService.hard_delete(self.a, acting_user=self.user)
+        hard_delete_tree(self.a)
 
         self.assertEqual(_order(album), [self.b.pk])
 
@@ -272,11 +273,11 @@ class AlbumFilesTests(TestCase):
     def test_a_trashed_file_drops_out_and_comes_back_on_restore(self):
         item = AlbumItem.objects.get(album=self.album, file=self.mine)
 
-        FileService.soft_delete(self.mine, acting_user=self.user)
+        trash.soft_delete(self.mine, acting_user=self.user)
         self.assertEqual(list(album_files(self.user, self.album)), [self.shared])
 
         self.mine.refresh_from_db()
-        FileService.restore(self.mine, acting_user=self.user)
+        trash.restore(self.mine, acting_user=self.user)
         self.assertIn(self.mine, album_files(self.user, self.album))
         self.assertEqual(AlbumItem.objects.get(pk=item.pk).position, item.position)
 
@@ -343,7 +344,7 @@ class AlbumSummariesTests(TestCase):
         self.album.cover = self.new
         self.album.save(update_fields=["cover"])
 
-        FileService.soft_delete(self.new, acting_user=self.user)
+        trash.soft_delete(self.new, acting_user=self.user)
 
         self.assertEqual(self._summary(), {"count": 1, "cover_id": self.old.pk})
 

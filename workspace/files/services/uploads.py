@@ -89,7 +89,7 @@ class UploadIncomplete(Exception):
 
 
 class SpooledUpload(UploadedFile):
-    """A finished spool, handed to ``FileService`` like a request upload.
+    """A finished spool, handed to the tree services like a request upload.
 
     ``temporary_file_path`` is what lets the storage rename it into place
     instead of copying it, and ``content_hash`` what spares a second read.

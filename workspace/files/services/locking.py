@@ -14,7 +14,7 @@ than to overwrite somebody else's save.
 The helpers here answer both questions against a row already in hand, which
 makes them a *check*, not a guarantee - between the check and the write another
 transaction can still move the row. Closing that window is the job of the
-conditional UPDATE that *is* the row write in ``FileService``: every content
+conditional UPDATE that *is* the row write in ``content_writes``: every content
 write re-asks these questions in its own WHERE clause, so a lock or a save
 landing in the window changes the answer before the write can land.
 """

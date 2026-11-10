@@ -11,7 +11,7 @@ from workspace.files.properties_sections import (
     properties_section_registry,
     render_properties_sections,
 )
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 User = get_user_model()
 
@@ -30,9 +30,7 @@ TEST_SLUGS = ("fake", "hidden", "broken", "second", "greeting")
 class PropertiesSectionRegistryTests(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="x")
-        self.file = FileService.create_file(
-            self.alice, "doc.txt", acting_user=self.alice
-        )
+        self.file = tree.create_file(self.alice, "doc.txt", acting_user=self.alice)
         self.request = RequestFactory().get("/files")
         self.request.user = self.alice
 

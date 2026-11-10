@@ -10,7 +10,7 @@ from PIL import ExifTags, Image
 from PIL.TiffImagePlugin import IFDRational
 
 from workspace.files.models import File, FileScan
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.tests.rasters import dng_bytes, heic_bytes
 from workspace.files.tests.videos import clip_bytes, requires_ffmpeg
@@ -176,7 +176,7 @@ class AnalyzePhotoTests(TestCase):
         f = upload(self.user, "upload.tmp.png", png_bytes())
 
         def rename_while_reading(stream, **kwargs):
-            FileService.rename(File.objects.get(pk=f.pk), "2024-07-14.png")
+            tree.rename(File.objects.get(pk=f.pk), "2024-07-14.png")
             return PhotoMetadata()
 
         with patch(
@@ -332,13 +332,13 @@ class PendingPhotosTests(TestCase):
 
     def test_trashed_image_is_not_pending(self):
         f = upload(self.user, "a.jpg")
-        FileService.soft_delete(f, acting_user=self.user)
+        trash.soft_delete(f, acting_user=self.user)
 
         self.assertEqual(self._pending(), set())
 
     def test_other_files_are_not_pending(self):
         upload(self.user, "a.txt", b"text")
-        FileService.create_folder(owner=self.user, name="Pictures")
+        tree.create_folder(owner=self.user, name="Pictures")
 
         self.assertEqual(self._pending(), set())
 

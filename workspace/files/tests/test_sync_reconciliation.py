@@ -22,7 +22,7 @@ from django.test.utils import CaptureQueriesContext
 
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.files.models import File, FileEvent
-from workspace.files.services import FileService
+from workspace.files.services import trash, tree
 from workspace.files.services.shortcuts import create_shortcut
 from workspace.files.sync import FileSyncService
 
@@ -230,7 +230,7 @@ class TrashInteractionTests(SyncReconciliationTestCase):
         self._write("trashed.txt")
         self._sync()
         row = self._live("trashed.txt")
-        row.soft_delete()
+        trash.trash_subtree(row)
 
         result = self._sync()
 
@@ -244,7 +244,7 @@ class TrashInteractionTests(SyncReconciliationTestCase):
     def test_does_not_recreate_a_trashed_folder_still_on_disk(self):
         self._mkdir("Trashed")
         self._sync()
-        self._live("Trashed").soft_delete()
+        trash.trash_subtree(self._live("Trashed"))
 
         result = self._sync()
 
@@ -258,7 +258,7 @@ class TrashInteractionTests(SyncReconciliationTestCase):
         # them as fresh live rows under a soft-deleted parent.
         self._write("Trashed", "inside.txt")
         self._sync()
-        self._live("Trashed").soft_delete()
+        trash.trash_subtree(self._live("Trashed"))
 
         self._sync()
 
@@ -269,7 +269,7 @@ class TrashInteractionTests(SyncReconciliationTestCase):
         # A trashed sibling must not mask an unrelated new node at the same level.
         self._write("A", "old.txt")
         self._sync()
-        self._live("old.txt").soft_delete()
+        trash.trash_subtree(self._live("old.txt"))
 
         self._write("A", "new.txt")
         result = self._sync()
@@ -285,7 +285,7 @@ class ScopeIsolationTests(SyncReconciliationTestCase):
         other = User.objects.create_user(
             username="stranger", email="s@test.com", password="pass"
         )
-        other_file = FileService.create_folder(other, "StrangerFolder")
+        other_file = tree.create_folder(other, "StrangerFolder")
 
         self._write("mine.txt")
         self._sync()
@@ -311,7 +311,7 @@ class ScopeIsolationTests(SyncReconciliationTestCase):
 
         group = Group.objects.create(name="team")
         self.user.groups.add(group)
-        group_folder = FileService.create_folder(self.user, "TeamSpace", group=group)
+        group_folder = tree.create_folder(self.user, "TeamSpace", group=group)
 
         self._sync()
 
@@ -329,7 +329,7 @@ class ShortcutCollisionTests(SyncReconciliationTestCase):
 
     def setUp(self):
         super().setUp()
-        self.target = FileService.create_file(
+        self.target = tree.create_file(
             self.user, "target.txt", content=ContentFile(b"target", name="t.txt")
         )
 
@@ -390,7 +390,7 @@ class ShortcutCollisionTests(SyncReconciliationTestCase):
         self.assertEqual(shortcut.name, "REPORT (Copy).pdf")
 
     def test_a_directory_on_disk_takes_the_name_and_is_walked(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         shortcut = self._shortcut("Archive", parent=docs)
         self._write("Docs", "Archive", "inside.txt")
 
@@ -422,7 +422,7 @@ class ShortcutCollisionTests(SyncReconciliationTestCase):
         self.assertEqual(shortcut.name, "report (Copy 2).pdf")
 
     def test_a_shallow_sync_of_the_folder_does_the_same(self):
-        docs = FileService.create_folder(self.user, "Docs")
+        docs = tree.create_folder(self.user, "Docs")
         shortcut = self._shortcut("notes.md", parent=docs)
         self._write("Docs", "notes.md")
 
@@ -584,7 +584,7 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
         default_storage.delete(path)
         self._write("swap", "inside.txt")
 
-        with patch.object(File, "soft_delete", side_effect=OSError("busy")):
+        with patch.object(trash, "trash_subtree", side_effect=OSError("busy")):
             result = self._sync()
 
         self.assertEqual(len(result.errors), 1)
@@ -766,7 +766,7 @@ class FollowedRenameTests(SyncReconciliationTestCase):
         row = self._live("Report.txt")
         self._rename("Report.txt", "report.txt")
 
-        with patch.object(FileService, "rename", side_effect=OSError("busy")):
+        with patch.object(tree, "rename", side_effect=OSError("busy")):
             result = self._sync()
 
         self.assertEqual(len(result.errors), 1)
@@ -893,7 +893,7 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
 
 class SyncEndpointTests(SyncReconciliationTestCase):
     def test_the_response_reports_every_counter(self):
-        target = FileService.create_file(
+        target = tree.create_file(
             self.user, "target.txt", content=ContentFile(b"target", name="t.txt")
         )
         create_shortcut(self.user, target, None, name="report.pdf")

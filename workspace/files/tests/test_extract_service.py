@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.extract import extract_zip
 
 User = get_user_model()
@@ -51,12 +51,12 @@ class ExtractZipServiceTests(TestCase):
         self.user = User.objects.create_user(
             username="alice", email="alice@example.com", password="pw"
         )
-        self.dest = FileService.create_folder(self.user, "dest")
+        self.dest = tree.create_folder(self.user, "dest")
 
     def _make_archive_file(
         self, payload, name="archive.zip", mime="application/zip", type_label=None
     ):
-        f = FileService.create_file(
+        f = tree.create_file(
             self.user,
             name,
             parent=None,
@@ -373,13 +373,11 @@ class ExtractToRootScopeTests(TestCase):
         self.bob = User.objects.create_user(username="bob", password="pw")
         self.other = Group.objects.create(name="Other")
         self.bob.groups.add(self.other)
-        self.bob_docs = FileService.create_folder(self.bob, "Docs")
-        self.group_root = FileService.create_folder(
-            self.bob, "OtherRoot", group=self.other
-        )
+        self.bob_docs = tree.create_folder(self.bob, "Docs")
+        self.group_root = tree.create_folder(self.bob, "OtherRoot", group=self.other)
 
     def _archive(self, entries):
-        archive = FileService.create_file(
+        archive = tree.create_file(
             self.alice,
             "a.zip",
             content=ContentFile(_make_zip(entries), name="a.zip"),
@@ -407,7 +405,7 @@ class ExtractToRootScopeTests(TestCase):
         self.assertFalse(File.objects.filter(parent=self.bob_docs).exists())
 
     def test_entries_merge_into_the_extractors_own_root_folder(self):
-        own = FileService.create_folder(self.alice, "Docs")
+        own = tree.create_folder(self.alice, "Docs")
         archive = self._archive([("docs/mine.txt", b"mine")])
 
         extract_zip(archive, None, acting_user=self.alice)

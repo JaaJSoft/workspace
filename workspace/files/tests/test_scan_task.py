@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import File, FileScan
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.scanning.base import ScanVerdict
 from workspace.files.services.scanning.policy import is_blocked
 from workspace.files.tasks import scan_file
@@ -60,7 +60,7 @@ class _RenamingScanner:
 
     def scan(self, stream, *, name=""):
         stream.read()
-        FileService.rename(File.objects.get(pk=self.file_obj.pk), self.new_name)
+        tree.rename(File.objects.get(pk=self.file_obj.pk), self.new_name)
         return self.verdict
 
     def health(self):
@@ -351,16 +351,14 @@ class ScanVerdictContentHashTests(TestCase):
         self.user = User.objects.create_user(username="hashtask", password="p")
 
     def _file(self, body=b"hello", name="a.txt"):
-        """Built through FileService, which is what computes content_hash.
+        """Built through ``tree.create_file``, which is what computes content_hash.
 
         A bare File(...).save() leaves the hash empty, so a fixture that
         skipped the service would silently assert "" == "" and prove nothing.
         """
-        from workspace.files.services import FileService
+        from workspace.files.services import tree
 
-        return FileService.create_file(
-            self.user, name, content=ContentFile(body, name=name)
-        )
+        return tree.create_file(self.user, name, content=ContentFile(body, name=name))
 
     def _run(self, file_obj, verdict):
         scanner = _StubScanner(verdict)

@@ -18,7 +18,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.services import FileService
+from workspace.files.services import tree
 
 PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -46,10 +46,10 @@ class _UploadsMixin:
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="active-content")
-        self.folder = FileService.create_folder(self.user, "Uploads")
+        self.folder = tree.create_folder(self.user, "Uploads")
 
     def _file(self, name, payload, mime_type):
-        return FileService.create_file(
+        return tree.create_file(
             owner=self.user,
             name=name,
             parent=self.folder,

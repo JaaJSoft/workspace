@@ -20,7 +20,7 @@ from PIL import Image
 from rest_framework.test import APITestCase
 
 from workspace.files.models import ProcessingFailure
-from workspace.files.services import FileService
+from workspace.files.services import tree
 from workspace.files.services.content_writes import (
     replace_content_storage,
     update_content,
@@ -43,7 +43,7 @@ def _image_bytes(size=(40, 40), fmt="JPEG"):
 class ThumbnailFileMixin:
     """Shared fixture: a user plus helpers to build image and non-image files.
 
-    NOTE: FileService.create_file records a CREATED event whose dispatch is
+    NOTE: tree.create_file records a CREATED event whose dispatch is
     wrapped in transaction.on_commit, which never runs under TestCase. No
     thumbnail attempt is consumed by file creation here.
 
@@ -60,7 +60,7 @@ class ThumbnailFileMixin:
         )
 
     def _make_file(self, name, data, ftype, mime):
-        f = FileService.create_file(
+        f = tree.create_file(
             owner=self.user,
             name=name,
             content=ContentFile(data, name=name),

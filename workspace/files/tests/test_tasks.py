@@ -1,7 +1,7 @@
 """Tests for workspace.files.tasks Celery entry points.
 
 sync_user_files and sync_folder delegate the actual disk work to
-FileSyncService, which we mock. The tests focus on real orchestration
+``disk_sync``, which we mock. The tests focus on real orchestration
 logic: active-user filtering, fan-out and its lock guard, access control
 via user_files_qs, and argument passing.
 
@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
-from workspace.files.sync import SyncResult
+from workspace.files.services.disk_sync import SyncResult
 
 User = get_user_model()
 
@@ -87,7 +87,7 @@ class SyncUserFilesTaskTests(TestCase):
 
     def _fake_service(self, result=None):
         fake = mock.Mock()
-        fake.sync_user_recursive.return_value = result or SyncResult(
+        fake.sync_user_tree.return_value = result or SyncResult(
             files_created=2,
             folders_created=1,
             files_soft_deleted=3,
@@ -98,11 +98,13 @@ class SyncUserFilesTaskTests(TestCase):
 
     def test_returns_the_walk_result(self):
         fake = self._fake_service()
-        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+        with mock.patch(
+            "workspace.files.services.disk_sync.sync_user_tree", fake.sync_user_tree
+        ):
             result = files_tasks.sync_user_files.run(self.user.pk)
 
-        fake.sync_user_recursive.assert_called_once()
-        self.assertEqual(fake.sync_user_recursive.call_args.args[0].pk, self.user.pk)
+        fake.sync_user_tree.assert_called_once()
+        self.assertEqual(fake.sync_user_tree.call_args.args[0].pk, self.user.pk)
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["files_created"], 2)
         self.assertEqual(result["folders_created"], 1)
@@ -120,28 +122,34 @@ class SyncUserFilesTaskTests(TestCase):
         )
 
         fake = self._fake_service()
-        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+        with mock.patch(
+            "workspace.files.services.disk_sync.sync_user_tree", fake.sync_user_tree
+        ):
             result = files_tasks.sync_user_files.run(self.user.pk)
 
-        fake.sync_user_recursive.assert_not_called()
+        fake.sync_user_tree.assert_not_called()
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "already_running")
 
     def test_releases_the_lock_after_a_successful_run(self):
         fake = self._fake_service()
-        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+        with mock.patch(
+            "workspace.files.services.disk_sync.sync_user_tree", fake.sync_user_tree
+        ):
             files_tasks.sync_user_files.run(self.user.pk)
             files_tasks.sync_user_files.run(self.user.pk)
 
         # A lock leaked by the first run would make the second a no-op and
         # stall the user's sync until the TTL expired.
-        self.assertEqual(fake.sync_user_recursive.call_count, 2)
+        self.assertEqual(fake.sync_user_tree.call_count, 2)
 
     def test_releases_the_lock_when_the_walk_raises(self):
         fake = mock.Mock()
-        fake.sync_user_recursive.side_effect = OSError("mount vanished")
+        fake.sync_user_tree.side_effect = OSError("mount vanished")
 
-        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+        with mock.patch(
+            "workspace.files.services.disk_sync.sync_user_tree", fake.sync_user_tree
+        ):
             with self.assertRaises(OSError):
                 files_tasks.sync_user_files.run(self.user.pk)
 
@@ -152,17 +160,21 @@ class SyncUserFilesTaskTests(TestCase):
         self.user.save(update_fields=["is_active"])
 
         fake = self._fake_service()
-        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+        with mock.patch(
+            "workspace.files.services.disk_sync.sync_user_tree", fake.sync_user_tree
+        ):
             result = files_tasks.sync_user_files.run(self.user.pk)
 
-        fake.sync_user_recursive.assert_not_called()
+        fake.sync_user_tree.assert_not_called()
         self.assertEqual(result["status"], "not_found")
 
     def test_missing_user_is_reported_not_raised(self):
         # The dispatcher enqueues by pk; a user deleted in between must not
         # turn into a retrying/erroring task.
         fake = self._fake_service()
-        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+        with mock.patch(
+            "workspace.files.services.disk_sync.sync_user_tree", fake.sync_user_tree
+        ):
             result = files_tasks.sync_user_files.run(999_999)
 
         self.assertEqual(result["status"], "not_found")
@@ -177,11 +189,11 @@ class SyncUserFilesTaskTests(TestCase):
         )
 
         fake_service = mock.Mock()
-        fake_service.sync_user_recursive.return_value = SyncResult()
+        fake_service.sync_user_tree.return_value = SyncResult()
 
         with mock.patch(
-            "workspace.files.sync.FileSyncService",
-            return_value=fake_service,
+            "workspace.files.services.disk_sync.sync_user_tree",
+            fake_service.sync_user_tree,
         ):
             with self.assertLogs("workspace.files.tasks", level="INFO") as cm:
                 files_tasks.sync_user_files.run(evil.pk)
@@ -304,7 +316,7 @@ class SyncFolderTaskTests(TestCase):
 
     def _fake_service(self, result=None):
         fake = mock.Mock()
-        fake.sync_folder_shallow.return_value = result or SyncResult(
+        fake.sync_folder_level.return_value = result or SyncResult(
             files_created=4,
             folders_created=1,
             files_soft_deleted=0,
@@ -316,12 +328,12 @@ class SyncFolderTaskTests(TestCase):
     def test_root_sync_when_no_folder_uuid(self):
         fake = self._fake_service()
         with mock.patch(
-            "workspace.files.sync.FileSyncService",
-            return_value=fake,
+            "workspace.files.services.disk_sync.sync_folder_level",
+            fake.sync_folder_level,
         ):
             result = files_tasks.sync_folder.run(self.user.pk)
 
-        fake.sync_folder_shallow.assert_called_once_with(self.user, None)
+        fake.sync_folder_level.assert_called_once_with(self.user, None, log=mock.ANY)
         self.assertEqual(result["files_created"], 4)
         self.assertEqual(result["folders_created"], 1)
         self.assertEqual(result["errors"], [])
@@ -329,12 +341,12 @@ class SyncFolderTaskTests(TestCase):
     def test_sync_specific_folder(self):
         fake = self._fake_service()
         with mock.patch(
-            "workspace.files.sync.FileSyncService",
-            return_value=fake,
+            "workspace.files.services.disk_sync.sync_folder_level",
+            fake.sync_folder_level,
         ):
             files_tasks.sync_folder.run(self.user.pk, folder_uuid=str(self.folder.uuid))
 
-        call = fake.sync_folder_shallow.call_args
+        call = fake.sync_folder_level.call_args
         self.assertEqual(call.args[0], self.user)
         passed_folder = call.args[1]
         self.assertEqual(passed_folder.pk, self.folder.pk)

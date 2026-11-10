@@ -19,8 +19,7 @@ from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
-from workspace.files.services import relocations, tree
-from workspace.files.sync import FileSyncService
+from workspace.files.services import disk_sync, relocations, tree
 
 User = get_user_model()
 
@@ -134,7 +133,7 @@ class RelocationCases:
         self.rename_then_roll_back()
         before = set(File.objects.values_list("pk", "deleted_at"))
 
-        FileSyncService().sync_user_recursive(self.user)
+        disk_sync.sync_user_tree(self.user)
 
         self.assertEqual(set(File.objects.values_list("pk", "deleted_at")), before)
 
@@ -142,7 +141,7 @@ class RelocationCases:
         tree.rename(self.docs, "Archive")
         before = set(File.objects.values_list("pk", "deleted_at"))
 
-        FileSyncService().sync_user_recursive(self.user)
+        disk_sync.sync_user_tree(self.user)
 
         self.assertEqual(set(File.objects.values_list("pk", "deleted_at")), before)
 

@@ -13,7 +13,7 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services import trash, tree
+from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.content_hash import (
     find_duplicates,
     hash_storage_file,
@@ -26,7 +26,6 @@ from workspace.files.services.content_writes import (
     update_content,
 )
 from workspace.files.services.processors import get_processor
-from workspace.files.sync import FileSyncService
 from workspace.files.webdav.resources import FileResource
 
 from .catch_up import run_catch_up
@@ -173,7 +172,7 @@ class SyncHashTests(TestCase):
             f"files/users/{self.user.username}/found.txt", ContentFile(HELLO)
         )
 
-        FileSyncService().sync_user_recursive(self.user)
+        disk_sync.sync_user_tree(self.user)
 
         f = File.objects.get(owner=self.user, name="found.txt")
         self.assertEqual(f.content_hash, HELLO_SHA256)

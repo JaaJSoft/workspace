@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 18:03+0000\n"
+"POT-Creation-Date: 2026-11-10 18:08+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -343,6 +343,12 @@ msgstr "%(actor)s vous a mentionné dans un commentaire sur « %(name)s »"
 msgid "%(actor)s commented on \"%(name)s\""
 msgstr "%(actor)s a commenté « %(name)s »"
 
+#: services/disk_sync.py
+msgid "Only folders of your personal files are synced with the disk."
+msgstr ""
+"Seuls les dossiers de vos fichiers personnels sont synchronisés avec le "
+"disque."
+
 #: services/names.py
 msgid "A folder with the same name already exists in this folder."
 msgstr "Un dossier portant le même nom existe déjà dans ce dossier."
@@ -481,12 +487,6 @@ msgstr "Le dossier racine d’un groupe ne peut pas être renommé."
 #, python-format
 msgid "\"%(name)s\" is no longer shared with you"
 msgstr "« %(name)s » n’est plus partagé avec vous"
-
-#: sync.py
-msgid "Only folders of your personal files are synced with the disk."
-msgstr ""
-"Seuls les dossiers de vos fichiers personnels sont synchronisés avec le "
-"disque."
 
 #: tasks.py
 #, python-format

@@ -65,13 +65,15 @@ class SyncMixin:
                 response=OpenApiTypes.OBJECT,
                 description="Sync result summary.",
             ),
-            400: OpenApiResponse(description="Not a folder."),
+            400: OpenApiResponse(
+                description="Not a folder, or not one of the caller's personal tree."
+            ),
         },
     )
     @action(detail=True, methods=["post"], url_path="sync")
     def sync_folder(self, request, uuid=None):
         """Sync a specific folder's children for the current user."""
-        from workspace.files.sync import FileSyncService
+        from workspace.files.sync import FileSyncService, NotPersonalFolder
 
         file_obj = self.get_object()
         if file_obj.node_type != File.NodeType.FOLDER:
@@ -81,7 +83,12 @@ class SyncMixin:
             )
 
         service = FileSyncService(log=logger)
-        result = service.sync_folder_shallow(request.user, parent_db=file_obj)
+        try:
+            result = service.sync_folder_shallow(request.user, parent_db=file_obj)
+        except NotPersonalFolder as refusal:
+            return Response(
+                {"detail": str(refusal)}, status=status.HTTP_400_BAD_REQUEST
+            )
         for err in result.errors:
             logger.warning("sync folder %s: %s", scrub(uuid), scrub(err))
         return Response(

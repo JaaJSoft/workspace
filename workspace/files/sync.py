@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, fields
 
 from django.core.files.storage import default_storage
 from django.utils import timezone
+from django.utils.translation import gettext
 
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
@@ -16,6 +17,15 @@ from workspace.files.services.storage_ops import unique_copy_name
 from workspace.files.storage_layout import user_root
 
 logger = logging.getLogger(__name__)
+
+
+class NotPersonalFolder(ValueError):
+    """A folder outside the user's personal tree was asked to be synced.
+
+    The walk reads the user's own directory: a group's folder, or one that is
+    trashed, has nothing there, and whatever sits at the same path belongs to
+    another folder.
+    """
 
 
 @dataclass
@@ -222,7 +232,20 @@ class FileSyncService:
         return result
 
     def sync_folder_shallow(self, user, parent_db=None) -> SyncResult:
-        """Sync immediate children of a specific folder (or root if None)."""
+        """Sync immediate children of a specific folder (or root if None).
+
+        Raises ``NotPersonalFolder`` for a folder that is not a live one of
+        *user*'s personal tree.
+        """
+        if parent_db is not None and not (
+            parent_db.node_type == File.NodeType.FOLDER
+            and parent_db.owner_id == user.pk
+            and parent_db.group_id is None
+            and parent_db.deleted_at is None
+        ):
+            raise NotPersonalFolder(
+                gettext("Only folders of your personal files are synced with the disk.")
+            )
         result = SyncResult()
 
         storage_prefix = user_root(user.username)

@@ -14,6 +14,7 @@ import unicodedata
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import connection
@@ -24,7 +25,7 @@ from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_o
 from workspace.files.models import File, FileEvent
 from workspace.files.services import trash, tree
 from workspace.files.services.shortcuts import create_shortcut
-from workspace.files.sync import FileSyncService
+from workspace.files.sync import FileSyncService, NotPersonalFolder
 
 User = get_user_model()
 
@@ -977,3 +978,39 @@ class SyncQueryBudgetTests(SyncReconciliationTestCase):
             f"warm sync of a 5-deep chain spent {queries} queries; depth "
             "must not add per-level lookups.",
         )
+
+
+class SyncFolderScopeTests(SyncReconciliationTestCase):
+    """The folder sync reads the caller's personal directory, so only a
+    folder of their personal tree has anything there to be synced with."""
+
+    def setUp(self):
+        super().setUp()
+        group = Group.objects.create(name="Team")
+        self.user.groups.add(group)
+        self.group_folder = tree.create_folder(self.user, "Team", group=group)
+        # Same path, other tree: the personal folder the walk used to read
+        # when asked for the group's.
+        personal = tree.create_folder(self.user, "Team")
+        self.private = tree.create_file(
+            self.user,
+            "private.txt",
+            parent=personal,
+            content=ContentFile(b"secret", name="private.txt"),
+        )
+        self.client.force_login(self.user)
+
+    def test_a_group_folder_adopts_nothing_from_the_callers_personal_tree(self):
+        response = self.client.post(f"/api/v1/files/{self.group_folder.uuid}/sync")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(File.objects.filter(parent=self.group_folder).exists())
+        self.assertEqual(
+            File.objects.filter(content=self.private.content.name).count(), 1
+        )
+
+    def test_the_service_refuses_a_folder_outside_the_personal_tree(self):
+        with self.assertRaises(NotPersonalFolder):
+            FileSyncService().sync_folder_shallow(self.user, self.group_folder)
+
+        self.assertFalse(File.objects.filter(parent=self.group_folder).exists())

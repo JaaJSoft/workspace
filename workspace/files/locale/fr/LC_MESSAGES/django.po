@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 05:54+0000\n"
+"POT-Creation-Date: 2026-11-10 18:03+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -39,13 +39,15 @@ msgstr "Ouvrir dans un nouvel onglet"
 
 #: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/node_card.html
+#: ui/templates/files/ui/partials/node_row.html
 msgid "Add to favorites"
 msgstr "Ajouter aux favoris"
 
 #: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/folder_content.html
+#: ui/templates/files/ui/partials/node_card.html
+#: ui/templates/files/ui/partials/node_row.html
 msgid "Remove from favorites"
 msgstr "Retirer des favoris"
 
@@ -221,7 +223,7 @@ msgstr "Un raccourci n’a pas de contenu."
 msgid "Content is required to replace the existing file."
 msgstr "Un contenu est requis pour remplacer le fichier existant."
 
-#: serializers.py services/_names.py
+#: serializers.py services/names.py
 msgid "A file with the same name already exists in this folder."
 msgstr "Un fichier portant le même nom existe déjà dans ce dossier."
 
@@ -326,18 +328,6 @@ msgstr ""
 msgid "A tag with this name already exists."
 msgstr "Une étiquette portant ce nom existe déjà."
 
-#: services/_names.py
-msgid "A folder with the same name already exists in this folder."
-msgstr "Un dossier portant le même nom existe déjà dans ce dossier."
-
-#: services/_names.py
-msgid "Cannot move a folder into itself."
-msgstr "Impossible de déplacer un dossier dans lui-même."
-
-#: services/_names.py
-msgid "Cannot move a folder into one of its descendants."
-msgstr "Impossible de déplacer un dossier dans l’un de ses sous-dossiers."
-
 #: services/announcements.py views/files.py
 #, python-format
 msgid "%(actor)s edited \"%(name)s\""
@@ -353,25 +343,17 @@ msgstr "%(actor)s vous a mentionné dans un commentaire sur « %(name)s »"
 msgid "%(actor)s commented on \"%(name)s\""
 msgstr "%(actor)s a commenté « %(name)s »"
 
-#: services/files.py
-msgid "A group's root folder cannot be moved."
-msgstr "Le dossier racine d’un groupe ne peut pas être déplacé."
+#: services/names.py
+msgid "A folder with the same name already exists in this folder."
+msgstr "Un dossier portant le même nom existe déjà dans ce dossier."
 
-#: services/files.py
-msgid "A group's root folder cannot be renamed."
-msgstr "Le dossier racine d’un groupe ne peut pas être renommé."
+#: services/names.py
+msgid "Cannot move a folder into itself."
+msgstr "Impossible de déplacer un dossier dans lui-même."
 
-#: services/files.py
-msgid "A group's root folder cannot be deleted."
-msgstr "Le dossier racine d’un groupe ne peut pas être supprimé."
-
-#: services/files.py views/files.py
-msgid "You are not a member of this group."
-msgstr "Vous n’êtes pas membre de ce groupe."
-
-#: services/files.py
-msgid "You cannot move items into this folder."
-msgstr "Vous ne pouvez pas déplacer d’éléments dans ce dossier."
+#: services/names.py
+msgid "Cannot move a folder into one of its descendants."
+msgstr "Impossible de déplacer un dossier dans l’un de ses sous-dossiers."
 
 #: services/quota.py
 msgid "Storage quota exceeded."
@@ -475,10 +457,36 @@ msgstr "Fichiers de ce dossier"
 msgid "%(actor)s deleted \"%(name)s\""
 msgstr "%(actor)s a supprimé « %(name)s »"
 
+#: services/trash.py
+msgid "A group's root folder cannot be deleted."
+msgstr "Le dossier racine d’un groupe ne peut pas être supprimé."
+
+#: services/tree.py
+msgid "A group's root folder cannot be moved."
+msgstr "Le dossier racine d’un groupe ne peut pas être déplacé."
+
+#: services/tree.py views/files.py
+msgid "You are not a member of this group."
+msgstr "Vous n’êtes pas membre de ce groupe."
+
+#: services/tree.py
+msgid "You cannot move items into this folder."
+msgstr "Vous ne pouvez pas déplacer d’éléments dans ce dossier."
+
+#: services/tree.py
+msgid "A group's root folder cannot be renamed."
+msgstr "Le dossier racine d’un groupe ne peut pas être renommé."
+
 #: signals.py
 #, python-format
 msgid "\"%(name)s\" is no longer shared with you"
 msgstr "« %(name)s » n’est plus partagé avec vous"
+
+#: sync.py
+msgid "Only folders of your personal files are synced with the disk."
+msgstr ""
+"Seuls les dossiers de vos fichiers personnels sont synchronisés avec le "
+"disque."
 
 #: tasks.py
 #, python-format
@@ -1315,32 +1323,6 @@ msgid "Deleted"
 msgstr "Supprimé"
 
 #: ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/partials/node_name.html
-msgid ""
-"Quarantined: the malware scanner flagged this file, so it cannot be opened "
-"or downloaded."
-msgstr ""
-"En quarantaine : l’analyseur antivirus a signalé ce fichier, il ne peut donc "
-"être ni ouvert ni téléchargé."
-
-#: ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/partials/node_name.html
-msgid "Processing: the file is being scanned and its preview prepared."
-msgstr ""
-"Traitement en cours : le fichier est en cours d’analyse et son aperçu en "
-"préparation."
-
-#: ui/templates/files/ui/partials/folder_content.html
-#, python-format
-msgid "Show files tagged %(name)s"
-msgstr "Afficher les fichiers étiquetés %(name)s"
-
-#: ui/templates/files/ui/partials/folder_content.html
-#: ui/templates/files/ui/partials/properties_content.html
-msgid "Shortcut"
-msgstr "Raccourci"
-
-#: ui/templates/files/ui/partials/folder_content.html
 #: ui/templates/files/ui/partials/properties_content.html
 #, python-format
 msgid "%(counter)s item"
@@ -1442,6 +1424,33 @@ msgstr "Téléverser un dossier"
 #: ui/templates/files/ui/partials/new_menu.html
 msgid "Upload entire folder"
 msgstr "Téléverser un dossier entier"
+
+#: ui/templates/files/ui/partials/node_card.html
+#: ui/templates/files/ui/partials/properties_content.html
+msgid "Shortcut"
+msgstr "Raccourci"
+
+#: ui/templates/files/ui/partials/node_card.html
+#: ui/templates/files/ui/partials/node_row.html
+#, python-format
+msgid "Show files tagged %(name)s"
+msgstr "Afficher les fichiers étiquetés %(name)s"
+
+#: ui/templates/files/ui/partials/node_name.html
+#: ui/templates/files/ui/partials/node_row.html
+msgid ""
+"Quarantined: the malware scanner flagged this file, so it cannot be opened "
+"or downloaded."
+msgstr ""
+"En quarantaine : l’analyseur antivirus a signalé ce fichier, il ne peut donc "
+"être ni ouvert ni téléchargé."
+
+#: ui/templates/files/ui/partials/node_name.html
+#: ui/templates/files/ui/partials/node_row.html
+msgid "Processing: the file is being scanned and its preview prepared."
+msgstr ""
+"Traitement en cours : le fichier est en cours d’analyse et son aperçu en "
+"préparation."
 
 #: ui/templates/files/ui/partials/operations_panel.html
 #, python-format

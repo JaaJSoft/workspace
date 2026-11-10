@@ -12,6 +12,7 @@ from workspace.common.vectors.encoding import from_bytes
 from workspace.core.services.admin_dashboard import embedding_backend_health_card
 from workspace.files.models import File, FileEvent, FileScan
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import get_processor
 from workspace.files.ui.viewers import AudioViewer
 from workspace.photos.indexes import PHOTO_EMBEDDINGS
@@ -111,9 +112,7 @@ class EmbedPhotoTests(TestCase):
         photo = upload(self.user, "a.jpg", jpeg_bytes(color=RED))
         before = _vector_of(*embed_file(photo))
 
-        FileService.update_content(
-            photo, ContentFile(jpeg_bytes(color=BLUE), name="a.jpg")
-        )
+        update_content(photo, ContentFile(jpeg_bytes(color=BLUE), name="a.jpg"))
         photo.refresh_from_db()
         self.assertIn(photo, pending_embeddings_qs())
         after = _vector_of(*embed_file(photo))

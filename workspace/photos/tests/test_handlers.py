@@ -6,6 +6,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.event_dispatch import run_handlers
 from workspace.files.services.processors import get_processor, run_pipeline
 from workspace.photos.models import MediaItem
@@ -121,7 +122,7 @@ class UploadDispatchTests(TestCase):
         )
 
         self._write(
-            lambda: FileService.update_content(
+            lambda: update_content(
                 f,
                 ContentFile(jpeg_bytes(taken="2025:01:02 09:00:00"), name="a.jpg"),
                 acting_user=self.user,
@@ -150,7 +151,7 @@ class PipelineTests(TestCase):
     def test_a_photo_overwritten_with_something_else_leaves_the_library(self):
         f = upload(self.user, "a.jpg")
         analyze_media(f)
-        FileService.update_content(f, ContentFile(b"plain text now", name="a.jpg"))
+        update_content(f, ContentFile(b"plain text now", name="a.jpg"))
         f.refresh_from_db()
         self.assertNotEqual(f.type, "jpeg")
 

@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from workspace.files.models import File, FileScan
 from workspace.files.search import search_files
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import replace_content_from
 from workspace.files.services.search_index import index_file
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.tests.test_actions import actions_of
@@ -643,9 +644,7 @@ class CopyEnforcementTests(APITestCase):
         )
 
         with self.assertRaisesRegex(Exception, "quarantined"):
-            FileService.replace_content_from(
-                target, self.infected, acting_user=self.user
-            )
+            replace_content_from(target, self.infected, acting_user=self.user)
         target.refresh_from_db()
         with target.content.open("rb") as fh:
             self.assertEqual(fh.read(), b"clean")

@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from workspace.files.models import File, FileScan, MediaInfo
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.event_dispatch import run_handlers
 from workspace.files.services.media_info import (
     is_probe_candidate,
@@ -166,9 +167,7 @@ class PendingTests(MediaInfoTestCase):
         probe_file(f)
         self.assertEqual(self._pending(), set())
 
-        FileService.update_content(
-            f, ContentFile(clip_bytes("clip_hevc.mp4"), name="clip.webm")
-        )
+        update_content(f, ContentFile(clip_bytes("clip_hevc.mp4"), name="clip.webm"))
 
         self.assertEqual(self._pending(), {f.pk})
 

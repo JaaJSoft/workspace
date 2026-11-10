@@ -31,6 +31,7 @@ from .refusals import (
     require_action,
     require_destination,
 )
+from .scanning.policy import check_copy_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         raise ValueError("Source is not a file")
     if file_obj.type not in ZIP_LABELS:
         raise ValueError("Not a ZIP archive")
-    FileService.check_copy_allowed(file_obj)
+    check_copy_allowed(file_obj)
 
     max_bytes = getattr(settings, "FILES_EXTRACT_MAX_BYTES", 2 * 1024 * 1024 * 1024)
     max_entries = getattr(settings, "FILES_EXTRACT_MAX_ENTRIES", 10_000)

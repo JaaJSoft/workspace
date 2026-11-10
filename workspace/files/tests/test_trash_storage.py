@@ -16,6 +16,7 @@ from django.test import TestCase
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 
 User = get_user_model()
 
@@ -72,7 +73,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self._trash(f)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.update_content(
+            update_content(
                 loaded, ContentFile(b"new", name="report.pdf"), acting_user=self.user
             )
 
@@ -92,7 +93,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self._trash(docs)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.update_content(
+            update_content(
                 loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
             )
 
@@ -117,7 +118,7 @@ class TrashStorageLayoutTests(TrashStorageTestCase):
         self._trash(docs)
 
         with self.captureOnCommitCallbacks(execute=True):
-            FileService.update_content(
+            update_content(
                 loaded, ContentFile(b"late", name="a.txt"), acting_user=self.user
             )
 

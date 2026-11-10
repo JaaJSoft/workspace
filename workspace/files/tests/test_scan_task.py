@@ -385,9 +385,9 @@ class ScanVerdictContentHashTests(TestCase):
         self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
         first_hash = f.scan.content_hash
 
-        from workspace.files.services import FileService
+        from workspace.files.services.content_writes import update_content
 
-        FileService.update_content(f, ContentFile(b"second", name="a.txt"))
+        update_content(f, ContentFile(b"second", name="a.txt"))
         f.refresh_from_db()
         self._run(f, ScanVerdict(status=FileScan.Status.CLEAN))
         f.refresh_from_db()

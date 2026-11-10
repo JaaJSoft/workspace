@@ -12,6 +12,10 @@ from django.test import TestCase
 from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import (
+    replace_content_storage,
+    update_content,
+)
 from workspace.files.services.locking import Relocated
 
 User = get_user_model()
@@ -231,7 +235,7 @@ class TestRename(TestCase):
 
 
 class TestUpdateContent(TestCase):
-    """Tests for FileService.update_content()."""
+    """Tests for update_content()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -244,7 +248,7 @@ class TestUpdateContent(TestCase):
         self.assertEqual(f.size, 3)
 
         new_content = ContentFile(b"new content here", name="file.txt")
-        FileService.update_content(f, new_content)
+        update_content(f, new_content)
         f.refresh_from_db()
         self.assertEqual(f.size, 16)
 
@@ -256,7 +260,7 @@ class TestUpdateContent(TestCase):
             b'{"name": "test", "version": 1, "items": [1, 2, 3]}',
             name="file.json",
         )
-        FileService.update_content(f, new_content, name="file.json")
+        update_content(f, new_content, name="file.json")
         f.refresh_from_db()
         self.assertIn("json", f.mime_type)
 
@@ -270,7 +274,7 @@ class TestUpdateContent(TestCase):
         f.has_thumbnail = True
         f.save(update_fields=["has_thumbnail"])
 
-        FileService.update_content(f, ContentFile(b"new bytes", name="photo.png"))
+        update_content(f, ContentFile(b"new bytes", name="photo.png"))
         f.refresh_from_db()
         self.assertFalse(f.has_thumbnail)
 
@@ -283,7 +287,7 @@ class TestUpdateContent(TestCase):
         )
         original_updated_at = f.updated_at
 
-        FileService.update_content(f, ContentFile(b"bb", name="doc.txt"))
+        update_content(f, ContentFile(b"bb", name="doc.txt"))
         f.refresh_from_db()
         self.assertGreater(f.updated_at, original_updated_at)
 
@@ -294,7 +298,7 @@ class TestUpdateContent(TestCase):
             "doc.txt",
             content=ContentFile(b"old", name="doc.txt"),
         )
-        FileService.update_content(f, ContentFile(b"fresh content", name="doc.txt"))
+        update_content(f, ContentFile(b"fresh content", name="doc.txt"))
         f.refresh_from_db()
         with f.content.storage.open(f.content.name, "rb") as fh:
             self.assertEqual(fh.read(), b"fresh content")
@@ -319,7 +323,7 @@ class TestUpdateContent(TestCase):
             patch.object(storage, "replace", side_effect=OSError("disk full")),
             self.assertRaises(OSError),
         ):
-            FileService.update_content(
+            update_content(
                 f, ContentFile(b"the new bytes", name="doc.txt"), name="doc.txt"
             )
 
@@ -361,7 +365,7 @@ class TestUpdateContent(TestCase):
         original_hash = f.content_hash
 
         with self._dying_storage_write(b"a new and lon"), self.assertRaises(OSError):
-            FileService.update_content(
+            update_content(
                 f, ContentFile(b"a new and longer body", name="doc.txt"), name="doc.txt"
             )
 
@@ -379,7 +383,7 @@ class TestUpdateContent(TestCase):
         )
 
         with self._dying_storage_write(b"half"), self.assertRaises(OSError):
-            FileService.update_content(
+            update_content(
                 f, ContentFile(b"a new body", name="doc.txt"), name="doc.txt"
             )
 
@@ -391,9 +395,7 @@ class TestUpdateContent(TestCase):
             "doc.txt",
             content=ContentFile(b"old", name="doc.txt"),
         )
-        FileService.update_content(
-            f, ContentFile(b"new bytes", name="doc.txt"), name="doc.txt"
-        )
+        update_content(f, ContentFile(b"new bytes", name="doc.txt"), name="doc.txt")
 
         self.assertEqual(self._blobs_beside(f), ["doc.txt"])
 
@@ -416,9 +418,7 @@ class TestUpdateContent(TestCase):
         )
         before = f.updated_at
 
-        FileService.update_content(
-            f, ContentFile(b"the new bytes", name="doc.txt"), name="doc.txt"
-        )
+        update_content(f, ContentFile(b"the new bytes", name="doc.txt"), name="doc.txt")
 
         self.assertEqual(f.size, 13)
         self.assertFalse(f.has_thumbnail)
@@ -436,7 +436,7 @@ class TestUpdateContent(TestCase):
             "data.bin",
             content=ContentFile(b"x", name="data.bin"),
         )
-        FileService.update_content(
+        update_content(
             f,
             ContentFile(b"y", name="data.bin"),
             mime_type="application/x-custom",
@@ -446,7 +446,7 @@ class TestUpdateContent(TestCase):
 
 
 class TestReplaceContentStorage(TestCase):
-    """Tests for FileService.replace_content_storage()."""
+    """Tests for replace_content_storage()."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -461,7 +461,7 @@ class TestReplaceContentStorage(TestCase):
             "note.md",
             content=ContentFile(b"old", name="note.md"),
         )
-        FileService.replace_content_storage(
+        replace_content_storage(
             f,
             storage_path="custom/path/note.md",
             size=4096,
@@ -480,7 +480,7 @@ class TestReplaceContentStorage(TestCase):
         f.has_thumbnail = True
         f.save(update_fields=["has_thumbnail"])
 
-        FileService.replace_content_storage(
+        replace_content_storage(
             f,
             storage_path="custom/path/photo.png",
             size=10,
@@ -497,7 +497,7 @@ class TestReplaceContentStorage(TestCase):
         )
         original_updated_at = f.updated_at
 
-        FileService.replace_content_storage(
+        replace_content_storage(
             f,
             storage_path="custom/path/doc.txt",
             size=2,
@@ -512,7 +512,7 @@ class TestReplaceContentStorage(TestCase):
             "doc.txt",
             content=ContentFile(b"a", name="doc.txt"),
         )
-        FileService.replace_content_storage(
+        replace_content_storage(
             f,
             storage_path="dav/streamed/doc.txt",
             size=11,
@@ -535,7 +535,7 @@ class TestReplaceContentStorage(TestCase):
         FileService.rename(folder, "Archive")
 
         with self.assertRaises(Relocated):
-            FileService.replace_content_storage(
+            replace_content_storage(
                 loaded,
                 storage_path=loaded.content.name,
                 size=1,
@@ -557,7 +557,7 @@ class TestReplaceContentStorage(TestCase):
         FileService.soft_delete(f, acting_user=self.user)
 
         with self.assertRaises(Relocated):
-            FileService.replace_content_storage(
+            replace_content_storage(
                 loaded,
                 storage_path=loaded.content.name,
                 size=1,

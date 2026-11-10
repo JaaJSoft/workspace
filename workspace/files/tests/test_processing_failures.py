@@ -21,6 +21,10 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import ProcessingFailure
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import (
+    replace_content_storage,
+    update_content,
+)
 from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
 from .catch_up import run_catch_up
@@ -486,7 +490,7 @@ class ContentReplacementResetsBudgetTests(ProcessingFailureTestCase):
         for _ in range(MAX_ATTEMPTS):
             record_failure(f, "thumbnails", ValueError("boom"))
 
-        FileService.update_content(
+        update_content(
             f,
             ContentFile(_image_bytes(), name="broken.jpg"),
             name="broken.jpg",
@@ -503,7 +507,7 @@ class ContentReplacementResetsBudgetTests(ProcessingFailureTestCase):
         f = self._make_broken_image()
         record_failure(f, "thumbnails", ValueError("boom"))
 
-        FileService.replace_content_storage(
+        replace_content_storage(
             f, storage_path=f.content.name, size=f.size or 1, content_hash="0" * 64
         )
 
@@ -520,7 +524,7 @@ class ContentReplacementResetsBudgetTests(ProcessingFailureTestCase):
             record_failure(f, "thumbnails", ValueError("boom"))
         self.assertEqual(run_catch_up("thumbnails"), 0)
 
-        FileService.update_content(
+        update_content(
             f,
             ContentFile(_image_bytes(), name="broken.jpg"),
             name="broken.jpg",

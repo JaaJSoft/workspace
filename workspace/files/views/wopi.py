@@ -31,7 +31,7 @@ from django.views.decorators.debug import sensitive_variables
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.queries import FilePermission, get_permission
-from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -205,7 +205,7 @@ class WopiFileContentsView(View):
 
         content = ContentFile(request.body, name=file_obj.name)
         try:
-            FileService.update_content(
+            update_content(
                 file_obj,
                 content,
                 acting_user=user,

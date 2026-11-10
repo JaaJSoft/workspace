@@ -13,6 +13,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 
 User = get_user_model()
 
@@ -59,7 +60,7 @@ class FileViewerPinningTests(TestCase):
             owner=self.user, name="clip.bin", content=content, acting_user=self.user
         )
         self.assertEqual(f.viewer, "")
-        FileService.update_content(
+        update_content(
             f,
             SimpleUploadedFile("clip.bin", MP4_HEADER, content_type="audio/mp4"),
             acting_user=self.user,

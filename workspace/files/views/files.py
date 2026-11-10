@@ -700,7 +700,7 @@ class FileViewSet(
 
     def get_serializer_context(self):
         # The serializer re-asks the precondition inside the write, where the
-        # database can serialise it (FileService.update_content). Parsing it
+        # database can serialise it (update_content). Parsing it
         # once here keeps the two answers from drifting apart.
         context = super().get_serializer_context()
         request = self.request
@@ -803,7 +803,7 @@ class FileViewSet(
                     status=status.HTTP_403_FORBIDDEN,
                 )
             # Perform the content update. The serializer's update() routes
-            # the write through FileService.update_content, which records
+            # the write through update_content, which records
             # the CONTENT_REPLACED event itself.
             serializer = self.get_serializer(file_obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)

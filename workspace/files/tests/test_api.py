@@ -484,7 +484,7 @@ class FileAPITests(APITestCase):
         """PATCH content must invalidate any cached thumbnail flag.
 
         Regression: before the FileSerializer was routed through
-        FileService.update_content, the API path left has_thumbnail untouched,
+        update_content, the API path left has_thumbnail untouched,
         so an image whose bytes were replaced kept serving the stale thumbnail.
         """
         from django.core.files.uploadedfile import SimpleUploadedFile

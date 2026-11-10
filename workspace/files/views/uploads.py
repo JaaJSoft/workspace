@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from workspace.files.queries import annotate_for_serializer, can_create_in
 from workspace.files.services import FileService, uploads
 from workspace.files.services.announcements import announce_replaced
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.quota import check_write_allowed
 
 from ..models import File, UploadSession
@@ -337,7 +338,7 @@ class UploadSessionFinalizeView(APIView):
                 excluding=session,
             )
             with content_write_refusals():
-                FileService.update_content(
+                update_content(
                     target,
                     content,
                     name=target.name,

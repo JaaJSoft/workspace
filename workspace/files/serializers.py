@@ -18,6 +18,7 @@ from workspace.files.queries import (
     visible_path,
 )
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import clear_content, update_content
 from workspace.files.services.files import GroupMismatch
 from workspace.files.services.image_edits import (
     ROTATIONS,
@@ -816,7 +817,7 @@ class FileSerializer(serializers.ModelSerializer):
             File.objects.filter(pk=target.pk), user
         ).first()
         with content_write_refusals():
-            FileService.update_content(
+            update_content(
                 instance,
                 validated_data["content"],
                 name=instance.name,
@@ -862,7 +863,7 @@ class FileSerializer(serializers.ModelSerializer):
                 # it goes through the same conditional statement rather than a
                 # bare save() a lock taken meanwhile would never see.
                 with content_write_refusals():
-                    FileService.clear_content(
+                    clear_content(
                         instance,
                         acting_user=acting_user,
                         expected_hash=self.context.get("expected_content_hash"),
@@ -873,7 +874,7 @@ class FileSerializer(serializers.ModelSerializer):
                 # database decides it, which is the half that holds under two
                 # writers racing with the same expectation.
                 with content_write_refusals():
-                    FileService.update_content(
+                    update_content(
                         instance,
                         uploaded,
                         name=instance.name,

@@ -9,6 +9,7 @@ from PIL import Image
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import run_pipeline
 from workspace.files.services.thumbnails.generation import (
     get_thumbnail_path,
@@ -172,7 +173,7 @@ class ThumbnailFlagWriteTests(TestCase):
         """The replacement cleared the flag; the late draw of the old bytes
         must leave it cleared, so the new bytes still get a thumbnail."""
         stored = self._refresh_while(
-            lambda current: FileService.update_content(
+            lambda current: update_content(
                 current,
                 ContentFile(_png_bytes((40, 30)), name="before.png"),
                 acting_user=self.user,

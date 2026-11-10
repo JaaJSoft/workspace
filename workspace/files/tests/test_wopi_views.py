@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from workspace.files.models import File, FileEvent, UserStorageQuota
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.wopi.tokens import mint_access_token
 
 User = get_user_model()
@@ -183,7 +184,7 @@ class PutFileTests(WopiViewTestBase):
         reload instead of overwriting whoever moved it.
         """
         opened_at = self.file.content_hash
-        FileService.update_content(
+        update_content(
             File.objects.get(pk=self.file.pk),
             SimpleUploadedFile("report.docx", b"somebody else's revision"),
             name="report.docx",

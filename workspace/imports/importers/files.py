@@ -22,6 +22,7 @@ from workspace.common.text import caseless
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs
 from workspace.files.services import FileService, quota
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.locking import LockConflict
 from workspace.files.services.names import available_file_name, find_name_conflict
 from workspace.files.services.quota import QuotaExceeded
@@ -450,7 +451,7 @@ class FilesImporter(Importer):
             # recognise and would import a second time.
             with transaction.atomic():
                 if existing is not None:
-                    file_obj = FileService.update_content(
+                    file_obj = update_content(
                         existing,
                         content,
                         name=name,

@@ -20,6 +20,7 @@ from workspace.files.actions import ActionRegistry
 from workspace.files.models import File, FileShare
 from workspace.files.queries import FilePermission
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.image_edits import (
     apply_edit,
     edit_version,
@@ -371,7 +372,7 @@ class ImageEditApiTests(ImageEditTestMixin, APITestCase):
         self._put({"rotation": 90})
         self.file.refresh_from_db()
 
-        FileService.update_content(
+        update_content(
             self.file, ContentFile(_jpeg(_halves((300, 300))), name="photo.jpg")
         )
 
@@ -561,7 +562,7 @@ class EditedDownloadTests(ImageEditTestMixin, APITestCase):
 
     def test_an_image_that_cannot_be_decoded_downloads_its_original(self):
         broken = b"\xff\xd8 not a jpeg"
-        FileService.update_content(self.file, ContentFile(broken, name="photo.jpg"))
+        update_content(self.file, ContentFile(broken, name="photo.jpg"))
         File.objects.filter(pk=self.file.pk).update(
             image_edit={"rotation": 90}, type="jpeg"
         )
@@ -578,7 +579,7 @@ class EditedDownloadTests(ImageEditTestMixin, APITestCase):
         exif[0x010F] = "Camera maker"
         buf = io.BytesIO()
         source.save(buf, format="JPEG", exif=exif.tobytes())
-        FileService.update_content(self.file, ContentFile(buf.getvalue(), name="p.jpg"))
+        update_content(self.file, ContentFile(buf.getvalue(), name="p.jpg"))
         File.objects.filter(pk=self.file.pk).update(image_edit={"rotation": 90})
 
         resp, body = self._download()
@@ -595,9 +596,7 @@ class EditedDownloadTests(ImageEditTestMixin, APITestCase):
 
         buf = io.BytesIO()
         _halves().save(buf, format="GIF")
-        FileService.update_content(
-            self.file, ContentFile(buf.getvalue(), name="anim.gif")
-        )
+        update_content(self.file, ContentFile(buf.getvalue(), name="anim.gif"))
         self.file.refresh_from_db()
         self.file.name = "anim.gif"
         self.file.image_edit = {"rotation": 180}

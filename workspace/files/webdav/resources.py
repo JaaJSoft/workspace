@@ -30,6 +30,7 @@ from workspace.files.models import (
 from workspace.files.queries import FilePermission, accessible_files_q, get_permission
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
+from workspace.files.services.content_writes import replace_content_storage
 from workspace.files.services.locking import (
     LockConflict,
     Relocated,
@@ -548,7 +549,7 @@ class FileResource(DAVNonCollection):
                     != self._storage_path
                 ):
                     raise Relocated()
-                FileService.replace_content_storage(
+                replace_content_storage(
                     self._file,
                     storage_path=self._storage_path,
                     size=buf.size,

@@ -17,6 +17,7 @@ from django.test import TestCase
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.shortcuts import create_shortcut
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.provider import WorkspaceDAVProvider
@@ -133,7 +134,7 @@ class ServiceNameTests(NameFormsTestCase):
             self.user, "report.txt", content=ContentFile(b"old", name="report.txt")
         )
 
-        FileService.update_content(f, ContentFile(b"new", name="REPORT.TXT"))
+        update_content(f, ContentFile(b"new", name="REPORT.TXT"))
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, "files/users/nfc/report.txt")

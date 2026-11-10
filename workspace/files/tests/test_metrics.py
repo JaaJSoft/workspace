@@ -15,6 +15,7 @@ from prometheus_client import REGISTRY
 from rest_framework.test import APIClient
 
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 
 User = get_user_model()
 
@@ -50,7 +51,7 @@ class UploadBytesTests(TestCase):
             content=ContentFile(b"abc", name="a.txt"),
         )
         before = _sample("files_upload_bytes_total")
-        FileService.update_content(f, ContentFile(b"abcdefghij", name="a.txt"))
+        update_content(f, ContentFile(b"abcdefghij", name="a.txt"))
         self.assertEqual(_sample("files_upload_bytes_total") - before, 10)
 
 

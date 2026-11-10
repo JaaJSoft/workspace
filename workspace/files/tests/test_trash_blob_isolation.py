@@ -19,6 +19,7 @@ from django.test import TestCase
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 
 User = get_user_model()
 
@@ -94,7 +95,7 @@ class TrashedBlobIsolationTests(IsolatedMediaRootMixin, TestCase):
         trashed = self._trashed()
         live = self._make("report.pdf", b"placeholder")
 
-        FileService.update_content(
+        update_content(
             live, ContentFile(LIVE, name="report.pdf"), acting_user=self.user
         )
         FileService.restore(trashed, acting_user=self.user)

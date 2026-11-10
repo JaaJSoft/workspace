@@ -18,6 +18,7 @@ from workspace.files.models import (
     UserStorageQuota,
 )
 from workspace.files.services import FileService, quota
+from workspace.files.services.content_writes import update_content
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.webdav.resources import FolderResource, RootCollection
 
@@ -160,22 +161,18 @@ class UpdateContentEnforcementTests(TestCase):
 
     def test_growing_past_the_quota_is_refused(self):
         with self.assertRaises(quota.QuotaExceeded):
-            FileService.update_content(
-                self.file, ContentFile(b"x" * (11 * KB), name="a.bin")
-            )
+            update_content(self.file, ContentFile(b"x" * (11 * KB), name="a.bin"))
         self.file.refresh_from_db()
         self.assertEqual(self.file.size, 9 * KB)
 
     def test_only_the_delta_counts(self):
-        FileService.update_content(
-            self.file, ContentFile(b"x" * (10 * KB), name="a.bin")
-        )
+        update_content(self.file, ContentFile(b"x" * (10 * KB), name="a.bin"))
         self.file.refresh_from_db()
         self.assertEqual(self.file.size, 10 * KB)
 
     def test_shrinking_is_allowed_while_over_quota(self):
         UserStorageQuota.objects.create(user=self.user, quota_bytes=KB)
-        FileService.update_content(self.file, ContentFile(b"x", name="a.bin"))
+        update_content(self.file, ContentFile(b"x", name="a.bin"))
         self.file.refresh_from_db()
         self.assertEqual(self.file.size, 1)
 
@@ -183,7 +180,7 @@ class UpdateContentEnforcementTests(TestCase):
         """Writing into someone else's file must not be a way around a quota."""
         editor = User.objects.create_user(username="editor", password="pw")
         UserStorageQuota.objects.create(user=editor, quota_bytes=0)
-        FileService.update_content(
+        update_content(
             self.file, ContentFile(b"x" * (10 * KB), name="a.bin"), acting_user=editor
         )
         self.file.refresh_from_db()

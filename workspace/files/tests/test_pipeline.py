@@ -12,6 +12,11 @@ from rest_framework.test import APITestCase
 from workspace.files.models import File, FileEvent, FileScan, ProcessingFailure
 from workspace.files.services import FileService
 from workspace.files.services import processors as registry
+from workspace.files.services.content_writes import (
+    clear_content,
+    replace_content_storage,
+    update_content,
+)
 from workspace.files.services.event_dispatch import _HANDLERS
 from workspace.files.services.processing_failures import MAX_ATTEMPTS
 from workspace.files.services.processors import (
@@ -109,7 +114,7 @@ class WritePathStatusTests(PipelineTestCase):
         f = self._upload()
         File.objects.filter(pk=f.pk).update(processing_status=Status.READY)
 
-        FileService.update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
+        update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
 
         self.assertEqual(self._status(f), Status.PENDING)
 
@@ -117,7 +122,7 @@ class WritePathStatusTests(PipelineTestCase):
         f = self._upload()
         File.objects.filter(pk=f.pk).update(processing_status=Status.READY)
 
-        FileService.replace_content_storage(
+        replace_content_storage(
             f, storage_path=f.content.name, size=1, content_hash="0" * 64
         )
 
@@ -126,7 +131,7 @@ class WritePathStatusTests(PipelineTestCase):
     def test_emptying_the_content_leaves_nothing_to_process(self):
         f = self._upload()
 
-        FileService.clear_content(f)
+        clear_content(f)
 
         self.assertEqual(self._status(f), Status.READY)
 
@@ -140,7 +145,7 @@ class WritePathStatusTests(PipelineTestCase):
                 last_attempt_at=timezone.now(),
             )
 
-        FileService.update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
+        update_content(f, ContentFile(b"new", name="a.txt"), name="a.txt")
 
         self.assertFalse(ProcessingFailure.objects.exists())
 
@@ -217,9 +222,7 @@ class RunPipelineTests(PipelineTestCase):
         call the new bytes ready."""
 
         def replace_then_process(file_obj):
-            FileService.update_content(
-                file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt"
-            )
+            update_content(file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt")
             self.journal.append(("first", "process", file_obj.pk))
             return True
 
@@ -286,9 +289,7 @@ class SettledAnnouncementTests(PipelineTestCase):
         """The replacement's own pipeline settles the new bytes and announces them."""
 
         def replace(file_obj):
-            FileService.update_content(
-                file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt"
-            )
+            update_content(file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt")
             return True
 
         register_processor(

@@ -27,6 +27,7 @@ from workspace.common.storage.s3 import MIN_PART_SIZE
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.resources import FileResource, FolderResource
 
@@ -214,9 +215,7 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             FileService.rename(docs, "Archive")
 
-        FileService.update_content(
-            loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
-        )
+        update_content(loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user)
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, "files/users/alice/Archive/a.txt")
@@ -232,9 +231,7 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             FileService.rename(f, "b.txt")
 
-        FileService.update_content(
-            loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
-        )
+        update_content(loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user)
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, "files/users/alice/b.txt")
@@ -298,9 +295,7 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
     def test_replacing_the_content(self):
         f = self.upload("doc.txt", b"old")
 
-        FileService.update_content(
-            f, ContentFile(b"new", name="doc.txt"), name="doc.txt"
-        )
+        update_content(f, ContentFile(b"new", name="doc.txt"), name="doc.txt")
 
         self.assertEqual(self.keys(), ["files/users/alice/doc.txt"])
         self.assertEqual(self.read(f), b"new")

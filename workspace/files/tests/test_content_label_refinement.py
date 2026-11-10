@@ -11,6 +11,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 
 
 class RefineWithNameTest(TestCase):
@@ -66,7 +67,7 @@ class StoredTypeHonoursExtensionTest(TestCase):
                 b"# Rich\n\nA real paragraph of content here.\n", name="note.md"
             ),
         )
-        FileService.update_content(
+        update_content(
             f,
             ContentFile(b"# Tiny\n", name="note.md"),
             name="note.md",

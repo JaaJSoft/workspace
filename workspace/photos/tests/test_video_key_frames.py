@@ -13,6 +13,7 @@ from workspace.common.vectors import nearest
 from workspace.common.vectors.encoding import from_bytes
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import get_processor
 from workspace.files.tests.videos import requires_ffmpeg
 from workspace.photos.indexes import PHOTO_EMBEDDINGS
@@ -192,9 +193,7 @@ class VideoKeyFrameTests(TestCase):
         video = self._video(colour_video((3, RED), (3, BLUE)))
         old = embed_file(video)
 
-        FileService.update_content(
-            video, ContentFile(colour_video((3, GREEN)), name="clip.mkv")
-        )
+        update_content(video, ContentFile(colour_video((3, GREEN)), name="clip.mkv"))
         video.refresh_from_db()
         self.assertIn(video, pending_embeddings_qs())
         with self.captureOnCommitCallbacks(execute=True):

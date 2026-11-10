@@ -16,6 +16,7 @@ from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_o
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.names import NameTaken
 from workspace.files.sync import FileSyncService
 
@@ -100,7 +101,7 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
     def test_new_content_lands_under_the_file_name_not_the_upload_name(self):
         created = self._create("report.txt", b"old")
 
-        FileService.update_content(created, ContentFile(b"new", name="upload.bin"))
+        update_content(created, ContentFile(b"new", name="upload.bin"))
 
         self.assertEqual(created.content.name, "files/users/alice/Docs/report.txt")
         self.assertEqual(read(created), b"new")

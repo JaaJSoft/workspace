@@ -21,6 +21,10 @@ from workspace.files.services.content_hash import (
     pending_hash_qs,
     refresh_content_hash,
 )
+from workspace.files.services.content_writes import (
+    replace_content_storage,
+    update_content,
+)
 from workspace.files.services.processors import get_processor
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.resources import FileResource
@@ -86,7 +90,7 @@ class WritePathHashTests(TestCase):
         f = FileService.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
-        FileService.update_content(
+        update_content(
             f, ContentFile(b"edited", name="note.txt"), acting_user=self.user
         )
         f.refresh_from_db()
@@ -96,7 +100,7 @@ class WritePathHashTests(TestCase):
         f = FileService.create_file(
             self.user, "note.txt", content=ContentFile(HELLO, name="note.txt")
         )
-        FileService.replace_content_storage(
+        replace_content_storage(
             f,
             storage_path=f.content.name,
             size=6,

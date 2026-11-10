@@ -17,6 +17,7 @@ from workspace.files.models import File, FileShare
 from workspace.files.queries import annotate_for_serializer
 from workspace.files.serializers import FileLocked, FileSerializer
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.locking import LockConflict
 from workspace.files.sse_provider import push_file_event
 
@@ -440,7 +441,7 @@ class StaleWriteTests(APITestCase):
         )
 
     def _move_the_blob(self):
-        FileService.update_content(
+        update_content(
             self.file,
             ContentFile(b"somebody else's paragraphs", name="note.md"),
             name="note.md",
@@ -697,7 +698,7 @@ class ConcurrentWriteTests(APITestCase):
         )
 
     def _rival_saves(self, body=b"the rival's paragraphs"):
-        FileService.update_content(
+        update_content(
             File.objects.get(pk=self.file.pk),
             ContentFile(body, name="race.md"),
             name="race.md",
@@ -871,7 +872,7 @@ class ConcurrentWriteTests(APITestCase):
             ),
             self.assertRaises(LockConflict),
         ):
-            FileService.update_content(
+            update_content(
                 File.objects.get(pk=self.file.pk),
                 ContentFile(b"mine", name="race.md"),
                 name="race.md",

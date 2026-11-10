@@ -14,6 +14,7 @@ from django.db import transaction
 from ..models import File, canonical_name
 from ..queries import FilePermission, get_permission
 from .announcements import announce_replaced
+from .content_writes import move_content_from, replace_content_from
 from .files import FileService, GroupRootFolder, new_owner_on_move
 from .names import NameTaken, find_node_conflict
 from .refusals import (
@@ -97,7 +98,7 @@ def copy_item(
                 raise Refused(Refusal.NAME_TAKEN)
             _require_replaceable(user, existing, node)
             with refusals():
-                FileService.replace_content_from(existing, node, acting_user=user)
+                replace_content_from(existing, node, acting_user=user)
             announce_replaced(existing, user)
             return TransferResult(Outcome.REPLACED, existing)
 
@@ -131,7 +132,7 @@ def _move_onto(user, node, existing):
     require_unlocked(user, node)
     _require_replaceable(user, existing, node)
     with refusals():
-        FileService.move_content_from(existing, node, acting_user=user)
+        move_content_from(existing, node, acting_user=user)
 
 
 def move_item(user, node, parent, on_conflict=OnConflict.ERROR, *, name=None):

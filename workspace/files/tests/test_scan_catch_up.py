@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
+from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import get_processor
 from workspace.files.services.scanning.base import ScanVerdict
 from workspace.files.services.scanning.scan import pending_scan_qs, scan_for_catch_up
@@ -67,7 +68,7 @@ class PendingScanTests(TestCase):
         """Without this, a lost CONTENT_REPLACED event strands the file with a
         verdict about bytes it no longer holds."""
         f = self._scanned_file("changed.txt")
-        FileService.update_content(f, ContentFile(b"different", name="changed.txt"))
+        update_content(f, ContentFile(b"different", name="changed.txt"))
         self.assertEqual(self._pending(), {f.pk})
 
     def test_a_verdict_with_no_recorded_hash_is_pending(self):

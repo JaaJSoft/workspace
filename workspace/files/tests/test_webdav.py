@@ -36,6 +36,7 @@ from workspace.files.models import (
     UserStorageQuota,
 )
 from workspace.files.services import FileService, quota
+from workspace.files.services.content_writes import update_content
 from workspace.files.webdav.dc import DjangoBasicDomainController
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import (
@@ -735,7 +736,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf = res.begin_write(content_type="text/plain")
         buf.write(b"my upload")
         buf.close()
-        FileService.update_content(
+        update_content(
             File.objects.get(pk=self.file.pk),
             ContentFile(b"somebody else's save", name="test.txt"),
             name="test.txt",
@@ -754,7 +755,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf = self.res.begin_write(content_type="text/plain")
         buf.write(b"my upload")
         buf.close()
-        FileService.update_content(
+        update_content(
             File.objects.get(pk=self.file.pk),
             ContentFile(b"somebody else's save", name="test.txt"),
             name="test.txt",
@@ -935,9 +936,8 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf.close()
 
         with (
-            mock.patch.object(
-                FileService,
-                "replace_content_storage",
+            mock.patch(
+                "workspace.files.webdav.resources.replace_content_storage",
                 side_effect=DatabaseError("the database went away"),
             ),
             self.assertRaises(DatabaseError),
@@ -2232,7 +2232,10 @@ class WebDAVIntegrationTests(TestCase):
         dest = File.objects.get(owner=self.user, name="report.odt")
         temp = File.objects.get(owner=self.user, name=".report.odt.tmp")
 
-        with patch.object(FileService, "hard_delete", side_effect=OSError("disk")):
+        with patch(
+            "workspace.files.services.content_writes.hard_delete_tree",
+            side_effect=OSError("disk"),
+        ):
             code, _, _ = self._request(
                 "MOVE",
                 "/.report.odt.tmp",

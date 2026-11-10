@@ -19,6 +19,8 @@ from django.utils.translation import gettext_lazy, pgettext_lazy
 from workspace.common.text import caseless
 from workspace.common.uuids import uuid_v7_or_v4
 
+from .storage_layout import live_path
+
 User = get_user_model()
 
 
@@ -74,22 +76,12 @@ def files_storage():
 
 
 def file_upload_path(instance, filename):
-    """Generate upload path based on the node's position in the tree.
+    """Where a blob named *filename* goes: in the live directory of its node.
 
-    Uses ``instance.path`` (set by ``File.save()`` before
-    ``super().save()`` runs) to avoid walking the parent FK chain.
-    Group files are stored under ``files/groups/<group_name>/...``.
-    Personal files are stored under ``files/users/<username>/...``.
+    The FileField's ``upload_to``. The services pass the node's own name, so
+    a blob's key is its node's ``live_path``.
     """
-    if instance.group_id:
-        root = "files/groups"
-    else:
-        root = "files/users/" + instance.owner.username
-
-    if instance.path:
-        parent_parts = instance.path.split("/")[:-1]
-        return posixpath.join(root, *parent_parts, filename)
-    return posixpath.join(root, filename)
+    return posixpath.join(posixpath.dirname(live_path(instance)), filename)
 
 
 class CaselessKeyField(models.CharField):

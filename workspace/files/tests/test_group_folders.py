@@ -13,7 +13,7 @@ from workspace.files.models import File
 from workspace.files.queries import can_access, user_files_qs, user_group_files_qs
 from workspace.files.services import trash, tree
 from workspace.files.services.names import check_name_available
-from workspace.files.services.storage_ops import folder_storage_path
+from workspace.files.services.storage_ops import node_storage_path
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.ui.views import build_breadcrumbs
 
@@ -107,11 +107,11 @@ class GroupStoragePathTests(TestCase):
             group=self.group,
         )
 
-    def test_folder_storage_path_for_group_folder(self):
-        path = folder_storage_path(self.root)
+    def test_storage_path_for_group_folder(self):
+        path = node_storage_path(self.root)
         self.assertEqual(path, "files/groups/Marketing Files")
 
-    def test_folder_storage_path_for_group_subfolder(self):
+    def test_storage_path_for_group_subfolder(self):
         sub = File.objects.create(
             owner=self.user,
             name="Reports",
@@ -119,16 +119,16 @@ class GroupStoragePathTests(TestCase):
             parent=self.root,
             group=self.group,
         )
-        path = folder_storage_path(sub)
+        path = node_storage_path(sub)
         self.assertEqual(path, "files/groups/Marketing Files/Reports")
 
-    def test_folder_storage_path_personal_unchanged(self):
+    def test_storage_path_personal_unchanged(self):
         personal = File.objects.create(
             owner=self.user,
             name="Personal",
             node_type=File.NodeType.FOLDER,
         )
-        path = folder_storage_path(personal)
+        path = node_storage_path(personal)
         self.assertEqual(path, "files/users/alice/Personal")
 
     def test_file_upload_path_for_group_file(self):

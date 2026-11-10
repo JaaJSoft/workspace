@@ -18,7 +18,8 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 
 from ..metrics import FILES_UPLOAD_BYTES
-from ..models import File, FileEvent, file_upload_path
+from ..models import File, FileEvent
+from ..storage_layout import live_path
 from . import detection, locking, storage_ops
 from .content_hash import upload_hash
 from .events import record_event
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 def _location(file_obj):
     """Everything a file's blob path is derived from.
 
-    Its place in the tree (``file_upload_path``), and whether it is in the
+    Its place in the tree (``live_path``), and whether it is in the
     trash: trashing leaves the tree path as it was and moves the blob under
     ``trash/`` all the same.
     """
@@ -297,7 +298,7 @@ def move_content_from(target, source, *, acting_user=None):
             additional_bytes=(source.size or 0) - (target.size or 0),
         )
     storage = target.content.storage
-    storage_path = file_upload_path(target, target.name)
+    storage_path = live_path(target)
     source_path = source.content.name
     # A rollback restores rows, not blobs: whatever sat at storage_path is
     # set aside until the commit, so a failure can put both blobs back. A

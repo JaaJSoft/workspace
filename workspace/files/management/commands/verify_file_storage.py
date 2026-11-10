@@ -6,7 +6,6 @@ That is what makes a bucket or a media directory readable without the
 database, and what the sync relies on; nothing else checks it.
 """
 
-import posixpath
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand, CommandError
@@ -20,12 +19,6 @@ from workspace.files.services import (
     trash_paths,
     tree,
 )
-
-
-def _expected_blob(node):
-    if node.deleted_at is not None:
-        return trash_paths.trashed_storage_path(node)
-    return posixpath.join(storage_ops.live_parent_path(node), node.name)
 
 
 class Command(BaseCommand):
@@ -82,7 +75,7 @@ class Command(BaseCommand):
             if node.deleted_at is None and node.name != canonical_name(node.name):
                 decomposed.append(f"{node.pk} {node.path}")
             if node.node_type == File.NodeType.FOLDER:
-                if storage_ops.folder_storage_path(node) not in directories:
+                if storage_ops.node_storage_path(node) not in directories:
                     dirless.append(node)
                 continue
             if not node.content:
@@ -91,8 +84,10 @@ class Command(BaseCommand):
             referenced.add(name)
             if name not in blobs:
                 missing.append(f"{node.pk} {name}")
-            elif name != _expected_blob(node):
-                misplaced.append(f"{node.pk} {name} (expected {_expected_blob(node)})")
+            elif name != storage_ops.node_storage_path(node):
+                misplaced.append(
+                    f"{node.pk} {name} (expected {storage_ops.node_storage_path(node)})"
+                )
         orphans = sorted(blobs - referenced)
         pending = relocations.entries()
 
@@ -101,7 +96,7 @@ class Command(BaseCommand):
         self._report("blob(s) no file points at", orphans, limit)
         self._report(
             "folder(s) without a directory",
-            [f"{node.pk} {storage_ops.folder_storage_path(node)}" for node in dirless],
+            [f"{node.pk} {storage_ops.node_storage_path(node)}" for node in dirless],
             limit,
         )
         self._report("name(s) stored decomposed", decomposed, limit)
@@ -116,7 +111,7 @@ class Command(BaseCommand):
 
         if dirless and options["repair"]:
             for node in dirless:
-                storage.make_dir(storage_ops.folder_storage_path(node))
+                storage.make_dir(storage_ops.node_storage_path(node))
             self.stdout.write(f"Created {len(dirless)} folder directory(ies).")
         if missing:
             raise CommandError(f"{len(missing)} file(s) point at a blob that is gone.")
@@ -160,7 +155,7 @@ class Command(BaseCommand):
         for node in (
             files.exclude(content="").order_by("path").iterator(chunk_size=2000)
         ):
-            name, expected = node.content.name, _expected_blob(node)
+            name, expected = node.content.name, storage_ops.node_storage_path(node)
             if name == expected:
                 continue
             if not storage.exists(expected):

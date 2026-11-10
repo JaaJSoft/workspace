@@ -20,6 +20,7 @@ from workspace.notifications.services.notifications import notify_many
 from workspace.users.services.settings import in_recipient_languages
 
 from ..models import File, FileEvent
+from ..storage_layout import live_path
 from . import names, storage_ops
 from .events import record_event
 from .hard_delete import hard_delete_tree
@@ -199,7 +200,7 @@ def restore_subtree(node):
 
     if root is not None and source:
         root.deleted_at = None
-        storage_ops.move_node_storage(root, source, storage_ops.live_node_path(root))
+        storage_ops.move_node_storage(root, source, live_path(root))
         storage_ops.reconcile_trashed_children(root, root_trashed_at)
     return updated
 

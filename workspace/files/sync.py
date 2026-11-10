@@ -13,6 +13,7 @@ from workspace.files.queries import user_files_qs
 from workspace.files.services import relocations, trash, tree
 from workspace.files.services.shortcuts import rename_aside
 from workspace.files.services.storage_ops import unique_copy_name
+from workspace.files.storage_layout import user_root
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,7 @@ class FileSyncService:
     def sync_user_recursive(self, user) -> SyncResult:
         """Full recursive sync for a single user."""
         result = SyncResult()
-        storage_prefix = f"files/users/{user.username}"
+        storage_prefix = user_root(user.username)
 
         if not default_storage.is_dir(storage_prefix):
             return result
@@ -224,7 +225,7 @@ class FileSyncService:
         """Sync immediate children of a specific folder (or root if None)."""
         result = SyncResult()
 
-        storage_prefix = f"files/users/{user.username}"
+        storage_prefix = user_root(user.username)
         if parent_db is not None:
             storage_prefix = f"{storage_prefix}/{parent_db.path or parent_db.name}"
 

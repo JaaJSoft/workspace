@@ -23,7 +23,6 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 from workspace.common.logging import scrub
 from workspace.files.models import (
     File,
-    file_upload_path,
     files_storage,
     name_forms,
 )
@@ -45,6 +44,7 @@ from workspace.files.services.transfers import (
     move_onto,
 )
 from workspace.files.services.trash import trash_item
+from workspace.files.storage_layout import live_path
 
 logger = logging.getLogger(__name__)
 
@@ -449,7 +449,7 @@ class FileResource(DAVNonCollection):
             self._file.content_hash if if_match and if_match != "*" else None
         )
 
-        storage_path = file_upload_path(self._file, self._file.name)
+        storage_path = live_path(self._file)
         self._storage_path = storage_path
         self._write_buf = _StreamingWriteBuffer(
             self._file.content.storage.staged_writer(storage_path),
@@ -545,8 +545,7 @@ class FileResource(DAVNonCollection):
                 # blob somewhere else.
                 if (
                     self._file.deleted_at is not None
-                    or file_upload_path(self._file, self._file.name)
-                    != self._storage_path
+                    or live_path(self._file) != self._storage_path
                 ):
                     raise Relocated()
                 replace_content_storage(

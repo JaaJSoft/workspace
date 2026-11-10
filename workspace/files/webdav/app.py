@@ -4,6 +4,7 @@ import logging
 from urllib.parse import urlparse
 
 from django.conf import settings as django_settings
+from django.db import close_old_connections
 from wsgidav.dav_error import (
     HTTP_FORBIDDEN,
     DAVError,
@@ -74,6 +75,37 @@ def _build_lock_storage():
         db=db,
         password=parsed.password,
     )
+
+
+class _RequestConnections:
+    """Close the request's database connections, as Django's handler does.
+
+    /dav is served outside Django, so nothing sends ``request_started`` and
+    ``request_finished``, the signals that drop a connection once its request
+    is over. Under gevent every request has a connection of its own, and one
+    left open lingers until a garbage collection reaches it - with its page
+    cache on SQLite, out of the pool on PostgreSQL.
+
+    A generator, like the ``WsgiDAVApp`` it wraps: the server closes it when
+    the response is sent or the client is gone, which runs the ``finally``.
+
+    Pass-through ``__getattr__`` keeps the wrapped ``WsgiDAVApp`` introspectable
+    (``.provider_map``, ``.config`` etc) — used by tests.
+    """
+
+    def __init__(self, app):
+        self._app = app
+
+    def __call__(self, environ, start_response):
+        # Before authentication, which is the first query of a request.
+        close_old_connections()
+        try:
+            yield from self._app(environ, start_response)
+        finally:
+            close_old_connections()
+
+    def __getattr__(self, name):
+        return getattr(self._app, name)
 
 
 class _LockContentTypeFix:
@@ -201,7 +233,7 @@ def create_webdav_app():
     }
     app = WsgiDAVApp(config)
     _install_app_lock_manager(app, _build_lock_storage())
-    return _LockContentTypeFix(_StoredContentHeaders(app))
+    return _RequestConnections(_LockContentTypeFix(_StoredContentHeaders(app)))
 
 
 def _install_app_lock_manager(app, storage):

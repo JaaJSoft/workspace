@@ -13,7 +13,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db import DatabaseError
+from django.db import DatabaseError, connection
+from django.db.backends.base.base import BaseDatabaseWrapper
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
@@ -1384,6 +1385,37 @@ class WebDAVIntegrationTests(TestCase):
         body_str = body.decode("utf-8", errors="replace")
         self.assertNotIn("<D:displayname></D:displayname>", body_str)
         self.assertNotIn("<D:displayname/>", body_str)
+
+    def test_request_releases_its_database_connection(self):
+        """The connection a request used is closed once its response is served.
+
+        /dav is served outside Django's handler, which is what closes a
+        request's connection: under gevent each request has its own, and one
+        left open stays until a garbage collection finds it.
+        """
+        events = []
+
+        def record_query(execute, sql, params, many, context):
+            events.append("query")
+            return execute(sql, params, many, context)
+
+        def record_close(wrapper):
+            events.append("close")
+
+        with (
+            patch.object(
+                BaseDatabaseWrapper, "close_if_unusable_or_obsolete", record_close
+            ),
+            connection.execute_wrapper(record_query),
+        ):
+            code, _, _ = self._request("PROPFIND", "/", headers={"Depth": "1"})
+
+        self.assertEqual(code, 207)
+        self.assertIn("query", events)
+        # Before the first query, authentication included: a connection the
+        # database dropped must not answer it.
+        self.assertEqual(events[0], "close")
+        self.assertEqual(events[-1], "close")
 
     def test_lock_response_content_type_is_xml(self):
         """LOCK response Content-Type must be a valid media type.

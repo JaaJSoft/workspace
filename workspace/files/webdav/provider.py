@@ -2,7 +2,6 @@
 
 import logging
 
-from django.db import close_old_connections
 from wsgidav.dav_provider import DAVProvider
 
 from workspace.files.models import name_forms
@@ -20,8 +19,6 @@ class WorkspaceDAVProvider(DAVProvider):
         super().__init__()
 
     def get_resource_inst(self, path, environ):
-        close_old_connections()
-
         user = self._get_user(environ)
         if user is None:
             return None

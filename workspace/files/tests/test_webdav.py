@@ -1420,12 +1420,10 @@ class WebDAVIntegrationTests(TestCase):
     def test_lock_response_content_type_is_xml(self):
         """LOCK response Content-Type must be a valid media type.
 
-        WsgiDAV 4.3.3 has a typo (``application; charset=utf-8`` —
-        missing ``/xml``) that davfs2 treats as a fatal protocol
-        error, abandoning the locked resource and returning EIO on
-        the subsequent ``open(O_CREAT)``.  Our app factory wraps
-        wsgidav with a middleware that rewrites the header; this
-        test pins the contract from the wire.
+        davfs2 treats a malformed one as a fatal protocol error, abandons
+        the resource it just locked and returns EIO on the ``open(O_CREAT)``
+        that follows - which wsgidav 4.3.3 caused by sending
+        ``application; charset=utf-8``.
         """
         code, headers, _ = self._request(
             "LOCK",

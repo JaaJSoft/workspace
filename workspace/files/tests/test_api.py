@@ -384,6 +384,24 @@ class FileAPITests(APITestCase):
         file.refresh_from_db()
         self.assertIsNotNone(file.deleted_at)
 
+    def test_renaming_a_folder_onto_another_folders_name_says_so(self):
+        File.objects.create(
+            owner=self.user, name="Taken", node_type=File.NodeType.FOLDER
+        )
+        folder = File.objects.create(
+            owner=self.user, name="Mine", node_type=File.NodeType.FOLDER
+        )
+
+        response = self.client.patch(
+            f"/api/v1/files/{folder.uuid}", {"name": "Taken"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()["name"],
+            ["A folder with the same name already exists in this folder."],
+        )
+
     def test_delete_trashes_one_item(self):
         file = File.objects.create(
             owner=self.user, name="gone.txt", node_type=File.NodeType.FILE

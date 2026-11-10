@@ -7,6 +7,7 @@ descendant content storage paths follow the move on disk.
 """
 
 import os
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -14,7 +15,9 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
+from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.refusals import Refusal, Refused
 from workspace.notes.ui.views import _ensure_default_folders
 from workspace.users.services.settings import get_setting
 
@@ -86,6 +89,25 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         self.assertEqual(
             get_setting(self.user, "notes", "preferences")["journalFolderUuid"],
             str(inner_journal.uuid),
+        )
+
+    def test_a_root_journal_that_cannot_move_stays_the_journal(self):
+        root_journal = FileService.create_folder(self.user, "Journal")
+
+        with patch(
+            "workspace.notes.ui.views.move_item",
+            side_effect=Refused(Refusal.NOT_ALLOWED),
+        ):
+            _ensure_default_folders(self.user)
+
+        root_journal.refresh_from_db()
+        self.assertIsNone(root_journal.parent_id)
+        self.assertEqual(
+            get_setting(self.user, "notes", "preferences")["journalFolderUuid"],
+            str(root_journal.uuid),
+        )
+        self.assertEqual(
+            File.objects.filter(name="Journal", deleted_at__isnull=True).count(), 1
         )
 
 

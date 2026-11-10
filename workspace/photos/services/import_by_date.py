@@ -17,6 +17,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.refusals import Refused
 from workspace.files.services.transfers import OnConflict, move_item
 from workspace.users.services.settings import get_user_timezone
 
@@ -67,7 +68,7 @@ def file_by_date(user, file_uuids):
                 continue
             day = timezone.localtime(taken_at, tz)
             _move_to_month(user, file_obj, day.year, day.month)
-        except ValueError as exc:
+        except (ValueError, Refused) as exc:
             # A file named like the year or month folder, or a move the
             # files rules refuse: the photo stays in the import folder.
             logger.info(

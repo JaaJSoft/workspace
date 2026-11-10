@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -143,6 +143,19 @@ class FileByDateTests(ImportByDateTestCase):
     def test_a_file_named_like_the_year_folder_keeps_the_photo_in_place(self):
         upload(self.user, "2024", png_bytes(), parent=self.folder)
         photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=self.folder)
+
+        self.assertEqual(file_by_date(self.user, [photo.uuid]), 0)
+
+        self.assertEqual(self._path(photo), "Pictures/a.jpg")
+
+    def test_a_photo_someone_else_is_editing_stays_in_place(self):
+        other = User.objects.create_user(username="bob", password="p")
+        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=self.folder)
+        File.objects.filter(pk=photo.pk).update(
+            locked_by=other,
+            locked_at=datetime.now(UTC),
+            lock_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
 
         self.assertEqual(file_by_date(self.user, [photo.uuid]), 0)
 

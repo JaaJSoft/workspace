@@ -8,7 +8,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services.refusals import Refused
+from workspace.files.services.refusals import Refusal, Refused
 from workspace.files.services.transfers import move_item
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -104,9 +104,13 @@ def _ensure_default_folders(user):
         if root_journal:
             try:
                 move_item(user, root_journal, notes_folder)
-            except Refused:
+            except Refused as refusal:
                 # Notes holds a Journal already: it is found just below.
-                pass
+                # Anything else keeps the journal where it is rather than
+                # start an empty one next to it.
+                if refusal.reason != Refusal.NAME_TAKEN:
+                    journal_folder = root_journal
+                    changed = True
             else:
                 journal_folder = root_journal
                 changed = True

@@ -12,7 +12,7 @@ from enum import StrEnum
 from django.db import transaction
 
 from ..models import File, canonical_name
-from ._names import find_node_conflict
+from ._names import NameTaken, find_node_conflict
 from .announcements import announce_replaced
 from .files import FilePermission, FileService, GroupRootFolder
 from .refusals import (
@@ -192,7 +192,10 @@ def _move(user, node, parent, on_conflict, name):
             _move_onto(user, node, conflict)
             return TransferResult(Outcome.REPLACED, conflict)
         if on_conflict != OnConflict.RENAME:
-            raise Refused(Refusal.NAME_TAKEN)
+            # Chained so a caller can tell a folder holding the name from a file.
+            raise Refused(Refusal.NAME_TAKEN) from NameTaken(
+                held_by_folder=conflict.node_type == File.NodeType.FOLDER
+            )
         # Renamed before it leaves, so the name has to be free in the folder
         # it is still in as well.
         wanted = FileService.available_file_name(

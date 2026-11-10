@@ -350,7 +350,7 @@ class RunProcessorBookkeepingTests(ProcessingFailureTestCase):
     def test_bookkeeping_error_does_not_escape_a_failed_run(self):
         # The file can be hard-deleted between the catch-up's fetch and this
         # write, making the FK insert fail. Escaping here would abandon the
-        # rest of the pipeline, which runs with max_retries=0.
+        # rest of the pipeline, which is never retried.
         f = self._make_broken_image()
 
         with patch(

@@ -441,7 +441,7 @@ class File(models.Model):
                 name="unique_group_root_folder",
             ),
             # One live node per name and folder, caselessly, scoped like
-            # services._names.sibling_nodes. A file's blob path derives from
+            # services.names.sibling_nodes. A file's blob path derives from
             # its name, so this is also what keeps two live files off one
             # blob. The INSERT is the lock that a check-then-save cannot be:
             # two creates racing for the same free name both pass the check.
@@ -476,7 +476,7 @@ class File(models.Model):
             ),
         ]
 
-    # The constraints above, which services._names turns into a name clash.
+    # The constraints above, which services.names turns into a name clash.
     LIVE_NAME_CONSTRAINTS = (
         "file_unique_live_group_name",
         "file_unique_live_personal_name",
@@ -669,7 +669,7 @@ class File(models.Model):
         would let that file overwrite them.
         """
         # Imported lazily: the services package imports this module.
-        from workspace.files.services import _storage_ops as _storage
+        from workspace.files.services import storage_ops as _storage
 
         if deleted_at is None:
             deleted_at = timezone.now()
@@ -713,15 +713,15 @@ class File(models.Model):
         back too, which is what ``_restore_parents`` already did in the
         database.
         """
-        from workspace.files.services import _storage_ops as _storage
-        from workspace.files.services._names import (
+        from workspace.files.services import storage_ops as _storage
+        from workspace.files.services.names import (
             CLAIM_ATTEMPTS,
             NameTaken,
             available_node_name,
             find_node_conflict,
             name_claim,
         )
-        from workspace.files.services._trash import trash_root_of
+        from workspace.files.services.trash_paths import trash_root_of
 
         if self.deleted_at is None and self.node_type != self.NodeType.FOLDER:
             return 0
@@ -1025,7 +1025,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
     cleanup also runs on queryset and cascade deletes.
     """
     # Imported lazily: the services package imports this module.
-    from workspace.files.services._storage_ops import delete_node_storage
+    from workspace.files.services.storage_ops import delete_node_storage
 
     delete_node_storage(instance)
 

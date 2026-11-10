@@ -108,7 +108,7 @@ class CopyAPITests(APITestCase):
 
         with (
             patch(
-                "workspace.files.services._storage_ops.logger.warning",
+                "workspace.files.services.storage_ops.logger.warning",
             ) as mock_warn,
             patch.object(
                 File._meta.get_field("content").storage,

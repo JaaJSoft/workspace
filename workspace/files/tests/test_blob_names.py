@@ -16,7 +16,7 @@ from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_o
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services._names import NameTaken
+from workspace.files.services.names import NameTaken
 from workspace.files.sync import FileSyncService
 
 resolve_caseless = importlib.import_module(

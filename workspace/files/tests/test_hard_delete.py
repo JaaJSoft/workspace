@@ -22,7 +22,7 @@ from rest_framework.test import APITestCase
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services._trash import trash_dir
+from workspace.files.services.trash_paths import trash_dir
 from workspace.files.tasks import purge_trash
 from workspace.files.tests.operations import outcome_of, run_operation
 

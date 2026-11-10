@@ -117,7 +117,7 @@ class TestCreateFolderOnStorage(TestCase):
     def test_silently_skipped_for_unsupported_backend(self):
         """A backend without local paths (S3-like) must not break folder creation."""
         with patch(
-            "workspace.files.services._storage_ops.default_storage.path",
+            "workspace.files.services.storage_ops.default_storage.path",
             side_effect=NotImplementedError,
         ):
             folder = FileService.create_folder(self.user, "Ignored")

@@ -20,9 +20,9 @@ from workspace.common.logging import scrub
 from ..metrics import FILES_UPLOAD_BYTES
 from ..models import File, FileEvent, canonical_name, file_upload_path
 from ..queries import can_create_in
-from . import _content as _content_helpers
-from . import _names as _name_helpers
-from . import _storage_ops as _storage
+from . import content_reading as _content_helpers
+from . import names as _name_helpers
+from . import storage_ops as _storage
 from .events import record_event
 from .hard_delete import hard_delete_tree
 from .locking import Relocated

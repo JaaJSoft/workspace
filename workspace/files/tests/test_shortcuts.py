@@ -16,8 +16,8 @@ from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileEvent, FileShare
 from workspace.files.queries import get_permission
 from workspace.files.services import FileService
-from workspace.files.services._names import NameTaken
 from workspace.files.services.files import GroupMismatch
+from workspace.files.services.names import NameTaken
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.services.shortcuts import (
     ShortcutState,

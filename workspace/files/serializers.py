@@ -18,11 +18,6 @@ from workspace.files.queries import (
     visible_path,
 )
 from workspace.files.services import FileService
-from workspace.files.services._names import (
-    FILE_NAME_TAKEN,
-    FOLDER_NAME_TAKEN,
-    NameTaken,
-)
 from workspace.files.services.files import GroupMismatch
 from workspace.files.services.image_edits import (
     ROTATIONS,
@@ -33,6 +28,11 @@ from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
     conflicting_lock,
+)
+from workspace.files.services.names import (
+    FILE_NAME_TAKEN,
+    FOLDER_NAME_TAKEN,
+    NameTaken,
 )
 from workspace.files.services.operations import (
     MAX_ITEMS,

@@ -154,7 +154,7 @@ class FileSerializerCreateTests(APITestCase):
     def test_create_folder_creates_directory_on_disk(self):
         """Folder creation via API must create the directory on storage."""
         with patch(
-            "workspace.files.services._storage_ops.ensure_folder_on_storage"
+            "workspace.files.services.storage_ops.ensure_folder_on_storage"
         ) as mock_ensure:
             response = self.client.post(
                 "/api/v1/files",

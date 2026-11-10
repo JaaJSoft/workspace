@@ -1,4 +1,4 @@
-"""Internal helpers for reading file content."""
+"""What a reader is handed of a file's content."""
 
 from ..models import File
 from .text_extraction import file_text

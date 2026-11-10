@@ -11,8 +11,8 @@ from workspace.common.text import caseless
 from workspace.files.models import File, canonical_name
 from workspace.files.queries import user_files_qs
 from workspace.files.services import FileService, relocations
-from workspace.files.services._storage_ops import unique_copy_name
 from workspace.files.services.shortcuts import rename_aside
+from workspace.files.services.storage_ops import unique_copy_name
 
 logger = logging.getLogger(__name__)
 

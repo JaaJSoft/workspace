@@ -17,7 +17,7 @@ from rest_framework.test import APITestCase
 
 from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File
-from workspace.files.services import FileService, _names
+from workspace.files.services import FileService, names
 
 User = get_user_model()
 
@@ -25,8 +25,8 @@ User = get_user_model()
 @contextmanager
 def competitor_after_check(name, create):
     """Run *create* once the next request has found *name* free."""
-    check_name_available = _names.check_name_available
-    available_node_name = _names.available_node_name
+    check_name_available = names.check_name_available
+    available_node_name = names.available_node_name
     raced = []
 
     def race(chosen):
@@ -44,8 +44,8 @@ def competitor_after_check(name, create):
         return chosen
 
     with (
-        patch.object(_names, "check_name_available", racing_check),
-        patch.object(_names, "available_node_name", racing_pick),
+        patch.object(names, "check_name_available", racing_check),
+        patch.object(names, "available_node_name", racing_pick),
     ):
         yield raced
 

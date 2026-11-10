@@ -20,7 +20,7 @@ from django.utils import timezone
 from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 
 from ..models import File, FileLink, FileLinkState
-from ._content import read_text_content
+from .content_reading import read_text_content
 from .scanning.policy import exclude_blocked
 
 # Matches the ``?file=<uuid>`` / ``&file=<uuid>`` token the autocomplete emits.

@@ -12,7 +12,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services._storage_ops import unique_copy_name
+from workspace.files.services.storage_ops import unique_copy_name
 from workspace.notifications.models import Notification
 
 User = get_user_model()

@@ -36,7 +36,7 @@ from ..serializers import (
     name_refusals,
     name_taken_error,
 )
-from ..services._names import NameTaken
+from ..services.names import NameTaken
 from .files import duplicate_entries
 
 _CONTENT_RANGE = re.compile(r"^bytes (\d+)-(\d+)/(\d+|\*)$")

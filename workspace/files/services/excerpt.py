@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from ._content import read_text_content
+from .content_reading import read_text_content
 
 # Notes are short; 8 KB is plenty to find the first real line without slurping
 # a large blob on every hover.

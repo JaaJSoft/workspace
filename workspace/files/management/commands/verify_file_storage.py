@@ -14,13 +14,13 @@ from django.db import transaction
 
 from workspace.common.logging import scrub
 from workspace.files.models import File, canonical_name
-from workspace.files.services import FileService, _storage_ops, _trash, relocations
+from workspace.files.services import FileService, relocations, storage_ops, trash_paths
 
 
 def _expected_blob(node):
     if node.deleted_at is not None:
-        return _trash.trashed_storage_path(node)
-    return posixpath.join(_storage_ops.live_parent_path(node), node.name)
+        return trash_paths.trashed_storage_path(node)
+    return posixpath.join(storage_ops.live_parent_path(node), node.name)
 
 
 class Command(BaseCommand):
@@ -66,7 +66,7 @@ class Command(BaseCommand):
 
         storage = File._meta.get_field("content").storage
         blobs, directories = set(), set()
-        for root in ("files", _trash.TRASH_ROOT):
+        for root in ("files", trash_paths.TRASH_ROOT):
             if storage.is_dir(root):
                 blobs.update(blob.name for blob in storage.iter_blobs(root))
                 directories.update(storage.iter_dirs(root))
@@ -77,7 +77,7 @@ class Command(BaseCommand):
             if node.deleted_at is None and node.name != canonical_name(node.name):
                 decomposed.append(f"{node.pk} {node.path}")
             if node.node_type == File.NodeType.FOLDER:
-                if _storage_ops.folder_storage_path(node) not in directories:
+                if storage_ops.folder_storage_path(node) not in directories:
                     dirless.append(node)
                 continue
             if not node.content:
@@ -96,7 +96,7 @@ class Command(BaseCommand):
         self._report("blob(s) no file points at", orphans, limit)
         self._report(
             "folder(s) without a directory",
-            [f"{node.pk} {_storage_ops.folder_storage_path(node)}" for node in dirless],
+            [f"{node.pk} {storage_ops.folder_storage_path(node)}" for node in dirless],
             limit,
         )
         self._report("name(s) stored decomposed", decomposed, limit)
@@ -111,7 +111,7 @@ class Command(BaseCommand):
 
         if dirless and options["repair"]:
             for node in dirless:
-                storage.make_dir(_storage_ops.folder_storage_path(node))
+                storage.make_dir(storage_ops.folder_storage_path(node))
             self.stdout.write(f"Created {len(dirless)} folder directory(ies).")
         if missing:
             raise CommandError(f"{len(missing)} file(s) point at a blob that is gone.")
@@ -161,7 +161,7 @@ class Command(BaseCommand):
             if not storage.exists(expected):
                 if storage.exists(name):
                     with transaction.atomic():
-                        _storage_ops.move_node_storage(node, name, expected)
+                        storage_ops.move_node_storage(node, name, expected)
                     moved += 1
             elif (
                 not storage.exists(name)

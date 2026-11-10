@@ -12,7 +12,7 @@ from rest_framework.test import APITestCase
 from workspace.files.models import File
 from workspace.files.queries import can_access, user_files_qs, user_group_files_qs
 from workspace.files.services import FileService
-from workspace.files.services._storage_ops import folder_storage_path
+from workspace.files.services.storage_ops import folder_storage_path
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.ui.views import build_breadcrumbs
 

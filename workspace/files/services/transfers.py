@@ -13,9 +13,9 @@ from django.db import transaction
 
 from ..models import File, canonical_name
 from ..queries import FilePermission, get_permission
-from ._names import NameTaken, find_node_conflict
 from .announcements import announce_replaced
 from .files import FileService, GroupRootFolder, new_owner_on_move
+from .names import NameTaken, find_node_conflict
 from .refusals import (
     Refusal,
     Refused,

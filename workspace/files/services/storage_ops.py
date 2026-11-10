@@ -1,8 +1,8 @@
-"""Internal storage-path helpers for the file service.
+"""Where a node's bytes sit on storage, and what moves, copies or drops them.
 
-Module-level functions extracted from FileService so the facade in
-``files.py`` stays small. Not part of the public API: callers should
-go through FileService methods, which delegate here.
+The paths a row's blob and a folder's directory derive from, live or
+trashed, and the storage half of every tree operation. Each move is
+journaled (``relocations``) from before it touches a blob.
 """
 
 import logging
@@ -18,7 +18,7 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
 from ..models import File, canonical_name
-from . import _trash, relocations
+from . import relocations, trash_paths
 from .content_hash import hash_stream
 
 logger = logging.getLogger(__name__)
@@ -28,10 +28,10 @@ def folder_storage_path(folder):
     """Return the storage-relative directory path for *folder*.
 
     A trashed folder lives under ``trash/`` instead of the live tree; see
-    ``_trash`` for why and for the layout.
+    ``trash_paths`` for why and for the layout.
     """
     if folder.deleted_at is not None:
-        return _trash.trashed_storage_path(folder)
+        return trash_paths.trashed_storage_path(folder)
     return live_folder_path(folder)
 
 
@@ -81,13 +81,13 @@ def live_parent_path(node):
 def node_storage_path(node):
     """Where *node*'s bytes belong according to its row, trashed or not."""
     if node.deleted_at is not None:
-        return _trash.trashed_storage_path(node)
+        return trash_paths.trashed_storage_path(node)
     return live_node_path(node)
 
 
 def trash_node_path(node):
     """Where *node*'s bytes go once it is trashed in its own right."""
-    return posixpath.join(_trash.trash_dir(node), node.name)
+    return posixpath.join(trash_paths.trash_dir(node), node.name)
 
 
 def reconcile_trashed_children(node, trashed_at):
@@ -169,7 +169,7 @@ def _delete_file_storage(node):
 
 
 # The two storage roots the cleanup climb must never remove.
-_STORAGE_ROOTS = ("files", _trash.TRASH_ROOT)
+_STORAGE_ROOTS = ("files", trash_paths.TRASH_ROOT)
 
 
 def _remove_empty_parents(dir_path):
@@ -331,7 +331,7 @@ def move_node_storage(node, source, destination):
         if not node.content or not node.content.name:
             return
         if blob_held_elsewhere(default_storage, destination, node):
-            from ._names import NameTaken
+            from .names import NameTaken
 
             raise NameTaken()
         node.content.name = destination
@@ -376,9 +376,9 @@ def copy_node(node, parent, owner, _sibling_names=None, *, name=None, checkpoint
     back what it had created: half a folder under the name of the whole one is
     worse than no copy.
     """
-    # Imported here because _names imports from this module.
-    from ._names import insert_node, insert_node_keeping_both
+    # Imported here because names imports from this module.
     from .hard_delete import hard_delete_tree
+    from .names import insert_node, insert_node_keeping_both
     from .scanning.policy import exclude_blocked
 
     copied = File(

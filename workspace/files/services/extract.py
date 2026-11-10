@@ -21,8 +21,8 @@ from workspace.common.text import caseless
 
 from ..models import File
 from ..queries import can_create_in
-from ._names import sibling_nodes
 from .files import FileService
+from .names import sibling_nodes
 from .quota import check_write_allowed, remaining_bytes
 from .refusals import (
     Refusal,

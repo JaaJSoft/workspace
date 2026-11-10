@@ -1,4 +1,4 @@
-"""Internal naming and validation helpers for the file service."""
+"""Who holds a name in a folder, and inserting a node under one."""
 
 import gc
 import logging
@@ -13,7 +13,7 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
 from ..models import File, canonical_name
-from ._storage_ops import blob_held_elsewhere, unique_copy_name
+from .storage_ops import blob_held_elsewhere, unique_copy_name
 
 logger = logging.getLogger(__name__)
 

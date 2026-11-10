@@ -13,7 +13,7 @@ from django.utils import timezone
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.files.models import File, UploadSession
 from workspace.files.services import uploads
-from workspace.files.services._names import _staged
+from workspace.files.services.names import _staged
 from workspace.files.tasks import STAGED_BLOB_TTL, purge_staged_blobs
 
 

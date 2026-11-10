@@ -153,13 +153,13 @@ class RestoreFolderTests(TestCase):
     def test_a_name_taken_during_the_restore_falls_back_to_a_copy(self):
         from unittest.mock import patch
 
-        from workspace.files.services import _names
+        from workspace.files.services import names
 
         trashed = FileService.create_file(
             self.user, "a.txt", parent=self.folder, content=ContentFile(b"old")
         )
         FileService.soft_delete(trashed, acting_user=self.user)
-        find_node_conflict = _names.find_node_conflict
+        find_node_conflict = names.find_node_conflict
         raced = []
 
         def racing_find(*args, **kwargs):
@@ -172,7 +172,7 @@ class RestoreFolderTests(TestCase):
             return conflict
 
         trashed.refresh_from_db()
-        with patch.object(_names, "find_node_conflict", racing_find):
+        with patch.object(names, "find_node_conflict", racing_find):
             FileService.restore(trashed, acting_user=self.user)
 
         trashed.refresh_from_db()

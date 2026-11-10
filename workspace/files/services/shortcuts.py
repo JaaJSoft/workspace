@@ -26,11 +26,11 @@ from ..queries import (
     get_permissions_bulk,
     trash_permissions_bulk,
 )
-from . import _names as _name_helpers
-from ._storage_ops import unique_copy_name
+from . import names as _name_helpers
 from .events import record_event
 from .files import FileService, GroupMismatch
 from .scanning.policy import with_scan
+from .storage_ops import unique_copy_name
 
 
 class ShortcutState(StrEnum):

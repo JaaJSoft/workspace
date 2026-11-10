@@ -20,7 +20,6 @@ from workspace.files.actions import ActionRegistry
 from workspace.files.models import File, FileShare
 from workspace.files.queries import FilePermission
 from workspace.files.services import FileService
-from workspace.files.services._storage_ops import copy_node
 from workspace.files.services.image_edits import (
     apply_edit,
     edit_version,
@@ -29,6 +28,7 @@ from workspace.files.services.image_edits import (
     rotate_edit,
     versioned_thumbnail_url,
 )
+from workspace.files.services.storage_ops import copy_node
 from workspace.files.services.thumbnails.generation import (
     generate_thumbnail,
     get_thumbnail_path,

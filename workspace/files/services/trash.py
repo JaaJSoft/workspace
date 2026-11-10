@@ -51,6 +51,8 @@ def _notify_trashed(user, node):
             )
             | Q(groups__projects__received_file_shares__file=node)
         )
+        # Whoever trashed it knows already, even when it reached them too.
+        .exclude(pk=user.pk)
         .distinct()
     )
     with transaction.atomic():

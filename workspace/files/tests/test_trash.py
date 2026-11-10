@@ -67,6 +67,21 @@ class TrashItemTests(TrashFixture):
         notice = Notification.objects.get(recipient=self.bob, origin="files")
         self.assertEqual(notice.title, 'alice deleted "report.txt"')
 
+    def test_whoever_trashed_it_is_not_told(self):
+        report = _file(self.alice, "report.txt")
+        FileShare.objects.create(
+            file=report,
+            shared_by=self.alice,
+            shared_with_group=self.team,
+            permission=FileShare.Permission.READ_ONLY,
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            trash_item(self.alice, report)
+
+        self.assertFalse(Notification.objects.filter(recipient=self.alice).exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.bob).exists())
+
     def test_a_read_only_share_cannot_trash(self):
         report = _file(self.alice, "report.txt")
         FileShare.objects.create(

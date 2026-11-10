@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 21:05+0000\n"
+"POT-Creation-Date: 2026-11-10 05:54+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -182,6 +182,10 @@ msgstr "Le fichier est verrouillé par un autre utilisateur."
 msgid "The file changed since it was loaded."
 msgstr "Le fichier a changé depuis son chargement."
 
+#: serializers.py
+msgid "Renaming this file is not allowed."
+msgstr "Le renommage de ce fichier n’est pas autorisé."
+
 #: serializers.py views/share_links.py viewsets/content.py
 msgid "File is quarantined."
 msgstr "Le fichier est en quarantaine."
@@ -315,7 +319,8 @@ msgstr "Un élément figure deux fois dans la liste."
 
 #: serializers.py
 msgid "Only a move or a copy takes a conflict choice."
-msgstr "Seuls un déplacement ou une copie acceptent un choix en cas de conflit."
+msgstr ""
+"Seuls un déplacement ou une copie acceptent un choix en cas de conflit."
 
 #: serializers_tags.py
 msgid "A tag with this name already exists."
@@ -809,7 +814,7 @@ msgid "Ask me"
 msgstr "Me demander"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
-#: ui/templates/files/ui/partials/transfers_panel.html
+#: ui/templates/files/ui/partials/operations_panel.html
 msgid "Keep both"
 msgstr "Conserver les deux"
 
@@ -1438,6 +1443,81 @@ msgstr "Téléverser un dossier"
 msgid "Upload entire folder"
 msgstr "Téléverser un dossier entier"
 
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "%%(loaded)s of %%(total)s - %%(percent)s"
+msgstr "%%(loaded)s sur %%(total)s - %%(percent)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Expand"
+msgstr "Développer"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "%%(count)s uploads failed"
+msgstr "%%(count)s téléversements ont échoué"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "%%(count)s uploads match existing files"
+msgstr "%%(count)s téléversements correspondent à des fichiers existants"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Cancel %%(name)s"
+msgstr "Annuler %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Retry %%(name)s"
+msgstr "Réessayer %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Cancel: %%(name)s"
+msgstr "Annuler : %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Dismiss: %%(name)s"
+msgstr "Masquer : %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Unnamed item"
+msgstr "Élément sans nom"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Operations"
+msgstr "Opérations"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Pause uploads"
+msgstr "Mettre en pause les téléversements"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Resume uploads"
+msgstr "Reprendre les téléversements"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Close operations"
+msgstr "Fermer les opérations"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Retry all"
+msgstr "Tout réessayer"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Discard all"
+msgstr "Tout abandonner"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Keep all"
+msgstr "Tout conserver"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Discard upload"
+msgstr "Abandonner le téléversement"
+
 #: ui/templates/files/ui/partials/pinned_folders.html
 msgid "No pinned folders"
 msgstr "Aucun dossier épinglé"
@@ -1995,81 +2075,6 @@ msgstr "Gérer les étiquettes"
 msgid "No favorite tags"
 msgstr "Aucune étiquette favorite"
 
-#: ui/templates/files/ui/partials/transfers_panel.html
-#, python-format
-msgid "%%(loaded)s of %%(total)s - %%(percent)s"
-msgstr "%%(loaded)s sur %%(total)s - %%(percent)s"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Expand"
-msgstr "Développer"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-#, python-format
-msgid "%%(count)s uploads failed"
-msgstr "%%(count)s téléversements ont échoué"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-#, python-format
-msgid "%%(count)s uploads match existing files"
-msgstr "%%(count)s téléversements correspondent à des fichiers existants"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-#, python-format
-msgid "Cancel %%(name)s"
-msgstr "Annuler %%(name)s"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-#, python-format
-msgid "Retry %%(name)s"
-msgstr "Réessayer %%(name)s"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-#, python-format
-msgid "Cancel: %%(name)s"
-msgstr "Annuler : %%(name)s"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-#, python-format
-msgid "Dismiss: %%(name)s"
-msgstr "Masquer : %%(name)s"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Unnamed item"
-msgstr "Élément sans nom"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Transfers"
-msgstr "Transferts"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Pause uploads"
-msgstr "Mettre en pause les téléversements"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Resume uploads"
-msgstr "Reprendre les téléversements"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Close transfers"
-msgstr "Fermer les transferts"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Retry all"
-msgstr "Tout réessayer"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Discard all"
-msgstr "Tout abandonner"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Keep all"
-msgstr "Tout conserver"
-
-#: ui/templates/files/ui/partials/transfers_panel.html
-msgid "Discard upload"
-msgstr "Abandonner le téléversement"
-
 #: ui/templates/files/ui/shared_base.html
 msgid "Link expired"
 msgstr "Lien expiré"
@@ -2540,8 +2545,8 @@ msgid "The malware scanner blocked this file."
 msgstr "L’analyseur antivirus a bloqué ce fichier."
 
 #: views/files.py
-msgid "Renaming this file is not allowed."
-msgstr "Le renommage de ce fichier n’est pas autorisé."
+msgid "This item cannot be moved to the trash."
+msgstr "Cet élément ne peut pas être mis à la corbeille."
 
 #: views/files.py
 msgid "Shared write access only allows updating file content."

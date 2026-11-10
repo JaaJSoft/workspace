@@ -145,18 +145,11 @@ class MoveOnConflictApiTests(APITestCase):
         self.assertEqual(_bytes(self.moved), b"moved")
         self.assertEqual(_bytes(self.existing), b"existing")
 
-    def test_replace_gives_the_existing_file_the_content_and_trashes_the_moved_one(
-        self,
-    ):
+    def test_replace_gives_the_existing_file_the_moved_one(self):
         response = self._move(on_conflict="replace")
         self.assertEqual(outcome_of(response), ({"replaced": 1}, []))
         self.assertEqual(_bytes(self.existing), b"moved")
-        self.moved.refresh_from_db()
-        self.assertIsNotNone(self.moved.deleted_at)
-        self.assertEqual(self.moved.parent_id, self.src.pk)
-        # The trashed row keeps its own blob, so it can come back intact.
-        self.assertEqual(_bytes(self.moved), b"moved")
-        self.assertNotEqual(self.moved.content.name, self.existing.content.name)
+        self.assertFalse(File.objects.filter(pk=self.moved.pk).exists())
 
     def test_on_conflict_is_ignored_on_a_plain_rename(self):
         other = FileService.create_file(self.user, "other.txt", parent=self.dst)
@@ -229,6 +222,5 @@ class GroupReplaceTests(APITestCase):
             )
         self.assertEqual(outcome_of(response), ({"replaced": 1}, []))
         self.assertEqual(_bytes(self.theirs), b"mine")
-        self.mine.refresh_from_db()
-        self.assertIsNotNone(self.mine.deleted_at)
+        self.assertFalse(File.objects.filter(pk=self.mine.pk).exists())
         self._assert_announced(push)

@@ -1,6 +1,6 @@
 /**
  * Upload queue of the Files page, published as the `uploads` Alpine store
- * and drawn by files/ui/partials/transfers_panel.html.
+ * and drawn by files/ui/partials/operations_panel.html.
  *
  *   Alpine.store('uploads').add([{ file, folderId, onConflict }, ...]);
  *

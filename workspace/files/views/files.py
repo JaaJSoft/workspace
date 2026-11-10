@@ -17,7 +17,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 from rest_framework import mixins, status, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from workspace.common.booleans import is_truthy
@@ -30,11 +30,13 @@ from workspace.files.services import FilePermission, FileService
 from workspace.files.services.announcements import announce_replaced
 from workspace.files.services.content_hash import find_duplicates
 from workspace.files.services.locking import conflicting_lock, precondition_hash
+from workspace.files.services.refusals import Refusal, Refused
+from workspace.files.services.trash import trash_item
 from workspace.notifications.services.notifications import notify
 from workspace.users.services.settings import get_user_language
 
 from ..models import File
-from ..serializers import FileSerializer, locked_payload
+from ..serializers import FileLocked, FileSerializer, locked_payload
 from ..viewsets.actions import ActionsMixin
 from ..viewsets.comments import CommentsMixin
 from ..viewsets.content import ContentMixin
@@ -248,6 +250,19 @@ def duplicate_entries(instance):
             ),
         },
     ),
+    destroy=extend_schema(
+        summary="Move a file or folder to the trash",
+        description=(
+            "Trash one file or folder, with what it holds. The same rules as "
+            "a trash operation apply; a batch goes through "
+            "/api/v1/files/operations."
+        ),
+        responses={
+            204: OpenApiResponse(description="Moved to the trash."),
+            403: OpenApiResponse(description="This item may not be trashed."),
+            423: OpenApiResponse(description="Someone else holds a lock on it."),
+        },
+    ),
 )
 @extend_schema(tags=["Files"])
 class FileViewSet(
@@ -265,6 +280,7 @@ class FileViewSet(
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
     mixins.ListModelMixin,
     viewsets.GenericViewSet,
 ):
@@ -275,8 +291,10 @@ class FileViewSet(
     retrieve: Get a specific file/folder
     create: Create a new file/folder
     update: Update a file/folder
-    Moving, copying, trashing, restoring and purging go through batch
-    operations (``/api/v1/files/operations``).
+    destroy: Move a file/folder to the trash (cascades to children)
+
+    Moving, copying, restoring and purging go through batch operations
+    (``/api/v1/files/operations``).
     """
 
     serializer_class = FileSerializer
@@ -578,6 +596,16 @@ class FileViewSet(
             headers=self.get_success_headers(data),
         )
 
+    def perform_destroy(self, instance):
+        try:
+            trash_item(self.request.user, instance)
+        except Refused as refusal:
+            if refusal.reason == Refusal.LOCKED:
+                raise FileLocked(locked_payload(refusal.holder)) from refusal
+            raise PermissionDenied(
+                _("This item cannot be moved to the trash.")
+            ) from refusal
+
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
 
@@ -727,33 +755,6 @@ class FileViewSet(
         locked = self._lock_conflict_response(request, uuid)
         if locked is not None:
             return locked
-
-        # Rename gate - consult the action registry so any future rule on
-        # RenameAction.is_available (e.g., journal notes, shared files)
-        # applies uniformly to direct PATCH calls, not just to UI menus.
-        # Only fires when the user already has EDIT+ permission - below that,
-        # the standard flow returns 404/403 and we must not preempt it
-        # (e.g. a VIEW-only shared user must still see 404, not 403).
-        if "name" in request.data:
-            from workspace.files.actions import ActionRegistry
-
-            target = File.objects.filter(
-                uuid=uuid,
-                deleted_at__isnull=True,
-            ).first()
-            if target and request.data["name"] != target.name:
-                perm = FileService.get_permission(request.user, target)
-                if perm is not None and perm >= FilePermission.EDIT:
-                    if not ActionRegistry.is_action_available(
-                        "rename",
-                        request.user,
-                        target,
-                        permission=perm,
-                    ):
-                        return Response(
-                            {"detail": _("Renaming this file is not allowed.")},
-                            status=status.HTTP_403_FORBIDDEN,
-                        )
 
         try:
             response = super().partial_update(request, *args, **kwargs)

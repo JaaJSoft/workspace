@@ -364,8 +364,8 @@ def unique_copy_name(base_name, node_type, existing_names):
         counter += 1
 
 
-def copy_node(node, parent, owner, _sibling_names=None, *, checkpoint=None):
-    """Recursively copy a single node.
+def copy_node(node, parent, owner, _sibling_names=None, *, name=None, checkpoint=None):
+    """Recursively copy a single node, the top one under *name* if given.
 
     The top-level copy competes for its name with every other writer of
     *parent*; the nodes below it land in a folder that did not exist a moment
@@ -383,7 +383,7 @@ def copy_node(node, parent, owner, _sibling_names=None, *, checkpoint=None):
 
     copied = File(
         owner=owner,
-        name=canonical_name(node.name),
+        name=canonical_name(name or node.name),
         node_type=node.node_type,
         parent=parent,
         # file_upload_path reads instance.group_id, so the group must be set
@@ -438,7 +438,7 @@ def copy_node(node, parent, owner, _sibling_names=None, *, checkpoint=None):
             # Same bytes, same digest; only legacy rows without one need
             # the extra read.
             copied.content_hash = node.content_hash or hash_stream(src)
-            insert(DjangoFile(src, name=node.name))
+            insert(DjangoFile(src, name=copied.name))
     else:
         insert()
 

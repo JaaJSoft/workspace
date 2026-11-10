@@ -1,10 +1,16 @@
+import uuid
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.files.models import File
+from workspace.files.models import File, FileShare
+from workspace.files.services import FileService
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -378,15 +384,60 @@ class FileAPITests(APITestCase):
         file.refresh_from_db()
         self.assertIsNotNone(file.deleted_at)
 
-    def test_delete_is_not_a_route(self):
-        """Trashing goes through operations: DELETE on a file is not allowed."""
+    def test_delete_trashes_one_item(self):
         file = File.objects.create(
-            owner=self.user, name="kept.txt", node_type=File.NodeType.FILE
+            owner=self.user, name="gone.txt", node_type=File.NodeType.FILE
         )
+
         response = self.client.delete(f"/api/v1/files/{file.uuid}")
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        file.refresh_from_db()
+        self.assertIsNotNone(file.deleted_at)
+
+    def test_delete_refuses_a_file_someone_else_is_editing(self):
+        other = User.objects.create_user(username="editor", password="pw")
+        file = File.objects.create(
+            owner=self.user, name="busy.txt", node_type=File.NodeType.FILE
+        )
+        File.objects.filter(pk=file.pk).update(
+            locked_by=other,
+            locked_at=timezone.now(),
+            lock_expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        response = self.client.delete(f"/api/v1/files/{file.uuid}")
+
+        self.assertEqual(response.status_code, 423)
         file.refresh_from_db()
         self.assertIsNone(file.deleted_at)
+
+    def test_delete_refuses_a_groups_root_folder(self):
+        group = Group.objects.create(name="Design")
+        self.user.groups.add(group)
+        root = FileService.create_folder(self.user, "Design", group=group)
+
+        response = self.client.delete(f"/api/v1/files/{root.uuid}")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        root.refresh_from_db()
+        self.assertIsNone(root.deleted_at)
+
+    def test_delete_of_a_file_out_of_reach_answers_like_a_missing_one(self):
+        other = User.objects.create_user(username="other", password="pw")
+        theirs = File.objects.create(
+            owner=other, name="theirs.txt", node_type=File.NodeType.FILE
+        )
+        FileShare.objects.create(file=theirs, shared_by=other, shared_with=self.user)
+
+        hidden = self.client.delete(f"/api/v1/files/{theirs.uuid}")
+        absent = self.client.delete(f"/api/v1/files/{uuid.uuid4()}")
+
+        self.assertEqual(
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
+        )
+        theirs.refresh_from_db()
+        self.assertIsNone(theirs.deleted_at)
 
     def test_cannot_access_other_user_files(self):
         """Test that users cannot access other users' files."""

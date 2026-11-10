@@ -16,7 +16,7 @@
  * operation never waits on an event that was lost.
  *
  * The `fileOperations` Alpine store keeps the operations of this page for the
- * transfers panel. One shows there only once it has lasted SHOW_AFTER ms, or
+ * operations panel. One shows there only once it has lasted SHOW_AFTER ms, or
  * when it ended with something to report, so a quick trash never flashes a
  * panel. `file-operation-finished` is dispatched on window when an operation
  * ends, for the pages that list files to refresh.
@@ -81,11 +81,12 @@ window.summarizeOperation = function summarizeOperation(operation) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-// The status line of a row in the transfers panel.
+// The status line of a row in the operations panel.
 window.operationStatusText = function operationStatusText(operation) {
   const progress = { done: operation.processed, total: operation.total };
-  if (operation.status === 'pending') return gettext('Waiting to start');
-  if (operation.status === 'running') {
+  // Pending with items done: back in the queue between two slices.
+  if (operation.status === 'pending' && !operation.processed) return gettext('Waiting to start');
+  if (!window.isOperationFinished(operation)) {
     if (operation.cancel_requested) return gettext('Stopping after the current item');
     return interpolate(gettext('%(done)s of %(total)s'), progress, true);
   }
@@ -140,7 +141,7 @@ window.createFileOperations = function createFileOperations({
     // The operations this page follows, newest first.
     items: [],
     expanded: true,
-    // Set by the transfers panel: where there is none, nothing is shown.
+    // Set by the operations panel: where there is none, nothing is shown.
     panel: false,
 
     get rows() {
@@ -310,7 +311,7 @@ window.fileOperations = {
     return window.Alpine.store('fileOperations').run(kind, items, options);
   },
 
-  // Tell the user how *report* ended, unless the transfers panel already does.
+  // Tell the user how *report* ended, unless the operations panel already does.
   // *summary* words a success worth announcing; a failure always is.
   announce(report, { summary } = {}) {
     const store = window.Alpine.store('fileOperations');

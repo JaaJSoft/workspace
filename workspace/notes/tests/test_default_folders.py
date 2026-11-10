@@ -16,6 +16,7 @@ from django.test import TestCase
 
 from workspace.files.services import FileService
 from workspace.notes.ui.views import _ensure_default_folders
+from workspace.users.services.settings import get_setting
 
 User = get_user_model()
 
@@ -72,6 +73,20 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         journal.refresh_from_db()
         self.assertIsNotNone(journal.parent_id)
         self.assertEqual(journal.parent.name, "Notes")
+
+    def test_a_root_journal_stays_when_notes_holds_one_already(self):
+        root_journal = FileService.create_folder(self.user, "Journal")
+        notes = FileService.create_folder(self.user, "Notes")
+        inner_journal = FileService.create_folder(self.user, "Journal", parent=notes)
+
+        _ensure_default_folders(self.user)
+
+        root_journal.refresh_from_db()
+        self.assertIsNone(root_journal.parent_id)
+        self.assertEqual(
+            get_setting(self.user, "notes", "preferences")["journalFolderUuid"],
+            str(inner_journal.uuid),
+        )
 
 
 class EnsureDefaultFoldersMalformedPrefsTests(TestCase):

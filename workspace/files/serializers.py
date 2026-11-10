@@ -30,7 +30,7 @@ from workspace.files.services.operations import (
     TARGETED_KINDS,
     TRANSFER_KINDS,
 )
-from workspace.files.services.refusals import Refusal
+from workspace.files.services.refusals import Refusal, Refused
 from workspace.files.services.scanning.policy import QuarantinedSource
 from workspace.files.services.shortcuts import (
     UNAVAILABLE,
@@ -39,7 +39,7 @@ from workspace.files.services.shortcuts import (
     create_shortcut,
     resolution_of,
 )
-from workspace.files.services.transfers import OnConflict
+from workspace.files.services.transfers import OnConflict, move_item
 from workspace.files.services.uploads import CHUNK_SIZE
 
 from .models import File, FileComment, FileOperation, UploadSession, canonical_name
@@ -92,6 +92,22 @@ def name_refusals():
         yield
     except NameTaken as error:
         raise name_taken_error(error) from error
+
+
+def _rename(user, node, name):
+    """Rename *node* the way every other path does: a move within its folder."""
+    try:
+        move_item(user, node, node.parent, name=name)
+    except Refused as refusal:
+        if refusal.reason == Refusal.NAME_TAKEN:
+            held_by_folder = getattr(refusal.__cause__, "held_by_folder", False)
+            message = FOLDER_NAME_TAKEN if held_by_folder else FILE_NAME_TAKEN
+            raise serializers.ValidationError({"name": [message]}) from refusal
+        if refusal.reason == Refusal.LOCKED:
+            raise FileLocked(locked_payload(refusal.holder)) from refusal
+        raise PermissionDenied(
+            gettext("Renaming this file is not allowed.")
+        ) from refusal
 
 
 @contextmanager
@@ -816,12 +832,8 @@ class FileSerializer(serializers.ModelSerializer):
         # shared-write fallback, a management command, a future endpoint.
         ensure_unlocked(acting_user, instance)
 
-        # Handle rename via FileService (storage moves)
-        if "name" in validated_data:
-            new_name = validated_data["name"]
-            if instance.name != new_name:
-                with name_refusals():
-                    FileService.rename(instance, new_name, acting_user=acting_user)
+        if "name" in validated_data and validated_data["name"] != instance.name:
+            _rename(acting_user, instance, validated_data["name"])
 
         # DRF's update() ends in a bare save(), which writes every column back
         # from an instance loaded when the request began. A PATCH that only

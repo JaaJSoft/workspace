@@ -13,7 +13,7 @@ from ..models import FileOperation
 from ..serializers import FileOperationCreateSerializer, FileOperationSerializer
 from ..tasks import run_file_operation
 
-# The transfers panel shows a session's worth of operations, not a history.
+# The operations panel shows a session's worth of operations, not a history.
 _LIST_LIMIT = 50
 
 

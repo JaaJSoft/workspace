@@ -11,7 +11,7 @@ from enum import StrEnum
 
 from ._names import NameTaken
 from .files import FileService, GroupRootFolder
-from .locking import LockConflict, StaleContent, conflicting_lock
+from .locking import LockConflict, Relocated, StaleContent, conflicting_lock
 from .quota import QuotaExceeded
 from .scanning.policy import QuarantinedSource
 
@@ -56,6 +56,9 @@ def refusals():
         raise Refused(Refusal.LOCKED, holder=error.holder) from error
     except StaleContent as error:
         raise Refused(Refusal.STALE, current_hash=error.current_hash) from error
+    except Relocated as error:
+        # The file a write was aimed at moved under it.
+        raise Refused(Refusal.STALE) from error
     except GroupRootFolder as error:
         raise Refused(Refusal.GROUP_ROOT) from error
     except NameTaken as error:

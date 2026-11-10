@@ -17,6 +17,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.transfers import OnConflict, move_item
 from workspace.users.services.settings import get_user_timezone
 
 from ..models import MediaItem
@@ -103,15 +104,8 @@ def _move_to_month(user, file_obj, year, month):
     root = File.objects.select_for_update().get(pk=file_obj.parent_id)
     year_folder = _child_folder(user, root, f"{year:04d}")
     month_folder = _child_folder(user, year_folder, f"{month:02d}")
-    if FileService.find_name_conflict(
-        file_obj.owner, month_folder, file_obj.name, exclude_pk=file_obj.pk
-    ):
-        # Cameras reuse names (IMG_0001.JPG): keep both, as the import did.
-        new_name = FileService.available_file_name(
-            file_obj.owner, month_folder, file_obj.name, avoiding=(root,)
-        )
-        FileService.rename(file_obj, new_name, acting_user=user)
-    FileService.move(file_obj, month_folder, acting_user=user)
+    # Cameras reuse names (IMG_0001.JPG): keep both, as the import did.
+    move_item(user, file_obj, month_folder, OnConflict.RENAME)
 
 
 def _child_folder(user, parent, name):

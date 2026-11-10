@@ -1698,6 +1698,9 @@ class FileOperation(models.Model):
     what became of each item. An item that cannot go through is recorded and
     the rest carries on, so an operation ends ``completed`` whenever it reached
     the end of its list; ``failed`` means the run itself was lost.
+
+    ``pending`` is waiting in the queue for a worker - before its first slice
+    and between two - and ``running`` is in a worker's hands right now.
     """
 
     class Kind(models.TextChoices):

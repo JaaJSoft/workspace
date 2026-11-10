@@ -2,7 +2,7 @@
 
 // The client of the batch operations API: what it sends, how it follows an
 // operation to its end with or without the event stream, and what the
-// transfers panel gets to show.
+// operations panel gets to show.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -201,6 +201,12 @@ test('the panel describes each kind and how it ended', () => {
   assert.equal(ctx.describeOperation(operation({ kind: 'trash', total: 1 })), 'Move 1 item to the trash');
   assert.equal(ctx.describeOperation(operation({ kind: 'empty_trash' })), 'Empty the trash');
   assert.equal(ctx.operationStatusText(operation({ status: 'running', processed: 1 })), '1 of 3');
+  assert.equal(ctx.operationStatusText(operation()), 'Waiting to start');
+  assert.equal(
+    ctx.operationStatusText(operation({ status: 'pending', processed: 2 })),
+    '2 of 3',
+    'between two slices it keeps its progress',
+  );
   assert.equal(
     ctx.operationStatusText(operation({ status: 'completed', counts: { done: 2, failed: 1 } })),
     '2 done, 1 failed',

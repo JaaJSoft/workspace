@@ -404,7 +404,7 @@ class ItemFailureTests(OperationFixture):
             result = self.run_to_end(operation)
 
         self.assertEqual(result, Slice.PAUSED)
-        self.assertEqual(operation.status, Status.RUNNING)
+        self.assertEqual(operation.status, Status.PENDING)
         self.assertEqual(operation.processed, 1)
         self.assertEqual(operation.errors[0]["reason"], "timeout")
 
@@ -428,7 +428,8 @@ class SliceTests(OperationFixture):
 
         with patch.object(operations, "SLICE_SECONDS", -1):
             self.assertEqual(self.run_to_end(operation), Slice.PAUSED)
-            self.assertEqual(operation.status, Status.RUNNING)
+            # Back in the queue for its next slice, like one never started.
+            self.assertEqual(operation.status, Status.PENDING)
             self.assertEqual(operation.processed, 1)
             self.assertEqual(_names(self.dst), ["a.txt"])
 
@@ -584,22 +585,25 @@ class ProgressEventTests(OperationFixture):
 class RecoveryTests(OperationFixture):
     def test_an_operation_whose_worker_is_gone_is_closed_not_resumed(self):
         lost = self.start(MOVE, self.files[:1], self.dst)
-        never_started = self.start(MOVE, self.files[1:2], self.dst)
         alive = self.start(MOVE, self.files[2:], self.dst)
-        long_ago = timezone.now() - operations.STALE_AFTER - timedelta(minutes=1)
+        # Older than a slice is allowed to live: no worker runs it anymore.
+        long_ago = timezone.now() - operations.stale_after() - timedelta(seconds=1)
         FileOperation.objects.filter(pk=lost.pk).update(
             status=Status.RUNNING, heartbeat_at=long_ago
         )
-        FileOperation.objects.filter(pk=never_started.pk).update(heartbeat_at=long_ago)
-        FileOperation.objects.filter(pk=alive.pk).update(status=Status.RUNNING)
+        FileOperation.objects.filter(pk=alive.pk).update(
+            status=Status.RUNNING,
+            heartbeat_at=timezone.now()
+            - operations.stale_after()
+            + timedelta(seconds=5),
+        )
         stream = FilesSSEProvider(self.alice, None)
 
-        self.assertEqual(fail_stale_operations(), 2)
+        self.assertEqual(fail_stale_operations(), 1)
 
-        for operation in (lost, never_started):
-            operation.refresh_from_db()
-            self.assertEqual(operation.status, Status.FAILED)
-            self.assertIsNotNone(operation.finished_at)
+        lost.refresh_from_db()
+        self.assertEqual(lost.status, Status.FAILED)
+        self.assertIsNotNone(lost.finished_at)
         alive.refresh_from_db()
         self.assertEqual(alive.status, Status.RUNNING)
         self.assertEqual(
@@ -607,10 +611,27 @@ class RecoveryTests(OperationFixture):
                 (payload["operation_uuid"], payload["status"])
                 for _name, payload, _id in stream.poll("dirty")
             },
-            {(str(lost.pk), "failed"), (str(never_started.pk), "failed")},
+            {(str(lost.pk), "failed")},
         )
         self.assertEqual(self.run_to_end(lost), Slice.FINISHED)
         self.assertEqual(_names(self.src), ["a.txt", "b.txt", "c.txt"])
+
+    def test_an_operation_waiting_for_a_worker_waits_however_long(self):
+        waiting = self.start(MOVE, self.files[:1], self.dst)
+        FileOperation.objects.filter(pk=waiting.pk).update(
+            heartbeat_at=timezone.now() - timedelta(days=3)
+        )
+
+        self.assertEqual(fail_stale_operations(), 0)
+
+        waiting.refresh_from_db()
+        self.assertEqual(waiting.status, Status.PENDING)
+        self.assertEqual(self.run_to_end(waiting), Slice.FINISHED)
+        self.assertEqual(waiting.status, Status.COMPLETED)
+
+    def test_running_operations_are_judged_by_the_task_time_limit(self):
+        with self.settings(CELERY_TASK_TIME_LIMIT=60):
+            self.assertEqual(operations.stale_after(), timedelta(seconds=60))
 
     def test_old_reports_are_dropped_and_recent_or_running_ones_kept(self):
         old = self.start(MOVE, self.files[:1], self.dst)
@@ -634,7 +655,9 @@ class RecoveryTests(OperationFixture):
         old = self.start(MOVE, self.files[1:2], self.dst)
         self.run_to_end(old)
         long_ago = timezone.now() - operations.RETENTION - timedelta(minutes=1)
-        FileOperation.objects.filter(pk=lost.pk).update(heartbeat_at=long_ago)
+        FileOperation.objects.filter(pk=lost.pk).update(
+            status=Status.RUNNING, heartbeat_at=long_ago
+        )
         FileOperation.objects.filter(pk=old.pk).update(finished_at=long_ago)
 
         with self.assertLogs("workspace.files.tasks", level="WARNING"):

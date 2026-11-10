@@ -340,7 +340,7 @@ window.fileBrowser = function fileBrowser() {
     // ('replace' | 'rename' | 'skip' | undefined = let the server reject).
     // Only the "ask" and "skip" preferences need to know about a collision
     // before the bytes go up; the other two are decided server-side.
-    async _decideNameCollisions(files, { replaceLabel = gettext('Replace the existing file'), targetFolderId } = {}) {
+    async _decideNameCollisions(files, { targetFolderId } = {}) {
       const mode = window.getFilePrefs().nameCollision || 'ask';
       const decisions = new Map();
       if (mode === 'replace' || mode === 'keep_both') {
@@ -367,7 +367,7 @@ window.fileBrowser = function fileBrowser() {
           ),
           options: [
             { value: 'rename', label: gettext('Keep both (rename the new file)') },
-            { value: 'replace', label: replaceLabel },
+            { value: 'replace', label: gettext('Replace the existing file') },
             { value: 'skip', label: gettext('Skip this file') },
           ],
           value: 'rename',
@@ -863,12 +863,7 @@ window.fileBrowser = function fileBrowser() {
         item => item.nodeType === 'file'
           && (item.sourceFolder === undefined || (item.sourceFolder || null) !== targetFolderId)
       );
-      const decisions = await this._decideNameCollisions(collidable, {
-        replaceLabel: isCopy
-          ? gettext('Replace the existing file')
-          : gettext('Replace the existing file (the moved one goes to the trash)'),
-        targetFolderId,
-      });
+      const decisions = await this._decideNameCollisions(collidable, { targetFolderId });
 
       // A collision decided as 'skip' is the server's to skip, so it counts
       // with the rest. An item with no collision at pre-check time still

@@ -16,6 +16,7 @@ from itertools import batched
 from time import monotonic
 
 from celery.exceptions import SoftTimeLimitExceeded
+from django.conf import settings
 from django.utils import timezone
 
 from workspace.core.sse_registry import push_user_event
@@ -36,9 +37,6 @@ MAX_ACTIVE_PER_USER = 10
 # How long a slice works before handing the worker back. An item in flight
 # is never cut short, so one slice lasts as long as its longest item.
 SLICE_SECONDS = 20
-# Longer than the hard time limit of a task: past it nothing can still be
-# running the operation.
-STALE_AFTER = timedelta(minutes=35)
 RETENTION = timedelta(hours=24)
 
 _PROGRESS_INTERVAL = 0.4
@@ -193,15 +191,27 @@ def run_slice(operation_uuid):
     return _Runner(operation).run()
 
 
+def stale_after():
+    """How long a running operation may go without news before it is dead.
+
+    A slice beats when it is claimed and at every tick, and the worker is
+    killed at the task's hard time limit: no live slice is ever further than
+    that from its last beat.
+    """
+    return timedelta(seconds=settings.CELERY_TASK_TIME_LIMIT)
+
+
 def fail_stale_operations():
-    """Close the operations whose runner is gone, and return how many.
+    """Close the running operations whose worker is gone, and return how many.
 
     They are not resumed: the item that was in flight may be half done, and
-    running it again would copy it a second time.
+    running it again would copy it a second time. A pending operation is
+    left alone: it waits in the queue for a worker, however long that takes,
+    and its owner can cancel it.
     """
-    cutoff = timezone.now() - STALE_AFTER
+    cutoff = timezone.now() - stale_after()
     stale = FileOperation.objects.filter(
-        status__in=FileOperation.ACTIVE_STATUSES, heartbeat_at__lt=cutoff
+        status=FileOperation.Status.RUNNING, heartbeat_at__lt=cutoff
     )
     failed = 0
     for operation in stale:
@@ -265,7 +275,7 @@ class _Runner:
                 # late still gets one item further.
                 out_of_time = self._yield or monotonic() > self._deadline
                 if out_of_time and operation.processed < len(operation.items):
-                    self._write_progress()
+                    self._pause()
                     return Slice.PAUSED
         except _Stopped as stopped:
             if stopped.args:
@@ -412,6 +422,21 @@ class _Runner:
         self.operation.heartbeat_at = timezone.now()
         self._write(["processed", "bytes_done", "counts", "errors", "heartbeat_at"])
         push_progress(self.operation)
+
+    def _pause(self):
+        """Hand the operation back to the queue, waiting for its next slice."""
+        operation = self.operation
+        operation.heartbeat_at = timezone.now()
+        fields = ["processed", "bytes_done", "counts", "errors", "heartbeat_at"]
+        paused = FileOperation.objects.filter(
+            pk=operation.pk, status=FileOperation.Status.RUNNING
+        ).update(
+            status=FileOperation.Status.PENDING,
+            **{field: getattr(operation, field) for field in fields},
+        )
+        if paused:
+            operation.status = FileOperation.Status.PENDING
+            push_progress(operation)
 
     def _finish(self, status):
         operation = self.operation

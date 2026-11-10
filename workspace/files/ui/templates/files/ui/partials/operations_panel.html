@@ -26,8 +26,8 @@
   x-transition:enter-start="opacity-0 translate-y-2"
   x-transition:enter-end="opacity-100 translate-y-0"
   class="fixed bottom-4 right-4 z-40 w-96 max-w-[calc(100vw-2rem)] flex flex-col overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-xl"
-  aria-label="{% translate 'Transfers' %}"
-  data-testid="transfers-panel"
+  aria-label="{% translate 'Operations' %}"
+  data-testid="operations-panel"
 >
   <header class="flex items-center gap-3 bg-base-200 py-3 pl-4 pr-3">
     <span
@@ -76,7 +76,7 @@
         class="btn btn-ghost btn-xs btn-square"
         :title="$store.uploads.expanded ? '{{ collapse_label|escapejs }}' : '{{ expand_label|escapejs }}'"
         :aria-expanded="$store.uploads.expanded"
-        aria-controls="transfers-panel-lists"
+        aria-controls="operations-panel-lists"
         @click="$store.uploads.expanded = !$store.uploads.expanded"
       >
         <i
@@ -88,7 +88,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         title="{% translate 'Close' %}"
-        aria-label="{% translate 'Close transfers' %}"
+        aria-label="{% translate 'Close operations' %}"
         @click="$store.uploads.close().then(() => $store.fileOperations.dismissFinished())"
       >
         <i data-lucide="x" class="w-4 h-4"></i>
@@ -102,14 +102,14 @@
     ></div>
   </div>
   <div
-    id="transfers-panel-lists"
+    id="operations-panel-lists"
     x-show="$store.uploads.expanded"
     class="max-h-56 sm:max-h-96 overflow-y-auto"
   >
     <ul
       x-show="$store.fileOperations.rows.length"
       class="divide-y divide-base-200 border-b border-base-200"
-      data-testid="transfers-panel-operations"
+      data-testid="operations-panel-operations"
     >
       <template x-for="operation in $store.fileOperations.rows" :key="operation.uuid">
         <li class="py-2 pl-4 pr-3" :data-status="operation.status">
@@ -173,7 +173,7 @@
           <ul
             x-show="operation.errors && operation.errors.length"
             class="mt-1 ml-8 space-y-0.5 text-xs"
-            data-testid="transfers-panel-errors"
+            data-testid="operations-panel-errors"
           >
             <template x-for="error in (operation.errors || [])" :key="error.uuid">
               <li
@@ -244,7 +244,7 @@
       x-effect="$store.uploads.pendingCount || ($el.parentElement.scrollTop = 0)"
       x-show="$store.uploads.items.length"
       class="divide-y divide-base-200"
-      data-testid="transfers-panel-uploads"
+      data-testid="operations-panel-uploads"
     >
       <template x-for="item in $store.uploads.rows" :key="item.id">
         <li

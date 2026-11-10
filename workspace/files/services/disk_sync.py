@@ -29,7 +29,7 @@ from datetime import datetime
 
 from django.core.files.storage import default_storage
 from django.utils import timezone
-from django.utils.translation import gettext
+from django.utils.translation import gettext_lazy
 
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
@@ -44,6 +44,11 @@ from .storage_ops import unique_copy_name
 logger = logging.getLogger(__name__)
 
 
+NOT_PERSONAL_FOLDER = gettext_lazy(
+    "Only folders of your personal files are synced with the disk."
+)
+
+
 class NotPersonalFolder(ValueError):
     """A folder outside the user's personal tree was asked to be synced.
 
@@ -51,6 +56,9 @@ class NotPersonalFolder(ValueError):
     trashed, has nothing there, and whatever sits at the same path belongs to
     another folder.
     """
+
+    def __init__(self):
+        super().__init__(NOT_PERSONAL_FOLDER)
 
 
 @dataclass
@@ -292,9 +300,7 @@ def sync_folder_level(user, folder=None, *, dry_run=False, log=None) -> SyncResu
         and folder.group_id is None
         and folder.deleted_at is None
     ):
-        raise NotPersonalFolder(
-            gettext("Only folders of your personal files are synced with the disk.")
-        )
+        raise NotPersonalFolder()
     result = SyncResult()
 
     storage_prefix = user_root(user.username)

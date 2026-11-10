@@ -80,10 +80,12 @@ class SyncMixin:
 
         try:
             result = disk_sync.sync_folder_level(request.user, file_obj, log=logger)
-        except disk_sync.NotPersonalFolder as refusal:
+        except disk_sync.NotPersonalFolder:
             return Response(
-                {"detail": str(refusal)}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": disk_sync.NOT_PERSONAL_FOLDER},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+
         for err in result.errors:
             logger.warning("sync folder %s: %s", scrub(uuid), scrub(err))
         return Response(

@@ -1003,6 +1003,10 @@ class SyncFolderScopeTests(SyncReconciliationTestCase):
         response = self.client.post(f"/api/v1/files/{self.group_folder.uuid}/sync")
 
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"detail": "Only folders of your personal files are synced with the disk."},
+        )
         self.assertFalse(File.objects.filter(parent=self.group_folder).exists())
         self.assertEqual(
             File.objects.filter(content=self.private.content.name).count(), 1

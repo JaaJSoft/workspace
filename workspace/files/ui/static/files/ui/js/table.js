@@ -385,6 +385,79 @@ window.fileTableControls = function fileTableControls() {
       if (checkbox) checkbox.checked = selected;
     },
 
+    // --- In-place refresh of a few items -----------------------------------
+    // A push names the items that changed (browser.js groups them). Each is
+    // rendered again by the server and swapped in place through its id, so
+    // the rest of the listing is neither rendered nor bound again. The swap
+    // leaves the item where it is: only for a change that moves no item and
+    // matches no filter differently.
+
+    // The whole listing is re-rendered instead when a swap cannot cover the
+    // batch: more items than one request may name, or a row a filter took
+    // out of the document, where alpine-ajax has nothing to target.
+    async refreshItems(uuids) {
+      const items = uuids.map((uuid) => this._itemsByUuid.get(uuid)).filter(Boolean);
+      if (items.length === 0) return;
+      const limit = parseInt(this._root.dataset.nodesRefreshLimit, 10);
+      if (items.length > limit || items.some((item) => !item.isConnected)) {
+        this.reloadListing();
+        return;
+      }
+      const listed = items.map((item) => item.dataset.uuid);
+      const url = new URL(window.location.href);
+      url.searchParams.set('nodes', listed.join(','));
+      try {
+        await this.$ajax(url.pathname + url.search, { targets: items.map((item) => item.id) });
+      } catch {
+        // Offline: the listing is re-rendered when the stream reconnects.
+        return;
+      }
+      // What settled may have changed what the item allows (a quarantine).
+      this.fetchActions(listed);
+    },
+
+    reloadListing() {
+      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+    },
+
+    // alpine-ajax swapped a refreshed item for a new element (ajax:merged on
+    // the listing container). The listing keeps its items by reference and
+    // paints their state on them, so the new element takes over both.
+    adoptItem(item) {
+      const uuid = item.dataset?.uuid;
+      const previous = this._itemsByUuid.get(uuid);
+      if (!previous || previous === item) return;
+      this.originalRows[this.originalRows.indexOf(previous)] = item;
+      this._itemsByUuid.set(uuid, item);
+      // alpine-ajax stamps the request an element came from, and requests
+      // made from inside it start there: this one is not a page.
+      delete item.dataset.source;
+      this._paintItemSelection(uuid, this.selectedUuids.has(uuid));
+      item.toggleAttribute('data-busy', previous.hasAttribute('data-busy'));
+      this._paintDraggable({ [uuid]: this.actionsMap[uuid] || [] });
+      if (this.tbody) {
+        this.applyRowColumns(item);
+      } else {
+        item.style.display = previous.style.display;
+      }
+    },
+
+    // The answer left out an item it was asked for: the listing no longer
+    // holds it (trashed, moved, out of reach). alpine-ajax would take the
+    // element out; the listing is re-rendered instead, counts included.
+    // One answer can miss several items, each announced in the same tick.
+    onItemMissing(event) {
+      const target = event.detail?.target;
+      if (!target || this._itemsByUuid.get(target.dataset?.uuid) !== target) return;
+      event.preventDefault();
+      if (this._reloadQueued) return;
+      this._reloadQueued = true;
+      queueMicrotask(() => {
+        this._reloadQueued = false;
+        this.reloadListing();
+      });
+    },
+
     toggleRowSelection(uuid, shiftKey = false) {
       // Shift-click: select range from last selected to current
       if (shiftKey && this.lastSelectedUuid && this.lastSelectedUuid !== uuid) {
@@ -583,10 +656,9 @@ window.fileTableControls = function fileTableControls() {
       return text;
     },
 
-    // Fetch actions for all visible rows from the API
-    async fetchActions() {
-      // Get elements with data-uuid from both list view (tr) and mosaic view (div)
-      const uuids = this.originalRows.map((r) => r.dataset.uuid).filter(Boolean);
+    // Fetch from the API the actions of the given items, by default every
+    // item of the listing, rows and cards alike.
+    async fetchActions(uuids = this.originalRows.map((r) => r.dataset.uuid).filter(Boolean)) {
       if (uuids.length === 0) return;
 
       this.actionsLoading = true;
@@ -1058,13 +1130,22 @@ window.fileTableControls = function fileTableControls() {
 
     applyColumnVisibility() {
       if (!this.table) return;
-      this.columns.forEach((col) => {
-        const show = this.isColumnVisible(col.id);
-        this.table.querySelectorAll(`[data-col="${col.id}"]`).forEach((cell) => {
-          cell.style.display = show ? '' : 'none';
-        });
-      });
+      this.table.querySelectorAll('tr').forEach((row) => this.applyRowColumnVisibility(row));
       this.updateEmptyRowColspan();
+    },
+
+    applyRowColumnVisibility(row) {
+      for (const cell of row.children) {
+        const id = cell.dataset.col;
+        if (id) cell.style.display = this.isColumnVisible(id) ? '' : 'none';
+      }
+    },
+
+    // A row rendered by the server comes with every column, in the default
+    // order: this gives it the layout the rest of the table has.
+    applyRowColumns(row) {
+      this.applyRowColumnVisibility(row);
+      this.reorderRowCells(row);
     },
 
     applyColumnOrder() {

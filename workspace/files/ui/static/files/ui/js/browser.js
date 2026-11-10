@@ -1376,12 +1376,18 @@ window.fileBrowser = function fileBrowser() {
       });
 
       // A file still being scanned and previewed shows a spinner rendered
-      // server-side: the listing re-renders once its thumbnail is drawn, so
-      // the preview shows while the rest of the pipeline runs, and again once
-      // the pipeline settles, so the spinner goes. A batch upload settles one
-      // file after another, so the re-renders are grouped, without waiting
-      // for the end of the batch.
-      const refreshProcessed = window.coalesceCalls(() => this.refreshFolderBrowser(), {
+      // server-side: its item is rendered again once its thumbnail is drawn,
+      // so the preview shows while the rest of the pipeline runs, and again
+      // once the pipeline settles, so the spinner goes. A batch upload
+      // settles one file after another, so the files are grouped, without
+      // waiting for the end of the batch. The listing on screen refreshes
+      // the ones it holds (refreshItems in table.js) and ignores the rest.
+      const processed = new Set();
+      const refreshProcessed = window.coalesceCalls(() => {
+        const uuids = Array.from(processed);
+        processed.clear();
+        window.dispatchEvent(new CustomEvent('refresh-listing-items', { detail: { uuids } }));
+      }, {
         wait: 400,
         maxWait: 2000,
       });
@@ -1391,7 +1397,7 @@ window.fileBrowser = function fileBrowser() {
         if (e.type === 'sse:files.processing_settled' && this.propertiesUuid === uuid) {
           this.reloadPropertiesPanel();
         }
-        if (!document.querySelector(`#folder-browser [data-uuid="${CSS.escape(uuid)}"]`)) return;
+        processed.add(uuid);
         refreshProcessed();
       };
       window.addEventListener('sse:files.preview_ready', onProcessed);

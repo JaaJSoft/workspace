@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render
 from django.utils.html import escape, format_html
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -71,6 +71,9 @@ MAX_EVENTS_LIMIT = 200
 # A public share link has no authentication behind it, so an unbounded
 # listing would let anyone turn one link into a folder-dump DoS.
 SHARED_FOLDER_PAGE_SIZE = 200
+# How many nodes one ?nodes= request of a listing may name. Past it the whole
+# listing is re-rendered instead, and the list has to fit in a request line.
+LISTING_NODES_LIMIT = 50
 
 
 def present_shortcuts(user, nodes):
@@ -147,8 +150,17 @@ def _root_crumb(label):
     }
 
 
-def _build_context(request, folder=None, is_trash_view=False):
-    current_folder = None
+def _query_flag(request, name):
+    return str(request.GET.get(name, "")).lower() in {"1", "true", "yes"}
+
+
+def _resolve_listing(request, folder=None, is_trash_view=False):
+    """Which listing a request names: ``(active_tag, active_special, current_folder)``.
+
+    At most one of the three is set, and none of them for the user's root.
+    Raises ``Http404`` for a tag that is not the user's or a folder they
+    cannot open.
+    """
     active_tag = None
     if not is_trash_view and request.GET.get("tag"):
         tag_uuid = parse_uuid_or_none(request.GET["tag"])
@@ -156,132 +168,89 @@ def _build_context(request, folder=None, is_trash_view=False):
             active_tag = Tag.objects.filter(owner=request.user, uuid=tag_uuid).first()
         if active_tag is None:
             raise Http404
-    is_tag_view = active_tag is not None
-    is_shared_view = (
-        not is_trash_view
-        and not is_tag_view
-        and str(request.GET.get("shared", "")).lower() in {"1", "true", "yes"}
-    )
-    is_favorites_view = (
-        not is_trash_view
-        and not is_tag_view
-        and not is_shared_view
-        and str(request.GET.get("favorites", "")).lower() in {"1", "true", "yes"}
-    )
-    is_recent_view = (
-        not is_trash_view
-        and not is_tag_view
-        and not is_favorites_view
-        and not is_shared_view
-        and str(request.GET.get("recent", "")).lower() in {"1", "true", "yes"}
-    )
-    user_label = request.user.get_full_name() or request.user.username
-    files_root = _root_crumb(user_label)
-    breadcrumbs = [files_root]
+    if active_tag is not None:
+        return active_tag, None, None
+    if is_trash_view:
+        return None, "trash", None
+    for special in ("shared", "favorites", "recent"):
+        if _query_flag(request, special):
+            return None, special, None
+    if not folder:
+        return None, None, None
+    current_folder = File.objects.filter(
+        FileService.accessible_files_q(request.user),
+        uuid=folder,
+        node_type=File.NodeType.FOLDER,
+        deleted_at__isnull=True,
+    ).first()
+    if not current_folder:
+        raise Http404
+    return None, None, current_folder
 
-    SPECIAL_VIEWS = {
-        "shared": {"label": _("Shared with me"), "icon": "share-2"},
-        "trash": {"label": _("Trash"), "icon": "trash-2"},
-        "favorites": {"label": _("Favorites"), "icon": "star"},
-        "recent": {"label": _("Recent"), "icon": "clock"},
-    }
-    active_special = (
-        "shared"
-        if is_shared_view
-        else "trash"
-        if is_trash_view
-        else "favorites"
-        if is_favorites_view
-        else "recent"
-        if is_recent_view
-        else None
-    )
-    if is_tag_view:
-        breadcrumbs = [
-            files_root,
-            {"label": active_tag.name, "icon": active_tag.icon or "tag"},
-        ]
-    elif active_special:
-        breadcrumbs = [files_root, SPECIAL_VIEWS[active_special]]
-    elif folder:
-        current_folder = File.objects.filter(
-            FileService.accessible_files_q(request.user),
-            uuid=folder,
-            node_type=File.NodeType.FOLDER,
-            deleted_at__isnull=True,
-        ).first()
-        if not current_folder:
-            raise Http404
-        breadcrumbs = build_breadcrumbs(current_folder, user=request.user)
 
-    if is_tag_view:
-        nodes = (
-            FileService.user_files_qs(request.user)
+def _listing_nodes(user, active_tag, active_special, current_folder):
+    """The nodes of a listing as *user* may see them, in listing order."""
+    if active_tag is not None:
+        return (
+            FileService.user_files_qs(user)
             .filter(file_tags__tag=active_tag)
             .folders_first()
         )
-    elif is_shared_view:
-        shared_file_ids = FileShare.objects.reaching(request.user).values_list(
+    if active_special == "shared":
+        shared_file_ids = FileShare.objects.reaching(user).values_list(
             "file_id", flat=True
         )
-        nodes = File.objects.filter(
+        return File.objects.filter(
             pk__in=shared_file_ids,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
         ).name_ordered()
-    elif is_trash_view:
-        nodes = (
-            FileService.restorable_files_qs(request.user)
+    if active_special == "trash":
+        return (
+            FileService.restorable_files_qs(user)
             .filter(deleted_at__isnull=False)
             .filter(Q(parent__isnull=True) | Q(parent__deleted_at__isnull=True))
             .name_ordered("-deleted_at")
         )
-    elif is_favorites_view:
-        nodes = (
+    if active_special == "favorites":
+        return (
             File.objects.filter(
-                FileService.accessible_files_q(request.user),
+                FileService.accessible_files_q(user),
                 deleted_at__isnull=True,
-                favorites__owner=request.user,
+                favorites__owner=user,
             )
             .distinct()
             .folders_first()
         )
-    elif is_recent_view:
-        nodes = (
-            FileService.owned_files_qs(request.user)
+    if active_special == "recent":
+        return (
+            FileService.owned_files_qs(user)
             .filter(deleted_at__isnull=True)
             .name_ordered("-updated_at")
         )
-    elif current_folder:
-        if current_folder.group_id:
-            nodes = File.objects.filter(
-                group=current_folder.group,
-                deleted_at__isnull=True,
-                parent=current_folder,
-            ).folders_first()
-        else:
-            nodes = (
-                FileService.user_files_qs(request.user)
-                .filter(
-                    parent=current_folder,
-                )
-                .folders_first()
-            )
-    else:
-        nodes = (
-            FileService.user_files_qs(request.user)
-            .filter(
-                parent__isnull=True,
-            )
+    if current_folder and current_folder.group_id:
+        return File.objects.filter(
+            group=current_folder.group,
+            deleted_at__isnull=True,
+            parent=current_folder,
+        ).folders_first()
+    if current_folder:
+        return (
+            FileService.user_files_qs(user)
+            .filter(parent=current_folder)
             .folders_first()
         )
+    return FileService.user_files_qs(user).filter(parent__isnull=True).folders_first()
 
+
+def _present_nodes(user, nodes, active_special):
+    """Load *nodes* with everything a row or a card of the listing reads."""
     favorite_subquery = FileFavorite.objects.filter(
-        owner=request.user,
+        owner=user,
         file_id=OuterRef("pk"),
     )
     pinned_subquery = PinnedFolder.objects.filter(
-        owner=request.user,
+        owner=user,
         folder_id=OuterRef("pk"),
     )
     is_shared_subquery = FileShare.objects.filter(
@@ -294,10 +263,108 @@ def _build_context(request, folder=None, is_trash_view=False):
             is_pinned=Exists(pinned_subquery),
             is_shared=Exists(is_shared_subquery),
         )
-        .prefetch_related(viewer_file_tags(request.user))
+        .prefetch_related(viewer_file_tags(user))
     )
-    if is_recent_view:
+    if active_special == "recent":
         nodes = nodes[:RECENT_FILES_LIMIT]
+    for node in nodes:
+        # Read up to four times per row by the listing, and each call ranks
+        # every viewer: resolved once here instead.
+        node.viewable = node.is_viewable()
+    present_shortcuts(user, nodes)
+    return nodes
+
+
+def _file_prefs(files_settings):
+    file_prefs = files_settings.get("preferences") or {}
+    return file_prefs if isinstance(file_prefs, dict) else {}
+
+
+def _listing_view_mode(file_prefs):
+    """The mode a listing is rendered in.
+
+    One only: a large folder costs the browser as much to bind as it has
+    markup, and the toggle is rare enough to be a re-render.
+    """
+    view_mode = file_prefs.get("defaultViewMode")
+    if not isinstance(view_mode, str) or view_mode not in {"list", "mosaic"}:
+        return "list"
+    return view_mode
+
+
+def _requested_nodes(request):
+    """The UUIDs a ``?nodes=<uuid>,...`` request names, None when malformed."""
+    uuids = [
+        parse_uuid_or_none(value) for value in request.GET.get("nodes", "").split(",")
+    ]
+    if None in uuids or len(uuids) > LISTING_NODES_LIMIT:
+        return None
+    return uuids
+
+
+def _listing_nodes_response(request, folder=None, is_trash_view=False):
+    """A few nodes of a listing, each rendered as the listing renders it.
+
+    The page swaps them in place when a push says they changed, instead of
+    re-rendering the whole listing. The request is the listing's own, so a
+    node comes back only when that listing holds it: one the user cannot
+    see, one of another folder and one that does not exist are all left out
+    the same way.
+    """
+    uuids = _requested_nodes(request)
+    if uuids is None:
+        return HttpResponseBadRequest()
+    active_tag, active_special, current_folder = _resolve_listing(
+        request, folder=folder, is_trash_view=is_trash_view
+    )
+    nodes = _listing_nodes(
+        request.user, active_tag, active_special, current_folder
+    ).filter(uuid__in=uuids)
+    file_prefs = _file_prefs(get_module_settings(request.user, "files"))
+    return render(
+        request,
+        "files/ui/partials/folder_nodes.html",
+        {
+            "nodes": _present_nodes(request.user, nodes, active_special),
+            "view_mode": _listing_view_mode(file_prefs),
+            "is_trash_view": is_trash_view,
+        },
+    )
+
+
+def _build_context(request, folder=None, is_trash_view=False):
+    active_tag, active_special, current_folder = _resolve_listing(
+        request, folder=folder, is_trash_view=is_trash_view
+    )
+    is_tag_view = active_tag is not None
+    is_shared_view = active_special == "shared"
+    is_favorites_view = active_special == "favorites"
+    is_recent_view = active_special == "recent"
+    user_label = request.user.get_full_name() or request.user.username
+    files_root = _root_crumb(user_label)
+    breadcrumbs = [files_root]
+
+    SPECIAL_VIEWS = {
+        "shared": {"label": _("Shared with me"), "icon": "share-2"},
+        "trash": {"label": _("Trash"), "icon": "trash-2"},
+        "favorites": {"label": _("Favorites"), "icon": "star"},
+        "recent": {"label": _("Recent"), "icon": "clock"},
+    }
+    if is_tag_view:
+        breadcrumbs = [
+            files_root,
+            {"label": active_tag.name, "icon": active_tag.icon or "tag"},
+        ]
+    elif active_special:
+        breadcrumbs = [files_root, SPECIAL_VIEWS[active_special]]
+    elif current_folder:
+        breadcrumbs = build_breadcrumbs(current_folder, user=request.user)
+
+    nodes = _present_nodes(
+        request.user,
+        _listing_nodes(request.user, active_tag, active_special, current_folder),
+        active_special,
+    )
 
     folder_stats = {
         "file_count": 0,
@@ -309,9 +376,6 @@ def _build_context(request, folder=None, is_trash_view=False):
     # those, so it never lists tags that would match nothing here.
     listing_tags = {}
     for node in nodes:
-        # Read up to four times per row by the listing, and each call ranks
-        # every viewer: resolved once here instead.
-        node.viewable = node.is_viewable()
         if node.node_type == File.NodeType.FILE:
             folder_stats["file_count"] += 1
             folder_stats["total_size"] += node.size or 0
@@ -321,7 +385,6 @@ def _build_context(request, folder=None, is_trash_view=False):
             folder_stats["shortcut_count"] += 1
         for file_tag in node.file_tags.all():
             listing_tags[file_tag.tag.uuid] = file_tag.tag
-    present_shortcuts(request.user, nodes)
 
     VIEW_META = {
         "shared": (
@@ -420,16 +483,9 @@ def _build_context(request, folder=None, is_trash_view=False):
     # Both keys live in the files module, so fetch them in a single query
     # instead of one round-trip per get_setting call.
     files_settings = get_module_settings(request.user, "files")
-    file_prefs = files_settings.get("preferences") or {}
-    if not isinstance(file_prefs, dict):
-        file_prefs = {}
+    file_prefs = _file_prefs(files_settings)
     breadcrumb_collapse = file_prefs.get("breadcrumbCollapse", 4)
-    # The listing is rendered in one view mode only: a large folder costs
-    # the browser as much to bind as it has markup, and the toggle is rare
-    # enough to be a re-render.
-    view_mode = file_prefs.get("defaultViewMode")
-    if not isinstance(view_mode, str) or view_mode not in {"list", "mosaic"}:
-        view_mode = "list"
+    view_mode = _listing_view_mode(file_prefs)
     table_controls = files_settings.get("table_controls")
     if not isinstance(table_controls, dict):
         table_controls = None
@@ -462,6 +518,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         "pinned_folders": pinned_folders_qs,
         "breadcrumb_collapse": breadcrumb_collapse,
         "view_mode": view_mode,
+        "nodes_refresh_limit": LISTING_NODES_LIMIT,
         "file_prefs": file_prefs,
         "table_controls": table_controls,
         "group_folders": group_folders,
@@ -473,6 +530,9 @@ def _build_context(request, folder=None, is_trash_view=False):
 @ensure_csrf_cookie
 def index(request, folder=None):
     """File browser view with optional folder navigation."""
+    if request.headers.get("X-Alpine-Request") and "nodes" in request.GET:
+        return _listing_nodes_response(request, folder=folder)
+
     context = _build_context(request, folder=folder, is_trash_view=False)
 
     if request.headers.get("X-Alpine-Request"):
@@ -485,6 +545,9 @@ def index(request, folder=None):
 @ensure_csrf_cookie
 def trash(request):
     """Trash view for deleted files and folders."""
+    if request.headers.get("X-Alpine-Request") and "nodes" in request.GET:
+        return _listing_nodes_response(request, is_trash_view=True)
+
     context = _build_context(request, is_trash_view=True)
 
     if request.headers.get("X-Alpine-Request"):
@@ -924,7 +987,6 @@ def file_previews(request):
     in the slot id it was asked for. A file the user may not reach comes
     back as nothing at all, like one that does not exist.
     """
-    from django.http import HttpResponseBadRequest
     from django.template.loader import render_to_string
 
     from workspace.files.services import previews

@@ -1,0 +1,25 @@
+{% comment %}
+  A few nodes of a listing, each rendered as the listing renders it and
+  swapped in place through its id (refreshItems in table.js). The wrapper
+  is only there to hold them: a table row is not valid outside a table.
+
+  Context:
+    - nodes: the requested nodes that are in the listing
+    - view_mode: "list" or "mosaic"
+    - is_trash_view: bool
+{% endcomment %}
+{% if view_mode == "mosaic" %}
+  <div>
+    {% for node in nodes %}
+      {% include "files/ui/partials/node_card.html" %}
+    {% endfor %}
+  </div>
+{% else %}
+  <table>
+    <tbody>
+      {% for node in nodes %}
+        {% include "files/ui/partials/node_row.html" %}
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}

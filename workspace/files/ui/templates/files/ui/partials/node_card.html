@@ -1,0 +1,139 @@
+{% load file_filters i18n %}
+{% comment %}
+  One node of the mosaic view: its card. Rendered by the listing for every
+  node and on its own by the listing's ?nodes= request, which swaps the
+  card in place through its id.
+
+  The card carries no listener and no state of its own. data-selected,
+  draggable on a file and the display of a filtered-out card are painted
+  by the table component (adoptItem repaints them on a swapped card),
+  data-busy by the browser while an action runs on the card.
+
+  Context:
+    - node: File, prepared by views._present_nodes
+    - is_trash_view: bool
+    - show_actions: bool (default: True) - show the card's action button
+{% endcomment %}
+<div
+  class="{% if node.is_quarantined %}bg-error/10 data-selected:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-selected:ring-2 data-selected:ring-module data-selected:border-module data-busy:opacity-50 data-busy:pointer-events-none"
+  id="node-{{ node.uuid }}"
+  data-uuid="{{ node.uuid }}"
+  data-name="{{ node.name|lower }}"
+  data-display-name="{{ node.name }}"
+  data-node-type="{{ node.node_type }}"
+  data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
+  data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
+  data-viewable="{{ node.viewable|yesno:'1,0' }}"
+  data-file-type="{{ node.type }}"
+  data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
+  data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
+  data-created="{{ node.created_at|date:'U' }}"
+  data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
+  {% if node.node_type == 'folder' and not is_trash_view %}draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}"{% endif %}
+  {% if node.node_type == 'shortcut' and node.shortcut_opens and not is_trash_view %}data-opens="{{ node.shortcut_opens }}" data-target-uuid="{{ node.resolved_target.uuid }}" data-target-name="{{ node.resolved_target.name }}" data-target-file-type="{{ node.resolved_target.type }}"{% endif %}
+>
+  <!-- Checkbox overlay (top-left) -->
+  <div class="absolute top-2 left-2 z-10" data-stop-row-click>
+    <input
+      type="checkbox"
+      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-selected:opacity-100"
+      data-select-item
+    />
+  </div>
+
+  <!-- Favorite button (top-right) -->
+  {% if not is_trash_view %}
+    <div class="absolute top-2 right-2 z-10" data-stop-row-click>
+      <span
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs pointer-events-none hidden group-data-busy:inline-flex"
+      >
+        <span class="loading loading-spinner loading-xs"></span>
+      </span>
+      {% if node.is_favorite %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs group-data-busy:hidden"
+          aria-label="{% translate 'Remove from favorites' %}"
+          data-item-control="favorite"
+        >
+          <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
+        </button>
+      {% else %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-busy:hidden"
+          aria-label="{% translate 'Add to favorites' %}"
+          data-item-control="favorite"
+        >
+          <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+        </button>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <!-- Preview/Icon area (square) -->
+  {% if node.node_type == "folder" %}
+    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:"folder" icon_color=node.color|default:"text-warning" icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" thumbnail_sizes_expr="tileImageSizes()" %}
+  {% elif node.node_type == "shortcut" %}
+    {% include "files/ui/partials/shortcut_preview.html" %}
+  {% else %}
+    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" thumbnail_sizes_expr="tileImageSizes()" duration=node.media_info.duration sensitive_level=node.sensitive_level %}
+  {% endif %}
+
+  <!-- File info -->
+  <div
+    class="border-t border-base-300 flex-1"
+    :class="mosaicTileSize <= 2 ? 'px-2 py-1.5' : 'p-3'"
+  >
+    <div class="flex items-start justify-between gap-1">
+      <div class="flex-1 min-w-0">
+        {% include "files/ui/partials/node_name.html" with name=node.name is_quarantined=node.is_quarantined is_processing=node.is_processing name_size_class_expr="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" viewer_focus=node.viewable %}
+        <p
+          class="text-xs text-base-content/60"
+          :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'"
+          x-cloak
+        >
+          {% if node.node_type == "file" %}
+            {{ node.size|filesizeformat }}
+          {% elif node.node_type == "shortcut" %}
+            <span title="{{ node.shortcut_title }}">{% translate "Shortcut" %}</span>
+          {% else %}
+            {% translate "Folder" %}
+          {% endif %}
+        </p>
+        {% if node.file_tags.all %}
+          <div
+            class="flex flex-nowrap items-center gap-1 mt-1 overflow-hidden"
+            :class="mosaicTileSize <= 1 ? 'hidden' : ''"
+            x-cloak
+          >
+            {% with row_tags=node.file_tags.all %}
+              {% for ft in row_tags %}
+                <a
+                  href="/files?tag={{ ft.tag.uuid }}"
+                  x-target.push="folder-browser"
+                  @click.stop
+                  @dblclick.stop
+                  class="shrink-0"
+                  title="{% blocktranslate trimmed with name=ft.tag.name %}Show files tagged {{ name }}{% endblocktranslate %}"
+                >
+                  <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm" {% if row_tags|length > 2 %}compact{% endif %}></tag-chip>
+                </a>
+              {% endfor %}
+            {% endwith %}
+          </div>
+        {% endif %}
+      </div>
+      {% if show_actions != False %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+          aria-label="{% translate 'More actions' %}"
+          data-item-control="menu"
+        >
+          <i data-lucide="more-vertical" class="w-4 h-4"></i>
+        </button>
+      {% endif %}
+    </div>
+  </div>
+</div>

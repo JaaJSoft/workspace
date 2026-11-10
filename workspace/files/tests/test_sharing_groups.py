@@ -21,6 +21,7 @@ from workspace.files.services import FilePermission, FileService
 from workspace.files.services.comments import mentionable_users
 from workspace.files.services.sharing import share_file, unshare_file
 from workspace.files.sse_provider import FilesSSEProvider, push_file_event
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.notifications.models import Notification
 
 User = get_user_model()
@@ -406,8 +407,8 @@ class GroupShareAPITests(GroupShareFixtures, APITestCase):
 
     def test_deleting_the_file_notifies_group_members(self):
         self._share_with_team()
-        resp = self.client.delete(f"/api/v1/files/{self.file.uuid}")
-        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        resp = run_operation(self.client, "trash", [self.file])
+        self.assertEqual(outcome_of(resp), ({"done": 1}, []))
         self.assertTrue(
             Notification.objects.filter(
                 recipient=self.member, title__contains="deleted"

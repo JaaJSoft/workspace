@@ -41,7 +41,6 @@ from workspace.files.webdav.resources import (
     FileResource,
     FolderResource,
     RootCollection,
-    _copy_as,
     _resolve_parent,
     _StreamingWriteBuffer,
 )
@@ -444,15 +443,19 @@ class FolderResourceTests(TestCase):
         self.folder.refresh_from_db()
         self.assertIsNone(self.folder.deleted_at)
 
-    def test_copy_move_single_creates_empty_collection(self):
-        """WsgiDAV's copy loop visits every descendant itself, so the
-        collection hook must create the destination folder WITHOUT members
-        (recursing here duplicates every child)."""
-        FileService.create_file(
+    def test_copy_move_single_copies_the_whole_tree_once(self):
+        """WsgiDAV's copy loop visits every descendant after the folder: the
+        folder hook copies the tree in one go, and the visits that follow
+        find it done instead of copying each child a second time."""
+        child = FileService.create_file(
             self.user, "child.txt", parent=self.folder, mime_type="text/plain"
         )
         target = FileService.create_folder(self.user, "Dest")
+
         self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
+        child_res = FileResource(f"{self.res.path}/child.txt", self.res.environ, child)
+        child_res.copy_move_single("/Dest/DocsCopy/child.txt", is_move=False)
+
         copy = File.objects.get(
             owner=self.user,
             name="DocsCopy",
@@ -460,6 +463,21 @@ class FolderResourceTests(TestCase):
             node_type=File.NodeType.FOLDER,
             deleted_at__isnull=True,
         )
+        self.assertEqual(
+            list(File.objects.filter(parent=copy).values_list("name", flat=True)),
+            ["child.txt"],
+        )
+
+    def test_a_depth_0_copy_creates_the_collection_without_its_members(self):
+        FileService.create_file(
+            self.user, "child.txt", parent=self.folder, mime_type="text/plain"
+        )
+        target = FileService.create_folder(self.user, "Dest")
+        self.res.environ["HTTP_DEPTH"] = "0"
+
+        self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
+
+        copy = File.objects.get(name="DocsCopy", parent=target)
         self.assertFalse(File.objects.filter(parent=copy).exists())
 
 
@@ -1069,40 +1087,6 @@ class ResolveParentTests(TestCase):
         folder = FileService.create_folder(self.user, "Del")
         folder.soft_delete()
         self.assertIsNone(_resolve_parent(self.user, ["Del"]))
-
-
-class CopyAsTests(TestCase):
-    """Tests for _copy_as helper."""
-
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username="davcp", email="cp@test.com", password="pass"
-        )
-
-    def test_copy_file_with_exact_name(self):
-        content = ContentFile(b"data", name="orig.txt")
-        orig = FileService.create_file(
-            self.user, "orig.txt", content=content, mime_type="text/plain"
-        )
-        copy = _copy_as(orig, None, self.user, "renamed.txt")
-        self.assertEqual(copy.name, "renamed.txt")
-        self.assertNotEqual(copy.pk, orig.pk)
-        self.assertEqual(copy.mime_type, "text/plain")
-
-    def test_copy_file_without_content(self):
-        orig = FileService.create_file(self.user, "empty.txt", mime_type="text/plain")
-        copy = _copy_as(orig, None, self.user, "empty_copy.txt")
-        self.assertEqual(copy.name, "empty_copy.txt")
-
-    def test_copy_into_folder(self):
-        target = FileService.create_folder(self.user, "Target")
-        content = ContentFile(b"x", name="x.txt")
-        orig = FileService.create_file(
-            self.user, "x.txt", content=content, mime_type="text/plain"
-        )
-        copy = _copy_as(orig, target, self.user, "y.txt")
-        self.assertEqual(copy.parent, target)
-        self.assertEqual(copy.name, "y.txt")
 
 
 class StreamingWriteBufferTests(TestCase):

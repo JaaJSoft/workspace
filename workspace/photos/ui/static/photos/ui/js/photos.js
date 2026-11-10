@@ -64,8 +64,6 @@ const SENSITIVE_MARKED_LEVEL = 4;
 
 // The actions endpoint refuses more than 200 uuids per call.
 const PHOTOS_ACTIONS_BATCH = 200;
-// Writes on a selection go out this many at a time.
-const PHOTOS_WRITE_BATCH = 6;
 
 // The album actions its header menu offers: the ones on the album as a whole.
 // The rest (add, remove, cover, reorder) gate controls elsewhere on the page.
@@ -899,11 +897,8 @@ window.photosApp = function photosApp() {
 
     async toggleFavorite(uuid, isFavorite) {
       try {
-        const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
-          method: isFavorite ? 'DELETE' : 'POST',
-          headers: { 'X-CSRFToken': getCSRFToken() },
-        });
-        if (!response.ok) throw new Error();
+        const done = await window.fileActions.setFavorite([uuid], !isFavorite);
+        if (!done.length) throw new Error();
         const tile = this._tile(uuid);
         if (tile) tile.dataset.favorite = isFavorite ? '0' : '1';
         this._forgetActions([uuid]);
@@ -962,13 +957,13 @@ window.photosApp = function photosApp() {
         iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
+      let report = null;
       try {
-        const response = await fetch(`/api/v1/files/${uuid}`, {
-          method: 'DELETE',
-          headers: { 'X-CSRFToken': getCSRFToken() },
-        });
-        if (!response.ok) throw new Error();
+        report = await window.fileOperations.run('trash', [uuid]);
       } catch (_) {
+        // Reported below, like an item the server turned down.
+      }
+      if (!report || !window.operationDoneUuids(report, [uuid]).length) {
         window.AppAlert.error('Failed to move the photo to the trash');
         return;
       }
@@ -1207,17 +1202,6 @@ window.photosApp = function photosApp() {
       return this.selectionAllows('download');
     },
 
-    // One request per photo, a few at a time. Resolves to the uuids the
-    // server accepted.
-    async _eachPhoto(uuids, request) {
-      const done = [];
-      for (const batch of photosBatches(uuids, PHOTOS_WRITE_BATCH)) {
-        const accepted = await Promise.all(batch.map((uuid) => request(uuid).then((r) => r.ok, () => false)));
-        batch.forEach((uuid, i) => { if (accepted[i]) done.push(uuid); });
-      }
-      return done;
-    },
-
     _reportEach(done, total, success, failure) {
       if (done === total) {
         window.AppAlert.success(success, { duration: 2500 });
@@ -1235,10 +1219,7 @@ window.photosApp = function photosApp() {
       const uuids = this.selection.slice();
       const add = action.add;
       this.selectionBusy = true;
-      const done = await this._eachPhoto(uuids, (uuid) => fetch(`/api/v1/files/${uuid}/favorite`, {
-        method: add ? 'POST' : 'DELETE',
-        headers: { 'X-CSRFToken': getCSRFToken() },
-      }));
+      const done = await window.fileActions.setFavorite(uuids, add).catch(() => []);
       this.selectionBusy = false;
       done.forEach((uuid) => {
         const tile = this._tile(uuid);
@@ -1309,10 +1290,12 @@ window.photosApp = function photosApp() {
       });
       if (!ok) return;
       this.selectionBusy = true;
-      const done = await this._eachPhoto(uuids, (uuid) => fetch(`/api/v1/files/${uuid}`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCSRFToken() },
-      }));
+      let done = [];
+      try {
+        done = window.operationDoneUuids(await window.fileOperations.run('trash', uuids), uuids);
+      } catch (_) {
+        // Nothing went: reported below.
+      }
       this.selectionBusy = false;
       if (done.includes(this.propertiesUuid)) this.closePropertiesPanel();
       this._removeTiles(done);

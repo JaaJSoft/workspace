@@ -7,12 +7,24 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
 
 class CopyAPITests(APITestCase):
-    """Tests for the copy endpoint."""
+    """Copies through the batch operations API."""
+
+    def copy(self, node, target=None):
+        return run_operation(self.client, "copy", [node], target)
+
+    def copy_of(self, node, parent=None):
+        """The one row the copy of *node* left under *parent*."""
+        return File.objects.exclude(pk=node.pk).get(
+            parent=parent,
+            node_type=node.node_type,
+            name__startswith=node.name.split(".")[0],
+        )
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -29,11 +41,9 @@ class CopyAPITests(APITestCase):
             mime_type="text/plain",
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{file.uuid}/copy", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn("Copy", response.data["name"])
+        response = self.copy(file)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
+        self.assertIn("Copy", self.copy_of(file).name)
 
         # Verify original still exists
         file.refresh_from_db()
@@ -48,13 +58,9 @@ class CopyAPITests(APITestCase):
             owner=self.user, name="file.txt", node_type=File.NodeType.FILE
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{file.uuid}/copy",
-            {"parent": str(folder.uuid)},
-            format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(str(response.data["parent"]), str(folder.uuid))
+        response = self.copy(file, folder)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
+        self.assertEqual(self.copy_of(file, folder).name, "file.txt")
 
     def test_copy_file_with_content(self):
         """Test copying a file preserves content."""
@@ -68,13 +74,10 @@ class CopyAPITests(APITestCase):
         file.size = 12
         file.save()
 
-        response = self.client.post(
-            f"/api/v1/files/{file.uuid}/copy", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.copy(file)
 
         # Verify copy has content
-        copy = File.objects.get(uuid=response.data["uuid"])
+        copy = self.copy_of(file)
         self.assertEqual(copy.size, 12)
         self.assertTrue(copy.content)
 
@@ -141,14 +144,9 @@ class CopyAPITests(APITestCase):
         file.size = 13
         file.save()
 
-        response = self.client.post(
-            f"/api/v1/files/{file.uuid}/copy",
-            {"parent": None},
-            format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.copy(file)
 
-        copy = File.objects.get(uuid=response.data["uuid"])
+        copy = self.copy_of(file)
         self.assertNotEqual(copy.content.name, file.content.name)
         with copy.content.open("rb") as f:
             self.assertEqual(f.read(), b"payload-bytes")
@@ -159,11 +157,9 @@ class CopyAPITests(APITestCase):
             owner=self.user, name="EmptyFolder", node_type=File.NodeType.FOLDER
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{folder.uuid}/copy", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn("Copy", response.data["name"])
+        response = self.copy(folder)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
+        self.assertIn("Copy", self.copy_of(folder).name)
 
     def test_copy_folder_with_children(self):
         """Test copying a folder with children copies recursively."""
@@ -189,13 +185,10 @@ class CopyAPITests(APITestCase):
             parent=child2,
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{folder.uuid}/copy", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.copy(folder)
 
         # Get the copied folder
-        copied_folder = File.objects.get(uuid=response.data["uuid"])
+        copied_folder = self.copy_of(folder)
 
         # Verify children were copied
         copied_children = File.objects.filter(parent=copied_folder)
@@ -216,12 +209,9 @@ class CopyAPITests(APITestCase):
             owner=self.user, name="conflict (Copy).txt", node_type=File.NodeType.FILE
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{file.uuid}/copy", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.copy(file)
         # Should have "Copy 2" in name
-        self.assertIn("Copy 2", response.data["name"])
+        self.assertTrue(File.objects.filter(name="conflict (Copy 2).txt").exists())
 
     def test_cannot_copy_folder_into_itself(self):
         """Test that copying a folder into itself fails."""
@@ -229,10 +219,10 @@ class CopyAPITests(APITestCase):
             owner=self.user, name="Folder", node_type=File.NodeType.FOLDER
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{folder.uuid}/copy", {"parent": str(folder.uuid)}
+        response = self.copy(folder, folder)
+        self.assertEqual(
+            outcome_of(response), ({"failed": 1}, [("Folder", "into_itself")])
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_cannot_copy_folder_into_descendant(self):
         """Test that copying a folder into its descendant fails."""
@@ -243,10 +233,10 @@ class CopyAPITests(APITestCase):
             owner=self.user, name="Child", node_type=File.NodeType.FOLDER, parent=folder
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{folder.uuid}/copy", {"parent": str(child.uuid)}
+        response = self.copy(folder, child)
+        self.assertEqual(
+            outcome_of(response), ({"failed": 1}, [("Parent", "into_itself")])
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_copy_into_group_subfolder_owned_by_another_member(self):
         """Regression: a group member must be able to copy into a folder
@@ -280,12 +270,11 @@ class CopyAPITests(APITestCase):
             mime_type="text/plain",
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{my_file.uuid}/copy",
-            {"parent": str(group_sub.uuid)},
-            format="json",
+        response = self.copy(my_file, group_sub)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
+        self.assertTrue(
+            File.objects.filter(parent=group_sub, name="draft.txt").exists()
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_copy_with_malformed_parent_uuid_returns_400(self):
         """Garbage parent UUID returns 400 via parse_uuid_or_none, not 500."""
@@ -296,11 +285,7 @@ class CopyAPITests(APITestCase):
             mime_type="text/plain",
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{my_file.uuid}/copy",
-            {"parent": "not-a-uuid"},
-            format="json",
-        )
+        response = self.copy(my_file, "not-a-uuid")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_copy_into_unrelated_user_folder_still_400(self):
@@ -319,12 +304,9 @@ class CopyAPITests(APITestCase):
             mime_type="text/plain",
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{my_file.uuid}/copy",
-            {"parent": str(their_folder.uuid)},
-            format="json",
-        )
+        response = self.copy(my_file, their_folder)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(File.objects.filter(parent=their_folder).exists())
 
     def test_copy_preserves_icon_and_color(self):
         """Test that copying preserves folder icon and color."""
@@ -336,9 +318,7 @@ class CopyAPITests(APITestCase):
             color="text-error",
         )
 
-        response = self.client.post(
-            f"/api/v1/files/{folder.uuid}/copy", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["icon"], "briefcase")
-        self.assertEqual(response.data["color"], "text-error")
+        self.copy(folder)
+        copy = self.copy_of(folder)
+        self.assertEqual(copy.icon, "briefcase")
+        self.assertEqual(copy.color, "text-error")

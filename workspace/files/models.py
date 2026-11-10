@@ -1046,23 +1046,11 @@ def unindex_file_on_delete(sender, instance, **kwargs):
 
 @receiver(pre_delete, sender="auth.Group")
 def soft_delete_group_files(sender, instance, **kwargs):
-    """Soft-delete all files belonging to this group before it is deleted.
+    """Trash all files belonging to this group before it is deleted."""
+    # Imported lazily: the services package imports this module.
+    from workspace.files.services import FileService
 
-    Through the root folders rather than in one queryset update: trashing a
-    node moves its bytes out of the live tree, and only the model method
-    does that.
-    """
-    now = timezone.now()
-    roots = File.objects.filter(
-        group=instance,
-        deleted_at__isnull=True,
-        parent__isnull=True,
-    ).select_related("owner")
-    for root in roots:
-        root.soft_delete(deleted_at=now)
-    # Anything the group owns outside those roots (legacy rows re-parented by
-    # hand) still has to leave the live listing.
-    File.objects.filter(group=instance, deleted_at__isnull=True).update(deleted_at=now)
+    FileService.trash_group_files(instance)
 
 
 def _generate_share_link_token():
@@ -1688,3 +1676,82 @@ class UploadSession(models.Model):
 
     def __str__(self):
         return f"{self.name}: {self.received}/{self.size}"
+
+
+class FileOperation(models.Model):
+    """A batch of file manipulations run off-request, one item at a time.
+
+    The row is both the work order and its report: ``items`` is what was
+    asked, ``processed`` how far the runner got, ``counts`` and ``errors``
+    what became of each item. An item that cannot go through is recorded and
+    the rest carries on, so an operation ends ``completed`` whenever it reached
+    the end of its list; ``failed`` means the run itself was lost.
+
+    ``pending`` is waiting in the queue for a worker - before its first slice
+    and between two - and ``running`` is in a worker's hands right now.
+    """
+
+    class Kind(models.TextChoices):
+        MOVE = "move", "Move"
+        COPY = "copy", "Copy"
+        TRASH = "trash", "Trash"
+        RESTORE = "restore", "Restore"
+        PURGE = "purge", "Purge"
+        EMPTY_TRASH = "empty_trash", "Empty trash"
+        EXTRACT = "extract", "Extract"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    ACTIVE_STATUSES = (Status.PENDING, Status.RUNNING)
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="file_operations"
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    # Not a foreign key: a folder deleted while the operation waits must read
+    # as "gone", and a column emptied by SET_NULL would read as "the root".
+    target_uuid = models.UUIDField(null=True, blank=True)
+    target_name = models.CharField(max_length=255, blank=True, default="")
+    # [{"uuid": ..., "on_conflict": ...}], in the order they are processed.
+    items = models.JSONField(default=list)
+    total = models.PositiveIntegerField(default=0)
+    processed = models.PositiveIntegerField(default=0)
+    # Only a copy measures bytes; null until the runner has sized the batch.
+    bytes_total = models.BigIntegerField(null=True, blank=True)
+    bytes_done = models.BigIntegerField(default=0)
+    # {outcome: number of items}, the outcomes being those of
+    # ``services.transfers.Outcome`` plus "failed".
+    counts = models.JSONField(default=dict)
+    # [{"uuid": ..., "name": ..., "reason": ...}], capped by the runner.
+    errors = models.JSONField(default=list)
+    cancel_requested_at = models.DateTimeField(null=True, blank=True)
+    # Moved by the runner as it works: what the recovery sweep measures a lost
+    # run from.
+    heartbeat_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "-created_at"], name="file_op_owner_created"),
+            models.Index(fields=["status", "heartbeat_at"], name="file_op_status_beat"),
+        ]
+
+    def __str__(self):
+        return f"{self.kind} {self.processed}/{self.total} ({self.status})"
+
+    @property
+    def is_active(self):
+        return self.status in self.ACTIVE_STATUSES

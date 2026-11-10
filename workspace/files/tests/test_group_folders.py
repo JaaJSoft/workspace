@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.files.ui.views import build_breadcrumbs
 
 User = get_user_model()
@@ -601,8 +602,8 @@ class GroupFolderViewSetTests(APITestCase):
             mime_type="text/plain",
         )
         self.client.force_authenticate(user=self.bob)
-        resp = self.client.delete(f"/api/v1/files/{child.uuid}")
-        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        resp = run_operation(self.client, "trash", [child])
+        self.assertEqual(outcome_of(resp), ({"done": 1}, []))
 
     def test_bob_can_rename_group_file(self):
         child = File.objects.create(

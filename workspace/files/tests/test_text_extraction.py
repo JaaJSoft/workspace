@@ -182,10 +182,13 @@ class ExtractTextTests(TestCase):
 
     def test_binary_content_declared_as_text_indexes_nothing(self):
         # A file whose type is wrong should not put its bytes in the index.
-        import os
+        import random
 
+        # Seeded: a few fresh random bytes now and then carry a real format's
+        # signature, and the parser then reads that format out of them.
+        noise = random.Random(4096).randbytes(4096)
         for label, payload in (
-            ("random", os.urandom(4096)),
+            ("random", noise),
             ("nul bytes", b"\x00" * 2048),
         ):
             with self.subTest(label=label):

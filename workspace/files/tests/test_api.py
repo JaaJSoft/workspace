@@ -1,10 +1,17 @@
+import uuid
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.files.models import File
+from workspace.files.models import File, FileShare
+from workspace.files.services import FileService
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -273,14 +280,52 @@ class FileAPITests(APITestCase):
             parent=folder1,
         )
 
-        response = self.client.patch(
-            f"/api/v1/files/{file.uuid}", {"parent": str(folder2.uuid)}
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(str(response.data["parent"]), str(folder2.uuid))
+        response = run_operation(self.client, "move", [file], folder2)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         file.refresh_from_db()
         self.assertEqual(file.path, "Folder2/file.txt")
+
+    def test_patch_refuses_to_move(self):
+        """Moves go through operations: a PATCH that changes the parent is refused."""
+        folder = File.objects.create(
+            owner=self.user, name="Folder", node_type=File.NodeType.FOLDER
+        )
+        file = File.objects.create(
+            owner=self.user, name="file.txt", node_type=File.NodeType.FILE
+        )
+
+        response = self.client.patch(
+            f"/api/v1/files/{file.uuid}",
+            {"parent": str(folder.uuid), "name": "renamed.txt"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("parent", response.json())
+        file.refresh_from_db()
+        self.assertEqual((file.parent_id, file.name), (None, "file.txt"))
+
+    def test_patch_accepts_the_parent_it_already_has(self):
+        folder = File.objects.create(
+            owner=self.user, name="Folder", node_type=File.NodeType.FOLDER
+        )
+        file = File.objects.create(
+            owner=self.user,
+            name="file.txt",
+            node_type=File.NodeType.FILE,
+            parent=folder,
+        )
+
+        response = self.client.patch(
+            f"/api/v1/files/{file.uuid}",
+            {"parent": str(folder.uuid), "name": "renamed.txt"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        file.refresh_from_db()
+        self.assertEqual((file.parent_id, file.name), (folder.pk, "renamed.txt"))
 
     def test_patch_same_parent_is_noop(self):
         """PATCH with the file's existing parent must succeed without error.
@@ -310,54 +355,6 @@ class FileAPITests(APITestCase):
         file.refresh_from_db()
         self.assertEqual(file.parent_id, folder.uuid)
 
-    def test_patch_parent_and_content_together(self):
-        """A single PATCH with both `parent` and `content` must apply both.
-
-        Order matters in the serializer: move runs first (so the file's
-        storage path resolves under the new parent), then content is
-        written. Regression guard: a previous arrangement could leave the
-        new bytes at the old storage path or skip the move entirely.
-        """
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
-        src = File.objects.create(
-            owner=self.user,
-            name="Src",
-            node_type=File.NodeType.FOLDER,
-        )
-        dest = File.objects.create(
-            owner=self.user,
-            name="Dest",
-            node_type=File.NodeType.FOLDER,
-        )
-        file = File.objects.create(
-            owner=self.user,
-            name="note.txt",
-            node_type=File.NodeType.FILE,
-            parent=src,
-        )
-        file.content = ContentFile(b"old", name="note.txt")
-        file.save()
-
-        new_content = SimpleUploadedFile(
-            "note.txt",
-            b"new bytes here",
-            content_type="text/plain",
-        )
-        response = self.client.patch(
-            f"/api/v1/files/{file.uuid}",
-            {"parent": str(dest.uuid), "content": new_content},
-            format="multipart",
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        file.refresh_from_db()
-        self.assertEqual(file.parent_id, dest.uuid)
-        self.assertEqual(file.size, len(b"new bytes here"))
-        # Read back to confirm the bytes actually live at the storage path
-        # the row points at - not at the old src/ location.
-        with file.content.storage.open(file.content.name, "rb") as fh:
-            self.assertEqual(fh.read(), b"new bytes here")
-
     def test_move_file_to_root(self):
         """Test moving a file to root (parent=null)."""
         folder = File.objects.create(
@@ -370,11 +367,8 @@ class FileAPITests(APITestCase):
             parent=folder,
         )
 
-        response = self.client.patch(
-            f"/api/v1/files/{file.uuid}", {"parent": None}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIsNone(response.data["parent"])
+        response = run_operation(self.client, "move", [file], None)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         file.refresh_from_db()
         self.assertEqual(file.path, "file.txt")
@@ -384,11 +378,84 @@ class FileAPITests(APITestCase):
         file = File.objects.create(
             owner=self.user, name="todelete.txt", node_type=File.NodeType.FILE
         )
-        response = self.client.delete(f"/api/v1/files/{file.uuid}")
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        response = run_operation(self.client, "trash", [file])
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         file.refresh_from_db()
         self.assertIsNotNone(file.deleted_at)
+
+    def test_renaming_a_folder_onto_another_folders_name_says_so(self):
+        File.objects.create(
+            owner=self.user, name="Taken", node_type=File.NodeType.FOLDER
+        )
+        folder = File.objects.create(
+            owner=self.user, name="Mine", node_type=File.NodeType.FOLDER
+        )
+
+        response = self.client.patch(
+            f"/api/v1/files/{folder.uuid}", {"name": "Taken"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()["name"],
+            ["A folder with the same name already exists in this folder."],
+        )
+
+    def test_delete_trashes_one_item(self):
+        file = File.objects.create(
+            owner=self.user, name="gone.txt", node_type=File.NodeType.FILE
+        )
+
+        response = self.client.delete(f"/api/v1/files/{file.uuid}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        file.refresh_from_db()
+        self.assertIsNotNone(file.deleted_at)
+
+    def test_delete_refuses_a_file_someone_else_is_editing(self):
+        other = User.objects.create_user(username="editor", password="pw")
+        file = File.objects.create(
+            owner=self.user, name="busy.txt", node_type=File.NodeType.FILE
+        )
+        File.objects.filter(pk=file.pk).update(
+            locked_by=other,
+            locked_at=timezone.now(),
+            lock_expires_at=timezone.now() + timedelta(minutes=5),
+        )
+
+        response = self.client.delete(f"/api/v1/files/{file.uuid}")
+
+        self.assertEqual(response.status_code, 423)
+        file.refresh_from_db()
+        self.assertIsNone(file.deleted_at)
+
+    def test_delete_refuses_a_groups_root_folder(self):
+        group = Group.objects.create(name="Design")
+        self.user.groups.add(group)
+        root = FileService.create_folder(self.user, "Design", group=group)
+
+        response = self.client.delete(f"/api/v1/files/{root.uuid}")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        root.refresh_from_db()
+        self.assertIsNone(root.deleted_at)
+
+    def test_delete_of_a_file_out_of_reach_answers_like_a_missing_one(self):
+        other = User.objects.create_user(username="other", password="pw")
+        theirs = File.objects.create(
+            owner=other, name="theirs.txt", node_type=File.NodeType.FILE
+        )
+        FileShare.objects.create(file=theirs, shared_by=other, shared_with=self.user)
+
+        hidden = self.client.delete(f"/api/v1/files/{theirs.uuid}")
+        absent = self.client.delete(f"/api/v1/files/{uuid.uuid4()}")
+
+        self.assertEqual(
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
+        )
+        theirs.refresh_from_db()
+        self.assertIsNone(theirs.deleted_at)
 
     def test_cannot_access_other_user_files(self):
         """Test that users cannot access other users' files."""

@@ -23,6 +23,8 @@ from workspace.files import tasks as files_tasks
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.services._trash import trash_dir
+from workspace.files.tasks import purge_trash
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -84,10 +86,9 @@ class HardDeleteBatchingTests(APITestCase):
         self.assertTrue(default_storage.is_dir(self._trash_dir_on_disk(root)))
 
         with collector_peak() as state:
-            response = self.client.delete("/api/v1/files/trash/clean?force=1")
+            response = run_operation(self.client, "empty_trash")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["deleted"], tree_size)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertLessEqual(state["peak"], BATCH_SIZE)
         self.assertFalse(File.objects.filter(owner=self.user).exists())
         self.assertFalse(default_storage.exists(self._trash_dir_on_disk(root)))
@@ -100,9 +101,9 @@ class HardDeleteBatchingTests(APITestCase):
         recent = self._build_tree("Recent")
 
         with collector_peak() as state:
-            response = self.client.delete("/api/v1/files/trash/clean")
+            result = purge_trash.apply().get()
 
-        self.assertEqual(response.data["deleted"], 111)
+        self.assertEqual(result["files_deleted"] + result["folders_deleted"], 111)
         self.assertLessEqual(state["peak"], BATCH_SIZE)
         self.assertFalse(File.objects.filter(pk=old.pk).exists())
         self.assertEqual(File.objects.filter(owner=self.user).count(), 111)
@@ -112,9 +113,9 @@ class HardDeleteBatchingTests(APITestCase):
         root = self._build_tree()
 
         with collector_peak() as state:
-            response = self.client.delete(f"/api/v1/files/{root.uuid}/purge")
+            response = run_operation(self.client, "purge", [root])
 
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertLessEqual(state["peak"], BATCH_SIZE)
         self.assertFalse(File.objects.filter(owner=self.user).exists())
         self.assertFalse(default_storage.exists(self._trash_dir_on_disk(root)))

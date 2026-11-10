@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 15:28+0000\n"
+"POT-Creation-Date: 2026-11-10 05:54+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -182,8 +182,11 @@ msgstr "Le fichier est verrouillé par un autre utilisateur."
 msgid "The file changed since it was loaded."
 msgstr "Le fichier a changé depuis son chargement."
 
-#: serializers.py views/share_links.py viewsets/content.py viewsets/copy.py
-#: viewsets/extract.py
+#: serializers.py
+msgid "Renaming this file is not allowed."
+msgstr "Le renommage de ce fichier n’est pas autorisé."
+
+#: serializers.py views/share_links.py viewsets/content.py
 msgid "File is quarantined."
 msgstr "Le fichier est en quarantaine."
 
@@ -207,6 +210,10 @@ msgstr ""
 "Les noms de fichiers et de dossiers ne doivent pas être « . » ou « .. »."
 
 #: serializers.py
+msgid "Move items through /api/v1/files/operations."
+msgstr "Déplacez des éléments via /api/v1/files/operations."
+
+#: serializers.py
 msgid "A shortcut has no content."
 msgstr "Un raccourci n’a pas de contenu."
 
@@ -214,11 +221,7 @@ msgstr "Un raccourci n’a pas de contenu."
 msgid "Content is required to replace the existing file."
 msgstr "Un contenu est requis pour remplacer le fichier existant."
 
-#: serializers.py viewsets/copy.py
-msgid "This file has no content to replace the existing one with."
-msgstr "Ce fichier n’a aucun contenu pour remplacer le fichier existant."
-
-#: serializers.py services/_names.py viewsets/copy.py
+#: serializers.py services/_names.py
 msgid "A file with the same name already exists in this folder."
 msgstr "Un fichier portant le même nom existe déjà dans ce dossier."
 
@@ -238,6 +241,87 @@ msgstr "Un raccourci ne peut pas remplacer un fichier."
 msgid "A shortcut goes in a folder of the group."
 msgstr "Un raccourci se place dans un dossier du groupe."
 
+#: serializers.py
+msgid "This item no longer exists."
+msgstr "Cet élément n’existe plus."
+
+#: serializers.py
+msgid "This item took too long and was left as it was."
+msgstr "Cet élément a pris trop de temps et a été laissé tel quel."
+
+#: serializers.py
+msgid "Something went wrong with this item."
+msgstr "Un problème est survenu avec cet élément."
+
+#: serializers.py
+msgid "You are not allowed to do this with this item."
+msgstr "Vous n’êtes pas autorisé à faire cela avec cet élément."
+
+#: serializers.py
+msgid "The destination folder is no longer available."
+msgstr "Le dossier de destination n’est plus disponible."
+
+#: serializers.py
+msgid "A folder cannot go inside itself."
+msgstr "Un dossier ne peut pas être placé dans lui-même."
+
+#: serializers.py
+msgid "The destination already holds an item with this name."
+msgstr "La destination contient déjà un élément portant ce nom."
+
+#: serializers.py
+msgid "This file has no content to copy."
+msgstr "Ce fichier n’a pas de contenu à copier."
+
+#: serializers.py
+msgid "The file is locked by someone else."
+msgstr "Le fichier est verrouillé par quelqu’un d’autre."
+
+#: serializers.py
+msgid "The existing file changed in the meantime."
+msgstr "Le fichier existant a changé entre-temps."
+
+#: serializers.py
+msgid "There is not enough storage space left."
+msgstr "Il ne reste pas assez d’espace de stockage."
+
+#: serializers.py
+msgid "The root folder of a group stays where it is."
+msgstr "Le dossier racine d’un groupe reste où il est."
+
+#: serializers.py
+msgid "The archive is too large to extract."
+msgstr "L’archive est trop volumineuse pour être extraite."
+
+#: serializers.py
+msgid "The archive holds too many entries to extract."
+msgstr "L’archive contient trop d’entrées pour être extraite."
+
+#: serializers.py
+msgid "The archive cannot be read."
+msgstr "L’archive ne peut pas être lue."
+
+#: serializers.py
+msgid "This kind of operation has no destination."
+msgstr "Ce type d’opération n’a pas de destination."
+
+#: serializers.py
+msgid "Emptying the trash takes no items."
+msgstr "Vider la corbeille ne prend aucun élément."
+
+#: serializers.py
+msgid "Pick at least one item."
+msgstr "Choisissez au moins un élément."
+
+#: serializers.py
+msgid "An item is listed twice."
+msgstr "Un élément figure deux fois dans la liste."
+
+#: serializers.py
+msgid "Only a move or a copy takes a conflict choice."
+msgstr ""
+"Seuls un déplacement ou une copie acceptent un choix en cas de conflit."
+
 #: serializers_tags.py
 msgid "A tag with this name already exists."
 msgstr "Une étiquette portant ce nom existe déjà."
@@ -253,6 +337,11 @@ msgstr "Impossible de déplacer un dossier dans lui-même."
 #: services/_names.py
 msgid "Cannot move a folder into one of its descendants."
 msgstr "Impossible de déplacer un dossier dans l’un de ses sous-dossiers."
+
+#: services/announcements.py views/files.py
+#, python-format
+msgid "%(actor)s edited \"%(name)s\""
+msgstr "%(actor)s a modifié « %(name)s »"
 
 #: services/comments.py
 #, python-format
@@ -272,7 +361,7 @@ msgstr "Le dossier racine d’un groupe ne peut pas être déplacé."
 msgid "A group's root folder cannot be renamed."
 msgstr "Le dossier racine d’un groupe ne peut pas être renommé."
 
-#: services/files.py views/files.py
+#: services/files.py
 msgid "A group's root folder cannot be deleted."
 msgstr "Le dossier racine d’un groupe ne peut pas être supprimé."
 
@@ -380,6 +469,11 @@ msgstr "Autres"
 #: services/storage_analysis.py
 msgid "Files in this folder"
 msgstr "Fichiers de ce dossier"
+
+#: services/trash.py
+#, python-format
+msgid "%(actor)s deleted \"%(name)s\""
+msgstr "%(actor)s a supprimé « %(name)s »"
 
 #: signals.py
 #, python-format
@@ -720,7 +814,7 @@ msgid "Ask me"
 msgstr "Me demander"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
-#: ui/templates/files/ui/partials/upload_panel.html
+#: ui/templates/files/ui/partials/operations_panel.html
 msgid "Keep both"
 msgstr "Conserver les deux"
 
@@ -1349,6 +1443,81 @@ msgstr "Téléverser un dossier"
 msgid "Upload entire folder"
 msgstr "Téléverser un dossier entier"
 
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "%%(loaded)s of %%(total)s - %%(percent)s"
+msgstr "%%(loaded)s sur %%(total)s - %%(percent)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Expand"
+msgstr "Développer"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "%%(count)s uploads failed"
+msgstr "%%(count)s téléversements ont échoué"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "%%(count)s uploads match existing files"
+msgstr "%%(count)s téléversements correspondent à des fichiers existants"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Cancel %%(name)s"
+msgstr "Annuler %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Retry %%(name)s"
+msgstr "Réessayer %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Cancel: %%(name)s"
+msgstr "Annuler : %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+#, python-format
+msgid "Dismiss: %%(name)s"
+msgstr "Masquer : %%(name)s"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Unnamed item"
+msgstr "Élément sans nom"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Operations"
+msgstr "Opérations"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Pause uploads"
+msgstr "Mettre en pause les téléversements"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Resume uploads"
+msgstr "Reprendre les téléversements"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Close operations"
+msgstr "Fermer les opérations"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Retry all"
+msgstr "Tout réessayer"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Discard all"
+msgstr "Tout abandonner"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Keep all"
+msgstr "Tout conserver"
+
+#: ui/templates/files/ui/partials/operations_panel.html
+msgid "Discard upload"
+msgstr "Abandonner le téléversement"
+
 #: ui/templates/files/ui/partials/pinned_folders.html
 msgid "No pinned folders"
 msgstr "Aucun dossier épinglé"
@@ -1906,67 +2075,6 @@ msgstr "Gérer les étiquettes"
 msgid "No favorite tags"
 msgstr "Aucune étiquette favorite"
 
-#: ui/templates/files/ui/partials/upload_panel.html
-#, python-format
-msgid "%%(loaded)s of %%(total)s - %%(percent)s"
-msgstr "%%(loaded)s sur %%(total)s - %%(percent)s"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Expand"
-msgstr "Développer"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-#, python-format
-msgid "%%(count)s uploads failed"
-msgstr "%%(count)s téléversements ont échoué"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-#, python-format
-msgid "%%(count)s uploads match existing files"
-msgstr "%%(count)s téléversements correspondent à des fichiers existants"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-#, python-format
-msgid "Cancel %%(name)s"
-msgstr "Annuler %%(name)s"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-#, python-format
-msgid "Retry %%(name)s"
-msgstr "Réessayer %%(name)s"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Uploads"
-msgstr "Téléversements"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Pause uploads"
-msgstr "Mettre en pause les téléversements"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Resume uploads"
-msgstr "Reprendre les téléversements"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Close uploads"
-msgstr "Fermer les téléversements"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Retry all"
-msgstr "Tout réessayer"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Discard all"
-msgstr "Tout abandonner"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Keep all"
-msgstr "Tout conserver"
-
-#: ui/templates/files/ui/partials/upload_panel.html
-msgid "Discard upload"
-msgstr "Abandonner le téléversement"
-
 #: ui/templates/files/ui/shared_base.html
 msgid "Link expired"
 msgstr "Lien expiré"
@@ -2437,13 +2545,8 @@ msgid "The malware scanner blocked this file."
 msgstr "L’analyseur antivirus a bloqué ce fichier."
 
 #: views/files.py
-#, python-format
-msgid "%(actor)s edited \"%(name)s\""
-msgstr "%(actor)s a modifié « %(name)s »"
-
-#: views/files.py
-msgid "Renaming this file is not allowed."
-msgstr "Le renommage de ce fichier n’est pas autorisé."
+msgid "This item cannot be moved to the trash."
+msgstr "Cet élément ne peut pas être mis à la corbeille."
 
 #: views/files.py
 msgid "Shared write access only allows updating file content."
@@ -2451,10 +2554,21 @@ msgstr ""
 "L’accès en écriture partagé permet uniquement de mettre à jour le contenu du "
 "fichier."
 
-#: views/files.py
-#, python-format
-msgid "%(actor)s deleted \"%(name)s\""
-msgstr "%(actor)s a supprimé « %(name)s »"
+#: views/operations.py
+msgid "No such operation."
+msgstr "Cette opération n’existe pas."
+
+#: views/operations.py views/uploads.py
+msgid "Folder not found."
+msgstr "Dossier introuvable."
+
+#: views/operations.py
+msgid "Too many operations in progress. Wait for one to finish."
+msgstr "Trop d’opérations en cours. Attendez que l’une d’elles se termine."
+
+#: views/operations.py
+msgid "The operation is still in progress."
+msgstr "L’opération est encore en cours."
 
 #: views/share_links.py
 msgid "This share link has expired."
@@ -2493,10 +2607,6 @@ msgid "The folder this upload goes to no longer exists."
 msgstr "Le dossier de destination de ce téléversement n’existe plus."
 
 #: views/uploads.py
-msgid "Folder not found."
-msgstr "Dossier introuvable."
-
-#: views/uploads.py
 msgid "The uploaded file no longer exists."
 msgstr "Le fichier téléversé n’existe plus."
 
@@ -2519,35 +2629,6 @@ msgstr "Commentaire introuvable."
 #: viewsets/comments.py
 msgid "You can only modify your own comments."
 msgstr "Vous ne pouvez modifier que vos propres commentaires."
-
-#: viewsets/copy.py
-msgid "Copying this item is not allowed."
-msgstr "La copie de cet élément n’est pas autorisée."
-
-#: viewsets/copy.py
-msgid "Parent folder not found."
-msgstr "Dossier parent introuvable."
-
-#: viewsets/copy.py
-msgid "Cannot copy folder into itself or its descendants."
-msgstr ""
-"Impossible de copier un dossier dans lui-même ou dans ses sous-dossiers."
-
-#: viewsets/extract.py
-msgid "Destination folder not found."
-msgstr "Dossier de destination introuvable."
-
-#: viewsets/extract.py
-msgid "Archive too large."
-msgstr "Archive trop volumineuse."
-
-#: viewsets/extract.py
-msgid "Too many entries in archive."
-msgstr "Trop d’entrées dans l’archive."
-
-#: viewsets/extract.py
-msgid "Invalid request."
-msgstr "Requête invalide."
 
 #: viewsets/share.py
 msgid "Only files can be shared."

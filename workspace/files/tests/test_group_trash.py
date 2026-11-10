@@ -14,6 +14,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FilePermission, FileService
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -52,9 +53,9 @@ class GroupTrashTests(APITestCase):
         return node.deleted_at is None
 
     def test_a_member_restores_a_node_another_member_trashed(self):
-        response = self.client.post(f"/api/v1/files/{self.loose.uuid}/restore")
+        response = run_operation(self.client, "restore", [self.loose])
 
-        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertTrue(self._live(self.loose))
         self.assertEqual(self.loose.parent_id, self.root.pk)
 
@@ -62,17 +63,17 @@ class GroupTrashTests(APITestCase):
         FileService.soft_delete(self.folder, acting_user=self.bob)
         self.doc.refresh_from_db()
 
-        response = self.client.post(f"/api/v1/files/{self.doc.uuid}/restore")
+        response = run_operation(self.client, "restore", [self.doc])
 
-        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertTrue(self._live(self.doc))
         self.assertTrue(self._live(self.folder))
         self.assertEqual(self.doc.parent_id, self.folder.pk)
 
     def test_a_member_purges_a_node_another_member_trashed(self):
-        response = self.client.delete(f"/api/v1/files/{self.loose.uuid}/purge")
+        response = run_operation(self.client, "purge", [self.loose])
 
-        self.assertEqual(response.status_code, 204, response.content)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertFalse(File.objects.filter(pk=self.loose.pk).exists())
 
     def test_the_trash_lists_the_groups_trashed_nodes(self):
@@ -94,9 +95,9 @@ class GroupTrashTests(APITestCase):
         )
         FileService.soft_delete(mine, acting_user=self.alice)
 
-        response = self.client.delete("/api/v1/files/trash/clean?force=true")
+        response = run_operation(self.client, "empty_trash")
 
-        self.assertEqual(response.json()["deleted"], 1)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         self.assertFalse(File.objects.filter(pk=mine.pk).exists())
         self.assertTrue(File.objects.filter(pk=self.loose.pk).exists())
 

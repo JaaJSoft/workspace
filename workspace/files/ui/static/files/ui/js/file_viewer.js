@@ -338,11 +338,8 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       const isFavorite = !this.isFavorite;
       this._favoriteBusy = true;
       try {
-        const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
-          method: isFavorite ? 'POST' : 'DELETE',
-          headers: { 'X-CSRFToken': getCSRFToken() },
-        });
-        if (!response.ok) throw new Error();
+        const done = await window.fileActions.setFavorite([uuid], isFavorite);
+        if (!done.length) throw new Error();
         if (this.fileUuid === uuid) this.isFavorite = isFavorite;
         window.dispatchEvent(new CustomEvent('file-favorite-changed', {
           detail: { uuid, isFavorite },

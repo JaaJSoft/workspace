@@ -15,6 +15,7 @@ from rest_framework.test import APITestCase
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.tests import test_webdav
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 DAV = "http://testserver/dav"
@@ -66,32 +67,30 @@ class GroupRootRestTests(_GroupRootFixture, APITestCase):
         self._assert_untouched()
 
     def test_a_member_cannot_trash_the_group_root(self):
-        response = self.client.delete(f"/api/v1/files/{self.root.uuid}")
+        response = run_operation(self.client, "trash", [self.root])
 
-        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(
+            outcome_of(response), ({"failed": 1}, [(self.root.name, "not_allowed")])
+        )
         self._assert_untouched()
 
     def test_a_member_cannot_copy_the_group_root(self):
-        response = self.client.post(
-            f"/api/v1/files/{self.root.uuid}/copy",
-            {"parent": str(self.mine.uuid)},
-            format="json",
-        )
+        response = run_operation(self.client, "copy", [self.root], self.mine)
 
-        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(
+            outcome_of(response), ({"failed": 1}, [(self.root.name, "not_allowed")])
+        )
         self.assertFalse(File.objects.filter(parent=self.mine).exists())
 
     def test_a_folder_inside_the_group_root_still_moves_and_trashes(self):
         sub = FileService.create_folder(self.alice, "Sub", parent=self.root)
         other = FileService.create_folder(self.alice, "Other", parent=self.root)
 
-        moved = self.client.patch(
-            f"/api/v1/files/{sub.uuid}", {"parent": str(other.uuid)}, format="json"
-        )
-        trashed = self.client.delete(f"/api/v1/files/{other.uuid}")
+        moved = run_operation(self.client, "move", [sub], other)
+        trashed = run_operation(self.client, "trash", [other])
 
-        self.assertEqual(moved.status_code, 200, moved.content)
-        self.assertEqual(trashed.status_code, 204, trashed.content)
+        self.assertEqual(outcome_of(moved), ({"done": 1}, []))
+        self.assertEqual(outcome_of(trashed), ({"done": 1}, []))
 
 
 class GroupRootServiceTests(_GroupRootFixture, TestCase):

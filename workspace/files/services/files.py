@@ -8,6 +8,8 @@ sync, and tasks.
 
 import enum
 import logging
+import posixpath
+import uuid
 
 from django.db import transaction
 from django.db.models import F
@@ -17,7 +19,7 @@ from django.utils.translation import gettext
 from workspace.common.logging import scrub
 
 from ..metrics import FILES_UPLOAD_BYTES
-from ..models import File, FileEvent, canonical_name
+from ..models import File, FileEvent, canonical_name, file_upload_path
 from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
@@ -69,6 +71,26 @@ def _location(file_obj):
         file_obj.owner_id,
         file_obj.deleted_at,
     )
+
+
+def _bucket(file_obj):
+    """The quota bucket *file_obj* is charged to (see ``services.quota``)."""
+    if file_obj.group_id:
+        return ("group", file_obj.group_id)
+    return ("user", file_obj.owner_id)
+
+
+def _put_back_blobs(storage, source_path, storage_path, backup_path, moved, backed_up):
+    """Undo ``move_content_from``'s storage moves after its rows rolled back."""
+    try:
+        if moved:
+            storage.move(storage_path, source_path)
+        if backed_up:
+            storage.move(backup_path, storage_path)
+    except OSError:
+        logger.exception(
+            "Could not restore blobs after a failed replace of %s", scrub(storage_path)
+        )
 
 
 class FileService:
@@ -880,6 +902,65 @@ class FileService:
             )
 
     @staticmethod
+    def move_content_from(target, source, *, acting_user=None):
+        """Give *target* the bytes of *source* by moving them, then drop *source*.
+
+        A move onto a same-name file: *target* keeps its row - its shares,
+        tags, comments and history - and the moved file's blob becomes its
+        content without being copied, so it charges no second copy to the
+        bucket. The moved row is deleted; what it held lives on in *target*.
+
+        Not journaled as a relocation: settling picks a side by the path a row
+        names, and here both versions sit at the path *target*'s row names.
+        After a crash the set-aside blob stays where the sync will list it,
+        rather than being dropped on a guess.
+        """
+        if _bucket(target) != _bucket(source):
+            # Within one bucket the source bytes are already counted.
+            check_write_allowed(
+                owner=target.owner_id,
+                group=target.group_id,
+                additional_bytes=(source.size or 0) - (target.size or 0),
+            )
+        storage = target.content.storage
+        storage_path = file_upload_path(target, target.name)
+        source_path = source.content.name
+        # A rollback restores rows, not blobs: whatever sat at storage_path is
+        # set aside until the commit, so a failure can put both blobs back. A
+        # short name of its own: the target's name plus a suffix can pass the
+        # limit a name segment has.
+        backup_path = posixpath.join(
+            posixpath.dirname(storage_path), f".{uuid.uuid4().hex}.bak"
+        )
+        backed_up = moved = False
+        try:
+            with transaction.atomic():
+                FileService.replace_content_storage(
+                    target,
+                    storage_path=storage_path,
+                    size=source.size,
+                    content_hash=source.content_hash,
+                    acting_user=acting_user,
+                )
+                if storage.exists(storage_path):
+                    storage.move(storage_path, backup_path)
+                    backed_up = True
+                storage.move(source_path, storage_path)
+                moved = True
+                # The blob has moved, so the row's storage cleanup finds nothing.
+                FileService.hard_delete(source, acting_user=acting_user)
+        except BaseException:
+            _put_back_blobs(
+                storage, source_path, storage_path, backup_path, moved, backed_up
+            )
+            raise
+        if backed_up:
+            try:
+                storage.delete(backup_path)
+            except OSError:
+                logger.warning("Could not remove replaced blob %s", scrub(backup_path))
+
+    @staticmethod
     def replace_content_storage(
         file_obj,
         *,
@@ -936,11 +1017,17 @@ class FileService:
         return file_obj
 
     @staticmethod
-    def copy(file_obj, target_parent, owner, *, acting_user=None):
+    def copy(
+        file_obj, target_parent, owner, *, name=None, acting_user=None, checkpoint=None
+    ):
         """Recursively copy a file or folder to *target_parent*.
 
-        Blocked descendants of a folder are left behind; a blocked file raises
-        ``QuarantinedSource``.
+        The copy is named *name*, *file_obj*'s own name by default, or the next
+        free variant of it when the destination already holds it. Blocked
+        descendants of a folder are left behind; a blocked file raises
+        ``QuarantinedSource``. *checkpoint* is called with each node once it is
+        copied and may raise to abandon the copy, which then leaves nothing
+        behind.
         """
         FileService.check_copy_allowed(file_obj)
         check_write_allowed(
@@ -949,7 +1036,9 @@ class FileService:
             # copy_node only duplicates live descendants.
             additional_bytes=subtree_bytes(file_obj, include_trashed=False),
         )
-        copied = _storage.copy_node(file_obj, target_parent, owner)
+        copied = _storage.copy_node(
+            file_obj, target_parent, owner, name=name, checkpoint=checkpoint
+        )
         record_event(
             copied,
             acting_user or owner,
@@ -966,18 +1055,41 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def soft_delete(file_obj, *, acting_user=None):
-        """Soft-delete a file or folder (cascades to descendants)."""
+    def soft_delete(file_obj, *, acting_user=None, deleted_at=None, details=None):
+        """Soft-delete a file or folder (cascades to descendants).
+
+        *deleted_at* defaults to now; *details* go into the recorded event.
+        """
         if FileService.is_group_root(file_obj):
             raise GroupRootFolder(gettext("A group's root folder cannot be deleted."))
-        count = file_obj.soft_delete()
+        return FileService._trash(file_obj, acting_user, deleted_at, details)
+
+    @staticmethod
+    def trash_group_files(group):
+        """Trash everything *group* holds, its root folders included.
+
+        Only for the group's own deletion: a root folder stays as long as its
+        group exists. Through the root folders rather than in one queryset
+        update: trashing a node moves its bytes out of the live tree.
+        """
+        now = timezone.now()
+        roots = File.objects.filter(
+            group=group, deleted_at__isnull=True, parent__isnull=True
+        ).select_related("owner")
+        for root in roots:
+            FileService._trash(root, None, now, None)
+        # Anything the group owns outside those roots (legacy rows re-parented
+        # by hand) still has to leave the live listing.
+        File.objects.filter(group=group, deleted_at__isnull=True).update(deleted_at=now)
+
+    @staticmethod
+    def _trash(file_obj, acting_user, deleted_at, details):
+        count = file_obj.soft_delete(deleted_at=deleted_at)
         record_event(
             file_obj,
             acting_user,
             FileEvent.Action.DELETED,
-            {
-                "cascade_count": count,
-            },
+            {"cascade_count": count, **(details or {})},
         )
         return count
 

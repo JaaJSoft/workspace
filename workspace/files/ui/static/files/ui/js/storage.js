@@ -135,14 +135,10 @@ window.storageAnalysis = function storageAnalysis() {
       if (!confirmed) return;
       this.busy = true;
       try {
-        const resp = await fetch(`/api/v1/files/${uuid}`, {
-          method: 'DELETE',
-          headers: { 'X-CSRFToken': getCSRFToken() },
-        });
-        if (!resp.ok) throw new Error('delete failed');
+        window.fileOperations.announce(await window.fileOperations.run('trash', [uuid]));
         this.afterMutation();
       } catch (err) {
-        AppAlert.error(gettext('Failed to move the file to trash'));
+        AppAlert.error(err.message || gettext('Failed to move the file to trash'));
       } finally {
         this.busy = false;
       }
@@ -160,14 +156,10 @@ window.storageAnalysis = function storageAnalysis() {
       if (!confirmed) return;
       this.busy = true;
       try {
-        const resp = await fetch('/api/v1/files/trash/clean?force=1', {
-          method: 'DELETE',
-          headers: { 'X-CSRFToken': getCSRFToken() },
-        });
-        if (!resp.ok) throw new Error('clean failed');
+        window.fileOperations.announce(await window.fileOperations.run('empty_trash'));
         this.afterMutation();
       } catch (err) {
-        AppAlert.error(gettext('Failed to empty trash'));
+        AppAlert.error(err.message || gettext('Failed to empty trash'));
       } finally {
         this.busy = false;
       }

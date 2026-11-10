@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 15:34+0000\n"
+"POT-Creation-Date: 2026-11-10 05:54+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -50,10 +50,6 @@ msgid "Failed to create file"
 msgstr "Impossible de créer le fichier"
 
 #: ui/static/files/ui/js/browser.js
-msgid "Replace the existing file"
-msgstr "Remplacer le fichier existant"
-
-#: ui/static/files/ui/js/browser.js
 msgid "File already exists"
 msgstr "Le fichier existe déjà"
 
@@ -68,6 +64,10 @@ msgstr ""
 #: ui/static/files/ui/js/browser.js
 msgid "Keep both (rename the new file)"
 msgstr "Conserver les deux (renommer le nouveau fichier)"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Replace the existing file"
+msgstr "Remplacer le fichier existant"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Skip this file"
@@ -115,7 +115,8 @@ msgstr[0] "%(count)s ignoré"
 msgstr[1] "%(count)s ignorés"
 msgstr[2] "%(count)s ignorés"
 
-#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/upload_queue.js
+#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_operations.js
+#: ui/static/files/ui/js/upload_queue.js
 msgid "%(count)s failed"
 msgid_plural "%(count)s failed"
 msgstr[0] "%(count)s en échec"
@@ -125,10 +126,6 @@ msgstr[2] "%(count)s en échec"
 #: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_actions.js
 msgid "Failed to rename"
 msgstr "Impossible de renommer"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Failed to delete"
-msgstr "Impossible de supprimer"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Restore folder?"
@@ -143,10 +140,6 @@ msgid "Restore \"%(name)s\" from trash?"
 msgstr "Restaurer « %(name)s » depuis la corbeille ?"
 
 #: ui/static/files/ui/js/browser.js
-msgid "Failed to restore"
-msgstr "Impossible de restaurer"
-
-#: ui/static/files/ui/js/browser.js
 msgid "Delete folder permanently?"
 msgstr "Supprimer définitivement le dossier ?"
 
@@ -158,10 +151,6 @@ msgstr "Supprimer définitivement le fichier ?"
 msgid "This will permanently delete \"%(name)s\" and cannot be undone."
 msgstr ""
 "« %(name)s » sera supprimé définitivement. Cette action est irréversible."
-
-#: ui/static/files/ui/js/browser.js
-msgid "Failed to delete permanently"
-msgstr "Impossible de supprimer définitivement"
 
 #: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
 msgid "Empty trash?"
@@ -178,8 +167,8 @@ msgid "Empty trash"
 msgstr "Vider la corbeille"
 
 #: ui/static/files/ui/js/browser.js
-msgid "Failed to clean trash"
-msgstr "Impossible de vider la corbeille"
+msgid "Something went wrong"
+msgstr "Une erreur s’est produite"
 
 #: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_viewer.js
 msgid "Failed to update favorites"
@@ -216,10 +205,6 @@ msgstr[2] ""
 "avec tout leur contenu."
 
 #: ui/static/files/ui/js/browser.js
-msgid "Deleted %(success)s items, %(failed)s failed"
-msgstr "%(success)s éléments supprimés, %(failed)s en échec"
-
-#: ui/static/files/ui/js/browser.js
 msgid "Deleted %(count)s item"
 msgid_plural "Deleted %(count)s items"
 msgstr[0] "%(count)s élément supprimé"
@@ -227,26 +212,26 @@ msgstr[1] "%(count)s d’éléments supprimés"
 msgstr[2] "%(count)s éléments supprimés"
 
 #: ui/static/files/ui/js/browser.js
+msgid "Added to favorites: %(count)s item"
+msgid_plural "Added to favorites: %(count)s items"
+msgstr[0] "Ajouté aux favoris : %(count)s élément"
+msgstr[1] "Ajoutés aux favoris : %(count)s d’éléments"
+msgstr[2] "Ajoutés aux favoris : %(count)s éléments"
+
+#: ui/static/files/ui/js/browser.js
 msgid "Added to favorites: %(success)s succeeded, %(failed)s failed"
 msgstr "Ajoutés aux favoris : %(success)s réussis, %(failed)s en échec"
 
 #: ui/static/files/ui/js/browser.js
-msgid "Removed from favorites: %(success)s succeeded, %(failed)s failed"
-msgstr "Retirés des favoris : %(success)s réussis, %(failed)s en échec"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Added to favorites: %(count)s item"
-msgid_plural "Added to favorites: %(count)s items"
-msgstr[0] "Ajouté aux favoris : %(count)s élément"
-msgstr[1] "Ajoutés aux favoris : %(count)s d’éléments"
-msgstr[2] "Ajoutés aux favoris : %(count)s éléments"
-
-#: ui/static/files/ui/js/browser.js
 msgid "Removed from favorites: %(count)s item"
 msgid_plural "Removed from favorites: %(count)s items"
-msgstr[0] "Retiré des favoris : %(count)s élément"
-msgstr[1] "Retirés des favoris : %(count)s d’éléments"
-msgstr[2] "Retirés des favoris : %(count)s éléments"
+msgstr[0] "Retiré des favoris : %(count)s élément"
+msgstr[1] "Retirés des favoris : %(count)s d’éléments"
+msgstr[2] "Retirés des favoris : %(count)s éléments"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Removed from favorites: %(success)s succeeded, %(failed)s failed"
+msgstr "Retirés des favoris : %(success)s réussis, %(failed)s en échec"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Restore items?"
@@ -258,10 +243,6 @@ msgid_plural "Restore %(count)s items from trash?"
 msgstr[0] "Restaurer %(count)s élément depuis la corbeille ?"
 msgstr[1] "Restaurer %(count)s d’éléments depuis la corbeille ?"
 msgstr[2] "Restaurer %(count)s éléments depuis la corbeille ?"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Restored %(success)s items, %(failed)s failed"
-msgstr "%(success)s éléments restaurés, %(failed)s en échec"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Restored %(count)s item"
@@ -289,23 +270,11 @@ msgstr[2] ""
 "irréversible."
 
 #: ui/static/files/ui/js/browser.js
-msgid "Permanently deleted %(success)s items, %(failed)s failed"
-msgstr "%(success)s éléments supprimés définitivement, %(failed)s en échec"
-
-#: ui/static/files/ui/js/browser.js
 msgid "Permanently deleted %(count)s item"
 msgid_plural "Permanently deleted %(count)s items"
 msgstr[0] "%(count)s élément supprimé définitivement"
 msgstr[1] "%(count)s d’éléments supprimés définitivement"
 msgstr[2] "%(count)s éléments supprimés définitivement"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Pinned %(success)s items, %(failed)s failed"
-msgstr "%(success)s éléments épinglés, %(failed)s en échec"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Unpinned %(success)s items, %(failed)s failed"
-msgstr "%(success)s éléments désépinglés, %(failed)s en échec"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Pinned %(count)s item"
@@ -315,11 +284,19 @@ msgstr[1] "%(count)s d’éléments épinglés"
 msgstr[2] "%(count)s éléments épinglés"
 
 #: ui/static/files/ui/js/browser.js
+msgid "Pinned %(success)s items, %(failed)s failed"
+msgstr "%(success)s éléments épinglés, %(failed)s en échec"
+
+#: ui/static/files/ui/js/browser.js
 msgid "Unpinned %(count)s item"
 msgid_plural "Unpinned %(count)s items"
 msgstr[0] "%(count)s élément désépinglé"
 msgstr[1] "%(count)s d’éléments désépinglés"
 msgstr[2] "%(count)s éléments désépinglés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Unpinned %(success)s items, %(failed)s failed"
+msgstr "%(success)s éléments désépinglés, %(failed)s en échec"
 
 #: ui/static/files/ui/js/browser.js
 msgid "%(count)s item cut to clipboard"
@@ -338,11 +315,6 @@ msgstr[2] "%(count)s éléments copiés dans le presse-papiers"
 #: ui/static/files/ui/js/browser.js
 msgid "Clipboard is empty"
 msgstr "Le presse-papiers est vide"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Replace the existing file (the moved one goes to the trash)"
-msgstr ""
-"Remplacer le fichier existant (le fichier déplacé va dans la corbeille)"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Create shortcut"
@@ -373,15 +345,8 @@ msgid "Extract"
 msgstr "Extraire"
 
 #: ui/static/files/ui/js/browser.js
-msgid "Extraction failed"
-msgstr "Échec de l’extraction"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Extracted %(count)s item"
-msgid_plural "Extracted %(count)s items"
-msgstr[0] "%(count)s élément extrait"
-msgstr[1] "%(count)s d’éléments extraits"
-msgstr[2] "%(count)s éléments extraits"
+msgid "\"%(name)s\" extracted"
+msgstr "« %(name)s » extrait"
 
 #: ui/static/files/ui/js/browser.js ui/static/files/ui/js/pinned.js
 msgid "Failed to pin folder"
@@ -425,6 +390,131 @@ msgstr "Impossible d’obtenir le verrou"
 msgid "Force unlock failed"
 msgstr "Échec du déverrouillage forcé"
 
+#: ui/static/files/ui/js/file_operations.js ui/static/files/ui/js/storage.js
+msgid "My files"
+msgstr "Mes fichiers"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Move %(count)s item to %(folder)s"
+msgid_plural "Move %(count)s items to %(folder)s"
+msgstr[0] "Déplacer %(count)s élément vers %(folder)s"
+msgstr[1] "Déplacer %(count)s d’éléments vers %(folder)s"
+msgstr[2] "Déplacer %(count)s éléments vers %(folder)s"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Copy %(count)s item to %(folder)s"
+msgid_plural "Copy %(count)s items to %(folder)s"
+msgstr[0] "Copier %(count)s élément vers %(folder)s"
+msgstr[1] "Copier %(count)s d’éléments vers %(folder)s"
+msgstr[2] "Copier %(count)s éléments vers %(folder)s"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Move %(count)s item to the trash"
+msgid_plural "Move %(count)s items to the trash"
+msgstr[0] "Mettre %(count)s élément à la corbeille"
+msgstr[1] "Mettre %(count)s d’éléments à la corbeille"
+msgstr[2] "Mettre %(count)s éléments à la corbeille"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Restore %(count)s item"
+msgid_plural "Restore %(count)s items"
+msgstr[0] "Restaurer %(count)s élément"
+msgstr[1] "Restaurer %(count)s d’éléments"
+msgstr[2] "Restaurer %(count)s éléments"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Delete %(count)s item permanently"
+msgid_plural "Delete %(count)s items permanently"
+msgstr[0] "Supprimer définitivement %(count)s élément"
+msgstr[1] "Supprimer définitivement %(count)s d’éléments"
+msgstr[2] "Supprimer définitivement %(count)s éléments"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Empty the trash"
+msgstr "Vider la corbeille"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Extract %(count)s archive to %(folder)s"
+msgid_plural "Extract %(count)s archives to %(folder)s"
+msgstr[0] "Extraire %(count)s archive vers %(folder)s"
+msgstr[1] "Extraire %(count)s d’archives vers %(folder)s"
+msgstr[2] "Extraire %(count)s archives vers %(folder)s"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "%(count)s done"
+msgid_plural "%(count)s done"
+msgstr[0] "%(count)s effectué"
+msgstr[1] "%(count)s effectués"
+msgstr[2] "%(count)s effectués"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "%(count)s replaced"
+msgid_plural "%(count)s replaced"
+msgstr[0] "%(count)s remplacé"
+msgstr[1] "%(count)s remplacés"
+msgstr[2] "%(count)s remplacés"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "%(count)s kept under a new name"
+msgid_plural "%(count)s kept under a new name"
+msgstr[0] "%(count)s conservé sous un nouveau nom"
+msgstr[1] "%(count)s conservés sous un nouveau nom"
+msgstr[2] "%(count)s conservés sous un nouveau nom"
+
+#: ui/static/files/ui/js/file_operations.js
+#: ui/static/files/ui/js/upload_queue.js
+msgid "%(count)s skipped"
+msgid_plural "%(count)s skipped"
+msgstr[0] "%(count)s ignoré"
+msgstr[1] "%(count)s ignorés"
+msgstr[2] "%(count)s ignorés"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Waiting to start"
+msgstr "En attente de démarrage"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Stopping after the current item"
+msgstr "Arrêt après l’élément en cours"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "%(done)s of %(total)s"
+msgstr "%(done)s sur %(total)s"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Cancelled after %(done)s of %(total)s"
+msgstr "Annulé après %(done)s sur %(total)s"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Interrupted after %(done)s of %(total)s"
+msgstr "Interrompu après %(done)s sur %(total)s"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Nothing to do"
+msgstr "Rien à faire"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "And %(count)s more"
+msgid_plural "And %(count)s more"
+msgstr[0] "Et %(count)s autre"
+msgstr[1] "Et %(count)s d’autres"
+msgstr[2] "Et %(count)s autres"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "%(count)s operation in progress"
+msgid_plural "%(count)s operations in progress"
+msgstr[0] "%(count)s opération en cours"
+msgstr[1] "%(count)s d’opérations en cours"
+msgstr[2] "%(count)s opérations en cours"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "Operations finished"
+msgstr "Opérations terminées"
+
+#: ui/static/files/ui/js/file_operations.js
+msgid "The operation was interrupted"
+msgstr "L’opération a été interrompue"
+
 #: ui/static/files/ui/js/file_viewer.js
 msgid "File"
 msgstr "Fichier"
@@ -432,6 +522,10 @@ msgstr "Fichier"
 #: ui/static/files/ui/js/file_viewer.js
 msgid "Show in Files: %(path)s"
 msgstr "Afficher dans Fichiers : %(path)s"
+
+#: ui/static/files/ui/js/pinned.js
+msgid "This folder cannot be pinned"
+msgstr "Ce dossier ne peut pas être épinglé"
 
 #: ui/static/files/ui/js/preferences.js
 msgid "Could not save the preference"
@@ -500,10 +594,6 @@ msgstr "Échec"
 #: ui/static/files/ui/js/shared_dropzone.js
 msgid "Sent"
 msgstr "Envoyé"
-
-#: ui/static/files/ui/js/storage.js
-msgid "My files"
-msgstr "Mes fichiers"
 
 #: ui/static/files/ui/js/storage.js
 msgid "Move to trash?"
@@ -634,13 +724,6 @@ msgid_plural "%(count)s uploaded"
 msgstr[0] "%(count)s téléversé"
 msgstr[1] "%(count)s téléversés"
 msgstr[2] "%(count)s téléversés"
-
-#: ui/static/files/ui/js/upload_queue.js
-msgid "%(count)s skipped"
-msgid_plural "%(count)s skipped"
-msgstr[0] "%(count)s ignoré"
-msgstr[1] "%(count)s ignorés"
-msgstr[2] "%(count)s ignorés"
 
 #: ui/static/files/ui/js/upload_queue.js
 msgid "%(count)s cancelled"

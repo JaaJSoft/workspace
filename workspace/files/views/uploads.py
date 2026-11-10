@@ -22,6 +22,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.files.services import FileService, uploads
+from workspace.files.services.announcements import announce_replaced
 from workspace.files.services.quota import check_write_allowed
 
 from ..models import File, UploadSession
@@ -35,7 +36,7 @@ from ..serializers import (
     name_taken_error,
 )
 from ..services._names import NameTaken
-from .files import announce_replaced, duplicate_entries
+from .files import duplicate_entries
 
 _CONTENT_RANGE = re.compile(r"^bytes (\d+)-(\d+)/(\d+|\*)$")
 

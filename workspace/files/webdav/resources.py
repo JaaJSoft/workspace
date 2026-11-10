@@ -4,9 +4,7 @@ import errno
 import functools
 import io
 import logging
-import posixpath
 import time
-import uuid
 from contextlib import contextmanager
 
 from django.core.files.base import File as DjangoFile
@@ -25,21 +23,27 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 from workspace.common.logging import scrub
 from workspace.files.models import (
     File,
-    canonical_name,
     file_upload_path,
     files_storage,
     name_forms,
 )
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
-from workspace.files.services.files import FilePermission, GroupRootFolder
+from workspace.files.services.files import FilePermission
 from workspace.files.services.locking import (
     LockConflict,
     Relocated,
     StaleContent,
     conflicting_lock,
 )
-from workspace.files.services.scanning.policy import QuarantinedSource
+from workspace.files.services.refusals import Refusal, Refused
+from workspace.files.services.transfers import (
+    OnConflict,
+    copy_item,
+    move_item,
+    move_onto,
+)
+from workspace.files.services.trash import trash_item
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +71,34 @@ def _require_permission(user, file_obj, level, verb):
     permission = FileService.get_permission(user, file_obj)
     if permission is None or permission < level:
         raise DAVError(HTTP_FORBIDDEN, f"{verb} is not allowed here")
+
+
+# How a refusal of the file services reads to a WebDAV client; anything else is
+# a 403.
+_DAV_STATUS = {
+    Refusal.LOCKED: HTTP_LOCKED,
+    Refusal.QUOTA: HTTP_INSUFFICIENT_STORAGE,
+    Refusal.NAME_TAKEN: HTTP_PRECONDITION_FAILED,
+    Refusal.STALE: HTTP_PRECONDITION_FAILED,
+}
+
+
+@contextmanager
+def _dav_refusals(verb):
+    """Answer a refused move, copy or delete the way a WebDAV client expects."""
+    try:
+        yield
+    except Refused as refusal:
+        if refusal.reason == Refusal.LOCKED:
+            holder = getattr(refusal.holder, "username", "another user")
+            message = f"File is locked by {holder}"
+        elif refusal.reason == Refusal.QUOTA:
+            message = str(refusal.__cause__)
+        else:
+            message = f"{verb} is not allowed here"
+        raise DAVError(
+            _DAV_STATUS.get(refusal.reason, HTTP_FORBIDDEN), message
+        ) from refusal
 
 
 def _refuse_overlong_names(method):
@@ -349,40 +381,37 @@ class FolderResource(DAVCollection):
         return True
 
     def delete(self):
-        _require_permission(self._user, self._file, FilePermission.EDIT, "DELETE")
-        try:
-            FileService.soft_delete(self._file, acting_user=self._user)
-        except GroupRootFolder as exc:
-            raise DAVError(
-                HTTP_FORBIDDEN, "A group's root folder cannot be deleted."
-            ) from exc
+        with _dav_refusals("DELETE"):
+            trash_item(self._user, self._file)
 
     @_refuse_overlong_names
     def copy_move_single(self, dest_path, *, is_move):
-        # WsgiDAV's copy/move loop visits every descendant itself, so this
-        # hook must only create the destination collection, without members
-        # (recursing here would duplicate every child).
+        # A move is always recursive here (support_recursive_move), so this
+        # is a copy.
+        if _inside_copied_tree(self.environ, dest_path):
+            return
         dest_parts = _dest_parts(dest_path)
-        new_name = dest_parts[-1]
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-        _require_permission(
-            self._user, dest_parent, FilePermission.EDIT, "MOVE" if is_move else "COPY"
-        )
-        FileService.create_folder(
-            self._user,
-            new_name,
-            parent=dest_parent,
-            acting_user=self._user,
+        if self.environ.get("HTTP_DEPTH") == "0":
+            # The collection without its members: an empty folder.
+            _require_permission(self._user, dest_parent, FilePermission.EDIT, "COPY")
+            FileService.create_folder(
+                self._user, dest_parts[-1], parent=dest_parent, acting_user=self._user
+            )
+            return
+        # WsgiDAV visits every descendant after this one: the whole tree is
+        # copied here, in one go, and the visits that follow find it done.
+        _copy_to(self._file, self._user, dest_path)
+        self.environ.setdefault("workspace.copied_trees", []).append(
+            "/".join(dest_parts)
         )
 
     def support_recursive_move(self, dest_path):
         return True
 
-    @transaction.atomic
     @_refuse_overlong_names
     def move_recursive(self, dest_path):
-        with _as_insufficient_storage():
-            _move_to(self._file, self._user, dest_path)
+        _move_to(self._file, self._user, dest_path)
 
     def support_recursive_delete(self):
         return True
@@ -637,9 +666,8 @@ class FileResource(DAVNonCollection):
         # A MOVE that handle_move hands back to wsgidav deletes an existing
         # destination first, so this is also where that overwrite meets the
         # lock.
-        _require_permission(self._user, self._file, FilePermission.EDIT, "DELETE")
-        self._refuse_if_locked("DELETE")
-        FileService.soft_delete(self._file, acting_user=self._user)
+        with _dav_refusals("DELETE"):
+            trash_item(self._user, self._file)
 
     def handle_move(self, dest_path):
         """Save-by-rename: a MOVE over an existing file replaces its content.
@@ -653,34 +681,20 @@ class FileResource(DAVNonCollection):
         target = self.provider.get_resource_inst(dest_path, self.environ)
         if not isinstance(target, FileResource) or target._file.pk == self._file.pk:
             return False
-        # The source is hard-deleted below, so it must be the user's own temp
-        # file - never a row someone shared with them.
-        if not self._file.content or self._file.owner_id != self._user.pk:
+        # Nothing to hand over: wsgidav's own MOVE trashes the target instead.
+        if not self._file.content:
             return False
-        _require_permission(self._user, target._file, FilePermission.WRITE, "MOVE")
-        self._refuse_if_locked("MOVE")
-        target._refuse_if_locked("PUT")
-        try:
-            with _as_insufficient_storage():
-                _replace_content(target._file, self._file, self._user)
-        except (LockConflict, StaleContent, Relocated) as exc:
-            target._refusal_error(exc, scrub(getattr(self._user, "username", "?")))
+        with _dav_refusals("MOVE"):
+            move_onto(self._user, self._file, target._file)
         return True
 
     @_refuse_overlong_names
     def copy_move_single(self, dest_path, *, is_move):
         if is_move:
-            self._refuse_if_locked("MOVE")
-            with transaction.atomic(), _as_insufficient_storage():
-                _move_to(self._file, self._user, dest_path)
+            _move_to(self._file, self._user, dest_path)
             self._moved = True
-        else:
-            dest_parts = _dest_parts(dest_path)
-            new_name = dest_parts[-1]
-            dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-            _require_permission(self._user, dest_parent, FilePermission.EDIT, "COPY")
-            with _as_insufficient_storage():
-                _copy_as(self._file, dest_parent, self._user, new_name)
+        elif not _inside_copied_tree(self.environ, dest_path):
+            _copy_to(self._file, self._user, dest_path)
 
     def support_content_length(self):
         return True
@@ -779,164 +793,33 @@ def _advertised_space(environ, user, group_id):
     return cache[key]
 
 
-def _bucket(file_obj):
-    """The quota bucket *file_obj* is charged to (see ``services.quota``)."""
-    if file_obj.group_id:
-        return ("group", file_obj.group_id)
-    return ("user", file_obj.owner_id)
-
-
-def _replace_content(target, source, user):
-    """Give *target* the bytes of *source*, then drop *source* for good.
-
-    Not journaled as a relocation: settling picks a side by the path a row
-    names, and here both versions sit at the path the target's row names.
-    After a crash the set-aside blob stays where the sync will list it,
-    rather than being dropped on a guess.
-    """
-    if _bucket(target) != _bucket(source):
-        # Within one bucket the source bytes are already counted.
-        quota.check_write_allowed(
-            owner=target.owner_id,
-            group=target.group_id,
-            additional_bytes=(source.size or 0) - (target.size or 0),
-        )
-    storage = target.content.storage
-    storage_path = file_upload_path(target, target.name)
-    source_path = source.content.name
-    # A rollback restores rows, not blobs: whatever sat at storage_path is set
-    # aside until the commit, so a failure can put both blobs back. A short
-    # name of its own: the target's name plus a suffix can pass the limit a
-    # name segment has.
-    backup_path = posixpath.join(
-        posixpath.dirname(storage_path), f".{uuid.uuid4().hex}.bak"
-    )
-    backed_up = moved = False
-    try:
-        with transaction.atomic():
-            FileService.replace_content_storage(
-                target,
-                storage_path=storage_path,
-                size=source.size,
-                content_hash=source.content_hash,
-                acting_user=user,
-            )
-            if storage.exists(storage_path):
-                storage.move(storage_path, backup_path)
-                backed_up = True
-            storage.move(source_path, storage_path)
-            moved = True
-            # The blob has moved, so the row's storage cleanup finds nothing.
-            FileService.hard_delete(source, acting_user=user)
-    except BaseException:
-        _restore_blobs(
-            storage, source_path, storage_path, backup_path, moved, backed_up
-        )
-        raise
-    if backed_up:
-        try:
-            storage.delete(backup_path)
-        except OSError:
-            logger.warning("Could not remove replaced blob %s", scrub(backup_path))
-
-
-def _restore_blobs(storage, source_path, storage_path, backup_path, moved, backed_up):
-    """Undo ``_replace_content``'s storage moves after its rows rolled back."""
-    try:
-        if moved:
-            storage.move(storage_path, source_path)
-        if backed_up:
-            storage.move(backup_path, storage_path)
-    except OSError:
-        logger.exception(
-            "Could not restore blobs after a failed replace of %s", scrub(storage_path)
-        )
-
-
 def _move_to(file_obj, user, dest_path):
     """Move and/or rename *file_obj* to *dest_path* (MOVE handlers).
 
-    When both a rename and a re-parent are needed, the order matters:
-    renaming first collides with an old-parent sibling already named
-    ``new_name`` (folder directories cannot be merged on storage, and the
-    descendants' content paths would be rewritten to a directory that was
-    never created), while moving first collides with a destination child
-    carrying the current name.  Pick whichever order is collision-free;
-    renaming first is the default.
+    wsgidav has already trashed an existing destination when the client
+    asked to overwrite it, so a name still taken is refused.
     """
     dest_parts = _dest_parts(dest_path)
-    new_name = canonical_name(dest_parts[-1])
     dest_parent = _resolve_parent(user, dest_parts[:-1])
+    with _dav_refusals("MOVE"):
+        move_item(user, file_obj, dest_parent, OnConflict.ERROR, name=dest_parts[-1])
 
-    needs_rename = new_name != file_obj.name
-    needs_move = dest_parent != file_obj.parent
 
-    _require_permission(user, file_obj, FilePermission.EDIT, "MOVE")
-    if needs_rename and FileService.is_group_root(file_obj):
-        raise DAVError(HTTP_FORBIDDEN, "A group's root folder cannot be renamed.")
-    if needs_move:
-        _require_permission(user, dest_parent, FilePermission.EDIT, "MOVE")
-        try:
-            FileService.validate_move_target(file_obj, dest_parent, user=user)
-        except ValueError as exc:
-            raise DAVError(HTTP_FORBIDDEN, "MOVE is not allowed here") from exc
-        # FileService.rename below moves the blob outside any transaction, so a
-        # refusal from move() would leave it stranded. Refuse here,
-        # before anything is written.
-        FileService.check_move_allowed(file_obj, dest_parent, acting_user=user)
+def _copy_to(file_obj, user, dest_path):
+    """Copy *file_obj*, with what it holds, to *dest_path* (COPY handlers)."""
+    dest_parts = _dest_parts(dest_path)
+    dest_parent = _resolve_parent(user, dest_parts[:-1])
+    with _dav_refusals("COPY"):
+        copy_item(user, file_obj, dest_parent, OnConflict.ERROR, name=dest_parts[-1])
 
-    rename_first = not (
-        needs_rename
-        and needs_move
-        and _live_child_exists(user, file_obj.parent, new_name)
+
+def _inside_copied_tree(environ, dest_path):
+    """Whether *dest_path* lies in a folder this COPY already copied whole."""
+    dest = "/".join(_dest_parts(dest_path))
+    return any(
+        dest.startswith(f"{tree}/")
+        for tree in environ.get("workspace.copied_trees", ())
     )
-
-    if needs_rename and rename_first:
-        FileService.rename(file_obj, new_name, acting_user=user)
-    if needs_move:
-        FileService.move(file_obj, dest_parent, acting_user=user)
-    if needs_rename and not rename_first:
-        FileService.rename(file_obj, new_name, acting_user=user)
-
-
-def _live_child_exists(user, parent, name):
-    return File.objects.filter(
-        FileService.accessible_files_q(user),
-        parent=parent,
-        name__in=name_forms(name),
-        deleted_at__isnull=True,
-    ).exists()
-
-
-def _copy_as(file_obj, dest_parent, owner, new_name):
-    """Copy a (non-folder) File to *dest_parent* with a specific *new_name*.
-
-    Unlike ``FileService.copy`` this does not auto-generate "(Copy)" suffixes.
-    Folders are never copied here: WsgiDAV's copy loop creates each
-    collection via ``FolderResource.copy_move_single`` and visits the
-    descendants one by one.
-    """
-    try:
-        FileService.check_copy_allowed(file_obj)
-    except QuarantinedSource as exc:
-        raise DAVError(HTTP_FORBIDDEN, "File is quarantined.") from exc
-    content = None
-    if file_obj.content:
-        file_obj.content.open("rb")
-        content = DjangoFile(file_obj.content, name=new_name)
-
-    try:
-        return FileService.create_file(
-            owner,
-            new_name,
-            parent=dest_parent,
-            content=content,
-            mime_type=file_obj.mime_type,
-            acting_user=owner,
-        )
-    finally:
-        if content is not None:
-            file_obj.content.close()
 
 
 def _resolve_parent(user, path_parts):

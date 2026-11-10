@@ -13,6 +13,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileEvent, FileShare, FileShareLink
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -109,15 +110,9 @@ class FileEventUpdateTests(APITestCase):
         )
         FileEvent.objects.all().delete()
 
-        response = self.client.patch(
-            f"/api/v1/files/{self.file.uuid}",
-            {
-                "parent": str(target_folder.uuid),
-            },
-            format="json",
-        )
+        response = run_operation(self.client, "move", [self.file], target_folder)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         events = list(FileEvent.objects.filter(file=self.file))
         self.assertEqual(len(events), 1)
         ev = events[0]
@@ -172,10 +167,10 @@ class FileEventDeleteRestoreTests(APITestCase):
         )
         FileEvent.objects.all().delete()
 
-    def test_destroy_emits_deleted_event(self):
-        response = self.client.delete(f"/api/v1/files/{self.file.uuid}")
+    def test_trash_emits_deleted_event(self):
+        response = run_operation(self.client, "trash", [self.file])
 
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         # The file is soft-deleted, so the row still exists alongside the event.
         events = list(FileEvent.objects.filter(file=self.file))
         self.assertEqual(len(events), 1)
@@ -185,9 +180,9 @@ class FileEventDeleteRestoreTests(APITestCase):
     def test_restore_emits_restored_event(self):
         self.file.soft_delete()
 
-        response = self.client.post(f"/api/v1/files/{self.file.uuid}/restore")
+        response = run_operation(self.client, "restore", [self.file])
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
         events = list(FileEvent.objects.filter(file=self.file))
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].action, FileEvent.Action.RESTORED)
@@ -708,15 +703,14 @@ class FileEventCopyTests(APITestCase):
         FileEvent.objects.all().delete()
 
     def test_copy_emits_created_with_source_uuid(self):
-        response = self.client.post(
-            f"/api/v1/files/{self.file.uuid}/copy",
-            {},
-            format="json",
-        )
+        response = run_operation(self.client, "copy", [self.file], None)
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_uuid = response.json()["uuid"]
-        self.assertNotEqual(new_uuid, str(self.file.uuid))
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
+        new_uuid = (
+            File.objects.exclude(pk=self.file.pk)
+            .get(name__startswith="doc", parent=None)
+            .uuid
+        )
 
         events = list(FileEvent.objects.filter(file__uuid=new_uuid))
         self.assertEqual(len(events), 1)

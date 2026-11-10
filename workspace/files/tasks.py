@@ -133,6 +133,48 @@ def purge_staged_blobs(self):
 
 
 @shared_task(
+    name="files.run_file_operation",
+    priority=INTERACTIVE_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
+def run_file_operation(self, operation_uuid):
+    """Run a batch operation slice by slice.
+
+    Each slice is its own delivery, so a long batch gives the worker back
+    between two of them instead of keeping everyone else's interactive tasks
+    waiting behind it. In eager mode (no broker, i.e. DEBUG) the slices loop
+    right here and the request that created the operation only answers once
+    it is over.
+    """
+    from workspace.files.services import operations
+
+    # Every slice gets at least one item further, so the loop ends.
+    while True:
+        result = operations.run_slice(operation_uuid)
+        if result is not operations.Slice.PAUSED:
+            return {"status": result.value}
+        if not self.request.is_eager:
+            self.apply_async(args=[operation_uuid], countdown=0)
+            return {"status": result.value}
+
+
+@shared_task(
+    name="files.sweep_file_operations",
+    priority=BACKGROUND_PRIORITY,
+    ignore_result=True,
+)
+def sweep_file_operations():
+    """Close the operations a dead worker left open, drop the old reports."""
+    from workspace.files.services import operations
+
+    failed = operations.fail_stale_operations()
+    if failed:
+        logger.warning("Closed %d file operations whose worker was lost", failed)
+    return {"failed": failed, "purged": operations.purge_finished_operations()}
+
+
+@shared_task(
     name="files.purge_trash", priority=BACKGROUND_PRIORITY, bind=True, max_retries=0
 )
 def purge_trash(self):

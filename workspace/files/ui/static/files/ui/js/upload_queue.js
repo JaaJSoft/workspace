@@ -1,6 +1,6 @@
 /**
  * Upload queue of the Files page, published as the `uploads` Alpine store
- * and drawn by files/ui/partials/upload_panel.html.
+ * and drawn by files/ui/partials/operations_panel.html.
  *
  *   Alpine.store('uploads').add([{ file, folderId, onConflict }, ...]);
  *
@@ -751,12 +751,11 @@ window.sendResumableUpload = function sendResumableUpload(
 
 // Trash then purge: the discarded copy should not linger in the trash.
 window.discardFileUpload = async function discardFileUpload(uuid, name) {
-  const headers = { 'X-CSRFToken': getCSRFToken() };
   try {
-    const trashed = await fetch(`/api/v1/files/${uuid}`, { method: 'DELETE', headers });
-    if (!trashed.ok) throw new Error();
-    const purged = await fetch(`/api/v1/files/${uuid}/purge`, { method: 'DELETE', headers });
-    if (!purged.ok) {
+    const trashed = await window.fileOperations.run('trash', [uuid]);
+    if (!window.operationDoneUuids(trashed, [uuid]).length) throw new Error();
+    const purged = await window.fileOperations.run('purge', [uuid]);
+    if (!window.operationDoneUuids(purged, [uuid]).length) {
       window.AppAlert.warning(interpolate(
         gettext('%(name)s was moved to trash but could not be permanently discarded'),
         { name },

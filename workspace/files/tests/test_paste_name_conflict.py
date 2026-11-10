@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
 
@@ -52,28 +53,31 @@ class CopyOnConflictApiTests(APITestCase):
         )
 
     def _copy(self, parent, **extra):
-        return self.client.post(
-            f"/api/v1/files/{self.source.uuid}/copy",
-            {"parent": str(parent.uuid) if parent else None, **extra},
-            format="json",
-        )
+        return run_operation(self.client, "copy", [self.source], parent, **extra)
+
+    def _names(self, parent):
+        return set(File.objects.filter(parent=parent).values_list("name", flat=True))
 
     def test_default_keeps_renaming(self):
         response = self._copy(self.dst)
-        self.assertEqual(response.status_code, 201, response.content)
-        self.assertEqual(response.data["name"], "report (Copy).txt")
+        self.assertEqual(outcome_of(response), ({"renamed": 1}, []))
+        self.assertEqual(self._names(self.dst), {"report.txt", "report (Copy).txt"})
         self.assertEqual(_bytes(self.existing), b"existing")
 
     def test_error_rejects_the_collision(self):
         response = self._copy(self.dst, on_conflict="error")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("same name", response.data["name"][0])
+        self.assertEqual(
+            outcome_of(response), ({"failed": 1}, [("report.txt", "name_taken")])
+        )
+        self.assertEqual(
+            response.json()["errors"][0]["message"],
+            "The destination already holds an item with this name.",
+        )
         self.assertEqual(File.objects.filter(parent=self.dst).count(), 1)
 
     def test_replace_writes_into_the_existing_file(self):
         response = self._copy(self.dst, on_conflict="replace")
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.data["uuid"], str(self.existing.uuid))
+        self.assertEqual(outcome_of(response), ({"replaced": 1}, []))
         self.assertEqual(_bytes(self.existing), b"source")
         self.assertEqual(_bytes(self.source), b"source")
         self.assertNotEqual(self.existing.content.name, self.source.content.name)
@@ -82,22 +86,22 @@ class CopyOnConflictApiTests(APITestCase):
     def test_replace_without_collision_just_copies(self):
         empty = FileService.create_folder(self.user, "Empty")
         response = self._copy(empty, on_conflict="replace")
-        self.assertEqual(response.status_code, 201, response.content)
-        self.assertEqual(response.data["name"], "report.txt")
+        self.assertEqual(outcome_of(response), ({"done": 1}, []))
+        self.assertEqual(self._names(empty), {"report.txt"})
 
     def test_copy_into_its_own_folder_always_renames(self):
         for mode in ("replace", "error"):
             response = self._copy(self.src, on_conflict=mode)
-            self.assertEqual(response.status_code, 201, (mode, response.content))
-        names = set(File.objects.filter(parent=self.src).values_list("name", flat=True))
+            self.assertEqual(outcome_of(response), ({"done": 1}, []), mode)
         self.assertEqual(
-            names, {"report.txt", "report (Copy).txt", "report (Copy 2).txt"}
+            self._names(self.src),
+            {"report.txt", "report (Copy).txt", "report (Copy 2).txt"},
         )
 
     def test_unknown_value_is_rejected(self):
         response = self._copy(self.dst, on_conflict="merge")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("on_conflict", response.data)
+        self.assertIn("on_conflict", response.json()["items"]["0"])
 
 
 class MoveOnConflictApiTests(APITestCase):
@@ -120,16 +124,13 @@ class MoveOnConflictApiTests(APITestCase):
         )
 
     def _move(self, **extra):
-        return self.client.patch(
-            f"/api/v1/files/{self.moved.uuid}",
-            {"parent": str(self.dst.uuid), **extra},
-            format="json",
-        )
+        return run_operation(self.client, "move", [self.moved], self.dst, **extra)
 
-    def test_default_rejects_with_the_field_message(self):
+    def test_default_rejects_the_collision(self):
         response = self._move()
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("same name", response.data["name"][0])
+        self.assertEqual(
+            outcome_of(response), ({"failed": 1}, [("report.txt", "name_taken")])
+        )
         self.moved.refresh_from_db()
         self.assertEqual(self.moved.parent_id, self.src.pk)
 
@@ -137,26 +138,18 @@ class MoveOnConflictApiTests(APITestCase):
         # Taken in the source folder too: the file is renamed before it moves.
         FileService.create_file(self.user, "report (Copy).txt", parent=self.src)
         response = self._move(on_conflict="rename")
-        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(outcome_of(response), ({"renamed": 1}, []))
         self.moved.refresh_from_db()
         self.assertEqual(self.moved.parent_id, self.dst.pk)
         self.assertEqual(self.moved.name, "report (Copy 2).txt")
         self.assertEqual(_bytes(self.moved), b"moved")
         self.assertEqual(_bytes(self.existing), b"existing")
 
-    def test_replace_gives_the_existing_file_the_content_and_trashes_the_moved_one(
-        self,
-    ):
+    def test_replace_gives_the_existing_file_the_moved_one(self):
         response = self._move(on_conflict="replace")
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.data["uuid"], str(self.existing.uuid))
+        self.assertEqual(outcome_of(response), ({"replaced": 1}, []))
         self.assertEqual(_bytes(self.existing), b"moved")
-        self.moved.refresh_from_db()
-        self.assertIsNotNone(self.moved.deleted_at)
-        self.assertEqual(self.moved.parent_id, self.src.pk)
-        # The trashed row keeps its own blob, so it can come back intact.
-        self.assertEqual(_bytes(self.moved), b"moved")
-        self.assertNotEqual(self.moved.content.name, self.existing.content.name)
+        self.assertFalse(File.objects.filter(pk=self.moved.pk).exists())
 
     def test_on_conflict_is_ignored_on_a_plain_rename(self):
         other = FileService.create_file(self.user, "other.txt", parent=self.dst)
@@ -215,26 +208,19 @@ class GroupReplaceTests(APITestCase):
 
     def test_copy_replace_onto_a_teammates_file(self):
         with patch("workspace.files.sse_provider.push_file_event") as push:
-            response = self.client.post(
-                f"/api/v1/files/{self.mine.uuid}/copy",
-                {"parent": str(self.root.uuid), "on_conflict": "replace"},
-                format="json",
+            response = run_operation(
+                self.client, "copy", [self.mine], self.root, on_conflict="replace"
             )
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.data["uuid"], str(self.theirs.uuid))
+        self.assertEqual(outcome_of(response), ({"replaced": 1}, []))
         self.assertEqual(_bytes(self.theirs), b"mine")
         self._assert_announced(push)
 
     def test_move_replace_onto_a_teammates_file(self):
         with patch("workspace.files.sse_provider.push_file_event") as push:
-            response = self.client.patch(
-                f"/api/v1/files/{self.mine.uuid}",
-                {"parent": str(self.root.uuid), "on_conflict": "replace"},
-                format="json",
+            response = run_operation(
+                self.client, "move", [self.mine], self.root, on_conflict="replace"
             )
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.data["uuid"], str(self.theirs.uuid))
+        self.assertEqual(outcome_of(response), ({"replaced": 1}, []))
         self.assertEqual(_bytes(self.theirs), b"mine")
-        self.mine.refresh_from_db()
-        self.assertIsNotNone(self.mine.deleted_at)
+        self.assertFalse(File.objects.filter(pk=self.mine.pk).exists())
         self._assert_announced(push)

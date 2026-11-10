@@ -3,8 +3,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models import Q
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.utils import translation
@@ -18,7 +16,7 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
@@ -29,20 +27,20 @@ from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.announcements import announce_replaced
 from workspace.files.services.content_hash import find_duplicates
-from workspace.files.services.files import GroupRootFolder
 from workspace.files.services.locking import conflicting_lock, precondition_hash
-from workspace.notifications.services.notifications import notify, notify_many
-from workspace.users.services.settings import get_user_language, in_recipient_languages
+from workspace.files.services.refusals import Refusal, Refused
+from workspace.files.services.trash import trash_item
+from workspace.notifications.services.notifications import notify
+from workspace.users.services.settings import get_user_language
 
 from ..models import File
-from ..serializers import FileSerializer, locked_payload
+from ..serializers import FileLocked, FileSerializer, locked_payload
 from ..viewsets.actions import ActionsMixin
 from ..viewsets.comments import CommentsMixin
 from ..viewsets.content import ContentMixin
-from ..viewsets.copy import CopyMixin
 from ..viewsets.events import EventsMixin
-from ..viewsets.extract import ExtractMixin
 from ..viewsets.favorites import FavoritesMixin
 from ..viewsets.image_edit import ImageEditMixin
 from ..viewsets.share import ShareMixin
@@ -68,31 +66,6 @@ def duplicate_entries(instance):
         }
         for dup in find_duplicates(instance).only("uuid", "name", "path", "parent_id")
     ]
-
-
-def announce_replaced(instance, actor):
-    """Tell live viewers and the owner that *instance* got new content."""
-    from workspace.files.sse_provider import push_file_event
-
-    push_file_event(
-        instance,
-        "file_updated",
-        actor.username,
-        exclude_user_id=actor.pk,
-    )
-    if instance.owner_id != actor.pk and FileService.can_access(
-        instance.owner, instance
-    ):
-        with translation.override(get_user_language(instance.owner)):
-            notify(
-                recipient=instance.owner,
-                origin="files",
-                title=_('%(actor)s edited "%(name)s"')
-                % {"actor": actor.username, "name": instance.name},
-                url=f"/files/{instance.parent_id}" if instance.parent_id else "/files",
-                actor=actor,
-                source=instance,
-            )
 
 
 @extend_schema_view(
@@ -278,20 +251,22 @@ def announce_replaced(instance, actor):
         },
     ),
     destroy=extend_schema(
-        summary="Delete file or folder",
+        summary="Move a file or folder to the trash",
         description=(
-            "Delete a file or folder. Deleting a folder cascades to its children."
+            "Trash one file or folder, with what it holds. The same rules as "
+            "a trash operation apply; a batch goes through "
+            "/api/v1/files/operations."
         ),
         responses={
-            204: OpenApiResponse(description="Deleted."),
+            204: OpenApiResponse(description="Moved to the trash."),
+            403: OpenApiResponse(description="This item may not be trashed."),
+            423: OpenApiResponse(description="Someone else holds a lock on it."),
         },
     ),
 )
 @extend_schema(tags=["Files"])
 class FileViewSet(
     CacheControlMixin,
-    CopyMixin,
-    ExtractMixin,
     ContentMixin,
     TrashMixin,
     FavoritesMixin,
@@ -302,7 +277,12 @@ class FileViewSet(
     CommentsMixin,
     ActionsMixin,
     EventsMixin,
-    viewsets.ModelViewSet,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    mixins.ListModelMixin,
+    viewsets.GenericViewSet,
 ):
     """
     ViewSet for managing files and folders in a tree structure.
@@ -311,7 +291,10 @@ class FileViewSet(
     retrieve: Get a specific file/folder
     create: Create a new file/folder
     update: Update a file/folder
-    destroy: Delete a file/folder (cascades to children)
+    destroy: Move a file/folder to the trash (cascades to children)
+
+    Moving, copying, restoring and purging go through batch operations
+    (``/api/v1/files/operations``).
     """
 
     serializer_class = FileSerializer
@@ -613,10 +596,15 @@ class FileViewSet(
             headers=self.get_success_headers(data),
         )
 
-    def perform_update(self, serializer):
-        serializer.save()
-        if getattr(serializer, "replaced_existing", False):
-            announce_replaced(serializer.instance, self.request.user)
+    def perform_destroy(self, instance):
+        try:
+            trash_item(self.request.user, instance)
+        except Refused as refusal:
+            if refusal.reason == Refusal.LOCKED:
+                raise FileLocked(locked_payload(refusal.holder)) from refusal
+            raise PermissionDenied(
+                _("This item cannot be moved to the trash.")
+            ) from refusal
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -768,33 +756,6 @@ class FileViewSet(
         if locked is not None:
             return locked
 
-        # Rename gate - consult the action registry so any future rule on
-        # RenameAction.is_available (e.g., journal notes, shared files)
-        # applies uniformly to direct PATCH calls, not just to UI menus.
-        # Only fires when the user already has EDIT+ permission - below that,
-        # the standard flow returns 404/403 and we must not preempt it
-        # (e.g. a VIEW-only shared user must still see 404, not 403).
-        if "name" in request.data:
-            from workspace.files.actions import ActionRegistry
-
-            target = File.objects.filter(
-                uuid=uuid,
-                deleted_at__isnull=True,
-            ).first()
-            if target and request.data["name"] != target.name:
-                perm = FileService.get_permission(request.user, target)
-                if perm is not None and perm >= FilePermission.EDIT:
-                    if not ActionRegistry.is_action_available(
-                        "rename",
-                        request.user,
-                        target,
-                        permission=perm,
-                    ):
-                        return Response(
-                            {"detail": _("Renaming this file is not allowed.")},
-                            status=status.HTTP_403_FORBIDDEN,
-                        )
-
         try:
             response = super().partial_update(request, *args, **kwargs)
             if response.status_code == 200 and (
@@ -866,29 +827,3 @@ class FileViewSet(
                         source=file_obj,
                     )
             return Response(serializer.data)
-
-    def perform_destroy(self, instance):
-        try:
-            FileService.soft_delete(instance, acting_user=self.request.user)
-        except GroupRootFolder as exc:
-            raise PermissionDenied(
-                _("A group's root folder cannot be deleted.")
-            ) from exc
-        shared_users = User.objects.filter(
-            Q(received_shares__file=instance)
-            | Q(groups__received_file_shares__file=instance)
-            | Q(
-                project_memberships__left_at__isnull=True,
-                project_memberships__project__received_file_shares__file=instance,
-            )
-            | Q(groups__projects__received_file_shares__file=instance)
-        ).distinct()
-        with transaction.atomic():
-            for users in in_recipient_languages(shared_users):
-                notify_many(
-                    recipients=users,
-                    origin="files",
-                    title=_('%(actor)s deleted "%(name)s"')
-                    % {"actor": self.request.user.username, "name": instance.name},
-                    actor=self.request.user,
-                )

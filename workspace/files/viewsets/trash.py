@@ -1,79 +1,20 @@
-"""Trash actions for FileViewSet: restore, purge, trash list, clean."""
+"""Trash listing for FileViewSet.
 
-from datetime import timedelta
+Restoring and purging go through batch operations.
+"""
 
-from django.conf import settings
-from django.http import Http404
-from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
-from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from workspace.files.models import File
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
-from workspace.files.services.hard_delete import hard_delete_in_batches
-
-TRASH_RETENTION_DAYS = getattr(settings, "TRASH_RETENTION_DAYS", 30)
-
-
-def _trash_action_available(action_id, user, file_obj):
-    from workspace.files.actions import ActionRegistry
-
-    return ActionRegistry.is_action_available(
-        action_id,
-        user,
-        file_obj,
-        permission=FileService.trash_permission(user, file_obj),
-    )
 
 
 class TrashMixin:
-    """Adds restore, purge, trash, clean_trash actions."""
-
-    @extend_schema(
-        summary="Restore from trash",
-        description="Restore a previously trashed file or folder.",
-        responses={
-            200: OpenApiResponse(description="Item restored."),
-            400: OpenApiResponse(description="Item is not in trash."),
-        },
-    )
-    @action(detail=True, methods=["post"], url_path="restore")
-    def restore(self, request, uuid=None):
-        """Restore a file or folder from trash."""
-        file_obj = self.get_object()
-        if file_obj.deleted_at is None:
-            return Response(
-                {"detail": "Item is not in trash."}, status=status.HTTP_400_BAD_REQUEST
-            )
-        if not _trash_action_available("restore", request.user, file_obj):
-            raise Http404
-        restored = FileService.restore(file_obj, acting_user=request.user)
-        return Response({"restored": restored}, status=status.HTTP_200_OK)
-
-    @extend_schema(
-        summary="Permanently delete",
-        description="Permanently delete a trashed file or folder. This action is irreversible.",
-        responses={
-            204: OpenApiResponse(description="Item permanently deleted."),
-            400: OpenApiResponse(description="Item is not in trash."),
-        },
-    )
-    @action(detail=True, methods=["delete"], url_path="purge")
-    def purge(self, request, uuid=None):
-        """Permanently delete a file or folder."""
-        file_obj = self.get_object()
-        if file_obj.deleted_at is None:
-            return Response(
-                {"detail": "Item is not in trash."}, status=status.HTTP_400_BAD_REQUEST
-            )
-        if not _trash_action_available("purge", request.user, file_obj):
-            raise Http404
-        FileService.hard_delete(file_obj, acting_user=request.user)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    """Adds the trash listing."""
 
     @extend_schema(
         summary="List trashed files and folders",
@@ -135,57 +76,3 @@ class TrashMixin:
         queryset = self.filter_queryset(queryset)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
-
-    @extend_schema(
-        summary="Clean trash",
-        description=(
-            "Permanently delete the current user's own trashed items past "
-            "retention; other members' trashed group items are left alone. "
-            "Use force=true to delete all of the user's own trashed items."
-        ),
-        parameters=[
-            OpenApiParameter(
-                name="force",
-                type=OpenApiTypes.BOOL,
-                description="When true, delete all trashed items.",
-            ),
-        ],
-        responses={
-            200: OpenApiResponse(
-                response=OpenApiTypes.OBJECT,
-                description="Deletion summary.",
-            ),
-        },
-    )
-    @action(detail=False, methods=["delete"], url_path="trash/clean")
-    def clean_trash(self, request):
-        """Permanently delete trashed items past retention (or force all)."""
-        force_value = self.request.query_params.get("force")
-        force = (
-            str(force_value).lower() in {"1", "true", "yes"}
-            if force_value is not None
-            else False
-        )
-        retention_days = TRASH_RETENTION_DAYS
-        cutoff = timezone.now() - timedelta(days=retention_days)
-        # Only the caller's own nodes: the listing also shows the group's
-        # trashed nodes, but emptying it must not destroy what other members
-        # trashed - they purge those one at a time.
-        queryset = FileService.owned_files_qs(request.user).filter(
-            deleted_at__isnull=False
-        )
-        if not force:
-            queryset = queryset.filter(deleted_at__lt=cutoff)
-        # Count Files explicitly so the response reflects deleted *files*,
-        # not the cascaded total (which inflates the number with related
-        # rows like FileShare, comments, etc).
-        file_count = queryset.count()
-        hard_delete_in_batches(queryset)
-        return Response(
-            {
-                "deleted": file_count,
-                "retention_days": retention_days,
-                "force": force,
-            },
-            status=status.HTTP_200_OK,
-        )

@@ -159,7 +159,8 @@ class _ListingItemInteractions:
         with self.page.expect_response(
             lambda r: (
                 r.request.method == "POST"
-                and f"/api/v1/files/{self.note.uuid}/favorite" in r.url
+                and r.url.endswith("/api/v1/files/favorites")
+                and str(self.note.uuid) in (r.request.post_data or "")
             )
         ):
             self.item(self.note).get_by_role("button", name="Add to favorites").click()

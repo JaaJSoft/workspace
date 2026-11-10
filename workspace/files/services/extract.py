@@ -23,6 +23,13 @@ from ..models import File
 from ._names import sibling_nodes
 from .files import FileService
 from .quota import check_write_allowed, remaining_bytes
+from .refusals import (
+    Refusal,
+    Refused,
+    refusals,
+    require_action,
+    require_destination,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +259,26 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         "destination_uuid": str(dest_folder.uuid) if dest_folder is not None else None,
         "files_created": files_created,
     }
+
+
+def extract_item(user, node, parent):
+    """Extract the archive *node* into *parent* (None for the user's root).
+
+    Returns how many files came out. The reason an archive could not be read
+    stays in the log: its entry names are the archive author's text.
+    """
+    require_action("extract", user, node)
+    require_destination(user, parent)
+    try:
+        with refusals():
+            return extract_zip(node, parent, acting_user=user)["files_created"]
+    except ArchiveTooLargeError as error:
+        raise Refused(Refusal.ARCHIVE_TOO_LARGE) from error
+    except ArchiveTooManyEntriesError as error:
+        raise Refused(Refusal.ARCHIVE_TOO_MANY_ENTRIES) from error
+    except ValueError as error:
+        logger.info("Extracting %s refused: %s", scrub(str(node.pk)), scrub(str(error)))
+        raise Refused(Refusal.ARCHIVE_INVALID) from error
 
 
 def _ensure_folder_chain(parts, folder_cache, acting_user):

@@ -4,12 +4,13 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-// sw.js reads self.location at module scope and registers four listeners at
-// load time. URL is a Node global rather than an ECMAScript intrinsic, so a
-// bare vm context does not have it.
+// sw.js reads self.location at module scope, imports the share target inbox
+// and registers its listeners at load time. URL is a Node global rather than
+// an ECMAScript intrinsic, so a bare vm context does not have it.
 function loadServiceWorker() {
   return loadScript('workspace/core/static/sw.js', {
     URL,
+    importScripts() {},
     self: {
       location: 'https://example.test/sw.js?v=test',
       addEventListener() {},

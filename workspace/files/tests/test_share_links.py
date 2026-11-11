@@ -57,7 +57,7 @@ class FileShareLinkModelTests(TestCase):
 
     def test_cascade_delete_file(self):
         FileShareLink.objects.create(file=self.file, created_by=self.user)
-        self.file.delete(hard=True)
+        self.file.delete()
         self.assertEqual(FileShareLink.objects.count(), 0)
 
     def test_multiple_links_per_file(self):

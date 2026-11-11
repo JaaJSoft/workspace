@@ -319,7 +319,7 @@ class FileEmbedTests(RealDragMixin, PlaywrightTestCase):
     def test_purged_target_renders_a_fallback(self):
         note = self._note(f"{_embed(self.pdf)}\n")
         target = self.pdf.uuid
-        self.pdf.delete(hard=True)
+        self.pdf.delete()
         self._open(note)
         preview = self.page.locator(
             f'.file-embed[data-file-embed="{target}"] file-preview'

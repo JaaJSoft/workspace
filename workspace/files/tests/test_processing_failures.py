@@ -129,11 +129,9 @@ class ProcessingFailureModelTests(ProcessingFailureTestCase):
             processor="thumbnails", file=f, attempts=2, last_attempt_at=timezone.now()
         )
 
-        # File.delete() soft-deletes by default (an UPDATE, not a DELETE), so
-        # the FK CASCADE never fires; hard=True forces a real row delete, per
-        # the convention used by every other satellite-table cascade test
-        # (test_links.py, test_sharing.py, test_tags.py, test_share_links.py).
-        f.delete(hard=True)
+        # A permanent deletion: trashing is an UPDATE, which the FK CASCADE
+        # never sees.
+        f.delete()
 
         self.assertEqual(ProcessingFailure.objects.count(), 0)
 

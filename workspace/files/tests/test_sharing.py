@@ -58,7 +58,7 @@ class FileShareModelTests(TestCase):
             shared_by=self.user_a,
             shared_with=self.user_b,
         )
-        self.file.delete(hard=True)
+        self.file.delete()
         self.assertEqual(FileShare.objects.count(), 0)
 
     def test_cascade_delete_user(self):

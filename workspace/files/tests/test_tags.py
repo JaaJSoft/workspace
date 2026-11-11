@@ -69,7 +69,7 @@ class FileTagModelTests(TestCase):
 
     def test_cascade_delete_file(self):
         FileTag.objects.create(file=self.file, tag=self.tag)
-        self.file.delete(hard=True)
+        self.file.delete()
         self.assertEqual(FileTag.objects.count(), 0)
 
     def test_cascade_delete_tag(self):

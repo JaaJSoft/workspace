@@ -90,7 +90,7 @@ _PHRASE = re.compile(
 # license, not of the name.
 REVIEWED = {
     ("pypi", "py-rust-stemmers"): (
-        "no usable license metadata",
+        "no license metadata",
         "MIT: its LICENSE file; the metadata is empty",
     ),
     ("pypi", "sqlite-vec"): (
@@ -190,9 +190,13 @@ def python_license(distribution):
         # Several classifiers are the choices of a dual-licensed package.
         return any(evaluate(c) for c in classifiers), "; ".join(classifiers)
     text = (meta.get("License") or "").strip()
-    if text and "\n" not in text and len(text) <= 120:
+    if not text:
+        return False, "no license metadata"
+    if "\n" not in text and len(text) <= 120:
         return evaluate(text), text
-    return False, "no usable license metadata"
+    # Kept apart from the empty case: a REVIEWED entry for a package with no
+    # metadata must not cover the license text it ships later.
+    return False, f"unusable license text: {text.splitlines()[0][:80]}"
 
 
 def python_runtime_names():

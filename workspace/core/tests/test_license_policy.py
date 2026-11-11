@@ -147,7 +147,19 @@ class PythonLicenseTests(SimpleTestCase):
         blob = "License: " + "Permission is hereby granted, free of charge " * 5
         allowed, declared = self._verdict(blob)
         self.assertFalse(allowed)
-        self.assertEqual(declared, "no usable license metadata")
+        self.assertTrue(declared.startswith("unusable license text: "), declared)
+
+    def test_no_license_and_a_license_text_are_told_apart(self):
+        # A package reviewed for having no license metadata must be checked
+        # again the day it ships a license text, whatever that text says.
+        _, empty = self._verdict()
+        _, blob = self._verdict(
+            "License: " + "GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007 " * 4
+        )
+        self.assertEqual(empty, "no license metadata")
+        self.assertNotEqual(blob, empty)
+        self.assertTrue(check_licenses.is_reviewed("pypi", "py-rust-stemmers", empty))
+        self.assertFalse(check_licenses.is_reviewed("pypi", "py-rust-stemmers", blob))
 
     def test_a_short_license_field_is_read(self):
         self.assertTrue(self._verdict("License: Apache License 2.0")[0])

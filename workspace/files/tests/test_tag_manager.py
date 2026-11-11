@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileTag, Tag
+from workspace.files.services import trash
 from workspace.files.services.tags import (
     TagMergeError,
     merge_tags,
@@ -44,7 +45,7 @@ class TagFavoriteAndUsageAPITests(APITestCase):
         tag = Tag.objects.create(owner=self.user, name="work")
         f = _file(self.user, "a.md")
         FileTag.objects.create(file=f, tag=tag)
-        f.delete()
+        trash.soft_delete(f)
         resp = self.client.get("/api/v1/tags")
         self.assertEqual(resp.data[0]["file_count"], 1)
 

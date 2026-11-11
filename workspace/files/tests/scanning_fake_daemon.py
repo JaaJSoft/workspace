@@ -51,20 +51,29 @@ class _Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
+class _UnixServer(socketserver.ThreadingUnixStreamServer):
+    daemon_threads = True
+
+
 class FakeClamd:
-    """Context manager running the fake daemon on an ephemeral local port.
+    """Context manager running the fake daemon on an ephemeral local port, or
+    on the Unix socket at ``unix_path`` when one is given.
 
     ``reply`` is the exact bytes written in answer to INSTREAM, newline
     included. ``received`` holds the bytes the last INSTREAM delivered, so a
     test can assert the cap was honoured.
     """
 
-    def __init__(self, reply=b"stream: OK\n", stall=False):
-        self._server = _Server(("127.0.0.1", 0), _Handler)
+    def __init__(self, reply=b"stream: OK\n", stall=False, unix_path=None):
+        if unix_path:
+            self._server = _UnixServer(unix_path, _Handler)
+        else:
+            self._server = _Server(("127.0.0.1", 0), _Handler)
         self._server.reply = reply
         self._server.stall = stall
         self._server.received = b""
-        self.host, self.port = self._server.server_address[:2]
+        if not unix_path:
+            self.host, self.port = self._server.server_address[:2]
 
     @property
     def received(self):

@@ -56,7 +56,7 @@ LABEL org.opencontainers.image.title="workspace" \
       org.opencontainers.image.url="https://github.com/JaaJSoft/workspace" \
       org.opencontainers.image.source="https://github.com/JaaJSoft/workspace" \
       org.opencontainers.image.vendor="JaaJSoft" \
-      org.opencontainers.image.licenses="BSL" \
+      org.opencontainers.image.licenses="BUSL-1.1" \
       org.opencontainers.image.base.name="docker.io/library/python:3.14-slim"
 
 # OCI metadata — dynamic labels (overridden at build time by CI)

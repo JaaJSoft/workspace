@@ -14,7 +14,7 @@ _BUILTIN_LABELS = frozenset({"jpeg", "png", "webp", "bmp", "tiff", "gif", "avif"
 
 
 def _register_heif():
-    from pillow_heif import register_heif_opener
+    from pi_heif import register_heif_opener
 
     register_heif_opener()
 

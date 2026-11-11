@@ -12,6 +12,9 @@ on:
     paths:
       - 'scripts/frontend/package.json'
       - 'scripts/frontend/package-lock.json'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'scripts/check_licenses.py'
       - '.github/workflows/audit.yml'
   schedule:
     - cron: '17 6 * * 1'
@@ -52,3 +55,26 @@ jobs:
 
       - name: Fail on advisories in the bundled dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  licenses:
+    runs-on: ubuntu-latest
+    name: License policy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Install the runtime dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Check the licenses of what is distributed
+        run: uv run --no-sync python scripts/check_licenses.py

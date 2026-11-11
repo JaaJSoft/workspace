@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from workspace.files.models import File, FileLink, FileLinkState
-from workspace.files.services import tree
+from workspace.files.services import trash, tree
 from workspace.files.services.links import (
     EXTRACTOR_VERSION,
     extract_link_targets,
@@ -64,11 +64,10 @@ class FileLinkModelTests(TestCase):
 
     def test_cascade_on_hard_delete(self):
         # The FK ON DELETE CASCADE removes edges when a file is permanently
-        # deleted. File.delete() soft-deletes by default; hard=True forces the
-        # real DB delete that fires the cascade.
+        # deleted.
         a, b = self._file("a.md"), self._file("b.md")
         FileLink.objects.create(source=a, target=b)
-        a.delete(hard=True)
+        a.delete()
         self.assertEqual(FileLink.objects.count(), 0)
 
     def test_soft_delete_keeps_edges(self):
@@ -77,7 +76,7 @@ class FileLinkModelTests(TestCase):
         # instead. So trashing a file must NOT prune its FileLink rows.
         a, b = self._file("a.md"), self._file("b.md")
         FileLink.objects.create(source=a, target=b)
-        a.delete()  # soft delete (default)
+        trash.soft_delete(a)
         self.assertEqual(FileLink.objects.count(), 1)
 
 

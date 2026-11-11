@@ -1440,10 +1440,10 @@ def people(request):
         if cluster_person(cluster) is None and cluster.hidden == show_hidden
     ]
     hidden = hidden_faces(request.user)
-    hidden_count = (
-        sum(card.hidden for card in persons)
-        + sum(c.hidden for c in clusters if cluster_person(c) is None)
-        + hidden.total
+    has_hidden = (
+        any(card.hidden for card in persons)
+        or any(c.hidden for c in clusters if cluster_person(c) is None)
+        or hidden.total > 0
     )
     progress = face_progress(request.user) if enabled else None
     context = {
@@ -1460,7 +1460,7 @@ def people(request):
             if show_hidden
             else None
         ),
-        "hidden_count": hidden_count if enabled else 0,
+        "has_hidden": enabled and has_hidden,
         "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
         "progress": progress,
         "analyzing": progress is not None and progress["analyzed"] < progress["total"],

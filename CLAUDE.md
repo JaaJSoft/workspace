@@ -162,6 +162,31 @@ Rationale: APIs, data formats, query parameters, and behavior are not semver'd i
 
 When in doubt between "the old way is dead code" and "someone might use this," ask rather than guessing.
 
+### Dependency licenses - permissive, or weak copyleft under conditions
+
+The project ships under the Business Source License 1.1 and converts to MIT on the change date (`LICENSE`). A GPL or AGPL dependency fits neither: the GPL forbids the use restrictions of the Additional Use Grant, and nothing relicenses it to MIT in 2029. Check the licence of every runtime dependency (Python, npm, vendored asset, native library inside a wheel, model weights) **before adding it** and when a bump crosses a major version.
+
+| Licence | Verdict |
+|---|---|
+| MIT, BSD-2/3-Clause, Apache-2.0, ISC, PSF, ZPL-2.1, Zlib, 0BSD, HPND, CC0, Unlicense | Allowed |
+| LGPL, MPL-2.0 | Allowed on conditions: installed unmodified from the package index, never vendored, patched or copied into the tree, and replaceable. A browser build under LGPL (`heic-to`) stays a file of its own, never merged into a bundle. MPL copyleft is per file |
+| GPL, AGPL, SSPL, non-commercial, no licence, unknown | Forbidden |
+| Dual or multi licence | Allowed if one option is allowed (`MIT OR GPL-2.0`); `AND` needs every part allowed |
+
+- **Read the licence of what ships, not of the package.** A BSD wheel can bundle GPL libraries: `pillow-heif`'s wheels carry `libx265` (GPL-2.0), which is why the application depends on `pi-heif-decoder`, the decode-only twin without it (module `pi_heif`). Read what a wheel bundles for its security too, not only its license: the system's updates never patch a library inside a wheel, and vulnerability scanners do not see it. `pi-heif`, dropped upstream, kept shipping a libheif from before its memory-safety fixes. For anything shipping native code read `<package>.libs/`, `*.dist-info/licenses/` and `LICENSES_bundled.txt`. The `License` metadata field is often empty, `UNKNOWN` or a free-text blob (`myl-discovery` declared "GNU GENERAL PUBLIC LICENSE"): open the licence file.
+- **Dev dependencies are exempt, application code is not.** The image installs with `--no-dev`, so nothing in `[dependency-groups] dev` is distributed and a GPL test tool is tolerated there. It is never imported by application code, and the `pyproject.toml` comment says why it is there (`pillow-heif` encodes the HEIC test fixtures).
+- **Model weights and datasets carry their own licence.** A non-commercial one stays opt-in and documented (`docs/photos/README.md`, *Weights licence*).
+- **A GPL-only candidate is a stop-and-ask**, not a reason to hand-write a replacement (see *File formats and protocols*). Look for a permissive alternative first, and check its release history: one release years ago is not maintained.
+- **A subprocess or a service is not a dependency.** ffmpeg, the ClamAV daemon or Cairo reached through a socket, a pipe or a command line are separate programs, outside this policy.
+
+`scripts/check_licenses.py` applies this table to the runtime Python packages of `uv.lock` and the bundled npm packages of the frontend lockfile, and flags a wheel whose bundled-libraries notice names a GPL library. The `License policy` job of `.github/workflows/audit.yml` runs it on every change to the manifests, and `core.tests.test_license_policy` runs its npm half in the suite. A package whose metadata says nothing usable goes in the script's `REVIEWED` table with the reason it is fine - a new entry is a decision, never a way to get green.
+
+```bash
+uv sync --frozen --no-dev && uv run --no-sync python scripts/check_licenses.py   # then `uv sync --frozen` to get the dev group back
+```
+
+The Docker image label `org.opencontainers.image.licenses` carries the SPDX identifier of the project's own licence (`BUSL-1.1`).
+
 ### Refactoring & Optimization
 
 Before any refactor or optimization, verify that at least one test covers the code being touched. If no test exists, **write the test first** (it must pass against the current code), then start the refactor. The test acts as a safety net to guarantee the behavior is preserved.
@@ -839,9 +864,9 @@ Reading a binary format (image and video containers, EXIF, TIFF directories, JPE
 
 **Rules:**
 
-- Search before writing: PyPI and npm, for a maintained library with wheels for our Python version (3.14) on Linux, macOS and Windows, or a browser build that runs without a CDN. Prefer the established native library's bindings (LibRaw, libheif, ffmpeg, exiv2) over a pure-Python or pure-JS reimplementation.
+- Search before writing: PyPI and npm, for a maintained library with wheels for our Python version (3.14) on Linux, macOS and Windows, or a browser build that runs without a CDN. Its licence must fit *Dependency licenses*. Prefer the established native library's bindings (LibRaw, libheif, ffmpeg, exiv2) over a pure-Python or pure-JS reimplementation.
 - Check the candidate on real files before adopting it, not on synthetic bytes: a content-sniffing library that files a NEF under TIFF and a CR3 under audio is not an answer, however clean its API.
-- Server-side decoding plugs in where the rest of the code already looks: a Pillow plugin registered in `files/services/raster_formats.py` (`pillow-heif`, `rawpy`), so thumbnails, EXIF and faces need no new branch. A format the browser cannot show gets the vendored library on the image viewer's `<img>` error path, the way `heic-to` and `libraw-wasm` do, never a server-side rendition route.
+- Server-side decoding plugs in where the rest of the code already looks: a Pillow plugin registered in `files/services/raster_formats.py` (`pi-heif-decoder`, `rawpy`), so thumbnails, EXIF and faces need no new branch. A format the browser cannot show gets the vendored library on the image viewer's `<img>` error path, the way `heic-to` and `libraw-wasm` do, never a server-side rendition route.
 - When a library covers most of the need, take its output and adapt the last mile (the RAW plugin copies LibRaw's `DateTime` into `DateTimeOriginal`), rather than parsing the file a second time to fill the gap.
 - When no library fits, stop and ask before writing a parser. If one is agreed, it caps what it reads (size, iterations), is tested against real files, and exists once - a JS twin of a Python parser is the same mistake twice.
 - A test fixture may build a format by hand (a minimal DNG in `files/tests/rasters.py`), provided the real library accepts it: that is the check that the fixture is the format and not an imitation of it.
@@ -1277,6 +1302,15 @@ window.addEventListener('nav:restore', (e) => {
 - A restore path never writes history: the open/select/close functions it calls take a flag that skips the write. A restore that pushes cuts off the forward history; one that pushes on every back loops.
 - Opening pushes, switching replaces, closing calls `returnTo`. Closing must never push: back would reopen what was just closed.
 - The decision does not depend on the screen size: a mobile back arrow calls the same close method as the desktop close button.
+
+### Incoming - what the operating system hands to the installed app
+
+"Incoming" is the word for anything another app or the operating system hands to Workspace: today the manifest's `share_target` (the system share sheet on Android and Windows), later `file_handlers` ("Open with") or `protocol_handlers`. Never call it "share": in this codebase a share is a file, album or vault entry shared with someone (`FileShare`, `_share_target`, "Shared with me"), and the two must not be confused in URLs, names or the UI.
+
+- **One entry point, owned by `core`.** The manifest allows a single `share_target`, so files, text and links shared from another app all arrive at `POST /incoming`, whatever module they end up in. Its URL is part of every installed app's manifest and changing it waits on each browser refreshing that manifest: it does not move. `sw.js` answers it (`receiveIncoming`) and `core/views/incoming.py` is the fallback when no service worker ran.
+- **`core` dispatches, the module receives.** The service worker keeps what arrived in the browser (IndexedDB, through a store the receiving module owns - `files/ui/js/incoming_files.js`) and redirects to that module's page with `?incoming=<id>`. The module's page reads it, asks what it needs (Files: the folder picker), sends it through its usual path (Files: the upload queue), then drops the id from the address with `navHistory.replace`. A new kind of content gets a branch in `receiveIncoming` and a landing page in the module that owns it, never a second action URL.
+- **Nothing is posted to the server on arrival.** The share carries no CSRF token and the user has not said where it goes yet; the bytes leave the browser through the module's authenticated API once they have.
+- **An empty or unknown id is reported, not ignored**: the user shared something and must learn it did not arrive.
 
 ### UI Partials
 

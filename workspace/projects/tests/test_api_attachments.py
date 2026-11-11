@@ -77,7 +77,7 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
     def test_attachment_survives_source_file_hard_delete(self):
         src = self._make_file(self.member, content=b"payload")
         self._attach_workspace(self.member, src)
-        src.delete(hard=True)
+        src.delete()
         att = TaskAttachment.objects.get()
         with att.file.open("rb") as fh:
             self.assertEqual(fh.read(), b"payload")

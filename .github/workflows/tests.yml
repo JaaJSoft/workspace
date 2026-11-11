@@ -17,6 +17,7 @@ on:
       - '!LICENSE'
       - '!.github/**'
       - '.github/workflows/tests.yml'
+      - '.github/actions/**'
       - '!.claude/**'
       - '!Dockerfile'
       - '!.dockerignore'
@@ -39,6 +40,7 @@ on:
       - '!LICENSE'
       - '!.github/**'
       - '.github/workflows/tests.yml'
+      - '.github/actions/**'
       - '!.claude/**'
       - '!Dockerfile'
       - '!.dockerignore'
@@ -117,6 +119,7 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
+              - '.github/actions/apt-install/**'
             # The vector index and what its pgvector backend runs on, the
             # vault envelope rotation, whose conditional UPDATE leans on
             # PostgreSQL's pre-update semantics, and the accent-folding lookup,
@@ -147,6 +150,7 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
+              - '.github/actions/apt-install/**'
             # The imports code, what it writes into (people, files) and the
             # shared plumbing, plus the dependency manifests.
             nextcloud:
@@ -276,9 +280,10 @@ jobs:
       # the binaries, which would leave that code uncovered.
       - name: Install ffmpeg
         if: contains(fromJSON('["ai", "files", "photos"]'), matrix.module)
-        run: |
-          sudo apt-get update
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends ffmpeg
+        uses: ./.github/actions/apt-install
+        timeout-minutes: 10
+        with:
+          packages: --no-install-recommends ffmpeg
 
       - name: Run Django test suite with coverage
         env:
@@ -429,13 +434,16 @@ jobs:
         run: uv sync --frozen
 
       - name: Install davfs2
-        run: |
-          sudo apt-get update
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y davfs2
-          # The test runner already wraps mount.davfs in `sudo -n` when
-          # the binary is not SUID; the GitHub-hosted runner ships with
-          # passwordless sudo so no further config is needed.
-          sudo modprobe fuse || true
+        uses: ./.github/actions/apt-install
+        timeout-minutes: 10
+        with:
+          packages: davfs2
+
+      # The test runner already wraps mount.davfs in `sudo -n` when the
+      # binary is not SUID; the GitHub-hosted runner ships with passwordless
+      # sudo so no further config is needed.
+      - name: Load the fuse module
+        run: sudo modprobe fuse || true
 
       - name: Run WebDAV mount tests
         env:
@@ -621,9 +629,10 @@ jobs:
       # As in the files job of the test matrix: the media tests run the
       # binaries.
       - name: Install ffmpeg
-        run: |
-          sudo apt-get update
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends ffmpeg
+        uses: ./.github/actions/apt-install
+        timeout-minutes: 10
+        with:
+          packages: --no-install-recommends ffmpeg
 
       - name: Run the files tests with every blob on the S3 server
         env:

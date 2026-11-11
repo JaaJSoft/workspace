@@ -122,14 +122,14 @@ class IndexWriteTests(_FtsTestCase):
         # it, so re-indexing on trash would be wasted work.
         note = self._note("groceries.md", b"buy some saffron")
         index_file(note)
-        note.delete()
+        trash.soft_delete(note)
         self.assertEqual(self._matches('"saffron"'), {self._rowid(note)})
 
     def test_hard_delete_removes_the_document(self):
         note = self._note("groceries.md", b"buy some saffron")
         index_file(note)
         rowid = self._rowid(note)
-        note.delete(hard=True)
+        note.delete()
         self.assertNotIn(rowid, self._matches('"saffron"'))
 
     def test_cascade_delete_removes_descendant_documents(self):
@@ -141,7 +141,7 @@ class IndexWriteTests(_FtsTestCase):
         note.save()
         index_file(note)
         rowid = self._rowid(note)
-        folder.delete(hard=True)
+        folder.delete()
         self.assertNotIn(rowid, self._matches('"saffron"'))
 
     def test_an_unreadable_blob_still_indexes_the_name(self):

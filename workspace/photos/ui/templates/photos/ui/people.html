@@ -66,17 +66,6 @@
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
             <span class="max-sm:hidden">All people</span>
           </a>
-        {% elif hidden_count %}
-          <a
-            href="{{ people_hidden_url }}"
-            x-target.push="photos-nav photos-content"
-            class="btn btn-ghost btn-sm gap-1"
-            title="People and faces you hid"
-          >
-            <i data-lucide="eye-off" class="w-4 h-4"></i>
-            <span class="max-sm:hidden">Hidden</span>
-            <span class="badge badge-sm badge-ghost tabular-nums">{{ hidden_count }}</span>
-          </a>
         {% endif %}
         <div class="dropdown dropdown-end">
           <button
@@ -91,6 +80,19 @@
             tabindex="0"
             class="dropdown-content z-50 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-56 p-1"
           >
+            {% if has_hidden and not show_hidden %}
+              <li>
+                <a
+                  href="{{ people_hidden_url }}"
+                  x-target.push="photos-nav photos-content"
+                  class="rounded-sm"
+                  @click="document.activeElement.blur()"
+                >
+                  <i data-lucide="eye-off" class="w-4 h-4"></i>
+                  Hidden people and faces
+                </a>
+              </li>
+            {% endif %}
             <li>
               <button
                 type="button"

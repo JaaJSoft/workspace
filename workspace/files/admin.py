@@ -25,6 +25,7 @@ from .models import (
     ProcessingFailure,
     UserStorageQuota,
 )
+from .services.hard_delete import hard_delete_in_batches, hard_delete_tree
 from .services.processing_failures import retry_failures
 from .services.quota import (
     group_usage,
@@ -80,6 +81,16 @@ class FileShareAdmin(ModelAdmin):
 
 @admin.register(File)
 class FileAdmin(ModelAdmin):
+    """Every node of every tree, the trashed ones included.
+
+    Deleting here is permanent, from a node's page as from the list's
+    "Delete selected" action: the rows and the bytes of the whole subtree
+    go, and nothing lands in anyone's trash. Trashing is something a user
+    does in the files app, where the tree's rules, the event and the
+    notifications apply; an operator who deletes a node here has read a
+    confirmation page listing everything that goes with it.
+    """
+
     list_display = (
         "uuid",
         "name",
@@ -96,6 +107,12 @@ class FileAdmin(ModelAdmin):
     autocomplete_fields = ("owner", "parent", "shortcut_target")
     readonly_fields = ("uuid", "created_at", "updated_at")
     date_hierarchy = "created_at"
+
+    def delete_model(self, request, obj):
+        hard_delete_tree(obj)
+
+    def delete_queryset(self, request, queryset):
+        hard_delete_in_batches(queryset)
 
 
 @admin.register(FileFavorite)

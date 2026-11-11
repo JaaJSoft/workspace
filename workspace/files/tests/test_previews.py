@@ -115,7 +115,7 @@ class PreviewableFilesTests(TestCase):
 
     def test_purged_file_is_absent(self):
         target = self.pdf.uuid
-        self.pdf.delete(hard=True)
+        self.pdf.delete()
         self.assertEqual(previews.previewable_files(self.owner, [target]), {})
 
     @override_settings(**BLOCKING)

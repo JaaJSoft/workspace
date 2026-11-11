@@ -32,7 +32,7 @@ def hard_delete_tree(node):
     if node.node_type == File.NodeType.FOLDER:
         _delete_pks_in_batches(_descendant_pks_deepest_first(node))
     # Through the instance, so the caller's object ends up like any deleted one.
-    node.delete(hard=True)
+    node.delete()
 
 
 def _descendant_pks_deepest_first(folder):

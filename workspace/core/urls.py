@@ -8,6 +8,7 @@ from workspace.core.views.activity import (
 from workspace.core.views.changelog import changelog_partial
 from workspace.core.views.csp_report import CspReportView
 from workspace.core.views.i18n import WorkspaceJavaScriptCatalog
+from workspace.core.views.incoming import incoming
 from workspace.core.views.modules import ModulesView
 from workspace.core.views.offline import offline_page
 from workspace.core.views.search import UnifiedSearchView
@@ -29,6 +30,7 @@ urlpatterns = [
     path("api/v1/csp-report", CspReportView.as_view(), name="csp-report"),
     path("changelog", changelog_partial, name="changelog-partial"),
     path("offline", offline_page, name="offline"),
+    path("incoming", incoming, name="incoming"),
     path(
         "i18n/<str:language>",
         WorkspaceJavaScriptCatalog.as_view(),

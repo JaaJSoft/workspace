@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.services import trash
 from workspace.files.tests.operations import outcome_of, run_operation
 
 User = get_user_model()
@@ -22,7 +23,7 @@ class TrashAPITests(APITestCase):
         file = File.objects.create(
             owner=self.user, name="trashed.txt", node_type=File.NodeType.FILE
         )
-        file.delete()  # Soft delete
+        trash.soft_delete(file)
 
         response = self.client.get("/api/v1/files/trash")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -37,7 +38,7 @@ class TrashAPITests(APITestCase):
         trashed_file = File.objects.create(
             owner=self.user, name="trashed.txt", node_type=File.NodeType.FILE
         )
-        trashed_file.delete()
+        trash.soft_delete(trashed_file)
 
         response = self.client.get("/api/v1/files/trash")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -49,7 +50,7 @@ class TrashAPITests(APITestCase):
         file = File.objects.create(
             owner=self.user, name="torestore.txt", node_type=File.NodeType.FILE
         )
-        file.delete()
+        trash.soft_delete(file)
         file.refresh_from_db()
         self.assertIsNotNone(file.deleted_at)
 
@@ -64,7 +65,7 @@ class TrashAPITests(APITestCase):
         file = File.objects.create(
             owner=self.user, name="topurge.txt", node_type=File.NodeType.FILE
         )
-        file.delete()
+        trash.soft_delete(file)
         uuid = file.uuid
 
         response = run_operation(self.client, "purge", [uuid])
@@ -88,7 +89,7 @@ class TrashAPITests(APITestCase):
         file = File.objects.create(
             owner=self.user, name="trashed.txt", node_type=File.NodeType.FILE
         )
-        file.delete()
+        trash.soft_delete(file)
 
         response = run_operation(self.client, "empty_trash")
         self.assertEqual(outcome_of(response), ({"done": 1}, []))

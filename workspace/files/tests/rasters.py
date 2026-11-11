@@ -13,9 +13,14 @@ def heic_bytes(*, size=(64, 48), color=(200, 60, 40), exif=None):
     Magika files these small ones under mp4, like a real iPhone photo, which
     is what makes them worth testing. *exif* is an ``Image.Exif``.
     """
+    # pillow_heif's own encoder, not Pillow's registry: the application decodes
+    # through pi_heif's opener, and registering a second one here would let
+    # the encoder library answer for the decoder under test.
+    import pillow_heif
+
     buf = io.BytesIO()
     params = {"exif": exif.tobytes()} if exif is not None else {}
-    Image.new("RGB", size, color).save(buf, format="HEIF", **params)
+    pillow_heif.from_pillow(Image.new("RGB", size, color)).save(buf, **params)
     return buf.getvalue()
 
 

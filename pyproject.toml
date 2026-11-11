@@ -25,8 +25,11 @@ dependencies = [
     "hiredis>=3.5.0",
     # imaging
     "pillow>=13.0.0",
-    # HEIF/HEIC decoding (photos straight off an iPhone), as a Pillow plugin
-    "pillow-heif>=1.8.1",
+    # HEIF/HEIC decoding (photos straight off an iPhone), as a Pillow plugin.
+    # pi-heif, not pillow-heif: same `pillow_heif` module, but its wheels bundle
+    # only libheif and libde265 (LGPL). pillow-heif's wheels also ship libx265
+    # (GPL-2.0, an encoder we never call), which no BUSL distribution can carry.
+    "pi-heif>=1.4.0",
     # Camera RAW photos (LibRaw): their embedded preview and its EXIF
     "rawpy>=0.27.1",
     "cairosvg>=2.9.1",
@@ -141,6 +144,10 @@ dev = [
     # A third-party CalDAV client, driven against a live server by the calendar
     # E2E suite: the server is tested with somebody else's reading of the RFCs.
     "caldav>=3.7.0",
+    # Encodes the HEIC fixtures of the files and photos tests (pi-heif, which
+    # the application ships, only decodes). Its wheels bundle x265 (GPL-2.0):
+    # fine for a test tool nothing distributes, never an application dependency.
+    "pillow-heif>=1.8.1",
     # Reads the .po catalogs in core.tests.test_translation_catalogs, which
     # checks the committed .mo files were compiled from them.
     "polib>=1.2.0",

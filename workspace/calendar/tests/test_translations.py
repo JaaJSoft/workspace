@@ -1,6 +1,7 @@
 """The calendar speaks the reader's language: the page, and the notifications
 it sends, each written in its recipient's language rather than the actor's."""
 
+import uuid
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -10,7 +11,14 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from workspace.calendar.activity import CalendarActivityProvider
-from workspace.calendar.models import Calendar, Event, Poll, PollInvitee, PollSlot
+from workspace.calendar.models import (
+    Calendar,
+    Event,
+    EventMember,
+    Poll,
+    PollInvitee,
+    PollSlot,
+)
 from workspace.calendar.services.recurrence_rule import describe
 from workspace.calendar.tasks import notify_today_events
 from workspace.notifications.models import Notification
@@ -241,3 +249,49 @@ class NotifyInLanguagesAtomicityTests(TestCase):
 
         self.assertEqual(len(calls), 2)
         self.assertFalse(Notification.objects.exists())
+
+
+class ErrorMessageLanguageTests(TestCase):
+    """The errors the calendar page shows come back in the reader's language."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="camille", password="pass")
+        set_setting(self.user, "core", "language", "fr")
+        # force_login, not force_authenticate: the middleware must see the user
+        # to activate their language.
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_missing_event_is_reported_in_french(self):
+        response = self.client.get(f"/api/v1/events/{uuid.uuid4()}")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Événement introuvable.")
+
+    def test_missing_calendar_is_reported_in_french(self):
+        response = self.client.delete(f"/api/v1/calendars/{uuid.uuid4()}")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Calendrier introuvable.")
+
+    def test_editing_someone_else_event_is_refused_in_french(self):
+        organiser = User.objects.create_user(username="dana", password="pass")
+        calendar = Calendar.objects.create(owner=organiser, name="Work")
+        start = timezone.now() + timedelta(days=1)
+        event = Event.objects.create(
+            calendar=calendar,
+            owner=organiser,
+            title="Review",
+            start=start,
+            end=start + timedelta(hours=1),
+        )
+        EventMember.objects.create(event=event, user=self.user)
+        response = self.client.put(
+            f"/api/v1/events/{event.pk}",
+            {"title": "Mine now"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json()["detail"], "Seul le propriétaire peut modifier."
+        )

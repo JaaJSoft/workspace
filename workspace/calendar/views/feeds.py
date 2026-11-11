@@ -1,4 +1,5 @@
 from django.http import Http404, HttpResponse
+from django.utils.translation import gettext
 from django.views.decorators.http import condition, require_GET
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -55,7 +56,8 @@ class CalendarFeedView(APIView):
         calendar = self._calendar(request, calendar_id)
         if calendar is None:
             return Response(
-                {"detail": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
         return Response(self._payload(request, calendar))
 
@@ -64,7 +66,8 @@ class CalendarFeedView(APIView):
         calendar = self._calendar(request, calendar_id)
         if calendar is None:
             return Response(
-                {"detail": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
         enable_feed(calendar)
         return Response(
@@ -76,7 +79,8 @@ class CalendarFeedView(APIView):
         calendar = self._calendar(request, calendar_id)
         if calendar is None:
             return Response(
-                {"detail": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
         disable_feed(calendar)
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class ProjectsConfig(AppConfig):
@@ -10,9 +11,9 @@ class ProjectsConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Projects",
+                name=gettext_lazy("Projects"),
                 slug="projects",
-                description="Plan work with kanban boards and backlogs.",
+                description=gettext_lazy("Plan work with kanban boards and backlogs."),
                 icon="square-kanban",
                 color="orange",
                 url="/projects",
@@ -60,7 +61,7 @@ class ProjectsConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="projects",
-                label="Projects",
+                label=gettext_lazy("Projects"),
                 icon="square-kanban",
                 provider_cls=ProjectsActivityProvider,
             )

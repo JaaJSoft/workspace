@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy, pgettext_lazy
 
 
 class CalendarConfig(AppConfig):
@@ -18,9 +19,11 @@ class CalendarConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Calendar",
+                name=gettext_lazy("Calendar"),
                 slug="calendar",
-                description="Plan and manage events, meetings and invitations.",
+                description=gettext_lazy(
+                    "Plan and manage events, meetings and invitations."
+                ),
                 icon="calendar",
                 color="teal",
                 url="/calendar",
@@ -50,7 +53,7 @@ class CalendarConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Calendar",
+                    name=gettext_lazy("Calendar"),
                     keywords=["calendar", "agenda", "events", "planning"],
                     icon="calendar",
                     url="/calendar",
@@ -59,7 +62,7 @@ class CalendarConfig(AppConfig):
                     order=20,
                 ),
                 CommandInfo(
-                    name="New event",
+                    name=gettext_lazy("New event"),
                     keywords=["new event", "meeting", "schedule"],
                     icon="calendar-plus",
                     url="/calendar?action=new-event",
@@ -68,7 +71,7 @@ class CalendarConfig(AppConfig):
                     order=21,
                 ),
                 CommandInfo(
-                    name="New poll",
+                    name=gettext_lazy("New poll"),
                     keywords=["new poll", "survey", "vote", "sondage"],
                     icon="bar-chart-3",
                     url="/calendar?action=new-poll",
@@ -93,7 +96,8 @@ class CalendarConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="calendar",
-                label="Calendar",
+                # A 64px tab of the activity feed: the French module name is cut there.
+                label=pgettext_lazy("activity source", "Calendar"),
                 icon="calendar",
                 provider_cls=CalendarActivityProvider,
             )

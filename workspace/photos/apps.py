@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class PhotosConfig(AppConfig):
@@ -63,7 +64,7 @@ class PhotosConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="photos",
-                label="Photos",
+                label=gettext_lazy("Photos"),
                 icon="images",
                 provider_cls=PhotosActivityProvider,
             )
@@ -71,9 +72,11 @@ class PhotosConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Photos",
+                name=gettext_lazy("Photos"),
                 slug="photos",
-                description="Browse your photos and videos by the day they were taken.",
+                description=gettext_lazy(
+                    "Browse your photos and videos by the day they were taken."
+                ),
                 icon="images",
                 color="lime",
                 url="/photos",
@@ -96,7 +99,7 @@ class PhotosConfig(AppConfig):
         person_section_registry.register(
             PersonSection(
                 slug="photos",
-                label="Photos",
+                label=gettext_lazy("Photos"),
                 icon="images",
                 template="photos/ui/partials/person_photos_section.html",
                 order=50,
@@ -112,7 +115,7 @@ class PhotosConfig(AppConfig):
         properties_section_registry.register(
             PropertiesSection(
                 slug="photo",
-                label="Photo",
+                label=gettext_lazy("Photo"),
                 template="photos/ui/partials/properties_section.html",
                 is_visible=is_section_visible,
                 get_context=section_context,
@@ -126,7 +129,7 @@ class PhotosConfig(AppConfig):
         properties_section_registry.register(
             PropertiesSection(
                 slug="video",
-                label="Video",
+                label=gettext_lazy("Video"),
                 template="photos/ui/partials/properties_video_section.html",
                 is_visible=is_video_section_visible,
                 get_context=video_section_context,
@@ -136,7 +139,7 @@ class PhotosConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Photos",
+                    name=gettext_lazy("Photos"),
                     keywords=[
                         "photos",
                         "pictures",
@@ -152,7 +155,7 @@ class PhotosConfig(AppConfig):
                     order=12,
                 ),
                 CommandInfo(
-                    name="Favorite photos",
+                    name=gettext_lazy("Favorite photos"),
                     keywords=["favorites", "starred photos", "best pictures"],
                     icon="star",
                     url="/photos?favorites=1",
@@ -161,7 +164,7 @@ class PhotosConfig(AppConfig):
                     order=13,
                 ),
                 CommandInfo(
-                    name="Videos",
+                    name=gettext_lazy("Videos"),
                     keywords=["videos", "movies", "clips", "recordings"],
                     icon="video",
                     url="/photos?type=video",
@@ -170,7 +173,7 @@ class PhotosConfig(AppConfig):
                     order=14,
                 ),
                 CommandInfo(
-                    name="Undated photos",
+                    name=gettext_lazy("Undated photos"),
                     keywords=["undated", "no date", "screenshots", "photos"],
                     icon="calendar-x",
                     url="/photos?date=undated",

@@ -311,12 +311,12 @@ class EventListView(CacheControlMixin, APIView):
             cal = Calendar.objects.get(pk=data["calendar_id"], owner=request.user)
         except Calendar.DoesNotExist:
             return Response(
-                {"detail": "Calendar not found or not owned by you."},
+                {"detail": _("Calendar not found or not owned by you.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if is_external_calendar(cal.pk):
             return Response(
-                {"detail": "Cannot create events in an external calendar."},
+                {"detail": _("Cannot create events in an external calendar.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -374,7 +374,7 @@ class EventDetailView(APIView):
         ).first()
         if not event:
             return None, Response(
-                {"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": _("Event not found.")}, status=status.HTTP_404_NOT_FOUND
             )
         return event, None
 
@@ -414,11 +414,12 @@ class EventDetailView(APIView):
             return err
         if event.owner_id != request.user.id:
             return Response(
-                {"detail": "Only the owner can edit."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": _("Only the owner can edit.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
         if is_external_calendar(event.calendar_id):
             return Response(
-                {"detail": "Cannot edit events from an external calendar."},
+                {"detail": _("Cannot edit events from an external calendar.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -445,12 +446,12 @@ class EventDetailView(APIView):
             return err
         if event.owner_id != request.user.id:
             return Response(
-                {"detail": "Only the owner can delete."},
+                {"detail": _("Only the owner can delete.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
         if is_external_calendar(event.calendar_id):
             return Response(
-                {"detail": "Cannot delete events from an external calendar."},
+                {"detail": _("Cannot delete events from an external calendar.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -480,6 +481,6 @@ class EventRespondView(APIView):
             )
         except NotInvitedError:
             return Response(
-                {"detail": "Not invited."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": _("Not invited.")}, status=status.HTTP_403_FORBIDDEN
             )
         return Response({"status": membership.status})

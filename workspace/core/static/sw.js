@@ -1,8 +1,13 @@
 /* Service Worker — PWA caching + Web Push Notifications */
 
-const CACHE_VERSION = new URL(self.location).searchParams.get('v') || 'dev';
-const CACHE_NAME = 'workspace-' + CACHE_VERSION;
-const OFFLINE_URL = '/static/offline.html';
+const SW_PARAMS = new URL(self.location).searchParams;
+const CACHE_VERSION = SW_PARAMS.get('v') || 'dev';
+// The offline page is cached in the language active when the worker
+// installed. The language is part of the worker's URL, so changing it
+// installs a new worker under a new cache, which fetches the page again.
+const LANGUAGE = SW_PARAMS.get('lang');
+const CACHE_NAME = 'workspace-' + CACHE_VERSION + (LANGUAGE ? '-' + LANGUAGE : '');
+const OFFLINE_URL = '/offline';
 
 // The manifest's share_target posts here; see receiveIncoming().
 const INCOMING_ACTION = '/incoming';
@@ -190,7 +195,7 @@ self.addEventListener('push', function (event) {
   try {
     payload = event.data.json();
   } catch (e) {
-    payload = { title: 'New notification', body: event.data.text() };
+    payload = { body: event.data.text() };
   }
 
   event.waitUntil(

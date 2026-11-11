@@ -26,6 +26,12 @@ Code that runs outside a request (a Celery task, a push notification, an email)
 has no active language. When it produces text for a user, it wraps that work in
 `translation.override(get_user_language(recipient))`.
 
+The offline page is a template too (`core/offline.html`, served at `/offline`).
+The service worker caches it when it installs, so it is written in the language
+active then. The worker's URL carries that language (`/sw.js?v=…&lang=fr`):
+when the user changes language, the next page registers a new URL, the browser
+installs the worker again and the cached page follows.
+
 ## Where catalogs live
 
 Each module owns its catalog, in `workspace/<module>/locale/<lang>/LC_MESSAGES/`:
@@ -120,6 +126,22 @@ A catalog that repeats a shared msgid fails
   with `common`'s translation: a word that read differently in the module is
   one that needs a context.
 
+## Length
+
+French runs 20-30% longer than English. A longer sentence is fine in text
+that wraps. In a fixed-width slot the extra characters are cut, and the label
+reads "Tableau d…". Fixed-width slots include a module tile, a tab, a button, a
+badge, a table header, a sidebar rail item, a `truncate`d title and a toast.
+
+- Before filling a `msgstr`, open the template its `#:` comment points to and
+  see where the string lands.
+- In a tight slot, pick the wording that fits: a shorter synonym, no article
+  ("Fichiers récents", not "Les fichiers récents"), a verb without its object
+  when the context already names it.
+- Check the French page at the narrowest width it supports.
+- A msgid shared through `common` must fit the narrowest of the places that use
+  it.
+
 ## Catalogs that shadow ours
 
 Django merges every installed app's catalog, and an app listed earlier in
@@ -206,9 +228,6 @@ calls `gettext`.
 - AI system prompts and tool descriptions: they are instructions to a model,
   not interface text.
 - Log messages, management command output and API documentation.
-- The offline page (`core/static/offline.html`) and the service worker's
-  fallback notification title: the service worker serves them as they are,
-  with no template engine and no catalog.
 - The admin (`django-unfold`): it has no strings of ours. Django and unfold
   ship their own catalogs, so the admin follows the user's language wherever
   those catalogs cover it.

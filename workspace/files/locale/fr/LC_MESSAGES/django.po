@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 18:08+0000\n"
+"POT-Creation-Date: 2026-11-11 16:53+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -74,6 +74,22 @@ msgstr "Créer un raccourci"
 #: actions/transfer.py
 msgid "Download as ZIP"
 msgstr "Télécharger en ZIP"
+
+#: apps.py
+msgid "Store, organize and share files."
+msgstr "Stockez, organisez et partagez vos fichiers."
+
+#: apps.py
+msgid "Favorite files"
+msgstr "Fichiers favoris"
+
+#: apps.py
+msgid "Recent files"
+msgstr "Fichiers récents"
+
+#: apps.py search.py ui/templates/files/ui/index.html ui/views.py
+msgid "Shared with me"
+msgstr "Partagés avec moi"
 
 #: models.py
 msgid "A shortcut opens a file or a folder."
@@ -151,10 +167,6 @@ msgstr "Modifications"
 #: models.py ui/templates/files/ui/partials/properties_content.html
 msgid "Sharing"
 msgstr "Partage"
-
-#: search.py ui/templates/files/ui/index.html ui/views.py
-msgid "Shared with me"
-msgstr "Partagés avec moi"
 
 #: sensitivity.py
 msgid "Strict"
@@ -403,6 +415,10 @@ msgid "A shortcut cannot be shared, only what it opens."
 msgstr "Un raccourci ne se partage pas, seul ce qu’il ouvre peut l’être."
 
 #: services/sharing.py
+msgid "Only a folder can accept uploads through a share link."
+msgstr "Seul un dossier peut recevoir des fichiers via un lien de partage."
+
+#: services/sharing.py
 msgid "A cap must be a positive number."
 msgstr "Une limite doit être un nombre positif."
 
@@ -413,10 +429,6 @@ msgstr "Une limite dépasse ce que ce serveur peut stocker."
 #: services/storage_analysis.py ui/templates/files/ui/partials/dialogs.html
 msgid "Images"
 msgstr "Images"
-
-#: services/storage_analysis.py
-msgid "Videos"
-msgstr "Vidéos"
 
 #: services/storage_analysis.py
 msgid "Audio"
@@ -2592,6 +2604,10 @@ msgid "Invalid or expired access token."
 msgstr "Jeton d’accès invalide ou expiré."
 
 #: views/share_links.py
+msgid "This link has no password."
+msgstr "Ce lien n'a pas de mot de passe."
+
+#: views/share_links.py
 msgid "Invalid password."
 msgstr "Mot de passe incorrect."
 
@@ -2686,3 +2702,11 @@ msgstr "%(actor)s a révoqué votre accès à « %(name)s »"
 #: viewsets/share.py
 msgid "Must be a whole number."
 msgstr "Doit être un nombre entier."
+
+#: viewsets/storage.py
+msgid "Storage analysis applies to folders."
+msgstr "L'analyse du stockage ne s'applique qu'aux dossiers."
+
+#: viewsets/sync.py
+msgid "Only folders can be synced."
+msgstr "Seuls les dossiers peuvent être synchronisés."

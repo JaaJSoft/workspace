@@ -134,3 +134,22 @@ class NotificationLanguageTests(APITestCase):
             self._title_for(self.reader_fr), "actor a supprimé «\xa0doc.txt\xa0»"
         )
         self.assertEqual(self._title_for(self.reader_en), 'actor deleted "doc.txt"')
+
+
+class ErrorMessageLanguageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="camille", password="pass")
+        set_setting(self.user, "core", "language", "fr")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_storage_analysis_of_a_file_is_refused_in_french(self):
+        file_obj = _make_file(self.user)
+        response = self.client.get(f"/api/v1/files/{file_obj.uuid}/storage")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"],
+            "L'analyse du stockage ne s'applique qu'aux dossiers.",
+        )

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 12:18+0000\n"
+"POT-Creation-Date: 2026-11-11 16:58+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -32,6 +32,42 @@ msgstr "Invitation au sondage « %(title)s »"
 #, python-format
 msgid "%(user)s invited you to vote on a poll."
 msgstr "%(user)s vous invite à répondre à un sondage."
+
+#: apps.py
+msgid "Plan and manage events, meetings and invitations."
+msgstr "Planifiez et gérez vos événements, réunions et invitations."
+
+#: apps.py ui/templates/calendar/ui/index.html
+#: ui/templates/calendar/ui/partials/_event_modal.html
+#: ui/templates/calendar/ui/partials/help_dialog.html
+msgid "New event"
+msgstr "Nouvel événement"
+
+#: apps.py
+msgid "New poll"
+msgstr "Nouveau sondage"
+
+#: apps.py
+msgctxt "activity source"
+msgid "Calendar"
+msgstr "Agenda"
+
+#: services/event_scope.py
+msgid "Only the owner can edit this event."
+msgstr "Seul le propriétaire peut modifier cet événement."
+
+#: services/event_scope.py
+msgid "This event comes from an external calendar and cannot be edited."
+msgstr ""
+"Cet événement provient d'un calendrier externe et ne peut pas être modifié."
+
+#: services/event_scope.py views/calendars.py views/external.py views/feeds.py
+msgid "Calendar not found."
+msgstr "Calendrier introuvable."
+
+#: services/event_scope.py
+msgid "Cannot move events into an external calendar."
+msgstr "Impossible de déplacer des événements vers un calendrier externe."
 
 #: services/event_scope.py
 #, python-format
@@ -283,12 +319,6 @@ msgstr "Agenda"
 #: ui/templates/calendar/ui/index.html
 msgid "No upcoming events"
 msgstr "Aucun événement à venir"
-
-#: ui/templates/calendar/ui/index.html
-#: ui/templates/calendar/ui/partials/_event_modal.html
-#: ui/templates/calendar/ui/partials/help_dialog.html
-msgid "New event"
-msgstr "Nouvel événement"
 
 #: ui/templates/calendar/ui/partials/_calendar_modals.html
 #: ui/templates/calendar/ui/partials/_sidebar.html
@@ -856,10 +886,6 @@ msgid "Task due dates"
 msgstr "Échéances des tâches"
 
 #: ui/templates/calendar/ui/partials/_sidebar.html
-msgid "Projects"
-msgstr "Projets"
-
-#: ui/templates/calendar/ui/partials/_sidebar.html
 msgid "Other calendars"
 msgstr "Autres calendriers"
 
@@ -1127,6 +1153,42 @@ msgstr "Sondage créé avec"
 msgctxt "default calendar name"
 msgid "Personal"
 msgstr "Personnel"
+
+#: views/events.py
+msgid "Calendar not found or not owned by you."
+msgstr "Calendrier introuvable ou qui ne vous appartient pas."
+
+#: views/events.py
+msgid "Cannot create events in an external calendar."
+msgstr "Impossible de créer des événements dans un calendrier externe."
+
+#: views/events.py
+msgid "Event not found."
+msgstr "Événement introuvable."
+
+#: views/events.py
+msgid "Only the owner can edit."
+msgstr "Seul le propriétaire peut modifier."
+
+#: views/events.py
+msgid "Cannot edit events from an external calendar."
+msgstr "Impossible de modifier les événements d'un calendrier externe."
+
+#: views/events.py
+msgid "Only the owner can delete."
+msgstr "Seul le propriétaire peut supprimer."
+
+#: views/events.py
+msgid "Cannot delete events from an external calendar."
+msgstr "Impossible de supprimer les événements d'un calendrier externe."
+
+#: views/events.py
+msgid "Not invited."
+msgstr "Vous n'êtes pas invité."
+
+#: views/external.py
+msgid "Sync started."
+msgstr "Synchronisation lancée."
 
 #: views/polls.py
 #, python-format

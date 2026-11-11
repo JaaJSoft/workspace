@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class NotesConfig(AppConfig):
@@ -21,9 +22,9 @@ class NotesConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Notes",
+                name=gettext_lazy("Notes"),
                 slug="notes",
-                description="Write and organize markdown notes.",
+                description=gettext_lazy("Write and organize markdown notes."),
                 icon="notebook-pen",
                 color="emerald",
                 url="/notes",
@@ -43,7 +44,7 @@ class NotesConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Notes",
+                    name=gettext_lazy("Notes"),
                     keywords=["notes", "markdown", "writing"],
                     icon="notebook-pen",
                     url="/notes",
@@ -52,7 +53,7 @@ class NotesConfig(AppConfig):
                     order=30,
                 ),
                 CommandInfo(
-                    name="New note",
+                    name=gettext_lazy("New note"),
                     keywords=["new note", "create note"],
                     icon="file-plus",
                     url="/notes?action=new",
@@ -61,7 +62,7 @@ class NotesConfig(AppConfig):
                     order=31,
                 ),
                 CommandInfo(
-                    name="Today's journal",
+                    name=gettext_lazy("Today's journal"),
                     keywords=["journal", "daily", "today", "diary"],
                     icon="book-open",
                     url="/notes?view=journal",
@@ -70,7 +71,7 @@ class NotesConfig(AppConfig):
                     order=32,
                 ),
                 CommandInfo(
-                    name="Favorite notes",
+                    name=gettext_lazy("Favorite notes"),
                     keywords=["favorites", "starred notes"],
                     icon="star",
                     url="/notes?view=favorites",
@@ -79,7 +80,7 @@ class NotesConfig(AppConfig):
                     order=33,
                 ),
                 CommandInfo(
-                    name="Recent notes",
+                    name=gettext_lazy("Recent notes"),
                     keywords=["recent notes", "last edited"],
                     icon="clock",
                     url="/notes?view=recent",
@@ -93,7 +94,7 @@ class NotesConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="notes",
-                label="Notes",
+                label=gettext_lazy("Notes"),
                 icon="notebook-pen",
                 provider_cls=NotesActivityProvider,
             )

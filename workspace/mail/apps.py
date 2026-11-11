@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class MailConfig(AppConfig):
@@ -21,9 +22,11 @@ class MailConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Mail",
+                name=gettext_lazy("Mail"),
                 slug="mail",
-                description="Read and send emails from external mail accounts.",
+                description=gettext_lazy(
+                    "Read and send emails from external mail accounts."
+                ),
                 icon="mail",
                 color="amber",
                 url="/mail",
@@ -50,7 +53,7 @@ class MailConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Mail",
+                    name=gettext_lazy("Mail"),
                     keywords=["mail", "email", "inbox"],
                     icon="mail",
                     url="/mail",
@@ -59,7 +62,7 @@ class MailConfig(AppConfig):
                     order=25,
                 ),
                 CommandInfo(
-                    name="New email",
+                    name=gettext_lazy("New email"),
                     keywords=["new email", "compose", "send"],
                     icon="mail-plus",
                     url="/mail?compose=",
@@ -84,7 +87,7 @@ class MailConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="mail",
-                label="Mail",
+                label=gettext_lazy("Mail"),
                 icon="mail",
                 provider_cls=MailActivityProvider,
             )

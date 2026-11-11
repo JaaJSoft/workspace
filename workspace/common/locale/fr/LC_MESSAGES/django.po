@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-30 11:55+0000\n"
+"POT-Creation-Date: 2026-11-11 16:43+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -239,6 +239,14 @@ msgid "Base URL:"
 msgstr "URL de base :"
 
 #: vocabulary.py
+msgid "Calendar"
+msgstr "Calendrier"
+
+#: vocabulary.py
+msgid "Chat"
+msgstr "Chat"
+
+#: vocabulary.py
 msgid "Clear"
 msgstr "Effacer"
 
@@ -289,6 +297,10 @@ msgstr "Impossible de charger l’activité."
 #: vocabulary.py
 msgid "Create"
 msgstr "Créer"
+
+#: vocabulary.py
+msgid "Dashboard"
+msgstr "Tableau de bord"
 
 #: vocabulary.py
 msgid "Default"
@@ -367,6 +379,10 @@ msgid "Hide password"
 msgstr "Masquer le mot de passe"
 
 #: vocabulary.py
+msgid "Imports"
+msgstr "Importations"
+
+#: vocabulary.py
 msgid "Link copied to clipboard"
 msgstr "Lien copié dans le presse-papiers"
 
@@ -435,6 +451,10 @@ msgid "Next"
 msgstr "Suivant"
 
 #: vocabulary.py
+msgid "Notes"
+msgstr "Notes"
+
+#: vocabulary.py
 msgid "Open"
 msgstr "Ouvrir"
 
@@ -443,12 +463,24 @@ msgid "Pause"
 msgstr "Pause"
 
 #: vocabulary.py
+msgid "People"
+msgstr "Personnes"
+
+#: vocabulary.py
+msgid "Photos"
+msgstr "Photos"
+
+#: vocabulary.py
 msgid "Previous"
 msgstr "Précédent"
 
 #: vocabulary.py
 msgid "Profile"
 msgstr "Profil"
+
+#: vocabulary.py
+msgid "Projects"
+msgstr "Projets"
 
 #: vocabulary.py
 msgid "Properties"
@@ -564,3 +596,11 @@ msgstr "Échec de l’envoi."
 #: vocabulary.py
 msgid "Use your session cookie or API token."
 msgstr "Utilisez votre cookie de session ou un jeton d’API."
+
+#: vocabulary.py
+msgid "Vault"
+msgstr "Coffre-fort"
+
+#: vocabulary.py
+msgid "Videos"
+msgstr "Vidéos"

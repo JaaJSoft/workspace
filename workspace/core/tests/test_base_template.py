@@ -104,7 +104,7 @@ class StandalonePageOriginTests(TestCase):
 
     def _offline_source(self) -> str:
         return (
-            Path(__file__).resolve().parents[1] / "static" / "offline.html"
+            Path(__file__).resolve().parents[1] / "templates" / "core" / "offline.html"
         ).read_text(encoding="utf-8")
 
     def test_the_offline_page_styles_itself_from_this_origin(self):

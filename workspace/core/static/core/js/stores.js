@@ -290,8 +290,15 @@ document.addEventListener('alpine:init', function () {
     async init() {
       if (!this.supported) return;
       try {
+        const params = new URLSearchParams();
         const appVersion = document.body?.dataset?.appVersion || '';
-        const swUrl = appVersion ? '/sw.js?v=' + encodeURIComponent(appVersion) : '/sw.js';
+        if (appVersion) params.set('v', appVersion);
+        // The worker caches the offline page in this language: a new language
+        // is a new URL, which makes the browser install the worker again.
+        const language = document.documentElement.lang;
+        if (language) params.set('lang', language);
+        const query = params.toString();
+        const swUrl = query ? '/sw.js?' + query : '/sw.js';
         const reg = await navigator.serviceWorker.register(swUrl);
         this.subscription = await reg.pushManager.getSubscription();
         // The backend prunes subscriptions the push service reports dead

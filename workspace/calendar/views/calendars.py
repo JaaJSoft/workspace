@@ -1,3 +1,4 @@
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -49,7 +50,8 @@ class CalendarDetailView(APIView):
             cal = Calendar.objects.get(pk=calendar_id, owner=request.user)
         except Calendar.DoesNotExist:
             return Response(
-                {"detail": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         ser = CalendarCreateSerializer(data=request.data)
@@ -67,7 +69,8 @@ class CalendarDetailView(APIView):
             cal = Calendar.objects.get(pk=calendar_id, owner=request.user)
         except Calendar.DoesNotExist:
             return Response(
-                {"detail": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
         cal.delete()
         invalidate("CalendarListView", user=request.user)

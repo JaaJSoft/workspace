@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class PeopleConfig(AppConfig):
@@ -11,9 +12,11 @@ class PeopleConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="People",
+                name=gettext_lazy("People"),
                 slug="people",
-                description="Keep the people around your data in one address book.",
+                description=gettext_lazy(
+                    "Keep the people around your data in one address book."
+                ),
                 icon="contact",
                 color="rose",
                 url="/people",
@@ -39,7 +42,7 @@ class PeopleConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="People",
+                    name=gettext_lazy("People"),
                     keywords=["people", "contacts", "address book", "carnet"],
                     icon="contact",
                     url="/people",
@@ -48,7 +51,7 @@ class PeopleConfig(AppConfig):
                     order=35,
                 ),
                 CommandInfo(
-                    name="New contact",
+                    name=gettext_lazy("New contact"),
                     keywords=["new contact", "new person", "add contact"],
                     icon="user-plus",
                     url="/people?action=new-person",
@@ -57,7 +60,7 @@ class PeopleConfig(AppConfig):
                     order=36,
                 ),
                 CommandInfo(
-                    name="Import contacts",
+                    name=gettext_lazy("Import contacts"),
                     keywords=["import contacts", "vcard", "vcf"],
                     icon="upload",
                     url="/people?action=import",

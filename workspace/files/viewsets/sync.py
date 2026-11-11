@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -74,7 +75,7 @@ class SyncMixin:
         file_obj = self.get_object()
         if file_obj.node_type != File.NodeType.FOLDER:
             return Response(
-                {"detail": "Only folders can be synced."},
+                {"detail": gettext("Only folders can be synced.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

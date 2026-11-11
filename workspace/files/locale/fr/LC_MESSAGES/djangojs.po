@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 05:54+0000\n"
+"POT-Creation-Date: 2026-11-11 18:20+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -61,8 +61,10 @@ msgstr "Enregistrer les fichiers partagés"
 msgid "Choose the folder to save the shared file in."
 msgid_plural "Choose the folder to save the %(count)s shared files in."
 msgstr[0] "Choisissez le dossier où enregistrer le fichier partagé."
-msgstr[1] "Choisissez le dossier où enregistrer les %(count)s de fichiers partagés."
-msgstr[2] "Choisissez le dossier où enregistrer les %(count)s fichiers partagés."
+msgstr[1] ""
+"Choisissez le dossier où enregistrer les %(count)s de fichiers partagés."
+msgstr[2] ""
+"Choisissez le dossier où enregistrer les %(count)s fichiers partagés."
 
 #: ui/static/files/ui/js/browser.js
 msgid "Save here"
@@ -826,14 +828,36 @@ msgid "Network error"
 msgstr "Erreur réseau"
 
 #: ui/static/files/ui/js/upload_queue.js
+msgid "Failed to discard %(name)s"
+msgstr "Impossible d’abandonner %(name)s"
+
+#: ui/static/files/ui/js/upload_queue.js
+msgid "Failed to discard %(count)s file"
+msgid_plural "Failed to discard %(count)s files"
+msgstr[0] "Impossible d’abandonner %(count)s fichier"
+msgstr[1] "Impossible d’abandonner %(count)s fichiers"
+msgstr[2] "Impossible d’abandonner %(count)s fichiers"
+
+#: ui/static/files/ui/js/upload_queue.js
 msgid "%(name)s was moved to trash but could not be permanently discarded"
 msgstr ""
 "%(name)s a été mis à la corbeille mais n’a pas pu être supprimé "
 "définitivement"
 
 #: ui/static/files/ui/js/upload_queue.js
-msgid "Failed to discard %(name)s"
-msgstr "Impossible d’abandonner %(name)s"
+msgid ""
+"%(count)s file was moved to trash but could not be permanently discarded"
+msgid_plural ""
+"%(count)s files were moved to trash but could not be permanently discarded"
+msgstr[0] ""
+"%(count)s fichier a été mis à la corbeille mais n’a pas pu être supprimé "
+"définitivement"
+msgstr[1] ""
+"%(count)s fichiers ont été mis à la corbeille mais n’ont pas pu être "
+"supprimés définitivement"
+msgstr[2] ""
+"%(count)s fichiers ont été mis à la corbeille mais n’ont pas pu être "
+"supprimés définitivement"
 
 #: ui/static/files/ui/js/viewer_panel.js
 msgid "Failed to load viewer"

@@ -7,11 +7,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
-function makeQueue({ discardOk = true, confirmAnswer = true } = {}) {
+function makeQueue({ discardOk = () => true, confirmAnswer = true } = {}) {
   const requests = [];
   const notified = [];
   const confirms = [];
   const discarded = [];
+  const discardCalls = [];
   const released = [];
   const ctx = loadScripts(
     ['workspace/common/static/ui/js/filesize.js', 'workspace/files/ui/static/files/ui/js/upload_queue.js'],
@@ -31,12 +32,17 @@ function makeQueue({ discardOk = true, confirmAnswer = true } = {}) {
       requests.push(request);
       return request;
     },
-    discard: async (uuid) => { discarded.push(uuid); return discardOk; },
+    discard: async (uploads) => {
+      discardCalls.push(Array.from(uploads, (upload) => upload.name));
+      const uuids = Array.from(uploads, (upload) => upload.uuid).filter(discardOk);
+      discarded.push(...uuids);
+      return uuids;
+    },
     notify: (type) => notified.push(type),
     confirm: async (options) => { confirms.push(options); return confirmAnswer; },
     release: (file) => released.push(file.name),
   });
-  return { queue, requests, notified, confirms, discarded, released };
+  return { queue, requests, notified, confirms, discarded, discardCalls, released };
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -273,8 +279,8 @@ test('rows that need the user are listed first', async () => {
   );
 });
 
-async function queueWithDuplicates(names) {
-  const harness = makeQueue();
+async function queueWithDuplicates(names, options) {
+  const harness = makeQueue(options);
   harness.queue.add(names.map((name) => ({ file: file(name) })));
   for (const [i, name] of names.entries()) {
     harness.requests[i].resolve({
@@ -287,11 +293,12 @@ async function queueWithDuplicates(names) {
 }
 
 test('every flagged duplicate can be discarded at once', async () => {
-  const { queue, discarded, notified } = await queueWithDuplicates(['dup-a.jpg', 'new.jpg', 'dup-b.jpg']);
+  const { queue, discarded, discardCalls, notified } = await queueWithDuplicates(['dup-a.jpg', 'new.jpg', 'dup-b.jpg']);
   assert.equal(queue.duplicateCount, 2);
 
   await queue.discardAllDuplicates();
 
+  assert.deepEqual(discardCalls, [['dup-a.jpg', 'dup-b.jpg']], 'one discard for the whole batch');
   assert.deepEqual(discarded, ['u-dup-a.jpg', 'u-dup-b.jpg']);
   assert.deepEqual(statuses(queue), ['dup-a.jpg:discarded', 'new.jpg:done', 'dup-b.jpg:discarded']);
   assert.equal(queue.duplicateCount, 0);
@@ -311,6 +318,28 @@ test('two copies uploaded side by side are never both discarded', async () => {
   assert.deepEqual(discarded, ['u-a']);
   assert.deepEqual(statuses(queue), ['a.jpg:discarded', 'b.jpg:done']);
   assert.equal(queue.duplicateCount, 0, 'the copy left is no longer flagged');
+});
+
+test('a duplicate the server failed to discard stays flagged', async () => {
+  const { queue, notified } = await queueWithDuplicates(
+    ['dup-a.jpg', 'dup-b.jpg'],
+    { discardOk: (uuid) => uuid !== 'u-dup-b.jpg' },
+  );
+
+  await queue.discardAllDuplicates();
+
+  assert.deepEqual(statuses(queue), ['dup-a.jpg:discarded', 'dup-b.jpg:done']);
+  assert.equal(queue.duplicateCount, 1);
+  assert.deepEqual(notified, ['uploads-changed', 'uploads-changed']);
+});
+
+test('nothing discarded refreshes nothing', async () => {
+  const { queue, notified } = await queueWithDuplicates(['dup-a.jpg'], { discardOk: () => false });
+
+  await queue.discardAllDuplicates();
+
+  assert.deepEqual(statuses(queue), ['dup-a.jpg:done']);
+  assert.deepEqual(notified, ['uploads-changed']);
 });
 
 test('every flagged duplicate can be kept at once', async () => {
@@ -534,4 +563,92 @@ test('nothing is taken when not wanted, refused, or unsupported', async () => {
   screen.hold(false);
 
   ctx.createScreenWakeLock(undefined, visible).hold(true);
+});
+
+function discardHarness(fails = {}, reports = {}) {
+  const runs = [];
+  const alerts = [];
+  const ctx = loadScripts(
+    [
+      'workspace/files/ui/static/files/ui/js/file_operations.js',
+      'workspace/common/static/ui/js/filesize.js',
+      'workspace/files/ui/static/files/ui/js/upload_queue.js',
+    ],
+    {
+      document: { addEventListener: () => {} },
+      AppAlert: {
+        error: (text) => alerts.push(`error: ${text}`),
+        warning: (text) => alerts.push(`warning: ${text}`),
+      },
+    },
+  );
+  ctx.fileOperations = {
+    run: async (kind, uuids) => {
+      runs.push([kind, Array.from(uuids)]);
+      const failed = fails[kind] || [];
+      return {
+        status: 'completed',
+        processed: uuids.length,
+        counts: { done: uuids.length - failed.length, failed: failed.length },
+        errors: failed.map((uuid) => ({ uuid, message: 'Refused' })),
+        ...reports[kind],
+      };
+    },
+  };
+  return { discard: ctx.discardFileUploads, runs, alerts };
+}
+
+const uploads = (...names) => names.map((name) => ({ uuid: `u-${name}`, name }));
+
+test('discarding a batch runs one trash and one purge, whatever its size', async () => {
+  const { discard, runs, alerts } = discardHarness();
+
+  const discarded = await discard(uploads('a.jpg', 'b.jpg', 'c.jpg'));
+
+  assert.deepEqual(Array.from(discarded), ['u-a.jpg', 'u-b.jpg', 'u-c.jpg']);
+  assert.deepEqual(runs, [
+    ['trash', ['u-a.jpg', 'u-b.jpg', 'u-c.jpg']],
+    ['purge', ['u-a.jpg', 'u-b.jpg', 'u-c.jpg']],
+  ]);
+  assert.deepEqual(alerts, []);
+});
+
+test('only what reached the trash is purged, and each failure is reported once', async () => {
+  const { discard, runs, alerts } = discardHarness({ trash: ['u-b.jpg', 'u-c.jpg'], purge: ['u-a.jpg'] });
+
+  const discarded = await discard(uploads('a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'));
+
+  assert.deepEqual(Array.from(discarded), ['u-a.jpg', 'u-d.jpg']);
+  assert.deepEqual(runs[1], ['purge', ['u-a.jpg', 'u-d.jpg']]);
+  assert.deepEqual(alerts, [
+    'error: Failed to discard 2 files',
+    'warning: a.jpg was moved to trash but could not be permanently discarded',
+  ]);
+});
+
+test('nothing trashed runs no purge', async () => {
+  const { discard, runs, alerts } = discardHarness({ trash: ['u-a.jpg'] });
+
+  assert.deepEqual(Array.from(await discard(uploads('a.jpg'))), []);
+  assert.deepEqual(runs, [['trash', ['u-a.jpg']]]);
+  assert.deepEqual(alerts, ['error: Failed to discard a.jpg']);
+});
+
+test('an operation cancelled halfway keeps what it already moved to the trash', async () => {
+  const { discard, runs } = discardHarness({}, { trash: { status: 'cancelled', processed: 1 } });
+
+  const discarded = await discard(uploads('a.jpg', 'b.jpg', 'c.jpg'));
+
+  assert.deepEqual(Array.from(discarded), ['u-a.jpg']);
+  assert.deepEqual(runs[1], ['purge', ['u-a.jpg']]);
+});
+
+test('a report with more failures than it lists counts nothing as discarded', async () => {
+  const { discard, runs } = discardHarness(
+    { trash: ['u-a.jpg'] },
+    { trash: { counts: { done: 1, failed: 2 } } },
+  );
+
+  assert.deepEqual(Array.from(await discard(uploads('a.jpg', 'b.jpg', 'c.jpg'))), []);
+  assert.deepEqual(runs, [['trash', ['u-a.jpg', 'u-b.jpg', 'u-c.jpg']]]);
 });

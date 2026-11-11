@@ -120,6 +120,22 @@ A catalog that repeats a shared msgid fails
   with `common`'s translation: a word that read differently in the module is
   one that needs a context.
 
+## Length
+
+French runs 20-30% longer than English. A longer sentence is fine in text
+that wraps. In a fixed-width slot the extra characters are cut, and the label
+reads "Tableau d…". Fixed-width slots include a module tile, a tab, a button, a
+badge, a table header, a sidebar rail item, a `truncate`d title and a toast.
+
+- Before filling a `msgstr`, open the template its `#:` comment points to and
+  see where the string lands.
+- In a tight slot, pick the wording that fits: a shorter synonym, no article
+  ("Fichiers récents", not "Les fichiers récents"), a verb without its object
+  when the context already names it.
+- Check the French page at the narrowest width it supports.
+- A msgid shared through `common` must fit the narrowest of the places that use
+  it.
+
 ## Catalogs that shadow ours
 
 Django merges every installed app's catalog, and an app listed earlier in

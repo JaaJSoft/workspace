@@ -1,21 +1,16 @@
 """ClamAV backend, speaking the clamd INSTREAM protocol.
 
-Uses clamav_client's low-level socket classes rather than its high-level
-``get_scanner()`` helper: that helper scans by filename, which would tie this
-feature to FileSystemStorage. ``instream`` accepts any file-like object and
-reads it in small chunks, so nothing is ever fully buffered.
+Uses ``instream``, which accepts any file-like object and reads it in small
+chunks, so nothing is ever fully buffered and the feature is not tied to
+FileSystemStorage.
 """
 
 from __future__ import annotations
 
 import logging
 
-from clamav_client.clamd import (
-    BufferTooLongError,
-    ClamdError,
-    ClamdNetworkSocket,
-    ClamdUnixSocket,
-)
+from clamdpy.exceptions import BufferTooLongError, ClamdException
+from clamdpy.sockets import ClamdNetworkSocket, ClamdUnixSocket
 from django.conf import settings
 
 from workspace.common.logging import scrub
@@ -31,6 +26,20 @@ HEALTH_TIMEOUT = 2.0
 
 _SIGNATURE_MAX = FileScan._meta.get_field("signature").max_length
 _DETAIL_MAX = FileScan._meta.get_field("detail").max_length
+
+
+def _describe(exc):
+    """The message of a clamd failure, as text.
+
+    clamdpy's errors keep their message in an attribute and pass their
+    constructor arguments to ``BaseException`` untouched, so ``str()`` of a
+    refused connection reads ``('Error while connecting to ...', 111)``.
+    """
+    for attribute in ("msg", "error"):
+        text = getattr(exc, attribute, None)
+        if isinstance(text, str):
+            return text
+    return str(exc)
 
 
 class ClamAVScanner(Scanner):
@@ -51,23 +60,6 @@ class ClamAVScanner(Scanner):
             timeout=effective,
         )
 
-    @staticmethod
-    def _force_close(client):
-        # clamav_client assigns clamd_socket before connect() and only closes
-        # it on paths that reach its own try/finally - a connect failure in
-        # _basic_command() (ping/version) skips that finally entirely, so the
-        # socket is left open until GC finalizes it. Closing twice is a no-op.
-        sock = getattr(client, "clamd_socket", None)
-        if sock is not None:
-            try:
-                sock.close()
-            except OSError:
-                # Already closed, or closing a socket whose peer vanished. This
-                # runs in a finally on the failure path, where the verdict is
-                # already decided - raising here would replace a useful ERROR
-                # verdict with a crash in the Celery task.
-                pass
-
     def scan(self, stream, *, name=""):
         client = self._client()
         try:
@@ -79,40 +71,33 @@ class ClamAVScanner(Scanner):
                 status=FileScan.Status.SKIPPED,
                 detail="daemon stream size limit exceeded",
             )
-        except (ClamdError, OSError) as exc:
+        except (ClamdException, OSError) as exc:
+            # clamdpy's errors are not OSErrors: it wraps a refused connection
+            # and a reply it cannot parse, an empty one included.
             logger.warning(
-                "Malware scan failed for %s: %s", scrub(name), scrub(str(exc))
+                "Malware scan failed for %s: %s", scrub(name), scrub(_describe(exc))
             )
             return ScanVerdict(
-                status=FileScan.Status.ERROR, detail=str(exc)[:_DETAIL_MAX]
-            )
-        finally:
-            self._force_close(client)
-
-        if not result:
-            return ScanVerdict(
-                status=FileScan.Status.ERROR, detail="empty response from daemon"
+                status=FileScan.Status.ERROR, detail=_describe(exc)[:_DETAIL_MAX]
             )
 
-        status, reason = next(iter(result.values()))
-        if status == "OK":
+        if result.status == "OK":
             return ScanVerdict(status=FileScan.Status.CLEAN)
-        if status == "FOUND":
+        if result.status == "FOUND":
             return ScanVerdict(
                 status=FileScan.Status.INFECTED,
-                signature=(reason or "")[:_SIGNATURE_MAX],
+                signature=(result.reason or "")[:_SIGNATURE_MAX],
             )
         return ScanVerdict(
-            status=FileScan.Status.ERROR, detail=(reason or status)[:_DETAIL_MAX]
+            status=FileScan.Status.ERROR,
+            detail=(result.reason or result.status)[:_DETAIL_MAX],
         )
 
     def health(self):
         client = self._client(timeout=HEALTH_TIMEOUT)
         try:
             client.ping()
-            version = client.version()
-        except (ClamdError, OSError) as exc:
-            return ScannerHealth(reachable=False, error=str(exc)[:_DETAIL_MAX])
-        finally:
-            self._force_close(client)
+            version = client.version(raw=True)
+        except (ClamdException, OSError) as exc:
+            return ScannerHealth(reachable=False, error=_describe(exc)[:_DETAIL_MAX])
         return ScannerHealth(reachable=True, version=version[:_DETAIL_MAX])

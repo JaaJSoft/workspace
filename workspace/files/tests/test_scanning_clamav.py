@@ -1,6 +1,10 @@
 import io
+import socket
+import types
+import weakref
 from unittest.mock import patch
 
+from clamdpy import sockets as clamd_sockets
 from django.test import SimpleTestCase, override_settings
 
 from workspace.files.models import FileScan
@@ -86,33 +90,38 @@ class ClamAVScannerTests(SimpleTestCase):
         self.assertFalse(health.reachable)
         self.assertTrue(health.error)
 
-    def _spy_on_client(self):
-        """Capture every clamd client the scanner builds, real construction kept.
+    def _track_sockets(self):
+        """Weak references to every socket clamdpy opens while the test runs.
 
-        A ResourceWarning raised while a socket's finalizer runs during
-        garbage collection is swallowed by the interpreter ("Exception
-        ignored while finalizing...") rather than propagated - it can never
-        fail a test, even when the leak is real. Asserting the socket's
-        ``fileno()`` is -1 (closed) after the call is the only reliable way
-        to pin this down.
+        A ResourceWarning raised while a socket is finalized during garbage
+        collection is swallowed by the interpreter, so it can never fail a
+        test. A socket nothing refers to any more is closed on the spot, so a
+        dead reference after the call proves none is left open - a worker
+        whose daemon is down would otherwise lose one descriptor per scan.
         """
-        clients = []
-        real_client = ClamAVScanner._client
+        opened = []
 
-        def spy(scanner, timeout=None):
-            client = real_client(scanner, timeout=timeout)
-            clients.append(client)
-            return client
+        class Tracked(socket.socket):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                opened.append(weakref.ref(self))
 
-        self.enterContext(patch.object(ClamAVScanner, "_client", spy))
-        return clients
+        tracked = types.SimpleNamespace(
+            socket=Tracked,
+            AF_INET=socket.AF_INET,
+            AF_UNIX=socket.AF_UNIX,
+            SOCK_STREAM=socket.SOCK_STREAM,
+        )
+        self.enterContext(patch.object(clamd_sockets, "socket", tracked))
+        return opened
+
+    def _assert_all_released(self, opened):
+        self.assertTrue(opened, "the daemon was never contacted")
+        self.assertEqual([ref for ref in opened if ref() is not None], [])
 
     def test_unreachable_daemon_does_not_leak_a_socket(self):
-        # clamav_client's _init_socket() assigns the socket before connect();
-        # a connect failure can leave it open until GC finalizes it, one fd
-        # per scan attempted while a Celery worker's daemon is down.
         port = free_port()
-        clients = self._spy_on_client()
+        opened = self._track_sockets()
         with override_settings(
             FILES_CLAMAV_SOCKET="",
             FILES_CLAMAV_HOST="127.0.0.1",
@@ -120,11 +129,11 @@ class ClamAVScannerTests(SimpleTestCase):
             FILES_CLAMAV_TIMEOUT=2.0,
         ):
             ClamAVScanner().scan(io.BytesIO(b"x"), name="a.bin")
-        self.assertEqual(clients[0].clamd_socket.fileno(), -1)
+        self._assert_all_released(opened)
 
     def test_health_check_does_not_leak_a_socket_when_unreachable(self):
         port = free_port()
-        clients = self._spy_on_client()
+        opened = self._track_sockets()
         with override_settings(
             FILES_CLAMAV_SOCKET="",
             FILES_CLAMAV_HOST="127.0.0.1",
@@ -132,4 +141,29 @@ class ClamAVScannerTests(SimpleTestCase):
             FILES_CLAMAV_TIMEOUT=2.0,
         ):
             ClamAVScanner().health()
-        self.assertEqual(clients[0].clamd_socket.fileno(), -1)
+        self._assert_all_released(opened)
+
+    def test_scan_does_not_leak_a_socket_when_the_daemon_answers(self):
+        opened = self._track_sockets()
+        with FakeClamd(reply=b"stream: OK\n") as daemon, _tcp(daemon):
+            ClamAVScanner().scan(io.BytesIO(b"harmless"), name="a.txt")
+        self._assert_all_released(opened)
+
+    def test_connection_failure_detail_is_a_sentence_not_a_tuple(self):
+        port = free_port()
+        with override_settings(
+            FILES_CLAMAV_SOCKET="",
+            FILES_CLAMAV_HOST="127.0.0.1",
+            FILES_CLAMAV_PORT=port,
+            FILES_CLAMAV_TIMEOUT=2.0,
+        ):
+            scan = ClamAVScanner().scan(io.BytesIO(b"x"), name="a.bin")
+            health = ClamAVScanner().health()
+        for detail in (scan.detail, health.error):
+            self.assertTrue(detail.startswith("Error while connecting to"), detail)
+
+    def test_unparseable_reply_is_an_error_verdict(self):
+        with FakeClamd(reply=b"\n") as daemon, _tcp(daemon):
+            verdict = ClamAVScanner().scan(io.BytesIO(b"x"), name="a.bin")
+        self.assertEqual(verdict.status, FileScan.Status.ERROR)
+        self.assertTrue(verdict.detail)

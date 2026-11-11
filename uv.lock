@@ -611,12 +611,12 @@ wheels = [
 ]
 
 [[package]]
-name = "clamav-client"
-version = "0.7.2"
+name = "clamdpy"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1a/0e/3d1813e43dce80a7f76220a715720906244b93e12692f0f4ede54d2c515f/clamav_client-0.7.2.tar.gz", hash = "sha256:d136f44acc79ceada188a200ac0f68840abb7cfae1fa5f9d535f11cfc244cccd", size = 35393, upload-time = "2026-03-05T14:42:41.495Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1f/19/6f476637b3cda052c7fd1be5224b7d2f30c09dc5717c51c02145c145a51c/clamdpy-0.2.0.tar.gz", hash = "sha256:6e157f49fc64dc239fe1f662db31009aca92b33486b3124b7863e808edf5cd1f", size = 24183, upload-time = "2025-12-14T11:15:34.328Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/d2/d7eceaa22d6fb01d7c3667c5c7129d8ccd4dde90935a7ea9064f688704c8/clamav_client-0.7.2-py3-none-any.whl", hash = "sha256:294ade0fb1e902db2399daa3f27a7023ca216282f129f0b2466abd5672b27397", size = 14410, upload-time = "2026-03-05T14:42:40.118Z" },
+    { url = "https://files.pythonhosted.org/packages/46/05/3b20a4a4674e8a80cfcef97e7bb15c35b4937ca1e6502071d8796a6175bd/clamdpy-0.2.0-py3-none-any.whl", hash = "sha256:51631e0455309f74090876cce989153729f7a5319ad89164f65ec5276759d584", size = 8223, upload-time = "2025-12-14T11:15:33.561Z" },
 ]
 
 [[package]]
@@ -3678,7 +3678,7 @@ dependencies = [
     { name = "cairosvg" },
     { name = "cbor2" },
     { name = "celery" },
-    { name = "clamav-client" },
+    { name = "clamdpy" },
     { name = "cryptography" },
     { name = "dj-database-url" },
     { name = "django" },
@@ -3757,7 +3757,7 @@ requires-dist = [
     { name = "cairosvg", specifier = ">=2.9.1" },
     { name = "cbor2", specifier = ">=6.1.5" },
     { name = "celery", specifier = ">=5.6.2" },
-    { name = "clamav-client", specifier = ">=0.7.2" },
+    { name = "clamdpy", specifier = ">=0.2.0" },
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "dj-database-url", specifier = ">=2.3.0" },
     { name = "django", specifier = ">=6.1.2,<7.0" },

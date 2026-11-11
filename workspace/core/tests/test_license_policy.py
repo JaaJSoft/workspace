@@ -27,13 +27,14 @@ def _distribution(root, *, metadata_lines, notices=None):
     (dist_info / "METADATA").write_text(
         "\n".join(
             ["Metadata-Version: 2.4", "Name: pkg", "Version: 1.0", *metadata_lines]
-        )
+        ),
+        encoding="utf-8",
     )
     record = []
     for name, text in (notices or {}).items():
-        (dist_info / "licenses" / name).write_text(text)
+        (dist_info / "licenses" / name).write_text(text, encoding="utf-8")
         record.append(f"pkg-1.0.dist-info/licenses/{name},,")
-    (dist_info / "RECORD").write_text("\n".join(record))
+    (dist_info / "RECORD").write_text("\n".join(record), encoding="utf-8")
     return metadata.PathDistribution(dist_info)
 
 
@@ -173,7 +174,9 @@ class NpmLockTests(SimpleTestCase):
     def _problems(self, packages):
         with tempfile.TemporaryDirectory() as root:
             lock = Path(root) / "package-lock.json"
-            lock.write_text(json.dumps({"packages": {"": {}, **packages}}))
+            lock.write_text(
+                json.dumps({"packages": {"": {}, **packages}}), encoding="utf-8"
+            )
             with mock.patch.object(check_licenses, "FRONTEND_LOCK", lock):
                 return check_licenses.check_npm()
 

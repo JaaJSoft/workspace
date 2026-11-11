@@ -199,7 +199,9 @@ def bundled_copyleft(distribution):
     for file in distribution.files or []:
         if "licenses" not in file.parts or not _NOTICE_FILE.search(file.name):
             continue
-        for line in file.locate().read_text(errors="replace").splitlines():
+        for line in (
+            file.locate().read_text(encoding="utf-8", errors="replace").splitlines()
+        ):
             if _STRONG_COPYLEFT.search(line) and "exception" not in line.lower():
                 lines.append(line.strip())
     return lines
@@ -235,7 +237,9 @@ def _lock_license(entry):
 
 def check_npm():
     problems, count = [], 0
-    for path, entry in json.loads(FRONTEND_LOCK.read_text())["packages"].items():
+    for path, entry in json.loads(FRONTEND_LOCK.read_text(encoding="utf-8"))[
+        "packages"
+    ].items():
         if not path or entry.get("dev"):
             continue
         count += 1

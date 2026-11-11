@@ -103,3 +103,24 @@ class ChatTouchActionsTests(PlaywrightTestCase):
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
         expect(item.locator('[title="More options"]')).to_be_visible()
         expect(item.get_by_text("just now")).to_be_visible()
+
+    def test_staged_attachments_show_their_remove_button(self):
+        self._open_conversation()
+        file_input = self.page.locator('input[type="file"][x-ref="fileInput"]').first
+        file_input.set_input_files(
+            {"name": "notes.txt", "mimeType": "text/plain", "buffer": b"hello"}
+        )
+        # A file picked from Files stages as a second kind of chip.
+        file_input.evaluate(
+            "(el) => Alpine.$data(el).pendingPickedFiles.push("
+            "{ uuid: 'picked', name: 'report.pdf' })"
+        )
+        chips = self.page.locator(r".group\/file")
+        expect(chips).to_have_count(2)
+
+        for name in ("notes.txt", "report.pdf"):
+            chip = chips.filter(has_text=name)
+            remove = chip.locator("button")
+            expect(remove).to_have_css("opacity", "1")
+            remove.tap()
+            expect(chip).to_have_count(0)

@@ -54,7 +54,7 @@ ALLOWED = frozenset(
         "cnri-python",
     }
 )
-WEAK_COPYLEFT_PREFIXES = ("lgpl-", "mpl-")
+WEAK_COPYLEFT_PREFIXES = ("lgpl-", "mpl-2.0")
 
 # What the Trove classifiers and free-text License fields of older packages
 # call the licenses above. Replaced as whole phrases before the expression is
@@ -85,11 +85,22 @@ _PHRASE = re.compile(
     re.IGNORECASE,
 )
 
-# (ecosystem, name) -> why it is fine although its metadata does not say so.
+# (ecosystem, name) -> (the license it declared when reviewed, why it is fine).
+# A package declaring anything else is checked again: the review was of that
+# license, not of the name.
 REVIEWED = {
-    ("pypi", "py-rust-stemmers"): "MIT: its LICENSE file; the metadata is empty",
-    ("pypi", "sqlite-vec"): "MIT or Apache-2.0: dual-licensed, said in free text",
-    ("npm", "rgbcolor"): "MIT: 'MIT OR SEE LICENSE IN FEEL-FREE.md', free use",
+    ("pypi", "py-rust-stemmers"): (
+        "no usable license metadata",
+        "MIT: its LICENSE file; the metadata is empty",
+    ),
+    ("pypi", "sqlite-vec"): (
+        "MIT License, Apache License, Version 2.0",
+        "MIT or Apache-2.0: dual-licensed, said in free text",
+    ),
+    ("npm", "rgbcolor"): (
+        "MIT OR SEE LICENSE IN FEEL-FREE.md",
+        "MIT, or a free-use grant",
+    ),
 }
 
 # Wheels that bundle native libraries ship a notice listing them, and the
@@ -99,16 +110,25 @@ BUNDLED_NOTICE_REVIEWED = {}
 
 _NOTICE_FILE = re.compile(r"bundled|third[-_ ]?party|notice", re.IGNORECASE)
 # GPL and AGPL, not LGPL; a line granting a linking exception is a runtime.
-_STRONG_COPYLEFT = re.compile(r"(?<![A-Za-z])A?GPL", re.IGNORECASE)
+# The spelled-out name only counts on a "License:" field line, the form of a
+# bundled-libraries listing: notices also carry whole license texts, which
+# name the GPL in passing (MPL-2.0 defines its "Secondary Licenses" with it).
+_STRONG_COPYLEFT = re.compile(
+    r"(?<![A-Za-z])A?GPL"
+    r"|^\s*licen[cs]e\s*:.*(?<!lesser )(?<!library )general public license",
+    re.IGNORECASE,
+)
 _TOKEN = re.compile(r"\(|\)|[^\s()]+")
 
 
 def _atom(tokens):
     token = tokens.pop(0)
+    if token == ")":
+        raise ValueError("unbalanced parenthesis")
     if token == "(":
         verdict = _or(tokens)
-        if tokens:
-            tokens.pop(0)
+        if not tokens or tokens.pop(0) != ")":
+            raise ValueError("unbalanced parenthesis")
         return verdict
     if tokens and tokens[0].upper() == "WITH":
         # The exception does not make a GPL license a permissive one.
@@ -149,7 +169,7 @@ def evaluate(expression):
         return False
     try:
         verdict = _or(tokens)
-    except IndexError:
+    except IndexError, ValueError:
         return False
     return verdict and not tokens
 
@@ -197,7 +217,8 @@ def bundled_copyleft(distribution):
     """Lines of the notices a wheel ships that name a GPL or AGPL library."""
     lines = []
     for file in distribution.files or []:
-        if "licenses" not in file.parts or not _NOTICE_FILE.search(file.name):
+        # Wherever the wheel put it: dist-info/licenses/, <package>.libs/...
+        if not _NOTICE_FILE.search(file.name):
             continue
         for line in (
             file.locate().read_text(encoding="utf-8", errors="replace").splitlines()
@@ -218,12 +239,18 @@ def check_python():
             continue
         allowed, declared = python_license(distribution)
         label = f"{name} {distribution.version}"
-        if not allowed and ("pypi", name) not in REVIEWED:
+        if not allowed and not is_reviewed("pypi", name, declared):
             problems.append(f"{label}: {declared}")
         if name not in BUNDLED_NOTICE_REVIEWED:
             for line in bundled_copyleft(distribution):
                 problems.append(f"{label} bundles strong copyleft code: {line}")
     return len(names), problems, unchecked
+
+
+def is_reviewed(ecosystem, name, declared):
+    """Whether a package was reviewed with the license it declares now."""
+    review = REVIEWED.get((ecosystem, name))
+    return review is not None and review[0] == declared
 
 
 def _lock_license(entry):
@@ -245,7 +272,7 @@ def check_npm():
         count += 1
         name = path.rsplit("node_modules/", 1)[-1]
         declared = _lock_license(entry)
-        if not evaluate(declared) and ("npm", name) not in REVIEWED:
+        if not evaluate(declared) and not is_reviewed("npm", name, declared):
             problems.append(
                 f"{name} {entry.get('version', '')}: {declared or 'no license'}"
             )

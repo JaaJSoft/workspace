@@ -1,7 +1,10 @@
 import io
 import socket
+import tempfile
 import types
+import unittest
 import weakref
+from pathlib import Path
 from unittest.mock import patch
 
 from clamdpy import sockets as clamd_sockets
@@ -167,3 +170,31 @@ class ClamAVScannerTests(SimpleTestCase):
             verdict = ClamAVScanner().scan(io.BytesIO(b"x"), name="a.bin")
         self.assertEqual(verdict.status, FileScan.Status.ERROR)
         self.assertTrue(verdict.detail)
+
+
+@unittest.skipUnless(hasattr(socket, "AF_UNIX"), "Unix sockets only")
+class ClamAVUnixSocketTests(SimpleTestCase):
+    """``FILES_CLAMAV_SOCKET`` takes a bare path or a ``unix://`` URL."""
+
+    def _scan_through(self, configured):
+        with tempfile.TemporaryDirectory() as root:
+            path = str(Path(root) / "clamd.ctl")
+            with (
+                FakeClamd(reply=b"stream: OK\n", unix_path=path) as daemon,
+                override_settings(FILES_CLAMAV_SOCKET=configured.format(path=path)),
+            ):
+                verdict = ClamAVScanner().scan(io.BytesIO(b"payload"), name="a.txt")
+                health = ClamAVScanner().health()
+                return verdict, health, daemon.received
+
+    def test_a_bare_path_reaches_the_daemon(self):
+        verdict, health, received = self._scan_through("{path}")
+        self.assertEqual(verdict.status, FileScan.Status.CLEAN, verdict.detail)
+        self.assertTrue(health.reachable, health.error)
+        self.assertEqual(received, b"payload")
+
+    def test_a_unix_url_reaches_the_daemon(self):
+        verdict, health, received = self._scan_through("unix://{path}")
+        self.assertEqual(verdict.status, FileScan.Status.CLEAN, verdict.detail)
+        self.assertTrue(health.reachable, health.error)
+        self.assertEqual(received, b"payload")

@@ -24,8 +24,9 @@ runs:
         # resolving from the runner while every other host still does, apt
         # waits out a DNS timeout per file on each of them in turn: the step
         # hangs for most of an hour, then fails. Keep the hosts that resolve
-        # and add an official mirror outside ubuntu.com after them; when they
-        # all resolve, the file is left as it is.
+        # and add an official mirror outside ubuntu.com after them, which apt
+        # only reaches when every host before it failed - including one that
+        # resolved here and stops resolving a minute later.
         mirrors=/etc/apt/apt-mirrors.txt
         if [ -f "$mirrors" ]; then
           kept=""
@@ -37,9 +38,7 @@ runs:
               echo "::warning title=Ubuntu archive::${host:-$line} does not resolve, apt falls back on ${FALLBACK_MIRROR}"
             fi
           done < "$mirrors"
-          if [ "$kept" != "$(cat "$mirrors")"$'\n' ]; then
-            printf '%s%s\tpriority:9\n' "$kept" "$FALLBACK_MIRROR" | sudo tee "$mirrors" >/dev/null
-          fi
+          printf '%s%s\tpriority:9\n' "$kept" "$FALLBACK_MIRROR" | sudo tee "$mirrors" >/dev/null
         fi
         sudo apt-get -o Acquire::Retries=3 update
         # The package list is split into words on purpose.

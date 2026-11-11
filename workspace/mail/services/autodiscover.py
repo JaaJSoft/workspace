@@ -20,6 +20,7 @@ response, which keeps the leak of such a request to its existence.
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 
 import httpx2
@@ -40,7 +41,10 @@ _CANDIDATE_URLS = (
 
 # Real files weigh a few kilobytes.
 _MAX_BYTES = 64 * 1024
+# The timeout bounds each read; the deadline bounds the whole response, which
+# a server sending a byte at a time could otherwise stretch indefinitely.
 _TIMEOUT = httpx2.Timeout(4.0)
+_DEADLINE_SECONDS = 8.0
 _HEADERS = {"User-Agent": "mail-autoconfig", "Accept": "application/xml, text/xml"}
 
 _LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
@@ -50,6 +54,10 @@ _DTD = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)", re.IGNORECASE)
 
 # What the socketType of the file means for us; "plain" is left out on purpose.
 _SECURITY = {"SSL": "ssl", "STARTTLS": "starttls"}
+# The security each protocol can be set up with here. The IMAP connector has
+# no STARTTLS mode (imap_use_ssl off is a connection in clear), so an IMAP
+# server offered only through STARTTLS would be logged into in clear.
+_USABLE_SECURITY = {"imap": {"ssl"}, "smtp": {"ssl", "starttls"}}
 
 
 @dataclass(frozen=True)
@@ -107,6 +115,7 @@ def _fetch(url):
     except UnsafeUrl:
         return None
     body = bytearray()
+    deadline = time.monotonic() + _DEADLINE_SECONDS
     try:
         with httpx2.Client(
             timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=False
@@ -116,7 +125,7 @@ def _fetch(url):
                     return None
                 for chunk in response.iter_bytes():
                     body += chunk
-                    if len(body) > _MAX_BYTES:
+                    if len(body) > _MAX_BYTES or time.monotonic() > deadline:
                         return None
     except httpx2.HTTPError:
         return None
@@ -160,7 +169,7 @@ def _first_server(root, element, protocol, domain):
             port = int((node.findtext("port") or "").strip())
         except ValueError:
             continue
-        if security is None or not 0 < port < 65536:
+        if security not in _USABLE_SECURITY[protocol] or not 0 < port < 65536:
             continue
         # A placeholder left in the host is one we cannot fill in.
         if not _is_hostname(host.lower()):

@@ -156,6 +156,23 @@ class DiscoverTests(SimpleTestCase):
         with FakeWeb({AUTOCONFIG_URL: big}):
             self.assertIsNone(discover("example.com"))
 
+    def test_a_file_trickled_past_the_deadline_is_dropped(self):
+        # Each chunk arrives inside the read timeout, so only a deadline over
+        # the whole response stops a server that sends one byte at a time.
+        clock = iter(range(0, 10_000, 2))
+
+        class Trickling(FakeWeb):
+            def _handle(self, request):
+                self.requested.append(str(request.url))
+                chunks = (PROVIDER_FILE[i : i + 1] for i in range(len(PROVIDER_FILE)))
+                return httpx2.Response(200, content=chunks)
+
+        with (
+            Trickling({}),
+            mock.patch.object(autodiscover.time, "monotonic", lambda: next(clock)),
+        ):
+            self.assertIsNone(discover("example.com"))
+
     def test_file_declaring_an_entity_is_dropped(self):
         xxe = (
             b'<?xml version="1.0"?>'
@@ -208,11 +225,33 @@ class ServerSelectionTests(SimpleTestCase):
 
     def test_first_usable_server_wins_in_file_order(self):
         servers = self._discover(
-            self._imap("imap.one.example", "143", "STARTTLS")
-            + self._imap("imap.two.example"),
+            self._imap("imap.one.example") + self._imap("imap.two.example"),
+            self._smtp("smtp.one.example", "465", "SSL")
+            + self._smtp("smtp.two.example"),
+        )
+        self.assertEqual(servers.imap, MailServer("imap.one.example", 993, "ssl"))
+        self.assertEqual(servers.smtp, MailServer("smtp.one.example", 465, "ssl"))
+
+    def test_imap_starttls_is_skipped_for_imap_over_tls(self):
+        # The IMAP connector has no STARTTLS mode: a STARTTLS server would be
+        # reached in clear, and the password sent with it.
+        servers = self._discover(
+            self._imap("imap.plain.example", "143", "STARTTLS")
+            + self._imap("imap.tls.example"),
             self._smtp(),
         )
-        self.assertEqual(servers.imap, MailServer("imap.one.example", 143, "starttls"))
+        self.assertEqual(servers.imap, MailServer("imap.tls.example", 993, "ssl"))
+
+    def test_imap_starttls_alone_means_nothing_found(self):
+        self.assertIsNone(
+            self._discover(
+                self._imap("imap.example.com", "143", "STARTTLS"), self._smtp()
+            )
+        )
+
+    def test_smtp_starttls_is_kept(self):
+        servers = self._discover(self._imap(), self._smtp())
+        self.assertEqual(servers.smtp, MailServer("smtp.example.com", 587, "starttls"))
 
     def test_unencrypted_servers_are_skipped(self):
         servers = self._discover(

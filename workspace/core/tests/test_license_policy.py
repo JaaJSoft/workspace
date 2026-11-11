@@ -20,8 +20,9 @@ def _load_script():
 check_licenses = _load_script()
 
 
-def _distribution(root, *, metadata_lines, notices=None):
-    """An installed distribution on disk: METADATA, RECORD and its notices."""
+def _distribution(root, *, metadata_lines, notices=None, files=None):
+    """An installed distribution on disk: METADATA, RECORD, its notices under
+    ``licenses/`` and any other *files*, keyed by their path in site-packages."""
     dist_info = Path(root) / "pkg-1.0.dist-info"
     (dist_info / "licenses").mkdir(parents=True)
     (dist_info / "METADATA").write_text(
@@ -34,6 +35,11 @@ def _distribution(root, *, metadata_lines, notices=None):
     for name, text in (notices or {}).items():
         (dist_info / "licenses" / name).write_text(text, encoding="utf-8")
         record.append(f"pkg-1.0.dist-info/licenses/{name},,")
+    for relative, text in (files or {}).items():
+        target = Path(root) / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        record.append(f"{relative},,")
     (dist_info / "RECORD").write_text("\n".join(record), encoding="utf-8")
     return metadata.PathDistribution(dist_info)
 
@@ -73,6 +79,16 @@ class EvaluateTests(SimpleTestCase):
             "MIT OR",
             "",
         ):
+            with self.subTest(expression=expression):
+                self.assertFalse(check_licenses.evaluate(expression))
+
+    def test_only_the_mpl_version_the_policy_names_is_allowed(self):
+        self.assertTrue(check_licenses.evaluate("MPL-2.0"))
+        self.assertFalse(check_licenses.evaluate("MPL-1.1"))
+        self.assertFalse(check_licenses.evaluate("MPL-1.0"))
+
+    def test_unbalanced_parentheses_are_refused(self):
+        for expression in ("(MIT", "MIT)", ")", "(MIT OR Apache-2.0", "()"):
             with self.subTest(expression=expression):
                 self.assertFalse(check_licenses.evaluate(expression))
 
@@ -154,6 +170,60 @@ class BundledNoticeTests(SimpleTestCase):
         )
         self.assertEqual(flagged, ["License: GPLv2"])
 
+    def test_the_spelled_out_gpl_and_agpl_names_are_flagged(self):
+        flagged = self._flagged(
+            {
+                "LICENSES_bundled.txt": (
+                    "Name: libfoo\nLicense: GNU General Public License v2\n"
+                    "Name: libbar\nLicense: GNU Affero General Public License v3\n"
+                    "Name: libbaz\nLicense: GNU Lesser General Public License v3\n"
+                    "Name: libqux\nLicense: GNU Library General Public License v2\n"
+                )
+            }
+        )
+        self.assertEqual(
+            flagged,
+            [
+                "License: GNU General Public License v2",
+                "License: GNU Affero General Public License v3",
+            ],
+        )
+
+    def test_a_license_text_quoting_the_gpl_is_not_a_gpl_library(self):
+        # Both lines of onnxruntime's ThirdPartyNotices.txt: a wrapped LGPL
+        # name, and the MPL-2.0 text defining its Secondary Licenses.
+        flagged = self._flagged(
+            {
+                "ThirdPartyNotices.txt": (
+                    "extent required to debug changes to any libraries licensed "
+                    "under the GNU Lesser\n"
+                    "General Public License.\n"
+                    '1.12. "Secondary License"\n'
+                    "    means either the GNU General Public License, Version 2.0, "
+                    "the GNU\n"
+                )
+            }
+        )
+        self.assertEqual(flagged, [])
+
+    def test_a_notice_outside_the_licenses_directory_is_read(self):
+        with tempfile.TemporaryDirectory() as root:
+            dist = _distribution(
+                root,
+                metadata_lines=[],
+                files={"pkg.libs/LICENSES_bundled.txt": "Name: x265\nLicense: GPLv2\n"},
+            )
+            self.assertEqual(check_licenses.bundled_copyleft(dist), ["License: GPLv2"])
+
+    def test_a_package_license_file_outside_licenses_is_not_a_notice(self):
+        with tempfile.TemporaryDirectory() as root:
+            dist = _distribution(
+                root,
+                metadata_lines=[],
+                files={"pkg/LICENSE.txt": "the GNU General Public License\n"},
+            )
+            self.assertEqual(check_licenses.bundled_copyleft(dist), [])
+
     def test_lgpl_and_runtime_exceptions_are_not_flagged(self):
         flagged = self._flagged(
             {
@@ -218,6 +288,12 @@ class NpmLockTests(SimpleTestCase):
             }
         )
         self.assertEqual(problems, [])
+
+    def test_a_reviewed_package_whose_license_changed_is_reviewed_again(self):
+        _, problems = self._problems(
+            {"node_modules/rgbcolor": {"version": "2", "license": "GPL-3.0"}}
+        )
+        self.assertEqual(problems, ["rgbcolor 2: GPL-3.0"])
 
     def test_the_frontend_lockfile_of_the_repository_passes(self):
         count, problems = check_licenses.check_npm()

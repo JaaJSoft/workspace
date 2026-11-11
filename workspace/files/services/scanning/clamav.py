@@ -53,7 +53,11 @@ class ClamAVScanner(Scanner):
             else float(getattr(settings, "FILES_CLAMAV_TIMEOUT", 60))
         )
         if socket_path:
-            return ClamdUnixSocket(path=socket_path, timeout=effective)
+            # The setting takes a bare path or a unix:// URL; the client
+            # connects to whatever string it is handed.
+            return ClamdUnixSocket(
+                path=socket_path.removeprefix("unix://"), timeout=effective
+            )
         return ClamdNetworkSocket(
             host=getattr(settings, "FILES_CLAMAV_HOST", "127.0.0.1"),
             port=int(getattr(settings, "FILES_CLAMAV_PORT", 3310)),

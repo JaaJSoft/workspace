@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-28 18:43+0000\n"
+"POT-Creation-Date: 2026-11-11 16:43+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -32,6 +32,21 @@ msgstr "Exporter en vCard"
 msgid "Show QR code"
 msgstr "Afficher le QR code"
 
+#: apps.py
+msgid "Keep the people around your data in one address book."
+msgstr ""
+"Rassemblez dans un seul carnet d'adresses les personnes liées à vos données."
+
+#: apps.py ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "New contact"
+msgstr "Nouveau contact"
+
+#: apps.py ui/templates/people/ui/index.html
+#: ui/templates/people/ui/partials/dialogs.html
+msgid "Import contacts"
+msgstr "Importer des contacts"
+
 #: serializers.py
 msgid "Unknown scope."
 msgstr "Carnet d’adresses inconnu."
@@ -55,17 +70,8 @@ msgstr ""
 "l’autre carnet."
 
 #: ui/templates/people/ui/index.html
-msgid "People"
-msgstr "Contacts"
-
-#: ui/templates/people/ui/index.html
 msgid "Could not load that contact."
 msgstr "Impossible de charger ce contact."
-
-#: ui/templates/people/ui/index.html
-#: ui/templates/people/ui/partials/dialogs.html
-msgid "New contact"
-msgstr "Nouveau contact"
 
 #: ui/templates/people/ui/index.html
 msgctxt "address books"
@@ -104,11 +110,6 @@ msgstr "Nouveau"
 #: ui/templates/people/ui/partials/dialogs.html
 msgid "Import"
 msgstr "Importer"
-
-#: ui/templates/people/ui/index.html
-#: ui/templates/people/ui/partials/dialogs.html
-msgid "Import contacts"
-msgstr "Importer des contacts"
 
 #: ui/templates/people/ui/index.html
 msgid "Export"
@@ -503,10 +504,6 @@ msgstr "Compte Workspace"
 #: ui/templates/people/ui/partials/person_panel.html
 msgid "Link a workspace account..."
 msgstr "Associer un compte Workspace..."
-
-#: ui/templates/people/ui/partials/person_panel.html
-msgid "Notes"
-msgstr "Notes"
 
 #: ui/templates/people/ui/partials/person_panel.html
 msgctxt "add to list"

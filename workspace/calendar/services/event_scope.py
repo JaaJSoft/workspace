@@ -62,10 +62,10 @@ def is_external_calendar(calendar_id):
 def assert_writable(event, user):
     """Raise unless *user* may write *event*."""
     if event.owner_id != user.id:
-        raise EventScopeError("Only the owner can edit this event.", 403)
+        raise EventScopeError(_("Only the owner can edit this event."), 403)
     if is_external_calendar(event.calendar_id):
         raise EventScopeError(
-            "This event comes from an external calendar and cannot be edited.", 403
+            _("This event comes from an external calendar and cannot be edited."), 403
         )
 
 
@@ -86,9 +86,9 @@ def _move_target(calendar_id, user):
     try:
         calendar = Calendar.objects.get(pk=calendar_id, owner=user)
     except Calendar.DoesNotExist:
-        raise EventScopeError("Calendar not found.") from None
+        raise EventScopeError(_("Calendar not found.")) from None
     if is_external_calendar(calendar.pk):
-        raise EventScopeError("Cannot move events into an external calendar.", 403)
+        raise EventScopeError(_("Cannot move events into an external calendar."), 403)
     return calendar
 
 

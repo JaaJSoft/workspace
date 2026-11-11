@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy, pgettext_lazy
 
 
 class ChatConfig(AppConfig):
@@ -23,9 +24,11 @@ class ChatConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Chat",
+                name=gettext_lazy("Chat"),
                 slug="chat",
-                description="Real-time messaging with direct and group conversations.",
+                description=gettext_lazy(
+                    "Real-time messaging with direct and group conversations."
+                ),
                 icon="message-circle",
                 color="sky",
                 url="/chat",
@@ -59,7 +62,7 @@ class ChatConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Chat",
+                    name=gettext_lazy("Chat"),
                     keywords=["chat", "messages", "conversations"],
                     icon="message-circle",
                     url="/chat",
@@ -68,7 +71,7 @@ class ChatConfig(AppConfig):
                     order=15,
                 ),
                 CommandInfo(
-                    name="New conversation",
+                    name=gettext_lazy("New conversation"),
                     keywords=["new chat", "message"],
                     icon="message-circle-plus",
                     url="/chat?action=new",
@@ -88,7 +91,8 @@ class ChatConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="chat",
-                label="Chat",
+                # A 64px tab of the activity feed: the French module name is cut there.
+                label=pgettext_lazy("activity source", "Chat"),
                 icon="message-circle",
                 provider_cls=ChatActivityProvider,
             )

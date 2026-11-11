@@ -1,0 +1,32 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-11 16:46+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: apps.py
+msgid "Browse your photos and videos by the day they were taken."
+msgstr "Parcourez vos photos et vidéos selon le jour où elles ont été prises."
+
+#: apps.py
+msgid "Photo"
+msgstr "Photo"
+
+#: apps.py
+msgid "Video"
+msgstr "Vidéo"
+
+#: apps.py
+msgid "Favorite photos"
+msgstr "Photos favorites"
+
+#: apps.py
+msgid "Undated photos"
+msgstr "Photos sans date"

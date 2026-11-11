@@ -3,6 +3,7 @@ import os
 
 from django.apps import AppConfig
 from django.core.files.base import File as DjangoFile
+from django.utils.translation import gettext_lazy
 
 from workspace.common.search.schema import register_fulltext_index
 
@@ -36,9 +37,9 @@ class FilesConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Files",
+                name=gettext_lazy("Files"),
                 slug="files",
-                description="Store, organize and share files.",
+                description=gettext_lazy("Store, organize and share files."),
                 icon="hard-drive",
                 color="indigo",
                 url="/files",
@@ -65,7 +66,7 @@ class FilesConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Files",
+                    name=gettext_lazy("Files"),
                     keywords=["files", "documents", "storage"],
                     icon="hard-drive",
                     url="/files",
@@ -74,7 +75,7 @@ class FilesConfig(AppConfig):
                     order=10,
                 ),
                 CommandInfo(
-                    name="Favorite files",
+                    name=gettext_lazy("Favorite files"),
                     keywords=["favorites", "starred", "bookmarked"],
                     icon="star",
                     url="/files?favorites=1",
@@ -83,7 +84,7 @@ class FilesConfig(AppConfig):
                     order=11,
                 ),
                 CommandInfo(
-                    name="Recent files",
+                    name=gettext_lazy("Recent files"),
                     keywords=["recent", "last opened", "history"],
                     icon="clock",
                     url="/files?recent=1",
@@ -92,7 +93,7 @@ class FilesConfig(AppConfig):
                     order=12,
                 ),
                 CommandInfo(
-                    name="Trash",
+                    name=gettext_lazy("Trash"),
                     keywords=["trash", "deleted", "recycle bin"],
                     icon="trash-2",
                     url="/files/trash",
@@ -101,7 +102,7 @@ class FilesConfig(AppConfig):
                     order=13,
                 ),
                 CommandInfo(
-                    name="Shared with me",
+                    name=gettext_lazy("Shared with me"),
                     keywords=["shared", "sharing", "received"],
                     icon="share-2",
                     url="/files?shared=1",
@@ -121,7 +122,7 @@ class FilesConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="files",
-                label="Files",
+                label=gettext_lazy("Files"),
                 icon="hard-drive",
                 provider_cls=FilesActivityProvider,
             )

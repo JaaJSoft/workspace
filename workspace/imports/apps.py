@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class ImportsConfig(AppConfig):
@@ -23,9 +24,11 @@ class ImportsConfig(AppConfig):
         # arriving rather than lived in, so it stays off the home dashboard.
         registry.register(
             ModuleInfo(
-                name="Imports",
+                name=gettext_lazy("Imports"),
                 slug="imports",
-                description="Bring your files and contacts over from another cloud.",
+                description=gettext_lazy(
+                    "Bring your files and contacts over from another cloud."
+                ),
                 icon="download-cloud",
                 color="cyan",
                 url="/imports",
@@ -38,7 +41,7 @@ class ImportsConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Import from another cloud",
+                    name=gettext_lazy("Import from another cloud"),
                     keywords=[
                         "import",
                         "migrate",
@@ -54,7 +57,7 @@ class ImportsConfig(AppConfig):
                     order=90,
                 ),
                 CommandInfo(
-                    name="My imports",
+                    name=gettext_lazy("My imports"),
                     keywords=["imports", "migration", "jobs"],
                     icon="download-cloud",
                     url="/imports",

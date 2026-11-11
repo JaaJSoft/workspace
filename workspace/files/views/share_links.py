@@ -241,7 +241,7 @@ class SharedFileVerifyView(APIView):
 
         if not link.has_password:
             return Response(
-                {"detail": "This link has no password."},
+                {"detail": _("This link has no password.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

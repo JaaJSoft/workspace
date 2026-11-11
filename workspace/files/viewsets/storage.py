@@ -1,6 +1,7 @@
 """Storage analysis endpoints for FileViewSet."""
 
 from django.http import Http404
+from django.utils.translation import gettext
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -89,7 +90,7 @@ class StorageMixin:
         folder, _perm = self._resolve_file_with_access(folder_uuid)
         if folder.node_type != File.NodeType.FOLDER:
             return Response(
-                {"detail": "Storage analysis applies to folders."},
+                {"detail": gettext("Storage analysis applies to folders.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         filters, error = _filters(request)

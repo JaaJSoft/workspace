@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class VaultConfig(AppConfig):
@@ -26,9 +27,11 @@ class VaultConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Vault",
+                name=gettext_lazy("Vault"),
                 slug="vault",
-                description="Store passwords in an end-to-end encrypted vault.",
+                description=gettext_lazy(
+                    "Store passwords in an end-to-end encrypted vault."
+                ),
                 icon="key-round",
                 color="purple",
                 url="/vault",
@@ -40,7 +43,7 @@ class VaultConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Vault",
+                    name=gettext_lazy("Vault"),
                     keywords=["passwords", "vault", "secrets"],
                     icon="key-round",
                     url="/vault",
@@ -49,7 +52,7 @@ class VaultConfig(AppConfig):
                     order=40,
                 ),
                 CommandInfo(
-                    name="Lock vault",
+                    name=gettext_lazy("Lock vault"),
                     keywords=["lock", "vault", "secrets"],
                     icon="lock",
                     url="/vault?action=lock",
@@ -58,7 +61,7 @@ class VaultConfig(AppConfig):
                     order=41,
                 ),
                 CommandInfo(
-                    name="New entry",
+                    name=gettext_lazy("New entry"),
                     keywords=["new", "entry", "password", "vault"],
                     icon="plus",
                     url="/vault?action=new",

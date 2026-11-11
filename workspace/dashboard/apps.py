@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
 class DashboardConfig(AppConfig):
@@ -10,9 +11,9 @@ class DashboardConfig(AppConfig):
 
         registry.register(
             ModuleInfo(
-                name="Dashboard",
+                name=gettext_lazy("Dashboard"),
                 slug="dashboard",
-                description="Overview of your workspace.",
+                description=gettext_lazy("Overview of your workspace."),
                 icon="home",
                 color="slate",
                 url="/",
@@ -23,7 +24,7 @@ class DashboardConfig(AppConfig):
         registry.register_commands(
             [
                 CommandInfo(
-                    name="Settings",
+                    name=gettext_lazy("Settings"),
                     keywords=["settings", "preferences", "configuration"],
                     icon="settings",
                     url="/users/settings",
@@ -32,7 +33,7 @@ class DashboardConfig(AppConfig):
                     order=1,
                 ),
                 CommandInfo(
-                    name="My profile",
+                    name=gettext_lazy("My profile"),
                     keywords=["profile", "account", "avatar"],
                     icon="user",
                     url="/users/profile",

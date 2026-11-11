@@ -44,3 +44,55 @@ test('the url defaults to the root', () => {
   const { buildNotificationOptions } = loadServiceWorker();
   assert.equal(buildNotificationOptions({}).data.url, '/');
 });
+
+// Fires the worker's install listener and reports what it cached, and where.
+async function installedCache(swUrl) {
+  const listeners = {};
+  const opened = [];
+  loadScript('workspace/core/static/sw.js', {
+    URL,
+    self: {
+      location: swUrl,
+      addEventListener(type, listener) { listeners[type] = listener; },
+      skipWaiting() {},
+    },
+    caches: {
+      open(name) {
+        const cache = { name, urls: [], addAll(urls) { cache.urls = urls; return Promise.resolve(); } };
+        opened.push(cache);
+        return Promise.resolve(cache);
+      },
+    },
+  });
+  let pending;
+  listeners.install({ waitUntil(promise) { pending = promise; } });
+  await pending;
+  return opened[0];
+}
+
+test('the offline page is cached under the language of the worker url', async () => {
+  const french = await installedCache('https://example.test/sw.js?v=test&lang=fr');
+  const english = await installedCache('https://example.test/sw.js?v=test&lang=en');
+  assert.equal(french.name, 'workspace-test-fr');
+  assert.equal(english.name, 'workspace-test-en');
+  assert.ok(french.urls.includes('/offline'));
+});
+
+test('a push without a JSON payload is titled with the product name', async () => {
+  const listeners = {};
+  const shown = [];
+  loadScript('workspace/core/static/sw.js', {
+    URL,
+    self: {
+      location: 'https://example.test/sw.js?v=test',
+      addEventListener(type, listener) { listeners[type] = listener; },
+      registration: { showNotification(title, options) { shown.push({ title, options }); } },
+    },
+  });
+  listeners.push({
+    data: { json() { throw new SyntaxError('not JSON'); }, text() { return 'Hello'; } },
+    waitUntil() {},
+  });
+  assert.equal(shown[0].title, 'Workspace');
+  assert.equal(shown[0].options.body, 'Hello');
+});

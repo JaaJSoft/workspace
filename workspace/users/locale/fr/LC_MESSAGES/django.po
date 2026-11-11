@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 20:30+0000\n"
+"POT-Creation-Date: 2026-11-11 16:43+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -499,10 +499,6 @@ msgid "Storage used"
 msgstr "Stockage utilisé"
 
 #: ui/templates/users/ui/partials/settings_usage.html
-msgid "Chat"
-msgstr "Discussions"
-
-#: ui/templates/users/ui/partials/settings_usage.html
 msgid "Conversations"
 msgstr "Conversations"
 
@@ -518,10 +514,6 @@ msgstr "Comptes"
 msgctxt "unread mail messages"
 msgid "Unread"
 msgstr "Non lus"
-
-#: ui/templates/users/ui/partials/settings_usage.html
-msgid "Calendar"
-msgstr "Agenda"
 
 #: ui/templates/users/ui/partials/settings_usage.html
 msgid "Total events"

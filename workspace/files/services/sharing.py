@@ -157,7 +157,7 @@ def create_share_link(
         raise ShareLinkRuleError("Unknown share link mode.")
     if mode != FileShareLink.Mode.READ and file_obj.node_type != File.NodeType.FOLDER:
         raise ShareLinkRuleError(
-            "Only a folder can accept uploads through a share link."
+            gettext("Only a folder can accept uploads through a share link.")
         )
     for cap, ceiling in (
         (max_file_bytes, MAX_FILE_BYTES_CEILING),

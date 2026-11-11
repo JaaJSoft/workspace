@@ -1,6 +1,7 @@
 import logging
 
 from django.db import transaction
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -82,7 +83,10 @@ class ExternalCalendarDetailView(APIView):
     def put(self, request, ext_id):
         ext = self._get_external(ext_id, request.user)
         if not ext:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         ser = ExternalCalendarUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -100,7 +104,10 @@ class ExternalCalendarDetailView(APIView):
     def delete(self, request, ext_id):
         ext = self._get_external(ext_id, request.user)
         if not ext:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         ext.calendar.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -118,9 +125,14 @@ class ExternalCalendarSyncView(APIView):
                 calendar__owner=request.user,
             )
         except ExternalCalendar.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": gettext("Calendar not found.")},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         sync_external_calendar_task.apply_async(
             [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
         )
-        return Response({"detail": "Sync started."}, status=status.HTTP_202_ACCEPTED)
+        return Response(
+            {"detail": gettext("Sync started.")}, status=status.HTTP_202_ACCEPTED
+        )

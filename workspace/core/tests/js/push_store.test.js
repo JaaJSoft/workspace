@@ -13,10 +13,11 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function loadPushStore({ subscription = null, fetchOk = true } = {}) {
+function loadPushStore({ subscription = null, fetchOk = true, appVersion = '', language = 'en' } = {}) {
   const stores = {};
   const fetchCalls = [];
   const warnings = [];
+  const registered = [];
   const Alpine = {
     store(name, obj) {
       if (obj === undefined) return stores[name];
@@ -29,7 +30,8 @@ function loadPushStore({ subscription = null, fetchOk = true } = {}) {
     addEventListener(type, cb) {
       if (type === 'alpine:init') this._alpineInit = cb;
     },
-    body: { dataset: {} },
+    body: { dataset: appVersion ? { appVersion } : {} },
+    documentElement: { lang: language },
   };
   const registration = {
     pushManager: {
@@ -38,7 +40,10 @@ function loadPushStore({ subscription = null, fetchOk = true } = {}) {
   };
   const navigator = {
     serviceWorker: {
-      register: async () => registration,
+      register: async (url) => {
+        registered.push(url);
+        return registration;
+      },
       ready: Promise.resolve(registration),
     },
   };
@@ -47,6 +52,8 @@ function loadPushStore({ subscription = null, fetchOk = true } = {}) {
     document,
     navigator,
     PushManager: function PushManager() {},
+    // A Node global rather than an ECMAScript intrinsic: a bare vm context lacks it.
+    URLSearchParams,
     addEventListener() {},
     getCSRFToken: () => 'csrf',
     console: { ...console, warn: (...args) => warnings.push(args) },
@@ -57,7 +64,7 @@ function loadPushStore({ subscription = null, fetchOk = true } = {}) {
   });
   // Fire alpine:init: registers the stores and kicks off push.init().
   document._alpineInit();
-  return { stores, fetchCalls, warnings };
+  return { stores, fetchCalls, warnings, registered };
 }
 
 // init() awaits register() then getSubscription() then the sync fetch; give
@@ -108,4 +115,11 @@ test('init without an existing subscription does not call the backend', async ()
 
   assert.equal(stores.push.enabled, false);
   assert.equal(fetchCalls.length, 0);
+});
+
+test('the worker url carries the page language, so a new language reinstalls it', async () => {
+  const { registered } = loadPushStore({ appVersion: '1.2.0', language: 'fr' });
+  await flush();
+
+  assert.deepStrictEqual([...registered], ['/sw.js?v=1.2.0&lang=fr']);
 });

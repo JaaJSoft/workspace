@@ -1,16 +1,19 @@
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ LANGUAGE_CODE }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Workspace — Offline</title>
+    <title>Workspace — {% translate "Offline" %}</title>
     <script>
       document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
     </script>
-    <!-- Literal paths, not the static template tag: the service worker serves
-       this file as it is, so a template tag would ship as text. collectstatic
-       keeps the unhashed names beside the hashed ones, so they resolve in
-       production. -->
+    <!-- Literal paths, not the static template tag: the service worker
+       precaches these exact names when it installs, and serves them from that
+       cache once the network is gone. A hashed name would be one it never
+       fetched. collectstatic keeps the unhashed names beside the hashed ones,
+       so they resolve in production. -->
     <!-- djlint:off D004 -->
     <link href="/static/css/app.css" rel="stylesheet" />
     <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml" />
@@ -29,9 +32,9 @@
           class="text-5xl font-bold bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent"
         >Workspace</span>
       </div>
-      <h1 class="text-xl font-semibold mb-2">You're offline</h1>
-      <p class="text-base-content/60 mb-6">Check your internet connection and try again.</p>
-      <button type="button" class="btn btn-primary" onclick="location.reload()">Retry</button>
+      <h1 class="text-xl font-semibold mb-2">{% translate "You're offline" %}</h1>
+      <p class="text-base-content/60 mb-6">{% translate "Check your internet connection and try again." %}</p>
+      <button type="button" class="btn btn-primary" onclick="location.reload()">{% translate "Retry" %}</button>
     </div>
     <script>
       lucide.createIcons();

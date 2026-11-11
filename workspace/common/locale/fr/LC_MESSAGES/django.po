@@ -464,7 +464,7 @@ msgstr "Pause"
 
 #: vocabulary.py
 msgid "People"
-msgstr "Contacts"
+msgstr "Personnes"
 
 #: vocabulary.py
 msgid "Photos"

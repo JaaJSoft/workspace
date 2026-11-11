@@ -122,7 +122,7 @@ msgstr "Exporter des contacts"
 
 #: ui/templates/people/ui/index.html
 msgid "Search people..."
-msgstr "Rechercher des contacts..."
+msgstr "Rechercher des personnes..."
 
 #: ui/templates/people/ui/index.html
 msgid "Select a contact to see its details."

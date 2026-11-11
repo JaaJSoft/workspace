@@ -27,7 +27,7 @@ class PeoplePageLanguageTests(TestCase):
         response = self.client.get("/people")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mes contacts")
-        self.assertContains(response, "Rechercher des contacts...")
+        self.assertContains(response, "Rechercher des personnes...")
         self.assertNotContains(response, "My contacts")
 
     def test_page_stays_english_by_default(self):

@@ -53,7 +53,7 @@ class PeoplePageTests(FacesTestMixin, TestCase):
         hidden = self.client.get("/photos/people", {"hidden": "1"})
 
         self.assertEqual(visible.context["unnamed"], [])
-        self.assertEqual(visible.context["hidden_count"], 1)
+        self.assertTrue(visible.context["has_hidden"])
         self.assertEqual(len(hidden.context["unnamed"]), 1)
 
     def test_hidden_faces_are_listed_with_the_hidden_people(self):
@@ -65,7 +65,7 @@ class PeoplePageTests(FacesTestMixin, TestCase):
         visible = self.client.get("/photos/people")
         hidden = self.client.get("/photos/people", {"hidden": "1"})
 
-        self.assertEqual(visible.context["hidden_count"], 1)
+        self.assertTrue(visible.context["has_hidden"])
         self.assertIsNone(visible.context["hidden_faces"])
         self.assertEqual(hidden.context["hidden_faces"]["total"], 1)
         (item,) = hidden.context["hidden_faces"]["faces"]

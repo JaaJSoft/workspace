@@ -1,0 +1,47 @@
+name: Install Ubuntu packages
+description: >-
+  apt-get install on a GitHub-hosted runner, reaching the Ubuntu archive
+  through a mirror outside ubuntu.com when the runner cannot resolve the
+  ubuntu.com hosts it is configured with.
+
+inputs:
+  packages:
+    description: The packages to install, with any apt-get install option, space-separated.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install ${{ inputs.packages }}
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        FALLBACK_MIRROR: https://mirrors.edge.kernel.org/ubuntu/
+      run: |
+        set -euo pipefail
+        # The runner reads the archive through the hosts listed in
+        # apt-mirrors.txt, all of them under ubuntu.com. When they stop
+        # resolving from the runner while every other host still does, apt
+        # waits out a DNS timeout per file on each of them in turn: the step
+        # hangs for most of an hour, then fails. Keep the hosts that resolve
+        # and add an official mirror outside ubuntu.com after them; when they
+        # all resolve, the file is left as it is.
+        mirrors=/etc/apt/apt-mirrors.txt
+        if [ -f "$mirrors" ]; then
+          kept=""
+          while IFS= read -r line || [ -n "$line" ]; do
+            host=$(printf '%s\n' "$line" | sed -nE 's#^[a-z+]+://([^/[:space:]]+).*#\1#p')
+            if [ -n "$host" ] && timeout 15 getent hosts "$host" >/dev/null; then
+              kept+="$line"$'\n'
+            else
+              echo "::warning title=Ubuntu archive::${host:-$line} does not resolve, apt falls back on ${FALLBACK_MIRROR}"
+            fi
+          done < "$mirrors"
+          if [ "$kept" != "$(cat "$mirrors")"$'\n' ]; then
+            printf '%s%s\tpriority:9\n' "$kept" "$FALLBACK_MIRROR" | sudo tee "$mirrors" >/dev/null
+          fi
+        fi
+        sudo apt-get -o Acquire::Retries=3 update
+        # The package list is split into words on purpose.
+        # shellcheck disable=SC2086
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y $PACKAGES

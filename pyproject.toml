@@ -26,10 +26,14 @@ dependencies = [
     # imaging
     "pillow>=13.0.0",
     # HEIF/HEIC decoding (photos straight off an iPhone), as a Pillow plugin.
-    # pi-heif (module `pi_heif`), not pillow-heif: its wheels bundle only libheif
-    # and libde265 (LGPL). pillow-heif's wheels also ship libx265
+    # pi-heif-decoder (module `pi_heif`), not pillow-heif: its wheels bundle
+    # only libheif and libde265 (LGPL). pillow-heif's wheels also ship libx265
     # (GPL-2.0, an encoder we never call), which no BUSL distribution can carry.
-    "pi-heif>=1.4.0",
+    # Not pi-heif either: upstream dropped it, and its last wheels carry
+    # libheif 1.23.0 and libde265 1.1.0, from before the fixes for the
+    # memory-safety bugs a crafted HEIC reaches (libheif 1.23.4, libde265
+    # 1.1.3). This fork continues it with current libraries.
+    "pi-heif-decoder>=1.7.0.post4",
     # Camera RAW photos (LibRaw): their embedded preview and its EXIF
     "rawpy>=0.28.0",
     "cairosvg>=2.9.1",
@@ -143,7 +147,7 @@ dev = [
     # A third-party CalDAV client, driven against a live server by the calendar
     # E2E suite: the server is tested with somebody else's reading of the RFCs.
     "caldav>=3.7.0",
-    # Encodes the HEIC fixtures of the files and photos tests (pi-heif, which
+    # Encodes the HEIC fixtures of the files and photos tests (pi-heif-decoder, which
     # the application ships, only decodes). Its wheels bundle x265 (GPL-2.0):
     # fine for a test tool nothing distributes, never an application dependency.
     "pillow-heif>=1.8.1",

@@ -313,18 +313,20 @@ window.createUploadQueue = function createUploadQueue({
 
     async discard(id) {
       const item = this._find(id);
-      if (item && (await this._discard(item))) notify('uploads-changed');
+      if (item && (await this._discard([item]))) notify('uploads-changed');
     },
 
     async discardAllDuplicates() {
-      let changed = false;
+      // Two copies uploaded side by side each list the other; once one is
+      // picked the other is the only copy left, and stays.
+      const picked = new Set();
+      const batch = [];
       for (const item of this._duplicates()) {
-        // Two copies uploaded side by side each list the other; once one is
-        // gone the other is the only copy left, and stays.
-        if (!item.duplicates.length) continue;
-        if (await this._discard(item)) changed = true;
+        if (item.duplicates.every((dup) => picked.has(dup.uuid))) continue;
+        picked.add(item.uuid);
+        batch.push(item);
       }
-      if (changed) notify('uploads-changed');
+      if (await this._discard(batch)) notify('uploads-changed');
     },
 
     keep(id) {
@@ -340,13 +342,22 @@ window.createUploadQueue = function createUploadQueue({
       return this.items.filter((item) => item.status === 'done' && item.duplicates.length > 0);
     },
 
-    async _discard(item) {
-      if (item.status !== 'done' || !item.uuid) return false;
-      if (!(await discard(item.uuid, item.savedName || item.name))) return false;
-      item.status = 'discarded';
-      item.duplicates = [];
+    // The whole batch goes to *discard* at once: it costs the server the
+    // same few operations whether one file or a hundred are dropped.
+    async _discard(items) {
+      const candidates = items.filter((item) => item.status === 'done' && item.uuid);
+      if (!candidates.length) return false;
+      const discarded = new Set(await discard(
+        candidates.map((item) => ({ uuid: item.uuid, name: item.savedName || item.name })),
+      ));
+      if (!discarded.size) return false;
+      for (const item of candidates) {
+        if (!discarded.has(item.uuid)) continue;
+        item.status = 'discarded';
+        item.duplicates = [];
+      }
       for (const other of this.items) {
-        other.duplicates = other.duplicates.filter((dup) => dup.uuid !== item.uuid);
+        other.duplicates = other.duplicates.filter((dup) => !discarded.has(dup.uuid));
       }
       return true;
     },
@@ -749,24 +760,45 @@ window.sendResumableUpload = function sendResumableUpload(
   };
 };
 
-// Trash then purge: the discarded copy should not linger in the trash.
-window.discardFileUpload = async function discardFileUpload(uuid, name) {
-  try {
-    const trashed = await window.fileOperations.run('trash', [uuid]);
-    if (!window.operationDoneUuids(trashed, [uuid]).length) throw new Error();
-    const purged = await window.fileOperations.run('purge', [uuid]);
-    if (!window.operationDoneUuids(purged, [uuid]).length) {
-      window.AppAlert.warning(interpolate(
-        gettext('%(name)s was moved to trash but could not be permanently discarded'),
-        { name },
-        true
-      ));
+// One trash then one purge for the whole batch, so the discarded copies do
+// not linger in the trash. Resolves with the uuids that left their folder.
+window.discardFileUploads = async function discardFileUploads(uploads) {
+  const doneUuids = async (kind, uuids) => {
+    try {
+      return window.operationDoneUuids(await window.fileOperations.run(kind, uuids), uuids);
+    } catch (_) {
+      return [];
     }
-    return true;
-  } catch (_) {
-    window.AppAlert.error(interpolate(gettext('Failed to discard %(name)s'), { name }, true));
-    return false;
-  }
+  };
+  const report = (left, alert, single, several) => {
+    if (!left.length) return;
+    const text = left.length === 1
+      ? interpolate(single, { name: left[0].name }, true)
+      : interpolate(several(left.length), { count: left.length }, true);
+    alert(text);
+  };
+
+  const trashed = new Set(await doneUuids('trash', uploads.map((upload) => upload.uuid)));
+  report(
+    uploads.filter((upload) => !trashed.has(upload.uuid)),
+    (text) => window.AppAlert.error(text),
+    gettext('Failed to discard %(name)s'),
+    (n) => ngettext('Failed to discard %(count)s file', 'Failed to discard %(count)s files', n),
+  );
+  if (!trashed.size) return [];
+
+  const purged = new Set(await doneUuids('purge', [...trashed]));
+  report(
+    uploads.filter((upload) => trashed.has(upload.uuid) && !purged.has(upload.uuid)),
+    (text) => window.AppAlert.warning(text),
+    gettext('%(name)s was moved to trash but could not be permanently discarded'),
+    (n) => ngettext(
+      '%(count)s file was moved to trash but could not be permanently discarded',
+      '%(count)s files were moved to trash but could not be permanently discarded',
+      n,
+    ),
+  );
+  return [...trashed];
 };
 
 /**
@@ -820,7 +852,7 @@ window.createScreenWakeLock = function createScreenWakeLock(wakeLock, isVisible)
 document.addEventListener('alpine:init', () => {
   Alpine.store('uploads', window.createUploadQueue({
     send: window.sendFileUpload,
-    discard: window.discardFileUpload,
+    discard: window.discardFileUploads,
     notify: (type) => window.dispatchEvent(new CustomEvent(type)),
     confirm: (options) => window.AppDialog.confirm(options),
     release: window.releaseFileUpload,

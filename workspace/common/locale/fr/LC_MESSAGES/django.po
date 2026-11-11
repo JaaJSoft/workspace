@@ -244,7 +244,7 @@ msgstr "Calendrier"
 
 #: vocabulary.py
 msgid "Chat"
-msgstr "Discussions"
+msgstr "Chat"
 
 #: vocabulary.py
 msgid "Clear"

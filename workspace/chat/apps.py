@@ -1,5 +1,5 @@
 from django.apps import AppConfig
-from django.utils.translation import gettext_lazy, pgettext_lazy
+from django.utils.translation import gettext_lazy
 
 
 class ChatConfig(AppConfig):
@@ -91,8 +91,7 @@ class ChatConfig(AppConfig):
         activity_registry.register(
             ActivityProviderInfo(
                 slug="chat",
-                # A 64px tab of the activity feed: the French module name is cut there.
-                label=pgettext_lazy("activity source", "Chat"),
+                label=gettext_lazy("Chat"),
                 icon="message-circle",
                 provider_cls=ChatActivityProvider,
             )

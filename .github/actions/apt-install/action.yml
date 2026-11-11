@@ -32,6 +32,8 @@ runs:
           kept=""
           while IFS= read -r line || [ -n "$line" ]; do
             host=$(printf '%s\n' "$line" | sed -nE 's#^[a-z+]+://([^/[:space:]]+).*#\1#p')
+            # A second run in the same job finds the fallback already listed.
+            case "$line" in "$FALLBACK_MIRROR"*) continue ;; esac
             if [ -n "$host" ] && timeout 15 getent hosts "$host" >/dev/null; then
               kept+="$line"$'\n'
             else

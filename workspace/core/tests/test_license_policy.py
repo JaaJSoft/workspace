@@ -156,10 +156,16 @@ class PythonLicenseTests(SimpleTestCase):
         _, blob = self._verdict(
             "License: " + "GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007 " * 4
         )
-        self.assertEqual(empty, "no license metadata")
+        self.assertIsNone(empty)
         self.assertNotEqual(blob, empty)
         self.assertTrue(check_licenses.is_reviewed("pypi", "py-rust-stemmers", empty))
         self.assertFalse(check_licenses.is_reviewed("pypi", "py-rust-stemmers", blob))
+
+    def test_no_text_can_pass_for_missing_metadata(self):
+        _, declared = self._verdict("License: no license metadata")
+        self.assertFalse(
+            check_licenses.is_reviewed("pypi", "py-rust-stemmers", declared)
+        )
 
     def test_a_short_license_field_is_read(self):
         self.assertTrue(self._verdict("License: Apache License 2.0")[0])

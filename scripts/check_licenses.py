@@ -85,12 +85,13 @@ _PHRASE = re.compile(
     re.IGNORECASE,
 )
 
-# (ecosystem, name) -> (the license it declared when reviewed, why it is fine).
+# (ecosystem, name) -> (the license it declared when reviewed, None for none,
+# why it is fine).
 # A package declaring anything else is checked again: the review was of that
 # license, not of the name.
 REVIEWED = {
     ("pypi", "py-rust-stemmers"): (
-        "no license metadata",
+        None,
         "MIT: its LICENSE file; the metadata is empty",
     ),
     ("pypi", "sqlite-vec"): (
@@ -175,7 +176,8 @@ def evaluate(expression):
 
 
 def python_license(distribution):
-    """``(allowed, what the metadata says)`` for an installed distribution."""
+    """``(allowed, what the metadata says)`` for an installed distribution;
+    what it says is None when it names no license at all."""
     meta = distribution.metadata
     expression = meta.get("License-Expression")
     if expression:
@@ -191,7 +193,8 @@ def python_license(distribution):
         return any(evaluate(c) for c in classifiers), "; ".join(classifiers)
     text = (meta.get("License") or "").strip()
     if not text:
-        return False, "no license metadata"
+        # None, not a label: no license text can then pass for its absence.
+        return False, None
     if "\n" not in text and len(text) <= 120:
         return evaluate(text), text
     # Kept apart from the empty case: a REVIEWED entry for a package with no
@@ -244,7 +247,7 @@ def check_python():
         allowed, declared = python_license(distribution)
         label = f"{name} {distribution.version}"
         if not allowed and not is_reviewed("pypi", name, declared):
-            problems.append(f"{label}: {declared}")
+            problems.append(f"{label}: {declared or 'no license metadata'}")
         if name not in BUNDLED_NOTICE_REVIEWED:
             for line in bundled_copyleft(distribution):
                 problems.append(f"{label} bundles strong copyleft code: {line}")

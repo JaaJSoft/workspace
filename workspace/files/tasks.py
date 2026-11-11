@@ -72,7 +72,7 @@ def sync_user_files(user_id):
     schedule period.
     """
     from workspace.common.task_locks import task_lock
-    from workspace.files.sync import FileSyncService
+    from workspace.files.services import disk_sync
 
     try:
         user = User.objects.get(pk=user_id, is_active=True)
@@ -88,7 +88,7 @@ def sync_user_files(user_id):
             return {"status": "skipped", "reason": "already_running"}
 
         logger.info("Syncing files for user: %s", scrub(user.username))
-        result = FileSyncService(log=logger).sync_user_recursive(user)
+        result = disk_sync.sync_user_tree(user, log=logger)
 
     return {
         "status": "ok",
@@ -353,7 +353,7 @@ def redraw_edited_thumbnail(file_uuid):
 def sync_folder(user_id, folder_uuid=None):
     """Shallow sync for a single folder. Can be triggered via API."""
     from workspace.files.models import File
-    from workspace.files.sync import FileSyncService
+    from workspace.files.services import disk_sync
 
     user = User.objects.get(pk=user_id)
     parent_db = None
@@ -366,8 +366,7 @@ def sync_folder(user_id, folder_uuid=None):
             node_type=File.NodeType.FOLDER,
         )
 
-    service = FileSyncService(log=logger)
-    result = service.sync_folder_shallow(user, parent_db)
+    result = disk_sync.sync_folder_level(user, parent_db, log=logger)
     return {
         **result.counts(),
         "errors": result.errors,

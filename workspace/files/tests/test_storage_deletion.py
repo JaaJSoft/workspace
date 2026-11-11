@@ -13,9 +13,8 @@ from django.core.files.storage import default_storage
 from django.test import TestCase
 
 from workspace.files.models import File
-from workspace.files.services import trash, tree
+from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.hard_delete import hard_delete_tree
-from workspace.files.sync import FileSyncService
 
 User = get_user_model()
 
@@ -118,6 +117,6 @@ class HardDeleteStorageTests(TestCase):
         folder = tree.create_folder(self.user, "Ghost")
         self._purge(folder)
 
-        FileSyncService().sync_user_recursive(self.user)
+        disk_sync.sync_user_tree(self.user)
 
         self.assertFalse(File.objects.filter(owner=self.user, name="Ghost").exists())

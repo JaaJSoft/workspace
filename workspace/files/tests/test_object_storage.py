@@ -26,10 +26,9 @@ from wsgidav.dav_error import DAVError
 from workspace.common.storage.s3 import MIN_PART_SIZE
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files.models import File
-from workspace.files.services import trash, tree
+from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.hard_delete import hard_delete_tree
-from workspace.files.sync import FileSyncService
 from workspace.files.webdav.resources import FileResource, FolderResource
 
 User = get_user_model()
@@ -306,7 +305,7 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
             Bucket=self.bucket, Key="files/users/alice/dropped.txt", Body=b"x"
         )
 
-        result = FileSyncService().sync_folder_shallow(self.user)
+        result = disk_sync.sync_folder_level(self.user)
 
         self.assertEqual(result.files_created, 1)
         self.assertEqual(self.read(File.objects.get(name="dropped.txt")), b"x")

@@ -15,7 +15,7 @@ from django.urls import reverse
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileEvent, FileShare
 from workspace.files.queries import get_permission
-from workspace.files.services import trash, tree
+from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.hard_delete import hard_delete_tree
 from workspace.files.services.names import NameTaken
 from workspace.files.services.sharing import share_file, unshare_file
@@ -26,7 +26,6 @@ from workspace.files.services.shortcuts import (
     resolve_shortcuts,
 )
 from workspace.files.services.tree import GroupMismatch
-from workspace.files.sync import FileSyncService
 
 User = get_user_model()
 
@@ -364,8 +363,8 @@ class ShortcutStorageTests(IsolatedMediaRootMixin, ShortcutFixtures, TestCase):
         top = create_shortcut(self.alice, self.report, None, name="top link")
         nested = create_shortcut(self.alice, self.report, self.alice_docs)
 
-        FileSyncService().sync_user_recursive(self.alice)
-        FileSyncService().sync_folder_shallow(self.alice, self.alice_docs)
+        disk_sync.sync_user_tree(self.alice)
+        disk_sync.sync_folder_level(self.alice, self.alice_docs)
 
         live = File.objects.filter(
             pk__in=[top.pk, nested.pk], deleted_at__isnull=True

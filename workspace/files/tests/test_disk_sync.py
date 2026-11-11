@@ -1,4 +1,4 @@
-"""Tests for FileSyncService disk <-> DB synchronization."""
+"""Tests for the disk <-> DB synchronization."""
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import SuspiciousFileOperation
@@ -8,13 +8,12 @@ from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
-from workspace.files.services import tree
-from workspace.files.sync import FileSyncService
+from workspace.files.services import disk_sync, tree
 
 User = get_user_model()
 
 
-class FileSyncServiceStoragePrefixTests(TestCase):
+class DiskSyncStoragePrefixTests(TestCase):
     """Verify the sync service uses the canonical ``files/users/<username>/`` prefix.
 
     The personal-files storage layout is owned by ``File.upload_to`` (see
@@ -38,7 +37,7 @@ class FileSyncServiceStoragePrefixTests(TestCase):
     def test_recursive_sync_registers_files_under_canonical_prefix(self):
         self._write("report.pdf", contents=b"%PDF-1.4 test")
 
-        FileSyncService().sync_user_recursive(self.user)
+        disk_sync.sync_user_tree(self.user)
 
         f = File.objects.get(owner=self.user, name="report.pdf")
         self.assertEqual(
@@ -49,7 +48,7 @@ class FileSyncServiceStoragePrefixTests(TestCase):
     def test_shallow_sync_at_root_registers_under_canonical_prefix(self):
         self._write("notes.txt", contents=b"hello")
 
-        FileSyncService().sync_folder_shallow(self.user, parent_db=None)
+        disk_sync.sync_folder_level(self.user)
 
         f = File.objects.get(owner=self.user, name="notes.txt")
         self.assertEqual(
@@ -65,7 +64,7 @@ class FileSyncServiceStoragePrefixTests(TestCase):
 
         self._write("Sub", "inside.md", contents=b"# hi")
 
-        FileSyncService().sync_folder_shallow(self.user, parent_db=sub)
+        disk_sync.sync_folder_level(self.user, sub)
 
         f = File.objects.get(owner=self.user, name="inside.md")
         self.assertEqual(
@@ -87,7 +86,7 @@ class FileSyncServiceStoragePrefixTests(TestCase):
             content=ContentFile(b"keep me", name="keep.txt"),
         )
 
-        FileSyncService().sync_user_recursive(self.user)
+        disk_sync.sync_user_tree(self.user)
 
         f.refresh_from_db()
         self.assertIsNone(f.deleted_at)
@@ -112,12 +111,12 @@ class SyncUnsafeUsernameTests(IsolatedMediaRootMixin, TestCase):
 
     def test_the_recursive_sync_adopts_nothing(self):
         with self.assertRaises(SuspiciousFileOperation):
-            FileSyncService().sync_user_recursive(self.intruder)
+            disk_sync.sync_user_tree(self.intruder)
 
         self.assertFalse(File.objects.filter(owner=self.intruder).exists())
 
     def test_the_shallow_sync_adopts_nothing(self):
         with self.assertRaises(SuspiciousFileOperation):
-            FileSyncService().sync_folder_shallow(self.intruder)
+            disk_sync.sync_folder_level(self.intruder)
 
         self.assertFalse(File.objects.filter(owner=self.intruder).exists())

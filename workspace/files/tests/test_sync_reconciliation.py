@@ -1,6 +1,6 @@
 """Behavioral contract for the disk <-> DB reconciliation walk.
 
-``test_sync.py`` pins the storage prefix; this module pins *what the walk
+``test_disk_sync.py`` pins the storage prefix; this module pins *what the walk
 decides* - which nodes get created, which get soft-deleted, which are left
 alone - plus the query budget it spends doing so.
 
@@ -14,6 +14,7 @@ import unicodedata
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import connection
@@ -21,10 +22,9 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
-from workspace.files.models import File, FileEvent
-from workspace.files.services import trash, tree
+from workspace.files.models import File, FileEvent, FileShare
+from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.shortcuts import create_shortcut
-from workspace.files.sync import FileSyncService
 
 User = get_user_model()
 
@@ -64,7 +64,7 @@ class SyncReconciliationTestCase(IsolatedMediaRootMixin, TestCase):
         default_storage.make_dir(self._root())
 
     def _sync(self):
-        return FileSyncService().sync_user_recursive(self.user)
+        return disk_sync.sync_user_tree(self.user)
 
     def _listing(self, *parts):
         """The names one directory of the tree holds, sorted."""
@@ -426,7 +426,7 @@ class ShortcutCollisionTests(SyncReconciliationTestCase):
         shortcut = self._shortcut("notes.md", parent=docs)
         self._write("Docs", "notes.md")
 
-        result = FileSyncService().sync_folder_shallow(self.user, docs)
+        result = disk_sync.sync_folder_level(self.user, docs)
 
         self.assertEqual(result.errors, [])
         self.assertEqual(self._live("notes.md").node_type, File.NodeType.FILE)
@@ -437,7 +437,7 @@ class ShortcutCollisionTests(SyncReconciliationTestCase):
         shortcut = self._shortcut("report.pdf")
         self._write("report.pdf")
 
-        result = FileSyncService(dry_run=True).sync_user_recursive(self.user)
+        result = disk_sync.sync_user_tree(self.user, dry_run=True)
 
         self.assertEqual(result.files_created, 1)
         self.assertEqual(result.shortcuts_renamed, 1)
@@ -604,7 +604,7 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
         self._sync()
         self._write_clashing("report.txt")
 
-        result = FileSyncService(dry_run=True).sync_user_recursive(self.user)
+        result = disk_sync.sync_user_tree(self.user, dry_run=True)
 
         self.assertEqual(result.files_created, 1)
         self.assertEqual(result.disk_entries_renamed, 1)
@@ -801,7 +801,7 @@ class FollowedRenameTests(SyncReconciliationTestCase):
         self._sync()
         self._rename("Report.txt", "report.txt")
 
-        result = FileSyncService(dry_run=True).sync_user_recursive(self.user)
+        result = disk_sync.sync_user_tree(self.user, dry_run=True)
 
         self.assertEqual(result.renames_followed, 1)
         self.assertEqual(result.files_soft_deleted, 0)
@@ -819,7 +819,7 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
     """
 
     def _rename(self, old, new):
-        FileSyncService._rename_on_disk(self._root(), old, new)
+        disk_sync._rename_on_disk(self._root(), old, new)
 
     def _read(self, *parts):
         with default_storage.open("/".join([self._root(), *parts]), "rb") as handle:
@@ -928,7 +928,7 @@ class SyncQueryBudgetTests(SyncReconciliationTestCase):
     def _warm_sync_queries(self):
         """Query count for a sync that finds nothing to do."""
         with CaptureQueriesContext(connection) as ctx:
-            result = FileSyncService().sync_user_recursive(self.user)
+            result = disk_sync.sync_user_tree(self.user)
         self.assertEqual(result.files_created, 0)
         self.assertEqual(result.folders_created, 0)
         self.assertEqual(result.files_soft_deleted, 0)
@@ -977,3 +977,66 @@ class SyncQueryBudgetTests(SyncReconciliationTestCase):
             f"warm sync of a 5-deep chain spent {queries} queries; depth "
             "must not add per-level lookups.",
         )
+
+
+class SyncFolderScopeTests(SyncReconciliationTestCase):
+    """The folder sync reads the caller's personal directory, so only a
+    folder of their personal tree has anything there to be synced with."""
+
+    def setUp(self):
+        super().setUp()
+        group = Group.objects.create(name="Team")
+        self.user.groups.add(group)
+        self.group_folder = tree.create_folder(self.user, "Team", group=group)
+        # Same path, other tree: the personal folder the walk used to read
+        # when asked for the group's.
+        personal = tree.create_folder(self.user, "Team")
+        self.private = tree.create_file(
+            self.user,
+            "private.txt",
+            parent=personal,
+            content=ContentFile(b"secret", name="private.txt"),
+        )
+        self.client.force_login(self.user)
+
+    def test_a_group_folder_adopts_nothing_from_the_callers_personal_tree(self):
+        response = self.client.post(f"/api/v1/files/{self.group_folder.uuid}/sync")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"detail": "Only folders of your personal files are synced with the disk."},
+        )
+        self.assertFalse(File.objects.filter(parent=self.group_folder).exists())
+        self.assertEqual(
+            File.objects.filter(content=self.private.content.name).count(), 1
+        )
+
+    def test_the_service_refuses_a_folder_outside_the_personal_tree(self):
+        with self.assertRaises(disk_sync.NotPersonalFolder):
+            disk_sync.sync_folder_level(self.user, self.group_folder)
+
+        self.assertFalse(File.objects.filter(parent=self.group_folder).exists())
+
+    def test_the_service_refuses_another_users_folder(self):
+        other = User.objects.create_user(username="other", password="pass")
+        theirs = tree.create_folder(other, "Team")
+
+        with self.assertRaises(disk_sync.NotPersonalFolder):
+            disk_sync.sync_folder_level(self.user, theirs)
+
+        self.assertFalse(File.objects.filter(parent=theirs).exists())
+
+    def test_a_folder_shared_with_the_caller_is_not_found(self):
+        """A share grants WRITE at most, which the action does not open a
+        folder for: it answers as for a folder that does not exist."""
+        other = User.objects.create_user(username="other", password="pass")
+        theirs = tree.create_folder(other, "Team")
+        FileShare.objects.create(
+            file=theirs, shared_by=other, shared_with=self.user, permission="rw"
+        )
+
+        response = self.client.post(f"/api/v1/files/{theirs.uuid}/sync")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(File.objects.filter(parent=theirs).exists())

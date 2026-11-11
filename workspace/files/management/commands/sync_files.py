@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from workspace.files.models import File
-from workspace.files.sync import FileSyncService
+from workspace.files.services import disk_sync
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -48,8 +48,6 @@ class Command(BaseCommand):
         folder_uuid = options["folder"]
         shallow = options["shallow"]
 
-        service = FileSyncService(dry_run=dry_run, log=logger)
-
         if folder_uuid:
             if not username:
                 self.stderr.write(
@@ -64,7 +62,13 @@ class Command(BaseCommand):
                 node_type=File.NodeType.FOLDER,
                 deleted_at__isnull=True,
             )
-            result = service.sync_folder_shallow(user, folder_db)
+            try:
+                result = disk_sync.sync_folder_level(
+                    user, folder_db, dry_run=dry_run, log=logger
+                )
+            except disk_sync.NotPersonalFolder as refusal:
+                self.stderr.write(self.style.ERROR(str(refusal)))
+                return
             self._print_result(result, f"folder '{folder_db.name}'")
             return
 
@@ -76,9 +80,9 @@ class Command(BaseCommand):
         for user in users:
             self.stdout.write(f"Syncing user: {user.username}")
             if shallow:
-                result = service.sync_folder_shallow(user, parent_db=None)
+                result = disk_sync.sync_folder_level(user, dry_run=dry_run, log=logger)
             else:
-                result = service.sync_user_recursive(user)
+                result = disk_sync.sync_user_tree(user, dry_run=dry_run, log=logger)
             self._print_result(result, f"user '{user.username}'")
 
     def _print_result(self, result, scope):

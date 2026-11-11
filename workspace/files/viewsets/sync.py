@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.queries import FilePermission, accessible_files_q, get_permission
+from workspace.files.services import disk_sync
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,7 @@ class SyncMixin:
     @action(detail=False, methods=["post"], url_path="sync")
     def sync_root(self, request):
         """Sync root-level files for the current user."""
-        from workspace.files.sync import FileSyncService
-
-        service = FileSyncService(log=logger)
-        result = service.sync_folder_shallow(request.user, parent_db=None)
+        result = disk_sync.sync_folder_level(request.user, log=logger)
         for err in result.errors:
             logger.warning("sync root: %s", scrub(err))
         return Response(
@@ -65,14 +63,14 @@ class SyncMixin:
                 response=OpenApiTypes.OBJECT,
                 description="Sync result summary.",
             ),
-            400: OpenApiResponse(description="Not a folder."),
+            400: OpenApiResponse(
+                description="Not a folder, or not one of the caller's personal tree."
+            ),
         },
     )
     @action(detail=True, methods=["post"], url_path="sync")
     def sync_folder(self, request, uuid=None):
         """Sync a specific folder's children for the current user."""
-        from workspace.files.sync import FileSyncService
-
         file_obj = self.get_object()
         if file_obj.node_type != File.NodeType.FOLDER:
             return Response(
@@ -80,8 +78,14 @@ class SyncMixin:
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        service = FileSyncService(log=logger)
-        result = service.sync_folder_shallow(request.user, parent_db=file_obj)
+        try:
+            result = disk_sync.sync_folder_level(request.user, file_obj, log=logger)
+        except disk_sync.NotPersonalFolder:
+            return Response(
+                {"detail": disk_sync.NOT_PERSONAL_FOLDER},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         for err in result.errors:
             logger.warning("sync folder %s: %s", scrub(uuid), scrub(err))
         return Response(

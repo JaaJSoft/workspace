@@ -16,10 +16,9 @@ from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
-from workspace.files.services import tree
+from workspace.files.services import disk_sync, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.shortcuts import create_shortcut
-from workspace.files.sync import FileSyncService
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import FolderResource
 
@@ -181,7 +180,7 @@ class ApiNameTests(NameFormsTestCase):
 
 class SyncNameTests(NameFormsTestCase):
     def sync(self):
-        return FileSyncService().sync_user_recursive(self.user)
+        return disk_sync.sync_user_tree(self.user)
 
     def test_a_decomposed_entry_is_adopted_under_its_composed_name(self):
         self.storage.save(f"files/users/nfc/{DECOMPOSED}", ContentFile(b"from a mac"))

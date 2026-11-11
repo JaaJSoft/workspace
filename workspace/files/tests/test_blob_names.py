@@ -15,10 +15,9 @@ from rest_framework.test import APITestCase
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.common.tests.migrations import schema_editor_stub
 from workspace.files.models import File
-from workspace.files.services import tree
+from workspace.files.services import disk_sync, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.names import NameTaken
-from workspace.files.sync import FileSyncService
 
 resolve_caseless = importlib.import_module(
     "workspace.files.migrations.0066_resolve_caseless_names"
@@ -92,7 +91,7 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
     def test_the_disk_sync_recognises_a_file_whose_name_has_a_space(self):
         created = self._create("my doc.txt", b"x")
 
-        result = FileSyncService().sync_user_recursive(self.user)
+        result = disk_sync.sync_user_tree(self.user)
 
         created.refresh_from_db()
         self.assertIsNone(created.deleted_at)

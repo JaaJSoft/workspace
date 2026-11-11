@@ -179,13 +179,10 @@ The project ships under the Business Source License 1.1 and converts to MIT on t
 - **A GPL-only candidate is a stop-and-ask**, not a reason to hand-write a replacement (see *File formats and protocols*). Look for a permissive alternative first, and check its release history: one release years ago is not maintained.
 - **A subprocess or a service is not a dependency.** ffmpeg, the ClamAV daemon or Cairo reached through a socket, a pipe or a command line are separate programs, outside this policy.
 
-To audit, in a scratch copy for npm so nothing lands in the tree:
+`scripts/check_licenses.py` applies this table to the runtime Python packages of `uv.lock` and the bundled npm packages of the frontend lockfile, and flags a wheel whose bundled-libraries notice names a GPL library. The `License policy` job of `.github/workflows/audit.yml` runs it on every change to the manifests, and `core.tests.test_license_policy` runs its npm half in the suite. A package whose metadata says nothing usable goes in the script's `REVIEWED` table with the reason it is fine - a new entry is a decision, never a way to get green.
 
 ```bash
-# Python, runtime only (flags GPL/AGPL/unknown; read the licence file of every hit, see above)
-uv sync --frozen --no-dev && uv run --no-sync --with pip-licenses pip-licenses --from=mixed --with-urls --format=csv
-# npm: the licence of every package in the lockfile, the vendored bundles included
-cd scripts/frontend && npm ci --ignore-scripts && npm query ':not(:root)' | python3 -c "import json,sys; [print(p['name'], p.get('license')) for p in json.load(sys.stdin)]"
+uv sync --frozen --no-dev && uv run --no-sync python scripts/check_licenses.py   # then `uv sync --frozen` to get the dev group back
 ```
 
 The Docker image label `org.opencontainers.image.licenses` carries the SPDX identifier of the project's own licence (`BUSL-1.1`).

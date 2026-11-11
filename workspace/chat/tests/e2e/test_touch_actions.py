@@ -45,6 +45,11 @@ class ChatTouchActionsTests(PlaywrightTestCase):
         self.page.goto(f"{self.live_server_url}/chat/{self.conv.uuid}")
         expect(self._bubble(self.own_msg)).to_be_visible()
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
+        # Opening a conversation ends by focusing the composer, once its
+        # requests are back: a tap before that would lose the focus to it.
+        self.page.wait_for_function(
+            "document.activeElement && document.activeElement.tagName === 'TEXTAREA'"
+        )
 
     def _bubble(self, msg):
         return self.page.locator(f"#msg-{msg.uuid} .msg-body")

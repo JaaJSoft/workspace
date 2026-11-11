@@ -342,9 +342,8 @@ window.fileBrowser = function fileBrowser() {
 
     // The target folder is read once, here: the queue keeps it per file, so
     // navigating while it drains never redirects the rest of the batch.
-    uploadFiles(files) {
+    uploadFiles(files, folderId = this.currentFolder || null) {
       const batch = Array.from(files);
-      const folderId = this.currentFolder || null;
       const intake = async () => {
         const decisions = await this._decideNameCollisions(batch, { targetFolderId: folderId });
         Alpine.store('uploads').add(
@@ -353,6 +352,60 @@ window.fileBrowser = function fileBrowser() {
       };
       this._uploadIntake = this._uploadIntake.catch(() => {}).then(intake);
       return this._uploadIntake;
+    },
+
+    // Files another app shared with the installed app: the service worker
+    // kept them under the id in the address (share_target_inbox.js), and they
+    // go up to the folder the user picks. The id leaves the address once the
+    // picker is answered, so a reload while it is open asks again.
+    async receiveSharedFiles() {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has('share_target')) return;
+      const id = params.get('share_target');
+      let files = null;
+      if (id) {
+        try {
+          files = await window.shareTargetInbox.get(id);
+        } catch (error) {
+          console.warn('Could not read the shared files:', error);
+        }
+      }
+      const leave = () => {
+        params.delete('share_target');
+        const query = params.toString();
+        window.navHistory.replace(window.location.pathname + (query ? '?' + query : ''));
+      };
+      if (!files || !files.length) {
+        leave();
+        window.AppAlert.error(gettext('The shared files could not be received. Share them again.'));
+        return;
+      }
+
+      const picked = await AppDialog.folderPicker({
+        title: gettext('Save shared files'),
+        message: interpolate(
+          ngettext(
+            'Choose the folder to save the shared file in.',
+            'Choose the folder to save the %(count)s shared files in.',
+            files.length
+          ),
+          { count: files.length },
+          true
+        ),
+        okLabel: gettext('Save here'),
+        okClass: 'btn-module',
+        icon: 'share',
+        iconClass: 'bg-module/15 text-module',
+      });
+      window.shareTargetInbox.remove(id).catch(() => {});
+      leave();
+      if (!picked) return;
+
+      const folderId = picked.uuid || null;
+      if (folderId !== (this.currentFolder || null)) {
+        window.folderNav.navigateTo(folderId ? '/files/' + folderId : '/files');
+      }
+      await this.uploadFiles(files, folderId);
     },
 
     // Map each file to what the server should do if its name is taken
@@ -1138,6 +1191,7 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('viewer-file-shown', (e) => this.followViewer(e.detail));
       window.addEventListener('nav:restore', () => this.followPropertiesUrl());
       this.followPropertiesUrl();
+      this.receiveSharedFiles();
       // Starred from the viewer: the listing's star column and the panel follow.
       window.addEventListener('file-favorite-changed', (e) => {
         this.refreshFolderBrowser();

@@ -6,6 +6,19 @@
   "display": "standalone",
   "theme_color": "#111827",
   "background_color": "#111827",
+  "share_target": {
+    "action": "/files/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "files",
+          "accept": ["*/*"]
+        }
+      ]
+    }
+  },
   "icons": [
     {
       "src": "/static/icons/icon-192.png",

@@ -13,8 +13,16 @@ class FakeFormData {
   append(key, value) { this.fields[key] = value; }
 }
 
-function makePage({ folder = 'folder-a', nameCollision = 'keep_both', existing = [], answers = [] } = {}) {
+function makePage({
+  folder = 'folder-a', nameCollision = 'keep_both', existing = [], answers = [],
+  search = '', inbox = {}, picked = null,
+} = {}) {
   const dialogs = [];
+  const pickers = [];
+  const alerts = [];
+  const history = [];
+  const navigations = [];
+  const removed = [];
   const sent = [];
   const state = { folder };
   const alpineInit = [];
@@ -57,13 +65,21 @@ function makePage({ folder = 'folder-a', nameCollision = 'keep_both', existing =
         },
         effect: (fn) => fn(),
       },
-      location: { pathname: '/files', search: '' },
+      location: { pathname: '/files', search },
       getCSRFToken: () => 'token',
       getFilePrefs: () => ({ nameCollision }),
       URLSearchParams,
       fetch: async () => ({ ok: true, json: async () => existing.map((name) => ({ name })) }),
       AppDialog: {
         select: async (options) => { dialogs.push(options); return answers.shift(); },
+        folderPicker: async (options) => { pickers.push(options); return picked; },
+      },
+      AppAlert: { error: (message) => alerts.push(message) },
+      navHistory: { replace: (url) => history.push(url) },
+      folderNav: { navigateTo: (url) => navigations.push(url) },
+      shareTargetInbox: {
+        get: async (id) => inbox[id] || null,
+        remove: async (id) => { removed.push(id); },
       },
       addEventListener: () => {},
       dispatchEvent: () => true,
@@ -76,7 +92,7 @@ function makePage({ folder = 'folder-a', nameCollision = 'keep_both', existing =
   );
   alpineInit.forEach((fn) => fn());
   const browser = ctx.fileBrowser();
-  return { browser, sent, state, dialogs };
+  return { browser, sent, state, dialogs, pickers, alerts, history, navigations, removed };
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -135,4 +151,74 @@ test('without the checkbox each conflict is asked on its own, the last without t
 
   assert.equal(dialogs.length, 2);
   assert.equal(dialogs[1].checkbox, '');
+});
+
+test('files shared from another app go up to the folder picked for them', async () => {
+  const { browser, sent, pickers, history, navigations, removed } = makePage({
+    folder: '',
+    search: '?share_target=share-1',
+    inbox: { 'share-1': [fakeFile('a.jpg'), fakeFile('b.pdf')] },
+    picked: { uuid: 'folder-b', name: 'B' },
+  });
+
+  await browser.receiveSharedFiles();
+  await settle();
+
+  assert.equal(pickers.length, 1);
+  assert.equal(pickers[0].message, 'Choose the folder to save the 2 shared files in.');
+  assert.deepEqual(navigations, ['/files/folder-b']);
+  assert.deepEqual(sent.map((xhr) => `${xhr.form.name}:${xhr.form.parent}`), ['a.jpg:folder-b', 'b.pdf:folder-b']);
+  assert.deepEqual(removed, ['share-1']);
+  assert.deepEqual(history, ['/files']);
+});
+
+test('shared files picked for the personal root go up without a parent', async () => {
+  const { browser, sent, navigations } = makePage({
+    folder: 'folder-a',
+    search: '?share_target=share-1',
+    inbox: { 'share-1': [fakeFile('a.jpg')] },
+    picked: { uuid: null, name: 'My files' },
+  });
+
+  await browser.receiveSharedFiles();
+  await settle();
+
+  assert.deepEqual(navigations, ['/files']);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].form.parent, undefined);
+});
+
+test('closing the picker drops the shared files without uploading them', async () => {
+  const { browser, sent, removed, history } = makePage({
+    search: '?share_target=share-1',
+    inbox: { 'share-1': [fakeFile('a.jpg')] },
+    picked: null,
+  });
+
+  await browser.receiveSharedFiles();
+  await settle();
+
+  assert.equal(sent.length, 0);
+  assert.deepEqual(removed, ['share-1']);
+  assert.deepEqual(history, ['/files']);
+});
+
+test('a share the inbox does not hold is reported instead of opening the picker', async () => {
+  for (const search of ['?share_target=gone', '?share_target=']) {
+    const { browser, pickers, alerts, history } = makePage({ search });
+
+    await browser.receiveSharedFiles();
+
+    assert.equal(pickers.length, 0);
+    assert.deepEqual(alerts, ['The shared files could not be received. Share them again.']);
+    assert.deepEqual(history, ['/files']);
+  }
+});
+
+test('a page opened without a share does nothing', async () => {
+  const { browser, pickers, alerts, history } = makePage({ search: '?tag=x' });
+
+  await browser.receiveSharedFiles();
+
+  assert.equal(pickers.length + alerts.length + history.length, 0);
 });

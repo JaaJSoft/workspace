@@ -7,6 +7,7 @@ app_name = "files_ui"
 urlpatterns = [
     path("", views.index, name="index"),
     path("/trash", views.trash, name="trash"),
+    path("/share-target", views.share_target, name="share_target"),
     path("/pinned", views.pinned_folders, name="pinned_folders"),
     path("/group-folders", views.group_folders_sidebar, name="group_folders_sidebar"),
     path("/properties/<uuid:uuid>", views.properties, name="properties"),

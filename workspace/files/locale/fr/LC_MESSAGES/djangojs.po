@@ -50,6 +50,25 @@ msgid "Failed to create file"
 msgstr "Impossible de créer le fichier"
 
 #: ui/static/files/ui/js/browser.js
+msgid "The shared files could not be received. Share them again."
+msgstr "Les fichiers partagés n'ont pas pu être reçus. Partagez-les à nouveau."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Save shared files"
+msgstr "Enregistrer les fichiers partagés"
+
+#: ui/static/files/ui/js/browser.js
+msgid "Choose the folder to save the shared file in."
+msgid_plural "Choose the folder to save the %(count)s shared files in."
+msgstr[0] "Choisissez le dossier où enregistrer le fichier partagé."
+msgstr[1] "Choisissez le dossier où enregistrer les %(count)s de fichiers partagés."
+msgstr[2] "Choisissez le dossier où enregistrer les %(count)s fichiers partagés."
+
+#: ui/static/files/ui/js/browser.js
+msgid "Save here"
+msgstr "Enregistrer ici"
+
+#: ui/static/files/ui/js/browser.js
 msgid "File already exists"
 msgstr "Le fichier existe déjà"
 

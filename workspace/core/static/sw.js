@@ -4,6 +4,11 @@ const CACHE_VERSION = new URL(self.location).searchParams.get('v') || 'dev';
 const CACHE_NAME = 'workspace-' + CACHE_VERSION;
 const OFFLINE_URL = '/static/offline.html';
 
+// The manifest's share_target posts here; see receiveSharedFiles().
+const SHARE_TARGET_ACTION = '/files/share-target';
+
+importScripts('/static/files/ui/js/share_target_inbox.js?v=' + encodeURIComponent(CACHE_VERSION));
+
 /* ──────────────────────────────────────────
    Lifecycle events
    ────────────────────────────────────────── */
@@ -44,11 +49,16 @@ self.addEventListener('activate', function (event) {
 
 self.addEventListener('fetch', function (event) {
   const request = event.request;
+  const url = new URL(request.url);
+
+  if (request.method === 'POST' && url.origin === self.location.origin
+      && url.pathname === SHARE_TARGET_ACTION) {
+    event.respondWith(receiveSharedFiles(request));
+    return;
+  }
 
   // Only handle GET requests
   if (request.method !== 'GET') return;
-
-  const url = new URL(request.url);
 
   // API requests — network only
   if (url.pathname.startsWith('/api/')) return;
@@ -127,6 +137,29 @@ function networkFirstWithOffline(request) {
         return cached || caches.match(OFFLINE_URL);
       });
     });
+}
+
+/* ──────────────────────────────────────────
+   Share target — files shared from another app
+   ────────────────────────────────────────── */
+
+// The files stay in the browser until the Files page has asked where they
+// go and handed them to its upload queue: posting them to the server here
+// would need a CSRF token the share does not carry, and a folder the user
+// has not chosen yet. A share the page cannot find (nothing attached, or
+// the inbox failed) lands on the same URL with an id it reports as gone.
+async function receiveSharedFiles(request) {
+  let id = '';
+  try {
+    const form = await request.formData();
+    const files = form.getAll('files').filter(function (value) { return typeof value !== 'string'; });
+    if (files.length) id = await self.shareTargetInbox.put(files);
+  } catch (e) {
+    console.warn('Could not keep the shared files:', e);
+  }
+  const target = new URL('/files', self.location.origin);
+  target.searchParams.set('share_target', id);
+  return Response.redirect(target.href, 303);
 }
 
 /* ──────────────────────────────────────────

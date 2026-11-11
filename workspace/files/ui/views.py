@@ -7,13 +7,14 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.html import escape, format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.clickjacking import xframe_options_sameorigin
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_GET
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.views.decorators.http import require_GET, require_http_methods
 
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
@@ -544,6 +545,21 @@ def index(request, folder=None):
         return render(request, "files/ui/index.html#folder-browser", context)
 
     return render(request, "files/ui/index.html", context)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def share_target(request):
+    """Where a share from another app lands when no service worker took it.
+
+    The service worker answers the manifest's share_target itself and keeps
+    the files in the browser (sw.js, receiveSharedFiles). A share reaches the
+    server only when it did not run - site data cleared, a worker older than
+    the manifest - and the files are lost by then: the body is never read,
+    so nothing is stored and the missing CSRF token protects nothing. The
+    Files page tells the user to share again.
+    """
+    return redirect(reverse("files_ui:index") + "?share_target=", permanent=False)
 
 
 @login_required

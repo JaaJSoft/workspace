@@ -31,7 +31,7 @@ dependencies = [
     # (GPL-2.0, an encoder we never call), which no BUSL distribution can carry.
     "pi-heif>=1.4.0",
     # Camera RAW photos (LibRaw): their embedded preview and its EXIF
-    "rawpy>=0.27.1",
+    "rawpy>=0.28.0",
     "cairosvg>=2.9.1",
     # mail
     "cryptography>=50.0.2",
@@ -48,7 +48,7 @@ dependencies = [
     "mistune>=3.4.0",
     "pygments>=2.21.0",
     "dj-database-url>=2.3.0",
-    "psycopg[binary,pool]>=3.3.6",
+    "psycopg[binary,pool]>=3.3.8",
     "python-dotenv>=1.2.4",
     # webdav
     "wsgidav>=4.4.0",
@@ -60,7 +60,7 @@ dependencies = [
     # push notifications
     "pywebpush>=2.5.0",
     # oauth2
-    "authlib>=1.9.1",
+    "authlib>=1.9.5",
     # file type detection
     "magika>=1.0.0",
     # malware scanning (clamd protocol client; the daemon itself is optional

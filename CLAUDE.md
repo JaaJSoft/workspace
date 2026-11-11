@@ -1277,6 +1277,15 @@ window.addEventListener('nav:restore', (e) => {
 - Opening pushes, switching replaces, closing calls `returnTo`. Closing must never push: back would reopen what was just closed.
 - The decision does not depend on the screen size: a mobile back arrow calls the same close method as the desktop close button.
 
+### Incoming - what the operating system hands to the installed app
+
+"Incoming" is the word for anything another app or the operating system hands to Workspace: today the manifest's `share_target` (the system share sheet on Android and Windows), later `file_handlers` ("Open with") or `protocol_handlers`. Never call it "share": in this codebase a share is a file, album or vault entry shared with someone (`FileShare`, `_share_target`, "Shared with me"), and the two must not be confused in URLs, names or the UI.
+
+- **One entry point, owned by `core`.** The manifest allows a single `share_target`, so files, text and links shared from another app all arrive at `POST /incoming`, whatever module they end up in. Its URL is part of every installed app's manifest and changing it waits on each browser refreshing that manifest: it does not move. `sw.js` answers it (`receiveIncoming`) and `core/views/incoming.py` is the fallback when no service worker ran.
+- **`core` dispatches, the module receives.** The service worker keeps what arrived in the browser (IndexedDB, through a store the receiving module owns - `files/ui/js/incoming_files.js`) and redirects to that module's page with `?incoming=<id>`. The module's page reads it, asks what it needs (Files: the folder picker), sends it through its usual path (Files: the upload queue), then drops the id from the address with `navHistory.replace`. A new kind of content gets a branch in `receiveIncoming` and a landing page in the module that owns it, never a second action URL.
+- **Nothing is posted to the server on arrival.** The share carries no CSRF token and the user has not said where it goes yet; the bytes leave the browser through the module's authenticated API once they have.
+- **An empty or unknown id is reported, not ignored**: the user shared something and must learn it did not arrive.
+
 ### UI Partials
 
 Always use the existing UI partials located in `workspace/common/templates/ui/partials/` instead of writing inline HTML for common components.

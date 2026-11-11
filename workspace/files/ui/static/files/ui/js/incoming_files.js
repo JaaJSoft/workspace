@@ -1,26 +1,26 @@
 /**
- * Files another app shared with the installed app (the manifest's
- * share_target), kept between the service worker that receives them and the
- * Files page that asks where to save them.
+ * Incoming files: files another app handed to the installed app through the
+ * manifest's share_target, kept between the service worker that receives
+ * them and the Files page that asks where to save them.
  *
- * The share arrives as a multipart POST that carries no CSRF token, so the
- * service worker answers it without the server: it stores the files under a
- * fresh id and redirects to /files?share_target=<id>. IndexedDB stores File
- * objects as they are, so the page gets back the names and types the other
- * app sent.
+ * The share arrives as a multipart POST to /incoming that carries no CSRF
+ * token, so the service worker answers it without the server: it stores the
+ * files under a fresh id and redirects to /files?incoming=<id>. IndexedDB
+ * stores File objects as they are, so the page gets back the names and types
+ * the other app sent.
  *
  * Loaded by sw.js (importScripts) and by the Files page: `self` is the
  * global in both.
  *
- *   const id = await shareTargetInbox.put(files);
- *   const files = await shareTargetInbox.get(id);   // null once removed
- *   await shareTargetInbox.remove(id);
+ *   const id = await incomingFiles.put(files);
+ *   const files = await incomingFiles.get(id);   // null once removed
+ *   await incomingFiles.remove(id);
  */
-self.shareTargetInbox = (function () {
-  const DB_NAME = 'workspace-share-target';
-  const STORE = 'shares';
-  // A share nobody claimed (the app was closed on the login page) is dropped
-  // the next time one arrives, rather than holding its bytes forever.
+self.incomingFiles = (function () {
+  const DB_NAME = 'workspace-incoming';
+  const STORE = 'files';
+  // Files nobody claimed (the app was closed on the login page) are dropped
+  // the next time a share arrives, rather than holding their bytes forever.
   const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
   function openDatabase() {

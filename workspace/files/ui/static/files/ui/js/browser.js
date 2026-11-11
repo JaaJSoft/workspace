@@ -354,24 +354,24 @@ window.fileBrowser = function fileBrowser() {
       return this._uploadIntake;
     },
 
-    // Files another app shared with the installed app: the service worker
-    // kept them under the id in the address (share_target_inbox.js), and they
-    // go up to the folder the user picks. The id leaves the address once the
-    // picker is answered, so a reload while it is open asks again.
-    async receiveSharedFiles() {
+    // Incoming files, shared by another app with the installed app: the
+    // service worker kept them under the id in the address (incoming_files.js),
+    // and they go up to the folder the user picks. The id leaves the address
+    // once the picker is answered, so a reload while it is open asks again.
+    async receiveIncomingFiles() {
       const params = new URLSearchParams(window.location.search);
-      if (!params.has('share_target')) return;
-      const id = params.get('share_target');
+      if (!params.has('incoming')) return;
+      const id = params.get('incoming');
       let files = null;
       if (id) {
         try {
-          files = await window.shareTargetInbox.get(id);
+          files = await window.incomingFiles.get(id);
         } catch (error) {
-          console.warn('Could not read the shared files:', error);
+          console.warn('Could not read the incoming files:', error);
         }
       }
       const leave = () => {
-        params.delete('share_target');
+        params.delete('incoming');
         const query = params.toString();
         window.navHistory.replace(window.location.pathname + (query ? '?' + query : ''));
       };
@@ -397,7 +397,7 @@ window.fileBrowser = function fileBrowser() {
         icon: 'share',
         iconClass: 'bg-module/15 text-module',
       });
-      window.shareTargetInbox.remove(id).catch(() => {});
+      window.incomingFiles.remove(id).catch(() => {});
       leave();
       if (!picked) return;
 
@@ -1191,7 +1191,7 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('viewer-file-shown', (e) => this.followViewer(e.detail));
       window.addEventListener('nav:restore', () => this.followPropertiesUrl());
       this.followPropertiesUrl();
-      this.receiveSharedFiles();
+      this.receiveIncomingFiles();
       // Starred from the viewer: the listing's star column and the panel follow.
       window.addEventListener('file-favorite-changed', (e) => {
         this.refreshFolderBrowser();

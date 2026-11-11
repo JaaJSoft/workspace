@@ -1,8 +1,8 @@
 'use strict';
 
 // A share from another app reaches the installed app as a multipart POST to
-// the manifest's share_target action. The service worker keeps the files in
-// the browser and sends the app to the Files page with their id.
+// /incoming, the manifest's share_target action. The service worker keeps the
+// files in the browser and sends the app to the Files page with their id.
 
 const assert = require('node:assert');
 const { test } = require('node:test');
@@ -17,7 +17,7 @@ function loadServiceWorker({ put = async () => 'share-1' } = {}) {
   const self = {
     location: new URL(`${ORIGIN}/sw.js?v=1.2.3`),
     addEventListener(type, fn) { listeners[type] = fn; },
-    shareTargetInbox: {
+    incomingFiles: {
       put: async (files) => { stored.push(files); return put(files); },
     },
   };
@@ -31,7 +31,7 @@ function loadServiceWorker({ put = async () => 'share-1' } = {}) {
   return { listeners, imported, stored };
 }
 
-function shareRequest(form, path = '/files/share-target') {
+function shareRequest(form, path = '/incoming') {
   return new Request(`${ORIGIN}${path}`, { method: 'POST', body: form });
 }
 
@@ -41,9 +41,9 @@ function dispatchFetch(listeners, request) {
   return responded;
 }
 
-test('the inbox is imported at the cache version, so a release refreshes it', () => {
+test('the incoming files store is imported at the cache version, so a release refreshes it', () => {
   const { imported } = loadServiceWorker();
-  assert.deepStrictEqual(imported, ['/static/files/ui/js/share_target_inbox.js?v=1.2.3']);
+  assert.deepStrictEqual(imported, ['/static/files/ui/js/incoming_files.js?v=1.2.3']);
 });
 
 test('shared files are kept and the app opens the Files page on their id', async () => {
@@ -55,7 +55,7 @@ test('shared files are kept and the app opens the Files page on their id', async
   const response = await dispatchFetch(listeners, shareRequest(form));
 
   assert.equal(response.status, 303);
-  assert.equal(response.headers.get('Location'), `${ORIGIN}/files?share_target=share-1`);
+  assert.equal(response.headers.get('Location'), `${ORIGIN}/files?incoming=share-1`);
   assert.equal(stored.length, 1);
   assert.deepStrictEqual(Array.from(stored[0], (file) => file.name), ['a.jpg', 'b.pdf']);
 });
@@ -67,18 +67,18 @@ test('a share without files lands on the Files page with an empty id', async () 
 
   const response = await dispatchFetch(listeners, shareRequest(form));
 
-  assert.equal(response.headers.get('Location'), `${ORIGIN}/files?share_target=`);
+  assert.equal(response.headers.get('Location'), `${ORIGIN}/files?incoming=`);
   assert.equal(stored.length, 0);
 });
 
-test('an inbox that cannot store the files still sends the app to the Files page', async () => {
+test('a store that cannot keep the files still sends the app to the Files page', async () => {
   const { listeners } = loadServiceWorker({ put: async () => { throw new Error('quota'); } });
   const form = new FormData();
   form.append('files', new File(['a'], 'a.jpg'));
 
   const response = await dispatchFetch(listeners, shareRequest(form));
 
-  assert.equal(response.headers.get('Location'), `${ORIGIN}/files?share_target=`);
+  assert.equal(response.headers.get('Location'), `${ORIGIN}/files?incoming=`);
 });
 
 test('other POST requests go to the network', () => {

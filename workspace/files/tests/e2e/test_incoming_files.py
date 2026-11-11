@@ -1,10 +1,10 @@
-"""E2E: files shared from another app go up to the folder the user picks.
+"""E2E: incoming files go up to the folder the user picks.
 
 Android and Windows hand a share to the installed app as a multipart POST to
-the manifest's share_target action. The service worker keeps the files in
-IndexedDB and sends the app to /files?share_target=<id>, where the folder
-picker asks where they go. A unit test stubs both halves; whether a File
-survives the trip through IndexedDB and reaches the upload queue is the
+/incoming, the manifest's share_target action. The service worker keeps the
+files in IndexedDB and sends the app to /files?incoming=<id>, where the
+folder picker asks where they go. A unit test stubs both halves; whether a
+File survives the trip through IndexedDB and reaches the upload queue is the
 browser's business.
 """
 
@@ -21,16 +21,16 @@ SHARE_SCRIPT = """
 async () => {
   const form = new FormData();
   form.append('files', new File(['shared bytes'], 'shared.txt', { type: 'text/plain' }));
-  const response = await fetch('/files/share-target', { method: 'POST', body: form });
+  const response = await fetch('/incoming', { method: 'POST', body: form });
   return response.url;
 }
 """
 
 
-class ShareTargetTests(PlaywrightTestCase):
+class IncomingFilesTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        self.user = self.create_user(username="share-target")
+        self.user = self.create_user(username="incoming")
         self.inbox = File.objects.create(
             owner=self.user, name="Inbox", node_type=File.NodeType.FOLDER
         )
@@ -47,7 +47,7 @@ class ShareTargetTests(PlaywrightTestCase):
         self._controlled_files_page()
 
         landing = self.page.evaluate(SHARE_SCRIPT)
-        self.assertRegex(landing, r"/files\?share_target=[0-9a-f-]{36}$")
+        self.assertRegex(landing, r"/files\?incoming=[0-9a-f-]{36}$")
         self.page.goto(landing)
 
         dialog = self.page.locator("dialog[open]").last
@@ -64,15 +64,15 @@ class ShareTargetTests(PlaywrightTestCase):
         with shared.content.open("rb") as f:
             self.assertEqual(f.read(), b"shared bytes")
 
-        # The share is consumed: the address no longer names it, and the
-        # inbox no longer holds it.
-        share_id = landing.rsplit("=", 1)[1]
+        # The files are consumed: the address no longer names them, and the
+        # browser no longer holds them.
+        incoming_id = landing.rsplit("=", 1)[1]
         self.assertIsNone(
-            self.page.evaluate("(id) => shareTargetInbox.get(id)", share_id)
+            self.page.evaluate("(id) => incomingFiles.get(id)", incoming_id)
         )
 
-    def test_a_share_the_browser_no_longer_holds_is_reported(self):
-        self.page.goto(f"{self.live_server_url}/files?share_target=gone")
+    def test_files_the_browser_no_longer_holds_are_reported(self):
+        self.page.goto(f"{self.live_server_url}/files?incoming=gone")
 
         expect(
             self.page.get_by_text("The shared files could not be received")

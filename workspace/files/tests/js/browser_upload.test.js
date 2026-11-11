@@ -77,7 +77,7 @@ function makePage({
       AppAlert: { error: (message) => alerts.push(message) },
       navHistory: { replace: (url) => history.push(url) },
       folderNav: { navigateTo: (url) => navigations.push(url) },
-      shareTargetInbox: {
+      incomingFiles: {
         get: async (id) => inbox[id] || null,
         remove: async (id) => { removed.push(id); },
       },
@@ -153,15 +153,15 @@ test('without the checkbox each conflict is asked on its own, the last without t
   assert.equal(dialogs[1].checkbox, '');
 });
 
-test('files shared from another app go up to the folder picked for them', async () => {
+test('incoming files go up to the folder picked for them', async () => {
   const { browser, sent, pickers, history, navigations, removed } = makePage({
     folder: '',
-    search: '?share_target=share-1',
+    search: '?incoming=share-1',
     inbox: { 'share-1': [fakeFile('a.jpg'), fakeFile('b.pdf')] },
     picked: { uuid: 'folder-b', name: 'B' },
   });
 
-  await browser.receiveSharedFiles();
+  await browser.receiveIncomingFiles();
   await settle();
 
   assert.equal(pickers.length, 1);
@@ -172,15 +172,15 @@ test('files shared from another app go up to the folder picked for them', async 
   assert.deepEqual(history, ['/files']);
 });
 
-test('shared files picked for the personal root go up without a parent', async () => {
+test('incoming files picked for the personal root go up without a parent', async () => {
   const { browser, sent, navigations } = makePage({
     folder: 'folder-a',
-    search: '?share_target=share-1',
+    search: '?incoming=share-1',
     inbox: { 'share-1': [fakeFile('a.jpg')] },
     picked: { uuid: null, name: 'My files' },
   });
 
-  await browser.receiveSharedFiles();
+  await browser.receiveIncomingFiles();
   await settle();
 
   assert.deepEqual(navigations, ['/files']);
@@ -188,14 +188,14 @@ test('shared files picked for the personal root go up without a parent', async (
   assert.equal(sent[0].form.parent, undefined);
 });
 
-test('closing the picker drops the shared files without uploading them', async () => {
+test('closing the picker drops the incoming files without uploading them', async () => {
   const { browser, sent, removed, history } = makePage({
-    search: '?share_target=share-1',
+    search: '?incoming=share-1',
     inbox: { 'share-1': [fakeFile('a.jpg')] },
     picked: null,
   });
 
-  await browser.receiveSharedFiles();
+  await browser.receiveIncomingFiles();
   await settle();
 
   assert.equal(sent.length, 0);
@@ -204,10 +204,10 @@ test('closing the picker drops the shared files without uploading them', async (
 });
 
 test('a share the inbox does not hold is reported instead of opening the picker', async () => {
-  for (const search of ['?share_target=gone', '?share_target=']) {
+  for (const search of ['?incoming=gone', '?incoming=']) {
     const { browser, pickers, alerts, history } = makePage({ search });
 
-    await browser.receiveSharedFiles();
+    await browser.receiveIncomingFiles();
 
     assert.equal(pickers.length, 0);
     assert.deepEqual(alerts, ['The shared files could not be received. Share them again.']);
@@ -215,10 +215,10 @@ test('a share the inbox does not hold is reported instead of opening the picker'
   }
 });
 
-test('a page opened without a share does nothing', async () => {
+test('a page opened without incoming files does nothing', async () => {
   const { browser, pickers, alerts, history } = makePage({ search: '?tag=x' });
 
-  await browser.receiveSharedFiles();
+  await browser.receiveIncomingFiles();
 
   assert.equal(pickers.length + alerts.length + history.length, 0);
 });

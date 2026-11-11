@@ -4,10 +4,10 @@ const CACHE_VERSION = new URL(self.location).searchParams.get('v') || 'dev';
 const CACHE_NAME = 'workspace-' + CACHE_VERSION;
 const OFFLINE_URL = '/static/offline.html';
 
-// The manifest's share_target posts here; see receiveSharedFiles().
-const SHARE_TARGET_ACTION = '/files/share-target';
+// The manifest's share_target posts here; see receiveIncoming().
+const INCOMING_ACTION = '/incoming';
 
-importScripts('/static/files/ui/js/share_target_inbox.js?v=' + encodeURIComponent(CACHE_VERSION));
+importScripts('/static/files/ui/js/incoming_files.js?v=' + encodeURIComponent(CACHE_VERSION));
 
 /* ──────────────────────────────────────────
    Lifecycle events
@@ -52,8 +52,8 @@ self.addEventListener('fetch', function (event) {
   const url = new URL(request.url);
 
   if (request.method === 'POST' && url.origin === self.location.origin
-      && url.pathname === SHARE_TARGET_ACTION) {
-    event.respondWith(receiveSharedFiles(request));
+      && url.pathname === INCOMING_ACTION) {
+    event.respondWith(receiveIncoming(request));
     return;
   }
 
@@ -140,25 +140,29 @@ function networkFirstWithOffline(request) {
 }
 
 /* ──────────────────────────────────────────
-   Share target — files shared from another app
+   Incoming — what another app shares with the installed app
    ────────────────────────────────────────── */
 
+// The manifest has a single share_target, so everything another app shares
+// arrives here, and goes on to the page of the module that receives it with
+// the id of what was kept: /<module>?incoming=<id>. Files go to Files.
+//
 // The files stay in the browser until the Files page has asked where they
 // go and handed them to its upload queue: posting them to the server here
 // would need a CSRF token the share does not carry, and a folder the user
 // has not chosen yet. A share the page cannot find (nothing attached, or
-// the inbox failed) lands on the same URL with an id it reports as gone.
-async function receiveSharedFiles(request) {
+// storing it failed) lands there with an empty id, which it reports.
+async function receiveIncoming(request) {
   let id = '';
   try {
     const form = await request.formData();
     const files = form.getAll('files').filter(function (value) { return typeof value !== 'string'; });
-    if (files.length) id = await self.shareTargetInbox.put(files);
+    if (files.length) id = await self.incomingFiles.put(files);
   } catch (e) {
-    console.warn('Could not keep the shared files:', e);
+    console.warn('Could not keep the incoming files:', e);
   }
   const target = new URL('/files', self.location.origin);
-  target.searchParams.set('share_target', id);
+  target.searchParams.set('incoming', id);
   return Response.redirect(target.href, 303);
 }
 

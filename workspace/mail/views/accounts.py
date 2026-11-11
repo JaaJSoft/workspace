@@ -15,6 +15,7 @@ from ..serializers import (
     MailAccountSerializer,
     MailAccountUpdateSerializer,
 )
+from ..services.autodiscover import discover
 
 logger = logging.getLogger(__name__)
 
@@ -42,37 +43,24 @@ class MailAutodiscoverView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        domain = email.split("@", 1)[1]
+        domain = email.rsplit("@", 1)[1]
 
-        from myldiscovery import autodiscover
-
-        try:
-            settings = autodiscover(domain)
-        except Exception:
-            logger.info("Autodiscover failed for domain %s", scrub(domain))
-            settings = None
-
-        if not settings or not settings.get("imap") or not settings.get("smtp"):
+        servers = discover(domain)
+        if servers is None:
+            logger.info("Autodiscover found nothing for domain %s", scrub(domain))
             return Response(
                 {"detail": "Could not auto-detect settings for this domain"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        imap = settings["imap"]
-        smtp = settings["smtp"]
-
-        # Map starttls to use_ssl / use_tls
-        imap_use_ssl = not imap.get("starttls", False)
-        smtp_use_tls = smtp.get("starttls", True)
-
         return Response(
             {
-                "imap_host": imap.get("server", ""),
-                "imap_port": imap.get("port", 993),
-                "imap_use_ssl": imap_use_ssl,
-                "smtp_host": smtp.get("server", ""),
-                "smtp_port": smtp.get("port", 587),
-                "smtp_use_tls": smtp_use_tls,
+                "imap_host": servers.imap.host,
+                "imap_port": servers.imap.port,
+                "imap_use_ssl": servers.imap.security == "ssl",
+                "smtp_host": servers.smtp.host,
+                "smtp_port": servers.smtp.port,
+                "smtp_use_tls": servers.smtp.security == "starttls",
             }
         )
 

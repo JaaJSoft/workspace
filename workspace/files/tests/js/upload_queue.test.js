@@ -565,7 +565,7 @@ test('nothing is taken when not wanted, refused, or unsupported', async () => {
   ctx.createScreenWakeLock(undefined, visible).hold(true);
 });
 
-function discardHarness(fails = {}) {
+function discardHarness(fails = {}, reports = {}) {
   const runs = [];
   const alerts = [];
   const ctx = loadScripts(
@@ -588,7 +588,10 @@ function discardHarness(fails = {}) {
       const failed = fails[kind] || [];
       return {
         status: 'completed',
+        processed: uuids.length,
+        counts: { done: uuids.length - failed.length, failed: failed.length },
         errors: failed.map((uuid) => ({ uuid, message: 'Refused' })),
+        ...reports[kind],
       };
     },
   };
@@ -629,4 +632,23 @@ test('nothing trashed runs no purge', async () => {
   assert.deepEqual(Array.from(await discard(uploads('a.jpg'))), []);
   assert.deepEqual(runs, [['trash', ['u-a.jpg']]]);
   assert.deepEqual(alerts, ['error: Failed to discard a.jpg']);
+});
+
+test('an operation cancelled halfway keeps what it already moved to the trash', async () => {
+  const { discard, runs } = discardHarness({}, { trash: { status: 'cancelled', processed: 1 } });
+
+  const discarded = await discard(uploads('a.jpg', 'b.jpg', 'c.jpg'));
+
+  assert.deepEqual(Array.from(discarded), ['u-a.jpg']);
+  assert.deepEqual(runs[1], ['purge', ['u-a.jpg']]);
+});
+
+test('a report with more failures than it lists counts nothing as discarded', async () => {
+  const { discard, runs } = discardHarness(
+    { trash: ['u-a.jpg'] },
+    { trash: { counts: { done: 1, failed: 2 } } },
+  );
+
+  assert.deepEqual(Array.from(await discard(uploads('a.jpg', 'b.jpg', 'c.jpg'))), []);
+  assert.deepEqual(runs, [['trash', ['u-a.jpg', 'u-b.jpg', 'u-c.jpg']]]);
 });

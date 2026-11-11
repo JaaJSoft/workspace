@@ -763,12 +763,20 @@ window.sendResumableUpload = function sendResumableUpload(
 // One trash then one purge for the whole batch, so the discarded copies do
 // not linger in the trash. Resolves with the uuids that left their folder.
 window.discardFileUploads = async function discardFileUploads(uploads) {
+  // A cancelled or interrupted operation still acted on the items it got to,
+  // in the order they were sent. A report that counts more failures than it
+  // lists cannot tell which items they were, so none of it counts as done.
   const doneUuids = async (kind, uuids) => {
+    let report;
     try {
-      return window.operationDoneUuids(await window.fileOperations.run(kind, uuids), uuids);
+      report = await window.fileOperations.run(kind, uuids);
     } catch (_) {
       return [];
     }
+    const errors = report.errors || [];
+    if (((report.counts && report.counts.failed) || 0) > errors.length) return [];
+    const failed = new Set(errors.map((error) => error.uuid));
+    return uuids.slice(0, report.processed || 0).filter((uuid) => !failed.has(uuid));
   };
   const report = (left, alert, single, several) => {
     if (!left.length) return;

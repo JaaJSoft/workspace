@@ -115,7 +115,7 @@ class FileModelTests(TestCase):
         folder = File.objects.create(
             owner=self.user, name="ToDelete", node_type=File.NodeType.FOLDER
         )
-        folder.delete()
+        trash.trash_subtree(folder)
 
         folder.refresh_from_db()
         self.assertIsNotNone(folder.deleted_at)
@@ -130,7 +130,7 @@ class FileModelTests(TestCase):
             owner=self.user, name="Child", node_type=File.NodeType.FILE, parent=folder
         )
 
-        folder.delete()
+        trash.trash_subtree(folder)
 
         folder.refresh_from_db()
         child.refresh_from_db()
@@ -142,7 +142,7 @@ class FileModelTests(TestCase):
         folder = File.objects.create(
             owner=self.user, name="ToRestore", node_type=File.NodeType.FOLDER
         )
-        folder.delete()
+        trash.trash_subtree(folder)
         folder.refresh_from_db()
         self.assertIsNotNone(folder.deleted_at)
 
@@ -159,7 +159,7 @@ class FileModelTests(TestCase):
             owner=self.user, name="Child", node_type=File.NodeType.FILE, parent=folder
         )
 
-        folder.delete()
+        trash.trash_subtree(folder)
         folder.refresh_from_db()
 
         trash.restore_subtree(folder)
@@ -175,7 +175,7 @@ class FileModelTests(TestCase):
             owner=self.user, name="ToDelete", node_type=File.NodeType.FOLDER
         )
         uuid = folder.uuid
-        folder.delete(hard=True)
+        folder.delete()
 
         self.assertFalse(File.objects.filter(uuid=uuid).exists())
 
@@ -695,7 +695,7 @@ class EdgeCaseTests(APITestCase):
         )
 
         # Delete parent (should cascade to child)
-        parent.delete()
+        trash.trash_subtree(parent)
         parent.refresh_from_db()
         child.refresh_from_db()
 

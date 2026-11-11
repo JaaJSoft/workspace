@@ -8,7 +8,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.files.services import tree
+from workspace.files.services import trash, tree
 from workspace.photos.models import MediaItem
 from workspace.photos.services.preferences import (
     display_preferences,
@@ -271,8 +271,8 @@ class DefaultMediaTypeTests(PreferencesTestCase):
 
     def test_an_empty_library_offers_the_import_whatever_the_default_type(self):
         set_setting(self.user, "photos", "default_media_type", "photo")
-        self.photo.delete()
-        self.video.delete()
+        trash.soft_delete(self.photo)
+        trash.soft_delete(self.video)
 
         response = self.client.get("/photos")
 

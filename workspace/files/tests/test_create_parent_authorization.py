@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileShare
+from workspace.files.services import trash
 
 User = get_user_model()
 
@@ -56,7 +57,7 @@ class CreateParentAuthorizationTests(APITestCase):
 
     def test_unreachable_and_missing_parent_answer_alike(self):
         refused = self._create_folder(self.alice_private).json()["parent"]
-        self.alice_private.delete()
+        trash.soft_delete(self.alice_private)
         missing = self._create_folder(self.alice_private).json()["parent"]
         self.assertEqual(refused, missing)
 

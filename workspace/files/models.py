@@ -652,16 +652,6 @@ class File(models.Model):
         )
         return own | below if include_self else below
 
-    def delete(self, *args, **kwargs):
-        """Soft-delete by default; pass hard=True to permanently delete."""
-        hard = kwargs.pop("hard", False)
-        if hard:
-            return super().delete(*args, **kwargs)
-        # Imported lazily: the services package imports this module.
-        from workspace.files.services.trash import trash_subtree
-
-        return trash_subtree(self)
-
 
 class FileFavorite(models.Model):
     """User favorites for files or folders."""

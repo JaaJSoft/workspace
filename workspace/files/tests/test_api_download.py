@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.services import trash
 
 User = get_user_model()
 
@@ -114,7 +115,7 @@ class DownloadAPITests(APITestCase):
         trashed.content = ContentFile(b"gone", name="trashed.txt")
         trashed.size = 4
         trashed.save()
-        trashed.delete()  # soft-delete
+        trash.soft_delete(trashed)
 
         response = self.client.get(f"/api/v1/files/{folder.uuid}/download")
         self.assertEqual(response.status_code, status.HTTP_200_OK)

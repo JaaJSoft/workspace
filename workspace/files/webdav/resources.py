@@ -473,7 +473,7 @@ class FileResource(DAVNonCollection):
         try:
             self._file.refresh_from_db()
             if self._file.size is None:
-                self._file.delete(hard=True)
+                self._file.delete()
         except File.DoesNotExist:
             pass  # already gone
 

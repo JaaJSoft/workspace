@@ -1,20 +1,31 @@
-"""``bulk_update`` batches that fit what the database binds in one statement.
+"""``bulk_update`` batches of a size the database handles well.
 
-Django sizes a ``bulk_update`` batch as if each object bound one parameter per
-field plus two for its key. It binds two per field, a key and a value in every
-``WHEN``, plus one key in the filter: with two fields or more, a batch
-overruns the limit it was sized for. On SQLite that is ``too many SQL
-variables`` from 6553 objects up for three fields, 4680 for five.
+Django leaves a ``bulk_update`` batch as wide as the database allows, and that
+is wrong twice:
 
-``bulk_update`` is wrapped once, on ``QuerySet``, to cap the batch at what the
-statement really binds. A caller's own smaller ``batch_size`` is kept, and a
-database without a limit is left alone.
+- It writes one ``WHEN`` per object and per field, so a statement costs the
+  square of its batch. PostgreSQL sets no limit and gets every object at once:
+  12000 objects on three fields took four minutes there, four seconds in
+  batches.
+- It sizes a batch as if each object bound one parameter per field plus two
+  for its key, where it binds two per field, a key and a value in every
+  ``WHEN``, plus one key in the filter. With three fields or more a full
+  batch overran SQLite's limit: ``too many SQL variables`` from 6553 objects
+  up for three fields, 4680 for five.
+
+``bulk_update`` is wrapped once, on ``QuerySet``. A call that names no
+``batch_size`` gets ``DEFAULT_BATCH``, and no batch is wider than what the
+statement really binds. A caller's own ``batch_size`` is kept while it fits.
 """
 
 from functools import wraps
 
 from django.db import connections
 from django.db.models import QuerySet
+
+# Flat from 50 to 2000 objects on both databases, far below where the square
+# starts to show.
+DEFAULT_BATCH = 500
 
 
 def widest_batch(model, fields, connection):
@@ -30,16 +41,18 @@ def widest_batch(model, fields, connection):
 
 def bind_bulk_update_batches():
     django_bulk_update = QuerySet.bulk_update
-    if getattr(django_bulk_update, "caps_batches", False):
+    if getattr(django_bulk_update, "sizes_batches", False):
         return
 
     @wraps(django_bulk_update)
     def bulk_update(self, objs, fields, batch_size=None):
         fields = list(fields)
+        if batch_size is None:
+            batch_size = DEFAULT_BATCH
         widest = widest_batch(self.model, fields, connections[self.db])
-        if widest is not None and (batch_size is None or batch_size > widest):
+        if widest is not None and batch_size > widest:
             batch_size = widest
         return django_bulk_update(self, objs, fields, batch_size=batch_size)
 
-    bulk_update.caps_batches = True
+    bulk_update.sizes_batches = True
     QuerySet.bulk_update = bulk_update

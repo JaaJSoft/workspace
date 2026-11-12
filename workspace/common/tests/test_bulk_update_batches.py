@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest import skipUnless
+from unittest import mock, skipUnless
 
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
@@ -73,13 +73,27 @@ class BulkUpdateWithinTheLimitTests(TestCase):
             Permission.objects.bulk_update(self.permissions, (name for name in FIELDS))
         self.assertEqual(self._renamed(), 100)
 
+    def test_a_call_naming_no_batch_size_gets_the_default(self):
+        self._rename()
+        default = "workspace.common.bulk_update_batches.DEFAULT_BATCH"
+        with mock.patch(default, 25), self.assertNumQueries(4):
+            Permission.objects.bulk_update(self.permissions, FIELDS)
+        self.assertEqual(self._renamed(), 100)
+
+    def test_a_batch_size_of_the_caller_wider_than_the_default_is_kept(self):
+        self._rename()
+        default = "workspace.common.bulk_update_batches.DEFAULT_BATCH"
+        with mock.patch(default, 25), self.assertNumQueries(2):
+            Permission.objects.bulk_update(self.permissions, FIELDS, batch_size=50)
+        self.assertEqual(self._renamed(), 100)
+
     def test_a_smaller_batch_size_of_the_caller_is_kept(self):
         self._rename()
         with self.assertNumQueries(10):
             Permission.objects.bulk_update(self.permissions, FIELDS, batch_size=10)
         self.assertEqual(self._renamed(), 100)
 
-    def test_a_larger_batch_size_of_the_caller_is_capped(self):
+    def test_a_batch_size_of_the_caller_past_the_limit_is_capped(self):
         self._rename()
         with sqlite_parameter_limit(PARAMETER_LIMIT):
             Permission.objects.bulk_update(self.permissions, FIELDS, batch_size=1000)
@@ -94,8 +108,8 @@ class BulkUpdateWithinTheLimitTests(TestCase):
 
     @ON_SQLITE
     def test_django_still_sizes_its_batches_too_wide(self):
-        """The reason the cap exists. When this fails, Django counts its
-        parameters right: delete workspace/common/bulk_update_batches.py."""
+        """The reason widest_batch exists. When this fails, Django counts its
+        parameters right: drop widest_batch and keep the default batch."""
         django_bulk_update = QuerySet.bulk_update.__wrapped__
         self._rename()
         with (

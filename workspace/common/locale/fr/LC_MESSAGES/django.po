@@ -599,7 +599,7 @@ msgstr "Utilisez votre cookie de session ou un jeton d’API."
 
 #: vocabulary.py
 msgid "Vault"
-msgstr "Coffre-fort"
+msgstr "Coffre"
 
 #: vocabulary.py
 msgid "Videos"

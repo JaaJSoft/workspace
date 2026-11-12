@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import override_settings
@@ -299,14 +297,6 @@ class BulkDownloadAPITests(APITestCase):
         """One selection is one archive whatever its size: nothing about the
         count decides whether it downloads."""
         files = self._create_files(201)
-        resp = self._download_all(files)
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        with self._read_zip(resp) as zf:
-            self.assertEqual(sorted(zf.namelist()), sorted(f.name for f in files))
-
-    @patch("workspace.files.viewsets.content._LOOKUP_CHUNK", 2)
-    def test_bulk_download_looks_the_selection_up_per_chunk(self):
-        files = self._create_files(5)
         resp = self._download_all(files)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         with self._read_zip(resp) as zf:

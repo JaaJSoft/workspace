@@ -1,7 +1,5 @@
 """Content + thumbnail + download actions for FileViewSet."""
 
-from itertools import batched
-
 from django.http import Http404
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -34,10 +32,6 @@ from workspace.files.services.scanning.policy import (
     blocked_statuses,
     exclude_blocked,
 )
-
-# A bulk download names every selected node in one ``uuid__in``; SQLite caps
-# the bound variables of one statement, so the lookups run per chunk.
-_LOOKUP_CHUNK = 500
 
 
 def _chunked_field_file(field_file, block_size=65536):
@@ -430,31 +424,29 @@ class ContentMixin:
         # whole request: the same treatment a missing blob already gets.
         blocked_statuses_now = blocked_statuses()
         blocked_uuids = set()
-        file_objects = []
-        for chunk in batched(uuids, _LOOKUP_CHUNK, strict=False):
-            if blocked_statuses_now:
-                blocked_uuids.update(
-                    FileScan.objects.filter(
-                        file__uuid__in=chunk, status__in=blocked_statuses_now
-                    ).values_list("file__uuid", flat=True)
-                )
-            file_objects.extend(
-                File.objects.filter(
-                    accessible_files_q(request.user),
-                    uuid__in=chunk,
-                    deleted_at__isnull=True,
-                )
-                .only(
-                    "uuid",
-                    "name",
-                    "path",
-                    "content",
-                    "node_type",
-                    "owner_id",
-                    "group_id",
-                )
-                .distinct()
+        if blocked_statuses_now:
+            blocked_uuids.update(
+                FileScan.objects.filter(
+                    file__uuid__in=uuids, status__in=blocked_statuses_now
+                ).values_list("file__uuid", flat=True)
             )
+        file_objects = list(
+            File.objects.filter(
+                accessible_files_q(request.user),
+                uuid__in=uuids,
+                deleted_at__isnull=True,
+            )
+            .only(
+                "uuid",
+                "name",
+                "path",
+                "content",
+                "node_type",
+                "owner_id",
+                "group_id",
+            )
+            .distinct()
+        )
 
         if len(file_objects) != len(uuids):
             return Response(

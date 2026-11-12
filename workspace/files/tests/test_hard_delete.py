@@ -19,6 +19,7 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
 from workspace.files.services import trash, tree
@@ -93,6 +94,18 @@ class HardDeleteBatchingTests(APITestCase):
         self.assertLessEqual(state["peak"], BATCH_SIZE)
         self.assertFalse(File.objects.filter(owner=self.user).exists())
         self.assertFalse(default_storage.exists(self._trash_dir_on_disk(root)))
+
+    def test_a_level_wider_than_one_statement_binds(self):
+        parameter_limit = 60
+        root = tree.create_folder(self.user, "Wide")
+        for index in range(parameter_limit + 20):
+            sub = tree.create_folder(self.user, f"sub{index}", root)
+            tree.create_folder(self.user, "deep", sub)
+
+        with sqlite_parameter_limit(parameter_limit):
+            hard_delete_tree(root)
+
+        self.assertFalse(File.objects.filter(owner=self.user).exists())
 
     def test_retention_clean_leaves_recent_trash_alone(self):
         old = self._build_tree("Old")

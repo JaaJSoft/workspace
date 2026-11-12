@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -23,6 +23,7 @@ from workspace.calendar.ai_tools import (
 from workspace.calendar.models import Calendar, Event, EventMember, Poll, PollVote
 from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.services.recurrence_rule import apply_rule
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
 User = get_user_model()
@@ -229,6 +230,63 @@ class CalendarAiToolsTests(TestCase):
         )
         self.assertFalse(payload["available"])
         self.assertEqual([e["title"] for e in payload["events"]], ["Busy"])
+
+    def _weekly(self, calendar, title, start):
+        master = Event(
+            calendar=calendar,
+            owner=self.user,
+            title=title,
+            start=start,
+            end=start + timedelta(hours=1),
+        )
+        apply_rule(master, "RRULE:FREQ=WEEKLY")
+        master.save()
+        return master
+
+    def test_check_availability_with_more_series_than_the_parameter_limit(self):
+        parameter_limit = 40
+        cal = Calendar.objects.create(name="Work", owner=self.user)
+        first_tuesday = datetime(2029, 1, 2, 10, tzinfo=UTC)
+        first_wednesday = datetime(2029, 1, 3, 10, tzinfo=UTC)
+        asked_tuesday = datetime(2030, 1, 8, 10, tzinfo=UTC)
+        asked_wednesday = datetime(2030, 1, 9, 10, tzinfo=UTC)
+        for index in range(parameter_limit * 2):
+            self._weekly(cal, f"Tuesdays {index}", first_tuesday)
+        cancelled = self._weekly(cal, "Wednesdays", first_wednesday)
+        Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="Wednesdays",
+            start=asked_wednesday,
+            recurrence_parent=cancelled,
+            original_start=asked_wednesday,
+            is_cancelled=True,
+        )
+        moved = self._weekly(cal, "Tuesdays, once on Wednesday", first_tuesday)
+        Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="Moved to Wednesday",
+            start=asked_wednesday + timedelta(minutes=30),
+            end=asked_wednesday + timedelta(hours=1),
+            recurrence_parent=moved,
+            original_start=asked_tuesday,
+        )
+        args = CheckAvailabilityParams(
+            start=asked_wednesday.isoformat(),
+            end=(asked_wednesday + timedelta(hours=1)).isoformat(),
+        )
+
+        with sqlite_parameter_limit(parameter_limit):
+            payload = json.loads(
+                self.provider.check_availability(
+                    args, user=self.user, bot=None, conversation_id=None, context={}
+                )
+            )
+
+        self.assertEqual(
+            [e["title"] for e in payload["events"]], ["Moved to Wednesday"]
+        )
 
     def test_check_availability_rejects_an_unparseable_range(self):
         args = CheckAvailabilityParams(start="next tuesday", end="2026-03-21T10:00")

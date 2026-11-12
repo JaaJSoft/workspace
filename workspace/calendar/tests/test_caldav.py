@@ -12,6 +12,7 @@ from knox.models import AuthToken
 from workspace.calendar.models import Calendar, CalendarSubscription, Event
 from workspace.calendar.models_external import ExternalCalendar
 from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 
 from .test_ical_objects import OVERRIDE, SERIES, _ics
 
@@ -479,6 +480,31 @@ class ReportTests(CalDavTestCase):
         )
         self.assertEqual(changes.pop(self.single_href), "changed")
         self.assertEqual(list(changes.values()), ["changed"])
+
+    def test_sync_after_more_changes_than_the_parameter_limit(self):
+        parameter_limit = 40
+        _, token = self._sync()
+        short_lived = [
+            Event.objects.create(
+                calendar=self.calendar,
+                owner=self.user,
+                title="Short-lived",
+                start=datetime(2027, 5, 1, 9, tzinfo=UTC),
+            )
+            for _ in range(parameter_limit * 2)
+        ]
+        gone = {f"{self.calendar_path}{event.uuid}.ics" for event in short_lived}
+        for event in short_lived:
+            event.delete()
+        self.single.title = "Dentist (moved)"
+        self.single.save(update_fields=["title"])
+
+        with sqlite_parameter_limit(parameter_limit):
+            changes, _ = self._sync(token)
+
+        self.assertEqual(changes.pop(self.single_href), "changed")
+        self.assertEqual(set(changes), gone)
+        self.assertEqual(set(changes.values()), {"HTTP/1.1 404 Not Found"})
 
     def test_repeated_syncs_report_no_spurious_change(self):
         _, token = self._sync()

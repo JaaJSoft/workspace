@@ -11,6 +11,7 @@ from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.recurrence import occurrences_in_range
 from workspace.calendar.services.ics_sync import sync_external_calendar
 from workspace.common.task_priority import INTERACTIVE_PRIORITY
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 
 User = get_user_model()
 
@@ -139,6 +140,19 @@ ICS_WITH_EXDATE = (
     "END:VEVENT\r\n"
     "END:VCALENDAR\r\n"
 )
+
+
+def _feed_of(uids):
+    events = "".join(
+        "BEGIN:VEVENT\r\n"
+        f"UID:{uid}\r\n"
+        "DTSTART:20260401T100000Z\r\n"
+        "DTEND:20260401T110000Z\r\n"
+        "SUMMARY:Bulk\r\n"
+        "END:VEVENT\r\n"
+        for uid in uids
+    )
+    return f"BEGIN:VCALENDAR\r\nVERSION:2.0\r\n{events}END:VCALENDAR\r\n"
 
 
 def _mock_response(text, status_code=200, etag=""):
@@ -467,6 +481,28 @@ class SyncExternalCalendarTests(TestCase):
             for e in Event.objects.filter(calendar=self.calendar)
         }
         self.assertEqual(before, after)
+
+    @patch("workspace.calendar.services.ics_sync.httpx2")
+    def test_sync_of_a_feed_past_the_parameter_limit_removes_what_left_it(
+        self, mock_httpx
+    ):
+        parameter_limit = 40
+        uids = [f"bulk-{i}@example.com" for i in range(parameter_limit * 2)]
+        client = _mock_httpx(mock_httpx, _mock_response(_feed_of(uids)))
+        sync_external_calendar(self.ext)
+
+        client.get.return_value = _mock_response(_feed_of(uids[1:]))
+        with sqlite_parameter_limit(parameter_limit):
+            sync_external_calendar(self.ext)
+
+        self.assertEqual(
+            set(
+                Event.objects.filter(calendar=self.calendar).values_list(
+                    "ical_uid", flat=True
+                )
+            ),
+            set(uids[1:]),
+        )
 
 
 # ─── Celery Task Tests ─────────────────────────────────────

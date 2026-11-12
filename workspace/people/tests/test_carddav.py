@@ -13,6 +13,7 @@ from knox.models import AuthToken
 from PIL import Image
 
 from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.people.models import SOURCE_CARDDAV, Person, PersonList
 from workspace.people.services.lists import add_members, create_list
 from workspace.people.services.persons import create_person, move_to_scope
@@ -571,6 +572,26 @@ class ReportTests(CardDavTestCase):
             },
         )
         self.assertTrue(entries[f"{self.book_path}jane.vcf"].findtext(f".//{D}getetag"))
+
+    def test_depth_one_propfind_of_a_book_past_the_parameter_limit(self):
+        parameter_limit = 40
+        hrefs = {
+            f"{self.book_path}{person.uuid}.vcf"
+            for person in (
+                create_person(owner=self.user, display_name=f"Contact {index}")
+                for index in range(parameter_limit * 2)
+            )
+        }
+
+        with sqlite_parameter_limit(parameter_limit):
+            response = self.dav(
+                "PROPFIND", self.book_path, _propfind("d:getetag"), Depth="1"
+            )
+
+        entries = self.responses(response)
+        self.assertLessEqual(hrefs, set(entries))
+        etags = {entries[href].findtext(f".//{D}getetag") for href in hrefs}
+        self.assertEqual(len(etags), len(hrefs))
 
     def test_multiget(self):
         response = self.report(

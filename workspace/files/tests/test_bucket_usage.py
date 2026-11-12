@@ -203,9 +203,13 @@ class CounterMatchesAggregateTests(TestCase):
     def test_a_rolled_back_write_leaves_the_counter_alone(self):
         from django.db import transaction
 
-        with self.assertRaises(RuntimeError), transaction.atomic():
-            self._upload("a.txt", b"12345")
-            raise RuntimeError
+        def upload_then_fail():
+            with transaction.atomic():
+                self._upload("a.txt", b"12345")
+                raise RuntimeError
+
+        with self.assertRaises(RuntimeError):
+            upload_then_fail()
         self.assertCountersMatch()
 
 

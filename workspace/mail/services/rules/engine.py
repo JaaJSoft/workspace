@@ -101,7 +101,7 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
 
     messages = list(
         MailMessage.objects.filter(
-            account=account, uuid__in_array=uuids, deleted_at__isnull=True
+            account=account, uuid__in=uuids, deleted_at__isnull=True
         ).select_related("account__owner", "folder")
     )
 

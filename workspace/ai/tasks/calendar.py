@@ -69,7 +69,7 @@ def extract_from_mail_messages(self, task_id: str):
             message_uuids = ai_task.input_data.get("message_uuids", [])
             msgs = list(
                 MailMessage.objects.filter(
-                    uuid__in_array=message_uuids,
+                    uuid__in=message_uuids,
                     account__owner=ai_task.owner,
                 ).select_related("account")
             )

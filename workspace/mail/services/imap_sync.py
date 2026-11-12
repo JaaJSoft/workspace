@@ -357,7 +357,7 @@ def sync_folder_messages(account, folder):
             cal_messages = _MailMsg.objects.filter(
                 folder=folder,
                 has_calendar_event=True,
-                uuid__in_array=new_message_uuids,
+                uuid__in=new_message_uuids,
             )
             if cal_messages.exists():
                 from workspace.calendar.services.ics_processor import (
@@ -406,12 +406,12 @@ def _reconcile_folder(conn, folder):
         gone_pks = list(
             MailMessage.objects.filter(
                 folder=folder,
-                imap_uid__in_array=gone,
+                imap_uid__in=gone,
                 deleted_at__isnull=True,
             ).values_list("pk", flat=True)
         )
         count = MailMessage.objects.filter(
-            pk__in_array=gone_pks, deleted_at__isnull=True
+            pk__in=gone_pks, deleted_at__isnull=True
         ).update(deleted_at=dj_timezone.now())
         if count:
             logger.info(
@@ -458,7 +458,7 @@ def _reconcile_folder(conn, folder):
     # Load current local state to diff against remote
     local_state = MailMessage.objects.filter(
         folder=folder,
-        imap_uid__in_array=present,
+        imap_uid__in=present,
         deleted_at__isnull=True,
     ).values_list("imap_uid", "is_read", "is_starred")
 
@@ -487,23 +487,21 @@ def _reconcile_folder(conn, folder):
     affected_message_ids = []
     if read_changed_uids:
         affected_message_ids = list(
-            base.filter(imap_uid__in_array=read_changed_uids).values_list(
-                "pk", flat=True
-            )
+            base.filter(imap_uid__in=read_changed_uids).values_list("pk", flat=True)
         )
 
     externally_read_pks = []
     if need_read:
         externally_read_pks = list(
-            base.filter(imap_uid__in_array=need_read).values_list("pk", flat=True)
+            base.filter(imap_uid__in=need_read).values_list("pk", flat=True)
         )
-        base.filter(imap_uid__in_array=need_read).update(is_read=True)
+        base.filter(imap_uid__in=need_read).update(is_read=True)
     if need_unread:
-        base.filter(imap_uid__in_array=need_unread).update(is_read=False)
+        base.filter(imap_uid__in=need_unread).update(is_read=False)
     if need_starred:
-        base.filter(imap_uid__in_array=need_starred).update(is_starred=True)
+        base.filter(imap_uid__in=need_starred).update(is_starred=True)
     if need_unstarred:
-        base.filter(imap_uid__in_array=need_unstarred).update(is_starred=False)
+        base.filter(imap_uid__in=need_unstarred).update(is_starred=False)
 
     if affected_message_ids:
         from .label_counts import refresh_labels_for_messages

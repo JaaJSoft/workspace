@@ -285,7 +285,7 @@ def mark_sources_read(user, sources):
     marked = Notification.objects.filter(
         recipient=user,
         read_at__isnull=True,
-        **{f"{field}__in_array": [s.pk for s in sources]},
+        **{f"{field}__in": [s.pk for s in sources]},
     ).update(read_at=timezone.now())
     if marked:
         _announce([user.pk])

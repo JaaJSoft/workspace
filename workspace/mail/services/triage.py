@@ -122,12 +122,12 @@ def mark_folder_read(folder):
         for folder_id, uids in uids_by_folder.items():
             flagged = MailMessage.objects.filter(
                 folder_id=folder_id,
-                imap_uid__in_array=uids,
+                imap_uid__in=uids,
                 deleted_at__isnull=True,
                 is_read=False,
             )
             pks = list(flagged.values_list("pk", flat=True))
-            updated += MailMessage.objects.filter(pk__in_array=pks).update(
+            updated += MailMessage.objects.filter(pk__in=pks).update(
                 is_read=True, updated_at=now
             )
             refresh_labels_for_messages(pks)

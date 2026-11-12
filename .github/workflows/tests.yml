@@ -122,9 +122,8 @@ jobs:
               - '.github/actions/apt-install/**'
             # The vector index and what its pgvector backend runs on, the
             # vault envelope rotation, whose conditional UPDATE leans on
-            # PostgreSQL's pre-update semantics, the accent-folding lookup,
-            # whose PostgreSQL SQL calls f_unaccent, and the in_array lookup,
-            # whose PostgreSQL SQL compares against an array.
+            # PostgreSQL's pre-update semantics, and the accent-folding lookup,
+            # whose PostgreSQL SQL calls f_unaccent.
             vectors:
               - 'workspace/common/vectors/**'
               - 'workspace/common/management/commands/*vector*'
@@ -132,9 +131,6 @@ jobs:
               - 'workspace/common/folding.py'
               - 'workspace/common/migrations/0001_f_unaccent.py'
               - 'workspace/common/tests/test_folding.py'
-              - 'workspace/common/in_array.py'
-              - 'workspace/common/tests/test_in_array.py'
-              - 'workspace/common/tests/parameter_limit.py'
               - 'workspace/vault/views/account.py'
               - 'workspace/vault/tests/test_account_api.py'
               - 'workspace/settings/**'
@@ -715,12 +711,3 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.common.tests.test_folding -v 2
-
-      # in_array compiles to = ANY(array) on PostgreSQL, with the values
-      # adapted by the driver; the Django matrix only runs its JSON side.
-      - name: Run the in_array lookup tests on PostgreSQL
-        env:
-          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
-          PYTHONWARNINGS: default
-        run: |
-          uv run python manage.py test workspace.common.tests.test_in_array -v 2

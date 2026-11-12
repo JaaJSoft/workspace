@@ -46,7 +46,7 @@ def get_user_timezone(user) -> ZoneInfo:
 def _stored_core_values(user_ids, key) -> dict:
     return dict(
         UserSetting.objects.filter(
-            user_id__in_array=user_ids, module="core", key=key
+            user_id__in=user_ids, module="core", key=key
         ).values_list("user_id", "value")
     )
 

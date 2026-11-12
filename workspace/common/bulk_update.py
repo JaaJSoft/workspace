@@ -11,8 +11,9 @@ the rows whatever their number. 12000 rows on three fields take 0.2 s instead
 of 3.5 s on SQLite, 0.6 s instead of 4.2 s on PostgreSQL.
 
 What that form cannot express stays with Django: a value that is an
-expression, an object listed twice, a model spread over several tables. There
-the batches are sized here, because Django sizes them wrong twice:
+expression, an object listed twice, a model spread over several tables, a
+queryset narrowed to some of its rows. There the batches are sized here,
+because Django sizes them wrong twice:
 
 - as wide as it can, which on PostgreSQL is every object at once. 12000
   objects on three fields took four minutes in one statement;
@@ -27,7 +28,6 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import connections
 from django.db.models import QuerySet
 from fast_update.fast import fast_update
-from fast_update.query import sanity_check
 
 # Django's own form is flat from 50 to 2000 objects on both databases, far
 # below where the square starts to show.
@@ -49,34 +49,45 @@ def widest_batch(model, fields, connection):
     return max(limit // per_object, 1)
 
 
-def _fits_a_values_table(model, objs, names, batch_size):
-    """Whether the call is one django-fast-update takes as Django would.
+def _covers_every_row(query):
+    """Whether the queryset is the whole table.
 
-    Anything else is Django's to carry out, or to refuse in its own words.
+    django-fast-update writes by primary key alone. It looks a filter up in a
+    statement of its own, ahead of the write, and never sees a slice.
     """
+    return not (query.where or query.is_sliced or query.distinct or query.combinator)
+
+
+def _values_table_fields(queryset, objs, names, batch_size):
+    """The fields of a call django-fast-update takes as Django would, None for
+    anything else: Django's to carry out, or to refuse in its own words."""
     if not objs or not names or (batch_size is not None and batch_size <= 0):
-        return False
-    opts = model._meta
+        return None
+    if not _covers_every_row(queryset.query):
+        return None
+    opts = queryset.model._meta
     if opts.parents or len(opts.pk_fields) != 1 or len(set(names)) != len(names):
-        return False
+        return None
     try:
         fields = [opts.get_field(name) for name in names]
     except FieldDoesNotExist:
-        return False
+        return None
     if any(
         not field.concrete or field.many_to_many or field.primary_key or field.generated
         for field in fields
     ):
-        return False
+        return None
     keys = {obj.pk for obj in objs}
     if None in keys or len(keys) != len(objs):
-        return False
+        return None
     attnames = [field.attname for field in fields]
-    return not any(
+    if any(
         hasattr(getattr(obj, attname), "resolve_expression")
         for obj in objs
         for attname in attnames
-    )
+    ):
+        return None
+    return fields
 
 
 def bind_bulk_update():
@@ -87,8 +98,12 @@ def bind_bulk_update():
     @wraps(django_bulk_update)
     def bulk_update(self, objs, fields, batch_size=None):
         objs, fields = tuple(objs), list(fields)
-        if _fits_a_values_table(self.model, objs, fields, batch_size):
-            sanity_check(self.model, objs, fields, "bulk_update", batch_size)
+        written = _values_table_fields(self, objs, fields, batch_size)
+        if written is not None:
+            for obj in objs:
+                obj._prepare_related_fields_for_save(
+                    operation_name="bulk_update", fields=written
+                )
             return fast_update(self, objs, fields, batch_size)
         if batch_size is None:
             batch_size = DEFAULT_BATCH

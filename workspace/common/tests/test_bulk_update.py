@@ -146,15 +146,6 @@ class PlainValuesTests(PermissionsTestCase):
             Permission.objects.bulk_update(self.permissions, FIELDS, batch_size=10)
         self.assertEqual(self._renamed(), 100)
 
-    def test_a_filtered_queryset_only_writes_its_own_rows(self):
-        self._rename()
-        mine = Permission.objects.filter(
-            pk__in=[permission.pk for permission in self.permissions[:10]]
-        )
-        updated = mine.bulk_update(self.permissions, FIELDS)
-        self.assertEqual(updated, 10)
-        self.assertEqual(self._renamed(), 10)
-
     def test_an_object_whose_row_is_gone_is_not_counted(self):
         self._rename()
         Permission.objects.filter(pk=self.permissions[0].pk).delete()
@@ -164,6 +155,18 @@ class PlainValuesTests(PermissionsTestCase):
     def test_no_object_writes_nothing(self):
         with self.assertNumQueries(0):
             self.assertEqual(Permission.objects.bulk_update([], FIELDS), 0)
+
+    def test_a_related_object_never_saved_on_a_field_left_out_is_ignored(self):
+        permission = self.permissions[0]
+        permission.name = "renamed"
+        permission.content_type = ContentType(app_label="nowhere", model="nothing")
+
+        updated = Permission.objects.bulk_update([permission], ["name"])
+
+        self.assertEqual(updated, 1)
+        stored = Permission.objects.get(pk=permission.pk)
+        self.assertEqual(stored.name, "renamed")
+        self.assertEqual(stored.content_type, self.content_type)
 
 
 class RefusedCallsTests(PermissionsTestCase):
@@ -198,6 +201,14 @@ class RefusedCallsTests(PermissionsTestCase):
         with self.assertRaisesMessage(ValueError, "bulk_update() prohibited"):
             Permission.objects.bulk_update([permission], ["content_type"])
 
+    def test_a_sliced_queryset(self):
+        self.permissions[0].name = "renamed"
+        self.permissions[1].name = "renamed"
+        first = Permission.objects.order_by("pk")[:1]
+        with self.assertRaisesMessage(TypeError, "slice"), transaction.atomic():
+            first.bulk_update(self.permissions[:2], ["name"])
+        self.assertFalse(Permission.objects.filter(name="renamed").exists())
+
 
 class DjangoFormTests(PermissionsTestCase):
     """What a table of values cannot express, left to Django's own form and
@@ -229,6 +240,27 @@ class DjangoFormTests(PermissionsTestCase):
         updated = Permission.objects.bulk_update(self.permissions, FIELDS)
         self.assertEqual(updated, 100)
         self.assertEqual(self._shouted(), 100)
+
+    def test_a_filtered_queryset_only_writes_its_own_rows(self):
+        self._renamed_with_one_listed_twice()
+        mine = Permission.objects.filter(
+            pk__in=[permission.pk for permission in self.permissions[:10]]
+        )
+        updated = mine.bulk_update(self.permissions, FIELDS)
+        self.assertEqual(updated, 10)
+        self.assertEqual(self._renamed(), 10)
+
+    def test_a_filtered_queryset_keeps_its_filter_in_the_update(self):
+        """Looked up ahead of the write, the rows that match could stop
+        matching before it lands."""
+        self._renamed_with_one_listed_twice()
+        mine = Permission.objects.filter(name__in=["p0", "p1"])
+        with CaptureQueriesContext(connection) as queries:
+            updated = mine.bulk_update(self.permissions, FIELDS)
+        self.assertEqual(updated, 2)
+        self.assertEqual(self._renamed(), 2)
+        self.assertEqual(len(queries), 1)
+        self.assertTrue(queries[0]["sql"].startswith("UPDATE"))
 
     def test_an_object_listed_twice_is_written(self):
         objs = self._renamed_with_one_listed_twice()

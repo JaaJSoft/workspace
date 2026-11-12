@@ -35,7 +35,7 @@
         <div class="absolute top-2 right-2 z-10" @click.stop>
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100"
+            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
             :aria-label="'Actions for ' + folder.name"
             @click="openFolderMenu($event, folder)"
           >
@@ -87,7 +87,7 @@
           <input
             type="checkbox"
             class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-xs"
-            :class="isSelected(entry.uuid) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+            :class="isSelected(entry.uuid) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100'"
             :checked="isSelected(entry.uuid)"
             :aria-label="'Select ' + entry.name"
             @click="toggleSelection(entry.uuid)"
@@ -104,7 +104,7 @@
           </span>
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100"
+            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
             :aria-label="'Actions for ' + entry.name"
             @click="openMenu($event, entry)"
           >

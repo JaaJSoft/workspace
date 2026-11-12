@@ -35,6 +35,14 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase  # noqa:
 
 E2E_ENABLED = os.environ.get("E2E", "").lower() in {"1", "true", "yes", "on"}
 
+# A phone: touch input and no hover, so ``hover:`` and ``group-hover:``
+# utilities never apply and ``[@media(hover:none)]:`` ones do.
+TOUCH_CONTEXT = {
+    "viewport": {"width": 412, "height": 915},
+    "is_mobile": True,
+    "has_touch": True,
+}
+
 
 @unittest.skipUnless(E2E_ENABLED, "E2E tests are disabled (set E2E=1 to run)")
 class PlaywrightTestCase(StaticLiveServerTestCase):
@@ -94,9 +102,13 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
     # Set to ``False`` for tests that genuinely need SSE.
     STUB_GLOBAL_SSE = True
 
+    # Keyword arguments for ``browser.new_context()``, e.g. TOUCH_CONTEXT to
+    # emulate a phone, where ``(hover: none)`` matches.
+    CONTEXT_OPTIONS: dict = {}
+
     def setUp(self):
         super().setUp()
-        self.context = self.browser.new_context()
+        self.context = self.browser.new_context(**self.CONTEXT_OPTIONS)
         self.page = self.context.new_page()
 
         if self.STUB_GLOBAL_SSE:

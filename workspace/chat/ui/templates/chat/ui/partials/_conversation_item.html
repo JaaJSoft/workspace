@@ -77,12 +77,15 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
             x-cloak
           ></span>
         </span>
-        <span class="shrink-0 w-12 h-5 inline-flex items-center justify-end">
+        {# A touch screen has no hover to swap the time for the menu button: it shows both. #}
+        <span
+          class="shrink-0 w-12 [@media(hover:none)]:w-auto h-5 inline-flex items-center justify-end gap-0.5"
+        >
           <span
             class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden"
           >{{ conv.time_ago }}</span>
           <span
-            class="hidden group-hover/conv:inline-flex btn btn-ghost btn-xs btn-square min-h-0 h-5 w-5"
+            class="hidden group-hover/conv:inline-flex [@media(hover:none)]:inline-flex btn btn-ghost btn-xs btn-square min-h-0 h-5 w-5"
             @click.stop="openConvContextMenu($event, '{{ conv.uuid|escapejs }}', '{{ conv.kind|escapejs }}'{% if pinned %}, true{% endif %})"
             title="More options"
           >

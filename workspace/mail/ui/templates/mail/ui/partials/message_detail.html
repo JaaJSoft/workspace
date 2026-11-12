@@ -296,7 +296,7 @@
           </a>
           <button
             type="button"
-            class="btn btn-ghost btn-xs btn-square opacity-100 lg:opacity-0 lg:group-hover/att:opacity-100 transition-opacity ml-0.5"
+            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover/att:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity ml-0.5"
             title="Save to Files"
             @click.prevent="saveAttachmentToFiles(att.uuid)"
           >

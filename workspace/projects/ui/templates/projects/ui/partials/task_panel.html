@@ -465,7 +465,7 @@
               {% if "edit" in panel_action_ids %}
                 <button
                   type="button"
-                  class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
                   @click="removeSubtask(st)"
                   aria-label="Remove item"
                 >

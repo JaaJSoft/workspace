@@ -67,7 +67,7 @@ and the tag_dialog partial on the same page for create/edit.
             :title="interpolate(tag.file_count === 1 ? '{{ file_count_one|escapejs }}' : '{{ file_count_other|escapejs }}', { count: tag.file_count }, true)"
           ></span>
           <div
-            class="flex items-center shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            class="flex items-center shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
           >
             <button
               type="button"

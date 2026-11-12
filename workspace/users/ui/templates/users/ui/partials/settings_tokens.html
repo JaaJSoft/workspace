@@ -121,7 +121,7 @@
             <button
               type="button"
               @click="revokeToken(token)"
-              class="btn btn-ghost btn-sm text-error opacity-0 group-hover/token:opacity-100 transition-opacity"
+              class="btn btn-ghost btn-sm text-error opacity-0 group-hover/token:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
               title="{% translate 'Revoke token' %}"
             >
               <i data-lucide="trash-2" class="w-4 h-4"></i>

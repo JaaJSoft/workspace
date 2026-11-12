@@ -152,7 +152,9 @@
               x-text="cal.name"
             ></span>
             <div x-show="!sidebarCollapsed()" class="flex items-center gap-0.5">
-              <div class="opacity-0 group-hover:opacity-100 flex gap-0.5">
+              <div
+                class="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 flex gap-0.5"
+              >
                 <button
                   type="button"
                   class="btn btn-ghost btn-xs btn-square"
@@ -237,7 +239,9 @@
                   x-text="ext.name"
                 ></span>
                 <div x-show="!sidebarCollapsed()" class="flex items-center gap-0.5">
-                  <div class="opacity-0 group-hover:opacity-100 flex gap-0.5">
+                  <div
+                    class="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 flex gap-0.5"
+                  >
                     <button
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"

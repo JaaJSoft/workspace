@@ -153,7 +153,7 @@
               <template x-if="pollFilter === 'mine'">
                 <button
                   type="button"
-                  class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity"
+                  class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
                   @click.stop="deletePoll(poll.uuid)"
                   title="{% translate 'Delete' %}"
                 >

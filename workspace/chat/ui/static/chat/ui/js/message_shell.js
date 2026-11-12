@@ -257,7 +257,10 @@
         }));
       }
 
-      const wrap = el('div', 'relative group/msg hover:z-20 max-w-full');
+      // Focusable so that a tap on a touch screen, which has no hover, can
+      // still reveal the action toolbar (message_group.html) through focus.
+      const wrap = el('div', 'relative group/msg hover:z-20 focus-within:z-20 outline-none max-w-full');
+      wrap.tabIndex = -1;
       wrap.appendChild(bubble);
       for (const node of afterBubble) wrap.appendChild(node);
       column.appendChild(wrap);
@@ -382,8 +385,8 @@
 
     _saveButton(item, { grid = false, chip = false } = {}) {
       const btn = el('button', chip
-        ? 'btn btn-ghost btn-xs btn-square opacity-0 group-hover/att:opacity-100 transition-opacity shrink-0'
-        : 'absolute top-1 right-1 btn btn-xs btn-square bg-base-100/80 hover:bg-base-100 border-base-300 shadow-xs opacity-0 group-hover/att:opacity-100 transition-opacity');
+        ? 'btn btn-ghost btn-xs btn-square opacity-0 group-hover/att:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0'
+        : 'absolute top-1 right-1 btn btn-xs btn-square bg-base-100/80 hover:bg-base-100 border-base-300 shadow-xs opacity-0 group-hover/att:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity');
       // .stop inside the mosaic: the whole cell opens the viewer on click.
       // x-on:, not the @ shorthand: setAttribute rejects '@' in a name.
       btn.setAttribute(grid ? 'x-on:click.stop' : 'x-on:click', `saveAttachmentToFiles('${item.uuid}')`);

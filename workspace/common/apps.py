@@ -10,6 +10,8 @@ class CommonConfig(AppConfig):
     def ready(self):
         from django.core.checks import register
 
+        # Imported for its side effect: it registers the in_array lookup.
+        import workspace.common.in_array  # noqa: F401
         from workspace.common.folding import register_sqlite_fold
         from workspace.common.search.checks import check_sqlite_fts_support
         from workspace.common.search.schema import rebuild_sqlite_fts_indexes

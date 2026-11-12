@@ -152,6 +152,18 @@
           >
             <i data-lucide="info" class="w-4 h-4"></i>
           </button>
+          {# The sidebar row's menu is out of reach on a phone (the rail clips it, iOS fires no contextmenu): this is its way in. #}
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            :class="ctxMenu.open && ctxMenu.uuid === activeConversation.uuid ? 'bg-base-200' : ''"
+            @click.stop="openConvContextMenu($event, activeConversation.uuid, activeConversation.kind)"
+            title="More options"
+            aria-label="More options"
+            data-testid="conversation-header-menu"
+          >
+            <i data-lucide="ellipsis-vertical" class="w-4 h-4"></i>
+          </button>
         </div>
       </div>
 

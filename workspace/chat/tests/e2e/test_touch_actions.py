@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from playwright.sync_api import expect
 
-from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.chat.models import (
+    Conversation,
+    ConversationMember,
+    Message,
+    PinnedConversation,
+)
 from workspace.chat.services.rendering import render_message_body
 from workspace.common.tests.e2e.base import TOUCH_CONTEXT, PlaywrightTestCase
 
@@ -103,6 +108,31 @@ class ChatTouchActionsTests(PlaywrightTestCase):
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
         expect(item.locator('[title="More options"]')).to_be_visible()
         expect(item.get_by_text("just now")).to_be_visible()
+
+    def test_the_conversation_header_opens_the_conversation_menu(self):
+        # The sidebar row's menu is out of reach on a phone: the rail clips
+        # its button and iOS fires no contextmenu on a long press.
+        self._open_conversation()
+        self.page.get_by_test_id("conversation-header-menu").tap()
+
+        menu = self.page.locator("#conv-context-menu > div")
+        expect(menu).to_be_visible()
+        box = menu.bounding_box()
+        self.assertGreaterEqual(box["x"], 0)
+        self.assertLessEqual(box["x"] + box["width"], 412)
+
+        with self.page.expect_response(
+            lambda r: r.url.endswith(f"/conversations/{self.conv.uuid}/pin")
+        ) as response:
+            menu.get_by_role("button", name="Pin conversation", exact=True).tap()
+
+        self.assertEqual(response.value.status, 201)
+        expect(menu).to_be_hidden()
+        self.assertTrue(
+            PinnedConversation.objects.filter(
+                owner=self.user, conversation=self.conv
+            ).exists()
+        )
 
     def test_staged_attachments_show_their_remove_button(self):
         self._open_conversation()

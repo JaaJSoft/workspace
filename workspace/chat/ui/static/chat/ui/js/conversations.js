@@ -625,8 +625,16 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     // ── Conversation context menu ─────────────────────────────
     openConvContextMenu(event, uuid, kind, isPinned = false) {
       event.preventDefault();
-      const menu = document.getElementById('conv-context-menu');
+      // The id sits on a wrapper that stays in the flow (pane width, no
+      // height): the fixed panel inside it is what has to fit the viewport.
+      const menu = document.getElementById('conv-context-menu')?.firstElementChild;
       if (!menu) return;
+      // A button opens the menu below itself: a keyboard click carries no
+      // pointer position (0, 0). currentTarget is only set during dispatch,
+      // so it is read before $nextTick.
+      const anchor = event.type === 'click' && event.currentTarget instanceof Element
+        ? event.currentTarget.getBoundingClientRect()
+        : null;
 
       this.ctxMenu.uuid = uuid;
       this.ctxMenu.kind = kind;
@@ -640,8 +648,9 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
       this.$nextTick(() => {
         const rect = menu.getBoundingClientRect();
-        let x = event.clientX;
-        let y = event.clientY;
+        let x = anchor ? anchor.right - rect.width : event.clientX;
+        let y = anchor ? anchor.bottom + 4 : event.clientY;
+        if (x < 10) x = 10;
         if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.ctxMenu.x = x;

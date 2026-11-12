@@ -17,6 +17,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.activity import FilesActivityProvider
 from workspace.files.models import (
     FILE_FEED_Q,
@@ -24,6 +25,7 @@ from workspace.files.models import (
     FileEvent,
     FileShare,
     FileShareLink,
+    PinnedFolder,
 )
 from workspace.files.queries import (
     FilePermission,
@@ -34,7 +36,13 @@ from workspace.files.queries import (
 )
 from workspace.files.services import trash, tree
 from workspace.files.services.events import recent_feed_events
-from workspace.files.services.sharing import create_share_link, share_file
+from workspace.files.services.pins import remove_group_pins
+from workspace.files.services.sharing import (
+    create_share_link,
+    revoke_group_share_links,
+    revoke_group_shares,
+    share_file,
+)
 from workspace.files.tests import test_webdav
 from workspace.files.tests.operations import outcome_of, run_operation
 from workspace.notifications.models import Notification
@@ -401,6 +409,79 @@ class ShareRevocationTests(_DepartureFixture, TestCase):
         self.assertEqual(notified.count(), 3)
         self.assertTrue(all(n.actor_id == self.alice.pk for n in notified))
         self.assertFalse(Notification.objects.exclude(recipient=self.carol).exists())
+
+
+class DepartureBeyondTheParameterLimitTests(_DepartureFixture, TestCase):
+    """More members leaving a group at once than SQLite binds in one statement.
+
+    The limit is lowered for each call, so a hundred and fifty members stand
+    in for the 32766 it takes in production.
+    """
+
+    # Not lower: Django's own cascade deletes a hundred rows per statement.
+    PARAMETER_LIMIT = 120
+    MEMBER_COUNT = 150
+
+    def setUp(self):
+        self._fixture()
+        self.members = User.objects.bulk_create(
+            User(username=f"member-{i}") for i in range(self.MEMBER_COUNT)
+        )
+        self.team.user_set.add(*self.members)
+        self.leaving = {
+            "user_ids": [member.pk for member in self.members],
+            "group_ids": [self.team.pk],
+        }
+
+    def test_their_pins_are_dropped(self):
+        PinnedFolder.objects.bulk_create(
+            PinnedFolder(owner=member, folder=self.alice_sub) for member in self.members
+        )
+        bob_pin = PinnedFolder.objects.create(owner=self.bob, folder=self.alice_sub)
+
+        with sqlite_parameter_limit(self.PARAMETER_LIMIT):
+            removed = remove_group_pins(**self.leaving)
+
+        self.assertEqual(removed, self.MEMBER_COUNT)
+        self.assertEqual(list(PinnedFolder.objects.all()), [bob_pin])
+
+    def test_their_links_are_revoked(self):
+        FileShareLink.objects.bulk_create(
+            FileShareLink(file=self.alice_sub, created_by=member)
+            for member in self.members
+        )
+        bob_link = create_share_link(self.root, acting_user=self.bob)
+
+        with sqlite_parameter_limit(self.PARAMETER_LIMIT):
+            revoked = revoke_group_share_links(**self.leaving)
+
+        self.assertEqual(revoked, self.MEMBER_COUNT)
+        self.assertEqual(list(FileShareLink.objects.all()), [bob_link])
+        recorded = FileEvent.objects.filter(action=FileEvent.Action.LINK_REVOKED)
+        self.assertEqual(recorded.count(), self.MEMBER_COUNT)
+
+    def test_their_shares_are_revoked(self):
+        outsiders = User.objects.bulk_create(
+            User(username=f"outsider-{i}") for i in range(self.MEMBER_COUNT)
+        )
+        FileShare.objects.bulk_create(
+            FileShare(file=self.alice_note, shared_by=member, shared_with=outsider)
+            for member, outsider in zip(self.members, outsiders, strict=True)
+        )
+        bobs, _, _ = share_file(
+            self.bob_secret,
+            target_user=outsiders[0],
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=self.bob,
+        )
+
+        with sqlite_parameter_limit(self.PARAMETER_LIMIT):
+            revoked = revoke_group_shares(**self.leaving)
+
+        self.assertEqual(len(revoked), self.MEMBER_COUNT)
+        self.assertEqual(list(FileShare.objects.all()), [bobs])
+        recorded = FileEvent.objects.filter(action=FileEvent.Action.UNSHARED)
+        self.assertEqual(recorded.count(), self.MEMBER_COUNT)
 
 
 class FormerMemberSharingMigrationTests(_DepartureFixture, TestCase):

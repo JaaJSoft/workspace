@@ -18,6 +18,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from workspace.common.tests.media import local_storage_only
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.models import File, UploadSession
 from workspace.files.services import quota, trash, tree, uploads
 
@@ -544,3 +545,21 @@ class PurgeExpiredTests(TestCase):
 
         self.assertEqual(uploads.purge_expired(timezone.now() - timedelta(days=1)), 1)
         self.assertFalse(os.path.exists(path))
+
+    def test_more_abandoned_sessions_than_one_statement_binds(self):
+        """The limit is lowered for the purge, so sixty sessions stand in for
+        the 32766 it takes in production."""
+        abandoned = [self._session(f"old-{i}.mp4") for i in range(60)]
+        live = self._session("new.mp4")
+        UploadSession.objects.exclude(pk=live.pk).update(
+            updated_at=timezone.now() - timedelta(days=2)
+        )
+
+        with sqlite_parameter_limit(40):
+            removed = uploads.purge_expired(timezone.now() - timedelta(days=1))
+
+        self.assertEqual(removed, 60)
+        self.assertEqual(list(UploadSession.objects.all()), [live])
+        self.assertFalse(
+            any(os.path.exists(uploads.spool_path(session)) for session in abandoned)
+        )

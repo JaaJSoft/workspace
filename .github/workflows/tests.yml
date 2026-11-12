@@ -123,8 +123,10 @@ jobs:
             # The vector index and what its pgvector backend runs on, the
             # vault envelope rotation, whose conditional UPDATE leans on
             # PostgreSQL's pre-update semantics, the accent-folding lookup,
-            # whose PostgreSQL SQL calls f_unaccent, and the array form of a
-            # long __in, which only PostgreSQL compiles.
+            # whose PostgreSQL SQL calls f_unaccent, the array form of a long
+            # __in, which only PostgreSQL compiles, and bulk_update, whose
+            # table of values is cast per column there. Both are bound in
+            # common/apps.py.
             vectors:
               - 'workspace/common/vectors/**'
               - 'workspace/common/management/commands/*vector*'
@@ -134,6 +136,9 @@ jobs:
               - 'workspace/common/tests/test_folding.py'
               - 'workspace/common/in_lists.py'
               - 'workspace/common/tests/test_in_lists.py'
+              - 'workspace/common/bulk_update.py'
+              - 'workspace/common/tests/test_bulk_update.py'
+              - 'workspace/common/apps.py'
               - 'workspace/vault/views/account.py'
               - 'workspace/vault/tests/test_account_api.py'
               - 'workspace/settings/**'
@@ -723,3 +728,13 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.common.tests.test_in_lists -v 2
+
+      # bulk_update goes out as UPDATE ... FROM (VALUES ...), each column of
+      # the table cast to its type on PostgreSQL; the Django matrix only ever
+      # runs its SQLite side.
+      - name: Run the bulk_update tests on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.common.tests.test_bulk_update -v 2

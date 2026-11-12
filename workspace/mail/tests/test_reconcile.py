@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.imap_sync import _reconcile_folder
 from workspace.notifications.models import Notification
@@ -454,3 +455,101 @@ class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
             42,
             "last_sync_uid must advance past confirmed-present UIDs",
         )
+
+
+class ReconcileBeyondTheParameterLimitTests(ReconcileFolderMixin, TestCase):
+    """A folder holding more messages than SQLite binds in one statement.
+
+    The limit is lowered for the pass, so a hundred messages stand in for the
+    32766 it takes in production.
+    """
+
+    PARAMETER_LIMIT = 50
+    MESSAGE_COUNT = 120
+
+    def _fill_folder(self, **fields):
+        MailMessage.objects.bulk_create(
+            MailMessage(
+                account=self.account, folder=self.folder, imap_uid=uid, **fields
+            )
+            for uid in self._uids()
+        )
+
+    def _uids(self):
+        return range(1, self.MESSAGE_COUNT + 1)
+
+    def _reconcile(self, conn):
+        with sqlite_parameter_limit(self.PARAMETER_LIMIT):
+            _reconcile_folder(conn, self.folder)
+
+    def _notify(self, message):
+        return Notification.objects.create(
+            recipient=self.user,
+            origin="mail",
+            title="New mail",
+            mail_message=message,
+        )
+
+    def test_a_pass_that_changes_nothing_goes_through(self):
+        self._fill_folder(is_read=True)
+        flags = dict.fromkeys(self._uids(), r"\Seen")
+
+        self._reconcile(self._mock_conn(self._uids(), flags=flags))
+
+        messages = MailMessage.objects.filter(folder=self.folder)
+        self.assertEqual(messages.filter(is_read=True).count(), self.MESSAGE_COUNT)
+        self.assertFalse(messages.filter(deleted_at__isnull=False).exists())
+
+    def test_every_message_read_from_another_client(self):
+        from workspace.mail.models import MailLabel, MailMessageLabel
+
+        self._fill_folder(is_read=False)
+        messages = list(MailMessage.objects.filter(folder=self.folder))
+        label = MailLabel.objects.create(
+            account=self.account, name="Important", unread_count=self.MESSAGE_COUNT
+        )
+        MailMessageLabel.objects.bulk_create(
+            MailMessageLabel(message=message, label=label) for message in messages
+        )
+        notification = self._notify(messages[0])
+        flags = dict.fromkeys(self._uids(), r"\Seen")
+
+        self._reconcile(self._mock_conn(self._uids(), flags=flags))
+
+        unread = MailMessage.objects.filter(folder=self.folder, is_read=False)
+        self.assertFalse(unread.exists())
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 0)
+        notification.refresh_from_db()
+        self.assertIsNotNone(notification.read_at)
+
+    def test_every_flag_flipped_the_other_way(self):
+        self._fill_folder(is_read=True, is_starred=True)
+
+        self._reconcile(self._mock_conn(self._uids()))
+
+        messages = MailMessage.objects.filter(folder=self.folder)
+        self.assertFalse(messages.filter(is_read=True).exists())
+        self.assertFalse(messages.filter(is_starred=True).exists())
+
+    def test_every_message_starred_from_another_client(self):
+        self._fill_folder(is_read=True)
+        flags = dict.fromkeys(self._uids(), r"\Seen \Flagged")
+
+        self._reconcile(self._mock_conn(self._uids(), flags=flags))
+
+        starred = MailMessage.objects.filter(folder=self.folder, is_starred=True)
+        self.assertEqual(starred.count(), self.MESSAGE_COUNT)
+
+    def test_a_folder_emptied_from_another_client(self):
+        self._fill_folder()
+        kept = self._make_msg(self.MESSAGE_COUNT + 1)
+        gone = MailMessage.objects.get(folder=self.folder, imap_uid=1)
+        notification = self._notify(gone)
+
+        self._reconcile(self._mock_conn([kept.imap_uid]))
+
+        live = MailMessage.objects.filter(folder=self.folder, deleted_at__isnull=True)
+        self.assertEqual(list(live), [kept])
+        notification.refresh_from_db()
+        self.assertIsNotNone(notification.read_at)

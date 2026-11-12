@@ -18,9 +18,9 @@ def refresh_labels_for_messages(message_ids):
     from .counts import refresh_label_counts
 
     label_ids = set(
-        MailMessageLabel.objects.filter(message_id__in=message_ids).values_list(
-            "label_id", flat=True
-        )
+        MailMessageLabel.objects.filter(message_id__in_array=message_ids)
+        .values_list("label_id", flat=True)
+        .distinct()
     )
     if not label_ids:
         return

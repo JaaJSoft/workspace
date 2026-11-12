@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -6,6 +7,7 @@ from django.db import transaction
 from django.test import TestCase
 
 from workspace.chat.models import Conversation
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.notifications.models import Notification
 from workspace.notifications.services.notifications import (
     get_unread_count,
@@ -251,6 +253,16 @@ class MarkSourcesReadTests(TestCase):
         from workspace.notifications.services.notifications import mark_sources_read
 
         self.assertEqual(mark_sources_read(self.alice, []), 0)
+
+    def test_takes_more_sources_than_a_statement_binds(self):
+        from workspace.notifications.services.notifications import mark_sources_read
+
+        self.make(self.conv_a)
+        limit = 20
+        sources = [Conversation(pk=uuid.uuid4()) for _ in range(limit * 2)]
+        sources.append(self.conv_a)
+        with sqlite_parameter_limit(limit):
+            self.assertEqual(mark_sources_read(self.alice, sources), 1)
 
 
 @patch("workspace.notifications.services.notifications.send_push_notification")

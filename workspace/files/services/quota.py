@@ -5,7 +5,8 @@ Two buckets, never both: a file counts against its group's quota when
 rows count.
 
 Bucket usage is computed here and nowhere else; the admin is the only other
-reader of the quota tables.
+reader of the quota tables. Write checks read it from the per-bucket counter
+of ``bucket_usage`` instead, which caches the same total.
 
 A write is checked against what the bucket holds plus what open upload
 sessions have reserved in it. Usage as shown to people leaves reservations
@@ -20,6 +21,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework.exceptions import APIException
 
 from ..models import File, GroupStorageQuota, UploadSession, UserStorageQuota
+from . import bucket_usage
 
 
 def _pk(value):
@@ -139,28 +141,25 @@ def reserved_bytes(*, owner, group, excluding=None):
 def bucket_state(*, owner, group, excluding=None):
     """Return ``(used, limit)`` for the bucket a write would land in.
 
-    ``used`` counts the open upload sessions' reservations, *excluding* one,
-    in the same query as the files. ``limit`` is ``None`` when unlimited;
-    ``used`` is then left at 0 rather than aggregated.
+    ``used`` is the bucket's counter (``bucket_usage``) plus the open upload
+    sessions' reservations, *excluding* one, read in one query. ``limit`` is
+    ``None`` when unlimited; ``used`` is then left at 0 rather than read.
     """
     if group is not None:
         limit = effective_group_quota(group)
-        files = File.objects.filter(group_id=_pk(group))
-        bucket_key = "group_id"
     else:
         limit = effective_quota(owner)
-        files = File.objects.filter(owner_id=_pk(owner), group__isnull=True)
-        bucket_key = "owner_id"
     if limit is None:
         return 0, None
     sessions = _open_sessions(owner=owner, group=group, excluding=excluding)
+    bucket_column = "group_id" if group is not None else "owner_id"
     reserved = Subquery(
-        sessions.values(bucket_key).annotate(total=Sum("size")).values("total"),
+        sessions.values(bucket_column).annotate(total=Sum("size")).values("total"),
         output_field=BigIntegerField(),
     )
-    used = files.filter(node_type=File.NodeType.FILE).aggregate(
-        total=Coalesce(Sum("size"), Value(0)) + Coalesce(reserved, Value(0))
-    )["total"]
+    used = bucket_usage.used_bytes(
+        owner=owner, group=group, plus=Coalesce(reserved, Value(0))
+    )
     return used, limit
 
 

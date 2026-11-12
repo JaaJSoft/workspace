@@ -10,7 +10,7 @@ from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Case, F, Q, Value, When
 from django.db.models.functions import Concat, Lower, Substr
-from django.db.models.signals import pre_delete
+from django.db.models.signals import post_delete, pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.functional import LazyObject, empty
@@ -916,6 +916,31 @@ def unindex_file_on_delete(sender, instance, **kwargs):
     unindex_file(instance)
 
 
+@receiver(post_delete, sender=File)
+def uncharge_file_on_delete(sender, instance, **kwargs):
+    """Take a deleted file's bytes off its bucket's counter.
+
+    A receiver for the same reason as the storage cleanup: queryset and
+    cascade deletes go through it too, inside the deletion's transaction.
+    """
+    if instance.node_type == File.NodeType.FILE and instance.size:
+        from workspace.files.services.bucket_usage import charge_row
+
+        charge_row(instance.owner_id, instance.group_id, -instance.size)
+
+
+@receiver(pre_delete, sender="auth.Group")
+def hand_group_bytes_to_owners(sender, instance, **kwargs):
+    """Charge the owners for the rows a deleted group leaves them.
+
+    ``File.group`` is SET_NULL, so every row of the group, trashed by the
+    receiver below, lands in its owner's personal bucket.
+    """
+    from workspace.files.services.bucket_usage import release_group
+
+    release_group(instance)
+
+
 @receiver(pre_delete, sender="auth.Group")
 def soft_delete_group_files(sender, instance, **kwargs):
     """Trash all files belonging to this group before it is deleted."""
@@ -1493,6 +1518,53 @@ class GroupStorageQuota(models.Model):
     def __str__(self):
         limit = "unlimited" if self.quota_bytes is None else f"{self.quota_bytes} bytes"
         return f"{self.group}: {limit}"
+
+
+class StorageUsage(models.Model):
+    """Running byte total of one bucket, kept so a quota check reads one row.
+
+    A cache of ``quota.personal_usage`` / ``quota.group_usage``, never the
+    source of truth: every write that changes a bucket's total moves it by
+    the difference in the same transaction (``services/bucket_usage.py``),
+    a missing row is seeded from the aggregate on first read, and a periodic
+    task resets any row that drifted from it.
+
+    Exactly one of ``owner`` (the personal bucket) and ``group`` is set.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    owner = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="storage_usage",
+    )
+    group = models.OneToOneField(
+        "auth.Group",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="storage_usage",
+    )
+    bytes = models.BigIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(owner__isnull=False, group__isnull=True)
+                    | Q(owner__isnull=True, group__isnull=False)
+                ),
+                name="storage_usage_one_bucket",
+            ),
+        ]
+
+    def __str__(self):
+        bucket = f"group {self.group_id}" if self.group_id else f"user {self.owner_id}"
+        return f"{bucket}: {self.bytes} bytes"
 
 
 class UploadSession(models.Model):

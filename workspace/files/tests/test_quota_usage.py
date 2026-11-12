@@ -7,7 +7,12 @@ from django.db.models import Sum
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from workspace.files.models import File, GroupStorageQuota, UserStorageQuota
+from workspace.files.models import (
+    File,
+    GroupStorageQuota,
+    StorageUsage,
+    UserStorageQuota,
+)
 from workspace.files.services import quota, trash, tree
 from workspace.files.services.hard_delete import hard_delete_tree
 
@@ -144,9 +149,17 @@ class UsageQueryCountTests(TestCase):
         with self.assertNumQueries(1):
             quota.group_usage(self.group)
 
-    def test_remaining_costs_one_lookup_and_one_aggregate(self):
+    def test_remaining_costs_one_lookup_and_one_counter_read(self):
+        quota.remaining_bytes(owner=self.user, group=None)  # seeds the counter
         with self.assertNumQueries(2):
             quota.remaining_bytes(owner=self.user, group=None)
+
+    def test_the_first_check_of_a_bucket_seeds_its_counter_once(self):
+        with self.assertNumQueries(7):
+            # Quota lookup, counter miss, savepoint, aggregate, insert,
+            # release, counter read.
+            quota.remaining_bytes(owner=self.user, group=None)
+        self.assertTrue(StorageUsage.objects.filter(owner=self.user).exists())
 
     def test_an_unlimited_bucket_skips_the_aggregate(self):
         with self.assertNumQueries(1):
@@ -166,6 +179,7 @@ class GroupLabelQueryCountTests(TestCase):
 
     def test_an_allowed_write_never_names_the_group(self):
         GroupStorageQuota.objects.create(group=self.group, quota_bytes=10 * MB)
+        quota.remaining_bytes(owner=self.user.pk, group=self.group.pk)
         with self.assertNumQueries(2):
             quota.check_write_allowed(
                 owner=self.user.pk, group=self.group.pk, additional_bytes=1
@@ -173,6 +187,7 @@ class GroupLabelQueryCountTests(TestCase):
 
     def test_a_refused_write_names_the_group(self):
         GroupStorageQuota.objects.create(group=self.group, quota_bytes=1)
+        quota.remaining_bytes(owner=self.user.pk, group=self.group.pk)
         with self.assertNumQueries(3), self.assertRaises(quota.QuotaExceeded) as caught:
             quota.check_write_allowed(
                 owner=self.user.pk, group=self.group.pk, additional_bytes=10 * MB

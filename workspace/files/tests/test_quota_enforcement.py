@@ -757,6 +757,7 @@ class ExtractEnforcementTests(TestCase):
             for q in captured.captured_queries
             if "files_userstoragequota" in q["sql"]
             or 'SUM("files_file"."size")' in q["sql"]
+            or (q["sql"].startswith("SELECT") and "files_storageusage" in q["sql"])
         ]
 
     def test_the_loop_reads_the_bucket_once_whatever_the_entry_count(self):

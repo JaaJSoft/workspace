@@ -13,6 +13,7 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
 from ..models import File, canonical_name
+from . import bucket_usage
 from .storage_ops import blob_held_elsewhere, unique_copy_name
 
 logger = logging.getLogger(__name__)
@@ -169,6 +170,8 @@ def _insert(node, content):
                 # A storage that renames around a collision moved the blob.
                 File.objects.filter(pk=node.pk).update(content=stored)
                 node.content = stored
+        if node.node_type == File.NodeType.FILE and node.size:
+            bucket_usage.charge_row(node.owner_id, node.group_id, node.size)
     return node
 
 

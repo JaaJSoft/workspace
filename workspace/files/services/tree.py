@@ -8,6 +8,7 @@ ask the action registry and the lock before calling here.
 """
 
 import logging
+from contextlib import nullcontext
 
 from django.db import transaction
 from django.db.models import F
@@ -18,7 +19,7 @@ from workspace.common.logging import scrub
 from ..metrics import FILES_UPLOAD_BYTES
 from ..models import File, FileEvent, canonical_name
 from ..queries import can_create_in
-from . import detection, names, storage_ops
+from . import bucket_usage, detection, names, storage_ops
 from .content_hash import hash_storage_file, upload_hash
 from .events import record_event
 from .filetype import pin_viewer_for_upload
@@ -308,7 +309,20 @@ def move(file_obj, new_parent, *, acting_user=None):
     # move changes - a bare save() would write back a content write or a
     # lock that landed meanwhile.
     source = storage_ops.current_node_path(file_obj)
-    with names.name_claim(new_owner or file_obj.owner, new_parent, file_obj.name):
+    changes_bucket = (old_group.pk if old_group else None) != (
+        new_group.pk if new_group else None
+    )
+    usage = (
+        bucket_usage.tracking(
+            lambda: File.objects.filter(file_obj._descendant_filter())
+        )
+        if changes_bucket
+        else nullcontext()
+    )
+    with (
+        usage,
+        names.name_claim(new_owner or file_obj.owner, new_parent, file_obj.name),
+    ):
         file_obj.parent = new_parent
         file_obj.save(update_fields=["parent"])
         if new_owner:

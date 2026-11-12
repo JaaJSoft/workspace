@@ -8,12 +8,8 @@ in - loses the links and the shares they made there (the files rule, see
 ``files.services.sharing.revoke_group_share_links``).
 """
 
-from functools import reduce
-from operator import or_
-
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Q
 
 from ..actions import AlbumActionRegistry
 from ..models import Album, AlbumLink, AlbumShare
@@ -54,14 +50,20 @@ def _lapsed_makers(pairs):
     return lapsed
 
 
-def _made_by(lapsed, maker_field):
-    return reduce(
-        or_,
-        (
-            Q(album_id=album_id, **{maker_field: user_id})
-            for album_id, user_id in lapsed
-        ),
-    )
+def _made_by(queryset, maker_field, lapsed):
+    """The pks of the *queryset* rows a *lapsed* ``(album_id, user_id)`` pair
+    made.
+
+    Narrowed by each column on its own and paired here: one condition per
+    pair is an expression SQLite refuses past a thousand of them.
+    """
+    candidates = queryset.filter(
+        album_id__in={album_id for album_id, _ in lapsed},
+        **{f"{maker_field}__in": {user_id for _, user_id in lapsed}},
+    ).values_list("pk", "album_id", maker_field)
+    return [
+        pk for pk, album_id, maker_id in candidates if (album_id, maker_id) in lapsed
+    ]
 
 
 def revoke_lapsed_sharing(*, album_ids=None, user_ids=None):
@@ -93,11 +95,11 @@ def revoke_lapsed_sharing(*, album_ids=None, user_ids=None):
             return revoked_links, revoked_shares
         with transaction.atomic():
             deleted, _ = AlbumLink.objects.filter(
-                _made_by(lapsed, "created_by_id")
+                pk__in=_made_by(AlbumLink.objects.all(), "created_by_id", lapsed)
             ).delete()
             gone = list(
                 AlbumShare.objects.filter(
-                    _made_by(lapsed, "shared_by_id")
+                    pk__in=_made_by(AlbumShare.objects.all(), "shared_by_id", lapsed)
                 ).select_related("album", "shared_by", "shared_with_project")
             )
             AlbumShare.objects.filter(pk__in=[share.pk for share in gone]).delete()

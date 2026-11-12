@@ -1,35 +1,49 @@
 import json
 import uuid
+from datetime import date, timedelta
 from unittest import skipUnless
 
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db import OperationalError, connection, models
-from django.db.models import FloatField, Value
+from django.db.models import (
+    DateField,
+    FloatField,
+    GenericIPAddressField,
+    IntegerField,
+    Value,
+)
 from django.db.models.functions import Concat
 from django.db.models.lookups import In
 from django.test import TestCase, TransactionTestCase
 from django.test.utils import isolate_apps
 
-from workspace.common.in_lists import compile_long_list
+from workspace.common import in_lists
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.common.uuids import uuid_v7_or_v4
 
 PARAMETER_LIMIT = 20
-ON_SQLITE = skipUnless(connection.vendor == "sqlite", "the long list form is SQLite's")
+ON_SQLITE = skipUnless(connection.vendor == "sqlite", "SQLite's form of a long list")
+ON_POSTGRESQL = skipUnless(
+    connection.vendor == "postgresql", "PostgreSQL's form of a long list"
+)
+
+# Enough values to take the long form: past the lowered limit on SQLite, past
+# the fixed threshold on PostgreSQL, which has no limit to lower.
+LONG = PARAMETER_LIMIT * 3 if connection.vendor == "sqlite" else 1100
 
 
 class LongInListTests(TestCase):
     """``__in`` with more values than a statement binds.
 
-    The limit is lowered around each query, so sixty rows stand in for the
-    32766 values it takes in production.
+    On SQLite the limit is lowered around each query, so sixty rows stand in
+    for the 32766 values it takes in production.
     """
 
     @classmethod
     def setUpTestData(cls):
         cls.groups = Group.objects.bulk_create(
-            Group(name=f"group {index}") for index in range(PARAMETER_LIMIT * 3)
+            Group(name=f"group {index}") for index in range(LONG)
         )
         cls.pks = [group.pk for group in cls.groups]
 
@@ -58,7 +72,7 @@ class LongInListTests(TestCase):
 
     def test_matches_only_the_listed_rows(self):
         found = Group.objects.filter(pk__in=self.pks[:-1])
-        self.assertNotIn("group 59", self._names(found))
+        self.assertNotIn(self.groups[-1].name, self._names(found))
         self.assertEqual(len(self._names(found)), len(self.pks) - 1)
 
     def test_text_reaches_the_database_unchanged(self):
@@ -68,7 +82,7 @@ class LongInListTests(TestCase):
             # PostgreSQL text cannot hold a NUL at all.
             names.append("nul\x00inside")
         Group.objects.bulk_create(Group(name=name) for name in names)
-        wanted = names + [f"absent {index}" for index in range(PARAMETER_LIMIT)]
+        wanted = names + [f"absent {index}" for index in range(LONG)]
         self.assertEqual(self._names(Group.objects.filter(name__in=wanted)), set(names))
 
     def test_matches_a_foreign_key_by_column_relation_or_instance(self):
@@ -111,7 +125,8 @@ class LongInListTests(TestCase):
         )
         with sqlite_parameter_limit(PARAMETER_LIMIT):
             names = [group.name for group in found[:2]]
-        self.assertEqual(names, ["group 53", "group 43"])
+        self.assertEqual(names, sorted(names, reverse=True))
+        self.assertTrue(all(name.endswith("3") for name in names), names)
 
     def test_two_long_lists_in_one_statement(self):
         names = [group.name for group in self.groups]
@@ -163,7 +178,7 @@ class LongInListOfUuidsTests(TransactionTestCase):
         self.root = Node.objects.create()
         self.child = Node.objects.create(parent=self.root)
         self.other = Node.objects.create()
-        self.strangers = [uuid.uuid4() for _ in range(PARAMETER_LIMIT * 3)]
+        self.strangers = [uuid.uuid4() for _ in range(LONG)]
 
     def tearDown(self):
         with connection.schema_editor() as editor:
@@ -192,7 +207,7 @@ class LongInListOfUuidsTests(TransactionTestCase):
 
 
 @ON_SQLITE
-class LongInListSqlTests(TestCase):
+class SqliteLongListSqlTests(TestCase):
     """Which lists take the JSON form, read off the compiled statement."""
 
     def _sql(self, queryset):
@@ -233,7 +248,7 @@ class LongInListSqlTests(TestCase):
         lookup = In(Value(1.5, output_field=FloatField()), values)
         compiler = Group.objects.all().query.get_compiler(connection=connection)
         with sqlite_parameter_limit(PARAMETER_LIMIT):
-            sql, params = compile_long_list(lookup, compiler, connection)
+            sql, params = in_lists.as_sqlite(lookup, compiler, connection)
         self.assertNotIn("json_each", sql)
         self.assertEqual(list(params)[1:], values)
 
@@ -241,3 +256,67 @@ class LongInListSqlTests(TestCase):
         self.assertFalse(Group.objects.filter(pk__in=[]).exists())
         Group.objects.create(name="only")
         self.assertEqual(Group.objects.exclude(pk__in=[None]).count(), 1)
+
+
+@ON_POSTGRESQL
+class PostgresqlLongListSqlTests(TestCase):
+    """Which lists take the array form, read off the compiled statement."""
+
+    def _sql(self, queryset):
+        return queryset.query.sql_with_params()
+
+    def _compile(self, output_field, values):
+        lookup = In(Value(values[0], output_field=output_field), values)
+        compiler = Group.objects.all().query.get_compiler(connection=connection)
+        return in_lists.as_postgresql(lookup, compiler, connection)
+
+    def test_a_long_list_is_one_array(self):
+        values = list(range(LONG))
+        sql, params = self._sql(Group.objects.filter(pk__in=values))
+        self.assertIn('"auth_group"."id" = ANY(%s)', sql)
+        self.assertEqual(list(params), [values])
+
+    def test_a_short_list_keeps_its_placeholders(self):
+        values = list(range(1023))
+        sql, params = self._sql(Group.objects.filter(pk__in=values))
+        self.assertNotIn("ANY", sql)
+        self.assertEqual(list(params), values)
+
+    def test_text_goes_to_a_text_column_as_an_array(self):
+        values = [f"name {index}" for index in range(LONG)]
+        sql, params = self._sql(Group.objects.filter(name__in=values))
+        self.assertIn("= ANY(%s)", sql)
+        self.assertEqual(list(params), [values])
+
+    def test_text_for_another_column_type_keeps_its_placeholders(self):
+        # An array is typed by its elements: inet has no operator against text[].
+        values = [f"10.0.{index // 256}.{index % 256}" for index in range(LONG)]
+        sql, _ = self._compile(GenericIPAddressField(), values)
+        self.assertNotIn("ANY", sql)
+
+    def test_other_value_types_keep_their_placeholders(self):
+        days = [date(2026, 1, 1) + timedelta(days=index) for index in range(LONG)]
+        floats = [index / 7 for index in range(LONG)]
+        for output_field, values in ((DateField(), days), (FloatField(), floats)):
+            with self.subTest(type=type(values[0]).__name__):
+                sql, _ = self._compile(output_field, values)
+                self.assertNotIn("ANY", sql)
+
+    def test_an_integer_past_the_size_of_its_column_keeps_the_placeholders(self):
+        # Django sizes each value after the column, and an array takes that
+        # size: one value past it would fail the statement.
+        fitting = list(range(LONG))
+        sql, _ = self._compile(IntegerField(), fitting)
+        self.assertIn("= ANY(%s)", sql)
+        sql, _ = self._compile(IntegerField(), [*fitting, 2**40])
+        self.assertNotIn("ANY", sql)
+
+    def test_integers_of_every_size_share_one_array(self):
+        Group.objects.create(name="only")
+        values = [*range(LONG), 2**40, -(2**40)]
+        found = Group.objects.filter(pk__in=values)
+        self.assertEqual(found.count(), Group.objects.filter(pk__lt=LONG).count())
+
+    def test_a_subquery_stays_a_subquery(self):
+        sql, _ = self._sql(Permission.objects.filter(group__in=Group.objects.all()))
+        self.assertNotIn("ANY", sql)

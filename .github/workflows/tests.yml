@@ -122,8 +122,9 @@ jobs:
               - '.github/actions/apt-install/**'
             # The vector index and what its pgvector backend runs on, the
             # vault envelope rotation, whose conditional UPDATE leans on
-            # PostgreSQL's pre-update semantics, and the accent-folding lookup,
-            # whose PostgreSQL SQL calls f_unaccent.
+            # PostgreSQL's pre-update semantics, the accent-folding lookup,
+            # whose PostgreSQL SQL calls f_unaccent, and the array form of a
+            # long __in, which only PostgreSQL compiles.
             vectors:
               - 'workspace/common/vectors/**'
               - 'workspace/common/management/commands/*vector*'
@@ -131,6 +132,8 @@ jobs:
               - 'workspace/common/folding.py'
               - 'workspace/common/migrations/0001_f_unaccent.py'
               - 'workspace/common/tests/test_folding.py'
+              - 'workspace/common/in_lists.py'
+              - 'workspace/common/tests/test_in_lists.py'
               - 'workspace/vault/views/account.py'
               - 'workspace/vault/tests/test_account_api.py'
               - 'workspace/settings/**'
@@ -711,3 +714,12 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.common.tests.test_folding -v 2
+
+      # A long __in compiles to = ANY(array) on PostgreSQL, the values adapted
+      # by the driver; the Django matrix only ever runs its SQLite side.
+      - name: Run the long __in list tests on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.common.tests.test_in_lists -v 2

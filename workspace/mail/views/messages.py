@@ -279,7 +279,7 @@ class MailBatchActionView(APIView):
         action = ser.validated_data["action"]
 
         messages = MailMessage.objects.filter(
-            uuid__in=message_ids,
+            uuid__in_array=message_ids,
             account_id__in=user_account_ids(request.user),
             deleted_at__isnull=True,
         ).select_related("account", "folder")

@@ -92,7 +92,7 @@ def notify_new_messages(folder, message_uuids, *, was_initial_sync) -> int:
     limit = resolve_notify_burst(user)
     qualifying = list(
         MailMessage.objects.filter(
-            uuid__in=message_uuids, is_read=False, deleted_at__isnull=True
+            uuid__in_array=message_uuids, is_read=False, deleted_at__isnull=True
         )
         # NULLs sort last on Postgres by default but first on SQLite; both are
         # production backends here, so the ordering must be forced explicitly.

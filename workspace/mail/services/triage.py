@@ -15,7 +15,6 @@ below is not something to write twice.
 
 import logging
 from collections import defaultdict
-from itertools import batched
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -30,9 +29,6 @@ from .counts import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Well under SQLite's 32766 bound parameters per query.
-PK_BATCH_SIZE = 10_000
 
 
 def flag_operations():
@@ -124,18 +120,17 @@ def mark_folder_read(folder):
     now = timezone.now()
     with transaction.atomic():
         for folder_id, uids in uids_by_folder.items():
-            for batch in batched(uids, PK_BATCH_SIZE, strict=False):
-                flagged = MailMessage.objects.filter(
-                    folder_id=folder_id,
-                    imap_uid__in=batch,
-                    deleted_at__isnull=True,
-                    is_read=False,
-                )
-                pks = list(flagged.values_list("pk", flat=True))
-                updated += MailMessage.objects.filter(pk__in=pks).update(
-                    is_read=True, updated_at=now
-                )
-                refresh_labels_for_messages(pks)
+            flagged = MailMessage.objects.filter(
+                folder_id=folder_id,
+                imap_uid__in_array=uids,
+                deleted_at__isnull=True,
+                is_read=False,
+            )
+            pks = list(flagged.values_list("pk", flat=True))
+            updated += MailMessage.objects.filter(pk__in_array=pks).update(
+                is_read=True, updated_at=now
+            )
+            refresh_labels_for_messages(pks)
         refresh_folders_counts_bulk(group_ids)
     return updated, synced
 

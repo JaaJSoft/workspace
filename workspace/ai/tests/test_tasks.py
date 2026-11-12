@@ -1,5 +1,6 @@
 import base64
 import json
+import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -12,6 +13,7 @@ from workspace.ai.tests.chat_tasks import queue_chat_task
 from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import EditImageParams, GenerateImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import MailAccount, MailFolder, MailLabel, MailMessage
 
 User = get_user_model()
@@ -1021,6 +1023,16 @@ class ClassifyMailMessagesTests(TestCase):
         )
         self.label_urgent = self.account.labels.get(name="Urgent")
         self.label_newsletter = self.account.labels.get(name="Newsletter")
+
+    def test_the_message_queryset_takes_more_messages_than_a_statement_binds(self):
+        from workspace.ai.tasks.mail import _classify_message_queryset
+
+        limit = 50
+        message_uuids = [str(uuid.uuid4()) for _ in range(limit * 2)]
+        message_uuids.append(str(self.msg1.uuid))
+        with sqlite_parameter_limit(limit):
+            fetched = list(_classify_message_queryset(self.user, message_uuids))
+        self.assertEqual([message.pk for message in fetched], [self.msg1.pk])
 
     @patch("workspace.ai.client.get_ai_client")
     def test_classifies_messages_with_labels(self, mock_client):

@@ -357,7 +357,7 @@ def sync_folder_messages(account, folder):
             cal_messages = _MailMsg.objects.filter(
                 folder=folder,
                 has_calendar_event=True,
-                uuid__in=new_message_uuids,
+                uuid__in_array=new_message_uuids,
             )
             if cal_messages.exists():
                 from workspace.calendar.services.ics_processor import (

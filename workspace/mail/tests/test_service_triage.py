@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import (
     MailAccount,
     MailFolder,
@@ -137,6 +138,24 @@ class MarkFolderReadTests(TriageServiceTestCase):
         self.assertFalse(arrived[0].is_read)
         self.assertEqual(self.inbox.unread_count, 1)
         self.assertEqual(label.unread_count, 1)
+
+    def test_a_folder_holding_more_unread_than_a_statement_binds(self):
+        limit = 50
+        MailMessage.objects.bulk_create(
+            MailMessage(
+                account=self.account, folder=self.inbox, imap_uid=uid, is_read=False
+            )
+            for uid in range(2, limit * 2 + 1)
+        )
+        with (
+            patch("workspace.mail.services.imap_messages.mark_uids_read"),
+            sqlite_parameter_limit(limit),
+        ):
+            updated, synced = mark_folder_read(self.inbox)
+
+        self.assertEqual((updated, synced), (limit * 2, True))
+        unread = MailMessage.objects.filter(folder=self.inbox, is_read=False)
+        self.assertFalse(unread.exists())
 
     def test_a_message_moved_out_during_the_imap_calls_stays_unread(self):
         # The STORE went to the Inbox; the copy now in the Archive never got

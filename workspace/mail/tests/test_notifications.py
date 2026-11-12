@@ -1,9 +1,11 @@
+import uuid
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import (
     MailAccount,
     MailFolder,
@@ -152,6 +154,17 @@ class NotifyNewMessagesTests(MailNotifyBase):
         messages = [self.make_message(uid=i) for i in range(3)]
         self.assertEqual(self.notify(messages), 3)
         self.assertEqual(Notification.objects.filter(recipient=self.alice).count(), 3)
+
+    def test_a_pass_with_more_new_messages_than_a_statement_binds(self):
+        limit = 50
+        message = self.make_message(uid=1)
+        uuids = [str(uuid.uuid4()) for _ in range(limit * 2)]
+        uuids.append(str(message.uuid))
+        with sqlite_parameter_limit(limit):
+            notified = notify_new_messages(self.inbox, uuids, was_initial_sync=False)
+        self.assertEqual(notified, 1)
+        notif = Notification.objects.get(recipient=self.alice)
+        self.assertEqual(notif.mail_message_id, message.pk)
 
     def test_notification_points_at_the_message(self):
         message = self.make_message(uid=1, subject="Invoice")

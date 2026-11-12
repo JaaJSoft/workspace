@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.notifications.models import Notification
 from workspace.projects.models import (
     ProjectNotificationLevel,
@@ -19,6 +20,7 @@ from workspace.projects.services.watchers import (
     auto_watch,
     clear_watch_state,
     set_watch_state,
+    watch_states,
 )
 from workspace.users.services.settings import set_setting
 
@@ -85,6 +87,21 @@ class WatchStateTests(WatcherTestsBase):
             self.project, self.admin, title="Ship it", assignees=[self.member]
         )
         self.assertFalse(TaskWatcher.objects.get(task=task, user=self.member).muted)
+
+    def test_watch_states_of_more_tasks_than_the_parameter_limit(self):
+        parameter_limit = 40
+        tasks = [self._task(title=f"Task {i}") for i in range(parameter_limit * 2)]
+        watched, muted = tasks[0], tasks[-1]
+        set_watch_state(watched, self.member, muted=False)
+        set_watch_state(muted, self.member, muted=True)
+
+        with sqlite_parameter_limit(parameter_limit):
+            states = watch_states(tasks)
+
+        self.assertEqual(
+            dict(states),
+            {watched.pk: {self.member.pk: False}, muted.pk: {self.member.pk: True}},
+        )
 
 
 class CommentFanOutTests(WatcherTestsBase):

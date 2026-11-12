@@ -3,6 +3,13 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 from workspace.files.models import File
+from workspace.files.services import bucket_usage
+
+
+def _write_sizes(rows):
+    pks = [row.pk for row in rows]
+    with bucket_usage.tracking(lambda: File.objects.filter(pk__in=pks)):
+        File.objects.bulk_update(rows, ["size"])
 
 
 class Command(BaseCommand):
@@ -69,11 +76,11 @@ class Command(BaseCommand):
 
             to_update.append(file_obj)
             if len(to_update) >= batch_size:
-                File.objects.bulk_update(to_update, ["size"])
+                _write_sizes(to_update)
                 to_update = []
 
         if to_update:
-            File.objects.bulk_update(to_update, ["size"])
+            _write_sizes(to_update)
 
         self.stdout.write(
             self.style.SUCCESS(

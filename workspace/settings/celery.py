@@ -111,6 +111,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.settle_relocations",
         "schedule": crontab(hour=2, minute=50),  # Every day at 2:50 AM
     },
+    # Storage counters a write path missed, reset to the files' total.
+    "reconcile-storage-usage": {
+        "task": "files.reconcile_storage_usage",
+        "schedule": crontab(hour=2, minute=55),  # Every day at 2:55 AM
+    },
     "db-maintenance": {
         "task": "core.db_maintenance",
         # Mon-Sat at 3:00 AM: cheap pass only (optimize + WAL checkpoint).

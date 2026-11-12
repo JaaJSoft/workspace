@@ -105,6 +105,14 @@ def sync_user_files(user_id):
 STAGED_BLOB_TTL = timedelta(days=1)
 
 
+@shared_task(name="files.reconcile_storage_usage", priority=BACKGROUND_PRIORITY)
+def reconcile_storage_usage():
+    """Reset the per-bucket storage counters that drifted from their files."""
+    from workspace.files.services.bucket_usage import reconcile
+
+    return reconcile()
+
+
 @shared_task(name="files.purge_staged_blobs", priority=BACKGROUND_PRIORITY)
 def purge_staged_blobs():
     """Delete what a killed worker or a client that left never moved into place.

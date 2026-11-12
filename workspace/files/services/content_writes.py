@@ -20,7 +20,7 @@ from workspace.common.logging import scrub
 from ..metrics import FILES_UPLOAD_BYTES
 from ..models import File, FileEvent
 from ..storage_layout import live_path
-from . import detection, locking, storage_ops
+from . import bucket_usage, detection, locking, storage_ops
 from .content_hash import upload_hash
 from .events import record_event
 from .filetype import pin_viewer_for_upload
@@ -214,10 +214,24 @@ def _write_content_row(file_obj, acting_user, expected_hash, fields):
     there is nothing of the other write left to lose.
     """
     claim = File.objects.filter(pk=file_obj.pk)
-    if expected_hash is not None:
-        claim = claim.filter(content_hash=expected_hash)
-    if claim.filter(locking.unlocked_for_q(acting_user)).update(**fields):
-        return
+    with transaction.atomic():
+        # Read under the row lock, so the bucket is charged the difference
+        # from the size this write replaces, not from the caller's copy.
+        before = (
+            claim.select_for_update()
+            .values("size", "owner_id", "group_id", "node_type")
+            .first()
+        )
+        if expected_hash is not None:
+            claim = claim.filter(content_hash=expected_hash)
+        if claim.filter(locking.unlocked_for_q(acting_user)).update(**fields):
+            if "size" in fields and before["node_type"] == File.NodeType.FILE:
+                bucket_usage.charge_row(
+                    before["owner_id"],
+                    before["group_id"],
+                    (fields["size"] or 0) - (before["size"] or 0),
+                )
+            return
     # Nothing matched: re-read to say which of the two conditions failed.
     # The read trails the write, so the lock may already be gone by the
     # time it runs - which is why an expectation that still matches is the

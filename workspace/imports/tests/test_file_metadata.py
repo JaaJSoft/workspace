@@ -1,11 +1,14 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.models import FileFavorite, FileTag, Tag
 from workspace.files.services import tree
 from workspace.imports.services import file_metadata
 
 User = get_user_model()
+
+PARAMETER_LIMIT = 40
 
 
 class MarkFavoritesTests(TestCase):
@@ -32,6 +35,21 @@ class MarkFavoritesTests(TestCase):
             file_metadata.mark_favorites(self.user, [self.a.uuid, self.a.uuid]), 1
         )
 
+    def test_more_files_than_one_statement_binds(self):
+        folders = [
+            tree.create_folder(self.user, f"folder {index}")
+            for index in range(PARAMETER_LIMIT + 20)
+        ]
+        uuids = [folder.uuid for folder in folders]
+        file_metadata.mark_favorites(self.user, uuids[:1])
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            added = file_metadata.mark_favorites(self.user, uuids)
+
+        self.assertEqual(added, len(uuids) - 1)
+        favorites = FileFavorite.objects.filter(owner=self.user, file__in=folders)
+        self.assertEqual(favorites.count(), len(uuids))
+
     def test_nothing_to_do(self):
         self.assertEqual(file_metadata.mark_favorites(self.user, []), 0)
         self.assertFalse(FileFavorite.objects.exists())
@@ -56,6 +74,20 @@ class ApplyTagTests(TestCase):
         )
         self.assertEqual(Tag.objects.filter(owner=self.user).count(), 1)
         self.assertEqual(FileTag.objects.count(), 1)
+
+    def test_more_files_than_one_statement_binds(self):
+        folders = [
+            tree.create_folder(self.user, f"folder {index}")
+            for index in range(PARAMETER_LIMIT + 20)
+        ]
+        uuids = [folder.uuid for folder in folders]
+        file_metadata.apply_tag(self.user, "Invoices", uuids[:1])
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            added = file_metadata.apply_tag(self.user, "Invoices", uuids)
+
+        self.assertEqual(added, len(uuids) - 1)
+        self.assertEqual(FileTag.objects.filter(file__in=folders).count(), len(uuids))
 
     def test_an_existing_tag_is_reused_whatever_its_case(self):
         existing = Tag.objects.create(owner=self.user, name="invoices", color="#fff")

@@ -1,3 +1,4 @@
+import uuid
 from datetime import timedelta
 from io import BytesIO
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from PIL import Image
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.imports.importers.base import (
     ImportContext,
     JobFailed,
@@ -29,7 +31,7 @@ from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
 from workspace.imports.providers.base import RemoteCard
 from workspace.people.models import Person, PersonList
 from workspace.people.services.lists import create_list
-from workspace.people.services.persons import delete_person
+from workspace.people.services.persons import create_person, delete_person
 
 from .fakes import FakeContactSource, fake_provider
 
@@ -588,3 +590,18 @@ class LinkedPhotoTests(ContactsImporterTestCase):
         ann = Person.objects.get(display_name="Ann")
         self.assertFalse(ann.has_avatar)
         self.assertEqual(ann.extra_properties["PHOTO"][0]["value"], self.URL)
+
+
+class LiveTargetsBeyondTheParameterLimitTests(ContactsImporterTestCase):
+    def test_live_targets_among_more_ids_than_a_statement_binds(self):
+        parameter_limit = 40
+        kept = create_person(owner=self.user, display_name="Ann")
+        gone = create_person(owner=self.user, display_name="Bob")
+        delete_person(gone)
+        asked = [uuid.uuid4() for _ in range(parameter_limit * 2)]
+        asked += [kept.uuid, gone.uuid]
+
+        with sqlite_parameter_limit(parameter_limit):
+            alive = self.importer.live_targets(self.user, asked)
+
+        self.assertEqual(alive, {kept.uuid})

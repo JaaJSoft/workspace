@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -7,6 +8,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.models import File, FileFavorite, FileTag, Tag
 from workspace.files.services import quota, trash, tree
 from workspace.imports.importers.base import ImportContext, JobFailed, Outcome
@@ -889,3 +891,43 @@ class MetadataPhaseTests(ImporterTestCase):
         ):
             self.assertIs(self._run(job), Outcome.DONE)
         self.assertEqual(listed, [])
+
+
+class TargetsBeyondTheParameterLimitTests(ImporterTestCase):
+    """More imported entries than SQLite binds in one statement, the limit
+    lowered so a hundred ids stand in for the 32766 it takes in production."""
+
+    PARAMETER_LIMIT = 40
+
+    def test_live_targets_among_more_ids_than_a_statement_binds(self):
+        kept = tree.create_file(self.user, "kept.txt")
+        trashed = tree.create_file(self.user, "trashed.txt")
+        trash.soft_delete(trashed, acting_user=self.user)
+        asked = [uuid.uuid4() for _ in range(self.PARAMETER_LIMIT * 2)]
+        asked += [kept.uuid, trashed.uuid]
+
+        with sqlite_parameter_limit(self.PARAMETER_LIMIT):
+            alive = self.importer.live_targets(self.user, asked)
+
+        self.assertEqual(alive, {kept.uuid})
+
+    def test_imported_targets_among_more_remote_ids_than_a_statement_binds(self):
+        kept = tree.create_file(self.user, "kept.txt")
+        job = ImportJob.objects.create(
+            connection=self.conn, kinds=["files"], status=ImportJob.Status.COMPLETED
+        )
+        ImportJobItem.objects.create(
+            job=job,
+            kind="files",
+            remote_id="/kept.txt",
+            status=ImportJobItem.Status.DONE,
+            target_uuid=kept.uuid,
+        )
+        ctx = ImportContext(job, self.provider, self.importer)
+        remote_ids = [f"/absent-{i}.txt" for i in range(self.PARAMETER_LIMIT * 2)]
+        remote_ids.append("/kept.txt")
+
+        with sqlite_parameter_limit(self.PARAMETER_LIMIT):
+            targets = self.importer._imported_targets(ctx, remote_ids)
+
+        self.assertEqual(targets, {"/kept.txt": kept.uuid})

@@ -8,7 +8,6 @@ of time resumes where it stopped instead of re-listing the whole tree.
 import logging
 import shutil
 import tempfile
-from itertools import batched
 
 from django.conf import settings
 from django.core.exceptions import SuspiciousFileOperation, ValidationError
@@ -118,14 +117,11 @@ class FilesImporter(Importer):
             source.close()
 
     def live_targets(self, owner, target_uuids):
-        alive = set()
-        for chunk in batched(target_uuids, 500, strict=False):
-            alive.update(
-                user_files_qs(owner)
-                .filter(uuid__in=chunk)
-                .values_list("uuid", flat=True)
-            )
-        return alive
+        return set(
+            user_files_qs(owner)
+            .filter(uuid__in=set(target_uuids))
+            .values_list("uuid", flat=True)
+        )
 
     def summarize(self, stats):
         parts = []
@@ -547,21 +543,19 @@ class FilesImporter(Importer):
         the retention purge dropped, or whose local file was deleted, is left
         alone rather than guessed at from its path.
         """
-        found = {}
-        for chunk in batched(remote_ids, 500, strict=False):
-            found.update(
-                ImportJobItem.objects.filter(
-                    job__connection_id=ctx.connection.pk,
-                    kind=self.kind,
-                    status=ImportJobItem.Status.DONE,
-                    remote_id__in=chunk,
-                )
-                .exclude(target_uuid=None)
-                # Two imports of the same remote entry: the newest local copy
-                # is the one the user is looking at.
-                .order_by("created_at")
-                .values_list("remote_id", "target_uuid")
+        found = dict(
+            ImportJobItem.objects.filter(
+                job__connection_id=ctx.connection.pk,
+                kind=self.kind,
+                status=ImportJobItem.Status.DONE,
+                remote_id__in=set(remote_ids),
             )
+            .exclude(target_uuid=None)
+            # Two imports of the same remote entry: the newest local copy
+            # is the one the user is looking at.
+            .order_by("created_at")
+            .values_list("remote_id", "target_uuid")
+        )
         alive = self.live_targets(ctx.owner, set(found.values()))
         return {rid: target for rid, target in found.items() if target in alive}
 

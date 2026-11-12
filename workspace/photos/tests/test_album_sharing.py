@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.models import File
 from workspace.files.queries import get_permission
 from workspace.files.services.sharing import share_file
@@ -44,6 +45,10 @@ User = get_user_model()
 
 API = "/api/v1/photos/albums"
 
+# SQLite binds 32766 parameters per statement at most; lowered to this, a
+# few dozen ids are as many as a large group's members.
+PARAMETER_LIMIT = 50
+
 
 def _at(day):
     return datetime(2024, 7, day, 12, tzinfo=UTC)
@@ -64,6 +69,15 @@ class SharingTestCase(TestCase):
     def share(self, role=AlbumShare.Role.VIEWER, **target):
         target = target or {"user": self.bob}
         return share_album(self.album, role=role, acting_user=self.owner, **target)[0]
+
+    def large_group(self):
+        """A group of more users than PARAMETER_LIMIT, and those users."""
+        team = Group.objects.create(name="Everyone")
+        users = User.objects.bulk_create(
+            User(username=f"member-{i}") for i in range(PARAMETER_LIMIT + 1)
+        )
+        team.user_set.add(*users)
+        return team, users
 
 
 class AlbumRoleTests(SharingTestCase):
@@ -165,6 +179,15 @@ class AlbumRoleTests(SharingTestCase):
             set(album_members(self.album).values_list("username", flat=True)),
             {"owner", "bob", "carol", "dev"},
         )
+
+    def test_members_of_a_group_larger_than_a_statement_binds(self):
+        team, users = self.large_group()
+        self.share(AlbumShare.Role.VIEWER, group=team)
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            members = set(album_members(self.album).values_list("pk", flat=True))
+
+        self.assertEqual(members, {self.owner.pk, *(user.pk for user in users)})
 
 
 class AlbumVisibilityTests(SharingTestCase):

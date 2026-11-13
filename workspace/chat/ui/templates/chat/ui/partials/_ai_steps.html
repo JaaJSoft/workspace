@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 AI reasoning timeline for a bot message. Context: steps/tool_count/
 has_reasoning/collapsed from render_ai_steps. Native <details> on purpose:
@@ -12,10 +13,26 @@ Alpine state would not survive the swap.
       >
         {% if has_reasoning %}
           <i data-lucide="brain" class="w-3 h-3 shrink-0"></i>
-          <span>Reasoned{% if tool_count %} - used {{ tool_count }} tool{{ tool_count|pluralize }}{% endif %}</span>
+          <span>
+            {% if tool_count %}
+              {% blocktranslate trimmed count counter=tool_count %}
+                Reasoned - used {{ counter }} tool
+              {% plural %}
+                Reasoned - used {{ counter }} tools
+              {% endblocktranslate %}
+            {% else %}
+              {% translate "Reasoned" %}
+            {% endif %}
+          </span>
         {% else %}
           <i data-lucide="wrench" class="w-3 h-3 shrink-0"></i>
-          <span>Used {{ tool_count }} tools</span>
+          <span>
+            {% blocktranslate trimmed count counter=tool_count %}
+              Used {{ counter }} tool
+            {% plural %}
+              Used {{ counter }} tools
+            {% endblocktranslate %}
+          </span>
         {% endif %}
         <i
           data-lucide="chevron-down"

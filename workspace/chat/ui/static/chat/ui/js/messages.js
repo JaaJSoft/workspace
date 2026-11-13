@@ -391,13 +391,13 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this._removeOptimisticMessage(tempId);
         this.botTyping = false;
         this.clearBotStep?.();
-        window.AppAlert.error('Failed to send the voice message.');
+        window.AppAlert.error(gettext('Failed to send the voice message.'));
         return false;
       } catch (e) {
         this._removeOptimisticMessage(tempId);
         this.botTyping = false;
         this.clearBotStep?.();
-        window.AppAlert.error('Failed to send the voice message.');
+        window.AppAlert.error(gettext('Failed to send the voice message.'));
         return false;
       }
     },
@@ -548,7 +548,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
             if (!el.querySelector('.edited-indicator')) {
               const indicator = document.createElement('span');
               indicator.className = 'text-[0.65rem] opacity-50 italic ml-1 edited-indicator';
-              indicator.textContent = '(edited)';
+              indicator.textContent = gettext('(edited)');
               el.appendChild(indicator);
             }
           });
@@ -564,9 +564,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // ── Deleting ───────────────────────────────────────────
     async deleteMessage(msgUuid) {
       const ok = await AppDialog.confirm({
-        title: 'Delete message',
-        message: 'Are you sure you want to delete this message?',
-        okLabel: 'Delete',
+        title: gettext('Delete message'),
+        message: gettext('Are you sure you want to delete this message?'),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -593,7 +593,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
             placeholder.className = 'msg-bubble rounded-2xl px-3 py-1.5 text-sm italic bg-base-200 text-base-content/40';
             placeholder.id = el.id;
             placeholder.dataset.messageUuid = msgUuid;
-            placeholder.textContent = 'Message deleted';
+            placeholder.textContent = gettext('Message deleted');
             row.replaceWith(placeholder);
           });
         }
@@ -763,8 +763,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           break;
         case 'copy':
           navigator.clipboard.writeText(body)
-            .then(() => window.AppAlert?.success('Message copied', { duration: 2000 }))
-            .catch(() => window.AppAlert?.error('Failed to copy message'));
+            .then(() => window.AppAlert?.success(gettext('Message copied'), { duration: 2000 }))
+            .catch(() => window.AppAlert?.error(gettext('Failed to copy message')));
           break;
         case 'pin':
           this.pinMessage(uuid);

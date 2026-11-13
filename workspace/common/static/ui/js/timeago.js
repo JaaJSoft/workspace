@@ -13,9 +13,26 @@
     return parts;
   }
 
+  // Any other interface language takes the browser's short date in that
+  // language ('1 juil.', '1 juil. 2025'), the order the server's translated
+  // "M d" / "M d, Y" formats follow. Django and Intl abbreviate a few months
+  // differently ('fév.' / 'févr.'), so the two labels can differ by a letter.
+  const _localizedFormatters = new Map();
+  function _localizedDate(d, tz, locale, withYear) {
+    const key = locale + (withYear ? '|y' : '');
+    let formatter = _localizedFormatters.get(key);
+    if (!formatter) {
+      const options = { day: 'numeric', month: 'short' };
+      if (withYear) options.year = 'numeric';
+      formatter = window.zonedFormatter(locale, options);
+      _localizedFormatters.set(key, formatter);
+    }
+    return formatter(tz).format(d);
+  }
+
   // 'just now' (< 1 min), '5m ago', '2h ago', '3d ago' (< 1 week), then the
   // absolute date - 'Feb 01' within the current year, 'Feb 01, 2025'
-  // otherwise - evaluated in the user's timezone.
+  // otherwise - evaluated in the user's timezone and language.
   window.formatTimeAgo = function formatTimeAgo(value, nowMs) {
     if (!value) return '';
     const d = value instanceof Date ? value : new Date(value);
@@ -28,8 +45,13 @@
     if (sec < 604800) return interpolate(gettext('%(count)sd ago'), { count: Math.floor(sec / 86400) }, true);
     const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     const then = _dateParts(d, tz);
+    const sameYear = then.year === _dateParts(new Date(now), tz).year;
+    const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+    if (locale && !locale.toLowerCase().startsWith('en')) {
+      return _localizedDate(d, tz, locale, !sameYear);
+    }
     const label = then.month + ' ' + then.day;
-    return then.year === _dateParts(new Date(now), tz).year ? label : label + ', ' + then.year;
+    return sameYear ? label : label + ', ' + then.year;
   };
 
   // "Last seen" variant shown next to away/offline presence labels: skips

@@ -142,3 +142,19 @@ test('relative labels go through the catalog, count interpolated', () => {
   assert.equal(frAgo(2 * 3600), 'il y a 2 h');
   assert.equal(frAgo(3 * 86400), 'il y a 3 j');
 });
+
+test('an older date is written in the interface language, like the server', () => {
+  // Same output as time_ago's translated "j N" / "j N Y" formats in French.
+  const fr = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/timeago.js'], {
+    getUserTimeZone: () => 'Europe/Paris',
+    getUserLocale: () => 'fr',
+  });
+  assert.equal(fr.formatTimeAgo('2026-07-01T12:00:00Z', NOW), '1 juil.');
+  assert.equal(fr.formatTimeAgo('2025-11-03T12:00:00Z', NOW), '3 nov. 2025');
+  // Any English variant keeps the month-first label.
+  const gb = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/timeago.js'], {
+    getUserTimeZone: () => 'Europe/Paris',
+    getUserLocale: () => 'en-GB',
+  });
+  assert.equal(gb.formatTimeAgo('2026-02-01T12:00:00Z', NOW), 'Feb 01');
+});

@@ -25,20 +25,39 @@ window.chatUiHelpersMixin = function chatUiHelpersMixin() {
       if (!iso) return '';
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { timeZone: tz, year: 'numeric', month: 'long', day: 'numeric' });
+      return d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, year: 'numeric', month: 'long', day: 'numeric' });
     },
 
     formatDateTime(iso) {
       if (!iso) return '';
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     },
 
     memberDisplayName(member) {
       const u = member.user;
       const full = ((u.first_name || '') + ' ' + (u.last_name || '')).trim();
       return full || u.username;
+    },
+
+    // "N pins" badge of the pinned-messages banner.
+    pinnedCountLabel(count) {
+      return interpolate(ngettext('%(count)s pin', '%(count)s pins', count), { count }, true);
+    },
+
+    // Text of the join-call banner, with the participant count once known.
+    callBannerLabel(participantCount) {
+      if (!participantCount) return gettext('Call in progress');
+      return interpolate(
+        ngettext(
+          'Call in progress - %(count)s participant',
+          'Call in progress - %(count)s participants',
+          participantCount,
+        ),
+        { count: participantCount },
+        true,
+      );
     },
 
     autoResize(el) {

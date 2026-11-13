@@ -1,3 +1,4 @@
+{% load i18n %}
 <div class="flex-1 flex items-center justify-center">
   <div class="text-center p-8">
     <div
@@ -5,9 +6,9 @@
     >
       <i data-lucide="message-circle" class="w-10 h-10 text-module"></i>
     </div>
-    <h2 class="text-xl font-semibold text-base-content/80 mb-2">Welcome to Chat</h2>
+    <h2 class="text-xl font-semibold text-base-content/80 mb-2">{% translate "Welcome to Chat" %}</h2>
     <p class="text-base-content/60 mb-6 max-w-sm">
-      Select a conversation from the sidebar or start a new one to begin messaging.
+      {% translate "Select a conversation from the sidebar or start a new one to begin messaging." %}
     </p>
     <button
       type="button"
@@ -15,7 +16,7 @@
       @click="showNewConversationDialog()"
     >
       <i data-lucide="plus" class="w-4 h-4"></i>
-      Start a conversation
+      {% translate "Start a conversation" %}
     </button>
   </div>
 </div>

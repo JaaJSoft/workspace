@@ -106,7 +106,7 @@ window.chatSseMixin = function chatSseMixin() {
           if (!el.querySelector('.edited-indicator')) {
             const indicator = document.createElement('span');
             indicator.className = 'text-[0.65rem] opacity-50 italic ml-1 edited-indicator';
-            indicator.textContent = '(edited)';
+            indicator.textContent = gettext('(edited)');
             el.appendChild(indicator);
           }
           el.dataset.body = detail.body;

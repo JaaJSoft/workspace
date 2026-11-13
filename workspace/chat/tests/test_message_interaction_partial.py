@@ -102,7 +102,7 @@ class MessageInteractionPartialTests(TestCase):
         interaction.save()
         msg.refresh_from_db()
         html = self._render(msg)
-        self.assertIn("Répondu par", html)
+        self.assertIn("Answered by", html)
 
     def test_dm_hides_answered_by(self):
         interaction = MessageInteraction.objects.create(
@@ -116,7 +116,7 @@ class MessageInteractionPartialTests(TestCase):
         interaction.save()
         self.message.refresh_from_db()
         html = self._render(self.message)
-        self.assertNotIn("Répondu par", html)
+        self.assertNotIn("Answered by", html)
 
 
 class MessageInteractionQueryCountTests(TestCase):

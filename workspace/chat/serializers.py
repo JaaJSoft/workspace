@@ -1,3 +1,4 @@
+from django.utils.translation import gettext
 from rest_framework import serializers
 
 from workspace.ai.models import AgentGoal, ScheduledMessage
@@ -351,7 +352,7 @@ class ConversationCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         if bool(attrs.get("member_ids")) == bool(attrs.get("group_ids")):
             raise serializers.ValidationError(
-                "Provide exactly one of member_ids or group_ids."
+                gettext("Provide exactly one of member_ids or group_ids.")
             )
         return attrs
 
@@ -426,7 +427,7 @@ class AgentGoalSerializer(serializers.ModelSerializer):
         # the DELETE endpoint (abandoned) or the bot's complete_agent_goal.
         if value not in (AgentGoal.Status.ACTIVE, AgentGoal.Status.PAUSED):
             raise serializers.ValidationError(
-                "Status can only be set to 'active' or 'paused'."
+                gettext("Status can only be set to 'active' or 'paused'.")
             )
         return value
 
@@ -504,7 +505,9 @@ class ScheduledMessageSerializer(serializers.ModelSerializer):
             if scheduled_at is None:
                 raise serializers.ValidationError(
                     {
-                        "scheduled_at": 'scheduled_at is required when kind is "once".',
+                        "scheduled_at": gettext(
+                            'scheduled_at is required when kind is "once".'
+                        ),
                     }
                 )
         return attrs

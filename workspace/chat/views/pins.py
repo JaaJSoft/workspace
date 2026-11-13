@@ -1,6 +1,7 @@
 import logging
 
 from django.db.models import Max
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -26,7 +27,7 @@ class ConversationPinView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -44,7 +45,9 @@ class ConversationPinView(APIView):
             defaults={"position": next_pos},
         )
         if not created:
-            return Response({"detail": "Already pinned."}, status=status.HTTP_200_OK)
+            return Response(
+                {"detail": gettext("Already pinned.")}, status=status.HTTP_200_OK
+            )
         return Response({"status": "pinned"}, status=status.HTTP_201_CREATED)
 
     @extend_schema(summary="Unpin a conversation")
@@ -55,7 +58,7 @@ class ConversationPinView(APIView):
         ).delete()
         if not deleted:
             return Response(
-                {"detail": "Not pinned."},
+                {"detail": gettext("Not pinned.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -78,7 +81,7 @@ class ConversationPinReorderView(APIView):
         order = request.data.get("order", [])
         if not isinstance(order, list):
             return Response(
-                {"detail": '"order" must be a list of conversation UUIDs.'},
+                {"detail": gettext('"order" must be a list of conversation UUIDs.')},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -90,7 +93,7 @@ class ConversationPinReorderView(APIView):
             parsed = parse_uuid_or_none(entry)
             if parsed is None:
                 return Response(
-                    {"detail": '"order" entries must be UUID strings.'},
+                    {"detail": gettext('"order" entries must be UUID strings.')},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             normalized_order.append(str(parsed))
@@ -123,19 +126,20 @@ class MessagePinToggleView(APIView):
             )
         except Message.DoesNotExist:
             return Response(
-                {"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Message not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if message.deleted_at:
             return Response(
-                {"detail": "Cannot pin a deleted message."},
+                {"detail": gettext("Cannot pin a deleted message.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -163,13 +167,14 @@ class MessagePinToggleView(APIView):
             )
         except Message.DoesNotExist:
             return Response(
-                {"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Message not found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -179,7 +184,8 @@ class MessagePinToggleView(APIView):
         ).delete()
         if not deleted:
             return Response(
-                {"detail": "Message is not pinned."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("Message is not pinned.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         notify_conversation_members(message.conversation, exclude_user=request.user)
@@ -196,7 +202,7 @@ class ConversationPinnedMessagesView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

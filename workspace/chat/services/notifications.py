@@ -1,4 +1,10 @@
+from collections import defaultdict
+
+from django.utils import translation
+from django.utils.translation import gettext
+
 from workspace.core.sse_registry import notify_sse
+from workspace.users.services.settings import get_user_languages
 
 
 def notify_conversation_members(conversation, exclude_user=None):
@@ -26,7 +32,11 @@ def notification_title(conversation, author_name):
     label = (conversation.title or "").strip()
     if not label or label.casefold() == author_name.casefold():
         return author_name
-    return f"{author_name} in {label}"
+    # Translators: notification title, "Alice in Team".
+    return gettext("%(author)s in %(conversation)s") % {
+        "author": author_name,
+        "conversation": label,
+    }
 
 
 def notify_new_message(
@@ -88,7 +98,6 @@ def notify_new_message(
 
     author_name = author.get_full_name() or author.username
     preview = (body[:150] + "...") if len(body) > 150 else body
-    title = notification_title(conversation, author_name)
 
     if mention_everyone:
         priority_map = dict.fromkeys(member_ids, "high")
@@ -99,16 +108,23 @@ def notify_new_message(
     if thread_root_id:
         url = f"{url}?thread={thread_root_id}"
 
-    notify_stream(
-        recipient_ids=member_ids,
-        source=conversation,
-        origin="chat",
-        title=title,
-        body=preview,
-        url=url,
-        actor=author,
-        priority_map=priority_map,
-    )
+    # The title is stored once per recipient, so each one gets it written in
+    # the language they read rather than the author's.
+    by_language = defaultdict(list)
+    for uid, language in get_user_languages(member_ids).items():
+        by_language[language].append(uid)
+    for language, recipient_ids in by_language.items():
+        with translation.override(language):
+            notify_stream(
+                recipient_ids=recipient_ids,
+                source=conversation,
+                origin="chat",
+                title=notification_title(conversation, author_name),
+                body=preview,
+                url=url,
+                actor=author,
+                priority_map=priority_map,
+            )
 
 
 def notify_user(user_id):

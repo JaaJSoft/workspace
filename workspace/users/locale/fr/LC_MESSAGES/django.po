@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:43+0000\n"
+"POT-Creation-Date: 2026-11-13 14:04+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -116,10 +116,6 @@ msgid "Dark theme"
 msgstr "Thème sombre"
 
 #: ui/templates/users/ui/partials/settings_profile.html
-msgid "Uploading..."
-msgstr "Envoi..."
-
-#: ui/templates/users/ui/partials/settings_profile.html
 msgid "Hide custom"
 msgstr "Masquer la personnalisation"
 
@@ -155,10 +151,6 @@ msgstr "Supprimer"
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "JPEG, PNG, WebP or GIF. Max 10 MB."
 msgstr "JPEG, PNG, WebP ou GIF. 10 Mo maximum."
-
-#: ui/templates/users/ui/partials/settings_profile.html
-msgid "Crop your photo"
-msgstr "Recadrez votre photo"
 
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "About You"
@@ -539,18 +531,6 @@ msgstr "Administrateur"
 msgid "Staff"
 msgstr "Équipe"
 
-#: ui/templates/users/ui/partials/user_selector.html
-msgid "Search users..."
-msgstr "Rechercher des utilisateurs..."
-
-#: ui/templates/users/ui/partials/user_selector.html
-msgid "No users found"
-msgstr "Aucun utilisateur trouvé"
-
-#: ui/templates/users/ui/profile.html
-msgid "Send message"
-msgstr "Envoyer un message"
-
 #: ui/templates/users/ui/profile.html
 msgid "Member"
 msgstr "Membre"
@@ -696,30 +676,6 @@ msgstr "Le mot de passe actuel et le nouveau mot de passe sont obligatoires."
 #: views.py
 msgid "Current password is incorrect."
 msgstr "Le mot de passe actuel est incorrect."
-
-#: views.py
-msgid "No image provided."
-msgstr "Aucune image fournie."
-
-#: views.py
-msgid "Unsupported image type. Use JPEG, PNG, WebP, or GIF."
-msgstr "Type d’image non pris en charge. Utilisez JPEG, PNG, WebP ou GIF."
-
-#: views.py
-msgid "Image too large. Maximum size is 10 MB."
-msgstr "Image trop volumineuse. La taille maximale est de 10 Mo."
-
-#: views.py
-msgid "Invalid crop coordinates."
-msgstr "Coordonnées de recadrage invalides."
-
-#: views.py
-msgid "Crop width and height must be positive."
-msgstr "La largeur et la hauteur du recadrage doivent être positives."
-
-#: views.py
-msgid "Invalid image or crop parameters."
-msgstr "Image ou paramètres de recadrage invalides."
 
 #: views.py
 msgid "Avatar updated successfully."

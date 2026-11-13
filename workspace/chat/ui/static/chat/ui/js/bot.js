@@ -170,7 +170,7 @@ window.chatBotMixin = function chatBotMixin() {
 
     botTypingName() {
       const m = this._getBotMember();
-      return m ? this.memberDisplayName(m) : 'AI';
+      return m ? this.memberDisplayName(m) : gettext('AI');
     },
 
     async retryBotResponse(errorMsgUuid) {
@@ -255,11 +255,11 @@ window.chatBotMixin = function chatBotMixin() {
 
     async editMemory(mem) {
       const content = await AppDialog.prompt({
-        title: 'Edit memory',
+        title: gettext('Edit memory'),
         message: mem.key,
         value: mem.content,
-        placeholder: 'Memory content...',
-        okLabel: 'Save',
+        placeholder: gettext('Memory content...'),
+        okLabel: gettext('Save'),
         inputSize: 'textarea',
         icon: 'brain',
         iconClass: 'bg-secondary/10 text-secondary',
@@ -281,9 +281,9 @@ window.chatBotMixin = function chatBotMixin() {
 
     async deleteMemory(mem) {
       const ok = await AppDialog.confirm({
-        title: 'Delete memory',
-        message: `Delete memory "${mem.key}"?`,
-        okLabel: 'Delete',
+        title: gettext('Delete memory'),
+        message: interpolate(gettext('Delete memory "%(key)s"?'), { key: mem.key }, true),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -340,6 +340,15 @@ window.chatBotMixin = function chatBotMixin() {
       };
     },
 
+    goalEditorCheckCountLabel() {
+      const count = this.goalEditor.check_count;
+      return interpolate(
+        ngettext('%(count)s check-in so far', '%(count)s check-ins so far', count),
+        { count },
+        true,
+      );
+    },
+
     closeGoalEditor() {
       this.goalEditor.open = false;
     },
@@ -362,7 +371,7 @@ window.chatBotMixin = function chatBotMixin() {
     async saveGoalEdit() {
       const payload = this.goalEditorPayload();
       if (!payload.title || !payload.goal) {
-        this.goalEditor.error = 'Title and objective are required.';
+        this.goalEditor.error = gettext('Title and objective are required.');
         return;
       }
       // next_check_at is non-nullable on the model: an emptied input keeps the
@@ -376,7 +385,7 @@ window.chatBotMixin = function chatBotMixin() {
       if (updated) {
         this.goalEditor.open = false;
       } else {
-        this.goalEditor.error = 'Could not save the goal. Please try again.';
+        this.goalEditor.error = gettext('Could not save the goal. Please try again.');
       }
     },
 
@@ -413,9 +422,13 @@ window.chatBotMixin = function chatBotMixin() {
 
     async stopGoal(goal) {
       const ok = await AppDialog.confirm({
-        title: 'Stop goal',
-        message: `Stop the goal "${goal.title}"? The bot will no longer work on it.`,
-        okLabel: 'Stop',
+        title: gettext('Stop goal'),
+        message: interpolate(
+          gettext('Stop the goal "%(title)s"? The bot will no longer work on it.'),
+          { title: goal.title },
+          true,
+        ),
+        okLabel: gettext('Stop'),
         okClass: 'btn-error',
         icon: 'octagon-x',
         iconClass: 'bg-error/10 text-error',
@@ -457,22 +470,45 @@ window.chatBotMixin = function chatBotMixin() {
 
     scheduleTimingLabel(sched) {
       if (sched.kind === 'once') {
-        return 'One-time';
+        return gettext('One-time');
       }
-      let label = `Every ${sched.recurrence_interval > 1 ? sched.recurrence_interval + ' ' : ''}${sched.recurrence_unit}`;
-      if (sched.recurrence_time) {
-        label += ` at ${sched.recurrence_time.slice(0, 5)}`;
+      const count = sched.recurrence_interval || 1;
+      const time = sched.recurrence_time ? sched.recurrence_time.slice(0, 5) : '';
+      let format;
+      switch (sched.recurrence_unit) {
+        case 'hours':
+          format = time
+            ? ngettext('Every hour at %(time)s', 'Every %(count)s hours at %(time)s', count)
+            : ngettext('Every hour', 'Every %(count)s hours', count);
+          break;
+        case 'days':
+          format = time
+            ? ngettext('Every day at %(time)s', 'Every %(count)s days at %(time)s', count)
+            : ngettext('Every day', 'Every %(count)s days', count);
+          break;
+        case 'weeks':
+          format = time
+            ? ngettext('Every week at %(time)s', 'Every %(count)s weeks at %(time)s', count)
+            : ngettext('Every week', 'Every %(count)s weeks', count);
+          break;
+        case 'months':
+          format = time
+            ? ngettext('Every month at %(time)s', 'Every %(count)s months at %(time)s', count)
+            : ngettext('Every month', 'Every %(count)s months', count);
+          break;
+        default:
+          return gettext('Recurring');
       }
-      return label;
+      return interpolate(format, { count, time }, true);
     },
 
     async editSchedule(sched) {
       const prompt = await AppDialog.prompt({
-        title: 'Edit scheduled message',
-        message: 'Update the instruction for this schedule:',
+        title: gettext('Edit scheduled message'),
+        message: gettext('Update the instruction for this schedule:'),
         value: sched.prompt,
-        placeholder: 'Instruction...',
-        okLabel: 'Save',
+        placeholder: gettext('Instruction...'),
+        okLabel: gettext('Save'),
         inputSize: 'textarea',
         icon: 'clock',
         iconClass: 'bg-module/15 text-module',
@@ -503,9 +539,9 @@ window.chatBotMixin = function chatBotMixin() {
 
     async deleteSchedule(sched) {
       const ok = await AppDialog.confirm({
-        title: 'Delete scheduled message',
-        message: 'Delete this scheduled message?',
-        okLabel: 'Delete',
+        title: gettext('Delete scheduled message'),
+        message: gettext('Delete this scheduled message?'),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

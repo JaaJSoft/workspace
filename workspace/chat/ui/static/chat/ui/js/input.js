@@ -20,7 +20,7 @@ window.chatInputMixin = function chatInputMixin() {
   return {
     // ── Pending file uploads (shared dual-source input) ──────
     ...window.attachmentInputMixin({
-      pickerMessage: 'Select files to attach to the message.',
+      pickerMessage: gettext('Select files to attach to the message.'),
     }),
 
     // ── Typing indicator ─────────────────────────────────────
@@ -450,10 +450,10 @@ window.chatInputMixin = function chatInputMixin() {
       const editor = rich;
       const selected = editor.selectedText();
       const href = await AppDialog.prompt({
-        title: 'Insert link',
-        message: selected ? `Link "${selected}" to:` : '',
+        title: gettext('Insert link'),
+        message: selected ? interpolate(gettext('Link "%(text)s" to:'), { text: selected }, true) : '',
         placeholder: 'https://',
-        okLabel: 'Insert',
+        okLabel: gettext('Insert'),
         icon: 'link',
       });
       if (editor !== rich) return;
@@ -499,7 +499,7 @@ window.chatInputMixin = function chatInputMixin() {
       // Add @everyone option for group conversations
       if (this.activeConversation.kind === 'group') {
         if (!q || 'everyone'.startsWith(q)) {
-          results.push({ username: 'everyone', first_name: 'Notify', last_name: 'everyone', id: null });
+          results.push({ username: 'everyone', first_name: gettext('Notify everyone'), last_name: '', id: null });
         }
       }
 
@@ -575,9 +575,21 @@ window.chatInputMixin = function chatInputMixin() {
     typingText() {
       const users = this.activeTypingUsers();
       if (users.length === 0) return '';
-      if (users.length === 1) return `${users[0].display_name} is typing`;
-      if (users.length === 2) return `${users[0].display_name} and ${users[1].display_name} are typing`;
-      return `${users[0].display_name} and ${users.length - 1} others are typing`;
+      const first = users[0].display_name;
+      if (users.length === 1) return interpolate(gettext('%(name)s is typing'), { name: first }, true);
+      if (users.length === 2) {
+        return interpolate(
+          gettext('%(name)s and %(other)s are typing'),
+          { name: first, other: users[1].display_name },
+          true,
+        );
+      }
+      const count = users.length - 1;
+      return interpolate(
+        ngettext('%(name)s and %(count)s other are typing', '%(name)s and %(count)s others are typing', count),
+        { name: first, count },
+        true,
+      );
     },
   };
 };

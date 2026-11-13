@@ -1,5 +1,6 @@
 from django.db import DEFAULT_DB_ALIAS, transaction
 from django.utils import timezone
+from django.utils.translation import gettext
 
 # One order for every member list, so the member panel and the mention
 # autocomplete present people as they joined rather than as the database
@@ -88,8 +89,8 @@ def display_name_for(kind, title, partner=None):
     if kind == Conversation.Kind.DM:
         if partner:
             return partner.get_full_name() or partner.username
-        return "Conversation"
-    return "Group"
+        return gettext("Conversation")
+    return gettext("Group")
 
 
 def backfill_group_titles(conversation_model, member_model, using=DEFAULT_DB_ALIAS):

@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Subquery
+from django.utils.translation import gettext, gettext_lazy
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -40,9 +41,11 @@ from ..services.threads import mark_conversation_threads_read
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-BOTS_ONLY_IN_DIRECT_CONVERSATIONS = "Bots can only be in a direct conversation."
-NOT_A_MEMBER = "Not a member of this conversation."
-GROUP_ADMINS_ONLY = "Only group admins can do this."
+BOTS_ONLY_IN_DIRECT_CONVERSATIONS = gettext_lazy(
+    "Bots can only be in a direct conversation."
+)
+NOT_A_MEMBER = gettext_lazy("Not a member of this conversation.")
+GROUP_ADMINS_ONLY = gettext_lazy("Only group admins can do this.")
 
 
 def _trigger_bot_response(conversation_id, message, sender):
@@ -165,7 +168,7 @@ class ConversationListView(CacheControlMixin, APIView):
             groups_by_pk = {g.pk: g for g in Group.objects.filter(pk__in=group_ids)}
             if len(groups_by_pk) != len(set(group_ids)):
                 return Response(
-                    {"detail": "One or more group IDs are invalid."},
+                    {"detail": gettext("One or more group IDs are invalid.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             # Preserve request order so the blank-title fallback (first group's
@@ -195,7 +198,7 @@ class ConversationListView(CacheControlMixin, APIView):
         )
         if users.count() != len(member_ids):
             return Response(
-                {"detail": "One or more user IDs are invalid."},
+                {"detail": gettext("One or more user IDs are invalid.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -206,7 +209,7 @@ class ConversationListView(CacheControlMixin, APIView):
             )
         if not can_add_users(request.user, users):
             return Response(
-                {"detail": "You do not have access to this bot."},
+                {"detail": gettext("You do not have access to this bot.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -220,7 +223,7 @@ class ConversationListView(CacheControlMixin, APIView):
             other_user = users.first()
             if other_user.id == request.user.id:
                 return Response(
-                    {"detail": "Cannot create a DM with yourself."},
+                    {"detail": gettext("Cannot create a DM with yourself.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if hasattr(other_user, "bot_profile"):
@@ -285,7 +288,7 @@ class ConversationDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -341,13 +344,13 @@ class ConversationDetailView(APIView):
             ).exists()
             if conversation.kind != Conversation.Kind.GROUP and not is_bot_conv:
                 return Response(
-                    {"detail": "Only group conversations can be renamed."},
+                    {"detail": gettext("Only group conversations can be renamed.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             title = request.data["title"].strip() if request.data["title"] else ""
             if not title:
                 return Response(
-                    {"detail": "Title cannot be empty."},
+                    {"detail": gettext("Title cannot be empty.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             conversation.title = title
@@ -360,7 +363,11 @@ class ConversationDetailView(APIView):
 
         if not update_fields:
             return Response(
-                {"detail": "No fields to update. Provide title or description."},
+                {
+                    "detail": gettext(
+                        "No fields to update. Provide title or description."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -378,14 +385,16 @@ class ConversationDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if is_group_linked(conversation_id):
             return Response(
                 {
-                    "detail": "Membership of a group-linked conversation follows its groups."
+                    "detail": gettext(
+                        "Membership of a group-linked conversation follows its groups."
+                    )
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
@@ -421,7 +430,7 @@ class ConversationMembersView(APIView):
         conversation = Conversation.objects.get(pk=conversation_id)
         if conversation.kind != Conversation.Kind.GROUP:
             return Response(
-                {"detail": "Can only add members to group conversations."},
+                {"detail": gettext("Can only add members to group conversations.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -434,7 +443,9 @@ class ConversationMembersView(APIView):
         if is_group_linked(conversation.pk):
             return Response(
                 {
-                    "detail": "Members of a group-linked conversation are managed through its groups."
+                    "detail": gettext(
+                        "Members of a group-linked conversation are managed through its groups."
+                    )
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
@@ -448,7 +459,7 @@ class ConversationMembersView(APIView):
         )
         if users.count() != len(user_ids):
             return Response(
-                {"detail": "One or more user IDs are invalid."},
+                {"detail": gettext("One or more user IDs are invalid.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not can_join_group(users):
@@ -458,7 +469,7 @@ class ConversationMembersView(APIView):
             )
         if not can_add_users(request.user, users):
             return Response(
-                {"detail": "You do not have access to this bot."},
+                {"detail": gettext("You do not have access to this bot.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -526,7 +537,7 @@ class ConversationNotificationLevelView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -558,7 +569,7 @@ def _group_admin_refusal(user, conversation_id):
         pk=conversation_id, kind=Conversation.Kind.GROUP
     ).exists():
         return Response(
-            {"detail": "Only group conversations have admins."},
+            {"detail": gettext("Only group conversations have admins.")},
             status=status.HTTP_400_BAD_REQUEST,
         )
     if role != ConversationMember.Role.ADMIN:
@@ -597,13 +608,13 @@ class ConversationMemberDetailView(APIView):
         target_membership = _active_member(conversation_id, user_id)
         if not target_membership:
             return Response(
-                {"detail": "User is not an active member."},
+                {"detail": gettext("User is not an active member.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if not set_member_role(target_membership, ser.validated_data["role"]):
             return Response(
-                {"detail": "A group needs at least one admin."},
+                {"detail": gettext("A group needs at least one admin.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -631,21 +642,23 @@ class ConversationMemberDetailView(APIView):
         if is_group_linked(conversation_id):
             return Response(
                 {
-                    "detail": "Members of a group-linked conversation are managed through its groups."
+                    "detail": gettext(
+                        "Members of a group-linked conversation are managed through its groups."
+                    )
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if user_id == request.user.id:
             return Response(
-                {"detail": "Cannot remove yourself. Use leave instead."},
+                {"detail": gettext("Cannot remove yourself. Use leave instead.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         target_membership = _active_member(conversation_id, user_id)
         if not target_membership:
             return Response(
-                {"detail": "User is not an active member."},
+                {"detail": gettext("User is not an active member.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 

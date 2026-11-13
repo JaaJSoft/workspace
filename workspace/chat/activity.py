@@ -1,5 +1,6 @@
 from django.db.models import Count
 from django.db.models.functions import TruncDate
+from django.utils.translation import gettext
 
 from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
@@ -62,8 +63,8 @@ class ChatActivityProvider(ActivityProvider):
             events.append(
                 {
                     "icon": "message-circle-plus",
-                    "label": "Group created",
-                    "description": conv.title or "Untitled group",
+                    "label": gettext("Group created"),
+                    "description": conv.title or gettext("Untitled group"),
                     "timestamp": conv.created_at,
                     "url": f"/chat/{conv.pk}",
                     "actor": {

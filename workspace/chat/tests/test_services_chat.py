@@ -340,18 +340,22 @@ class NotifyNewMessageTests(TestCase):
     def test_batched_flow_stays_constant_in_query_count(self, mock_push, mock_sse):
         """Regression guard: the batched flow must not slip back to N+1.
 
-        The 4 queries are:
+        The 5 queries are:
             1. ConversationMember lookup for recipient ids.
-            2. SELECT existing chat notifs (batch lookup).
-            3. bulk_update for the merge path (CASE WHEN).
-            4. bulk_create for the new path.
+            2. The recipients' interface languages (one lookup for all).
+            3. SELECT existing chat notifs (batch lookup).
+            4. bulk_update for the merge path (CASE WHEN).
+            5. bulk_create for the new path.
+
+        Steps 3-5 run once per language the recipients read, never per
+        recipient.
         """
         # Prime one of the two recipients so we exercise both update AND
         # create paths on the second call.
         notify_new_message(self.conv, self.author, "prime alice")
         Notification.objects.filter(recipient=self.bob).delete()
 
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             notify_new_message(self.conv, self.author, "second")
 
         # Query count must not scale with the number of recipients.
@@ -359,7 +363,7 @@ class NotifyNewMessageTests(TestCase):
         dave = User.objects.create_user(username="dave", password="p")
         ConversationMember.objects.create(conversation=self.conv, user=charlie)
         ConversationMember.objects.create(conversation=self.conv, user=dave)
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             notify_new_message(self.conv, self.author, "with more members")
 
     def test_unread_count_reflects_new_message_immediately(self, mock_push, mock_sse):

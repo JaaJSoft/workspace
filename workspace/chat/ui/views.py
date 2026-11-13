@@ -6,6 +6,7 @@ from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_obje
 from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.translation import gettext, ngettext, pgettext_lazy
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.chat.models import (
@@ -18,6 +19,7 @@ from workspace.chat.models import (
 )
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.avatar import avatar_initial_for
+from workspace.chat.services.calls import system_call_label
 from workspace.chat.services.conversations import (
     active_members_queryset,
     display_name_for,
@@ -43,14 +45,31 @@ def _display(user):
     return user.get_full_name() or user.username
 
 
+def _last_message_preview(message):
+    """The "Alice: hello" line under a conversation in the sidebar."""
+    if message.kind == Message.Kind.SYSTEM and isinstance(message.tool_data, dict):
+        text = system_call_label(message.tool_data)
+    elif body := message.body:
+        text = body[:30] + "\u2026" if len(body) > 30 else body
+    elif count := len(message.attachments.all()):
+        text = ngettext("sent a file", "sent %(count)s files", count) % {"count": count}
+    else:
+        text = ""
+    # Translators: a conversation's last message in the sidebar, "Alice: hello".
+    return gettext("%(author)s: %(text)s") % {
+        "author": _display(message.author),
+        "text": text,
+    }
+
+
 # Entrance animation styles offered in the preferences panel; the values are
 # the data-msg-animation variants chat.css knows.
 MESSAGE_ANIMATIONS = [
-    ("slide", "Slide"),
-    ("pop", "Pop"),
-    ("fade", "Fade"),
-    ("bounce", "Bounce"),
-    ("none", "None"),
+    ("slide", pgettext_lazy("message animation", "Slide")),
+    ("pop", pgettext_lazy("message animation", "Pop")),
+    ("fade", pgettext_lazy("message animation", "Fade")),
+    ("bounce", pgettext_lazy("message animation", "Bounce")),
+    ("none", pgettext_lazy("message animation", "None")),
 ]
 
 
@@ -137,19 +156,10 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
 
         # Last message preview & time ago
         if c._last_message:
-            body = c._last_message.body
-            if body:
-                if len(body) > 30:
-                    body = body[:30] + "\u2026"
-                c.last_message_preview = f"{_display(c._last_message.author)}: {body}"
-            elif att := list(c._last_message.attachments.all()):
-                label = "sent a file" if len(att) == 1 else f"sent {len(att)} files"
-                c.last_message_preview = f"{_display(c._last_message.author)}: {label}"
-            else:
-                c.last_message_preview = f"{_display(c._last_message.author)}: "
+            c.last_message_preview = _last_message_preview(c._last_message)
             c.time_ago = time_ago(c._last_message.created_at, now=now)
         else:
-            c.last_message_preview = "No messages yet"
+            c.last_message_preview = gettext("No messages yet")
             c.time_ago = ""
 
     return conv_list

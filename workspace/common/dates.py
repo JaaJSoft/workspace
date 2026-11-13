@@ -1,7 +1,8 @@
 """Datetime presentation helpers shared across modules."""
 
 from django.utils import timezone
-from django.utils.translation import gettext
+from django.utils.formats import date_format
+from django.utils.translation import gettext, pgettext
 
 
 def time_ago(value, now=None):
@@ -13,7 +14,8 @@ def time_ago(value, now=None):
 
     Buckets: ``just now`` (under a minute), ``5m ago``, ``2h ago``, ``3d ago``
     (under a week), then the absolute date - ``Feb 01`` within the current
-    year, ``Feb 01, 2025`` otherwise - evaluated in the active timezone.
+    year, ``Feb 01, 2025`` otherwise (``1 févr.`` and ``1 févr. 2025`` in
+    French) - evaluated in the active timezone and language.
     """
     if not value:
         return ""
@@ -30,5 +32,10 @@ def time_ago(value, now=None):
         return gettext("%(count)sd ago") % {"count": int(diff // 86400)}
     local = timezone.localtime(value)
     if local.year == timezone.localtime(now).year:
-        return local.strftime("%b %d")
-    return local.strftime("%b %d, %Y")
+        # Translators: Django date format of a "time ago" label older than a
+        # week, "Feb 01". Mirror the month and day order of the browser's
+        # Intl short date in your language (French: "j N", "1 juil."); the
+        # two only disagree on a few month abbreviations ("fév." / "févr.").
+        return date_format(local, pgettext("time ago date", "M d"))
+    # Translators: same as "M d", with the year: "Feb 01, 2025".
+    return date_format(local, pgettext("time ago date with year", "M d, Y"))

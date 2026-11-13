@@ -1,0 +1,445 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-13 14:14+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Edit memory"
+msgstr "Modifier le souvenir"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Memory content..."
+msgstr "Contenu du souvenir..."
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Delete memory"
+msgstr "Supprimer le souvenir"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Delete memory \"%(key)s\"?"
+msgstr "Supprimer le souvenir « %(key)s » ?"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "%(count)s check-in so far"
+msgid_plural "%(count)s check-ins so far"
+msgstr[0] "%(count)s passage jusqu’ici"
+msgstr[1] "%(count)s de passages jusqu’ici"
+msgstr[2] "%(count)s passages jusqu’ici"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Title and objective are required."
+msgstr "Le titre et l’objectif sont requis."
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Could not save the goal. Please try again."
+msgstr "Impossible d’enregistrer l’objectif. Veuillez réessayer."
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Stop goal"
+msgstr "Arrêter l’objectif"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Stop the goal \"%(title)s\"? The bot will no longer work on it."
+msgstr "Arrêter l’objectif « %(title)s » ? Le bot n’y travaillera plus."
+
+#: ui/static/chat/ui/js/bot.js
+msgid "One-time"
+msgstr "Une seule fois"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every hour at %(time)s"
+msgid_plural "Every %(count)s hours at %(time)s"
+msgstr[0] "Toutes les heures à %(time)s"
+msgstr[1] "Toutes les %(count)s heures à %(time)s"
+msgstr[2] "Toutes les %(count)s heures à %(time)s"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every hour"
+msgid_plural "Every %(count)s hours"
+msgstr[0] "Toutes les heures"
+msgstr[1] "Toutes les %(count)s heures"
+msgstr[2] "Toutes les %(count)s heures"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every day at %(time)s"
+msgid_plural "Every %(count)s days at %(time)s"
+msgstr[0] "Tous les jours à %(time)s"
+msgstr[1] "Tous les %(count)s jours à %(time)s"
+msgstr[2] "Tous les %(count)s jours à %(time)s"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every day"
+msgid_plural "Every %(count)s days"
+msgstr[0] "Tous les jours"
+msgstr[1] "Tous les %(count)s jours"
+msgstr[2] "Tous les %(count)s jours"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every week at %(time)s"
+msgid_plural "Every %(count)s weeks at %(time)s"
+msgstr[0] "Toutes les semaines à %(time)s"
+msgstr[1] "Toutes les %(count)s semaines à %(time)s"
+msgstr[2] "Toutes les %(count)s semaines à %(time)s"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every week"
+msgid_plural "Every %(count)s weeks"
+msgstr[0] "Toutes les semaines"
+msgstr[1] "Toutes les %(count)s semaines"
+msgstr[2] "Toutes les %(count)s semaines"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every month at %(time)s"
+msgid_plural "Every %(count)s months at %(time)s"
+msgstr[0] "Tous les mois à %(time)s"
+msgstr[1] "Tous les %(count)s mois à %(time)s"
+msgstr[2] "Tous les %(count)s mois à %(time)s"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Every month"
+msgid_plural "Every %(count)s months"
+msgstr[0] "Tous les mois"
+msgstr[1] "Tous les %(count)s mois"
+msgstr[2] "Tous les %(count)s mois"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Recurring"
+msgstr "Récurrent"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Edit scheduled message"
+msgstr "Modifier le message programmé"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Update the instruction for this schedule:"
+msgstr "Modifiez la consigne de cette programmation :"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Instruction..."
+msgstr "Consigne..."
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Delete scheduled message"
+msgstr "Supprimer le message programmé"
+
+#: ui/static/chat/ui/js/bot.js
+msgid "Delete this scheduled message?"
+msgstr "Supprimer ce message programmé ?"
+
+#: ui/static/chat/ui/js/call.js
+msgid "Microphone permission is required to join a call."
+msgstr "L’accès au micro est nécessaire pour rejoindre un appel."
+
+#: ui/static/chat/ui/js/call.js
+msgid "This call is full."
+msgstr "Cet appel est complet."
+
+#: ui/static/chat/ui/js/call.js
+msgid "Allow pop-ups to open the voice room."
+msgstr "Autorisez les fenêtres pop-up pour ouvrir le salon vocal."
+
+#: ui/static/chat/ui/js/call.js
+msgid "%(count)s participant"
+msgid_plural "%(count)s participants"
+msgstr[0] "%(count)s participant"
+msgstr[1] "%(count)s de participants"
+msgstr[2] "%(count)s participants"
+
+#: ui/static/chat/ui/js/call.js
+msgid "Camera permission is required to turn on video."
+msgstr "L’accès à la caméra est nécessaire pour activer la vidéo."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Microphone access"
+msgstr "Accès au micro"
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Network / ICE servers"
+msgstr "Réseau / serveurs ICE"
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Server relay + WebRTC loopback"
+msgstr "Relais serveur + boucle WebRTC"
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Everything works. Your connection is ready for calls."
+msgstr "Tout fonctionne. Votre connexion est prête pour les appels."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Calls should work, but some checks need attention."
+msgstr ""
+"Les appels devraient fonctionner, mais certaines vérifications demandent "
+"votre attention."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Connection problem detected. Calls may not work here."
+msgstr ""
+"Problème de connexion détecté. Les appels risquent de ne pas fonctionner ici."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Requesting microphone..."
+msgstr "Demande d’accès au micro..."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Microphone captured."
+msgstr "Micro capté."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Microphone unavailable or permission denied."
+msgstr "Micro indisponible ou accès refusé."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Gathering ICE candidates..."
+msgstr "Collecte des candidats ICE..."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "TURN reachable."
+msgstr "TURN joignable."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "STUN reachable (no TURN)."
+msgstr "STUN joignable (sans TURN)."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Local network only."
+msgstr "Réseau local uniquement."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "No candidates gathered."
+msgstr "Aucun candidat collecté."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Connecting through the server..."
+msgstr "Connexion via le serveur..."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Could not create peer connections."
+msgstr "Impossible de créer les connexions pair à pair."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Server relay OK, but the media connection timed out (NAT/firewall?)."
+msgstr "Relais serveur OK, mais la connexion média a expiré (NAT/pare-feu ?)."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "No response from the server relay."
+msgstr "Aucune réponse du relais serveur."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Connected end-to-end through the server."
+msgstr "Connecté de bout en bout via le serveur."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Server relay OK. Establishing media..."
+msgstr "Relais serveur OK. Établissement du média..."
+
+#: ui/static/chat/ui/js/call_diagnostic.js
+msgid "Failed to create the loopback offer."
+msgstr "Impossible de créer l’offre de boucle."
+
+#: ui/static/chat/ui/js/conversations.js
+msgid "Mentions only"
+msgstr "Mentions uniquement"
+
+#: ui/static/chat/ui/js/conversations.js
+msgid "All messages"
+msgstr "Tous les messages"
+
+#: ui/static/chat/ui/js/conversations.js
+msgid "Direct message"
+msgstr "Message privé"
+
+#: ui/static/chat/ui/js/conversations.js
+msgid "%(count)s member"
+msgid_plural "%(count)s members"
+msgstr[0] "%(count)s membre"
+msgstr[1] "%(count)s de membres"
+msgstr[2] "%(count)s membres"
+
+#: ui/static/chat/ui/js/conversations.js
+msgid "Could not change the notification level"
+msgstr "Impossible de changer le niveau de notification"
+
+#: ui/static/chat/ui/js/input.js
+msgid "Select files to attach to the message."
+msgstr "Sélectionnez les fichiers à joindre au message."
+
+#: ui/static/chat/ui/js/input.js
+msgid "Insert link"
+msgstr "Insérer un lien"
+
+#: ui/static/chat/ui/js/input.js
+msgid "Link \"%(text)s\" to:"
+msgstr "Lier « %(text)s » à :"
+
+#: ui/static/chat/ui/js/input.js
+msgid "Insert"
+msgstr "Insérer"
+
+#: ui/static/chat/ui/js/input.js
+msgid "Notify everyone"
+msgstr "Notifier tout le monde"
+
+#: ui/static/chat/ui/js/input.js
+msgid "%(name)s is typing"
+msgstr "%(name)s écrit"
+
+#: ui/static/chat/ui/js/input.js
+msgid "%(name)s and %(other)s are typing"
+msgstr "%(name)s et %(other)s écrivent"
+
+#: ui/static/chat/ui/js/input.js
+msgid "%(name)s and %(count)s other are typing"
+msgid_plural "%(name)s and %(count)s others are typing"
+msgstr[0] "%(name)s et %(count)s autre écrivent"
+msgstr[1] "%(name)s et %(count)s d’autres écrivent"
+msgstr[2] "%(name)s et %(count)s autres écrivent"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Rename conversation"
+msgstr "Renommer la conversation"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Rename group"
+msgstr "Renommer le groupe"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Enter a new name for this conversation:"
+msgstr "Saisissez un nouveau nom pour cette conversation :"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Enter a new name for this group:"
+msgstr "Saisissez un nouveau nom pour ce groupe :"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Conversation name"
+msgstr "Nom de la conversation"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Group name"
+msgstr "Nom du groupe"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Edit description"
+msgstr "Modifier la description"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Enter a description for this conversation:"
+msgstr "Saisissez une description pour cette conversation :"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Add a description..."
+msgstr "Ajouter une description..."
+
+#: ui/static/chat/ui/js/members.js
+msgid "Clear conversation"
+msgstr "Vider la conversation"
+
+#: ui/static/chat/ui/js/members.js
+msgid ""
+"This will permanently delete all messages and media in this conversation. "
+"This cannot be undone."
+msgstr ""
+"Tous les messages et médias de cette conversation seront définitivement "
+"supprimés. Cette action est irréversible."
+
+#: ui/static/chat/ui/js/members.js
+msgid "Leave conversation"
+msgstr "Quitter la conversation"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Are you sure you want to leave this conversation?"
+msgstr "Voulez-vous vraiment quitter cette conversation ?"
+
+#: ui/static/chat/ui/js/members.js
+msgctxt "conversation"
+msgid "Leave"
+msgstr "Quitter"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Remove %(name)s from this group?"
+msgstr "Retirer %(name)s de ce groupe ?"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Remove this member from this group?"
+msgstr "Retirer ce membre de ce groupe ?"
+
+#: ui/static/chat/ui/js/members.js
+msgctxt "confirm button"
+msgid "Remove"
+msgstr "Retirer"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Remove avatar"
+msgstr "Retirer l’avatar"
+
+#: ui/static/chat/ui/js/members.js
+msgid "Remove the group avatar?"
+msgstr "Retirer l’avatar du groupe ?"
+
+#: ui/static/chat/ui/js/message_shell.js ui/static/chat/ui/js/messages.js
+msgid "Message deleted"
+msgstr "Message supprimé"
+
+#: ui/static/chat/ui/js/messages.js
+msgid "Failed to send the voice message."
+msgstr "Impossible d’envoyer le message vocal."
+
+#: ui/static/chat/ui/js/messages.js
+msgid "Are you sure you want to delete this message?"
+msgstr "Voulez-vous vraiment supprimer ce message ?"
+
+#: ui/static/chat/ui/js/messages.js
+msgid "Message copied"
+msgstr "Message copié"
+
+#: ui/static/chat/ui/js/messages.js
+msgid "Failed to copy message"
+msgstr "Impossible de copier le message"
+
+#: ui/static/chat/ui/js/panels.js
+msgid "%(count)s check-in"
+msgid_plural "%(count)s check-ins"
+msgstr[0] "%(count)s passage"
+msgstr[1] "%(count)s de passages"
+msgstr[2] "%(count)s passages"
+
+#: ui/static/chat/ui/js/recorder.js
+msgid "Microphone access was denied."
+msgstr "L’accès au micro a été refusé."
+
+#: ui/static/chat/ui/js/recorder.js
+msgid "Recording could not start."
+msgstr "Impossible de démarrer l’enregistrement."
+
+#: ui/static/chat/ui/js/threads.js
+msgid "%(count)s reply"
+msgid_plural "%(count)s replies"
+msgstr[0] "%(count)s réponse"
+msgstr[1] "%(count)s de réponses"
+msgstr[2] "%(count)s réponses"
+
+#: ui/static/chat/ui/js/ui_helpers.js
+msgid "%(count)s pin"
+msgid_plural "%(count)s pins"
+msgstr[0] "%(count)s épinglé"
+msgstr[1] "%(count)s d’épinglés"
+msgstr[2] "%(count)s épinglés"
+
+#: ui/static/chat/ui/js/ui_helpers.js
+msgid "Call in progress"
+msgstr "Appel en cours"
+
+#: ui/static/chat/ui/js/ui_helpers.js
+msgid "Call in progress - %(count)s participant"
+msgid_plural "Call in progress - %(count)s participants"
+msgstr[0] "Appel en cours - %(count)s participant"
+msgstr[1] "Appel en cours - %(count)s de participants"
+msgstr[2] "Appel en cours - %(count)s participants"

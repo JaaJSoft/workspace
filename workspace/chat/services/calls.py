@@ -9,7 +9,8 @@ reaped without a clean "leave". Lifecycle mutations fan out cache events via
 from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
-from django.utils import timezone
+from django.utils import timezone, translation
+from django.utils.translation import gettext
 
 from workspace.core.sse_registry import notify_sse
 
@@ -19,14 +20,33 @@ DEFAULT_MEDIA_STATE = {"audio": True}
 
 
 def format_duration(seconds):
-    """Human label for a call duration. No em-dash; uses 'min' / 'h'."""
+    """Human label for a call duration, in the active language.
+
+    No em-dash; uses 'min' / 'h'.
+    """
     if seconds < 60:
-        return f"{seconds}s"
+        # Translators: a call duration under a minute, "45s".
+        return gettext("%(seconds)ss") % {"seconds": seconds}
     if seconds < 3600:
-        return f"{seconds // 60} min"
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    return f"{hours} h {minutes:02d}"
+        # Translators: a call duration under an hour, "12 min".
+        return gettext("%(minutes)s min") % {"minutes": seconds // 60}
+    # Translators: a call duration of an hour or more, "1 h 05".
+    return gettext("%(hours)s h %(minutes)s") % {
+        "hours": seconds // 3600,
+        "minutes": f"{(seconds % 3600) // 60:02d}",
+    }
+
+
+def call_duration_label(tool_data):
+    """A call message's duration in the active language, or "" while it runs.
+
+    Formatted from the stored seconds at read time: the label stored next to
+    them was written once, in the source language, for every member.
+    """
+    seconds = tool_data.get("duration_seconds")
+    if isinstance(seconds, int):
+        return format_duration(seconds)
+    return tool_data.get("duration_label") or ""
 
 
 def presence_ttl():
@@ -132,12 +152,22 @@ def _broadcast(conversation_id, event, data, exclude_user_id=None):
         notify_sse("chat", uid)
 
 
-def _render_system_call_body(state, duration_label=None):
+def system_call_label(tool_data):
+    """What a call's system message says, in the active language."""
+    if tool_data.get("state") == "ended":
+        if duration := call_duration_label(tool_data):
+            return gettext("Call ended - %(duration)s") % {"duration": duration}
+        return gettext("Call ended")
+    return gettext("Call started")
+
+
+def _render_system_call_body(state, duration_seconds=None):
     """Plain-text fallback body. The visible bubble is rendered by the template
-    from tool_data; body keeps the message readable in previews/search."""
-    if state == "ended":
-        return f"Call ended - {duration_label}" if duration_label else "Call ended"
-    return "Call started"
+    from tool_data, and the sidebar preview by system_call_label, each in the
+    reader's language; the body is stored once for every member, so it stays
+    in the source language."""
+    with translation.override(settings.LANGUAGE_CODE):
+        return system_call_label({"state": state, "duration_seconds": duration_seconds})
 
 
 def _active_session_for_update(conversation_id):
@@ -295,7 +325,8 @@ def _end_call(session):
     session.save(update_fields=["state", "ended_at"])
 
     duration = session.duration_seconds or 0
-    label = format_duration(duration)
+    with translation.override(settings.LANGUAGE_CODE):
+        label = format_duration(duration)
     msg = session.system_message
     if msg is not None:
         data = dict(msg.tool_data or {})
@@ -303,7 +334,7 @@ def _end_call(session):
         data["duration_seconds"] = duration
         data["duration_label"] = label
         msg.tool_data = data
-        msg.body = _render_system_call_body("ended", label)
+        msg.body = _render_system_call_body("ended", duration)
         msg.edited_at = timezone.now()
         msg.save(update_fields=["tool_data", "body", "edited_at"])
 

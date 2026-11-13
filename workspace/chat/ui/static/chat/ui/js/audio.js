@@ -98,7 +98,8 @@ window.chatAudioPlayer = function chatAudioPlayer(uuid, knownDuration) {
     },
 
     speedLabel() {
-      return 'x' + this.speed;
+      const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+      return 'x' + this.speed.toLocaleString(locale);
     },
 
     elapsedLabel() {

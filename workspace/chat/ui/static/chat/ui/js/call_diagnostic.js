@@ -93,9 +93,9 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
     diagSummary: '',          // overall verdict label, set when the run ends
     diagRunId: '',            // nonce guarding echoes against stale/foreign runs
     diagSteps: [
-      { key: 'mic', label: 'Microphone access', status: 'pending', detail: '' },
-      { key: 'ice', label: 'Network / ICE servers', status: 'pending', detail: '' },
-      { key: 'loopback', label: 'Server relay + WebRTC loopback', status: 'pending', detail: '' },
+      { key: 'mic', label: gettext('Microphone access'), status: 'pending', detail: '' },
+      { key: 'ice', label: gettext('Network / ICE servers'), status: 'pending', detail: '' },
+      { key: 'loopback', label: gettext('Server relay + WebRTC loopback'), status: 'pending', detail: '' },
     ],
     _diagPeers: { caller: null, callee: null },
     _diagStream: null,
@@ -181,45 +181,45 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
 
       const micOk = this._diagStep('mic').status === 'pass';
       if (loopOk && micOk && iceVerdict !== 'warn') {
-        this.diagSummary = 'Everything works. Your connection is ready for calls.';
+        this.diagSummary = gettext('Everything works. Your connection is ready for calls.');
       } else if (loopOk) {
-        this.diagSummary = 'Calls should work, but some checks need attention.';
+        this.diagSummary = gettext('Calls should work, but some checks need attention.');
       } else {
-        this.diagSummary = 'Connection problem detected. Calls may not work here.';
+        this.diagSummary = gettext('Connection problem detected. Calls may not work here.');
       }
       this.diagRunning = false;
     },
 
     async _diagStepMic() {
       const runId = this.diagRunId;
-      this._diagSet('mic', 'running', 'Requesting microphone...');
+      this._diagSet('mic', 'running', gettext('Requesting microphone...'));
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         // If the run was closed/superseded while the prompt was open, drop the
         // capture instead of leaving the microphone live and clobbering state.
         if (this.diagRunId !== runId) { stream.getTracks().forEach((t) => t.stop()); return; }
         this._diagStream = stream;
-        this._diagSet('mic', 'pass', 'Microphone captured.');
+        this._diagSet('mic', 'pass', gettext('Microphone captured.'));
       } catch (e) {
         if (this.diagRunId !== runId) return;
-        this._diagSet('mic', 'fail', 'Microphone unavailable or permission denied.');
+        this._diagSet('mic', 'fail', gettext('Microphone unavailable or permission denied.'));
       }
     },
 
     async _diagStepIce() {
       const runId = this.diagRunId;
-      this._diagSet('ice', 'running', 'Gathering ICE candidates...');
+      this._diagSet('ice', 'running', gettext('Gathering ICE candidates...'));
       const candidates = await this._diagGatherCandidates();
       if (this.diagRunId !== runId) return 'fail'; // run closed/superseded mid-gather
       const summary = window.chatDiagSummarizeIce(candidates);
       const parts = [];
-      if (summary.relay) parts.push('TURN reachable');
-      else if (summary.srflx) parts.push('STUN reachable (no TURN)');
-      else if (summary.host) parts.push('local network only');
-      else parts.push('no candidates gathered');
+      if (summary.relay) parts.push(gettext('TURN reachable.'));
+      else if (summary.srflx) parts.push(gettext('STUN reachable (no TURN).'));
+      else if (summary.host) parts.push(gettext('Local network only.'));
+      else parts.push(gettext('No candidates gathered.'));
       const status = summary.verdict === 'pass' ? 'pass'
         : (summary.verdict === 'warn' ? 'warn' : 'fail');
-      this._diagSet('ice', status, parts[0] + '.');
+      this._diagSet('ice', status, parts[0]);
       return summary.verdict;
     },
 
@@ -256,7 +256,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
 
     _diagStepLoopback() {
       const runId = this.diagRunId;
-      this._diagSet('loopback', 'running', 'Connecting through the server...');
+      this._diagSet('loopback', 'running', gettext('Connecting through the server...'));
       return new Promise((resolve) => {
         let settled = false;
         const ice = this._loadIceServers();
@@ -265,7 +265,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           caller = new RTCPeerConnection({ iceServers: ice });
           callee = new RTCPeerConnection({ iceServers: ice });
         } catch (e) {
-          this._diagSet('loopback', 'fail', 'Could not create peer connections.');
+          this._diagSet('loopback', 'fail', gettext('Could not create peer connections.'));
           resolve(false);
           return;
         }
@@ -294,8 +294,8 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
         };
         const timer = setTimeout(
           () => finish(false, serverProven
-            ? 'Server relay OK, but the media connection timed out (NAT/firewall?).'
-            : 'No response from the server relay.'),
+            ? gettext('Server relay OK, but the media connection timed out (NAT/firewall?).')
+            : gettext('No response from the server relay.')),
           25000,
         );
 
@@ -314,7 +314,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
             caller.connectionState, caller.iceConnectionState,
             callee.connectionState, callee.iceConnectionState,
           )) {
-            finish(true, 'Connected end-to-end through the server.');
+            finish(true, gettext('Connected end-to-end through the server.'));
           }
         };
         caller.onconnectionstatechange = onConnected;
@@ -326,7 +326,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
         this._diagOnServerEcho = () => {
           if (!serverProven) {
             serverProven = true;
-            this._diagSet('loopback', 'running', 'Server relay OK. Establishing media...');
+            this._diagSet('loopback', 'running', gettext('Server relay OK. Establishing media...'));
           }
         };
 
@@ -341,7 +341,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
         caller.createOffer()
           .then((offer) => caller.setLocalDescription(offer))
           .then(() => this._diagSendSdp(caller, 'to_callee', 'offer', runId))
-          .catch(() => finish(false, 'Failed to create the loopback offer.'));
+          .catch(() => finish(false, gettext('Failed to create the loopback offer.')));
 
         // Resend the offer until the answer arrives, so a single dropped echo on
         // the signaling relay does not strand the loopback. The callee resends

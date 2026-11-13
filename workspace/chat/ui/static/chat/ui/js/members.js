@@ -67,11 +67,11 @@ window.chatMembersMixin = function chatMembersMixin() {
       if (!isBot && !this.isGroupAdmin()) return;
       const current = this.activeConversation.title || '';
       const title = await AppDialog.prompt({
-        title: isBot ? 'Rename conversation' : 'Rename group',
-        message: isBot ? 'Enter a new name for this conversation:' : 'Enter a new name for this group:',
+        title: isBot ? gettext('Rename conversation') : gettext('Rename group'),
+        message: isBot ? gettext('Enter a new name for this conversation:') : gettext('Enter a new name for this group:'),
         value: current,
-        placeholder: isBot ? 'Conversation name' : 'Group name',
-        okLabel: 'Rename',
+        placeholder: isBot ? gettext('Conversation name') : gettext('Group name'),
+        okLabel: gettext('Rename'),
         icon: 'pencil',
         iconClass: 'bg-module/15 text-module',
       });
@@ -101,11 +101,11 @@ window.chatMembersMixin = function chatMembersMixin() {
       if (!this.canEditConversationDetails()) return;
       const current = this.activeConversation.description || '';
       const description = await AppDialog.prompt({
-        title: 'Edit description',
-        message: 'Enter a description for this conversation:',
+        title: gettext('Edit description'),
+        message: gettext('Enter a description for this conversation:'),
         value: current,
-        placeholder: 'Add a description...',
-        okLabel: 'Save',
+        placeholder: gettext('Add a description...'),
+        okLabel: gettext('Save'),
         inputSize: 'textarea',
         icon: 'text',
         iconClass: 'bg-module/15 text-module',
@@ -135,9 +135,9 @@ window.chatMembersMixin = function chatMembersMixin() {
     async clearConversation() {
       if (!this.activeConversation?.can_clear) return;
       const ok = await AppDialog.confirm({
-        title: 'Clear conversation',
-        message: 'This will permanently delete all messages and media in this conversation. This cannot be undone.',
-        okLabel: 'Clear all',
+        title: gettext('Clear conversation'),
+        message: gettext('This will permanently delete all messages and media in this conversation. This cannot be undone.'),
+        okLabel: gettext('Clear all'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -169,9 +169,9 @@ window.chatMembersMixin = function chatMembersMixin() {
       if (!this.activeConversation) return;
       if (this.isGroupLinkedConversation()) return;
       const ok = await AppDialog.confirm({
-        title: 'Leave conversation',
-        message: 'Are you sure you want to leave this conversation?',
-        okLabel: 'Leave',
+        title: gettext('Leave conversation'),
+        message: gettext('Are you sure you want to leave this conversation?'),
+        okLabel: pgettext('conversation', 'Leave'),
         okClass: 'btn-error',
         icon: 'log-out',
         iconClass: 'bg-error/10 text-error',
@@ -300,11 +300,12 @@ window.chatMembersMixin = function chatMembersMixin() {
       if (!this.isGroupAdmin()) return;
       if (this.isGroupLinkedConversation()) return;
       const member = this.activeConversation.members?.find(m => m.user.id === userId);
-      const name = member ? this.memberDisplayName(member) : 'this member';
       const ok = await AppDialog.confirm({
-        title: 'Remove member',
-        message: `Remove ${name} from this group?`,
-        okLabel: 'Remove',
+        title: gettext('Remove member'),
+        message: member
+          ? interpolate(gettext('Remove %(name)s from this group?'), { name: this.memberDisplayName(member) }, true)
+          : gettext('Remove this member from this group?'),
+        okLabel: pgettext('confirm button', 'Remove'),
         okClass: 'btn-error',
         icon: 'user-minus',
         iconClass: 'bg-error/10 text-error',
@@ -415,9 +416,9 @@ window.chatMembersMixin = function chatMembersMixin() {
       if (!this.isGroupAdmin()) return;
 
       const ok = await AppDialog.confirm({
-        title: 'Remove avatar',
-        message: 'Remove the group avatar?',
-        okLabel: 'Remove',
+        title: gettext('Remove avatar'),
+        message: gettext('Remove the group avatar?'),
+        okLabel: pgettext('confirm button', 'Remove'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

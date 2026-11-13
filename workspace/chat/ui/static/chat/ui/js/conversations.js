@@ -8,9 +8,9 @@
 // serialized before the field existed does not render a blank menu.
 function chatNotificationLevelLabel(level) {
   switch (level) {
-    case 'mentions': return 'Mentions only';
-    case 'none': return 'Nothing';
-    default: return 'All messages';
+    case 'mentions': return gettext('Mentions only');
+    case 'none': return gettext('Nothing');
+    default: return gettext('All messages');
   }
 }
 window.chatNotificationLevelLabel = chatNotificationLevelLabel;
@@ -466,13 +466,13 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       if (conv.title) return conv.title;
       if (conv.kind === 'dm') {
         const other = conv.members?.find(m => m.user.id !== this.currentUserId);
-        return other ? this.memberDisplayName(other) : 'Direct Message';
+        return other ? this.memberDisplayName(other) : gettext('Direct message');
       }
       const names = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
         .map(m => this.memberDisplayName(m))
         .slice(0, 3);
-      if (names.length === 0) return 'Group';
+      if (names.length === 0) return gettext('Group');
       return names.join(', ');
     },
 
@@ -486,11 +486,13 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
     membersList(conv) {
       if (!conv.members) return '';
-      const names = conv.members
-        .filter(m => m.user.id !== this.currentUserId)
-        .map(m => m.user.username);
-      if (conv.kind === 'dm') return 'Direct message';
-      return names.length + 1 + ' members';
+      if (conv.kind === 'dm') return gettext('Direct message');
+      const others = conv.members.filter(m => m.user.id !== this.currentUserId).length;
+      return this.memberCountLabel(others + 1);
+    },
+
+    memberCountLabel(count) {
+      return interpolate(ngettext('%(count)s member', '%(count)s members', count), { count }, true);
     },
 
     // ── Notification level ───────────────────────────────────
@@ -525,7 +527,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       } catch (e) {
         conv.notification_level = previous;
         console.error('Failed to set notification level', e);
-        window.AppAlert.error('Could not change the notification level');
+        window.AppAlert.error(gettext('Could not change the notification level'));
       }
     },
 

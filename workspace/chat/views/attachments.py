@@ -1,6 +1,7 @@
 import logging
 
 from django.core.files.storage import default_storage
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -69,7 +70,7 @@ class AttachmentDownloadView(APIView):
         meta = _get_attachment_meta(request.user, attachment_id)
         if meta is None:
             return Response(
-                {"detail": "Attachment not found."},
+                {"detail": gettext("Attachment not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         try:
@@ -77,7 +78,7 @@ class AttachmentDownloadView(APIView):
         except FileNotFoundError, OSError:
             invalidate_tags(f"att:{attachment_id}")
             return Response(
-                {"detail": "Attachment not found."},
+                {"detail": gettext("Attachment not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         size = _attachment_size(fh)
@@ -117,7 +118,7 @@ class AttachmentSaveToFilesView(APIView):
             )
         except MessageAttachment.DoesNotExist:
             return Response(
-                {"detail": "Attachment not found."},
+                {"detail": gettext("Attachment not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -127,7 +128,7 @@ class AttachmentSaveToFilesView(APIView):
         )
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -139,7 +140,7 @@ class AttachmentSaveToFilesView(APIView):
             folder_uuid = parse_uuid_or_none(folder_id)
             if folder_uuid is None:
                 return Response(
-                    {"detail": '"folder_id" must be a valid UUID.'},
+                    {"detail": gettext('"folder_id" must be a valid UUID.')},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             try:
@@ -151,7 +152,7 @@ class AttachmentSaveToFilesView(APIView):
                 )
             except File.DoesNotExist:
                 return Response(
-                    {"detail": "Folder not found."},
+                    {"detail": gettext("Folder not found.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -174,7 +175,7 @@ class AttachmentSaveToFilesView(APIView):
                 "Chat attachment blob missing for %s", scrub(attachment.file.name)
             )
             return Response(
-                {"detail": "Attachment not found."},
+                {"detail": gettext("Attachment not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -193,6 +194,6 @@ class AttachmentSaveToFilesView(APIView):
             )
 
         return Response(
-            {"detail": "File saved.", "file_uuid": str(file_obj.uuid)},
+            {"detail": gettext("File saved."), "file_uuid": str(file_obj.uuid)},
             status=status.HTTP_201_CREATED,
         )

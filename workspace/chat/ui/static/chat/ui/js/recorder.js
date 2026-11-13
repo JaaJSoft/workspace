@@ -115,9 +115,9 @@ window.chatRecorderMixin = function chatRecorderMixin() {
         // getUserMedia denied, or MediaRecorder construction/start failed
         this._releaseMic();
         if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-          window.AppAlert.error('Microphone access was denied.');
+          window.AppAlert.error(gettext('Microphone access was denied.'));
         } else {
-          window.AppAlert.error('Recording could not start.');
+          window.AppAlert.error(gettext('Recording could not start.'));
         }
       } finally {
         this._startingRecording = false;

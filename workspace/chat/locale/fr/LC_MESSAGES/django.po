@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 17:24+0000\n"
+"POT-Creation-Date: 2026-11-13 14:14+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -11,10 +11,1471 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
 
+#: activity.py
+msgid "Group created"
+msgstr "Groupe créé"
+
+#: activity.py
+msgid "Untitled group"
+msgstr "Groupe sans titre"
+
 #: apps.py
 msgid "Real-time messaging with direct and group conversations."
 msgstr "Messagerie instantanée, en tête-à-tête ou en groupe."
 
-#: apps.py
+#: apps.py ui/templates/chat/ui/partials/help_dialog.html
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
 msgid "New conversation"
 msgstr "Nouvelle conversation"
+
+#: search.py
+msgctxt "search result type"
+msgid "Message"
+msgstr "Message"
+
+#: serializers.py
+msgid "Provide exactly one of member_ids or group_ids."
+msgstr "Indiquez soit member_ids, soit group_ids."
+
+#: serializers.py
+msgid "Status can only be set to 'active' or 'paused'."
+msgstr "Le statut ne peut être que « active » ou « paused »."
+
+#: serializers.py
+msgid "scheduled_at is required when kind is \"once\"."
+msgstr "scheduled_at est requis quand kind vaut « once »."
+
+#. Translators: a call duration under a minute, "45s".
+#: services/calls.py ui/templates/chat/ui/partials/_ai_usage.html
+#, python-format
+msgid "%(seconds)ss"
+msgstr "%(seconds)s s"
+
+#. Translators: a call duration under an hour, "12 min".
+#: services/calls.py
+#, python-format
+msgid "%(minutes)s min"
+msgstr "%(minutes)s min"
+
+#. Translators: a call duration of an hour or more, "1 h 05".
+#: services/calls.py
+#, python-format
+msgid "%(hours)s h %(minutes)s"
+msgstr "%(hours)s h %(minutes)s"
+
+#: services/calls.py ui/templates/chat/ui/partials/_system_call.html
+#, python-format
+msgid "Call ended - %(duration)s"
+msgstr "Appel terminé - %(duration)s"
+
+#: services/calls.py ui/templates/chat/ui/partials/_system_call.html
+msgid "Call ended"
+msgstr "Appel terminé"
+
+#: services/calls.py ui/templates/chat/ui/partials/_system_call.html
+msgid "Call started"
+msgstr "Appel démarré"
+
+#: services/conversations.py
+msgid "Conversation"
+msgstr "Conversation"
+
+#: services/group_sync.py
+msgid "You must belong to at least one of the groups."
+msgstr "Vous devez appartenir à au moins un de ces groupes."
+
+#. Translators: notification title, "Alice in Team".
+#: services/notifications.py
+#, python-format
+msgid "%(author)s in %(conversation)s"
+msgstr "%(author)s dans %(conversation)s"
+
+#: ui/templates/chat/ui/index.html
+msgid "New AI Chat"
+msgstr "Nouvelle discussion IA"
+
+#: ui/templates/chat/ui/index.html
+msgid "New conversation (Alt+N)"
+msgstr "Nouvelle conversation (Alt+N)"
+
+#: ui/templates/chat/ui/index.html
+msgid "Search conversations"
+msgstr "Rechercher des conversations"
+
+#: ui/templates/chat/ui/index.html
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Clear search"
+msgstr "Effacer la recherche"
+
+#: ui/templates/chat/ui/index.html
+msgctxt "new conversation"
+msgid "New"
+msgstr "Nouvelle"
+
+#: ui/templates/chat/ui/index.html ui/templates/chat/ui/partials/_composer.html
+#: ui/templates/chat/ui/partials/conversation_list.html
+msgid "New chat"
+msgstr "Nouvelle discussion"
+
+#: ui/templates/chat/ui/index.html
+msgid "Call in progress"
+msgstr "Appel en cours"
+
+#: ui/templates/chat/ui/index.html
+msgid "Return to room"
+msgstr "Revenir au salon"
+
+#: ui/templates/chat/ui/index.html
+msgid "Join call"
+msgstr "Rejoindre l’appel"
+
+#: ui/templates/chat/ui/index.html
+msgid "Open voice room"
+msgstr "Ouvrir le salon vocal"
+
+#: ui/templates/chat/ui/partials/_ai_steps.html
+#, python-format
+msgid "Reasoned - used %(counter)s tool"
+msgid_plural "Reasoned - used %(counter)s tools"
+msgstr[0] "A raisonné - %(counter)s outil utilisé"
+msgstr[1] "A raisonné - %(counter)s d’outils utilisés"
+msgstr[2] "A raisonné - %(counter)s outils utilisés"
+
+#: ui/templates/chat/ui/partials/_ai_steps.html
+msgid "Reasoned"
+msgstr "A raisonné"
+
+#: ui/templates/chat/ui/partials/_ai_steps.html
+#, python-format
+msgid "Used %(counter)s tool"
+msgid_plural "Used %(counter)s tools"
+msgstr[0] "%(counter)s outil utilisé"
+msgstr[1] "%(counter)s d’outils utilisés"
+msgstr[2] "%(counter)s outils utilisés"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+msgid "Generation details"
+msgstr "Détails de la génération"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+msgctxt "AI tokens"
+msgid "Input"
+msgstr "Entrée"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+#, python-format
+msgid "%(counter)s token"
+msgid_plural "%(counter)s tokens"
+msgstr[0] "%(counter)s jeton"
+msgstr[1] "%(counter)s de jetons"
+msgstr[2] "%(counter)s jetons"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+msgctxt "AI tokens"
+msgid "Output"
+msgstr "Sortie"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+msgctxt "AI tokens"
+msgid "Total"
+msgstr "Total"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+msgctxt "AI generation duration"
+msgid "Time"
+msgstr "Durée"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+msgid "Speed"
+msgstr "Vitesse"
+
+#: ui/templates/chat/ui/partials/_ai_usage.html
+#, python-format
+msgid "%(speed)s tok/s"
+msgstr "%(speed)s jetons/s"
+
+#: ui/templates/chat/ui/partials/_audio_player.html
+msgid "Play"
+msgstr "Lire"
+
+#: ui/templates/chat/ui/partials/_audio_player.html
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Seek"
+msgstr "Avancer ou reculer"
+
+#: ui/templates/chat/ui/partials/_audio_player.html
+msgid "Playback speed"
+msgstr "Vitesse de lecture"
+
+#: ui/templates/chat/ui/partials/_audio_player.html
+msgid "File details"
+msgstr "Détails du fichier"
+
+#: ui/templates/chat/ui/partials/_composer.html
+#, python-format
+msgid "Replying to %%(name)s"
+msgstr "En réponse à %%(name)s"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Back to formatted text"
+msgstr "Revenir au texte mis en forme"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Edit as markdown"
+msgstr "Modifier en Markdown"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Markdown syntax is applied as you type"
+msgstr "La syntaxe Markdown s’applique pendant la saisie"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Cancel reply (Esc)"
+msgstr "Annuler la réponse (Échap)"
+
+#: ui/templates/chat/ui/partials/_composer.html
+#, python-format
+msgid "Editing - <kbd class=\"kbd kbd-xs\">%(esc_key)s</kbd> to cancel"
+msgstr ""
+"Modification - <kbd class=\"kbd kbd-xs\">%(esc_key)s</kbd> pour annuler"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Message..."
+msgstr "Message..."
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Record a voice message"
+msgstr "Enregistrer un message vocal"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Bold (Ctrl+B)"
+msgstr "Gras (Ctrl+B)"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Italic (Ctrl+I)"
+msgstr "Italique (Ctrl+I)"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Strikethrough (Ctrl+Shift+X)"
+msgstr "Barré (Ctrl+Maj+X)"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Code (Ctrl+E)"
+msgstr "Code (Ctrl+E)"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Insert link"
+msgstr "Insérer un lien"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Keyboard shortcuts"
+msgstr "Raccourcis clavier"
+
+#: ui/templates/chat/ui/partials/_composer.html
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "New line"
+msgstr "Nouvelle ligne"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Code"
+msgstr "Code"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Edit last msg"
+msgstr "Modifier le dernier"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Cancel edit"
+msgstr "Annuler la modification"
+
+#: ui/templates/chat/ui/partials/_composer.html
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Search messages"
+msgstr "Rechercher des messages"
+
+#: ui/templates/chat/ui/partials/_composer.html
+#: ui/templates/chat/ui/partials/conversation_context_menu.html
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Conversation info"
+msgstr "Infos de la conversation"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Mention user"
+msgstr "Mentionner quelqu’un"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Emoji"
+msgstr "Émoji"
+
+#: ui/templates/chat/ui/partials/_composer.html
+msgid "Type a message..."
+msgstr "Écrivez un message..."
+
+#: ui/templates/chat/ui/partials/_conversation_item.html
+msgid "AI Bot"
+msgstr "Bot IA"
+
+#: ui/templates/chat/ui/partials/_conversation_item.html
+msgid "Group-linked conversation"
+msgstr "Conversation liée à des groupes"
+
+#: ui/templates/chat/ui/partials/_conversation_item.html
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "More options"
+msgstr "Plus d’options"
+
+#: ui/templates/chat/ui/partials/_message_interaction.html
+#, python-format
+msgid "Answered by %(name)s"
+msgstr "Répondu par %(name)s"
+
+#: ui/templates/chat/ui/partials/_preferences_content.html
+msgid "Compact conversation list"
+msgstr "Liste des conversations compacte"
+
+#: ui/templates/chat/ui/partials/_preferences_content.html
+msgid "Compact message view"
+msgstr "Affichage compact des messages"
+
+#: ui/templates/chat/ui/partials/_preferences_content.html
+msgid "Show thread replies in the conversation"
+msgstr "Afficher les réponses des fils dans la conversation"
+
+#: ui/templates/chat/ui/partials/_preferences_content.html
+msgid "Call sounds"
+msgstr "Sons d’appel"
+
+#: ui/templates/chat/ui/partials/_preferences_content.html
+msgid "Message animation"
+msgstr "Animation des messages"
+
+#: ui/templates/chat/ui/partials/_preferences_content.html
+msgid "Test call connection"
+msgstr "Tester la connexion d’appel"
+
+#: ui/templates/chat/ui/partials/_reaction_picker.html
+#, python-format
+msgid "You reacted with %(emoji)s"
+msgstr "Vous avez réagi avec %(emoji)s"
+
+#: ui/templates/chat/ui/partials/_read_receipt_popover.html
+msgid "Read by"
+msgstr "Lu par"
+
+#: ui/templates/chat/ui/partials/_read_receipt_popover.html
+msgid "Not yet"
+msgstr "Pas encore"
+
+#: ui/templates/chat/ui/partials/add_member_dialog.html
+#: ui/templates/chat/ui/partials/conversation_context_menu.html
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Add members"
+msgstr "Ajouter des membres"
+
+#: ui/templates/chat/ui/partials/add_member_dialog.html
+msgid "Search users"
+msgstr "Rechercher des utilisateurs"
+
+#: ui/templates/chat/ui/partials/add_member_dialog.html
+msgctxt "add members"
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+#, python-format
+msgid "last one %%(date)s"
+msgstr "dernier %%(date)s"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Edit goal"
+msgstr "Modifier l’objectif"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid ""
+"Everything here is read by the bot at every check-in. The more precise it "
+"is, the better it handles the mission on its own."
+msgstr ""
+"Le bot relit tout ceci à chaque passage. Plus c’est précis, mieux il mène la "
+"mission seul."
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Title"
+msgstr "Titre"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Short label for the goal"
+msgstr "Nom court de l’objectif"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Objective"
+msgstr "Objectif"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "What the bot should accomplish or track"
+msgstr "Ce que le bot doit accomplir ou suivre"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Definition of done"
+msgstr "Critère de réussite"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "How the bot knows the goal is achieved and can close it"
+msgstr "Comment le bot sait que l’objectif est atteint et peut le clore"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Constraints &amp; preferences"
+msgstr "Contraintes et préférences"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Rules to respect: budget, sources to use or avoid, tone, what not to do"
+msgstr ""
+"Règles à respecter : budget, sources à utiliser ou à éviter, ton, ce qu’il "
+"ne faut pas faire"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "When to contact me"
+msgstr "Quand me contacter"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "e.g. only for a listing under 900€, plus a recap every Sunday"
+msgstr ""
+"p. ex. seulement pour une annonce à moins de 900 €, plus un récapitulatif "
+"chaque dimanche"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Next check-in"
+msgstr "Prochain passage"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Deadline"
+msgstr "Échéance"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Bot's working notes"
+msgstr "Notes de travail du bot"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid "Empty until the first check-in"
+msgstr "Vide jusqu’au premier passage"
+
+#: ui/templates/chat/ui/partials/agent_goal_dialog.html
+msgid ""
+"The bot's only memory between check-ins. Edit it to correct something it got "
+"wrong."
+msgstr ""
+"La seule mémoire du bot d’un passage à l’autre. Modifiez-la pour corriger "
+"une erreur."
+
+#: ui/templates/chat/ui/partials/conversation_context_menu.html
+msgid "Pin conversation"
+msgstr "Épingler la conversation"
+
+#: ui/templates/chat/ui/partials/conversation_context_menu.html
+msgid "Unpin conversation"
+msgstr "Désépingler la conversation"
+
+#: ui/templates/chat/ui/partials/conversation_context_menu.html
+msgid "Regenerate title"
+msgstr "Régénérer le titre"
+
+#: ui/templates/chat/ui/partials/conversation_context_menu.html
+msgid "Leave conversation"
+msgstr "Quitter la conversation"
+
+#: ui/templates/chat/ui/partials/conversation_list.html
+#, python-format
+msgid "No conversations match “%(search_query)s”."
+msgstr "Aucune conversation ne correspond à « %(search_query)s »."
+
+#: ui/templates/chat/ui/partials/conversation_list.html
+msgid "No conversations yet"
+msgstr "Aucune conversation pour l’instant"
+
+#: ui/templates/chat/ui/partials/conversation_list.html
+msgctxt "pinned conversations"
+msgid "Pinned"
+msgstr "Épinglées"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Edit description"
+msgstr "Modifier la description"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+#, python-format
+msgid "Notifications: %%(level)s"
+msgstr "Notifications : %%(level)s"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Pinned message"
+msgstr "Message épinglé"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Stop hearing myself"
+msgstr "Ne plus m’entendre"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Hear myself"
+msgstr "M’entendre"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Back to conversations"
+msgstr "Retour aux conversations"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Regenerating title..."
+msgstr "Régénération du titre..."
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Add description"
+msgstr "Ajouter une description"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Start or join a call"
+msgstr "Lancer ou rejoindre un appel"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Search in conversation (Ctrl+F)"
+msgstr "Rechercher dans la conversation (Ctrl+F)"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "All messages"
+msgstr "Tous les messages"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Mentions only"
+msgstr "Mentions uniquement"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Conversation info (Alt+I)"
+msgstr "Infos de la conversation (Alt+I)"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Join"
+msgstr "Rejoindre"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Load older messages"
+msgstr "Charger les messages précédents"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Drop files to attach"
+msgstr "Déposez des fichiers à joindre"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+#: ui/templates/chat/ui/room.html
+msgid "Connection diagnostic"
+msgstr "Diagnostic de connexion"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Checks your microphone, network, and a test call through the server."
+msgstr "Vérifie votre micro, votre réseau et un appel de test via le serveur."
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Speak - the bar should move (audio sent through the test connection)."
+msgstr "Parlez : la barre doit bouger (le son passe par la connexion de test)."
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Use headphones to avoid echo."
+msgstr "Utilisez un casque pour éviter l’écho."
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Run again"
+msgstr "Relancer"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Start AI Chat"
+msgstr "Démarrer une discussion IA"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Filter bots…"
+msgstr "Filtrer les bots…"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "No AI bots available."
+msgstr "Aucun bot IA disponible."
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "No bots match your filter."
+msgstr "Aucun bot ne correspond à votre filtre."
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Agent mode — give a long-term goal"
+msgstr "Mode agent — fixez un objectif à long terme"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid ""
+"Objective: what should the bot pursue autonomously? (e.g. follow apartment "
+"listings in Lyon and alert me about good ones)"
+msgstr ""
+"Objectif : que doit poursuivre le bot en autonomie ? (p. ex. suivre les "
+"annonces d’appartements à Lyon et me signaler les bonnes)"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Title (optional)"
+msgstr "Titre (facultatif)"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "First check-in (optional)"
+msgstr "Premier passage (facultatif)"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Deadline (optional)"
+msgstr "Échéance (facultative)"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid ""
+"The bot will work on this goal on its own schedule and only message you when "
+"it has something worth saying. Pick a bot above to start."
+msgstr ""
+"Le bot travaillera sur cet objectif à son rythme et ne vous écrira que s’il "
+"a quelque chose d’utile à dire. Choisissez un bot ci-dessus pour commencer."
+
+#: ui/templates/chat/ui/partials/empty_state.html
+msgid "Welcome to Chat"
+msgstr "Bienvenue dans Chat"
+
+#: ui/templates/chat/ui/partials/empty_state.html
+msgid ""
+"Select a conversation from the sidebar or start a new one to begin messaging."
+msgstr ""
+"Sélectionnez une conversation dans la barre latérale ou démarrez-en une "
+"nouvelle pour commencer à échanger."
+
+#: ui/templates/chat/ui/partials/empty_state.html
+msgid "Start a conversation"
+msgstr "Démarrer une conversation"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Send message / save edit"
+msgstr "Envoyer le message / enregistrer la modification"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Cancel edit / blur input"
+msgstr "Annuler la modification / quitter la saisie"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Edit last own message (when input is empty)"
+msgstr "Modifier votre dernier message (champ vide)"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Formatting"
+msgstr "Mise en forme"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Search messages in conversation"
+msgstr "Rechercher des messages dans la conversation"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Conversation info panel"
+msgstr "Panneau d’infos de la conversation"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Search conversations (command palette)"
+msgstr "Rechercher des conversations (palette de commandes)"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid ""
+"The composer shows formatting as it will be sent: the toolbar buttons and "
+"their shortcuts style the selected text, and the Markdown syntax below is "
+"applied as you type. The <strong>M</strong> button in the toolbar switches "
+"to editing the raw Markdown instead."
+msgstr ""
+"La zone de saisie affiche la mise en forme telle qu’elle sera envoyée : les "
+"boutons de la barre d’outils et leurs raccourcis mettent en forme le texte "
+"sélectionné, et la syntaxe Markdown ci-dessous s’applique pendant la saisie. "
+"Le bouton <strong>M</strong> de la barre d’outils permet de modifier le "
+"Markdown brut."
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid "Conversations"
+msgstr "Conversations"
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid ""
+"<strong>Direct messages</strong> &mdash; Start a private conversation with "
+"one person."
+msgstr ""
+"<strong>Messages privés</strong> &mdash; Démarrez une conversation privée "
+"avec une personne."
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid ""
+"<strong>Group chats</strong> &mdash; Add two or more people and optionally "
+"name the group."
+msgstr ""
+"<strong>Discussions de groupe</strong> &mdash; Ajoutez deux personnes ou "
+"plus et nommez le groupe si vous le souhaitez."
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid ""
+"<strong>Reactions</strong> &mdash; Hover over a message and click an emoji "
+"to react."
+msgstr ""
+"<strong>Réactions</strong> &mdash; Survolez un message et cliquez sur un "
+"émoji pour réagir."
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid ""
+"<strong>Edit &amp; delete</strong> &mdash; Hover over your own messages to "
+"edit or delete them."
+msgstr ""
+"<strong>Modifier et supprimer</strong> &mdash; Survolez vos propres messages "
+"pour les modifier ou les supprimer."
+
+#: ui/templates/chat/ui/partials/help_dialog.html
+msgid ""
+"<strong>Search</strong> &mdash; Use the command palette (<kbd class=\"kbd "
+"kbd-xs\">Ctrl+K</kbd>) to quickly find and switch conversations."
+msgstr ""
+"<strong>Recherche</strong> &mdash; Utilisez la palette de commandes (<kbd "
+"class=\"kbd kbd-xs\">Ctrl+K</kbd>) pour trouver une conversation et y passer "
+"rapidement."
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Direct message"
+msgstr "Message privé"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+#, python-format
+msgid "Linked to %%(groups)s"
+msgstr "Liée à %%(groups)s"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+#, python-format
+msgid "Read %%(time)s"
+msgstr "Lu %%(time)s"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Remove admin"
+msgstr "Retirer les droits d’admin"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Make admin"
+msgstr "Nommer admin"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgctxt "unknown author"
+msgid "Unknown"
+msgstr "Inconnu"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+#, python-format
+msgid "Pinned by %%(name)s"
+msgstr "Épinglé par %%(name)s"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No media shared yet"
+msgstr "Aucun média partagé pour l’instant"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No files shared yet"
+msgstr "Aucun fichier partagé pour l’instant"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+#, python-format
+msgid "Load more (%%(count)s)"
+msgstr "Charger plus (%%(count)s)"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgctxt "agent goal status"
+msgid "Active"
+msgstr "Actif"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Resume goal"
+msgstr "Reprendre l’objectif"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Pause goal"
+msgstr "Mettre l’objectif en pause"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+#, python-format
+msgctxt "conversation"
+msgid "Created %%(date)s"
+msgstr "Créée le %%(date)s"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Change group avatar"
+msgstr "Changer l’avatar du groupe"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Remove avatar"
+msgstr "Retirer l’avatar"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Rename group"
+msgstr "Renommer le groupe"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgctxt "conversation"
+msgid "Leave"
+msgstr "Quitter"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Members"
+msgstr "Membres"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgctxt "member badge"
+msgid "you"
+msgstr "vous"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgctxt "member badge"
+msgid "admin"
+msgstr "admin"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Remove from group"
+msgstr "Retirer du groupe"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Pinned Messages"
+msgstr "Messages épinglés"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+#: ui/templates/chat/ui/partials/message_group.html
+msgid "Unpin"
+msgstr "Désépingler"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No pinned messages"
+msgstr "Aucun message épinglé"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Shared Media"
+msgstr "Médias partagés"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Media"
+msgstr "Médias"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgctxt "media filter"
+msgid "All"
+msgstr "Tous"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Statistics"
+msgstr "Statistiques"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Reactions"
+msgstr "Réactions"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "First message:"
+msgstr "Premier message :"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Last message:"
+msgstr "Dernier message :"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Top contributors"
+msgstr "Membres les plus actifs"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No stats available"
+msgstr "Aucune statistique disponible"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "AI Memory"
+msgstr "Mémoire de l’IA"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Search memories..."
+msgstr "Rechercher dans la mémoire..."
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No memories yet"
+msgstr "Aucun souvenir pour l’instant"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No matches"
+msgstr "Aucun résultat"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Agent Goals"
+msgstr "Objectifs de l’agent"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No agent goals"
+msgstr "Aucun objectif"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Done when:"
+msgstr "Terminé quand :"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Reports:"
+msgstr "Rapports :"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Constraints:"
+msgstr "Contraintes :"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgctxt "next run"
+msgid "Next:"
+msgstr "Prochain :"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "deadline"
+msgstr "échéance"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Stop goal"
+msgstr "Arrêter l’objectif"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "Scheduled Messages"
+msgstr "Messages programmés"
+
+#: ui/templates/chat/ui/partials/info_panel.html
+msgid "No scheduled messages"
+msgstr "Aucun message programmé"
+
+#: ui/templates/chat/ui/partials/message_context_menu.html
+msgid "Add reaction"
+msgstr "Ajouter une réaction"
+
+#: ui/templates/chat/ui/partials/message_context_menu.html
+msgid "Copy text"
+msgstr "Copier le texte"
+
+#: ui/templates/chat/ui/partials/message_context_menu.html
+msgid "Pin message"
+msgstr "Épingler le message"
+
+#: ui/templates/chat/ui/partials/message_context_menu.html
+msgid "Unpin message"
+msgstr "Désépingler le message"
+
+#: ui/templates/chat/ui/partials/message_group.html
+msgctxt "pinned message"
+msgid "Pinned"
+msgstr "Épinglé"
+
+#: ui/templates/chat/ui/partials/message_group.html
+msgid "More reactions"
+msgstr "Plus de réactions"
+
+#: ui/templates/chat/ui/partials/message_group.html
+msgid "Pin"
+msgstr "Épingler"
+
+#: ui/templates/chat/ui/partials/message_group.html
+#, python-format
+msgid "%(counter)s reply"
+msgid_plural "%(counter)s replies"
+msgstr[0] "%(counter)s réponse"
+msgstr[1] "%(counter)s de réponses"
+msgstr[2] "%(counter)s réponses"
+
+#: ui/templates/chat/ui/partials/message_group.html
+msgid "View thread"
+msgstr "Voir le fil"
+
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
+msgctxt "message recipients"
+msgid "To"
+msgstr "À"
+
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
+msgctxt "remove item"
+msgid "Remove"
+msgstr "Retirer"
+
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
+msgid "Group name"
+msgstr "Nom du groupe"
+
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
+msgid "Optional"
+msgstr "Facultatif"
+
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
+msgid "e.g. Project Team"
+msgstr "p. ex. Équipe projet"
+
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
+msgid "Start chat"
+msgstr "Démarrer"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+#, python-format
+msgid "%%(count)s result"
+msgstr "%%(count)s résultat"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+#, python-format
+msgid "%%(count)s results"
+msgstr "%%(count)s résultats"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Sender"
+msgstr "Expéditeur"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Anyone"
+msgstr "Tout le monde"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Date"
+msgstr "Date"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Any time"
+msgstr "N’importe quand"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Last 7 days"
+msgstr "7 derniers jours"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Last 30 days"
+msgstr "30 derniers jours"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Custom range"
+msgstr "Période personnalisée"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgctxt "date range end"
+msgid "To"
+msgstr "À"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Attachments"
+msgstr "Pièces jointes"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Has files"
+msgstr "Avec fichiers"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Has images"
+msgstr "Avec images"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "No messages found"
+msgstr "Aucun message trouvé"
+
+#: ui/templates/chat/ui/partials/search_panel.html
+msgid "Type at least 2 characters or use filters"
+msgstr "Saisissez au moins 2 caractères ou utilisez les filtres"
+
+#: ui/templates/chat/ui/partials/thread_panel.html
+msgid "Thread"
+msgstr "Fil"
+
+#: ui/templates/chat/ui/partials/thread_panel.html
+msgid "Close thread"
+msgstr "Fermer le fil"
+
+#: ui/templates/chat/ui/partials/thread_panel.html
+msgid "Load older replies"
+msgstr "Charger les réponses précédentes"
+
+#: ui/templates/chat/ui/room.html
+msgid "Voice room"
+msgstr "Salon vocal"
+
+#: ui/templates/chat/ui/room.html
+#, python-format
+msgid "Spotlight %%(name)s"
+msgstr "Mettre %%(name)s en avant"
+
+#: ui/templates/chat/ui/room.html
+msgid "Unmute"
+msgstr "Réactiver le micro"
+
+#: ui/templates/chat/ui/room.html
+msgid "Mute"
+msgstr "Couper le micro"
+
+#: ui/templates/chat/ui/room.html
+msgid "Turn camera off"
+msgstr "Couper la caméra"
+
+#: ui/templates/chat/ui/room.html
+msgid "Turn camera on"
+msgstr "Activer la caméra"
+
+#: ui/templates/chat/ui/room.html
+msgid "Stop sharing"
+msgstr "Arrêter le partage"
+
+#: ui/templates/chat/ui/room.html
+msgid "Share screen"
+msgstr "Partager l’écran"
+
+#: ui/templates/chat/ui/room.html
+msgid "In call"
+msgstr "En appel"
+
+#: ui/templates/chat/ui/room.html
+msgid "Waiting for others to join..."
+msgstr "En attente des autres participants..."
+
+#: ui/templates/chat/ui/room.html
+msgid "Back to grid"
+msgstr "Revenir à la grille"
+
+#: ui/templates/chat/ui/room.html
+msgid "Leave call"
+msgstr "Quitter l’appel"
+
+#. Translators: a date format for Django's date filter; "M j" reads "Feb 5".
+#: ui/templatetags/chat_tags.py
+msgctxt "chat day separator format"
+msgid "M j"
+msgstr "j N"
+
+#: ui/views.py
+#, python-format
+msgid "sent a file"
+msgid_plural "sent %(count)s files"
+msgstr[0] "a envoyé un fichier"
+msgstr[1] "a envoyé %(count)s de fichiers"
+msgstr[2] "a envoyé %(count)s fichiers"
+
+#. Translators: a conversation's last message in the sidebar, "Alice: hello".
+#: ui/views.py
+#, python-format
+msgid "%(author)s: %(text)s"
+msgstr "%(author)s : %(text)s"
+
+#: ui/views.py
+msgctxt "message animation"
+msgid "Slide"
+msgstr "Glissement"
+
+#: ui/views.py
+msgctxt "message animation"
+msgid "Pop"
+msgstr "Apparition"
+
+#: ui/views.py
+msgctxt "message animation"
+msgid "Fade"
+msgstr "Fondu"
+
+#: ui/views.py
+msgctxt "message animation"
+msgid "Bounce"
+msgstr "Rebond"
+
+#: ui/views.py
+msgctxt "message animation"
+msgid "None"
+msgstr "Aucune"
+
+#: ui/views.py
+msgid "No messages yet"
+msgstr "Aucun message pour l’instant"
+
+#: views/attachments.py
+msgid "Attachment not found."
+msgstr "Pièce jointe introuvable."
+
+#: views/attachments.py views/avatar.py views/conversations.py views/goals.py
+#: views/messages.py views/pins.py views/scheduled.py views/search.py
+msgid "Not a member of this conversation."
+msgstr "Vous n’êtes pas membre de cette conversation."
+
+#: views/attachments.py
+msgid "\"folder_id\" must be a valid UUID."
+msgstr "« folder_id » doit être un UUID valide."
+
+#: views/attachments.py
+msgid "File saved."
+msgstr "Fichier enregistré."
+
+#: views/avatar.py
+msgid "Avatars are only supported for group conversations."
+msgstr "Seules les conversations de groupe peuvent avoir un avatar."
+
+#: views/avatar.py
+msgid "Only group admins can change the avatar."
+msgstr "Seuls les administrateurs du groupe peuvent changer l’avatar."
+
+#: views/avatar.py
+msgid "Group avatar updated successfully."
+msgstr "Avatar du groupe mis à jour."
+
+#: views/avatar.py
+msgid "Group avatar removed."
+msgstr "Avatar du groupe supprimé."
+
+#: views/bots.py
+msgid "Only bot messages can be retried."
+msgstr "Seuls les messages d’un bot peuvent être relancés."
+
+#: views/bots.py
+msgid "No user message found to retry."
+msgstr "Aucun message d’utilisateur à relancer."
+
+#: views/bots.py
+msgid "No active task found."
+msgstr "Aucune tâche en cours."
+
+#: views/bots.py
+msgid "Only AI conversations support title regeneration."
+msgstr "Seules les conversations avec une IA peuvent régénérer leur titre."
+
+#: views/bots.py
+msgid "The conversation has no messages yet."
+msgstr "La conversation ne contient encore aucun message."
+
+#: views/calls.py
+msgid "Calls are not available in AI conversations."
+msgstr "Les appels ne sont pas disponibles dans les conversations avec une IA."
+
+#: views/calls.py
+msgid "Call is full."
+msgstr "L’appel est complet."
+
+#: views/calls.py
+msgid "to_user_id (int) and signal (object) are required."
+msgstr "to_user_id (entier) et signal (objet) sont requis."
+
+#: views/calls.py
+msgid "Target is not a member."
+msgstr "Le destinataire n’est pas membre."
+
+#: views/calls.py
+msgid "No active call."
+msgstr "Aucun appel en cours."
+
+#: views/calls.py
+msgid ""
+"lane (to_caller|to_callee), signal (object) and run_id (string) are required."
+msgstr ""
+"lane (to_caller|to_callee), signal (objet) et run_id (chaîne) sont requis."
+
+#: views/conversations.py
+msgid "Bots can only be in a direct conversation."
+msgstr "Un bot ne peut participer qu’à une conversation privée."
+
+#: views/conversations.py
+msgid "Only group admins can do this."
+msgstr "Seuls les administrateurs du groupe peuvent faire cela."
+
+#: views/conversations.py
+msgid "One or more group IDs are invalid."
+msgstr "Un ou plusieurs identifiants de groupe sont invalides."
+
+#: views/conversations.py
+msgid "One or more user IDs are invalid."
+msgstr "Un ou plusieurs identifiants d’utilisateur sont invalides."
+
+#: views/conversations.py
+msgid "You do not have access to this bot."
+msgstr "Vous n’avez pas accès à ce bot."
+
+#: views/conversations.py
+msgid "Cannot create a DM with yourself."
+msgstr "Impossible de créer une conversation privée avec vous-même."
+
+#: views/conversations.py
+msgid "Only group conversations can be renamed."
+msgstr "Seules les conversations de groupe peuvent être renommées."
+
+#: views/conversations.py
+msgid "Title cannot be empty."
+msgstr "Le titre ne peut pas être vide."
+
+#: views/conversations.py
+msgid "No fields to update. Provide title or description."
+msgstr "Aucun champ à mettre à jour. Indiquez un titre ou une description."
+
+#: views/conversations.py
+msgid "Membership of a group-linked conversation follows its groups."
+msgstr "Les membres d’une conversation liée à des groupes suivent ces groupes."
+
+#: views/conversations.py
+msgid "Can only add members to group conversations."
+msgstr "On ne peut ajouter des membres qu’aux conversations de groupe."
+
+#: views/conversations.py
+msgid "Members of a group-linked conversation are managed through its groups."
+msgstr ""
+"Les membres d’une conversation liée à des groupes se gèrent depuis ces "
+"groupes."
+
+#: views/conversations.py
+msgid "Only group conversations have admins."
+msgstr "Seules les conversations de groupe ont des administrateurs."
+
+#: views/conversations.py
+msgid "User is not an active member."
+msgstr "Cet utilisateur n’est pas un membre actif."
+
+#: views/conversations.py
+msgid "A group needs at least one admin."
+msgstr "Un groupe doit avoir au moins un administrateur."
+
+#: views/conversations.py
+msgid "Cannot remove yourself. Use leave instead."
+msgstr ""
+"Vous ne pouvez pas vous retirer vous-même. Quittez plutôt la conversation."
+
+#: views/goals.py
+msgid "This conversation has no AI bot."
+msgstr "Cette conversation n’a pas de bot IA."
+
+#: views/goals.py
+msgid "Too many active goals in this conversation."
+msgstr "Trop d’objectifs actifs dans cette conversation."
+
+#: views/goals.py
+msgid "Goal is required."
+msgstr "L’objectif est requis."
+
+#: views/goals.py
+msgid "Agent goal not found."
+msgstr "Objectif d’agent introuvable."
+
+#: views/goals.py
+msgid "Only the person who set this goal can change it."
+msgstr "Seule la personne qui a fixé cet objectif peut le modifier."
+
+#: views/interactions.py
+msgid "option_index is required"
+msgstr "option_index est requis"
+
+#: views/interactions.py
+msgid "option_index must be an integer"
+msgstr "option_index doit être un entier"
+
+#: views/interactions.py
+msgid "option_index out of range"
+msgstr "option_index hors limites"
+
+#: views/interactions.py
+msgid "already answered"
+msgstr "déjà répondu"
+
+#: views/messages.py
+msgid "Message must have text or at least one file."
+msgstr "Le message doit contenir du texte ou au moins un fichier."
+
+#: views/messages.py
+msgid "Maximum 10 files per message."
+msgstr "10 fichiers au maximum par message."
+
+#: views/messages.py
+#, python-format
+msgid "File \"%(name)s\" exceeds the 50 MB limit."
+msgstr "Le fichier « %(name)s » dépasse la limite de 50 Mo."
+
+#: views/messages.py
+msgid "\"duration\" requires exactly one uploaded file."
+msgstr "« duration » exige exactement un fichier envoyé."
+
+#: views/messages.py
+#, python-format
+msgid "Voice messages must last between 0 and %(max)s seconds."
+msgstr "Un message vocal doit durer entre 0 et %(max)s secondes."
+
+#: views/messages.py
+msgid "\"duration\" is only valid for an audio file."
+msgstr "« duration » n’est valable que pour un fichier audio."
+
+#: views/messages.py
+msgid "One or more files not found or not accessible."
+msgstr "Un ou plusieurs fichiers sont introuvables ou inaccessibles."
+
+#: views/messages.py
+msgid "Reply target message not found in this conversation."
+msgstr ""
+"Le message auquel vous répondez est introuvable dans cette conversation."
+
+#: views/messages.py
+msgid "One or more workspace file contents are unavailable."
+msgstr "Le contenu d’un ou plusieurs fichiers de Workspace est indisponible."
+
+#: views/messages.py views/pins.py
+msgid "Message not found."
+msgstr "Message introuvable."
+
+#: views/messages.py
+msgid "Only the author can edit this message."
+msgstr "Seul l’auteur peut modifier ce message."
+
+#: views/messages.py
+msgid "Only the author can delete this message."
+msgstr "Seul l’auteur peut supprimer ce message."
+
+#: views/pins.py
+msgid "Already pinned."
+msgstr "Déjà épinglé."
+
+#: views/pins.py
+msgid "Not pinned."
+msgstr "Non épinglé."
+
+#: views/pins.py
+msgid "\"order\" must be a list of conversation UUIDs."
+msgstr "« order » doit être une liste d’UUID de conversations."
+
+#: views/pins.py
+msgid "\"order\" entries must be UUID strings."
+msgstr "Les entrées de « order » doivent être des UUID."
+
+#: views/pins.py
+msgid "Cannot pin a deleted message."
+msgstr "Impossible d’épingler un message supprimé."
+
+#: views/pins.py
+msgid "Message is not pinned."
+msgstr "Ce message n’est pas épinglé."
+
+#: views/scheduled.py
+msgid "Scheduled message not found."
+msgstr "Message programmé introuvable."
+
+#: views/scheduled.py
+msgid "Only the person who scheduled this message can change it."
+msgstr "Seule la personne qui a programmé ce message peut le modifier."
+
+#: views/search.py
+msgid "At least one search criterion is required."
+msgstr "Au moins un critère de recherche est requis."
+
+#: views/search.py
+msgid "Invalid author id."
+msgstr "Identifiant d’auteur invalide."
+
+#: views/search.py
+msgid "Invalid date_range."
+msgstr "date_range invalide."
+
+#: views/search.py
+msgid "Invalid date_from."
+msgstr "date_from invalide."
+
+#: views/search.py
+msgid "Invalid date_to."
+msgstr "date_to invalide."
+
+#: views/search.py
+msgid "Invalid media type."
+msgstr "Type de média invalide."
+
+#: views/search.py
+msgid "Invalid pagination parameters."
+msgstr "Paramètres de pagination invalides."
+
+#: views/typing.py
+msgid "Not a member."
+msgstr "Vous n’êtes pas membre."
+
+#: views/typing.py
+msgid "Only a private conversation with an AI can be cleared."
+msgstr "Seule une conversation privée avec une IA peut être vidée."

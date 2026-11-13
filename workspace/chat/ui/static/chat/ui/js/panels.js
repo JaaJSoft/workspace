@@ -114,6 +114,10 @@ window.chatPanelsMixin = function chatPanelsMixin() {
       this.loadConversationMedia(this.activeConversation.uuid, true);
     },
 
+    goalCheckInsLabel(count) {
+      return interpolate(ngettext('%(count)s check-in', '%(count)s check-ins', count), { count }, true);
+    },
+
     changeMediaFilter(filter) {
       this.mediaFilter = filter;
       if (this.activeConversation) {

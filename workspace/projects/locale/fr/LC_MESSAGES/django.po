@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:01+0000\n"
+"POT-Creation-Date: 2026-11-13 16:58+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -2384,6 +2384,13 @@ msgstr "Un tableau continu où chaque colonne est toujours visible."
 #: ui/views.py
 msgid "Timeboxed sprints; the board shows one sprint at a time."
 msgstr "Des sprints à durée fixe ; le tableau affiche un sprint à la fois."
+
+#. Translators: a PHP-style date format (Django's date filter) for an
+#. epic's target date in a picker, e.g. "Oct 03".
+#: ui/views.py
+msgctxt "epic target date"
+msgid "M d"
+msgstr "j N"
 
 #: ui/views.py
 msgctxt "timeline scale"

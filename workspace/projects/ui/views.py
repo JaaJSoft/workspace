@@ -277,12 +277,18 @@ def _epics_data(project):
             "color": epic.color,
             "closed": epic.is_closed,
             "target_date": epic.target_date.isoformat() if epic.target_date else "",
-            "display_date": epic.target_date.strftime("%b %d")
+            "display_date": _epic_target_label(epic.target_date)
             if epic.target_date
             else "",
         }
         for epic in project.epics.all()
     ]
+
+
+def _epic_target_label(day):
+    # Translators: a PHP-style date format (Django's date filter) for an
+    # epic's target date in a picker, e.g. "Oct 03".
+    return format_date(day, pgettext("epic target date", "M d"))
 
 
 def _filtered_tasks(request, qs):

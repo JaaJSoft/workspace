@@ -17,7 +17,7 @@ The file rows wait for the registry's answer about every selected photo
     <ul class="menu menu-sm p-0 w-full">
       <li class="menu-title py-1">
         <span
-          x-text="selectedLabel(selection.length)"
+          x-text="selectedPhotosLabel(selection.length)"
         ></span>
       </li>
       {% include "ui/partials/context_menu_item.html" with show="selectionShows('toggle_favorite')" li_class_expr="selectionRule('toggle_favorite')" icon="star" icon_alt="star-off" icon_toggle="selectionFavoriteAdds()" label_expr=favorite_label_expr click="favoriteSelection()" only %}

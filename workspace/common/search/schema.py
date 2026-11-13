@@ -116,7 +116,7 @@ class FulltextIndex(_BaseIndex):
             if col.cap is not None:
                 expr = f"left({expr}, {col.cap})"
             parts.append(
-                f"setweight(to_tsvector('simple', f_unaccent({expr})), '{col.weight}')"
+                f"setweight(to_tsvector('simple', f_fts_text({expr})), '{col.weight}')"
             )
         vector = " ||\n    ".join(parts)
         return (
@@ -245,7 +245,7 @@ class DerivedFulltextIndex(_BaseIndex):
     def pg_update_sql(self):
         """UPDATE that writes one document. One bind per field, then the pk."""
         parts = [
-            f"setweight(to_tsvector('simple', f_unaccent(%s)), '{f.weight}')"
+            f"setweight(to_tsvector('simple', f_fts_text(%s)), '{f.weight}')"
             for f in self.fields
         ]
         vector = " ||\n    ".join(parts)

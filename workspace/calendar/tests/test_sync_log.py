@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,7 @@ from workspace.calendar.services.sync_log import (
     object_etag,
     object_revisions,
 )
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 
 User = get_user_model()
 
@@ -49,6 +51,16 @@ class SyncLogTests(TestCase):
         self.assertNotEqual(
             object_etag(event.pk, first), object_etag(event.pk, self._revision())
         )
+
+    def test_revisions_of_more_objects_than_the_parameter_limit(self):
+        parameter_limit = 40
+        event = self._event()
+        asked = [uuid.uuid4() for _ in range(parameter_limit * 2)] + [event.pk]
+
+        with sqlite_parameter_limit(parameter_limit):
+            revisions = object_revisions(self.calendar.pk, asked)
+
+        self.assertEqual(revisions, {event.pk: self._revision()})
 
     def test_exception_row_stamps_its_master(self):
         master = self._event(recurrence_rule="RRULE:FREQ=DAILY")

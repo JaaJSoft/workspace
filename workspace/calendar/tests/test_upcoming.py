@@ -19,6 +19,7 @@ from workspace.calendar import upcoming
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.calendar.upcoming import get_upcoming_for_user, get_upcoming_page
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 
 User = get_user_model()
 
@@ -154,6 +155,40 @@ class GetUpcomingForUserTests(TestCase):
         result = get_upcoming_for_user(self.user, self.now)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "Daily standup")
+
+    def _daily(self, title):
+        start = self.now.replace(hour=13, minute=30) - timedelta(days=7)
+        master = Event(
+            calendar=self.calendar,
+            owner=self.user,
+            title=title,
+            start=start,
+            end=start + timedelta(hours=1),
+        )
+        apply_rule(master, "RRULE:FREQ=DAILY")
+        master.save()
+        return master
+
+    def test_more_recurring_series_than_the_parameter_limit(self):
+        parameter_limit = 40
+        for index in range(parameter_limit * 2):
+            self._daily(f"Series {index}")
+        cancelled = self._daily("Cancelled today")
+        todays_occurrence = self.now.replace(hour=13, minute=30)
+        self._make(
+            "Cancelled today",
+            start=todays_occurrence,
+            end=todays_occurrence + timedelta(hours=1),
+            recurrence_parent=cancelled,
+            original_start=todays_occurrence,
+            is_cancelled=True,
+        )
+
+        with sqlite_parameter_limit(parameter_limit):
+            result = get_upcoming_for_user(self.user, self.now)
+
+        self.assertEqual(len(result), parameter_limit * 2)
+        self.assertNotIn("Cancelled today", [event.title for event in result])
 
 
 class AllDayTimezoneWindowTests(TestCase):

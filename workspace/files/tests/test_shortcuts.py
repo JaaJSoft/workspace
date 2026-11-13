@@ -13,6 +13,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.models import File, FileEvent, FileShare
 from workspace.files.queries import get_permission
 from workspace.files.services import disk_sync, trash, tree
@@ -242,6 +243,30 @@ class ResolveShortcutsTests(ShortcutFixtures, TestCase):
 
     def test_other_nodes_are_left_out(self):
         self.assertEqual(resolve_shortcuts(self.alice, [self.report]), {})
+
+    def test_more_shortcuts_than_one_statement_binds(self):
+        """The limit is lowered for the call, so sixty shortcuts stand in for
+        the 32766 it takes in production."""
+        targets = [tree.create_file(self.alice, f"doc-{i}.txt") for i in range(60)]
+        FileShare.objects.bulk_create(
+            FileShare(file=target, shared_by=self.alice, shared_with=self.bob)
+            for target in targets
+        )
+        shortcuts = [
+            create_shortcut(self.bob, target, self.bob_inbox) for target in targets
+        ]
+
+        with sqlite_parameter_limit(40):
+            resolutions = resolve_shortcuts(self.bob, shortcuts)
+
+        self.assertEqual(
+            {resolutions[shortcut.pk].target.pk for shortcut in shortcuts},
+            {target.pk for target in targets},
+        )
+        self.assertEqual(
+            {resolution.state for resolution in resolutions.values()},
+            {ShortcutState.OK},
+        )
 
 
 class ShortcutModelValidationTests(ShortcutFixtures, TestCase):

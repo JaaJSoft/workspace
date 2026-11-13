@@ -19,6 +19,7 @@ from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APITestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.models import ProcessingFailure
 from workspace.files.services import tree
 from workspace.files.services.content_writes import (
@@ -621,6 +622,36 @@ class RetryQueuesTheUnparkedFilesTests(ProcessingFailureTestCase):
             [c.kwargs["args"] for c in queue.call_args_list],
         )
         self.assertFalse(ProcessingFailure.objects.exists())
+
+    def test_more_parked_files_than_one_statement_binds(self):
+        """The limit is lowered for the retry, so sixty failures stand in for
+        the 32766 it takes in production."""
+        from workspace.files.services.processing_failures import retry_failures
+        from workspace.files.tasks import catch_up_file
+
+        parked = [tree.create_file(self.user, f"parked-{i}.jpg") for i in range(60)]
+        ProcessingFailure.objects.bulk_create(
+            ProcessingFailure(
+                processor="thumbnails",
+                file=f,
+                attempts=1,
+                last_attempt_at=timezone.now(),
+            )
+            for f in parked
+        )
+
+        with (
+            patch.object(catch_up_file, "apply_async") as queue,
+            sqlite_parameter_limit(40),
+        ):
+            unparked = retry_failures(ProcessingFailure.objects.all())
+
+        self.assertEqual(unparked, 60)
+        self.assertFalse(ProcessingFailure.objects.exists())
+        self.assertEqual(
+            {c.kwargs["args"][1] for c in queue.call_args_list},
+            {str(f.pk) for f in parked},
+        )
 
 
 class RetryFailedEndpointTests(ProcessingFailureAPITestCase):

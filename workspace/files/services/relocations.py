@@ -22,7 +22,6 @@ import posixpath
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from itertools import batched
 
 from django.core.exceptions import SuspiciousFileOperation
 from django.core.files.base import ContentFile
@@ -44,8 +43,6 @@ JOURNAL_DIR = ".relocations"
 # sooner could act on rows that have not committed yet: the copies would look
 # like nobody's.
 SETTLE_AFTER = timedelta(days=1)
-
-_QUERY_BATCH = 500
 
 
 @dataclass(frozen=True)
@@ -245,12 +242,9 @@ def _suffixes(directory):
 
 def _referenced(names):
     """Of *names*, the ones a row - live or trashed - keeps its bytes under."""
-    found = set()
-    for batch in batched(dict.fromkeys(names), _QUERY_BATCH, strict=False):
-        found.update(
-            File.objects.filter(content__in=batch).values_list("content", flat=True)
-        )
-    return found
+    return set(
+        File.objects.filter(content__in=set(names)).values_list("content", flat=True)
+    )
 
 
 def _prune_directories(top):

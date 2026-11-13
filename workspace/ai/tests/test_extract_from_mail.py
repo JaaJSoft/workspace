@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, time, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -9,6 +10,7 @@ from django.utils import timezone as dj_tz
 
 from workspace.ai.models import AITask
 from workspace.calendar.models import Event
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import (
     MailAccount,
     MailExtraction,
@@ -92,6 +94,23 @@ class ExtractFromMailTests(TestCase):
         self.assertEqual(ex.confidence, "high")
         self.assertIsNotNone(ex.target)
         self.assertEqual(ex.target.source, "llm")
+
+    @patch("workspace.ai.services.llm.call_llm")
+    def test_takes_more_messages_than_a_statement_binds(self, mock_llm):
+        mock_llm.return_value = _llm_payload([])
+        limit = 50
+        message_uuids = [str(uuid.uuid4()) for _ in range(limit * 2)]
+        message_uuids.append(str(self.message.uuid))
+        self.ai_task.input_data = {"message_uuids": message_uuids}
+        self.ai_task.save(update_fields=["input_data"])
+        from workspace.ai.tasks.calendar import extract_from_mail_messages
+
+        with sqlite_parameter_limit(limit):
+            extract_from_mail_messages(str(self.ai_task.uuid))
+
+        mock_llm.assert_called_once()
+        self.ai_task.refresh_from_db()
+        self.assertEqual(self.ai_task.status, AITask.Status.COMPLETED)
 
     @patch("workspace.ai.services.llm.call_llm")
     def test_drops_medium_confidence(self, mock_llm):

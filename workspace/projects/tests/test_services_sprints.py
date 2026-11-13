@@ -1,8 +1,10 @@
+import uuid
 from datetime import timedelta
 
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.projects.models import Project, Sprint, TaskEvent
 from workspace.projects.services.members import add_member
 from workspace.projects.services.projects import create_project
@@ -111,6 +113,19 @@ class CompleteSprintTests(SprintServiceTestCase):
 
 
 class AssignTasksTests(SprintServiceTestCase):
+    def test_assign_a_selection_larger_than_the_parameter_limit(self):
+        parameter_limit = 50
+        sprint = self.scrum.sprints.create(name="Sprint 1")
+        task = create_task(self.scrum, self.admin, title="a")
+        selection = [task.uuid, *(uuid.uuid4() for _ in range(parameter_limit * 2))]
+
+        with sqlite_parameter_limit(parameter_limit):
+            changed = assign_tasks_to_sprint(self.scrum, sprint, selection)
+
+        self.assertEqual([t.uuid for t in changed], [task.uuid])
+        task.refresh_from_db()
+        self.assertEqual(task.sprint_id, sprint.pk)
+
     def test_assign_skips_tasks_already_on_sprint(self):
         sprint = self.scrum.sprints.create(name="Sprint 1")
         task = create_task(self.scrum, self.admin, title="a", sprint=sprint)

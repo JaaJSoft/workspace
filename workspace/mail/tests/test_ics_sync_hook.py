@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
 User = get_user_model()
@@ -114,3 +115,61 @@ class SyncCalendarHookTest(TestCase):
         processed = list(mock_process.call_args[0][0])
         self.assertEqual(len(processed), 1)
         self.assertEqual(processed[0].pk, new_msg.pk)
+
+    @patch("workspace.ai.tasks.mail.classify_mail_messages.delay")
+    @patch("workspace.ai.client.is_ai_enabled", return_value=False)
+    @patch("workspace.mail.services.imap_sync._reconcile_folder")
+    @patch("workspace.mail.services.imap_sync._parse_message")
+    @patch("workspace.mail.services.imap_sync.connect_imap")
+    @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
+    def test_sync_hands_over_more_new_messages_than_a_statement_binds(
+        self,
+        mock_process,
+        mock_connect,
+        mock_parse,
+        _mock_reconcile,
+        _mock_ai_enabled,
+        _mock_classify_delay,
+    ):
+        from workspace.mail.services.imap_sync import (
+            FETCH_BATCH_SIZE,
+            sync_folder_messages,
+        )
+
+        # Above a fetch batch: its existence probe binds one UID each.
+        limit = FETCH_BATCH_SIZE + 10
+        uids = range(2, limit + 12)
+        new_messages = {
+            message.imap_uid: message
+            for message in MailMessage.objects.bulk_create(
+                MailMessage(
+                    account=self.account,
+                    folder=self.folder,
+                    imap_uid=uid,
+                    has_calendar_event=True,
+                )
+                for uid in uids
+            )
+        }
+        mock_parse.side_effect = lambda raw, account, folder, uid, flags, known_uids: (
+            new_messages[uid]
+        )
+
+        def uid_command(command, *args):
+            if command == "SEARCH":
+                return "OK", [" ".join(str(uid) for uid in uids).encode()]
+            return "OK", [
+                (f"{uid} (UID {uid} FLAGS ())".encode(), b"raw email")
+                for uid in args[0].split(",")
+            ]
+
+        conn = MagicMock()
+        conn.uid.side_effect = uid_command
+        conn.select.return_value = ("OK", [b"1"])
+        mock_connect.return_value = conn
+
+        with sqlite_parameter_limit(limit):
+            sync_folder_messages(self.account, self.folder)
+
+        mock_process.assert_called_once()
+        self.assertEqual(mock_process.call_args[0][0].count(), len(uids))

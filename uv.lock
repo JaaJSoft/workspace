@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14.1"
 
 [[package]]
@@ -920,6 +920,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4f/3d/aa093a841f32837311538e7952f5548b1a9c605a5aba5395163fbc54ac59/django_debug_toolbar-8.0.0.tar.gz", hash = "sha256:cae32d3e441e608f39f3f1ca6b3f028c38d5d04d74c98d8ab96d46022dee3163", size = 1239141, upload-time = "2026-09-01T18:27:56.934Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/22/bd/ffd3f171940c58cca7971d1e5b81d6ab67b85a9569fe9d9fe13f7fbd1c99/django_debug_toolbar-8.0.0-py3-none-any.whl", hash = "sha256:329dfd6e1c26d9b4501a5cc69294c8bb734206ccb1bd36e96afc4d14128b630a", size = 437877, upload-time = "2026-09-01T18:27:55.018Z" },
+]
+
+[[package]]
+name = "django-fast-update"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/6d/6fa970959833893a93d7f60a2a77494a3f96bafa6fa45bce7b001c04c1f7/django_fast_update-0.3.0.tar.gz", hash = "sha256:6cbd0fb9d4899023b174f0840fb70bc29b3519991bce2b9f92a7d64aace42883", size = 22693, upload-time = "2025-08-04T17:03:43.387Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/88/a1400eaef9b1ecf834fdef1bf6c0fb32d37068b813568235740eaa1e8efa/django_fast_update-0.3.0-py3-none-any.whl", hash = "sha256:88ccb5172dd2eafdc040709bbb0a805b4e36697d2bc000e5a17126fa054c43b1", size = 24433, upload-time = "2025-08-04T17:03:40.706Z" },
 ]
 
 [[package]]
@@ -3553,6 +3565,7 @@ dependencies = [
     { name = "dj-database-url" },
     { name = "django" },
     { name = "django-csp" },
+    { name = "django-fast-update" },
     { name = "django-filter" },
     { name = "django-http-compression", extra = ["brotli"] },
     { name = "django-prometheus" },
@@ -3631,6 +3644,7 @@ requires-dist = [
     { name = "dj-database-url", specifier = ">=2.3.0" },
     { name = "django", specifier = ">=6.1.3,<7.0" },
     { name = "django-csp", specifier = ">=4.0" },
+    { name = "django-fast-update", specifier = ">=0.3.0" },
     { name = "django-filter", specifier = "==26.2" },
     { name = "django-http-compression", extras = ["brotli"], specifier = ">=1.4.0" },
     { name = "django-prometheus", specifier = ">=2.6.0.dev26" },

@@ -5,12 +5,14 @@ dimensions. The fake backend's grouping threshold is 0.5, so a neighbour is
 confident from 0.4 on.
 """
 
+import uuid
 from unittest.mock import patch
 
 import numpy as np
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.common.vectors.encoding import from_bytes
 from workspace.common.vectors.indexing import index_vector
 from workspace.photos.indexes import FACE_EMBEDDINGS
@@ -31,6 +33,14 @@ User = get_user_model()
 
 AUTO = Face.Assignment.AUTO
 CONFIRMED = Face.Assignment.CONFIRMED
+
+# SQLite binds 32766 parameters per statement at most; lowered to this, a
+# few dozen ids are as many as a library's.
+PARAMETER_LIMIT = 50
+
+
+def unknown_ids():
+    return [uuid.uuid4() for _ in range(PARAMETER_LIMIT * 2)]
 
 
 def unit(*components):
@@ -115,6 +125,17 @@ class ConfirmedWeightTests(VectorFacesMixin, FacesTestMixin, TestCase):
 
         self.assertEqual(self.cluster_of(poor), cluster.pk)
 
+    def test_refreshes_more_clusters_than_a_statement_binds(self):
+        # A clustering run refreshes every cluster of its owner.
+        cluster = FaceCluster.objects.create(owner=self.user)
+        self.face("guessed", unit(1), cluster=cluster)
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            refresh_clusters([*unknown_ids(), cluster.pk])
+
+        cluster.refresh_from_db()
+        self.assertEqual(cluster.face_count, 1)
+
 
 class IntruderMixin(VectorFacesMixin):
     """Three of Ann's faces, confirmed, and Bob's, put with them on its own.
@@ -155,6 +176,15 @@ class ChainTests(IntruderMixin, FacesTestMixin, TestCase):
         newcomer = self.face("ann-new", unit(1, 0.1))
 
         assign_faces(self.user.pk, [newcomer.pk])
+
+        self.assertEqual(self.cluster_of(newcomer), self.cluster.pk)
+
+    def test_places_more_faces_than_a_statement_binds(self):
+        # The faces released from a cluster are offered again all at once.
+        newcomer = self.face("ann-new", unit(1, 0.1))
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            assign_faces(self.user.pk, [*unknown_ids(), newcomer.pk])
 
         self.assertEqual(self.cluster_of(newcomer), self.cluster.pk)
 
@@ -219,4 +249,40 @@ class ReleaseFollowersTests(IntruderMixin, FacesTestMixin, TestCase):
 
         owner_id, file_ids = suggest.call_args.args
         self.assertEqual(owner_id, self.user.pk)
+        self.assertEqual(set(file_ids), {self.bob.file_id, self.follower.file_id})
+
+    def test_releases_more_followers_than_a_statement_binds(self):
+        followers = [
+            self.face(f"bob-follower-{k}", unit(0.6, 0.75), cluster=self.cluster)
+            for k in range(PARAMETER_LIMIT + 1)
+        ]
+        refresh_clusters([self.cluster.pk])
+        face_corrections.reject_face(self.bob)
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            released = release_followers(self.user.pk, self.cluster.pk, [self.bob.pk])
+
+        self.assertEqual(
+            set(released), {self.follower.pk, *(face.pk for face in followers)}
+        )
+        self.assertFalse(
+            Face.objects.filter(cluster=self.cluster, pk__in=released).exists()
+        )
+
+    def test_the_task_takes_more_released_faces_than_a_statement_binds(self):
+        released = [*unknown_ids(), self.follower.pk]
+
+        with (
+            patch(
+                "workspace.photos.services.face_grouping.release_followers",
+                return_value=released,
+            ),
+            patch(
+                "workspace.photos.services.appearance_suggestions.suggest_around_files"
+            ) as suggest,
+            sqlite_parameter_limit(PARAMETER_LIMIT),
+        ):
+            release_face_followers(self.user.pk, self.cluster.pk, [self.bob.pk])
+
+        _owner_id, file_ids = suggest.call_args.args
         self.assertEqual(set(file_ids), {self.bob.file_id, self.follower.file_id})

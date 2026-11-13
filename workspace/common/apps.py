@@ -10,7 +10,9 @@ class CommonConfig(AppConfig):
     def ready(self):
         from django.core.checks import register
 
+        from workspace.common.bulk_update import bind_bulk_update
         from workspace.common.folding import register_sqlite_fold
+        from workspace.common.in_lists import bind_long_lists
         from workspace.common.search.checks import check_sqlite_fts_support
         from workspace.common.search.schema import rebuild_sqlite_fts_indexes
         from workspace.common.vectors.checks import check_vector_backends
@@ -18,6 +20,9 @@ class CommonConfig(AppConfig):
 
         register(check_sqlite_fts_support)
         register(check_vector_backends)
+
+        bind_long_lists()
+        bind_bulk_update()
 
         # Before any query: a connection opened without sqlite-vec keeps
         # serving vector search from the numpy fallback.

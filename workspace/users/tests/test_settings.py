@@ -5,6 +5,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import translation
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.users.models import UserSetting
 from workspace.users.services.settings import (
     delete_setting,
@@ -106,7 +107,6 @@ class SetSettingTests(TestCase):
         # that method is more meaningful than counting queries because
         # the no-op fast path still does ONE cheap SELECT to honour the
         # return-type contract - the win is "no UPDATE", not "no query".
-        from unittest.mock import patch
 
         set_setting(self.user, "core", "theme", "dark")
         # Warm the read cache (set_setting invalidates it on write).
@@ -138,7 +138,6 @@ class SetSettingTests(TestCase):
         # The fast path must still kick in based on the *DB* value
         # populated into the cache by get_module_settings, not require a
         # pre-warmed cache.
-        from unittest.mock import patch
 
         # Plant the row directly so the read-side cache stays cold.
         UserSetting.objects.create(
@@ -587,18 +586,18 @@ class GetUserLanguagesTests(TestCase):
         with self.assertNumQueries(0):
             self.assertEqual(get_user_languages([]), {})
 
-    def test_splits_a_large_fan_out_into_bounded_queries(self):
-        # SQLite caps the parameters of one query (32766): a fan-out to every
-        # active user must not put them all in a single IN list.
+    def test_a_fan_out_larger_than_a_statement_binds_stays_one_query(self):
+        # SQLite caps the parameters of one query (32766, lowered here): a
+        # fan-out to every active user must not bind one per user.
         set_setting(self.users[0], "core", "language", "fr")
         set_setting(self.users[2], "core", "language", "fr")
-        with (
-            patch("workspace.users.services.settings._LANGUAGE_BATCH_SIZE", 2),
-            self.assertNumQueries(2),
-        ):
-            languages = get_user_languages([u.pk for u in self.users])
+        limit = 20
+        user_ids = [u.pk for u in self.users]
+        strangers = [max(user_ids) + offset for offset in range(1, limit * 2)]
+        with sqlite_parameter_limit(limit), self.assertNumQueries(1):
+            languages = get_user_languages(user_ids + strangers)
         self.assertEqual(
-            languages,
+            {user_id: languages[user_id] for user_id in user_ids},
             {self.users[0].pk: "fr", self.users[1].pk: "en", self.users[2].pk: "fr"},
         )
 

@@ -1,9 +1,11 @@
+import uuid
 from datetime import UTC
 
 import numpy as np
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.common.vectors.encoding import normalize, to_bytes
 from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Appearance, Face
@@ -30,6 +32,10 @@ from .appearances import (
 from .faces import FacesTestMixin, opt_in
 
 User = get_user_model()
+
+# SQLite binds 32766 parameters per statement at most; lowered to this, a
+# few dozen ids are as many as a library's.
+PARAMETER_LIMIT = 50
 
 
 def face_vector(*components):
@@ -394,6 +400,18 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
         self.assertEqual(self.suggestion(near_lea), self.lea.pk)
         self.assertEqual(self.suggestion(near_noah), self.noah.pk)
         self.assertIsNone(self.suggestion(far))
+
+    def test_around_more_photos_than_a_statement_binds(self):
+        # A cluster releasing its followers hands over the photo of each.
+        lea = self.anchor(self.lea, RED)
+        near = seen(self.user, photo_at(self.user, "near.jpg", 1), RED)
+        file_ids = [uuid.uuid4() for _ in range(PARAMETER_LIMIT * 2)]
+        file_ids.append(lea.file_id)
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            suggest_around_files(self.user.pk, file_ids)
+
+        self.assertEqual(self.suggestion(near), self.lea.pk)
 
     def _lea_guessed(self, assignment):
         """Lea's group, sure of one face of hers, and another face in it,

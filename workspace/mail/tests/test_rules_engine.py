@@ -1,8 +1,10 @@
+import uuid
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import (
     MailAccount,
     MailFolder,
@@ -63,6 +65,15 @@ class EngineTests(TestCase):
             ],
         )
         return MailRule.objects.create(**kw)
+
+    def test_takes_more_messages_than_a_statement_binds(self):
+        rule = self._rule()
+        limit = 50
+        uuids = [str(uuid.uuid4()) for _ in range(limit * 2)]
+        uuids.append(str(self.msg.uuid))
+        with sqlite_parameter_limit(limit):
+            summary = run_rules_for_messages(self.account, uuids)
+        self.assertEqual(summary, {str(self.msg.uuid): [str(rule.uuid)]})
 
     def test_match_runs_action_and_writes_log(self):
         rule = self._rule()

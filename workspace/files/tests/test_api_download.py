@@ -1,11 +1,11 @@
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.files.models import File
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
+from workspace.files.models import File, FileScan
 from workspace.files.services import trash
 
 User = get_user_model()
@@ -302,13 +302,24 @@ class BulkDownloadAPITests(APITestCase):
         with self._read_zip(resp) as zf:
             self.assertEqual(sorted(zf.namelist()), sorted(f.name for f in files))
 
-    @patch("workspace.files.viewsets.content._LOOKUP_CHUNK", 2)
-    def test_bulk_download_looks_the_selection_up_per_chunk(self):
-        files = self._create_files(5)
-        resp = self._download_all(files)
+    @override_settings(
+        FILES_MALWARE_SCAN_ENABLED=True, FILES_MALWARE_ON_DETECTION="block"
+    )
+    def test_bulk_download_accepts_a_selection_past_the_parameter_limit(self):
+        """The limit is lowered for the request, so sixty files stand in for
+        the 32766 it takes in production."""
+        files = self._create_files(60)
+        infected = files[0]
+        FileScan.objects.create(
+            file=infected,
+            status=FileScan.Status.INFECTED,
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+        with sqlite_parameter_limit(40):
+            resp = self._download_all(files)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         with self._read_zip(resp) as zf:
-            self.assertEqual(sorted(zf.namelist()), sorted(f.name for f in files))
+            self.assertEqual(sorted(zf.namelist()), sorted(f.name for f in files[1:]))
 
     def test_bulk_download_tolerates_a_repeated_uuid(self):
         resp = self.client.post(

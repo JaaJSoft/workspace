@@ -16,6 +16,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
@@ -166,3 +167,21 @@ class RelocationOnDiskTests(RelocationCases, IsolatedMediaRootMixin, TestCase):
 
 class RelocationOnObjectStorageTests(RelocationCases, S3StoragesMixin, TestCase):
     pass
+
+
+class ReferencedNamesTests(TestCase):
+    def test_among_more_names_than_one_statement_binds(self):
+        parameter_limit = 40
+        user = get_user_model().objects.create_user(username="keeper", password="x")
+        kept = tree.create_file(
+            user, "kept.txt", content=ContentFile(b"bytes", name="kept.txt")
+        )
+        names = [
+            f"files/users/keeper/ghost-{i}.txt" for i in range(parameter_limit * 2)
+        ]
+        names.append(kept.content.name)
+
+        with sqlite_parameter_limit(parameter_limit):
+            referenced = relocations._referenced(names)
+
+        self.assertEqual(referenced, {kept.content.name})

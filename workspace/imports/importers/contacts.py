@@ -180,14 +180,11 @@ class ContactsImporter(Importer):
             source.close()
 
     def live_targets(self, owner, target_uuids):
-        alive = set()
-        for chunk in batched(target_uuids, 500, strict=False):
-            alive.update(
-                user_persons(owner)
-                .filter(uuid__in=chunk)
-                .values_list("uuid", flat=True)
-            )
-        return alive
+        return set(
+            user_persons(owner)
+            .filter(uuid__in=set(target_uuids))
+            .values_list("uuid", flat=True)
+        )
 
     def summarize(self, stats):
         parts = []

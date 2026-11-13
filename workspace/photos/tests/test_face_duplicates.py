@@ -1,16 +1,21 @@
 """A correction that puts a person in a photo or video already showing them:
 the newcomer is folded into the face already them, never refused."""
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.people.services.persons import create_person
 from workspace.photos.models import Face, FaceCluster
-from workspace.photos.services.face_corrections import reject_face
+from workspace.photos.services.face_corrections import merge_clusters, reject_face
 from workspace.photos.services.face_grouping import cluster_owner
 from workspace.photos.services.face_review import unassigned_groups
 
-from .images import CAROL
+from .images import CAROL, faces_png, upload
 from .test_face_api import CLUSTERS, FaceApiTestCase, library_photo
 
 FACES = "/api/v1/photos/faces"
+
+# SQLite binds 32766 parameters per statement at most; lowered to this, a
+# few dozen ids are as many as a library's.
+PARAMETER_LIMIT = 50
 
 
 class PhotoDuplicateTests(FaceApiTestCase):
@@ -189,3 +194,39 @@ class VideoDuplicateTests(PhotoDuplicateTests):
         Face.objects.filter(file=self.photos["pair.png"]).update(timestamp=1.5)
         self.alice_in_pair.refresh_from_db()
         self.bob_in_pair.refresh_from_db()
+
+
+class MergeBesideALargeClusterTests(FaceApiTestCase):
+    """pair.png shows Ann twice, as in PhotoDuplicateTests; her cluster holds
+    more photos than a statement binds parameters."""
+
+    def _face(self, name, cluster):
+        return Face.objects.create(
+            file=upload(self.user, name, faces_png()),
+            owner=self.user,
+            box_x=0.1,
+            box_y=0.1,
+            box_width=0.2,
+            box_height=0.2,
+            detector_score=0.99,
+            quality=0.9,
+            cluster=cluster,
+        )
+
+    def test_merging_into_her_folds_the_second_face_of_the_photo(self):
+        ann = create_person(owner=self.user, display_name="Ann")
+        FaceCluster.objects.filter(pk=self.alice.pk).update(person=ann)
+        for k in range(PARAMETER_LIMIT):
+            self._face(f"ann-{k}.png", self.alice)
+        new_look = FaceCluster.objects.create(owner=self.user, person=ann)
+        self._face("ann-new-look.png", new_look)
+        bob_in_pair = self.face("pair.png", self.bob)
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            merge_clusters(self.bob, [new_look])
+
+        self.bob.refresh_from_db()
+        self.assertEqual(self.bob.person_id, ann.pk)
+        bob_in_pair.refresh_from_db()
+        self.assertIsNone(bob_in_pair.cluster_id)
+        self.assertEqual(bob_in_pair.assignment, Face.Assignment.DUPLICATE)

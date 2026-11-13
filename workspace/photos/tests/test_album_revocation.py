@@ -8,6 +8,10 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import (
+    sqlite_expression_depth,
+    sqlite_parameter_limit,
+)
 from workspace.notifications.models import Notification
 from workspace.photos.models import Album, AlbumItem, AlbumLink, AlbumShare
 from workspace.photos.queries import get_album_role
@@ -28,6 +32,10 @@ User = get_user_model()
 
 MANAGER = AlbumShare.Role.MANAGER
 VIEWER = AlbumShare.Role.VIEWER
+
+# SQLite binds 32766 parameters per statement at most; lowered to this, a
+# few dozen ids are as many as a large group's members.
+PARAMETER_LIMIT = 50
 
 
 def _at(day):
@@ -210,6 +218,42 @@ class LosingAGroupTests(RevocationTestCase):
 
         self.assertRevoked(bobs)
         self.assertRevoked(owners)
+
+    def test_revokes_among_more_former_members_than_a_statement_binds(self):
+        link = self.link(self.bob, self.group_album)
+        share_album(
+            self.group_album, role=VIEWER, acting_user=self.bob, user=self.carol
+        )
+        # Out of the group with no signal, so the revocation is the call below.
+        User.groups.through.objects.filter(user=self.bob, group=self.team).delete()
+        last_id = User.objects.order_by("-pk").values_list("pk", flat=True).first()
+        former = {last_id + 1 + i for i in range(PARAMETER_LIMIT * 2)} | {self.bob.pk}
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            revoked = revoke_lapsed_sharing(user_ids=former)
+
+        self.assertEqual(revoked, (1, 1))
+        self.assertFalse(AlbumLink.objects.filter(pk=link.pk).exists())
+        self.assertIsNone(get_album_role(self.carol, self.group_album))
+
+    def test_revokes_for_more_makers_than_an_expression_nests(self):
+        # SQLite refuses an expression past a thousand levels, lowered here: a
+        # condition per (album, maker) pair would be one level each.
+        depth = 40
+        members = User.objects.bulk_create(
+            User(username=f"member-{index}") for index in range(depth + 20)
+        )
+        self.team.user_set.add(*members)
+        links = [self.link(member, self.group_album) for member in members]
+        kept = self.link(self.bob, self.group_album)
+        # Out of the group with no signal, so the revocation is the call below.
+        User.groups.through.objects.filter(user__in=members).delete()
+
+        with sqlite_expression_depth(depth):
+            revoked = revoke_lapsed_sharing(user_ids={member.pk for member in members})
+
+        self.assertEqual(revoked, (len(links), 0))
+        self.assertEqual(list(AlbumLink.objects.all()), [kept])
 
     def test_leaving_a_group_the_album_is_shared_with(self):
         self.share(MANAGER, group=self.team)

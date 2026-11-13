@@ -12,7 +12,6 @@ the request saw.
 import logging
 from datetime import timedelta
 from enum import Enum
-from itertools import batched
 from time import monotonic
 
 from celery.exceptions import SoftTimeLimitExceeded
@@ -47,7 +46,6 @@ RETENTION = timedelta(hours=24)
 
 _PROGRESS_INTERVAL = 0.4
 _MAX_ERRORS = 50
-_MEASURE_BATCH = 500
 
 # Reasons an item fails that no transfer refusal covers.
 NOT_FOUND = "not_found"
@@ -291,15 +289,10 @@ class _Runner:
         return Slice.FINISHED
 
     def _measure(self):
-        total = 0
         uuids = [item["uuid"] for item in self.operation.items]
-        for batch in batched(uuids, _MEASURE_BATCH, strict=False):
-            nodes = list(File.objects.filter(pk__in=batch, deleted_at__isnull=True))
-            permissions = get_permissions_bulk(self.user, nodes)
-            total += sum(
-                _weight(node) for node in nodes if permissions[node.pk] is not None
-            )
-        return total
+        nodes = list(File.objects.filter(pk__in=uuids, deleted_at__isnull=True))
+        permissions = get_permissions_bulk(self.user, nodes)
+        return sum(_weight(node) for node in nodes if permissions[node.pk] is not None)
 
     def _process(self, item):
         operation = self.operation

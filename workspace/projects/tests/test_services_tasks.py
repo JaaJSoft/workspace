@@ -1,7 +1,9 @@
+import uuid
 from datetime import UTC, date, datetime
 
 from django.test import TestCase
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.projects.models import Task, TaskEvent, TaskStatus
 from workspace.projects.services.statuses import create_status
 from workspace.projects.services.tasks import (
@@ -12,6 +14,8 @@ from workspace.projects.services.tasks import (
 )
 
 from .base import ProjectTestMixin
+
+PARAMETER_LIMIT = 50
 
 
 class TaskServiceMixin(ProjectTestMixin):
@@ -217,6 +221,14 @@ class ReorderTasksTests(TaskServiceMixin, TestCase):
         reorder_tasks(self.project, self.backlog, [uuid_module.uuid4(), self.t2.uuid])
         self.assertEqual(self._backlog_titles(), ["t2", "t1", "t3"])
 
+    def test_order_longer_than_the_parameter_limit(self):
+        order = [self.t3.uuid, *(uuid.uuid4() for _ in range(PARAMETER_LIMIT * 2))]
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            reorder_tasks(self.project, self.backlog, order)
+
+        self.assertEqual(self._backlog_titles(), ["t3", "t1", "t2"])
+
 
 class MoveTasksTests(TaskServiceMixin, TestCase):
     def setUp(self):
@@ -260,6 +272,15 @@ class MoveTasksTests(TaskServiceMixin, TestCase):
         import uuid as uuid_module
 
         moved = move_tasks(self.project, self.todo, [uuid_module.uuid4(), self.t2.uuid])
+        self.assertEqual([t.uuid for t in moved], [self.t2.uuid])
+        self.assertEqual(self._titles(self.todo), ["t2"])
+
+    def test_selection_larger_than_the_parameter_limit(self):
+        selection = [self.t2.uuid, *(uuid.uuid4() for _ in range(PARAMETER_LIMIT * 2))]
+
+        with sqlite_parameter_limit(PARAMETER_LIMIT):
+            moved = move_tasks(self.project, self.todo, selection)
+
         self.assertEqual([t.uuid for t in moved], [self.t2.uuid])
         self.assertEqual(self._titles(self.todo), ["t2"])
 

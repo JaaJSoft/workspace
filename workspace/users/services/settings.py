@@ -11,7 +11,6 @@ Usage from another app::
 from __future__ import annotations
 
 from collections import defaultdict
-from itertools import batched
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -24,11 +23,6 @@ from workspace.users.models import UserSetting
 UTC = ZoneInfo("UTC")
 
 _CACHE_TTL = 300  # 5 minutes
-
-# Users per query in get_user_languages / get_user_timezones. SQLite, the default database in
-# production too, refuses a query with more than 32766 parameters, and a fan-out
-# to every active user would otherwise put them all in one IN list.
-_LANGUAGE_BATCH_SIZE = 5000
 
 
 def _module_tag(user_id: int, module: str) -> str:
@@ -50,18 +44,15 @@ def get_user_timezone(user) -> ZoneInfo:
 
 
 def _stored_core_values(user_ids, key) -> dict:
-    stored = {}
-    for batch in batched(user_ids, _LANGUAGE_BATCH_SIZE, strict=False):
-        stored.update(
-            UserSetting.objects.filter(
-                user_id__in=batch, module="core", key=key
-            ).values_list("user_id", "value")
-        )
-    return stored
+    return dict(
+        UserSetting.objects.filter(
+            user_id__in=user_ids, module="core", key=key
+        ).values_list("user_id", "value")
+    )
 
 
 def get_user_timezones(user_ids) -> dict[int, ZoneInfo]:
-    """Timezone of each of *user_ids*, in one query per batch.
+    """Timezone of each of *user_ids*, in one query.
 
     The fan-out counterpart of :func:`get_user_timezone`, for work that runs
     for every user at once (a cron judging each user's local day), with the
@@ -84,7 +75,7 @@ def get_user_language(user) -> str:
 
 
 def get_user_languages(user_ids) -> dict[int, str]:
-    """Interface language of each of *user_ids*, in one query per batch.
+    """Interface language of each of *user_ids*, in one query.
 
     For fan-outs (a notification to every member of a group), where calling
     :func:`get_user_language` per recipient would cost one query each on a

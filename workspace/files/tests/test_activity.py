@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.activity import FilesActivityProvider
 from workspace.files.models import File, FileEvent, FileShare
 from workspace.files.services.events import record_event
@@ -479,6 +480,19 @@ class RecentFeedEventsTests(TestCase):
         private_ids = {f.pk for f in private}
         visible = FileEvent.objects.filter(pk__in=self._feed(self.alice, 100, 0))
         self.assertFalse(visible.filter(file_id__in=private_ids).exists())
+
+    def test_a_page_of_more_files_than_one_statement_binds(self):
+        """The limit is lowered for the read, so sixty candidate files stand
+        in for the 32766 it takes in production."""
+        for i in range(60):
+            self._event(self._file(self.alice, f"own-{i}.txt"), self.bob)
+        expected = self._expected(self.alice, 60, 0)
+
+        with sqlite_parameter_limit(40):
+            feed = self._feed(self.alice, 60, 0)
+
+        self.assertEqual(len(feed), 60)
+        self.assertEqual(feed, expected)
 
     def _bob_event_behind_alices_edits(self):
         """Bob's event on a team file, behind Alice's edits on 20 other team

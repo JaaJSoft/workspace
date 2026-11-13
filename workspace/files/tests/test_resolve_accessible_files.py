@@ -8,6 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.files.models import FileScan, FileShare
 from workspace.files.queries import resolve_accessible_files
 from workspace.files.services import tree
@@ -101,3 +102,18 @@ class ResolveAccessibleFilesTests(TestCase):
         flagged = self._infected("flagged.txt")
         result = resolve_accessible_files(self.user, [flagged.uuid])
         self.assertEqual({f.uuid for f in result}, {flagged.uuid})
+
+    def test_more_shared_files_than_one_statement_binds(self):
+        """The limit is lowered for the call, so sixty files stand in for the
+        32766 it takes in production."""
+        shared = [tree.create_file(self.other, f"shared-{i}.txt") for i in range(60)]
+        FileShare.objects.bulk_create(
+            FileShare(file=f, shared_by=self.other, shared_with=self.user)
+            for f in shared
+        )
+        uuids = [f.uuid for f in shared]
+
+        with sqlite_parameter_limit(40):
+            result = resolve_accessible_files(self.user, uuids)
+
+        self.assertEqual({f.uuid for f in result}, set(uuids))

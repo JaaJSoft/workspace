@@ -41,13 +41,9 @@ def _descendant_pks_deepest_first(folder):
     levels = []
     frontier = [folder.pk]
     while frontier:
-        frontier = [
-            pk
-            for chunk in batched(frontier, HARD_DELETE_BATCH_SIZE, strict=False)
-            for pk in File.objects.filter(parent_id__in=chunk).values_list(
-                "pk", flat=True
-            )
-        ]
+        frontier = list(
+            File.objects.filter(parent_id__in=frontier).values_list("pk", flat=True)
+        )
         levels.append(frontier)
     return [pk for level in reversed(levels) for pk in level]
 

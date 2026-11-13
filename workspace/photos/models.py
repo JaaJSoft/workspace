@@ -3,6 +3,7 @@ import secrets
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import pgettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
 from workspace.files.models import File
@@ -219,9 +220,9 @@ class AlbumShare(models.Model):
     """
 
     class Role(models.TextChoices):
-        VIEWER = "viewer", "Viewer"
-        CONTRIBUTOR = "contributor", "Contributor"
-        MANAGER = "manager", "Manager"
+        VIEWER = "viewer", pgettext_lazy("album role", "Viewer")
+        CONTRIBUTOR = "contributor", pgettext_lazy("album role", "Contributor")
+        MANAGER = "manager", pgettext_lazy("album role", "Manager")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     album = models.ForeignKey(Album, on_delete=models.CASCADE, related_name="shares")

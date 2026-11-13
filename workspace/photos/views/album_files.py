@@ -12,6 +12,7 @@ The helpers at the top are shared with the public link endpoints
 from django.core.files.storage import default_storage
 from django.db.models import F
 from django.http import FileResponse, StreamingHttpResponse
+from django.utils.translation import gettext
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
@@ -277,7 +278,7 @@ class AlbumDownloadView(APIView):
                 parse_uuid_batch(request.data, key="files", max_items=MAX_FILES)
             )
         except BatchTooLarge:
-            detail = f"Too many files (max {MAX_FILES})."
+            detail = gettext("Too many files (max %(max)s).") % {"max": MAX_FILES}
         except MalformedUuid:
             detail = "Malformed UUID in files."
         except UuidBatchError:

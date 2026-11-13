@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import serializers, status
@@ -65,7 +66,7 @@ class LinkWriteSerializer(serializers.Serializer):
 
     def validate_expires_at(self, value):
         if value is not None and value <= timezone.now():
-            raise serializers.ValidationError("The expiry must be in the future.")
+            raise serializers.ValidationError(_("The expiry must be in the future."))
         return value
 
 
@@ -122,7 +123,7 @@ def _resolve_target(request, data, *, active_only=True):
     if "shared_with" in data:
         if data["shared_with"] == request.user.pk:
             return Response(
-                {"detail": "Cannot share with yourself."},
+                {"detail": _("Cannot share with yourself.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         users = User.objects.filter(pk=data["shared_with"])
@@ -198,7 +199,7 @@ class AlbumSharesView(CacheControlMixin, APIView):
             album.group_id is None and target["user"].pk == album.owner_id
         ):
             return Response(
-                {"detail": "The owner already holds the album."},
+                {"detail": _("The owner already holds the album.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         share, created = share_album(

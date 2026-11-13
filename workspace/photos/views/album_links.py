@@ -7,6 +7,7 @@ token ``verify`` hands out, in ``?access_token=``.
 """
 
 from django.contrib.auth.hashers import check_password
+from django.utils.translation import gettext
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -35,11 +36,11 @@ def _open_link(request, token):
         return None, Response(status=status.HTTP_404_NOT_FOUND)
     if link.is_expired:
         return None, Response(
-            {"detail": "This link has expired."}, status=status.HTTP_410_GONE
+            {"detail": gettext("This link has expired.")}, status=status.HTTP_410_GONE
         )
     if not has_access(link, request.query_params.get("access_token", "")):
         return None, Response(
-            {"detail": "Password required.", "has_password": True},
+            {"detail": gettext("Password required."), "has_password": True},
             status=status.HTTP_403_FORBIDDEN,
         )
     return link, None
@@ -85,17 +86,19 @@ class AlbumLinkVerifyView(_PublicView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         if link.is_expired:
             return Response(
-                {"detail": "This link has expired."}, status=status.HTTP_410_GONE
+                {"detail": gettext("This link has expired.")},
+                status=status.HTTP_410_GONE,
             )
         if not link.has_password:
             return Response(
-                {"detail": "This link has no password."},
+                {"detail": gettext("This link has no password.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         data = request.data if isinstance(request.data, dict) else {}
         if not check_password(str(data.get("password", "")), link.password):
             return Response(
-                {"detail": "Invalid password."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": gettext("Invalid password.")},
+                status=status.HTTP_403_FORBIDDEN,
             )
         return Response({"access_token": access_token_for(link)})
 

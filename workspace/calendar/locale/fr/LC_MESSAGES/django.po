@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:46+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -801,10 +801,6 @@ msgid "Save my votes"
 msgstr "Enregistrer mes votes"
 
 #: ui/templates/calendar/ui/partials/_preferences_content.html
-msgid "Default view"
-msgstr "Vue par défaut"
-
-#: ui/templates/calendar/ui/partials/_preferences_content.html
 msgid "First day of week"
 msgstr "Premier jour de la semaine"
 
@@ -885,10 +881,6 @@ msgstr "Échéances des tâches"
 msgid "Other calendars"
 msgstr "Autres calendriers"
 
-#: ui/templates/calendar/ui/partials/_sidebar.html
-msgid "Help (?)"
-msgstr "Aide (?)"
-
 #: ui/templates/calendar/ui/partials/event_card.html
 msgctxt "open the event"
 msgid "View"
@@ -921,10 +913,6 @@ msgstr "Période précédente"
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "Next period"
 msgstr "Période suivante"
-
-#: ui/templates/calendar/ui/partials/help_dialog.html
-msgid "Views"
-msgstr "Vues"
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "Month view"

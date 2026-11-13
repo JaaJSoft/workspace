@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:58+0000\n"
+"POT-Creation-Date: 2026-11-14 19:43+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1482,10 +1482,6 @@ msgid "Close dialog"
 msgstr "Fermer la fenêtre"
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid "Views"
-msgstr "Vues"
-
-#: ui/templates/projects/ui/partials/help_dialog.html
 msgid ""
 "<strong>Overview</strong> &mdash; Task counts and recent activity at a "
 "glance."
@@ -2356,10 +2352,6 @@ msgstr "Toutes les tâches"
 #: ui/templates/projects/ui/project.html
 msgid "Analytics"
 msgstr "Statistiques"
-
-#: ui/templates/projects/ui/project.html
-msgid "Help (?)"
-msgstr "Aide (?)"
 
 #: ui/templates/projects/ui/project.html
 msgid "Could not create the project."

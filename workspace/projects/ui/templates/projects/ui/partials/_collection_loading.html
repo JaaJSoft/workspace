@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Loading veil over #task-collection. It sits next to the collection, not
 inside it, so it survives the swap; it shows while collectionLoading is
@@ -32,5 +33,5 @@ while the delay runs.
   <span class="sticky top-1/2 inline-flex text-module animate-spin">
     <i data-lucide="loader-circle" class="w-8 h-8"></i>
   </span>
-  <span class="sr-only">Loading tasks…</span>
+  <span class="sr-only">{% translate "Loading tasks…" %}</span>
 </div>

@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 One horizontal-bar breakdown of the project's open tasks.
 
@@ -38,7 +39,7 @@ A status column carries a raw CSS colour, everything else a daisyUI class.
         </div>
       </li>
     {% empty %}
-      <li class="text-sm text-base-content/50 italic">Nothing open here.</li>
+      <li class="text-sm text-base-content/50 italic">{% translate "Nothing open here." %}</li>
     {% endfor %}
   </ul>
 </section>

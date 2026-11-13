@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Shared board/backlog filter bar. Filtering is server-side: every change
 re-fetches the current view with the filters as query parameters (see
@@ -35,7 +36,7 @@ readable while the panel is closed.
       <input
         type="search"
         class="grow min-w-0"
-        placeholder="Search tasks"
+        placeholder="{% translate "Search tasks" %}"
         x-model="filters.q"
         @input.debounce.300ms="applyFilters()"
       />
@@ -55,7 +56,7 @@ readable while the panel is closed.
         @click="filtersPanelOpen = !filtersPanelOpen"
       >
         <i data-lucide="list-filter" class="w-4 h-4"></i>
-        <span class="hidden sm:inline">Filters</span>
+        <span class="hidden sm:inline">{% translate "Filters" %}</span>
         <span
           class="badge badge-sm"
           x-show="activeFilterCount()"
@@ -69,8 +70,9 @@ readable while the panel is closed.
         class="absolute left-0 top-9 z-50 w-full max-w-sm bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 flex flex-col gap-3"
       >
         <div class="flex flex-col gap-1.5">
-          <span class="text-xs font-medium text-base-content/60">Assignee</span>
-          {% include "users/ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder="Filter by assignee" local_source="unfilteredMembers()" icon="users" %}
+          <span class="text-xs font-medium text-base-content/60">{% translate "Assignee" %}</span>
+          {% translate "Filter by assignee" as assignee_placeholder %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="filter-assignee-selected" placeholder=assignee_placeholder local_source="unfilteredMembers()" icon="users" %}
           <div
             class="flex flex-wrap items-center gap-1.5"
             x-show="assigneeFilterChips().length"
@@ -87,13 +89,14 @@ readable while the panel is closed.
               :checked="isAssigneeFilter('none')"
               @change="toggleAssigneeFilter('none')"
             />
-            <span class="text-sm">Unassigned tasks</span>
+            <span class="text-sm">{% translate "Unassigned tasks" %}</span>
           </label>
         </div>
         {% if epics_data %}
           <div class="flex flex-col gap-1.5">
-            <span class="text-xs font-medium text-base-content/60">Epic</span>
-            {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-epic-selected" all_source="epics" selected_source="filters.epic" placeholder="Filter by epic" entity="epic" icon="layers" no_create=True %}
+            <span class="text-xs font-medium text-base-content/60">{% translate "Epic" %}</span>
+            {% translate "Filter by epic" as epic_placeholder %}
+            {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-epic-selected" all_source="epics" selected_source="filters.epic" placeholder=epic_placeholder entity="epic" icon="layers" no_create=True %}
             <div
               class="flex flex-wrap items-center gap-1.5"
               x-show="filters.epic.length"
@@ -107,8 +110,9 @@ readable while the panel is closed.
         {% endif %}
         {% if labels_data %}
           <div class="flex flex-col gap-1.5">
-            <span class="text-xs font-medium text-base-content/60">Label</span>
-            {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder="Filter by label" no_create=True %}
+            <span class="text-xs font-medium text-base-content/60">{% translate "Label" %}</span>
+            {% translate "Filter by label" as label_placeholder %}
+            {% include "projects/ui/partials/_label_selector.html" with on_select_event="filter-label-selected" all_source="labels" selected_source="filters.label" placeholder=label_placeholder no_create=True %}
             <div
               class="flex flex-wrap items-center gap-1.5"
               x-show="filters.label.length"
@@ -121,13 +125,15 @@ readable while the panel is closed.
           </div>
         {% endif %}
         <div class="flex flex-col gap-1.5">
-          <span class="text-xs font-medium text-base-content/60">Priority</span>
-          {% include "projects/ui/partials/_priority_selector.html" with model_expr="filters.priority" on_change="applyFilters()" with_all=True label="Filter by priority" %}
+          <span class="text-xs font-medium text-base-content/60">{% translate "Priority" %}</span>
+          {% translate "Filter by priority" as priority_filter_label %}
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="filters.priority" on_change="applyFilters()" with_all=True label=priority_filter_label %}
         </div>
         {% if show_status_filter %}
           <div class="flex flex-col gap-1.5">
-            <span class="text-xs font-medium text-base-content/60">Status</span>
-            {% include "projects/ui/partials/_status_selector.html" with model_expr="filters.status" on_change="applyFilters()" with_all=True label="Filter by status" %}
+            <span class="text-xs font-medium text-base-content/60">{% translate "Status" %}</span>
+            {% translate "Filter by status" as status_filter_label %}
+            {% include "projects/ui/partials/_status_selector.html" with model_expr="filters.status" on_change="applyFilters()" with_all=True label=status_filter_label %}
           </div>
         {% endif %}
         <button
@@ -138,7 +144,7 @@ readable while the panel is closed.
           @click="clearFilters()"
         >
           <i data-lucide="x" class="w-3.5 h-3.5"></i>
-          Clear all filters
+          {% translate "Clear all filters" %}
         </button>
       </div>
     </div>
@@ -147,12 +153,12 @@ readable while the panel is closed.
       class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3"
       x-show="filtersActive()"
       x-cloak
-      title="Clear filters"
-      aria-label="Clear filters"
+      title="{% translate "Clear filters" %}"
+      aria-label="{% translate "Clear filters" %}"
       @click="clearFilters()"
     >
       <i data-lucide="x" class="w-4 h-4"></i>
-      <span class="hidden sm:inline">Clear</span>
+      <span class="hidden sm:inline">{% translate "Clear" %}</span>
     </button>
   </div>
   {# Search is visible in the input itself, so only the panel-managed filters get a chip. #}
@@ -170,11 +176,11 @@ readable while the panel is closed.
       x-cloak
     >
       <i data-lucide="user-x" class="w-3.5 h-3.5 opacity-60"></i>
-      <span class="text-xs">Unassigned</span>
+      <span class="text-xs">{% translate "Unassigned" %}</span>
       <button
         type="button"
         class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
-        aria-label="Remove the unassigned filter"
+        aria-label="{% translate "Remove the unassigned filter" %}"
         @click="toggleAssigneeFilter('none')"
       >
         <i data-lucide="x" class="w-3 h-3"></i>
@@ -196,7 +202,7 @@ readable while the panel is closed.
       <button
         type="button"
         class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
-        aria-label="Remove the priority filter"
+        aria-label="{% translate "Remove the priority filter" %}"
         @click="filters.priority = ''; applyFilters()"
       >
         <i data-lucide="x" class="w-3 h-3"></i>
@@ -215,7 +221,7 @@ readable while the panel is closed.
       <button
         type="button"
         class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
-        aria-label="Remove the status filter"
+        aria-label="{% translate "Remove the status filter" %}"
         @click="filters.status = ''; applyFilters()"
       >
         <i data-lucide="x" class="w-3 h-3"></i>

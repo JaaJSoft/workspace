@@ -17,6 +17,7 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from ..models import Sprint, TaskEvent, TaskStatus
 
@@ -27,13 +28,13 @@ VELOCITY_WINDOW = 3
 
 # Upper bounds in days, None for the open-ended last bucket.
 DURATION_BUCKETS = [
-    ("< 1 day", 1),
-    ("1-2 days", 2),
-    ("2-4 days", 4),
-    ("4-7 days", 7),
-    ("1-2 weeks", 14),
-    ("2-4 weeks", 28),
-    ("> 4 weeks", None),
+    (_("< 1 day"), 1),
+    (_("1-2 days"), 2),
+    (_("2-4 days"), 4),
+    (_("4-7 days"), 7),
+    (_("1-2 weeks"), 14),
+    (_("2-4 weeks"), 28),
+    (_("> 4 weeks"), None),
 ]
 
 _REPLAYED_TYPES = (
@@ -304,7 +305,7 @@ def _percentiles(durations):
 def duration_buckets(samples):
     """Histogram of both durations over DURATION_BUCKETS."""
     return {
-        "labels": [label for label, _ in DURATION_BUCKETS],
+        "labels": [str(label) for label, _upper in DURATION_BUCKETS],
         "lead": _bucket_counts(s.lead for s in samples),
         "cycle": _bucket_counts(s.cycle for s in samples if s.cycle is not None),
     }
@@ -314,7 +315,7 @@ def _bucket_counts(durations):
     counts = [0] * len(DURATION_BUCKETS)
     for duration in durations:
         days = duration.total_seconds() / 86400
-        for index, (_, upper) in enumerate(DURATION_BUCKETS):
+        for index, (_label, upper) in enumerate(DURATION_BUCKETS):
             if upper is None or days < upper:
                 counts[index] += 1
                 break

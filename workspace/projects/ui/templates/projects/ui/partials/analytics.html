@@ -1,3 +1,4 @@
+{% load i18n %}
 <div id="analytics" class="w-full max-w-6xl mx-auto flex flex-col gap-4">
   {% if is_empty %}
     <section class="rounded-box bg-base-200 p-10 text-center">
@@ -5,10 +6,12 @@
         data-lucide="bar-chart-3"
         class="w-10 h-10 mx-auto text-base-content/30"
       ></i>
-      <h2 class="font-semibold mt-3">Nothing to chart yet</h2>
+      <h2 class="font-semibold mt-3">{% translate "Nothing to chart yet" %}</h2>
       <p class="text-sm text-base-content/60 mt-1 max-w-md mx-auto">
-        Create a few tasks and move them across the board. Throughput and
-        distribution appear here as soon as there is history to read.
+        {% blocktranslate trimmed %}
+          Create a few tasks and move them across the board. Throughput and
+          distribution appear here as soon as there is history to read.
+        {% endblocktranslate %}
       </p>
     </section>
   {% else %}
@@ -19,17 +22,17 @@
         <div class="stat-figure text-success">
           <i data-lucide="circle-check" class="w-6 h-6"></i>
         </div>
-        <div class="stat-title">Completed</div>
+        <div class="stat-title">{% translate "Completed" context "task count" %}</div>
         <div class="stat-value text-2xl">{{ flow_summary.completed }}</div>
-        <div class="stat-desc">last 12 weeks</div>
+        <div class="stat-desc">{% translate "last 12 weeks" %}</div>
       </div>
       <div class="stat">
         <div class="stat-figure text-module">
           <i data-lucide="plus" class="w-6 h-6"></i>
         </div>
-        <div class="stat-title">Created</div>
+        <div class="stat-title">{% translate "Created" context "task count" %}</div>
         <div class="stat-value text-2xl">{{ flow_summary.created }}</div>
-        <div class="stat-desc">last 12 weeks</div>
+        <div class="stat-desc">{% translate "last 12 weeks" %}</div>
       </div>
       <div class="stat">
         {% comment %}
@@ -45,78 +48,117 @@
             class="w-6 h-6"
           ></i>
         </div>
-        <div class="stat-title">Net change</div>
+        <div class="stat-title">{% translate "Net change" %}</div>
         <div class="stat-value text-2xl">{% if flow_summary.net > 0 %}+{% endif %}{{ flow_summary.net }}</div>
-        <div class="stat-desc">{% if flow_summary.net > 0 %}backlog growing{% elif flow_summary.net < 0 %}backlog shrinking{% else %}backlog unchanged{% endif %}</div>
+        <div class="stat-desc">
+          {% if flow_summary.net > 0 %}
+            {% translate "backlog growing" %}
+          {% elif flow_summary.net < 0 %}
+            {% translate "backlog shrinking" %}
+          {% else %}
+            {% translate "backlog unchanged" %}
+          {% endif %}
+        </div>
       </div>
       <div class="stat">
         <div class="stat-figure text-module">
           <i data-lucide="gauge" class="w-6 h-6"></i>
         </div>
-        <div class="stat-title">Throughput</div>
+        <div class="stat-title">{% translate "Throughput" %}</div>
         <div class="stat-value text-2xl">{{ flow_summary.avg_weekly }}</div>
-        <div class="stat-desc">completed per week</div>
+        <div class="stat-desc">{% translate "completed per week" %}</div>
       </div>
     </div>
 
     <section class="rounded-box bg-base-200 p-4">
       <h2 class="font-semibold mb-1 flex items-center gap-2">
         <i data-lucide="activity" class="w-4 h-4 text-module"></i>
-        Created vs completed
+        {% translate "Created vs completed" %}
       </h2>
       <p class="text-xs text-base-content/50 mb-3">
-        Weekly, oldest first.
-        The final bar covers the current week so far.
+        {% blocktranslate trimmed %}
+          Weekly, oldest first.
+          The final bar covers the current week so far.
+        {% endblocktranslate %}
       </p>
-      {% include "ui/partials/column_chart.html" with chart=flow_chart aria_label="Tasks created and completed per week over the last 12 weeks" %}
+      {% translate "Tasks created and completed per week over the last 12 weeks" as flow_aria_label %}
+      {% include "ui/partials/column_chart.html" with chart=flow_chart aria_label=flow_aria_label %}
     </section>
 
     <section class="rounded-box bg-base-200 p-4">
       <h2 class="font-semibold mb-1 flex items-center gap-2">
         <i data-lucide="timer" class="w-4 h-4 text-module"></i>
-        Cycle and lead time
+        {% translate "Cycle and lead time" %}
       </h2>
       <p class="text-xs text-base-content/50 mb-3">
-        Tasks finished in the last 12 weeks. Lead time runs from creation to
-        completion, cycle time from the first move onto the board.
+        {% blocktranslate trimmed %}
+          Tasks finished in the last 12 weeks. Lead time runs from creation to
+          completion, cycle time from the first move onto the board.
+        {% endblocktranslate %}
       </p>
       {% if duration_stats.count %}
         <div
           class="stats stats-vertical sm:stats-horizontal bg-base-100 w-full mb-4"
         >
           <div class="stat py-3">
-            <div class="stat-title">Cycle time</div>
-            <div class="stat-value text-2xl">{% if duration_stats.cycle.median is None %}–{% else %}{{ duration_stats.cycle.median }} d{% endif %}</div>
-            <div class="stat-desc">median · 85% within {% if duration_stats.cycle.p85 is None %}–{% else %}{{ duration_stats.cycle.p85 }} d{% endif %}</div>
+            <div class="stat-title">{% translate "Cycle time" %}</div>
+            <div class="stat-value text-2xl">{% if duration_stats.cycle.median is None %}–{% else %}{% blocktranslate trimmed with days=duration_stats.cycle.median %}{{ days }} d{% endblocktranslate %}{% endif %}</div>
+            <div class="stat-desc">
+              {% if duration_stats.cycle.p85 is None %}
+                {% translate "median · 85% within –" %}
+              {% else %}
+                {% blocktranslate trimmed with days=duration_stats.cycle.p85 %}
+                  median · 85% within {{ days }} d
+                {% endblocktranslate %}
+              {% endif %}
+            </div>
           </div>
           <div class="stat py-3">
-            <div class="stat-title">Lead time</div>
-            <div class="stat-value text-2xl">{{ duration_stats.lead.median }} d</div>
-            <div class="stat-desc">median · 85% within {{ duration_stats.lead.p85 }} d</div>
+            <div class="stat-title">{% translate "Lead time" %}</div>
+            <div class="stat-value text-2xl">
+              {% blocktranslate trimmed with days=duration_stats.lead.median %}
+                {{ days }} d
+              {% endblocktranslate %}
+            </div>
+            <div class="stat-desc">
+              {% blocktranslate trimmed with days=duration_stats.lead.p85 %}
+                median · 85% within {{ days }} d
+              {% endblocktranslate %}
+            </div>
           </div>
           <div class="stat py-3">
-            <div class="stat-title">Finished</div>
+            <div class="stat-title">{% translate "Finished" context "task count" %}</div>
             <div class="stat-value text-2xl">{{ duration_stats.count }}</div>
-            <div class="stat-desc">task{{ duration_stats.count|pluralize }} measured</div>
+            <div class="stat-desc">
+              {% blocktranslate trimmed count counter=duration_stats.count %}
+                task measured
+              {% plural %}
+                tasks measured
+              {% endblocktranslate %}
+            </div>
           </div>
         </div>
-        {% include "ui/partials/column_chart.html" with chart=duration_chart aria_label="Number of tasks per lead and cycle time bracket" %}
+        {% translate "Number of tasks per lead and cycle time bracket" as duration_aria_label %}
+        {% include "ui/partials/column_chart.html" with chart=duration_chart aria_label=duration_aria_label %}
       {% else %}
-        <p class="text-sm text-base-content/50 italic">No task finished in the last 12 weeks yet.</p>
+        <p class="text-sm text-base-content/50 italic">{% translate "No task finished in the last 12 weeks yet." %}</p>
       {% endif %}
     </section>
 
     <section class="rounded-box bg-base-200 p-4">
       <h2 class="font-semibold mb-1 flex items-center gap-2">
         <i data-lucide="area-chart" class="w-4 h-4 text-module"></i>
-        Cumulative flow
+        {% translate "Cumulative flow" %}
       </h2>
       <p class="text-xs text-base-content/50 mb-3">
-        How many tasks sat in the backlog, on the board and in done at the
-        end of each day. A widening middle band means work piles up faster
-        than it finishes.
+        {% blocktranslate trimmed %}
+          How many tasks sat in the backlog, on the board and in done at the
+          end of each day. A widening middle band means work piles up faster
+          than it finishes.
+        {% endblocktranslate %}
       </p>
-      {% include "ui/partials/line_chart.html" with chart=cumulative_flow_chart aria_label="Tasks per status category per day over the last 12 weeks" %}
+      {% translate "Tasks per status category per day over the last 12 weeks" as cumulative_aria_label %}
+      {% include "ui/partials/line_chart.html" with chart=cumulative_flow_chart aria_label=cumulative_aria_label %}
     </section>
 
     {% if project.type == "scrum" %}
@@ -124,90 +166,152 @@
         <div class="flex flex-wrap items-start justify-between gap-2 mb-1">
           <h2 class="font-semibold flex items-center gap-2">
             <i data-lucide="trending-down" class="w-4 h-4 text-module"></i>
-            Sprint burndown
+            {% translate "Sprint burndown" %}
           </h2>
           {% if report_sprints %}
             {% url 'projects_ui:analytics' project.uuid as analytics_url %}
-            {% include "projects/ui/partials/_sprint_switcher.html" with options=report_sprints selected=report_sprint base_url=analytics_url empty_label="Pick a sprint" %}
+            {% translate "Pick a sprint" as pick_sprint_label %}
+            {% include "projects/ui/partials/_sprint_switcher.html" with options=report_sprints selected=report_sprint base_url=analytics_url empty_label=pick_sprint_label %}
           {% endif %}
         </div>
         {% if burndown %}
           <p class="text-xs text-base-content/50 mb-3">
-            {{ burndown.unit|capfirst }} left at the end of each sprint day
-            against an even pace to zero.
+            {% if burndown.unit == "points" %}
+              {% translate "Points left at the end of each sprint day against an even pace to zero." %}
+            {% elif burndown.unit == "hours" %}
+              {% translate "Hours left at the end of each sprint day against an even pace to zero." %}
+            {% else %}
+              {% translate "Tasks left at the end of each sprint day against an even pace to zero." %}
+            {% endif %}
             {% if burndown.unestimated %}
-              {{ burndown.unestimated }} task{{ burndown.unestimated|pluralize }}
-              without an estimate {{ burndown.unestimated|pluralize:"is,are" }} not counted.
+              {% blocktranslate trimmed count counter=burndown.unestimated %}
+                {{ counter }} task without an estimate is not counted.
+              {% plural %}
+                {{ counter }} tasks without an estimate are not counted.
+              {% endblocktranslate %}
             {% endif %}
           </p>
           <div
             class="stats stats-vertical sm:stats-horizontal bg-base-100 w-full mb-4"
           >
             <div class="stat py-3">
-              <div class="stat-title">Remaining</div>
+              <div class="stat-title">{% translate "Remaining" %}</div>
               <div class="stat-value text-2xl">{{ burndown.remaining|floatformat:"-1" }}</div>
-              <div class="stat-desc">{{ burndown.unit }} still open</div>
-            </div>
-            <div class="stat py-3">
-              <div class="stat-title">Scope</div>
-              <div class="stat-value text-2xl">{{ burndown.scope|floatformat:"-1" }}</div>
               <div class="stat-desc">
-                {% if burndown.scope > burndown.initial_scope %}
-                  grew from {{ burndown.initial_scope|floatformat:"-1" }} at the start
-                {% elif burndown.scope < burndown.initial_scope %}
-                  down from {{ burndown.initial_scope|floatformat:"-1" }} at the start
+                {% if burndown.unit == "points" %}
+                  {% translate "points still open" %}
+                {% elif burndown.unit == "hours" %}
+                  {% translate "hours still open" %}
                 {% else %}
-                  {{ burndown.unit }} planned, unchanged
+                  {% translate "tasks still open" %}
                 {% endif %}
               </div>
             </div>
             <div class="stat py-3">
-              <div class="stat-title">Sprint</div>
+              <div class="stat-title">{% translate "Scope" %}</div>
+              <div class="stat-value text-2xl">{{ burndown.scope|floatformat:"-1" }}</div>
+              <div class="stat-desc">
+                {% if burndown.scope > burndown.initial_scope %}
+                  {% blocktranslate trimmed with initial=burndown.initial_scope|floatformat:"-1" %}
+                    grew from {{ initial }} at the start
+                  {% endblocktranslate %}
+                {% elif burndown.scope < burndown.initial_scope %}
+                  {% blocktranslate trimmed with initial=burndown.initial_scope|floatformat:"-1" %}
+                    down from {{ initial }} at the start
+                  {% endblocktranslate %}
+                {% else %}
+                  {% if burndown.unit == "points" %}
+                    {% translate "points planned, unchanged" %}
+                  {% elif burndown.unit == "hours" %}
+                    {% translate "hours planned, unchanged" %}
+                  {% else %}
+                    {% translate "tasks planned, unchanged" %}
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+            <div class="stat py-3">
+              <div class="stat-title">{% translate "Sprint" %}</div>
               <div class="stat-value text-2xl truncate">{{ report_sprint.name }}</div>
-              <div class="stat-desc">{{ report_sprint.start_date|date:"M j" }} – {{ report_sprint.end_date|date:"M j"|default:"open" }}</div>
+              {# Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25". #}
+              {% translate "M j" context "short due date format" as due_date_format %}
+              {% translate "open" context "sprint without an end date" as open_end_label %}
+              <div class="stat-desc">{{ report_sprint.start_date|date:due_date_format }} – {{ report_sprint.end_date|date:due_date_format|default:open_end_label }}</div>
             </div>
           </div>
-          {% include "ui/partials/line_chart.html" with chart=burndown_chart aria_label="Remaining effort per sprint day against the ideal pace" %}
+          {% translate "Remaining effort per sprint day against the ideal pace" as burndown_aria_label %}
+          {% include "ui/partials/line_chart.html" with chart=burndown_chart aria_label=burndown_aria_label %}
         {% else %}
-          <p class="text-sm text-base-content/50 italic mt-2">Start a sprint to see its burndown here.</p>
+          <p
+            class="text-sm text-base-content/50 italic mt-2"
+          >{% translate "Start a sprint to see its burndown here." %}</p>
         {% endif %}
       </section>
 
       <section class="rounded-box bg-base-200 p-4">
         <h2 class="font-semibold mb-1 flex items-center gap-2">
           <i data-lucide="gauge" class="w-4 h-4 text-module"></i>
-          Velocity
+          {% translate "Velocity" %}
         </h2>
         <p class="text-xs text-base-content/50 mb-3">
-          {{ velocity_unit|capfirst }} completed per closed sprint, with the
-          average over the last three.
+          {% if velocity_unit == "points" %}
+            {% translate "Points completed per closed sprint, with the average over the last three." %}
+          {% elif velocity_unit == "hours" %}
+            {% translate "Hours completed per closed sprint, with the average over the last three." %}
+          {% else %}
+            {% translate "Tasks completed per closed sprint, with the average over the last three." %}
+          {% endif %}
         </p>
         {% if velocity %}
           <div
             class="stats stats-vertical sm:stats-horizontal bg-base-100 w-full mb-4"
           >
             <div class="stat py-3">
-              <div class="stat-title">Last sprint</div>
+              <div class="stat-title">{% translate "Last sprint" %}</div>
               <div class="stat-value text-2xl">{{ velocity_summary.last|floatformat:"-1" }}</div>
-              <div class="stat-desc">{{ velocity_unit }} completed</div>
+              <div class="stat-desc">
+                {% if velocity_unit == "points" %}
+                  {% translate "points completed" %}
+                {% elif velocity_unit == "hours" %}
+                  {% translate "hours completed" %}
+                {% else %}
+                  {% translate "tasks completed" %}
+                {% endif %}
+              </div>
             </div>
             <div class="stat py-3">
-              <div class="stat-title">Average</div>
+              <div class="stat-title">{% translate "Average" %}</div>
               <div class="stat-value text-2xl">{{ velocity_summary.average|floatformat:"-1" }}</div>
-              <div class="stat-desc">{% if velocity_summary.count >= 3 %}over the last three sprints{% else %}over {{ velocity_summary.count }} sprint{{ velocity_summary.count|pluralize }}{% endif %}</div>
+              <div class="stat-desc">
+                {% if velocity_summary.count >= 3 %}
+                  {% translate "over the last three sprints" %}
+                {% else %}
+                  {% blocktranslate trimmed count counter=velocity_summary.count %}
+                    over {{ counter }} sprint
+                  {% plural %}
+                    over {{ counter }} sprints
+                  {% endblocktranslate %}
+                {% endif %}
+              </div>
             </div>
           </div>
-          {% include "ui/partials/column_chart.html" with chart=velocity_chart aria_label="Effort completed per closed sprint with the rolling three-sprint average" %}
+          {% translate "Effort completed per closed sprint with the rolling three-sprint average" as velocity_aria_label %}
+          {% include "ui/partials/column_chart.html" with chart=velocity_chart aria_label=velocity_aria_label %}
         {% else %}
-          <p class="text-sm text-base-content/50 italic">Velocity appears once a sprint has been completed.</p>
+          <p
+            class="text-sm text-base-content/50 italic"
+          >{% translate "Velocity appears once a sprint has been completed." %}</p>
         {% endif %}
       </section>
     {% endif %}
 
     <div class="grid gap-4 items-start lg:grid-cols-3">
-      {% include "projects/ui/partials/_distribution_card.html" with title="Open by column" icon="columns-3" entries=distribution.by_status %}
-      {% include "projects/ui/partials/_distribution_card.html" with title="Open by assignee" icon="users" entries=distribution.by_assignee %}
-      {% include "projects/ui/partials/_distribution_card.html" with title="Open by priority" icon="flag" entries=distribution.by_priority %}
+      {% translate "Open by column" as by_column_title %}
+      {% translate "Open by assignee" as by_assignee_title %}
+      {% translate "Open by priority" as by_priority_title %}
+      {% include "projects/ui/partials/_distribution_card.html" with title=by_column_title icon="columns-3" entries=distribution.by_status %}
+      {% include "projects/ui/partials/_distribution_card.html" with title=by_assignee_title icon="users" entries=distribution.by_assignee %}
+      {% include "projects/ui/partials/_distribution_card.html" with title=by_priority_title icon="flag" entries=distribution.by_priority %}
     </div>
   {% endif %}
 </div>

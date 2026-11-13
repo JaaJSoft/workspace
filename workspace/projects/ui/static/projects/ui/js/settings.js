@@ -59,6 +59,20 @@ function retentionDaysFromIndex(index) {
   return i >= RETENTION_PRESETS.length ? '' : String(RETENTION_PRESETS[i]);
 }
 
+// Accessible name of a swatch in the colour pickers ('' is "no colour").
+function colorAriaLabel(color) {
+  if (!color) return gettext('No color');
+  return interpolate(gettext('Color %(color)s'), { color: color }, true);
+}
+
+function doneCountLabel(item) {
+  return interpolate(
+    gettext('%(done)s/%(total)s done'),
+    { done: item.done_task_count, total: item.task_count },
+    true
+  );
+}
+
 function projectSettingsGeneral(config) {
   return {
     name: '',
@@ -94,11 +108,12 @@ function projectSettingsGeneral(config) {
     },
 
     retentionSliderLabel() {
-      if (this.doneRetentionDays === '') return 'Always';
-      return (
-        this.doneRetentionDays +
-        ' day' +
-        (this.doneRetentionDays === '1' ? '' : 's')
+      if (this.doneRetentionDays === '') return gettext('Always');
+      const days = Number(this.doneRetentionDays);
+      return interpolate(
+        ngettext('%(count)s day', '%(count)s days', days),
+        { count: days },
+        true
       );
     },
 
@@ -128,7 +143,7 @@ function projectSettingsGeneral(config) {
             data.detail ||
               (data.name && data.name[0]) ||
               (data.key && data.key[0]) ||
-              'Could not save.'
+              gettext('Could not save.')
           );
         }
         this.saved = true;
@@ -144,25 +159,26 @@ function projectSettingsGeneral(config) {
 // Spelled out in the confirmation dialog: the conversion moves tasks and
 // retires sprints, and neither side is a plain field write the user can
 // undo by clicking the other option.
-const BOARD_MODEL_WARNINGS = {
-  scrum: {
-    title: 'Convert to scrum',
-    message:
-      'Every task on a board column joins a new running sprint. Backlog ' +
-      'tasks stay unplanned, and the board shows one sprint at a time.',
-    okLabel: 'Convert to scrum',
-    icon: 'timer',
-  },
-  kanban: {
-    title: 'Convert to kanban',
-    message:
-      'The running sprint is closed and planned sprints are deleted, ' +
-      'returning their tasks to the backlog pool. Tasks keep their ' +
-      'columns and closed sprints stay as history.',
-    okLabel: 'Convert to kanban',
-    icon: 'square-kanban',
-  },
-};
+function boardModelWarnings() {
+  return {
+    scrum: {
+      title: gettext('Convert to scrum'),
+      message: gettext(
+        'Every task on a board column joins a new running sprint. Backlog tasks stay unplanned, and the board shows one sprint at a time.'
+      ),
+      okLabel: gettext('Convert to scrum'),
+      icon: 'timer',
+    },
+    kanban: {
+      title: gettext('Convert to kanban'),
+      message: gettext(
+        'The running sprint is closed and planned sprints are deleted, returning their tasks to the backlog pool. Tasks keep their columns and closed sprints stay as history.'
+      ),
+      okLabel: gettext('Convert to kanban'),
+      icon: 'square-kanban',
+    },
+  };
+}
 
 function projectBoardModel(config) {
   return {
@@ -173,7 +189,7 @@ function projectBoardModel(config) {
 
     async convertTo(target) {
       if (!this.writable || target === this.type || this.busy) return;
-      const warning = BOARD_MODEL_WARNINGS[target];
+      const warning = boardModelWarnings()[target];
       const ok = await AppDialog.confirm({
         title: warning.title,
         message: warning.message,
@@ -196,7 +212,7 @@ function projectBoardModel(config) {
             return {};
           });
           throw new Error(
-            data.detail || (data.type && data.type[0]) || 'Could not convert.'
+            data.detail || (data.type && data.type[0]) || gettext('Could not convert.')
           );
         }
         window.location.reload();
@@ -283,7 +299,7 @@ function projectGroupAccess(config) {
             return {};
           });
           throw new Error(
-            data.detail || (data.groups && data.groups[0]) || 'Could not save.'
+            data.detail || (data.groups && data.groups[0]) || gettext('Could not save.')
           );
         }
         this.items = next;
@@ -310,7 +326,13 @@ function projectSettingsDanger(config) {
           method: 'POST',
           headers: settingsHeaders(),
         });
-        if (!resp.ok) throw new Error('Could not ' + action + ' the project.');
+        if (!resp.ok) {
+          throw new Error(
+            action === 'unarchive'
+              ? gettext('Could not unarchive the project.')
+              : gettext('Could not archive the project.')
+          );
+        }
         window.location.reload();
       } catch (e) {
         this.error = e.message;
@@ -322,12 +344,13 @@ function projectSettingsDanger(config) {
     // teardown hook when the element leaves the DOM (view swaps).
     async deleteProject() {
       const ok = await AppDialog.confirm({
-        title: 'Delete project',
-        message:
-          '"' +
-          config.projectName +
-          '" and all of its tasks will be permanently deleted.',
-        okLabel: 'Delete project',
+        title: gettext('Delete project'),
+        message: interpolate(
+          gettext('“%(name)s” and all of its tasks will be permanently deleted.'),
+          { name: config.projectName },
+          true
+        ),
+        okLabel: gettext('Delete project'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -340,7 +363,7 @@ function projectSettingsDanger(config) {
           method: 'DELETE',
           headers: settingsHeaders(),
         });
-        if (!resp.ok) throw new Error('Could not delete the project.');
+        if (!resp.ok) throw new Error(gettext('Could not delete the project.'));
         window.location.href = '/projects';
       } catch (e) {
         this.error = e.message;
@@ -356,6 +379,21 @@ const COLUMN_COLORS = window.TAG_CHIP_COLORS.map((c) => c.value);
 
 function projectColumns(config) {
   return {
+    categoryLabel(category) {
+      const labels = {
+        backlog: pgettext('status category', 'Backlog'),
+        active: pgettext('status category', 'Active'),
+        done: pgettext('status category', 'Done'),
+      };
+      return labels[category] || category;
+    },
+    taskCountLabel(count) {
+      return interpolate(
+        ngettext('%(count)s task', '%(count)s tasks', count),
+        { count: count },
+        true
+      );
+    },
     columns: [],
     colors: COLUMN_COLORS,
     draggingColumn: null,
@@ -390,7 +428,7 @@ function projectColumns(config) {
             return {};
           });
           throw new Error(
-            data.detail || (data.name && data.name[0]) || 'Request failed.'
+            data.detail || (data.name && data.name[0]) || gettext('Request failed.')
           );
         }
         return resp;
@@ -503,21 +541,25 @@ function projectColumns(config) {
           return c.uuid !== column.uuid;
         });
         if (!others.length) {
-          this.error = 'The last column cannot be deleted while it holds tasks.';
+          this.error = gettext('The last column cannot be deleted while it holds tasks.');
           return;
         }
         moveTarget = await AppDialog.select({
-          title: 'Delete column',
-          message:
-            column.task_count +
-            ' task' +
-            (column.task_count === 1 ? '' : 's') +
-            ' will move to:',
+          title: gettext('Delete column'),
+          message: interpolate(
+            ngettext(
+              '%(count)s task will move to:',
+              '%(count)s tasks will move to:',
+              column.task_count
+            ),
+            { count: column.task_count },
+            true
+          ),
           options: others.map(function (c) {
             return { value: c.uuid, label: c.name };
           }),
           value: defaultMoveTarget(this.columns, column.uuid) || others[0].uuid,
-          okLabel: 'Delete',
+          okLabel: gettext('Delete'),
           okClass: 'btn-error',
           icon: 'trash-2',
           iconClass: 'bg-error/10 text-error',
@@ -525,9 +567,13 @@ function projectColumns(config) {
         if (!moveTarget) return;
       } else {
         const ok = await AppDialog.confirm({
-          title: 'Delete column',
-          message: 'Delete the empty column "' + column.name + '"?',
-          okLabel: 'Delete',
+          title: gettext('Delete column'),
+          message: interpolate(
+            gettext('Delete the empty column “%(name)s”?'),
+            { name: column.name },
+            true
+          ),
+          okLabel: gettext('Delete'),
           okClass: 'btn-error',
           icon: 'trash-2',
           iconClass: 'bg-error/10 text-error',
@@ -574,7 +620,7 @@ function projectLabels(config) {
         const resp = await fetch(config.apiBase + '/labels');
         if (resp.ok) this.items = await resp.json();
       } catch (e) {
-        this.error = 'Could not load labels.';
+        this.error = gettext('Could not load labels.');
       }
     },
 
@@ -594,7 +640,7 @@ function projectLabels(config) {
             return {};
           });
           throw new Error(
-            data.detail || (data.name && data.name[0]) || 'Request failed.'
+            data.detail || (data.name && data.name[0]) || gettext('Request failed.')
           );
         }
         return resp;
@@ -664,10 +710,13 @@ function projectLabels(config) {
 
     async removeLabel(label) {
       const ok = await AppDialog.confirm({
-        title: 'Delete label',
-        message:
-          '"' + label.name + '" will be removed from every task using it.',
-        okLabel: 'Delete',
+        title: gettext('Delete label'),
+        message: interpolate(
+          gettext('“%(name)s” will be removed from every task using it.'),
+          { name: label.name },
+          true
+        ),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -691,6 +740,7 @@ function projectLabels(config) {
 
 function projectEpics(config) {
   return {
+    doneCountLabel,
     items: [],
     colors: COLUMN_COLORS,
     query: '',
@@ -709,7 +759,7 @@ function projectEpics(config) {
         const resp = await fetch(config.apiBase + '/epics');
         if (resp.ok) this.items = await resp.json();
       } catch (e) {
-        this.error = 'Could not load epics.';
+        this.error = gettext('Could not load epics.');
       }
     },
 
@@ -738,7 +788,7 @@ function projectEpics(config) {
           closed: e.closed,
           target_date: e.target_date || null,
           display_date: e.target_date
-            ? new Date(e.target_date + 'T00:00:00').toLocaleDateString('en', {
+            ? new Date(e.target_date + 'T00:00:00').toLocaleDateString(window.getUserLocale(), {
                 month: 'short',
                 day: '2-digit',
               })
@@ -760,7 +810,7 @@ function projectEpics(config) {
             data.detail ||
               (data.name && data.name[0]) ||
               (data.target_date && data.target_date[0]) ||
-              'Request failed.'
+              gettext('Request failed.')
           );
         }
         return resp;
@@ -918,12 +968,13 @@ function projectEpics(config) {
 
     async removeEpic(epic) {
       const ok = await AppDialog.confirm({
-        title: 'Delete epic',
-        message:
-          '"' +
-          epic.name +
-          '" will be deleted; its tasks are kept and ungrouped.',
-        okLabel: 'Delete',
+        title: gettext('Delete epic'),
+        message: interpolate(
+          gettext('“%(name)s” will be deleted; its tasks are kept and ungrouped.'),
+          { name: epic.name },
+          true
+        ),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -994,6 +1045,15 @@ function suggestSprintDates(sprints, today) {
 
 function projectSprints(config) {
   return {
+    doneCountLabel,
+    stateLabel(state) {
+      const labels = {
+        planned: pgettext('sprint state', 'Planned'),
+        active: pgettext('sprint state', 'Active'),
+        closed: pgettext('sprint state', 'Closed'),
+      };
+      return labels[state] || state;
+    },
     items: [],
     query: '',
     hideClosed: true,
@@ -1011,7 +1071,7 @@ function projectSprints(config) {
         const resp = await fetch(config.apiBase + '/sprints');
         if (resp.ok) this.items = await resp.json();
       } catch (e) {
-        this.error = 'Could not load sprints.';
+        this.error = gettext('Could not load sprints.');
       }
     },
 
@@ -1028,7 +1088,7 @@ function projectSprints(config) {
             data.detail ||
               (data.name && data.name[0]) ||
               (data.end_date && data.end_date[0]) ||
-              'Request failed.'
+              gettext('Request failed.')
           );
         }
         return resp;
@@ -1161,12 +1221,13 @@ function projectSprints(config) {
 
     async removeSprint(sprint) {
       const ok = await AppDialog.confirm({
-        title: 'Delete sprint',
-        message:
-          '"' +
-          sprint.name +
-          '" will be deleted; its tasks are kept and leave the sprint.',
-        okLabel: 'Delete',
+        title: gettext('Delete sprint'),
+        message: interpolate(
+          gettext('“%(name)s” will be deleted; its tasks are kept and leave the sprint.'),
+          { name: sprint.name },
+          true
+        ),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -1189,6 +1250,13 @@ function projectSprints(config) {
 
 function projectMembers(config) {
   return {
+    roleLabel(role) {
+      const labels = {
+        admin: pgettext('project role', 'Admin'),
+        member: pgettext('project role', 'Member'),
+      };
+      return labels[role] || role;
+    },
     items: [],
     busy: false,
     error: '',
@@ -1198,7 +1266,7 @@ function projectMembers(config) {
         const resp = await fetch(config.apiBase + '/members');
         if (resp.ok) this.items = await resp.json();
       } catch (e) {
-        this.error = 'Could not load members.';
+        this.error = gettext('Could not load members.');
       }
     },
 
@@ -1217,7 +1285,7 @@ function projectMembers(config) {
           const data = await resp.json().catch(function () {
             return {};
           });
-          throw new Error(data.detail || 'Request failed.');
+          throw new Error(data.detail || gettext('Request failed.'));
         }
         return resp;
       } finally {
@@ -1266,9 +1334,13 @@ function projectMembers(config) {
 
     async removeMember(member) {
       const ok = await AppDialog.confirm({
-        title: 'Remove member',
-        message: 'Remove ' + member.username + ' from this project?',
-        okLabel: 'Remove',
+        title: gettext('Remove member'),
+        message: interpolate(
+          gettext('Remove %(username)s from this project?'),
+          { username: member.username },
+          true
+        ),
+        okLabel: pgettext('project member', 'Remove'),
         okClass: 'btn-error',
         icon: 'user-minus',
         iconClass: 'bg-error/10 text-error',
@@ -1299,6 +1371,7 @@ window.projectLabels = projectLabels;
 window.projectEpics = projectEpics;
 window.projectSprints = projectSprints;
 window.projectMembers = projectMembers;
+window.colorAriaLabel = colorAriaLabel;
 window.projectSettingsHelpers = {
   defaultMoveTarget: defaultMoveTarget,
   normalizeProjectKey: normalizeProjectKey,
@@ -1306,5 +1379,5 @@ window.projectSettingsHelpers = {
   retentionDaysFromIndex: retentionDaysFromIndex,
   nextSprintName: nextSprintName,
   suggestSprintDates: suggestSprintDates,
-  boardModelWarnings: BOARD_MODEL_WARNINGS,
+  boardModelWarnings,
 };

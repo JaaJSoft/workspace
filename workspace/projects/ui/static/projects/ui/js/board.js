@@ -619,7 +619,7 @@ function projectBoard(config) {
 
     filterAssigneeName(id) {
       const user = this.members.find((m) => String(m.id) === String(id));
-      return user ? user.username : 'Unknown user';
+      return user ? user.username : gettext('Unknown user');
     },
 
     addLabelFilter(label) {
@@ -660,17 +660,17 @@ function projectBoard(config) {
 
     filterPriorityName() {
       const names = {
-        urgent: 'Urgent',
-        high: 'High',
-        medium: 'Medium',
-        low: 'Low',
+        urgent: pgettext('task priority', 'Urgent'),
+        high: pgettext('task priority', 'High'),
+        medium: pgettext('task priority', 'Medium'),
+        low: pgettext('task priority', 'Low'),
       };
       return names[this.filters.priority] || this.filters.priority;
     },
 
     filterStatusName() {
       const s = this.statuses.find((x) => x.uuid === this.filters.status);
-      return s ? s.name : 'Unknown status';
+      return s ? s.name : gettext('Unknown status');
     },
 
     filterStatusColor() {
@@ -785,15 +785,19 @@ function projectBoard(config) {
         const data = await resp.json();
         if (data.skipped && window.AppAlert) {
           AppAlert.warning(
-            data.skipped +
-              (data.skipped === 1 ? ' task starts' : ' tasks start') +
-              ' after that due date and ' +
-              (data.skipped === 1 ? 'was' : 'were') +
-              ' left unchanged.'
+            interpolate(
+              ngettext(
+                '%(count)s task starts after that due date and was left unchanged.',
+                '%(count)s tasks start after that due date and were left unchanged.',
+                data.skipped
+              ),
+              { count: data.skipped },
+              true
+            )
           );
         }
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not update the tasks.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not update the tasks.'));
       } finally {
         this.refresh();
       }
@@ -827,12 +831,31 @@ function projectBoard(config) {
       }
       const uuids = this.selected.slice();
       const count = uuids.length;
+      const deleteLabel =
+        count === 1
+          ? gettext('Delete task')
+          : interpolate(
+            ngettext('Delete %(count)s task', 'Delete %(count)s tasks', count),
+            { count: count },
+            true
+          );
       const ok = await AppDialog.confirm({
-        title: count === 1 ? 'Delete task' : 'Delete ' + count + ' tasks',
+        title: deleteLabel,
         message:
-          (count === 1 ? 'The selected task' : 'The ' + count + ' selected tasks') +
-          ' will be permanently deleted, with their comments, subtasks and attachments.',
-        okLabel: count === 1 ? 'Delete task' : 'Delete ' + count + ' tasks',
+          count === 1
+            ? gettext(
+              'The selected task will be permanently deleted, with its comments, subtasks and attachments.'
+            )
+            : interpolate(
+              ngettext(
+                'The %(count)s selected task will be permanently deleted, with their comments, subtasks and attachments.',
+                'The %(count)s selected tasks will be permanently deleted, with their comments, subtasks and attachments.',
+                count
+              ),
+              { count: count },
+              true
+            ),
+        okLabel: deleteLabel,
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -850,7 +873,7 @@ function projectBoard(config) {
           this.closePanel();
         }
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not delete the tasks.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not delete the tasks.'));
       } finally {
         this.refresh();
       }
@@ -867,7 +890,7 @@ function projectBoard(config) {
         if (!resp.ok) throw new Error('Move failed');
         this.selected = this.selected.filter((u) => !uuids.includes(u));
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not move the tasks.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not move the tasks.'));
       } finally {
         this.refresh();
       }
@@ -903,7 +926,7 @@ function projectBoard(config) {
         if (!resp.ok) throw new Error('Assign failed');
         this.selected = this.selected.filter((u) => !uuids.includes(u));
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not update the sprint.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not update the sprint.'));
       } finally {
         this.refresh();
       }
@@ -934,9 +957,13 @@ function projectBoard(config) {
 
     async startSprint(uuid, name) {
       const ok = await AppDialog.confirm({
-        title: 'Start sprint',
-        message: 'Start "' + name + '"? Its tasks move onto the board.',
-        okLabel: 'Start',
+        title: gettext('Start sprint'),
+        message: interpolate(
+          gettext('Start "%(name)s"? Its tasks move onto the board.'),
+          { name: name },
+          true
+        ),
+        okLabel: pgettext('sprint', 'Start'),
         okClass: 'btn-module',
         icon: 'play',
         iconClass: 'bg-module/15 text-module',
@@ -949,11 +976,11 @@ function projectBoard(config) {
         );
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
-          throw new Error(data.detail || 'Could not start the sprint.');
+          throw new Error(data.detail || gettext('Could not start the sprint.'));
         }
       } catch (e) {
         if (window.AppAlert) {
-          AppAlert.error(e.message || 'Could not start the sprint.');
+          AppAlert.error(e.message || gettext('Could not start the sprint.'));
         }
       } finally {
         this.refresh();
@@ -969,17 +996,21 @@ function projectBoard(config) {
         // 'backlog' sentinel rather than '': AppDialog.select resolves null
         // on cancel, and a '' choice would be indistinguishable from it.
         const choice = await AppDialog.select({
-          title: 'Complete sprint',
-          message:
-            unfinished +
-            ' unfinished task' +
-            (unfinished === 1 ? '' : 's') +
-            ' will move to:',
-          options: [{ value: 'backlog', label: 'Backlog' }].concat(
+          title: gettext('Complete sprint'),
+          message: interpolate(
+            ngettext(
+              '%(count)s unfinished task will move to:',
+              '%(count)s unfinished tasks will move to:',
+              unfinished
+            ),
+            { count: unfinished },
+            true
+          ),
+          options: [{ value: 'backlog', label: gettext('Backlog') }].concat(
             planned.map((s) => ({ value: s.uuid, label: s.name }))
           ),
           value: 'backlog',
-          okLabel: 'Complete',
+          okLabel: pgettext('sprint', 'Complete'),
           okClass: 'btn-module',
           icon: 'flag',
           iconClass: 'bg-module/15 text-module',
@@ -988,9 +1019,9 @@ function projectBoard(config) {
         moveTo = choice === 'backlog' ? null : choice;
       } else {
         const ok = await AppDialog.confirm({
-          title: 'Complete sprint',
-          message: 'Complete "' + name + '"?',
-          okLabel: 'Complete',
+          title: gettext('Complete sprint'),
+          message: interpolate(gettext('Complete "%(name)s"?'), { name: name }, true),
+          okLabel: pgettext('sprint', 'Complete'),
           okClass: 'btn-module',
           icon: 'flag',
           iconClass: 'bg-module/15 text-module',
@@ -1008,14 +1039,14 @@ function projectBoard(config) {
         );
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({}));
-          throw new Error(body.detail || 'Could not complete the sprint.');
+          throw new Error(body.detail || gettext('Could not complete the sprint.'));
         }
         // The completed sprint is no longer the board's default; drop the
         // explicit selection so the refresh lands on the current state.
         this._clearSprintParam();
       } catch (e) {
         if (window.AppAlert) {
-          AppAlert.error(e.message || 'Could not complete the sprint.');
+          AppAlert.error(e.message || gettext('Could not complete the sprint.'));
         }
       } finally {
         this.refresh();
@@ -1058,7 +1089,7 @@ function projectBoard(config) {
         // A load the user has already navigated away from must not alert
         // nor close the panel it lost the race to.
         if (generation !== this._panelGeneration) return;
-        if (window.AppAlert) AppAlert.error('Could not load the task.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not load the task.'));
         this.closePanel();
       }
     },
@@ -1121,10 +1152,10 @@ function projectBoard(config) {
           // else stays generic so a 500 body never reaches the toast.
           const data = await resp.json().catch(() => ({}));
           const detail = data.start_date && data.start_date[0];
-          if (window.AppAlert) AppAlert.error(detail || 'Could not save the task.');
+          if (window.AppAlert) AppAlert.error(detail || gettext('Could not save the task.'));
         }
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not save the task.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not save the task.'));
       } finally {
         // Success or failure, re-render server truth: refresh swaps the
         // board cards and reloads whatever panel is open now (nothing if
@@ -1136,9 +1167,13 @@ function projectBoard(config) {
 
     async deletePanelTask(uuid, title) {
       const ok = await AppDialog.confirm({
-        title: 'Delete task',
-        message: 'Are you sure you want to delete "' + title + '"?',
-        okLabel: 'Delete',
+        title: gettext('Delete task'),
+        message: interpolate(
+          gettext('Are you sure you want to delete "%(title)s"?'),
+          { title: title },
+          true
+        ),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -1152,7 +1187,7 @@ function projectBoard(config) {
         if (!resp.ok) throw new Error('Delete failed');
         this.closePanel();
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not delete the task.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not delete the task.'));
       } finally {
         this.refresh();
       }
@@ -1160,7 +1195,7 @@ function projectBoard(config) {
 
     formAssigneeName(id) {
       const user = this.members.find((m) => m.id === id);
-      return user ? user.username : 'Unknown user';
+      return user ? user.username : gettext('Unknown user');
     },
 
     formUnassignedUsers() {
@@ -1181,7 +1216,7 @@ function projectBoard(config) {
 
     labelName(uuid) {
       const label = this.labelById(uuid);
-      return label ? label.name : 'Unknown label';
+      return label ? label.name : gettext('Unknown label');
     },
 
     labelColor(uuid) {
@@ -1211,7 +1246,7 @@ function projectBoard(config) {
 
     epicName(uuid) {
       const epic = this.epicById(uuid);
-      return epic ? epic.name : 'Unknown epic';
+      return epic ? epic.name : gettext('Unknown epic');
     },
 
     epicColor(uuid) {
@@ -1250,7 +1285,7 @@ function projectBoard(config) {
         });
         return epic;
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not create the epic.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not create the epic.'));
         return null;
       }
     },
@@ -1298,7 +1333,7 @@ function projectBoard(config) {
     // The dialog of a superseded opening shows another draft now, so its
     // failure goes to a toast instead of that draft's error line.
     _taskSaveFailed(opening, detail) {
-      const message = detail || 'Could not save the task.';
+      const message = detail || gettext('Could not save the task.');
       if (opening.isCurrent()) this.formError = message;
       else if (window.AppAlert) AppAlert.error(message);
     },
@@ -1308,7 +1343,7 @@ function projectBoard(config) {
 function taskPanel() {
   return {
     ...window.attachmentInputMixin({
-      pickerMessage: 'Select files to attach to the task.',
+      pickerMessage: gettext('Select files to attach to the task.'),
     }),
     data: {
       uuid: null,
@@ -1434,7 +1469,7 @@ function taskPanel() {
     },
 
     assigneeName(id) {
-      return this.assigneeNames[id] || 'Unknown user';
+      return this.assigneeNames[id] || gettext('Unknown user');
     },
 
     unassignedUsers() {
@@ -1545,7 +1580,7 @@ function taskPanel() {
         this.newSubtask = '';
         this.refreshContent();
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not add the item.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not add the item.'));
       } finally {
         this.savingSubtask = false;
       }
@@ -1564,7 +1599,7 @@ function taskPanel() {
         this.refreshContent();
       } catch (e) {
         st.done = !st.done;
-        if (window.AppAlert) AppAlert.error('Could not save the item.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not save the item.'));
       }
     },
 
@@ -1592,7 +1627,7 @@ function taskPanel() {
         if (!resp.ok) throw new Error('Save failed');
       } catch (e) {
         st.title = previous;
-        if (window.AppAlert) AppAlert.error('Could not save the item.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not save the item.'));
       }
     },
 
@@ -1607,7 +1642,7 @@ function taskPanel() {
         this.subtasks = this.subtasks.filter((s) => s.uuid !== st.uuid);
         this.refreshContent();
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not remove the item.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not remove the item.'));
       }
     },
 
@@ -1658,7 +1693,7 @@ function taskPanel() {
         });
         if (!resp.ok) throw new Error('Reorder failed');
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not reorder the checklist.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not reorder the checklist.'));
         this.refresh();
       }
     },
@@ -1690,7 +1725,7 @@ function taskPanel() {
         const data = await resp.json();
         this.attachments = data.attachments;
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not attach the files.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not attach the files.'));
       } finally {
         this.clearAttachments();
         this._attachmentsSaving = false;
@@ -1710,7 +1745,7 @@ function taskPanel() {
         if (!resp.ok && resp.status !== 404) throw new Error('unlink failed');
         this.attachments = this.attachments.filter((a) => a.uuid !== att.uuid);
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not remove the attachment.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not remove the attachment.'));
       }
     },
 
@@ -1733,9 +1768,9 @@ function taskPanel() {
     async linkWorkspaceFiles() {
       if (!this.can('link_file') || this.fileLinkSaving) return;
       const files = await AppDialog.filePicker({
-        title: 'Link from Workspace',
-        message: 'Select files to link to the task. Nothing is copied.',
-        okLabel: 'Continue',
+        title: gettext('Link from Workspace'),
+        message: gettext('Select files to link to the task. Nothing is copied.'),
+        okLabel: gettext('Continue'),
         okClass: 'btn-info',
         icon: 'file-symlink',
         iconClass: 'bg-info/10 text-info',
@@ -1768,14 +1803,14 @@ function taskPanel() {
         });
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
-          this.fileLinkError = data.detail || 'Could not link the files.';
+          this.fileLinkError = data.detail || gettext('Could not link the files.');
           return;
         }
         const data = await resp.json();
         this.fileLinks = data.files;
         this.$refs.linkFileDialog.close();
       } catch (e) {
-        this.fileLinkError = 'Could not link the files.';
+        this.fileLinkError = gettext('Could not link the files.');
       } finally {
         this.fileLinkSaving = false;
       }
@@ -1784,9 +1819,15 @@ function taskPanel() {
     async unlinkFile(link) {
       if (!this.can('link_file')) return;
       const confirmed = await AppDialog.confirm({
-        title: 'Unlink file',
-        message: `Remove "${link.name}" from this task? If no other task links it, the project stops seeing it.`,
-        okLabel: 'Unlink',
+        title: gettext('Unlink file'),
+        message: interpolate(
+          gettext(
+            'Remove "%(name)s" from this task? If no other task links it, the project stops seeing it.'
+          ),
+          { name: link.name },
+          true
+        ),
+        okLabel: gettext('Unlink'),
         okClass: 'btn-error',
         icon: 'unlink',
         iconClass: 'bg-error/10 text-error',
@@ -1801,7 +1842,7 @@ function taskPanel() {
         if (!resp.ok && resp.status !== 404) throw new Error('unlink failed');
         this.fileLinks = this.fileLinks.filter((l) => l.uuid !== link.uuid);
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not unlink the file.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not unlink the file.'));
       }
     },
 
@@ -1867,7 +1908,7 @@ function taskPanel() {
           // Rule violations (cycle, duplicate) come back as a curated
           // detail message worth surfacing verbatim.
           const body = await resp.json().catch(() => ({}));
-          throw new Error(body.detail || 'Could not link the tasks.');
+          throw new Error(body.detail || gettext('Could not link the tasks.'));
         }
         this.links = await resp.json();
         this.linkQuery = '';
@@ -1877,7 +1918,7 @@ function taskPanel() {
         this.refresh();
       } catch (e) {
         if (window.AppAlert) {
-          AppAlert.error(e.message || 'Could not link the tasks.');
+          AppAlert.error(e.message || gettext('Could not link the tasks.'));
         }
       } finally {
         this.linkSaving = false;
@@ -1894,7 +1935,7 @@ function taskPanel() {
         if (!resp.ok) throw new Error('Unlink failed');
         this.links = this.links.filter((l) => l.uuid !== uuid);
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not remove the link.');
+        if (window.AppAlert) AppAlert.error(gettext('Could not remove the link.'));
       } finally {
         this.refresh();
       }
@@ -1948,14 +1989,18 @@ function taskWatch(opts) {
   if (el) {
     try { initial = JSON.parse(el.textContent); } catch (_) { /* keep empty */ }
   }
-  const LABELS = { '': 'Default', watching: 'Watching', muted: 'Muted' };
+  const LABELS = {
+    '': gettext('Default'),
+    watching: pgettext('task watch state', 'Watching'),
+    muted: pgettext('task watch state', 'Muted'),
+  };
   return {
     state: opts.state || '',
     watchers: initial,
     // Latest-request-wins guard, same as projectNotificationLevel: a slow
     // failure may not clobber the state of a newer request.
     _gen: 0,
-    label(state) { return LABELS[state] || 'Default'; },
+    label(state) { return LABELS[state] || LABELS['']; },
     set(state) {
       this._send(state, () => fetch(opts.url, {
         method: 'PUT',
@@ -1989,7 +2034,7 @@ function taskWatch(opts) {
         if (gen !== this._gen) return;
         this.state = previousState;
         this.watchers = previousList;
-        if (window.AppAlert) AppAlert.error('Failed to save watch state');
+        if (window.AppAlert) AppAlert.error(gettext('Failed to save watch state'));
       });
     },
   };

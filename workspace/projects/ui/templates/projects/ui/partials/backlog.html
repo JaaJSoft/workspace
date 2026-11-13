@@ -1,3 +1,4 @@
+{% load i18n %}
 <div
   id="backlog"
   class="w-full flex flex-col gap-3"
@@ -7,7 +8,8 @@
     {# Same switcher component as the board's, scoping the list instead of the columns. #}
     <div class="flex flex-wrap items-center gap-3">
       {% url 'projects_ui:backlog' project.uuid as sprint_switcher_url %}
-      {% include "projects/ui/partials/_sprint_switcher.html" with options=planning_sprints selected=backlog_scope base_url=sprint_switcher_url empty_label="Whole backlog" with_pool_entries=True %}
+      {% translate "Whole backlog" as whole_backlog_label %}
+      {% include "projects/ui/partials/_sprint_switcher.html" with options=planning_sprints selected=backlog_scope base_url=sprint_switcher_url empty_label=whole_backlog_label with_pool_entries=True %}
     </div>
   {% endif %}
   {# items-start keeps the actions aligned with the first filter row once it wraps on mobile. #}
@@ -20,7 +22,7 @@
         @click="newTask('{{ backlog_status.uuid|escapejs }}')"
       >
         <i data-lucide="plus" class="w-4 h-4"></i>
-        New task
+        {% translate "New task" %}
       </button>
     {% endif %}
   </div>
@@ -41,10 +43,10 @@
             type="button"
             tabindex="0"
             class="btn btn-module btn-sm"
-            title="Send to a sprint"
+            title="{% translate "Send to a sprint" %}"
           >
             <i data-lucide="timer" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Send to sprint</span>
+            <span class="hidden sm:inline">{% translate "Send to sprint" %}</span>
             <i data-lucide="chevron-down" class="w-4 h-4"></i>
           </button>
           <ul
@@ -59,12 +61,12 @@
                 >
                   <span class="truncate flex-1">{{ sprint.name }}</span>
                   {% if sprint.state == "active" %}
-                    <span class="badge badge-module badge-sm">Active</span>
+                    <span class="badge badge-module badge-sm">{% translate "Active" context "sprint state" %}</span>
                   {% endif %}
                 </button>
               </li>
             {% empty %}
-              <li class="menu-title">No open sprint - create one from the sprint menu.</li>
+              <li class="menu-title">{% translate "No open sprint - create one from the sprint menu." %}</li>
             {% endfor %}
             {% if planning_sprints %}
               <li class="border-t border-base-300 pt-1">
@@ -73,7 +75,7 @@
                   @click="sendSelectedToSprint(null); document.activeElement.blur()"
                 >
                   <i data-lucide="x" class="w-4 h-4"></i>
-                  Remove from sprint
+                  {% translate "Remove from sprint" %}
                 </button>
               </li>
             {% endif %}
@@ -88,16 +90,16 @@
             @click="sendSelected()"
           >
             <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Send to board</span>
-            <span class="sm:hidden">Send</span>
+            <span class="hidden sm:inline">{% translate "Send to board" %}</span>
+            <span class="sm:hidden">{% translate "Send" context "send tasks to the board" %}</span>
           </button>
           <div class="dropdown dropdown-end">
             <button
               type="button"
               tabindex="0"
               class="btn btn-module btn-sm join-item px-1.5"
-              title="Send to a specific column"
-              aria-label="Send to a specific column"
+              title="{% translate "Send to a specific column" %}"
+              aria-label="{% translate "Send to a specific column" %}"
               :disabled="!bulkCan('move')"
             >
               <i data-lucide="chevron-down" class="w-4 h-4"></i>
@@ -140,28 +142,30 @@
               <input
                 type="checkbox"
                 class="checkbox checkbox-sm shrink-0"
-                aria-label="Select all tasks"
+                aria-label="{% translate "Select all tasks" %}"
                 :checked="allVisibleSelected()"
                 @change="toggleSelectAll()"
               />
             {% endif %}
             <span class="flex-1 flex items-center gap-2">
-              Task
+              {% translate "Task" %}
               {% if project.estimate_unit %}
                 <span
                   class="badge badge-ghost badge-sm font-mono normal-case"
-                  title="Estimate total · task count"
+                  title="{% translate "Estimate total · task count" %}"
                 >
-                  {{ estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ backlog_tasks|length }}
+                  {{ estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}{% translate "h" context "hours estimate unit" %}{% else %}{% translate "pt" context "story points estimate unit" %}{% endif %} · {{ backlog_tasks|length }}
                 </span>
               {% endif %}
             </span>
             {% if project.estimate_unit %}
-              <span class="w-14 hidden sm:block shrink-0 text-right">Est.</span>
+              <span
+                class="w-14 hidden sm:block shrink-0 text-right"
+              >{% translate "Est." context "estimate column" %}</span>
             {% endif %}
-            <span class="w-24 hidden sm:block shrink-0">Priority</span>
-            <span class="w-24 hidden md:block shrink-0">Due</span>
-            <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
+            <span class="w-24 hidden sm:block shrink-0">{% translate "Priority" %}</span>
+            <span class="w-24 hidden md:block shrink-0">{% translate "Due" context "due date column" %}</span>
+            <span class="w-24 hidden md:block shrink-0 text-right">{% translate "Assignees" %}</span>
             {% if writable %}<span class="w-8 shrink-0"></span>{% endif %}
           </div>
           <ul class="divide-y divide-base-200 min-h-8" data-backlog-list>
@@ -173,18 +177,26 @@
             <p
               class="px-3 py-2 border-t border-base-300 text-xs text-base-content/60"
             >
-              Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest.
+              {% blocktranslate trimmed count counter=task_render_limit %}
+                Only the first {{ counter }} task is shown - narrow the filters to see the rest.
+              {% plural %}
+                Only the first {{ counter }} tasks are shown - narrow the filters to see the rest.
+              {% endblocktranslate %}
             </p>
           {% endif %}
         </div>
       {% elif filters_active %}
-        <inline-alert type="info" message="No tasks match the current filters."></inline-alert>
+        {% translate "No tasks match the current filters." as no_match_message %}
+        <inline-alert type="info" message="{{ no_match_message }}"></inline-alert>
       {% elif backlog_scope == "none" %}
-        <inline-alert type="info" message="Every backlog task is planned into a sprint."></inline-alert>
+        {% translate "Every backlog task is planned into a sprint." as all_planned_message %}
+        <inline-alert type="info" message="{{ all_planned_message }}"></inline-alert>
       {% elif backlog_scope %}
-        <inline-alert type="info" message="No backlog tasks in this sprint."></inline-alert>
+        {% translate "No backlog tasks in this sprint." as sprint_empty_message %}
+        <inline-alert type="info" message="{{ sprint_empty_message }}"></inline-alert>
       {% else %}
-        <inline-alert type="info" message="The backlog is empty."></inline-alert>
+        {% translate "The backlog is empty." as backlog_empty_message %}
+        <inline-alert type="info" message="{{ backlog_empty_message }}"></inline-alert>
       {% endif %}
     </div>
     {% include "projects/ui/partials/_collection_loading.html" %}

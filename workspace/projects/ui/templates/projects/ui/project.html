@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}{{ project.name }} - Projects{% endblock %}
+{% block title %}{{ project.name }} - {% translate "Projects" %}{% endblock %}
 
 {% block extra_head %}
   {# The attachment/linked-file viewer mounts the files markdown viewer, #}
@@ -43,7 +43,7 @@
   <div class="drawer-side z-40 h-full overflow-visible!">
     <label
       for="projects-drawer"
-      aria-label="close sidebar"
+      aria-label="{% translate "close sidebar" %}"
       class="drawer-overlay"
     ></label>
 
@@ -82,7 +82,9 @@
                 class="w-5 h-5 text-module shrink-0"
               ></i>
               <span class="truncate">{{ project.name }}</span>
-              {% if project.archived_at %}<span class="badge badge-ghost badge-sm">Archived</span>{% endif %}
+              {% if project.archived_at %}
+                <span class="badge badge-ghost badge-sm">{% translate "Archived" context "project state" %}</span>
+              {% endif %}
             </span>
             <i data-lucide="chevrons-up-down" class="w-4 h-4 shrink-0 opacity-60"></i>
           </button>
@@ -102,7 +104,7 @@
                   ></i>
                   <span class="truncate flex-1">{{ p.name }}</span>
                   {% if p.archived_at %}
-                    <span class="badge badge-ghost badge-sm">Archived</span>
+                    <span class="badge badge-ghost badge-sm">{% translate "Archived" context "project state" %}</span>
                   {% elif p.uuid == project.uuid %}
                     <span
                       class="badge badge-ghost badge-sm{% if not sidebar_counts.open %} hidden{% endif %}"
@@ -121,7 +123,7 @@
                 @click="document.activeElement.blur(); document.getElementById('new-project-dialog').showModal()"
               >
                 <i data-lucide="plus" class="w-4 h-4"></i>
-                New project
+                {% translate "New project" %}
               </button>
             </li>
           </ul>
@@ -149,21 +151,22 @@
       <!-- Project navigation -->
       <div class="flex-1 overflow-y-auto py-2 px-3">
         <ul class="menu p-0 gap-1 w-full">
+          {% translate "Timeline" context "project view" as timeline_label %}
           {% url 'projects_ui:project' project.uuid as overview_url %}
-          {% include "ui/partials/drawer_item.html" with href=overview_url icon="layout-dashboard" label="Overview" color="module" active_binding="currentView === 'overview'" x_target="project-content" x_target_history="push" onclick="currentView = 'overview'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Overview" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href=overview_url icon="layout-dashboard" label=_("Overview") color="module" active_binding="currentView === 'overview'" x_target="project-content" x_target_history="push" onclick="currentView = 'overview'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip=_("Overview") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% url 'projects_ui:board' project.uuid as board_url %}
-          {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label="Board" color="module" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Board" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label=_("Board") color="module" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip=_("Board") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% url 'projects_ui:backlog' project.uuid as backlog_url %}
-          {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label="Backlog" color="module" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Backlog" badge_binding="sidebarCounts.backlog" badge_initial=sidebar_counts.backlog collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label=_("Backlog") color="module" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip=_("Backlog") badge_binding="sidebarCounts.backlog" badge_initial=sidebar_counts.backlog collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% url 'projects_ui:all_tasks' project.uuid as all_tasks_url %}
-          {% include "ui/partials/drawer_item.html" with href=all_tasks_url icon="list" label="All tasks" color="module" active_binding="currentView === 'tasks'" x_target="project-content" x_target_history="push" onclick="currentView = 'tasks'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="All tasks" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href=all_tasks_url icon="list" label=_("All tasks") color="module" active_binding="currentView === 'tasks'" x_target="project-content" x_target_history="push" onclick="currentView = 'tasks'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip=_("All tasks") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% url 'projects_ui:timeline' project.uuid as timeline_url %}
-          {% include "ui/partials/drawer_item.html" with href=timeline_url icon="chart-gantt" label="Timeline" color="module" active_binding="currentView === 'timeline'" x_target="project-content" x_target_history="push" onclick="currentView = 'timeline'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Timeline" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href=timeline_url icon="chart-gantt" label=timeline_label color="module" active_binding="currentView === 'timeline'" x_target="project-content" x_target_history="push" onclick="currentView = 'timeline'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip=timeline_label collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% url 'projects_ui:analytics' project.uuid as analytics_url %}
-          {% include "ui/partials/drawer_item.html" with href=analytics_url icon="bar-chart-3" label="Analytics" color="module" active_binding="currentView === 'analytics'" x_target="project-content" x_target_history="push" onclick="currentView = 'analytics'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Analytics" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with href=analytics_url icon="bar-chart-3" label=_("Analytics") color="module" active_binding="currentView === 'analytics'" x_target="project-content" x_target_history="push" onclick="currentView = 'analytics'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip=_("Analytics") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% if role == "admin" %}
             {% url 'projects_ui:settings' project.uuid as settings_url %}
-            {% include "ui/partials/drawer_item.html" with href=settings_url icon="settings" label="Settings" color="module" active_binding="currentView === 'settings'" x_target="project-content" x_target_history="push" onclick="currentView = 'settings'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Settings" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+            {% include "ui/partials/drawer_item.html" with href=settings_url icon="settings" label=_("Settings") color="module" active_binding="currentView === 'settings'" x_target="project-content" x_target_history="push" onclick="currentView = 'settings'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip=_("Settings") collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% endif %}
         </ul>
       </div>
@@ -171,14 +174,20 @@
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0 w-full">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('projects-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('projects-help-dialog').showModal()" tooltip=_("Help (?)") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Collapse toggle (desktop only) -->
       <div class="border-t border-base-300 py-4 px-3">
+        {% translate "Expand sidebar" as expand_sidebar_label %}
+        {% translate "Collapse sidebar" as collapse_sidebar_label %}
         <ul class="menu p-0 hidden lg:block w-full">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" collapse_expr="sidebarCollapsed()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+            {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" collapse_expr="sidebarCollapsed()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+            {% endwith %}
+          {% endwith %}
         </ul>
       </div>
     </aside>
@@ -218,12 +227,15 @@
   {% include "projects/ui/partials/help_dialog.html" %}
   {% include "files/ui/partials/file_viewer_modal.html" with event="open-task-attachment-viewer" viewer_url="/projects/view-attachment/{uuid}" history=True %}
 
+  {% translate "Could not create the project." as create_project_failed %}
   <dialog id="new-project-dialog" class="modal">
     <div
       class="modal-box max-w-sm"
       x-data="{ creating: false, name: '', description: '', type: 'kanban', error: '' }"
     >
-      {% include "ui/partials/dialog_header.html" with icon="square-kanban" title="New project" subtitle="Board and backlog for your tasks" close_expr="document.getElementById('new-project-dialog').close()" only %}
+      {% translate "New project" as new_project_title %}
+      {% translate "Board and backlog for your tasks" as new_project_subtitle %}
+      {% include "ui/partials/dialog_header.html" with icon="square-kanban" title=new_project_title subtitle=new_project_subtitle close_expr="document.getElementById('new-project-dialog').close()" only %}
       <template x-if="error">
         <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
       </template>
@@ -235,14 +247,14 @@
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ name: name, description: description, type: type }),
       }).then(async (resp) => {
-        if (!resp.ok) throw new Error('Could not create the project.');
+        if (!resp.ok) throw new Error('{{ create_project_failed|escapejs }}');
         const data = await resp.json();
         window.location.href = '/projects/' + data.uuid;
       }).catch((e) => { error = e.message; }).finally(() => { creating = false; });
     "
       >
         <label class="fieldset w-full">
-          <div class="fieldset-legend"><span>Name</span></div>
+          <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
           <input
             type="text"
             class="input w-full"
@@ -252,11 +264,11 @@
           />
         </label>
         <label class="fieldset w-full mt-2">
-          <div class="fieldset-legend"><span>Description</span></div>
+          <div class="fieldset-legend"><span>{% translate "Description" context "project field" %}</span></div>
           <textarea class="textarea w-full" x-model="description" rows="2"></textarea>
         </label>
         <div class="fieldset w-full mt-2">
-          <div class="fieldset-legend"><span>Type</span></div>
+          <div class="fieldset-legend"><span>{% translate "Type" %}</span></div>
           <div class="grid grid-cols-2 gap-2">
             <label
               class="rounded-box border p-3 cursor-pointer flex flex-col gap-1"
@@ -272,7 +284,7 @@
                 />
                 Kanban
               </span>
-              <span class="text-xs text-base-content/60">Continuous board</span>
+              <span class="text-xs text-base-content/60">{% translate "Continuous board" %}</span>
             </label>
             <label
               class="rounded-box border p-3 cursor-pointer flex flex-col gap-1"
@@ -288,7 +300,7 @@
                 />
                 Scrum
               </span>
-              <span class="text-xs text-base-content/60">Timeboxed sprints</span>
+              <span class="text-xs text-base-content/60">{% translate "Timeboxed sprints" %}</span>
             </label>
           </div>
         </div>
@@ -298,20 +310,20 @@
             class="btn btn-ghost btn-sm"
             @click="document.getElementById('new-project-dialog').close()"
           >
-            Cancel
+            {% translate "Cancel" %}
           </button>
           <button
             type="submit"
             class="btn btn-module btn-sm"
             :disabled="creating || !name.trim()"
           >
-            Create
+            {% translate "Create" %}
           </button>
         </div>
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
   {# Attachment preview needs the files viewer stack: locking (the text #}

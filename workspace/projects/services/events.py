@@ -1,5 +1,23 @@
+from django.utils.translation import gettext as _
+from django.utils.translation import pgettext_lazy
+
 from ..models import TaskEvent, TaskStatus
 from ..queries import visible_task_events_q
+
+# The direction labels links.py snapshots into a link event's from_value, in
+# English: the stored value is data, so it is translated when it is read.
+_LINK_DIRECTIONS = {
+    "blocks": pgettext_lazy("task link", "blocks"),
+    "is blocked by": pgettext_lazy("task link", "is blocked by"),
+    "duplicates": pgettext_lazy("task link", "duplicates"),
+    "is duplicated by": pgettext_lazy("task link", "is duplicated by"),
+    "relates to": pgettext_lazy("task link", "relates to"),
+}
+
+
+def link_direction_label(value):
+    """The reader's wording of a snapshotted link direction; an unknown one as stored."""
+    return str(_LINK_DIRECTIONS.get(value, value))
 
 
 def record_task_event(
@@ -78,42 +96,58 @@ def serialize_task_event(ev):
     label = ev.short_label
     if ev.type == TaskEvent.Type.ESTIMATED:
         if ev.from_value and ev.to_value:
-            label = f"Estimate changed: {ev.from_value} → {ev.to_value}"
+            label = _("Estimate changed: %(old)s → %(new)s") % {
+                "old": ev.from_value,
+                "new": ev.to_value,
+            }
         elif ev.to_value:
-            label = f"Estimate set to {ev.to_value}"
+            label = _("Estimate set to %(value)s") % {"value": ev.to_value}
         elif ev.from_value:
-            label = "Estimate removed"
+            label = _("Estimate removed")
     elif ev.type == TaskEvent.Type.EPIC:
         # from_value/to_value carry the epic names snapshotted at change time.
         if ev.from_value and ev.to_value:
-            label = f"Epic changed: {ev.from_value} → {ev.to_value}"
+            label = _("Epic changed: %(old)s → %(new)s") % {
+                "old": ev.from_value,
+                "new": ev.to_value,
+            }
         elif ev.to_value:
-            label = f"Epic set to {ev.to_value}"
+            label = _("Epic set to %(name)s") % {"name": ev.to_value}
         elif ev.from_value:
-            label = "Epic removed"
+            label = _("Epic removed")
     elif ev.type == TaskEvent.Type.SPRINT:
         # from_value/to_value carry the sprint names snapshotted at change
         # time, same rationale as the epic names.
         if ev.from_value and ev.to_value:
-            label = f"Sprint changed: {ev.from_value} → {ev.to_value}"
+            label = _("Sprint changed: %(old)s → %(new)s") % {
+                "old": ev.from_value,
+                "new": ev.to_value,
+            }
         elif ev.to_value:
-            label = f"Added to sprint {ev.to_value}"
+            label = _("Added to sprint %(name)s") % {"name": ev.to_value}
         elif ev.from_value:
-            label = f"Removed from sprint {ev.from_value}"
+            label = _("Removed from sprint %(name)s") % {"name": ev.from_value}
     elif ev.type in (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED):
         # from_value holds the direction label ("blocks", "is blocked by"),
         # to_value the other end's reference, both snapshotted at link time.
         # Feeds filter with visible_task_events_q, which drops the event when
         # the viewer cannot access the other end's project.
         if ev.from_value and ev.to_value:
-            label = f"{ev.short_label}: {ev.from_value} {ev.to_value}"
+            label = _("%(event)s: %(direction)s %(reference)s") % {
+                "event": ev.short_label,
+                "direction": link_direction_label(ev.from_value),
+                "reference": ev.to_value,
+            }
     elif ev.type in (TaskEvent.Type.FILE_LINKED, TaskEvent.Type.FILE_UNLINKED):
         # to_value holds the file name snapshotted at link time.
         if ev.to_value:
-            label = f"{ev.short_label}: {ev.to_value}"
+            label = _("%(event)s: %(file)s") % {
+                "event": ev.short_label,
+                "file": ev.to_value,
+            }
     return {
         "icon": ev.icon,
-        "label": label,
+        "label": str(label),
         "description": description,
         "timestamp": ev.created_at,
         "url": url,

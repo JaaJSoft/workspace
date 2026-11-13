@@ -72,6 +72,7 @@ function settingsWith(extraGlobals) {
       getCSRFToken: () => 'test-token',
       // localtime.js, loaded by base.html: the day in the configured zone.
       userTzDayKey: (d) => d.toISOString().slice(0, 10),
+      getUserLocale: () => 'en',
       ...extraGlobals,
     }
   );

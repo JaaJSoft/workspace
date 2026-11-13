@@ -1,0 +1,468 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-13 14:05+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Unknown user"
+msgstr "Utilisateur inconnu"
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "task priority"
+msgid "Urgent"
+msgstr "Urgente"
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "task priority"
+msgid "High"
+msgstr "Haute"
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "task priority"
+msgid "Medium"
+msgstr "Moyenne"
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "task priority"
+msgid "Low"
+msgstr "Basse"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Unknown status"
+msgstr "Statut inconnu"
+
+#: ui/static/projects/ui/js/board.js
+msgid "%(count)s task starts after that due date and was left unchanged."
+msgid_plural ""
+"%(count)s tasks start after that due date and were left unchanged."
+msgstr[0] ""
+"%(count)s tâche commence après cette échéance et n’a pas été modifiée."
+msgstr[1] ""
+"%(count)s de tâches commencent après cette échéance et n’ont pas été "
+"modifiées."
+msgstr[2] ""
+"%(count)s tâches commencent après cette échéance et n’ont pas été modifiées."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not update the tasks."
+msgstr "Impossible de mettre à jour les tâches."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Delete task"
+msgstr "Supprimer la tâche"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Delete %(count)s task"
+msgid_plural "Delete %(count)s tasks"
+msgstr[0] "Supprimer %(count)s tâche"
+msgstr[1] "Supprimer %(count)s de tâches"
+msgstr[2] "Supprimer %(count)s tâches"
+
+#: ui/static/projects/ui/js/board.js
+msgid ""
+"The selected task will be permanently deleted, with its comments, subtasks "
+"and attachments."
+msgstr ""
+"La tâche sélectionnée sera définitivement supprimée, avec ses commentaires, "
+"sous-tâches et pièces jointes."
+
+#: ui/static/projects/ui/js/board.js
+msgid ""
+"The %(count)s selected task will be permanently deleted, with their "
+"comments, subtasks and attachments."
+msgid_plural ""
+"The %(count)s selected tasks will be permanently deleted, with their "
+"comments, subtasks and attachments."
+msgstr[0] ""
+"%(count)s tâche sélectionnée sera définitivement supprimée, avec ses "
+"commentaires, sous-tâches et pièces jointes."
+msgstr[1] ""
+"Les %(count)s de tâches sélectionnées seront définitivement supprimées, avec "
+"leurs commentaires, sous-tâches et pièces jointes."
+msgstr[2] ""
+"Les %(count)s tâches sélectionnées seront définitivement supprimées, avec "
+"leurs commentaires, sous-tâches et pièces jointes."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not delete the tasks."
+msgstr "Impossible de supprimer les tâches."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not move the tasks."
+msgstr "Impossible de déplacer les tâches."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not update the sprint."
+msgstr "Impossible de mettre à jour le sprint."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Start sprint"
+msgstr "Démarrer le sprint"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Start \"%(name)s\"? Its tasks move onto the board."
+msgstr "Démarrer « %(name)s » ? Ses tâches passent sur le tableau."
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "sprint"
+msgid "Start"
+msgstr "Démarrer"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not start the sprint."
+msgstr "Impossible de démarrer le sprint."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Complete sprint"
+msgstr "Terminer le sprint"
+
+#: ui/static/projects/ui/js/board.js
+msgid "%(count)s unfinished task will move to:"
+msgid_plural "%(count)s unfinished tasks will move to:"
+msgstr[0] "%(count)s tâche non terminée sera déplacée vers :"
+msgstr[1] "%(count)s de tâches non terminées seront déplacées vers :"
+msgstr[2] "%(count)s tâches non terminées seront déplacées vers :"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Backlog"
+msgstr "Backlog"
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "sprint"
+msgid "Complete"
+msgstr "Terminer"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Complete \"%(name)s\"?"
+msgstr "Terminer « %(name)s » ?"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not complete the sprint."
+msgstr "Impossible de terminer le sprint."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not load the task."
+msgstr "Impossible de charger la tâche."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not save the task."
+msgstr "Impossible d’enregistrer la tâche."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Are you sure you want to delete \"%(title)s\"?"
+msgstr "Voulez-vous vraiment supprimer « %(title)s » ?"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not delete the task."
+msgstr "Impossible de supprimer la tâche."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Unknown label"
+msgstr "Étiquette inconnue"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Unknown epic"
+msgstr "Epic inconnu"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not create the epic."
+msgstr "Impossible de créer l’epic."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Select files to attach to the task."
+msgstr "Sélectionnez les fichiers à joindre à la tâche."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not add the item."
+msgstr "Impossible d’ajouter l’élément."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not save the item."
+msgstr "Impossible d’enregistrer l’élément."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not remove the item."
+msgstr "Impossible de retirer l’élément."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not reorder the checklist."
+msgstr "Impossible de réordonner la liste de contrôle."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not attach the files."
+msgstr "Impossible de joindre les fichiers."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not remove the attachment."
+msgstr "Impossible de retirer la pièce jointe."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Link from Workspace"
+msgstr "Lier depuis Workspace"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Select files to link to the task. Nothing is copied."
+msgstr "Sélectionnez les fichiers à lier à la tâche. Rien n’est copié."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not link the files."
+msgstr "Impossible de lier les fichiers."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Unlink file"
+msgstr "Délier le fichier"
+
+#: ui/static/projects/ui/js/board.js
+msgid ""
+"Remove \"%(name)s\" from this task? If no other task links it, the project "
+"stops seeing it."
+msgstr ""
+"Retirer « %(name)s » de cette tâche ? Si aucune autre tâche ne le lie, le "
+"projet ne le voit plus."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Unlink"
+msgstr "Délier"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not unlink the file."
+msgstr "Impossible de délier le fichier."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not link the tasks."
+msgstr "Impossible de lier les tâches."
+
+#: ui/static/projects/ui/js/board.js
+msgid "Could not remove the link."
+msgstr "Impossible de retirer le lien."
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "task watch state"
+msgid "Watching"
+msgstr "Suivie"
+
+#: ui/static/projects/ui/js/board.js
+msgctxt "task watch state"
+msgid "Muted"
+msgstr "En sourdine"
+
+#: ui/static/projects/ui/js/board.js
+msgid "Failed to save watch state"
+msgstr "Impossible d’enregistrer l’état de suivi"
+
+#: ui/static/projects/ui/js/preferences.js
+msgid "Failed to save preference"
+msgstr "Impossible d’enregistrer la préférence"
+
+#: ui/static/projects/ui/js/preferences.js
+msgid "All notifications"
+msgstr "Toutes les notifications"
+
+#: ui/static/projects/ui/js/preferences.js
+msgid "In-app only"
+msgstr "Dans l’application uniquement"
+
+#: ui/static/projects/ui/js/preferences.js
+msgid "Failed to save notification level"
+msgstr "Impossible d’enregistrer le niveau de notification"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "No color"
+msgstr "Aucune couleur"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Color %(color)s"
+msgstr "Couleur %(color)s"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "%(done)s/%(total)s done"
+msgstr "%(done)s/%(total)s terminées"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Always"
+msgstr "Toujours"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "%(count)s day"
+msgid_plural "%(count)s days"
+msgstr[0] "%(count)s jour"
+msgstr[1] "%(count)s de jours"
+msgstr[2] "%(count)s jours"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Convert to scrum"
+msgstr "Convertir en scrum"
+
+#: ui/static/projects/ui/js/settings.js
+msgid ""
+"Every task on a board column joins a new running sprint. Backlog tasks stay "
+"unplanned, and the board shows one sprint at a time."
+msgstr ""
+"Chaque tâche d’une colonne du tableau rejoint un nouveau sprint en cours. "
+"Les tâches du backlog restent hors sprint, et le tableau affiche un sprint à "
+"la fois."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Convert to kanban"
+msgstr "Convertir en kanban"
+
+#: ui/static/projects/ui/js/settings.js
+msgid ""
+"The running sprint is closed and planned sprints are deleted, returning "
+"their tasks to the backlog pool. Tasks keep their columns and closed sprints "
+"stay as history."
+msgstr ""
+"Le sprint en cours est clôturé et les sprints planifiés sont supprimés, "
+"leurs tâches retournant dans le backlog. Les tâches gardent leur colonne et "
+"les sprints clôturés restent dans l’historique."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not convert."
+msgstr "Conversion impossible."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not unarchive the project."
+msgstr "Impossible de désarchiver le projet."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not archive the project."
+msgstr "Impossible d’archiver le projet."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Delete project"
+msgstr "Supprimer le projet"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "“%(name)s” and all of its tasks will be permanently deleted."
+msgstr "« %(name)s » et toutes ses tâches seront définitivement supprimés."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not delete the project."
+msgstr "Impossible de supprimer le projet."
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "status category"
+msgid "Backlog"
+msgstr "Backlog"
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "status category"
+msgid "Active"
+msgstr "En cours"
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "status category"
+msgid "Done"
+msgstr "Terminé"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "%(count)s task"
+msgid_plural "%(count)s tasks"
+msgstr[0] "%(count)s tâche"
+msgstr[1] "%(count)s de tâches"
+msgstr[2] "%(count)s tâches"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Request failed."
+msgstr "La requête a échoué."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "The last column cannot be deleted while it holds tasks."
+msgstr ""
+"La dernière colonne ne peut pas être supprimée tant qu’elle contient des "
+"tâches."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Delete column"
+msgstr "Supprimer la colonne"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "%(count)s task will move to:"
+msgid_plural "%(count)s tasks will move to:"
+msgstr[0] "%(count)s tâche sera déplacée vers :"
+msgstr[1] "%(count)s de tâches seront déplacées vers :"
+msgstr[2] "%(count)s tâches seront déplacées vers :"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Delete the empty column “%(name)s”?"
+msgstr "Supprimer la colonne vide « %(name)s » ?"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not load labels."
+msgstr "Impossible de charger les étiquettes."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "“%(name)s” will be removed from every task using it."
+msgstr "« %(name)s » sera retirée de toutes les tâches qui l’utilisent."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not load epics."
+msgstr "Impossible de charger les epics."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Delete epic"
+msgstr "Supprimer l’epic"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "“%(name)s” will be deleted; its tasks are kept and ungrouped."
+msgstr "« %(name)s » sera supprimé ; ses tâches sont conservées, sans epic."
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "sprint state"
+msgid "Planned"
+msgstr "Planifié"
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "sprint state"
+msgid "Active"
+msgstr "Actif"
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "sprint state"
+msgid "Closed"
+msgstr "Clôturé"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not load sprints."
+msgstr "Impossible de charger les sprints."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Delete sprint"
+msgstr "Supprimer le sprint"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "“%(name)s” will be deleted; its tasks are kept and leave the sprint."
+msgstr ""
+"« %(name)s » sera supprimé ; ses tâches sont conservées et quittent le "
+"sprint."
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "project role"
+msgid "Admin"
+msgstr "Administrateur"
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "project role"
+msgid "Member"
+msgstr "Membre"
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Could not load members."
+msgstr "Impossible de charger les membres."
+
+#: ui/static/projects/ui/js/settings.js
+msgid "Remove %(username)s from this project?"
+msgstr "Retirer %(username)s de ce projet ?"
+
+#: ui/static/projects/ui/js/settings.js
+msgctxt "project member"
+msgid "Remove"
+msgstr "Retirer"

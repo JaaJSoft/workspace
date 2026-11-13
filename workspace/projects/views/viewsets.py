@@ -3,6 +3,8 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import Http404
 from django.utils import timezone
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status, viewsets
@@ -164,7 +166,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         self._require_admin(project)
         if project.is_archived:
-            raise PermissionDenied("Project is archived.")
+            raise PermissionDenied(_("Project is archived."))
         try:
             with transaction.atomic():
                 return super().partial_update(request, *args, **kwargs)
@@ -179,7 +181,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         self._require_admin(project)
         if project.type == Project.Type.PERSONAL:
             return Response(
-                {"detail": "Personal projects cannot be deleted."},
+                {"detail": _("Personal projects cannot be deleted.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)
@@ -189,7 +191,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         self._require_admin(project)
         if project.is_archived:
-            raise PermissionDenied("Project is archived.")
+            raise PermissionDenied(_("Project is archived."))
         serializer = ProjectConvertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
@@ -206,7 +208,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         self._require_admin(project)
         if project.type == Project.Type.PERSONAL:
             return Response(
-                {"detail": "Personal projects cannot be archived."},
+                {"detail": _("Personal projects cannot be archived.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if project.archived_at is None:
@@ -225,7 +227,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def _require_admin(self, project):
         if get_project_role(self.request.user, project) != ProjectMember.Role.ADMIN:
-            raise PermissionDenied("Admin role required.")
+            raise PermissionDenied(_("Admin role required."))
 
 
 class ProjectContextMixin:
@@ -255,11 +257,11 @@ class ProjectContextMixin:
 
     def _require_admin(self):
         if self.role != ProjectMember.Role.ADMIN:
-            raise PermissionDenied("Admin role required.")
+            raise PermissionDenied(_("Admin role required."))
 
     def _require_writable(self):
         if self.project.is_archived:
-            raise PermissionDenied("Project is archived.")
+            raise PermissionDenied(_("Project is archived."))
 
 
 @extend_schema(tags=["Projects"])
@@ -289,7 +291,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         user = User.objects.filter(pk=serializer.validated_data["user"]).first()
         if user is None:
             return Response(
-                {"detail": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": _("User not found.")}, status=status.HTTP_400_BAD_REQUEST
             )
         try:
             member = add_member(
@@ -506,7 +508,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         """Sprints are the scrum board model; a kanban project only ever
         holds the closed ones a conversion left behind, as frozen history."""
         if self.project.type != Project.Type.SCRUM:
-            raise PermissionDenied("Sprints require a scrum project.")
+            raise PermissionDenied(_("Sprints require a scrum project."))
 
     def create(self, request, *args, **kwargs):
         self._require_admin()
@@ -569,7 +571,7 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             move_to = self.project.sprints.filter(uuid=move_to_uuid).first()
             if move_to is None:
                 return Response(
-                    {"detail": "Unknown target sprint for this project."},
+                    {"detail": _("Unknown target sprint for this project.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         try:
@@ -636,7 +638,7 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             move_to = self.project.statuses.filter(uuid=parsed).first()
             if move_to is None:
                 return Response(
-                    {"detail": "Unknown target column for this project."},
+                    {"detail": _("Unknown target column for this project.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         try:
@@ -855,7 +857,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         status_obj = self._resolve_status(serializer.validated_data["status"])
         if status_obj is None:
             return Response(
-                {"detail": "Unknown status for this project."},
+                {"detail": _("Unknown status for this project.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         reorder_tasks(
@@ -875,7 +877,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         status_obj = self._resolve_status(serializer.validated_data["status"])
         if status_obj is None:
             return Response(
-                {"detail": "Unknown status for this project."},
+                {"detail": _("Unknown status for this project.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         moved = move_tasks(
@@ -898,7 +900,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             sprint = self.project.sprints.filter(uuid=sprint_uuid).first()
             if sprint is None:
                 return Response(
-                    {"detail": "Unknown sprint for this project."},
+                    {"detail": _("Unknown sprint for this project.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         try:
@@ -1050,7 +1052,7 @@ class TaskLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         if other is None:
             # Unknown and inaccessible targets answer alike (404-not-403).
             return Response(
-                {"detail": "Task not found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": _("Task not found.")}, status=status.HTTP_404_NOT_FOUND
             )
         try:
             create_link(
@@ -1169,7 +1171,7 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         if comment is None:
             raise Http404
         if comment.author_id != request.user.pk:
-            raise PermissionDenied("You can only modify your own comments.")
+            raise PermissionDenied(_("You can only modify your own comments."))
         return comment
 
 
@@ -1212,22 +1214,29 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         if len(uploads) + len(file_uuids) > MAX_ATTACHMENTS_PER_REQUEST:
             return Response(
                 {
-                    "detail": "Maximum "
-                    f"{MAX_ATTACHMENTS_PER_REQUEST} attachments per request."
+                    "detail": ngettext(
+                        "Maximum %(count)s attachment per request.",
+                        "Maximum %(count)s attachments per request.",
+                        MAX_ATTACHMENTS_PER_REQUEST,
+                    )
+                    % {"count": MAX_ATTACHMENTS_PER_REQUEST}
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         for f in uploads:
             if f.size > MAX_UPLOAD_BYTES:
                 return Response(
-                    {"detail": f'File "{f.name}" exceeds the 50 MB limit.'},
+                    {
+                        "detail": _('File "%(name)s" exceeds the 50 MB limit.')
+                        % {"name": f.name}
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         picked = resolve_accessible_files(request.user, file_uuids)
         if picked is None:
             return Response(
-                {"detail": "One or more files not found or not accessible."},
+                {"detail": _("One or more files not found or not accessible.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1236,7 +1245,7 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
                 create_attachments(request.user, self.task, uploads, picked)
         except FileNotFoundError, OSError:
             return Response(
-                {"detail": "One or more workspace file contents are unavailable."},
+                {"detail": _("One or more workspace file contents are unavailable.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(
@@ -1309,7 +1318,7 @@ class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         )
         if files is None:
             return Response(
-                {"detail": "One or more files not found or not accessible."},
+                {"detail": _("One or more files not found or not accessible.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:46+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -442,10 +442,6 @@ msgstr "Envoyez-le dans l’en-tête Authorization de vos requêtes API."
 #: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Copy this token now. You won't be able to see it again."
 msgstr "Copiez ce jeton maintenant. Vous ne pourrez plus le revoir."
-
-#: ui/templates/users/ui/partials/settings_tokens.html
-msgid "Copied"
-msgstr "Copié"
 
 #: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Failed to load tokens."

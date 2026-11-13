@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Status dropdown: styled replacement for the native <select>, visually in line
 with _priority_selector.html. Each row shows the status colour dot used on the
@@ -45,7 +46,7 @@ Params:
         <span
           class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
         ></span>
-        <span class="truncate">All statuses</span>
+        <span class="truncate">{% translate "All statuses" %}</span>
       </span>
     {% endif %}
     {% for s in statuses %}
@@ -85,7 +86,7 @@ Params:
             <span
               class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
             ></span>
-            <span class="text-sm">All statuses</span>
+            <span class="text-sm">{% translate "All statuses" %}</span>
           </button>
         </li>
       {% endif %}

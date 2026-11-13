@@ -3,19 +3,21 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
 
 
 class Project(models.Model):
     class Type(models.TextChoices):
-        PERSONAL = "personal", "Personal"
-        KANBAN = "kanban", "Kanban"
-        SCRUM = "scrum", "Scrum"
+        PERSONAL = "personal", pgettext_lazy("project type", "Personal")
+        KANBAN = "kanban", pgettext_lazy("project type", "Kanban")
+        SCRUM = "scrum", pgettext_lazy("project type", "Scrum")
 
     class EstimateUnit(models.TextChoices):
-        POINTS = "points", "Story points"
-        HOURS = "hours", "Hours"
+        POINTS = "points", _("Story points")
+        HOURS = "hours", _("Hours")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     name = models.CharField(max_length=255)
@@ -73,8 +75,8 @@ class Project(models.Model):
 
 class ProjectMember(models.Model):
     class Role(models.TextChoices):
-        ADMIN = "admin", "Admin"
-        MEMBER = "member", "Member"
+        ADMIN = "admin", pgettext_lazy("project role", "Admin")
+        MEMBER = "member", pgettext_lazy("project role", "Member")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     project = models.ForeignKey(
@@ -125,9 +127,9 @@ class ProjectNotificationLevel(models.Model):
         the user from the recipient set entirely.
         """
 
-        ALL = "all", "All notifications"
-        IN_APP = "in_app", "In-app only"
-        NONE = "none", "Nothing"
+        ALL = "all", _("All notifications")
+        IN_APP = "in_app", _("In-app only")
+        NONE = "none", _("Nothing")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     project = models.ForeignKey(
@@ -156,9 +158,9 @@ class ProjectNotificationLevel(models.Model):
 
 class TaskStatus(models.Model):
     class Category(models.TextChoices):
-        BACKLOG = "backlog", "Backlog"
-        ACTIVE = "active", "Active"
-        DONE = "done", "Done"
+        BACKLOG = "backlog", pgettext_lazy("status category", "Backlog")
+        ACTIVE = "active", pgettext_lazy("status category", "Active")
+        DONE = "done", pgettext_lazy("status category", "Done")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     project = models.ForeignKey(
@@ -269,9 +271,9 @@ class Sprint(models.Model):
     """
 
     class State(models.TextChoices):
-        PLANNED = "planned", "Planned"
-        ACTIVE = "active", "Active"
-        CLOSED = "closed", "Closed"
+        PLANNED = "planned", pgettext_lazy("sprint state", "Planned")
+        ACTIVE = "active", pgettext_lazy("sprint state", "Active")
+        CLOSED = "closed", pgettext_lazy("sprint state", "Closed")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     project = models.ForeignKey(
@@ -311,10 +313,10 @@ class Sprint(models.Model):
 
 class Task(models.Model):
     class Priority(models.TextChoices):
-        LOW = "low", "Low"
-        MEDIUM = "medium", "Medium"
-        HIGH = "high", "High"
-        URGENT = "urgent", "Urgent"
+        LOW = "low", pgettext_lazy("task priority", "Low")
+        MEDIUM = "medium", pgettext_lazy("task priority", "Medium")
+        HIGH = "high", pgettext_lazy("task priority", "High")
+        URGENT = "urgent", pgettext_lazy("task priority", "Urgent")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     project = models.ForeignKey(
@@ -410,16 +412,16 @@ class Task(models.Model):
         # Runs in ModelForm paths (the Django admin): the API scopes the
         # epic and sprint querysets per project, but the admin offers all.
         if self.epic_id and self.epic.project_id != self.project_id:
-            raise ValidationError({"epic": "Epic belongs to another project."})
+            raise ValidationError({"epic": _("Epic belongs to another project.")})
         if self.sprint_id and self.sprint.project_id != self.project_id:
-            raise ValidationError({"sprint": "Sprint belongs to another project."})
+            raise ValidationError({"sprint": _("Sprint belongs to another project.")})
         if (
             self.start_date is not None
             and self.due_date is not None
             and self.start_date > self.due_date
         ):
             raise ValidationError(
-                {"start_date": "Start date cannot be after the due date."}
+                {"start_date": _("Start date cannot be after the due date.")}
             )
 
     @property
@@ -462,9 +464,9 @@ class TaskLink(models.Model):
     """
 
     class Type(models.TextChoices):
-        BLOCKS = "blocks", "Blocks"
-        DUPLICATES = "duplicates", "Duplicates"
-        RELATES_TO = "relates_to", "Relates to"
+        BLOCKS = "blocks", pgettext_lazy("task link", "Blocks")
+        DUPLICATES = "duplicates", pgettext_lazy("task link", "Duplicates")
+        RELATES_TO = "relates_to", pgettext_lazy("task link", "Relates to")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     source = models.ForeignKey(
@@ -628,22 +630,22 @@ class TaskFileLink(models.Model):
 
 class TaskEvent(models.Model):
     class Type(models.TextChoices):
-        CREATED = "created", "Created"
-        UPDATED = "updated", "Updated"
-        ASSIGNED = "assigned", "Assigned"
-        MOVED = "moved", "Moved"
-        COMPLETED = "completed", "Completed"
-        DELETED = "deleted", "Deleted"
-        COMMENTED = "commented", "Commented"
-        ESTIMATED = "estimate", "Estimated"
-        EPIC = "epic", "Epic"
-        SPRINT = "sprint", "Sprint"
-        ATTACHED = "attached", "Attached"
-        DETACHED = "detached", "Detached"
-        LINKED = "linked", "Linked"
-        UNLINKED = "unlinked", "Unlinked"
-        FILE_LINKED = "file_linked", "File linked"
-        FILE_UNLINKED = "file_unlinked", "File unlinked"
+        CREATED = "created", pgettext_lazy("task event", "Created")
+        UPDATED = "updated", pgettext_lazy("task event", "Updated")
+        ASSIGNED = "assigned", pgettext_lazy("task event", "Assigned")
+        MOVED = "moved", pgettext_lazy("task event", "Moved")
+        COMPLETED = "completed", pgettext_lazy("task event", "Completed")
+        DELETED = "deleted", pgettext_lazy("task event", "Deleted")
+        COMMENTED = "commented", pgettext_lazy("task event", "Commented")
+        ESTIMATED = "estimate", pgettext_lazy("task event", "Estimated")
+        EPIC = "epic", pgettext_lazy("task event", "Epic")
+        SPRINT = "sprint", pgettext_lazy("task event", "Sprint")
+        ATTACHED = "attached", pgettext_lazy("task event", "Attached")
+        DETACHED = "detached", pgettext_lazy("task event", "Detached")
+        LINKED = "linked", pgettext_lazy("task event", "Linked")
+        UNLINKED = "unlinked", pgettext_lazy("task event", "Unlinked")
+        FILE_LINKED = "file_linked", pgettext_lazy("task event", "File linked")
+        FILE_UNLINKED = "file_unlinked", pgettext_lazy("task event", "File unlinked")
 
     _ICONS = {
         Type.CREATED: "plus",
@@ -664,22 +666,22 @@ class TaskEvent(models.Model):
         Type.FILE_UNLINKED: "unlink",
     }
     _LABELS = {
-        Type.CREATED: "Task created",
-        Type.UPDATED: "Task updated",
-        Type.ASSIGNED: "Task assigned",
-        Type.MOVED: "Task moved",
-        Type.COMPLETED: "Task completed",
-        Type.DELETED: "Task deleted",
-        Type.COMMENTED: "Comment added",
-        Type.ESTIMATED: "Estimate changed",
-        Type.EPIC: "Epic changed",
-        Type.SPRINT: "Sprint changed",
-        Type.ATTACHED: "File attached",
-        Type.DETACHED: "File removed",
-        Type.LINKED: "Link added",
-        Type.UNLINKED: "Link removed",
-        Type.FILE_LINKED: "File linked",
-        Type.FILE_UNLINKED: "File unlinked",
+        Type.CREATED: _("Task created"),
+        Type.UPDATED: _("Task updated"),
+        Type.ASSIGNED: _("Task assigned"),
+        Type.MOVED: _("Task moved"),
+        Type.COMPLETED: _("Task completed"),
+        Type.DELETED: _("Task deleted"),
+        Type.COMMENTED: _("Comment added"),
+        Type.ESTIMATED: _("Estimate changed"),
+        Type.EPIC: _("Epic changed"),
+        Type.SPRINT: _("Sprint changed"),
+        Type.ATTACHED: _("File attached"),
+        Type.DETACHED: _("File removed"),
+        Type.LINKED: _("Link added"),
+        Type.UNLINKED: _("Link removed"),
+        Type.FILE_LINKED: _("File linked"),
+        Type.FILE_UNLINKED: _("File unlinked"),
     }
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
@@ -766,7 +768,7 @@ class TaskEvent(models.Model):
 
     @property
     def short_label(self):
-        return self._LABELS.get(self.type, "Task updated")
+        return self._LABELS.get(self.type, self._LABELS[self.Type.UPDATED])
 
 
 class TaskReminder(models.Model):
@@ -780,8 +782,8 @@ class TaskReminder(models.Model):
     """
 
     class Kind(models.TextChoices):
-        DUE = "due", "Due"
-        OVERDUE = "overdue", "Overdue"
+        DUE = "due", pgettext_lazy("task reminder", "Due")
+        OVERDUE = "overdue", pgettext_lazy("task reminder", "Overdue")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     task = models.ForeignKey(

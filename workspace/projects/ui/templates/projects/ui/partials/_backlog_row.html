@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}Column widths must stay in sync with the header rows in
 backlog.html and all_tasks.html. `selectable` renders the checkbox feeding
 the selection toolbar; `row_readonly` drops the drag handle and the
@@ -17,7 +18,7 @@ reorderable).{% endcomment %}
       type="checkbox"
       class="checkbox checkbox-sm shrink-0"
       @click.stop
-      aria-label="Select task"
+      aria-label="{% translate "Select task" %}"
       :checked="isSelected('{{ task.uuid|escapejs }}')"
       @change="toggleSelect('{{ task.uuid|escapejs }}')"
     />
@@ -70,7 +71,9 @@ reorderable).{% endcomment %}
     class="w-24 hidden md:flex items-center gap-1 shrink-0 text-xs {% if task.due_date and task.due_date < today and task.status.category != "done" %}text-error font-medium{% else %}text-base-content/60{% endif %}"
   >
     {% if task.due_date %}
-      <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:"M j" }}
+      {# Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25". #}
+      {% translate "M j" context "short due date format" as due_date_format %}
+      <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:due_date_format }}
     {% endif %}
   </span>
   <span class="w-24 hidden md:flex justify-end -space-x-2 shrink-0">
@@ -90,7 +93,7 @@ reorderable).{% endcomment %}
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square shrink-0"
-        title="Send to current sprint"
+        title="{% translate "Send to current sprint" %}"
         @click.stop="sendToBoard('{{ task.uuid|escapejs }}')"
       >
         <i data-lucide="timer" class="w-5 h-5"></i>
@@ -99,7 +102,7 @@ reorderable).{% endcomment %}
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square shrink-0"
-        title="Send to board"
+        title="{% translate "Send to board" %}"
         @click.stop="sendToBoard('{{ task.uuid|escapejs }}')"
       >
         <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>

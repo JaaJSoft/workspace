@@ -1,3 +1,4 @@
+{% load i18n %}
 <div
   id="project-content"
   class="flex-1 min-h-0 overflow-y-auto"
@@ -15,7 +16,10 @@
   >
     {% include "ui/partials/drawer_toggle.html" with drawer_id="projects-drawer" class="lg:hidden" %}
     <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
-    {% if project.archived_at %}<span class="badge badge-ghost">Archived</span>{% endif %}
+    {% if project.archived_at %}
+      <span class="badge badge-ghost">{% translate "Archived" context "project state" %}</span>
+    {% endif %}
+    {% translate "Notifications: %(level)s" as notifications_title %}
     <div
       class="dropdown dropdown-end ml-auto"
       x-data="projectNotificationLevel({
@@ -29,8 +33,8 @@
         type="button"
         tabindex="0"
         class="btn btn-ghost btn-sm btn-square"
-        aria-label="Notification level"
-        :title="'Notifications: ' + label(effective())"
+        aria-label="{% translate "Notification level" %}"
+        :title="interpolate('{{ notifications_title|escapejs }}', { level: label(effective()) }, true)"
       >
         <i x-show="effective() === 'all'" data-lucide="bell" class="w-4 h-4"></i>
         <i
@@ -54,7 +58,10 @@
             :class="override === '' ? 'menu-active' : ''"
           >
             <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-            <span>Default · <span x-text="label(moduleLevel)"></span></span>
+            {% translate "Default · %(level)s" as default_level_label %}
+            <span
+              x-text="interpolate('{{ default_level_label|escapejs }}', { level: label(moduleLevel) }, true)"
+            >{% translate "Default" %}</span>
           </a>
         </li>
         <li>
@@ -62,7 +69,7 @@
             @click="document.activeElement.blur(); set('all')"
             :class="override === 'all' ? 'menu-active' : ''"
           >
-            <i data-lucide="bell" class="w-4 h-4"></i> All notifications
+            <i data-lucide="bell" class="w-4 h-4"></i> {% translate "All notifications" %}
           </a>
         </li>
         <li>
@@ -70,7 +77,7 @@
             @click="document.activeElement.blur(); set('in_app')"
             :class="override === 'in_app' ? 'menu-active' : ''"
           >
-            <i data-lucide="bell-minus" class="w-4 h-4"></i> In-app only
+            <i data-lucide="bell-minus" class="w-4 h-4"></i> {% translate "In-app only" %}
           </a>
         </li>
         <li>
@@ -78,7 +85,7 @@
             @click="document.activeElement.blur(); set('none')"
             :class="override === 'none' ? 'menu-active' : ''"
           >
-            <i data-lucide="bell-off" class="w-4 h-4"></i> Nothing
+            <i data-lucide="bell-off" class="w-4 h-4"></i> {% translate "Nothing" %}
           </a>
         </li>
       </ul>

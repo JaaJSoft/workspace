@@ -24,6 +24,7 @@ Params:
                        visible, and a search query looks through the
                        closed history regardless.
 {% endcomment %}
+{% load i18n %}
 <div
   class="dropdown"
   x-data="{ sprintQuery: '', hideClosed: {% if with_closed_toggle %}true{% else %}false{% endif %} }"
@@ -35,13 +36,13 @@ Params:
   >
     <i data-lucide="timer" class="w-4 h-4 text-module"></i>
     {% if selected == "none" %}
-      <span class="font-medium">Unplanned</span>
+      <span class="font-medium">{% translate "Unplanned" context "sprint scope" %}</span>
     {% elif selected %}
       <span class="font-medium">{{ selected.name }}</span>
       {% if selected.state == "active" %}
-        <span class="badge badge-module badge-sm">Active</span>
+        <span class="badge badge-module badge-sm">{% translate "Active" context "sprint state" %}</span>
       {% elif selected.state == "closed" %}
-        <span class="badge badge-ghost badge-sm">Closed</span>
+        <span class="badge badge-ghost badge-sm">{% translate "Closed" context "sprint state" %}</span>
       {% endif %}
     {% else %}
       <span>{{ empty_label }}</span>
@@ -58,7 +59,7 @@ Params:
         <input
           type="search"
           class="grow min-w-0"
-          placeholder="Search sprints"
+          placeholder="{% translate "Search sprints" %}"
           x-model="sprintQuery"
           @click.stop
         />
@@ -75,7 +76,7 @@ Params:
             class="{% if not selected %}active{% endif %}"
             @click="document.activeElement.blur()"
           >
-            Whole backlog
+            {% translate "Whole backlog" %}
           </a>
         </li>
         <li>
@@ -85,7 +86,7 @@ Params:
             class="{% if selected == 'none' %}active{% endif %}"
             @click="document.activeElement.blur()"
           >
-            Unplanned
+            {% translate "Unplanned" context "sprint scope" %}
           </a>
         </li>
       {% endif %}
@@ -103,17 +104,17 @@ Params:
           >
             <span class="truncate flex-1">{{ s.name }}</span>
             {% if s.state == "active" %}
-              <span class="badge badge-module badge-sm">Active</span>
+              <span class="badge badge-module badge-sm">{% translate "Active" context "sprint state" %}</span>
             {% elif s.state == "closed" %}
-              <span class="badge badge-ghost badge-sm">Closed</span>
+              <span class="badge badge-ghost badge-sm">{% translate "Closed" context "sprint state" %}</span>
             {% else %}
-              <span class="badge badge-ghost badge-sm">Planned</span>
+              <span class="badge badge-ghost badge-sm">{% translate "Planned" context "sprint state" %}</span>
             {% endif %}
           </a>
         </li>
       {% empty %}
         {% if not with_pool_entries %}
-          <li class="menu-title">No started sprint yet.</li>
+          <li class="menu-title">{% translate "No started sprint yet." %}</li>
         {% endif %}
       {% endfor %}
     </ul>
@@ -122,7 +123,7 @@ Params:
         {% if with_closed_toggle %}
           <li>
             <label class="flex items-center justify-between gap-2 cursor-pointer">
-              <span class="text-sm">Hide closed sprints</span>
+              <span class="text-sm">{% translate "Hide closed sprints" %}</span>
               <input
                 type="checkbox"
                 class="toggle toggle-xs toggle-module"
@@ -136,13 +137,13 @@ Params:
           <li>
             <button type="button" @click="openSprints({ add: true })">
               <i data-lucide="plus" class="w-4 h-4 text-module"></i>
-              New sprint
+              {% translate "New sprint" %}
             </button>
           </li>
           <li>
             <button type="button" @click="openSprints()">
               <i data-lucide="settings-2" class="w-4 h-4 opacity-70"></i>
-              Manage sprints
+              {% translate "Manage sprints" %}
             </button>
           </li>
         {% endif %}

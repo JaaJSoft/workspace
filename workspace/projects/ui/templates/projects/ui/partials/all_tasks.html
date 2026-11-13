@@ -1,3 +1,4 @@
+{% load i18n %}
 <div id="all-tasks" class="w-full flex flex-col gap-3">
   {% include "projects/ui/partials/_task_filters.html" with show_status_filter=True %}
 
@@ -31,19 +32,21 @@
               <input
                 type="checkbox"
                 class="checkbox checkbox-sm shrink-0"
-                aria-label="Select all tasks"
+                aria-label="{% translate "Select all tasks" %}"
                 :checked="allVisibleSelected()"
                 @change="toggleSelectAll()"
               />
             {% endif %}
-            <span class="flex-1">Task</span>
-            <span class="w-28 hidden sm:block shrink-0">Status</span>
+            <span class="flex-1">{% translate "Task" %}</span>
+            <span class="w-28 hidden sm:block shrink-0">{% translate "Status" %}</span>
             {% if project.estimate_unit %}
-              <span class="w-14 hidden sm:block shrink-0 text-right">Est.</span>
+              <span
+                class="w-14 hidden sm:block shrink-0 text-right"
+              >{% translate "Est." context "estimate column" %}</span>
             {% endif %}
-            <span class="w-24 hidden sm:block shrink-0">Priority</span>
-            <span class="w-24 hidden md:block shrink-0">Due</span>
-            <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
+            <span class="w-24 hidden sm:block shrink-0">{% translate "Priority" %}</span>
+            <span class="w-24 hidden md:block shrink-0">{% translate "Due" context "due date column" %}</span>
+            <span class="w-24 hidden md:block shrink-0 text-right">{% translate "Assignees" %}</span>
           </div>
           <ul class="divide-y divide-base-200 min-h-8">
             {% for task in all_tasks %}
@@ -54,14 +57,20 @@
             <p
               class="px-3 py-2 border-t border-base-300 text-xs text-base-content/60"
             >
-              Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest.
+              {% blocktranslate trimmed count counter=task_render_limit %}
+                Only the first {{ counter }} task is shown - narrow the filters to see the rest.
+              {% plural %}
+                Only the first {{ counter }} tasks are shown - narrow the filters to see the rest.
+              {% endblocktranslate %}
             </p>
           {% endif %}
         </div>
       {% elif filters_active %}
-        <inline-alert type="info" message="No tasks match the current filters."></inline-alert>
+        {% translate "No tasks match the current filters." as no_match_message %}
+        <inline-alert type="info" message="{{ no_match_message }}"></inline-alert>
       {% else %}
-        <inline-alert type="info" message="This project has no tasks yet."></inline-alert>
+        {% translate "This project has no tasks yet." as no_tasks_message %}
+        <inline-alert type="info" message="{{ no_tasks_message }}"></inline-alert>
       {% endif %}
     </div>
     {% include "projects/ui/partials/_collection_loading.html" %}

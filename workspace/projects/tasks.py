@@ -3,6 +3,8 @@ from collections import defaultdict
 
 from celery import shared_task
 from django.utils import timezone
+from django.utils.dateformat import format as date_format
+from django.utils.translation import gettext, pgettext
 
 from workspace.common.task_priority import NORMAL_PRIORITY
 
@@ -54,6 +56,20 @@ def _claim_reminder(task, user_id, kind):
     )
 
 
+def _reminder_body(task, project, kind):
+    """A reminder's body, in the language active for its recipients."""
+    from workspace.projects.models import TaskReminder
+
+    if kind == TaskReminder.Kind.OVERDUE:
+        # Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25".
+        due_date_format = pgettext("short due date format", "M j")
+        return gettext("Overdue since %(date)s · %(project)s") % {
+            "date": date_format(task.due_date, due_date_format),
+            "project": project.name,
+        }
+    return gettext("Due today · %(project)s") % {"project": project.name}
+
+
 @shared_task(
     name="projects.notify_due_tasks", priority=NORMAL_PRIORITY, ignore_result=True
 )
@@ -80,7 +96,10 @@ def notify_due_tasks():
         user_levels,
     )
     from workspace.projects.services.watchers import watch_states
-    from workspace.users.services.settings import get_user_timezone
+    from workspace.users.services.settings import (
+        get_user_timezone,
+        in_recipient_languages,
+    )
 
     now = timezone.now()
     tasks_by_project = defaultdict(list)
@@ -137,24 +156,24 @@ def notify_due_tasks():
                 if _claim_reminder(task, user.pk, kind):
                     recipients_by_kind[kind].append(user.pk)
             for kind, recipient_ids in recipients_by_kind.items():
-                if kind == TaskReminder.Kind.OVERDUE:
-                    body = f"Overdue since {task.due_date.isoformat()} · {project.name}"
-                else:
-                    body = f"Due today · {project.name}"
-                notify_stream(
-                    recipient_ids=recipient_ids,
-                    source=task,
-                    origin="projects",
-                    title=task.title,
-                    body=body,
-                    url=f"/projects/{task.project_id}?task={task.uuid}",
-                    priority_map={
-                        uid: IN_APP_PRIORITY
-                        for uid in recipient_ids
-                        if levels[uid] == Level.IN_APP
-                    },
-                    stream="reminder",
-                )
+                for group in in_recipient_languages(
+                    users_by_id[uid] for uid in recipient_ids
+                ):
+                    group_ids = [u.pk for u in group]
+                    notify_stream(
+                        recipient_ids=group_ids,
+                        source=task,
+                        origin="projects",
+                        title=task.title,
+                        body=_reminder_body(task, project, kind),
+                        url=f"/projects/{task.project_id}?task={task.uuid}",
+                        priority_map={
+                            uid: IN_APP_PRIORITY
+                            for uid in group_ids
+                            if levels[uid] == Level.IN_APP
+                        },
+                        stream="reminder",
+                    )
                 sent += len(recipient_ids)
     if sent:
         logger.info("Sent %d due-task reminders", sent)

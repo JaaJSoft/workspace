@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:46+0000\n"
+"POT-Creation-Date: 2026-11-13 16:46+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -11,11 +11,1066 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
 
+#: activity.py
+msgid "Email sent"
+msgstr "E-mail envoyé"
+
+#: activity.py
+msgid "Email received"
+msgstr "E-mail reçu"
+
+#: activity.py services/notifications.py
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "(no subject)"
+msgstr "(sans objet)"
+
 #: apps.py
 msgid "Read and send emails from external mail accounts."
 msgstr ""
 "Lisez et envoyez des e-mails depuis vos comptes de messagerie externes."
 
-#: apps.py
+#: apps.py services/notifications.py
 msgid "New email"
 msgstr "Nouvel e-mail"
+
+#: models.py
+msgid "Inbox"
+msgstr "Boîte de réception"
+
+#: models.py
+msgid "Sent"
+msgstr "Envoyés"
+
+#: models.py
+msgid "Drafts"
+msgstr "Brouillons"
+
+#: models.py
+msgid "Spam"
+msgstr "Spam"
+
+#: models.py
+msgid "Archive"
+msgstr "Archives"
+
+#: models.py
+msgid "Other"
+msgstr "Autres"
+
+#: serializers.py
+msgid ""
+"Invalid conditions: check field, op and value formats, and that the tree "
+"depth and total leaf count are within limits."
+msgstr ""
+"Conditions non valides : vérifiez le format des champs, opérateurs et "
+"valeurs, et que la profondeur de l’arbre et le nombre total de conditions "
+"restent dans les limites."
+
+#: serializers.py
+msgid ""
+"Invalid actions: check that each action has a valid type and the required "
+"label_id or folder_id when applicable."
+msgstr ""
+"Actions non valides : vérifiez que chaque action a un type valide et, le cas "
+"échéant, le label_id ou le folder_id requis."
+
+#: serializers.py
+msgid "at least one action is required"
+msgstr "au moins une action est requise"
+
+#: services/oauth2.py
+#, python-format
+msgid "Mail account %(email)s disconnected"
+msgstr "Compte de messagerie %(email)s déconnecté"
+
+#: services/oauth2.py
+msgid "Authorization was revoked or expired. Please reconnect your account."
+msgstr "L’autorisation a été révoquée ou a expiré. Reconnectez votre compte."
+
+#: templates/mail/oauth2_callback.html
+msgid "Account connected! You can close this window."
+msgstr "Compte connecté ! Vous pouvez fermer cette fenêtre."
+
+#: templates/mail/oauth2_callback.html
+#, python-format
+msgid "Error: %%(error)s"
+msgstr "Erreur : %%(error)s"
+
+#: templates/mail/oauth2_callback.html
+msgid "Connecting account..."
+msgstr "Connexion du compte..."
+
+#: templates/mail/oauth2_callback.html
+msgid "Connecting your account..."
+msgstr "Connexion de votre compte..."
+
+#: ui/templates/mail/ui/index.html
+msgid "Compose (C)"
+msgstr "Écrire (C)"
+
+#: ui/templates/mail/ui/index.html
+msgctxt "new message"
+msgid "New"
+msgstr "Nouveau"
+
+#: ui/templates/mail/ui/index.html
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Compose"
+msgstr "Écrire"
+
+#: ui/templates/mail/ui/index.html
+msgid "Help (?)"
+msgstr "Aide (?)"
+
+#: ui/templates/mail/ui/index.html
+msgid "No mail accounts configured"
+msgstr "Aucun compte de messagerie configuré"
+
+#: ui/templates/mail/ui/index.html
+msgid "Add a mail account to get started"
+msgstr "Ajoutez un compte de messagerie pour commencer"
+
+#: ui/templates/mail/ui/index.html
+msgid "Add Account"
+msgstr "Ajouter un compte"
+
+#: ui/templates/mail/ui/index.html
+msgid "Edit Label"
+msgstr "Modifier l’étiquette"
+
+#: ui/templates/mail/ui/index.html
+msgid "New Label"
+msgstr "Nouvelle étiquette"
+
+#: ui/templates/mail/ui/index.html
+msgid "Label name"
+msgstr "Nom de l’étiquette"
+
+#: ui/templates/mail/ui/index.html
+msgid "What belongs here"
+msgstr "Ce qui va ici"
+
+#: ui/templates/mail/ui/index.html
+msgid "Optional"
+msgstr "Facultatif"
+
+#: ui/templates/mail/ui/index.html
+msgid "e.g. Client follow-ups I still owe an answer"
+msgstr "ex. Relances clients qui attendent ma réponse"
+
+#: ui/templates/mail/ui/index.html
+msgid "The AI classifier reads this to decide what lands in this label."
+msgstr ""
+"Le classement par IA lit ce texte pour décider quels e-mails reçoivent cette "
+"étiquette."
+
+#: ui/templates/mail/ui/index.html
+msgid "Notify me about these emails"
+msgstr "M’avertir pour ces e-mails"
+
+#: ui/templates/mail/ui/index.html
+msgid "A new email getting this label sends a notification."
+msgstr "Un nouvel e-mail qui reçoit cette étiquette envoie une notification."
+
+#: ui/templates/mail/ui/index.html
+msgid "Change folder icon"
+msgstr "Changer l’icône du dossier"
+
+#: ui/templates/mail/ui/index.html
+msgid "Add Mail Account"
+msgstr "Ajouter un compte de messagerie"
+
+#: ui/templates/mail/ui/index.html
+msgid "Connect with <span x-text=\"p.name\"></span>"
+msgstr "Se connecter avec <span x-text=\"p.name\"></span>"
+
+#: ui/templates/mail/ui/index.html
+msgid "OR"
+msgstr "OU"
+
+#: ui/templates/mail/ui/index.html
+msgid "Email address"
+msgstr "Adresse e-mail"
+
+#: ui/templates/mail/ui/index.html
+msgid "Detect"
+msgstr "Détecter"
+
+#: ui/templates/mail/ui/index.html
+msgid "Display name"
+msgstr "Nom affiché"
+
+#: ui/templates/mail/ui/index.html
+msgid "IMAP (Incoming)"
+msgstr "IMAP (entrant)"
+
+#: ui/templates/mail/ui/index.html
+msgid "Host"
+msgstr "Hôte"
+
+#: ui/templates/mail/ui/index.html
+msgid "Port"
+msgstr "Port"
+
+#: ui/templates/mail/ui/index.html
+msgid "Use SSL"
+msgstr "Utiliser SSL"
+
+#: ui/templates/mail/ui/index.html
+msgid "SMTP (Outgoing)"
+msgstr "SMTP (sortant)"
+
+#: ui/templates/mail/ui/index.html
+msgid "Use STARTTLS"
+msgstr "Utiliser STARTTLS"
+
+#: ui/templates/mail/ui/index.html
+msgid "Authentication"
+msgstr "Authentification"
+
+#: ui/templates/mail/ui/index.html
+msgctxt "mail server login"
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: ui/templates/mail/ui/index.html
+msgid "Edit Account"
+msgstr "Modifier le compte"
+
+#: ui/templates/mail/ui/index.html
+msgid "Leave empty to keep current"
+msgstr "Laisser vide pour conserver l’actuel"
+
+#: ui/templates/mail/ui/index.html
+#: ui/templates/mail/ui/partials/account_context_menu.html
+msgid "Signature"
+msgstr "Signature"
+
+#: ui/templates/mail/ui/index.html
+msgid "This signature is added to new messages, replies and forwards."
+msgstr ""
+"Cette signature est ajoutée aux nouveaux messages, aux réponses et aux "
+"transferts."
+
+#: ui/templates/mail/ui/index.html
+msgid "Your signature"
+msgstr "Votre signature"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Density"
+msgstr "Densité"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgctxt "density"
+msgid "Compact"
+msgstr "Compacte"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgctxt "density"
+msgid "Normal"
+msgstr "Normale"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgctxt "density"
+msgid "Spacious"
+msgstr "Aérée"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Preview lines"
+msgstr "Lignes d’aperçu"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgctxt "preview lines"
+msgid "None"
+msgstr "Aucune"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "1 line"
+msgstr "1 ligne"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "2 lines"
+msgstr "2 lignes"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Show labels in list"
+msgstr "Afficher les étiquettes dans la liste"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "AI features"
+msgstr "Fonctions IA"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Auto-classify new emails"
+msgstr "Classer automatiquement les nouveaux e-mails"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Extract events and tasks"
+msgstr "Extraire les événements et les tâches"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "AI writing assistance"
+msgstr "Aide à la rédaction par IA"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Notify me about"
+msgstr "M’avertir pour"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "All new emails"
+msgstr "Tous les nouveaux e-mails"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Only labels I chose"
+msgstr "Seulement les étiquettes choisies"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid ""
+"Auto-classify is off, so no email gets labelled and no notification is sent."
+msgstr ""
+"Le classement automatique est désactivé : aucun e-mail ne reçoit d’étiquette "
+"et aucune notification n’est envoyée."
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid "Max notifications per folder at once"
+msgstr "Notifications max. par dossier à la fois"
+
+#: ui/templates/mail/ui/partials/_preferences_content.html
+msgid ""
+"When several emails arrive together, only the first ones are notified. The "
+"rest still appear in your inbox."
+msgstr ""
+"Quand plusieurs e-mails arrivent ensemble, seuls les premiers sont notifiés. "
+"Les autres apparaissent quand même dans votre boîte de réception."
+
+#: ui/templates/mail/ui/partials/_rules_header_actions.html
+msgid "Switch to comfortable view"
+msgstr "Passer en vue confortable"
+
+#: ui/templates/mail/ui/partials/_rules_header_actions.html
+msgid "Switch to compact view"
+msgstr "Passer en vue compacte"
+
+#: ui/templates/mail/ui/partials/_rules_header_actions.html
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "New rule"
+msgstr "Nouvelle règle"
+
+#: ui/templates/mail/ui/partials/account_context_menu.html
+msgid "Syncing..."
+msgstr "Synchronisation..."
+
+#: ui/templates/mail/ui/partials/account_context_menu.html
+msgctxt "verb"
+msgid "Sync"
+msgstr "Synchroniser"
+
+#: ui/templates/mail/ui/partials/account_context_menu.html
+msgctxt "verb, test the account connection"
+msgid "Test"
+msgstr "Tester"
+
+#: ui/templates/mail/ui/partials/account_context_menu.html
+#: ui/templates/mail/ui/partials/merged_folders_dialog.html
+msgid "Merged folders"
+msgstr "Dossiers fusionnés"
+
+#: ui/templates/mail/ui/partials/account_context_menu.html
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Filters & Rules"
+msgstr "Filtres et règles"
+
+#: ui/templates/mail/ui/partials/autocomplete_dropdown.html
+msgid "Open contact"
+msgstr "Ouvrir le contact"
+
+#: ui/templates/mail/ui/partials/autocomplete_dropdown.html
+#: ui/templates/mail/ui/partials/contact_card.html
+msgid "Add to contacts"
+msgstr "Ajouter aux contacts"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "New Message"
+msgstr "Nouveau message"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "To"
+msgstr "À"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "Cc/Bcc"
+msgstr "Cc/Cci"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Cc"
+msgstr "Cc"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "Bcc"
+msgstr "Cci"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "Subject"
+msgstr "Objet"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "AI Assistant"
+msgstr "Assistant IA"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "Describe what you want to write..."
+msgstr "Décrivez ce que vous voulez écrire..."
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "Write your message..."
+msgstr "Rédigez votre message..."
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "Compose with AI"
+msgstr "Rédiger avec l’IA"
+
+#: ui/templates/mail/ui/partials/compose_dialog.html
+msgid "Draft saved"
+msgstr "Brouillon enregistré"
+
+#: ui/templates/mail/ui/partials/contact_card.html
+#, python-format
+msgid "Workspace account &middot; @%(username)s"
+msgstr "Compte Workspace &middot; @%(username)s"
+
+#: ui/templates/mail/ui/partials/contact_card.html
+msgid "Copy email"
+msgstr "Copier l’adresse"
+
+#: ui/templates/mail/ui/partials/contact_card.html
+msgid "Send email"
+msgstr "Envoyer un e-mail"
+
+#: ui/templates/mail/ui/partials/folder_context_menu.html
+msgid "Enable auto-labeling"
+msgstr "Activer l’étiquetage automatique"
+
+#: ui/templates/mail/ui/partials/folder_context_menu.html
+msgid "Disable auto-labeling"
+msgstr "Désactiver l’étiquetage automatique"
+
+#: ui/templates/mail/ui/partials/folder_context_menu.html
+msgid "Mark all as read"
+msgstr "Tout marquer comme lu"
+
+#: ui/templates/mail/ui/partials/folder_context_menu.html
+msgid "Change icon"
+msgstr "Changer l’icône"
+
+#: ui/templates/mail/ui/partials/folder_context_menu.html
+msgid "Merge into..."
+msgstr "Fusionner dans..."
+
+#: ui/templates/mail/ui/partials/folder_context_menu.html
+msgid "Merged folders..."
+msgstr "Dossiers fusionnés..."
+
+#: ui/templates/mail/ui/partials/folder_context_menu.html
+msgid "Sync account"
+msgstr "Synchroniser le compte"
+
+#: ui/templates/mail/ui/partials/folder_list.html
+#, python-format
+msgid "Merged: %%(names)s"
+msgstr "Fusionnés : %%(names)s"
+
+#: ui/templates/mail/ui/partials/folder_list.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "All Inboxes"
+msgstr "Toutes les boîtes"
+
+#: ui/templates/mail/ui/partials/folder_list.html
+msgid "Labels"
+msgstr "Étiquettes"
+
+#: ui/templates/mail/ui/partials/folder_list.html
+msgid "New label"
+msgstr "Nouvelle étiquette"
+
+#: ui/templates/mail/ui/partials/folder_list.html
+msgid "Add account"
+msgstr "Ajouter un compte"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Next message"
+msgstr "Message suivant"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Previous message"
+msgstr "Message précédent"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Close message / panel"
+msgstr "Fermer le message / le panneau"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "New message"
+msgstr "Nouveau message"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Reply all"
+msgstr "Répondre à tous"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Star / unstar message"
+msgstr "Activer / désactiver le suivi du message"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Mark read / unread"
+msgstr "Marquer comme lu / non lu"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Mail Features"
+msgstr "Fonctionnalités de la messagerie"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid ""
+"<strong>Multiple accounts</strong> &mdash; Add and manage several mail "
+"accounts from one place."
+msgstr ""
+"<strong>Plusieurs comptes</strong> &mdash; Ajoutez et gérez plusieurs "
+"comptes de messagerie au même endroit."
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid ""
+"<strong>Compose</strong> &mdash; Write new messages with To, Cc, and Bcc "
+"fields. Recipient suggestions list your contacts first, then workspace "
+"accounts, then addresses from your history; the person icon beside one adds "
+"it to your contacts."
+msgstr ""
+"<strong>Rédaction</strong> &mdash; Écrivez de nouveaux messages avec les "
+"champs À, Cc et Cci. Les suggestions de destinataires listent d’abord vos "
+"contacts, puis les comptes Workspace, puis les adresses de votre "
+"historique ; l’icône de personne à côté d’une adresse l’ajoute à vos "
+"contacts."
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid ""
+"<strong>Drafts</strong> &mdash; Drafts are saved automatically and can be "
+"restored when reopening compose."
+msgstr ""
+"<strong>Brouillons</strong> &mdash; Les brouillons sont enregistrés "
+"automatiquement et peuvent être restaurés en rouvrant la rédaction."
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid ""
+"<strong>Attachments</strong> &mdash; Attach files when composing and "
+"download attachments from received messages."
+msgstr ""
+"<strong>Pièces jointes</strong> &mdash; Joignez des fichiers en rédigeant et "
+"téléchargez les pièces jointes des messages reçus."
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid ""
+"<strong>Search &amp; filters</strong> &mdash; Search messages by subject, "
+"snippet or sender. Filter by unread, starred, or with attachments."
+msgstr ""
+"<strong>Recherche et filtres</strong> &mdash; Recherchez des messages par "
+"objet, extrait ou expéditeur. Filtrez par non lus, suivis ou avec pièces "
+"jointes."
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid ""
+"<strong>Batch actions</strong> &mdash; Select multiple messages to mark read/"
+"unread, star, or delete in bulk."
+msgstr ""
+"<strong>Actions groupées</strong> &mdash; Sélectionnez plusieurs messages "
+"pour les marquer comme lus ou non lus, les suivre ou les supprimer en une "
+"fois."
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid ""
+"<strong>Folders</strong> &mdash; Right-click a folder for options: refresh, "
+"mark all read, change icon, or sync."
+msgstr ""
+"<strong>Dossiers</strong> &mdash; Faites un clic droit sur un dossier pour "
+"ses options : actualiser, tout marquer comme lu, changer l’icône ou "
+"synchroniser."
+
+#: ui/templates/mail/ui/partials/hidden_folders_dialog.html
+msgid "No hidden folders for this account."
+msgstr "Aucun dossier masqué pour ce compte."
+
+#: ui/templates/mail/ui/partials/merged_folders_dialog.html
+msgid "No merged folders for this account."
+msgstr "Aucun dossier fusionné pour ce compte."
+
+#: ui/templates/mail/ui/partials/merged_folders_dialog.html
+msgid "Unmerge"
+msgstr "Défusionner"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Unstar"
+msgstr "Désactiver le suivi"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgctxt "verb"
+msgid "Star"
+msgstr "Activer le suivi"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Mark unread"
+msgstr "Marquer non lu"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Mark read"
+msgstr "Marquer lu"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+msgid "Create filter"
+msgstr "Créer un filtre"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+msgid "Create filter from sender"
+msgstr "Créer un filtre pour cet expéditeur"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Star"
+msgstr "Activer le suivi"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Select a message to read"
+msgstr "Sélectionnez un message à lire"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid ""
+"Use <kbd class=\"kbd kbd-xs\">j</kbd> / <kbd class=\"kbd kbd-xs\">k</kbd> to "
+"navigate"
+msgstr ""
+"Utilisez <kbd class=\"kbd kbd-xs\">j</kbd> / <kbd class=\"kbd kbd-xs\">k</"
+"kbd> pour naviguer"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Back to messages"
+msgstr "Retour aux messages"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Reply (R)"
+msgstr "Répondre (R)"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Reply all (A)"
+msgstr "Répondre à tous (A)"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Forward (F)"
+msgstr "Transférer (F)"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Summarize with AI"
+msgstr "Résumer avec l’IA"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Summarize"
+msgstr "Résumer"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Dismiss summary"
+msgstr "Masquer le résumé"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Suggested event"
+msgstr "Événement suggéré"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "View in calendar"
+msgstr "Voir dans le calendrier"
+
+#: ui/templates/mail/ui/partials/message_list.html
+msgctxt "mail sender"
+msgid "Unknown"
+msgstr "Inconnu"
+
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Classify with AI"
+msgstr "Classer avec l’IA"
+
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Search messages..."
+msgstr "Rechercher des messages..."
+
+#: ui/templates/mail/ui/partials/message_list.html
+msgctxt "mail filter"
+msgid "Unread"
+msgstr "Non lus"
+
+#: ui/templates/mail/ui/partials/message_list.html
+msgctxt "mail filter"
+msgid "Starred"
+msgstr "Suivis"
+
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Attachments"
+msgstr "Pièces jointes"
+
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "No messages"
+msgstr "Aucun message"
+
+#: ui/templates/mail/ui/partials/move_dialog.html
+msgid "Select a destination folder."
+msgstr "Sélectionnez un dossier de destination."
+
+#: ui/templates/mail/ui/partials/move_dialog.html
+#, python-format
+msgid "Move %%(count)s messages to:"
+msgstr "Déplacer %%(count)s messages vers :"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "No rules yet. Click 'New rule' to create one."
+msgstr ""
+"Aucune règle pour l’instant. Cliquez sur « Nouvelle règle » pour en créer "
+"une."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Filter by name or action type..."
+msgstr "Filtrer par nom ou type d’action..."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Move up"
+msgstr "Monter"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Move rule up"
+msgstr "Monter la règle"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Move down"
+msgstr "Descendre"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Move rule down"
+msgstr "Descendre la règle"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+#, python-format
+msgid "Disable rule %%(name)s"
+msgstr "Désactiver la règle %%(name)s"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+#, python-format
+msgid "Enable rule %%(name)s"
+msgstr "Activer la règle %%(name)s"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Apply to a folder"
+msgstr "Appliquer à un dossier"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Apply rule to a folder"
+msgstr "Appliquer la règle à un dossier"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Edit rule"
+msgstr "Modifier la règle"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Delete rule"
+msgstr "Supprimer la règle"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "No rules match the filter."
+msgstr "Aucune règle ne correspond au filtre."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Scans the 500 most recent messages of the folder."
+msgstr "Analyse les 500 messages les plus récents du dossier."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgctxt "rule dry run"
+msgid "Preview"
+msgstr "Aperçu"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Apply now"
+msgstr "Appliquer maintenant"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgctxt "rule editor mode"
+msgid "Simple"
+msgstr "Simple"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgctxt "rule editor mode"
+msgid "Advanced"
+msgstr "Avancé"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Rule name"
+msgstr "Nom de la règle"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgctxt "rule condition"
+msgid "When"
+msgstr "Quand"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgctxt "rule action"
+msgid "Then"
+msgstr "Alors"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Mark as read"
+msgstr "Marquer comme lu"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Mark as unread"
+msgstr "Marquer comme non lu"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Conditions (JSON tree)"
+msgstr "Conditions (arbre JSON)"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Hide syntax help"
+msgstr "Masquer l’aide sur la syntaxe"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Show syntax help"
+msgstr "Afficher l’aide sur la syntaxe"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Conditions"
+msgstr "Conditions"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid ""
+"A condition is either a single check (leaf) or a group combining multiple "
+"checks with AND/OR."
+msgstr ""
+"Une condition est soit une vérification unique (feuille), soit un groupe qui "
+"combine plusieurs vérifications avec AND/OR."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Available fields"
+msgstr "Champs disponibles"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid ""
+"<span class=\"font-mono\">from, to, cc, recipient, subject, body, folder</"
+"span> (text); <span class=\"font-mono\">has_attachments, is_starred</span> "
+"(boolean); <span class=\"font-mono\">date</span> (ISO 8601)."
+msgstr ""
+"<span class=\"font-mono\">from, to, cc, recipient, subject, body, folder</"
+"span> (texte) ; <span class=\"font-mono\">has_attachments, is_starred</span> "
+"(booléen) ; <span class=\"font-mono\">date</span> (ISO 8601)."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Available ops"
+msgstr "Opérateurs disponibles"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid ""
+"Text: <span class=\"font-mono\">contains, equals, starts_with, ends_with, "
+"matches_regex, in_list</span>. Boolean: <span class=\"font-mono\">is_true, "
+"is_false</span>. Date: <span class=\"font-mono\">greater_than, less_than</"
+"span>."
+msgstr ""
+"Texte : <span class=\"font-mono\">contains, equals, starts_with, ends_with, "
+"matches_regex, in_list</span>. Booléen : <span class=\"font-mono\">is_true, "
+"is_false</span>. Date : <span class=\"font-mono\">greater_than, less_than</"
+"span>."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid ""
+"Add <span class=\"font-mono\">\"case_sensitive\": true</span> to a text leaf "
+"for exact case matching (default: false)."
+msgstr ""
+"Ajoutez <span class=\"font-mono\">\"case_sensitive\": true</span> à une "
+"condition texte pour respecter la casse (par défaut : false)."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Actions (flat list)"
+msgstr "Actions (liste simple)"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid ""
+"Types: <span class=\"font-mono\">add_label, remove_label</span> (need <span "
+"class=\"font-mono\">label_id</span>); <span class=\"font-mono\">mark_read, "
+"mark_unread, star, unstar, delete</span> (no args); <span class=\"font-"
+"mono\">move_to_folder</span> (needs <span class=\"font-mono\">folder_id</"
+"span>)."
+msgstr ""
+"Types : <span class=\"font-mono\">add_label, remove_label</span> (avec <span "
+"class=\"font-mono\">label_id</span>) ; <span class=\"font-mono\">mark_read, "
+"mark_unread, star, unstar, delete</span> (sans argument) ; <span "
+"class=\"font-mono\">move_to_folder</span> (avec <span class=\"font-"
+"mono\">folder_id</span>)."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Limits: max 5 nesting levels, max 20 leaf conditions per rule."
+msgstr ""
+"Limites : 5 niveaux d’imbrication et 20 conditions simples au plus par règle."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Finding label/folder UUIDs"
+msgstr "Trouver l’UUID d’une étiquette ou d’un dossier"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid ""
+"Use the Simple mode to pick a label or folder, then switch to Advanced to "
+"see its UUID inlined in the JSON."
+msgstr ""
+"Choisissez une étiquette ou un dossier en mode Simple, puis passez en mode "
+"Avancé pour voir son UUID dans le JSON."
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Actions (JSON list)"
+msgstr "Actions (liste JSON)"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgctxt "rule"
+msgid "Enabled"
+msgstr "Activée"
+
+#: ui/templates/mail/ui/partials/rules_dialog.html
+msgid "Stop processing more rules after this one"
+msgstr "Ne pas appliquer d’autres règles après celle-ci"
+
+#: views/accounts.py
+msgid "A valid email address is required"
+msgstr "Une adresse e-mail valide est requise"
+
+#: views/accounts.py
+msgid "Could not auto-detect settings for this domain"
+msgstr "Impossible de détecter automatiquement les paramètres de ce domaine"
+
+#: views/accounts.py
+msgid "Connection failed"
+msgstr "Échec de la connexion"
+
+#: views/accounts.py
+msgid "Account is inactive"
+msgstr "Le compte est inactif"
+
+#: views/accounts.py
+msgid "Sync could not be queued"
+msgstr "Impossible de lancer la synchronisation"
+
+#: views/attachments.py
+msgid "Attachment not found."
+msgstr "Pièce jointe introuvable."
+
+#: views/attachments.py
+msgid "File saved."
+msgstr "Fichier enregistré."
+
+#: views/compose.py
+msgid "Account not found"
+msgstr "Compte introuvable"
+
+#: views/compose.py
+msgid "One or more workspace files not found or not accessible."
+msgstr "Un ou plusieurs fichiers Workspace sont introuvables ou inaccessibles."
+
+#: views/compose.py
+#, python-format
+msgid "Attachments are limited to %(limit)s MB per email."
+msgstr "Les pièces jointes sont limitées à %(limit)s Mo par e-mail."
+
+#: views/compose.py
+#, python-format
+msgid "File \"%(name)s\" content is unavailable."
+msgstr "Le contenu du fichier « %(name)s » n’est pas disponible."
+
+#: views/compose.py
+msgid "Failed to send email"
+msgstr "Échec de l’envoi de l’e-mail"
+
+#: views/compose.py
+msgid "Failed to save draft"
+msgstr "Échec de l’enregistrement du brouillon"
+
+#: views/folders.py
+msgid "Cannot hide a special folder"
+msgstr "Impossible de masquer un dossier spécial"
+
+#: views/folders.py
+msgid "Cannot move a special folder"
+msgstr "Impossible de déplacer un dossier spécial"
+
+#: views/folders.py
+msgid "Failed to move folder"
+msgstr "Échec du déplacement du dossier"
+
+#: views/folders.py
+msgid "Failed to rename folder"
+msgstr "Échec du renommage du dossier"
+
+#: views/folders.py
+msgid "Cannot delete a special folder"
+msgstr "Impossible de supprimer un dossier spécial"
+
+#: views/folders.py
+msgid "Failed to delete folder"
+msgstr "Échec de la suppression du dossier"
+
+#: views/folders.py
+msgid "A folder cannot be merged into itself"
+msgstr "Un dossier ne peut pas être fusionné avec lui-même"
+
+#: views/folders.py
+msgid "Only folders of the same account can be merged"
+msgstr "Seuls les dossiers d’un même compte peuvent être fusionnés"
+
+#: views/folders.py
+msgid "The target folder is already merged into another one"
+msgstr "Le dossier cible est déjà fusionné dans un autre"
+
+#: views/folders.py
+msgid "Unmerge this folder's own aliases before merging it"
+msgstr "Défusionnez d’abord les dossiers fusionnés dans celui-ci"
+
+#: views/folders.py
+msgid "This merge is not allowed"
+msgstr "Cette fusion n’est pas autorisée"
+
+#: views/labels.py
+msgid "A label with this name already exists for this account."
+msgstr "Une étiquette de ce nom existe déjà pour ce compte."
+
+#: views/labels.py
+msgid "One or more labels do not belong to this account."
+msgstr "Une ou plusieurs étiquettes n’appartiennent pas à ce compte."
+
+#: views/messages.py
+msgid "Target folder not found"
+msgstr "Dossier cible introuvable"
+
+#: views/oauth2.py
+msgid "Invalid state parameter. Please try again."
+msgstr "Paramètre d’état non valide. Veuillez réessayer."
+
+#: views/oauth2.py
+msgid "Missing provider. Please try again."
+msgstr "Fournisseur manquant. Veuillez réessayer."
+
+#: views/oauth2.py
+msgid "Failed to exchange authorization code. Please try again."
+msgstr "Échec de l’échange du code d’autorisation. Veuillez réessayer."
+
+#: views/oauth2.py
+msgid "Could not determine email address from provider."
+msgstr "Impossible d’obtenir l’adresse e-mail auprès du fournisseur."
+
+#: views/rules.py
+msgid "Invalid conditions payload."
+msgstr "Conditions non valides."

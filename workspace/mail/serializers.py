@@ -1,6 +1,7 @@
 from datetime import UTC
 
 import mistune
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from .models import (
@@ -434,8 +435,10 @@ def _validate_conditions(value):
         validate_tree_limits(node)
     except SchemaError:
         raise serializers.ValidationError(
-            "Invalid conditions: check field, op and value formats, and that "
-            "the tree depth and total leaf count are within limits."
+            _(
+                "Invalid conditions: check field, op and value formats, and that "
+                "the tree depth and total leaf count are within limits."
+            )
         ) from None
     return value
 
@@ -445,11 +448,13 @@ def _validate_actions(value):
         parsed = parse_actions(value)
     except SchemaError:
         raise serializers.ValidationError(
-            "Invalid actions: check that each action has a valid type and "
-            "the required label_id or folder_id when applicable."
+            _(
+                "Invalid actions: check that each action has a valid type and "
+                "the required label_id or folder_id when applicable."
+            )
         ) from None
     if not parsed:
-        raise serializers.ValidationError("at least one action is required")
+        raise serializers.ValidationError(_("at least one action is required"))
     return value
 
 

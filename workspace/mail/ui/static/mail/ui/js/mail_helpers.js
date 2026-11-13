@@ -45,8 +45,8 @@ async function _mailCardAction(event, popover) {
   if (action === 'copy') {
     navigator.clipboard.writeText(email);
     const label = button.querySelector('[data-label]');
-    label.textContent = 'Copied!';
-    setTimeout(function() { label.textContent = 'Copy email'; }, 1500);
+    label.textContent = gettext('Copied!');
+    setTimeout(function() { label.textContent = gettext('Copy email'); }, 1500);
   } else if (action === 'compose') {
     if (document.getElementById('mail-compose-dialog')) {
       document.dispatchEvent(new CustomEvent('mail:compose', { detail: { to: email } }));
@@ -70,7 +70,7 @@ async function _mailCardAction(event, popover) {
       await _mailCardLoad(popover, popover.dataset.url);
     } catch (e) {
       button.disabled = false;
-      AppAlert.error('Could not add to contacts');
+      AppAlert.error(gettext('Could not add to contacts'));
     }
   }
 }

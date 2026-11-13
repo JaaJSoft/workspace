@@ -3,12 +3,13 @@ Review and undo folder merges for one account. State lives on mailApp:
 mergedGroups (one entry per canonical folder that has aliases) and
 mergedGroupsAccount, both filled by _showMergedFolders.
 {% endcomment %}
+{% load i18n %}
 <dialog id="mail-merged-folders-dialog" class="modal">
   <div class="modal-box max-w-sm">
-    {% include "ui/partials/dialog_header.html" with icon="git-merge" title="Merged folders" only %}
+    {% include "ui/partials/dialog_header.html" with icon="git-merge" title=_("Merged folders") only %}
 
     <template x-if="mergedGroups.length === 0">
-      <p class="text-base-content/60 text-sm py-4 text-center">No merged folders for this account.</p>
+      <p class="text-base-content/60 text-sm py-4 text-center">{% translate "No merged folders for this account." %}</p>
     </template>
 
     <template x-if="mergedGroups.length > 0">
@@ -32,7 +33,7 @@ mergedGroupsAccount, both filled by _showMergedFolders.
                     type="button"
                     class="btn btn-ghost btn-xs"
                     @click="unmergeFolder(alias.uuid)"
-                    title="Unmerge"
+                    title="{% translate "Unmerge" %}"
                   >
                     <i data-lucide="split" class="w-4 h-4"></i>
                   </button>
@@ -46,11 +47,11 @@ mergedGroupsAccount, both filled by _showMergedFolders.
 
     <div class="modal-action">
       <form method="dialog">
-        <button type="submit" class="btn btn-sm">Close</button>
+        <button type="submit" class="btn btn-sm">{% translate "Close" %}</button>
       </form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

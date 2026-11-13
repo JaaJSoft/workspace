@@ -1,4 +1,5 @@
 <!-- Autocomplete dropdown for {{ field }} -->
+{% load i18n %}
 <div
   x-show="_acIsOpen('{{ field|escapejs }}')"
   x-cloak
@@ -53,8 +54,8 @@
               target="_blank"
               rel="noopener"
               class="btn btn-ghost btn-xs btn-square text-success"
-              title="Open contact"
-              aria-label="Open contact"
+              title="{% translate "Open contact" %}"
+              aria-label="{% translate "Open contact" %}"
               @mousedown.prevent.stop
             >
               <i data-lucide="user-check" class="w-4 h-4"></i>
@@ -63,8 +64,8 @@
               x-show="!row.person_uuid"
               type="button"
               class="btn btn-ghost btn-xs btn-square text-base-content/50 hover:text-module"
-              title="Add to contacts"
-              aria-label="Add to contacts"
+              title="{% translate "Add to contacts" %}"
+              aria-label="{% translate "Add to contacts" %}"
               :disabled="row.promoting"
               @mousedown.prevent.stop
               @click.stop="_acAddToContacts(row)"

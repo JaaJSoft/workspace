@@ -2,15 +2,23 @@
 Rows of the account context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from index.html.
 {% endcomment %}
+{% load i18n %}
+{% translate "Syncing..." as syncing_label %}
+{% translate "Sync" context "verb" as sync_label %}
+{% translate "Test" context "verb, test the account connection" as test_label %}
 <ul class="menu menu-sm p-0 w-full">
-  {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label_expr="syncingAccounts[accountCtx.account?.uuid] ? 'Syncing...' : 'Sync'" click="accountCtxAction('sync')" loading="syncingAccounts[accountCtx.account?.uuid]" class_expr="syncingAccounts[accountCtx.account?.uuid] ? 'pointer-events-none opacity-50' : ''" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="settings" label="Edit" click="accountCtxAction('edit')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="pen-line" label="Signature" click="accountCtxAction('signature')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="plug" label="Test" click="accountCtxAction('test')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="eye-off" label="Hidden folders" click="accountCtxAction('hidden_folders')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="git-merge" label="Merged folders" click="accountCtxAction('merged_folders')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="filter" label="Filters & Rules" click="accountCtxAction('filters_rules')" only %}
+  {% with syncing_js=syncing_label|escapejs sync_js=sync_label|escapejs %}
+    {% with sync_expr="syncingAccounts[accountCtx.account?.uuid] ? '"|add:syncing_js|add:"' : '"|add:sync_js|add:"'" %}
+      {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label_expr=sync_expr click="accountCtxAction('sync')" loading="syncingAccounts[accountCtx.account?.uuid]" class_expr="syncingAccounts[accountCtx.account?.uuid] ? 'pointer-events-none opacity-50' : ''" only %}
+    {% endwith %}
+  {% endwith %}
+  {% include "ui/partials/context_menu_item.html" with icon="settings" label=_("Edit") click="accountCtxAction('edit')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="pen-line" label=_("Signature") click="accountCtxAction('signature')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="plug" label=test_label click="accountCtxAction('test')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="eye-off" label=_("Hidden folders") click="accountCtxAction('hidden_folders')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="git-merge" label=_("Merged folders") click="accountCtxAction('merged_folders')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="filter" label=_("Filters & Rules") click="accountCtxAction('filters_rules')" only %}
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Remove" tone="error" click="accountCtxAction('remove')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label=_("Remove") tone="error" click="accountCtxAction('remove')" only %}
 </ul>

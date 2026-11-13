@@ -1,5 +1,7 @@
 import logging
 
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -92,7 +94,7 @@ class MailFolderListView(APIView):
                 "Failed to create folder for %s: %s", scrub(account.email), scrub(e)
             )
             return Response(
-                {"detail": "Failed to create folder"},
+                {"detail": _("Failed to create folder")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -131,7 +133,7 @@ class MailFolderUpdateView(APIView):
         # out of sync, with no client-visible signal that the rename happened.
         if ser.validated_data.get("is_hidden") and folder.folder_type != "other":
             return Response(
-                {"detail": "Cannot hide a special folder"},
+                {"detail": _("Cannot hide a special folder")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -140,7 +142,7 @@ class MailFolderUpdateView(APIView):
         if parent_name is not None:
             if folder.folder_type != "other":
                 return Response(
-                    {"detail": "Cannot move a special folder"},
+                    {"detail": _("Cannot move a special folder")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             from ..services.imap_folders import move_folder
@@ -154,7 +156,7 @@ class MailFolderUpdateView(APIView):
                     scrub(e),
                 )
                 return Response(
-                    {"detail": "Failed to move folder"},
+                    {"detail": _("Failed to move folder")},
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
         else:
@@ -167,7 +169,7 @@ class MailFolderUpdateView(APIView):
                 # (Parent/Old) we must keep the parent path so we end up with
                 # Parent/New, not New at the root.
                 delimiter = folder.account.imap_delimiter or "/"
-                parent_path, _, _ = folder.name.rpartition(delimiter)
+                parent_path, _sep, _leaf = folder.name.rpartition(delimiter)
                 new_name = (
                     f"{parent_path}{delimiter}{new_display_name}"
                     if parent_path
@@ -183,7 +185,7 @@ class MailFolderUpdateView(APIView):
                         scrub(e),
                     )
                     return Response(
-                        {"detail": "Failed to rename folder"},
+                        {"detail": _("Failed to rename folder")},
                         status=status.HTTP_502_BAD_GATEWAY,
                     )
 
@@ -214,7 +216,7 @@ class MailFolderUpdateView(APIView):
         # Prevent deletion of special folders
         if folder.folder_type != "other":
             return Response(
-                {"detail": "Cannot delete a special folder"},
+                {"detail": _("Cannot delete a special folder")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -237,7 +239,7 @@ class MailFolderUpdateView(APIView):
                 scrub(e),
             )
             return Response(
-                {"detail": "Failed to delete folder"},
+                {"detail": _("Failed to delete folder")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -247,10 +249,12 @@ class MailFolderUpdateView(APIView):
 # Keyed by MergeError.code so the response body is built from literals here
 # rather than from anything carried on the exception.
 _MERGE_ERROR_DETAIL = {
-    "self": "A folder cannot be merged into itself",
-    "cross_account": "Only folders of the same account can be merged",
-    "target_is_alias": "The target folder is already merged into another one",
-    "has_aliases": "Unmerge this folder's own aliases before merging it",
+    "self": gettext_lazy("A folder cannot be merged into itself"),
+    "cross_account": gettext_lazy("Only folders of the same account can be merged"),
+    "target_is_alias": gettext_lazy(
+        "The target folder is already merged into another one"
+    ),
+    "has_aliases": gettext_lazy("Unmerge this folder's own aliases before merging it"),
 }
 
 
@@ -297,7 +301,7 @@ class MailFolderMergeView(APIView):
             return Response(
                 {
                     "detail": _MERGE_ERROR_DETAIL.get(
-                        e.code, "This merge is not allowed"
+                        e.code, _("This merge is not allowed")
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -332,5 +336,5 @@ class MailFolderMarkReadView(APIView):
 
         from ..services.triage import mark_folder_read
 
-        updated, _ = mark_folder_read(folder)
+        updated, _count = mark_folder_read(folder)
         return Response({"updated": updated})

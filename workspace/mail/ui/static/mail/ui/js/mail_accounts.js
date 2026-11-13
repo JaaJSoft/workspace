@@ -37,10 +37,10 @@ window.mailAccountsMixin = function mailAccountsMixin() {
             this.newAccount.username = email;
           }
         } else {
-          this.accountError = 'Could not auto-detect settings for this email. Please fill in manually.';
+          this.accountError = gettext('Could not auto-detect settings for this email. Please fill in manually.');
         }
       } catch (e) {
-        this.accountError = 'Auto-detection failed. Please fill in settings manually.';
+        this.accountError = gettext('Auto-detection failed. Please fill in settings manually.');
       }
 
       this.autoDiscovering = false;
@@ -84,10 +84,10 @@ window.mailAccountsMixin = function mailAccountsMixin() {
           this.syncAccount(account.uuid);
         } else {
           const data = await res.json().catch(() => ({}));
-          this.accountError = data.detail || JSON.stringify(data) || 'Failed to add account';
+          this.accountError = data.detail || JSON.stringify(data) || gettext('Failed to add account');
         }
       } catch (e) {
-        this.accountError = 'Network error. Please check your connection and try again.';
+        this.accountError = gettext('Network error. Please check your connection and try again.');
       } finally {
         this.addingAccount = false;
       }
@@ -100,8 +100,8 @@ window.mailAccountsMixin = function mailAccountsMixin() {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           await AppDialog.message({
-            title: 'Sync',
-            message: data.detail || data.error || 'Failed to sync account',
+            title: pgettext('dialog title', 'Sync'),
+            message: data.detail || data.error || gettext('Failed to sync account'),
             icon: 'alert-triangle',
             iconClass: 'bg-error/10 text-error',
           });
@@ -152,10 +152,10 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       const res = await this._fetch(`/api/v1/mail/accounts/${uuid}/test`, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
-        const imapStatus = data.imap.success ? 'OK' : `Failed: ${data.imap.error}`;
-        const smtpStatus = data.smtp.success ? 'OK' : `Failed: ${data.smtp.error}`;
+        const imapStatus = data.imap.success ? 'OK' : interpolate(gettext('Failed: %(error)s'), { error: data.imap.error }, true);
+        const smtpStatus = data.smtp.success ? 'OK' : interpolate(gettext('Failed: %(error)s'), { error: data.smtp.error }, true);
         await AppDialog.message({
-          title: 'Connection Test',
+          title: gettext('Connection Test'),
           message: `IMAP: ${imapStatus}\nSMTP: ${smtpStatus}`,
           icon: data.imap.success && data.smtp.success ? 'check-circle' : 'alert-triangle',
           iconClass: data.imap.success && data.smtp.success ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
@@ -165,9 +165,9 @@ window.mailAccountsMixin = function mailAccountsMixin() {
 
     async removeAccount(uuid) {
       const ok = await AppDialog.confirm({
-        title: 'Remove Account',
-        message: 'This will delete the account and all synced messages. Continue?',
-        okLabel: 'Remove',
+        title: gettext('Remove Account'),
+        message: gettext('This will delete the account and all synced messages. Continue?'),
+        okLabel: gettext('Remove'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -179,8 +179,8 @@ window.mailAccountsMixin = function mailAccountsMixin() {
         res = await this._fetch(`/api/v1/mail/accounts/${uuid}`, { method: 'DELETE' });
       } catch (e) {
         await AppDialog.message({
-          title: 'Remove Account',
-          message: 'Network error. Please check your connection and try again.',
+          title: gettext('Remove Account'),
+          message: gettext('Network error. Please check your connection and try again.'),
           icon: 'alert-triangle',
           iconClass: 'bg-error/10 text-error',
         });
@@ -190,8 +190,8 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         await AppDialog.message({
-          title: 'Remove Account',
-          message: data.detail || 'Failed to remove account',
+          title: gettext('Remove Account'),
+          message: data.detail || gettext('Failed to remove account'),
           icon: 'alert-triangle',
           iconClass: 'bg-error/10 text-error',
         });
@@ -255,10 +255,10 @@ window.mailAccountsMixin = function mailAccountsMixin() {
           this.closeEditAccount();
         } else {
           const data = await res.json().catch(() => ({}));
-          this.editAccountError = data.detail || JSON.stringify(data) || 'Failed to save account';
+          this.editAccountError = data.detail || JSON.stringify(data) || gettext('Failed to save account');
         }
       } catch (e) {
-        this.editAccountError = 'Network error. Please check your connection and try again.';
+        this.editAccountError = gettext('Network error. Please check your connection and try again.');
       } finally {
         this.savingAccount = false;
       }
@@ -290,10 +290,10 @@ window.mailAccountsMixin = function mailAccountsMixin() {
           document.getElementById('mail-signature-dialog').close();
         } else {
           const data = await res.json().catch(() => ({}));
-          this.signatureEditError = data.detail || 'Failed to save signature';
+          this.signatureEditError = data.detail || gettext('Failed to save signature');
         }
       } catch (e) {
-        this.signatureEditError = 'Failed to save signature';
+        this.signatureEditError = gettext('Failed to save signature');
       } finally {
         this.signatureEdit.saving = false;
       }

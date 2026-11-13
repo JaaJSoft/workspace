@@ -1,5 +1,6 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
+from django.utils.translation import gettext as _
 
 from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
@@ -81,8 +82,8 @@ class MailActivityProvider(ActivityProvider):
             events.append(
                 {
                     "icon": "mail",
-                    "label": "Email sent" if is_sent else "Email received",
-                    "description": msg.subject or "(no subject)",
+                    "label": _("Email sent") if is_sent else _("Email received"),
+                    "description": msg.subject or _("(no subject)"),
                     "timestamp": msg.date or msg.created_at,
                     "url": f"/mail/{msg.account_id}/messages/{msg.pk}",
                     "actor": {

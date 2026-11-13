@@ -1,3 +1,4 @@
+{% load i18n %}
 <div
   class="p-3 w-72"
   data-mail-contact-card
@@ -66,7 +67,11 @@
   {% elif account %}
     <div class="flex items-center gap-1.5 text-xs text-base-content/60 mb-3">
       <i data-lucide="building-2" class="w-3 h-3 shrink-0"></i>
-      <span class="truncate">Workspace account &middot; @{{ account.username }}</span>
+      <span class="truncate">
+        {% blocktranslate trimmed with username=account.username %}
+          Workspace account &middot; @{{ username }}
+        {% endblocktranslate %}
+      </span>
     </div>
   {% else %}
     <div class="mb-1"></div>
@@ -79,7 +84,7 @@
       data-mail-card-action="copy"
     >
       <i data-lucide="copy" class="w-3 h-3"></i>
-      <span data-label>Copy email</span>
+      <span data-label>{% translate "Copy email" %}</span>
     </button>
     <button
       type="button"
@@ -87,7 +92,7 @@
       data-mail-card-action="compose"
     >
       <i data-lucide="send" class="w-3 h-3"></i>
-      Send email
+      {% translate "Send email" %}
     </button>
   </div>
   <div class="mt-2 pt-2 border-t border-base-200">
@@ -99,7 +104,7 @@
         class="btn btn-ghost btn-xs w-full gap-1"
       >
         <i data-lucide="contact" class="w-3 h-3"></i>
-        Open in People
+        {% translate "Open in People" %}
       </a>
     {% else %}
       <button
@@ -108,7 +113,7 @@
         data-mail-card-action="add"
       >
         <i data-lucide="user-plus" class="w-3 h-3"></i>
-        Add to contacts
+        {% translate "Add to contacts" %}
       </button>
     {% endif %}
   </div>

@@ -37,7 +37,7 @@ window.mailRulesMixin = function mailRulesMixin() {
       this.rulesForm.mode = 'simple';
       this.rulesForm.simpleCondition = { field: 'from', op: 'equals', value: email };
       const senderName = (msg.from_address && msg.from_address.name) || email;
-      this.rulesEditing.name = `From ${senderName}`;
+      this.rulesEditing.name = interpolate(gettext('From %(sender)s'), { sender: senderName }, true);
     },
 
     async _loadRules() {
@@ -57,7 +57,10 @@ window.mailRulesMixin = function mailRulesMixin() {
         if ((r.name || '').toLowerCase().includes(q)) return true;
         // Also match on action types so users can find "all delete rules"
         // by typing 'delete', etc.
-        const types = (r.actions || []).map(a => (a.type || '').toLowerCase());
+        const types = (r.actions || []).flatMap(a => [
+          (a.type || '').toLowerCase(),
+          this.rulesActionLabel(a.type).toLowerCase(),
+        ]);
         return types.some(t => t.includes(q));
       });
     },
@@ -72,10 +75,27 @@ window.mailRulesMixin = function mailRulesMixin() {
       return this.flatFolderOptions(this.rulesAccount?.uuid);
     },
 
+    rulesActionLabel(type) {
+      return {
+        mark_read: gettext('Mark as read'),
+        mark_unread: gettext('Mark as unread'),
+        star: gettext('Star'),
+        unstar: gettext('Unstar'),
+        add_label: gettext('Add label'),
+        remove_label: gettext('Remove label'),
+        move_to_folder: gettext('Move to folder'),
+        delete: gettext('Delete'),
+      }[type] || type || '';
+    },
+
     rulesDescribe(rule) {
-      const actions = (rule.actions || []).map(a => a.type).join(', ');
+      const actions = (rule.actions || []).map(a => this.rulesActionLabel(a.type)).join(', ');
       const condCount = this._rulesCountLeaves(rule.conditions);
-      return `${condCount} condition${condCount === 1 ? '' : 's'} -> ${actions || 'no actions'}`;
+      return interpolate(
+        ngettext('%(count)s condition -> %(actions)s', '%(count)s conditions -> %(actions)s', condCount),
+        { count: condCount, actions: actions || gettext('no actions') },
+        true,
+      );
     },
 
     _rulesCountLeaves(node) {
@@ -133,6 +153,33 @@ window.mailRulesMixin = function mailRulesMixin() {
       this.rulesApplyFolderId = folders.length ? folders[0].uuid : '';
     },
 
+    rulesApplyText(kind) {
+      const r = this.rulesApplyResult || {};
+      if (kind === 'matched') {
+        return interpolate(ngettext(
+          '%(matched)s of %(scanned)s scanned message matches this rule.',
+          '%(matched)s of %(scanned)s scanned messages match this rule.',
+          r.scanned || 0,
+        ), { matched: r.matched || 0, scanned: r.scanned || 0 }, true);
+      }
+      if (kind === 'applied') {
+        return interpolate(ngettext(
+          'Applied to %(count)s message.', 'Applied to %(count)s messages.', r.applied || 0,
+        ), { count: r.applied || 0 }, true);
+      }
+      if (kind === 'failed') {
+        return interpolate(ngettext(
+          '%(count)s action failed on the mail server (IMAP).',
+          '%(count)s actions failed on the mail server (IMAP).',
+          r.imap_failed || 0,
+        ), { count: r.imap_failed || 0 }, true);
+      }
+      return interpolate(
+        gettext('Folder has %(total)s messages; only the 500 most recent were scanned.'),
+        { total: r.total || 0 }, true,
+      );
+    },
+
     rulesCancelApply() {
       this.rulesApplying = null;
       this.rulesApplyResult = null;
@@ -166,9 +213,13 @@ window.mailRulesMixin = function mailRulesMixin() {
 
     async rulesRunApply() {
       const ok = await AppDialog.confirm({
-        title: 'Apply rule',
-        message: `Apply rule "${this.rulesApplying.name}" to the selected folder now? Actions like move and delete cannot be undone.`,
-        okLabel: 'Apply',
+        title: gettext('Apply rule'),
+        message: interpolate(
+          gettext('Apply rule "%(name)s" to the selected folder now? Actions like move and delete cannot be undone.'),
+          { name: this.rulesApplying.name },
+          true,
+        ),
+        okLabel: gettext('Apply'),
         okClass: 'btn-warning',
         icon: 'play',
         iconClass: 'bg-warning/10 text-warning',
@@ -193,9 +244,9 @@ window.mailRulesMixin = function mailRulesMixin() {
 
     async rulesDelete(rule) {
       const ok = await AppDialog.confirm({
-        title: 'Delete rule',
-        message: `Delete rule "${rule.name}"? This cannot be undone.`,
-        okLabel: 'Delete',
+        title: gettext('Delete rule'),
+        message: interpolate(gettext('Delete rule "%(name)s"? This cannot be undone.'), { name: rule.name }, true),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

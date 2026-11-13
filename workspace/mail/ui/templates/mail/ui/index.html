@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}Mail - Workspace{% endblock %}
+{% block title %}{% translate "Mail" %} - Workspace{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}" />
@@ -50,7 +50,7 @@
               type="button"
               class="btn btn-ghost btn-sm btn-square mr-1 hover:text-module"
               @click="showCompose()"
-              title="Compose (C)"
+              title="{% translate "Compose (C)" %}"
             >
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
@@ -68,24 +68,31 @@
         x-show="sidebarCollapsed()"
       >
         <ul class="menu p-0 w-full">
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="module" onclick="showCompose()" tooltip="Compose" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% translate "New" context "new message" as new_label %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label=new_label color="module" onclick="showCompose()" tooltip=_("Compose") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0 w-full">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip=_("Help (?)") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
+        {% translate "Expand sidebar" as expand_sidebar_label %}
+        {% translate "Collapse sidebar" as collapse_sidebar_label %}
         <ul class="menu p-0 hidden lg:block w-full">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+            {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+            {% endwith %}
+          {% endwith %}
         </ul>
         <ul class="menu p-0 lg:hidden w-full">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip=_("Preferences") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
     </aside>
@@ -100,11 +107,11 @@
       <div class="flex-1 flex items-center justify-center">
         <div class="text-center text-base-content/40">
           <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
-          <p class="text-lg font-medium mb-2">No mail accounts configured</p>
-          <p class="text-sm mb-4">Add a mail account to get started</p>
+          <p class="text-lg font-medium mb-2">{% translate "No mail accounts configured" %}</p>
+          <p class="text-sm mb-4">{% translate "Add a mail account to get started" %}</p>
           <button type="button" class="btn btn-module btn-sm" @click="showAddAccount()">
             <i data-lucide="plus" class="w-4 h-4"></i>
-            Add Account
+            {% translate "Add Account" %}
           </button>
         </div>
       </div>
@@ -163,34 +170,42 @@
   <!-- Label create/edit dialog -->
   <dialog id="mail-label-dialog" class="modal">
     <div class="modal-box max-w-md">
-      {% include "ui/partials/dialog_header.html" with icon_expr="labelModal.icon || 'tag'" icon_class_expr="labelModal.color && labelModal.color !== 'ghost' ? 'bg-base-200 text-' + labelModal.color : 'bg-module/15 text-module'" title_expr="labelModal.uuid ? 'Edit Label' : 'New Label'" only %}
+      {% translate "Edit Label" as edit_label_title %}
+      {% translate "New Label" as new_label_title %}
+      {% with edit_js=edit_label_title|escapejs new_js=new_label_title|escapejs %}
+        {% with title_js="labelModal.uuid ? '"|add:edit_js|add:"' : '"|add:new_js|add:"'" %}
+          {% include "ui/partials/dialog_header.html" with icon_expr="labelModal.icon || 'tag'" icon_class_expr="labelModal.color && labelModal.color !== 'ghost' ? 'bg-base-200 text-' + labelModal.color : 'bg-module/15 text-module'" title_expr=title_js only %}
+        {% endwith %}
+      {% endwith %}
       <form @submit.prevent="saveLabelModal()">
         <label class="fieldset w-full mb-3">
-          <div class="fieldset-legend"><span>Name</span></div>
+          <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
           <input
             type="text"
             class="input w-full input-sm"
             x-model="labelModal.name"
-            placeholder="Label name"
+            placeholder="{% translate "Label name" %}"
             required
             @keydown.escape="closeLabelModal()"
           />
         </label>
         <label class="fieldset w-full mb-3">
           <div class="fieldset-legend w-full">
-            <span>What belongs here</span>
-            <span class="text-base-content/50">Optional</span>
+            <span>{% translate "What belongs here" %}</span>
+            <span class="text-base-content/50">{% translate "Optional" %}</span>
           </div>
           <textarea
             class="textarea w-full textarea-sm leading-snug"
             rows="2"
             maxlength="200"
             x-model="labelModal.description"
-            placeholder="e.g. Client follow-ups I still owe an answer"
+            placeholder="{% translate "e.g. Client follow-ups I still owe an answer" %}"
             @keydown.escape="closeLabelModal()"
           ></textarea>
           <div class="label whitespace-normal">
-            <span class="text-base-content/50">The AI classifier reads this to decide what lands in this label.</span>
+            <span
+              class="text-base-content/50"
+            >{% translate "The AI classifier reads this to decide what lands in this label." %}</span>
           </div>
         </label>
         <!-- Icon & color picker (shared component) -->
@@ -225,8 +240,10 @@
         </div>
         <label class="flex items-center justify-between gap-2 cursor-pointer mb-3">
           <span class="text-sm">
-            Notify me about these emails
-            <span class="block text-xs text-base-content/50">A new email getting this label sends a notification.</span>
+            {% translate "Notify me about these emails" %}
+            <span
+              class="block text-xs text-base-content/50"
+            >{% translate "A new email getting this label sends a notification." %}</span>
           </span>
           <input
             type="checkbox"
@@ -245,17 +262,19 @@
             @click="deleteLabelConfirm()"
           >
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-            Delete
+            {% translate "Delete" %}
           </button>
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeLabelModal()">Cancel</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeLabelModal()">{% translate "Cancel" %}</button>
           <button
             type="submit"
             class="btn btn-module btn-sm"
             :disabled="labelModal.saving || !labelModal.name.trim()"
           >
+            {% translate "Save" as save_label %}
+            {% translate "Create" as create_label %}
             <span
               x-show="!labelModal.saving"
-              x-text="labelModal.uuid ? 'Save' : 'Create'"
+              x-text="labelModal.uuid ? '{{ save_label|escapejs }}' : '{{ create_label|escapejs }}'"
             ></span>
             <span x-show="labelModal.saving" class="loading loading-spinner loading-xs"></span>
           </button>
@@ -263,7 +282,7 @@
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 
@@ -287,7 +306,7 @@
        )"
       x-effect="if (folderIconEdit.uuid) { uuid = folderIconEdit.uuid; selectedIcon = folderIconEdit.icon || 'folder'; selectedColor = folderIconEdit.color || 'text-warning'; $nextTick(() => updatePreviewIcon()); }"
     >
-      {% include "ui/partials/dialog_header.html" with icon="folder-pen" title="Change folder icon" subtitle_expr="folderIconEdit.name" only %}
+      {% include "ui/partials/dialog_header.html" with icon="folder-pen" title=_("Change folder icon") subtitle_expr="folderIconEdit.name" only %}
 
       <!-- Preview -->
       <div class="flex justify-center mb-4">
@@ -306,12 +325,12 @@
           class="btn btn-ghost btn-sm"
           @click="document.getElementById('mail-folder-icon-dialog').close()"
         >
-          Close
+          {% translate "Close" %}
         </button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 
@@ -321,16 +340,16 @@
   <!-- Mobile preferences dialog -->
   <dialog id="mail-prefs-dialog" class="modal" x-data="mailPreferences()">
     <div class="modal-box">
-      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title="Preferences" only %}
+      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title=_("Preferences") only %}
       <div>{% include "mail/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
-          <button type="submit" class="btn btn-sm">Close</button>
+          <button type="submit" class="btn btn-sm">{% translate "Close" %}</button>
         </form>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 
@@ -340,7 +359,7 @@
   <!-- Add account dialog -->
   <dialog id="mail-add-account-dialog" class="modal">
     <div class="modal-box max-w-lg">
-      {% include "ui/partials/dialog_header.html" with icon="mail-plus" title="Add Mail Account" only %}
+      {% include "ui/partials/dialog_header.html" with icon="mail-plus" title=_("Add Mail Account") only %}
 
       <!-- OAuth buttons -->
       <template x-if="oauthProviders.length > 0">
@@ -382,18 +401,22 @@
                 <template x-if="p.provider !== 'google' && p.provider !== 'microsoft'">
                   <i data-lucide="key-round" class="w-4 h-4"></i>
                 </template>
-                <span>Connect with <span x-text="p.name"></span></span>
+                <span>
+                  {% blocktranslate trimmed %}
+                    Connect with <span x-text="p.name"></span>
+                  {% endblocktranslate %}
+                </span>
               </button>
             </template>
           </div>
-          <div class="divider text-xs my-3">OR</div>
+          <div class="divider text-xs my-3">{% translate "OR" %}</div>
         </div>
       </template>
 
       <form @submit.prevent="addAccount()">
         <div class="grid grid-cols-1 gap-3">
           <label class="fieldset w-full min-w-0">
-            <div class="fieldset-legend"><span>Email address</span></div>
+            <div class="fieldset-legend"><span>{% translate "Email address" %}</span></div>
             <div class="flex gap-2">
               <input
                 type="email"
@@ -409,24 +432,24 @@
               >
                 <span x-show="!autoDiscovering" class="flex items-center gap-1">
                   <i data-lucide="radar" class="w-3.5 h-3.5"></i>
-                  Detect
+                  {% translate "Detect" %}
                 </span>
                 <span x-show="autoDiscovering" class="loading loading-spinner loading-xs"></span>
               </button>
             </div>
           </label>
           <label class="fieldset w-full min-w-0">
-            <div class="fieldset-legend"><span>Display name</span></div>
+            <div class="fieldset-legend"><span>{% translate "Display name" %}</span></div>
             <input
               type="text"
               x-model="newAccount.display_name"
               class="input w-full input-sm min-w-0"
             />
           </label>
-          <div class="divider text-xs my-1">IMAP (Incoming)</div>
+          <div class="divider text-xs my-1">{% translate "IMAP (Incoming)" %}</div>
           <div class="grid grid-cols-3 gap-2">
             <label class="fieldset col-span-2 min-w-0">
-              <div class="fieldset-legend"><span>Host</span></div>
+              <div class="fieldset-legend"><span>{% translate "Host" %}</span></div>
               <input
                 type="text"
                 x-model="newAccount.imap_host"
@@ -435,7 +458,7 @@
               />
             </label>
             <label class="fieldset min-w-0">
-              <div class="fieldset-legend"><span>Port</span></div>
+              <div class="fieldset-legend"><span>{% translate "Port" %}</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.imap_port"
@@ -449,12 +472,12 @@
               x-model="newAccount.imap_use_ssl"
               class="toggle toggle-sm toggle-module"
             />
-            <span class="text-sm">Use SSL</span>
+            <span class="text-sm">{% translate "Use SSL" %}</span>
           </label>
-          <div class="divider text-xs my-1">SMTP (Outgoing)</div>
+          <div class="divider text-xs my-1">{% translate "SMTP (Outgoing)" %}</div>
           <div class="grid grid-cols-3 gap-2">
             <label class="fieldset col-span-2 min-w-0">
-              <div class="fieldset-legend"><span>Host</span></div>
+              <div class="fieldset-legend"><span>{% translate "Host" %}</span></div>
               <input
                 type="text"
                 x-model="newAccount.smtp_host"
@@ -463,7 +486,7 @@
               />
             </label>
             <label class="fieldset min-w-0">
-              <div class="fieldset-legend"><span>Port</span></div>
+              <div class="fieldset-legend"><span>{% translate "Port" %}</span></div>
               <input
                 type="number"
                 x-model.number="newAccount.smtp_port"
@@ -477,11 +500,11 @@
               x-model="newAccount.smtp_use_tls"
               class="toggle toggle-sm toggle-module"
             />
-            <span class="text-sm">Use STARTTLS</span>
+            <span class="text-sm">{% translate "Use STARTTLS" %}</span>
           </label>
-          <div class="divider text-xs my-1">Authentication</div>
+          <div class="divider text-xs my-1">{% translate "Authentication" %}</div>
           <label class="fieldset w-full min-w-0">
-            <div class="fieldset-legend"><span>Username</span></div>
+            <div class="fieldset-legend"><span>{% translate "Username" context "mail server login" %}</span></div>
             <input
               type="text"
               x-model="newAccount.username"
@@ -490,7 +513,7 @@
             />
           </label>
           <label class="fieldset w-full min-w-0">
-            <div class="fieldset-legend"><span>Password</span></div>
+            <div class="fieldset-legend"><span>{% translate "Password" %}</span></div>
             <input
               type="password"
               x-model="newAccount.password"
@@ -506,16 +529,16 @@
           </div>
         </div>
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">Cancel</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">{% translate "Cancel" %}</button>
           <button type="submit" class="btn btn-module btn-sm" :disabled="addingAccount">
-            <span x-show="!addingAccount">Add Account</span>
+            <span x-show="!addingAccount">{% translate "Add Account" %}</span>
             <span x-show="addingAccount" class="loading loading-spinner loading-xs"></span>
           </button>
         </div>
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 
@@ -523,21 +546,21 @@
   <dialog id="mail-edit-account-dialog" class="modal">
     <template x-if="editAccount">
       <div class="modal-box max-w-lg">
-        {% include "ui/partials/dialog_header.html" with icon="mail-pen" title="Edit Account" subtitle_expr="editAccount?.email" only %}
+        {% include "ui/partials/dialog_header.html" with icon="mail-pen" title=_("Edit Account") subtitle_expr="editAccount?.email" only %}
         <form @submit.prevent="saveAccount()">
           <div class="grid grid-cols-1 gap-3">
             <label class="fieldset w-full min-w-0">
-              <div class="fieldset-legend"><span>Display name</span></div>
+              <div class="fieldset-legend"><span>{% translate "Display name" %}</span></div>
               <input
                 type="text"
                 x-model="editAccount.display_name"
                 class="input w-full input-sm min-w-0"
               />
             </label>
-            <div class="divider text-xs my-1">IMAP (Incoming)</div>
+            <div class="divider text-xs my-1">{% translate "IMAP (Incoming)" %}</div>
             <div class="grid grid-cols-3 gap-2">
               <label class="fieldset col-span-2 min-w-0">
-                <div class="fieldset-legend"><span>Host</span></div>
+                <div class="fieldset-legend"><span>{% translate "Host" %}</span></div>
                 <input
                   type="text"
                   x-model="editAccount.imap_host"
@@ -546,7 +569,7 @@
                 />
               </label>
               <label class="fieldset min-w-0">
-                <div class="fieldset-legend"><span>Port</span></div>
+                <div class="fieldset-legend"><span>{% translate "Port" %}</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.imap_port"
@@ -560,12 +583,12 @@
                 x-model="editAccount.imap_use_ssl"
                 class="toggle toggle-sm toggle-module"
               />
-              <span class="text-sm">Use SSL</span>
+              <span class="text-sm">{% translate "Use SSL" %}</span>
             </label>
-            <div class="divider text-xs my-1">SMTP (Outgoing)</div>
+            <div class="divider text-xs my-1">{% translate "SMTP (Outgoing)" %}</div>
             <div class="grid grid-cols-3 gap-2">
               <label class="fieldset col-span-2 min-w-0">
-                <div class="fieldset-legend"><span>Host</span></div>
+                <div class="fieldset-legend"><span>{% translate "Host" %}</span></div>
                 <input
                   type="text"
                   x-model="editAccount.smtp_host"
@@ -574,7 +597,7 @@
                 />
               </label>
               <label class="fieldset min-w-0">
-                <div class="fieldset-legend"><span>Port</span></div>
+                <div class="fieldset-legend"><span>{% translate "Port" %}</span></div>
                 <input
                   type="number"
                   x-model.number="editAccount.smtp_port"
@@ -588,11 +611,11 @@
                 x-model="editAccount.smtp_use_tls"
                 class="toggle toggle-sm toggle-module"
               />
-              <span class="text-sm">Use STARTTLS</span>
+              <span class="text-sm">{% translate "Use STARTTLS" %}</span>
             </label>
-            <div class="divider text-xs my-1">Authentication</div>
+            <div class="divider text-xs my-1">{% translate "Authentication" %}</div>
             <label class="fieldset w-full min-w-0">
-              <div class="fieldset-legend"><span>Username</span></div>
+              <div class="fieldset-legend"><span>{% translate "Username" context "mail server login" %}</span></div>
               <input
                 type="text"
                 x-model="editAccount.username"
@@ -602,8 +625,8 @@
             </label>
             <label class="fieldset w-full min-w-0">
               <div class="fieldset-legend w-full">
-                <span>Password</span>
-                <span class="text-base-content/40">Leave empty to keep current</span>
+                <span>{% translate "Password" %}</span>
+                <span class="text-base-content/40">{% translate "Leave empty to keep current" %}</span>
               </div>
               <input
                 type="password"
@@ -625,10 +648,10 @@
               class="btn btn-ghost btn-sm"
               @click="closeEditAccount()"
             >
-              Cancel
+              {% translate "Cancel" %}
             </button>
             <button type="submit" class="btn btn-module btn-sm" :disabled="savingAccount">
-              <span x-show="!savingAccount">Save</span>
+              <span x-show="!savingAccount">{% translate "Save" %}</span>
               <span x-show="savingAccount" class="loading loading-spinner loading-xs"></span>
             </button>
           </div>
@@ -636,25 +659,25 @@
       </div>
     </template>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 
   <!-- Signature dialog (opened per-account from the account context menu) -->
   <dialog id="mail-signature-dialog" class="modal">
     <div class="modal-box max-w-lg">
-      {% include "ui/partials/dialog_header.html" with icon="signature" title="Signature" subtitle_expr="signatureEdit.email" only %}
+      {% include "ui/partials/dialog_header.html" with icon="signature" title=_("Signature") subtitle_expr="signatureEdit.email" only %}
       <form @submit.prevent="saveSignature()">
         <label class="fieldset w-full">
           <div class="fieldset-legend">
-            <span>This signature is added to new messages, replies and forwards.</span>
+            <span>{% translate "This signature is added to new messages, replies and forwards." %}</span>
           </div>
           <textarea
             x-model="signatureEdit.text"
             class="textarea w-full"
             rows="6"
             maxlength="5000"
-            placeholder="Your signature"
+            placeholder="{% translate "Your signature" %}"
           ></textarea>
         </label>
         <div class="mt-3" x-show="signatureEditError" x-cloak>
@@ -669,7 +692,7 @@
             class="btn btn-ghost btn-sm"
             @click="document.getElementById('mail-signature-dialog').close()"
           >
-            Cancel
+            {% translate "Cancel" %}
           </button>
           <button
             type="submit"
@@ -681,13 +704,13 @@
               x-show="signatureEdit.saving"
               x-cloak
             ></span>
-            Save
+            {% translate "Save" %}
           </button>
         </div>
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 

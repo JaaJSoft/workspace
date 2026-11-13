@@ -1,63 +1,66 @@
+{% load i18n %}
 <div class="space-y-3">
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Density</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Density" %}</label>
     <select
       class="select select-sm w-full"
       :value="prefs.density"
       @change="update('density', $event.target.value)"
     >
-      <option value="compact">Compact</option>
-      <option value="normal">Normal</option>
-      <option value="spacious">Spacious</option>
+      <option value="compact">{% translate "Compact" context "density" %}</option>
+      <option value="normal">{% translate "Normal" context "density" %}</option>
+      <option value="spacious">{% translate "Spacious" context "density" %}</option>
     </select>
   </div>
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Preview lines</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Preview lines" %}</label>
     <select
       class="select select-sm w-full"
       :value="prefs.previewLines"
       @change="update('previewLines', parseInt($event.target.value))"
     >
-      <option value="0">None</option>
-      <option value="1">1 line</option>
-      <option value="2">2 lines</option>
+      <option value="0">{% translate "None" context "preview lines" %}</option>
+      <option value="1">{% translate "1 line" %}</option>
+      <option value="2">{% translate "2 lines" %}</option>
     </select>
   </div>
   <hr class="border-base-300" />
-  {% include "ui/partials/pref_toggle.html" with label="Show labels in list" key="showLabels" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Show labels in list") key="showLabels" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Confirm before delete") key="confirmBeforeDelete" accent="toggle-module" %}
   <hr class="border-base-300" />
   <div
     class="text-xs font-semibold uppercase tracking-wide text-base-content/60"
   >
-    AI features
+    {% translate "AI features" %}
   </div>
-  {% include "ui/partials/pref_toggle.html" with label="Auto-classify new emails" key="classify" state="ai.classify" handler="saveAiFeature" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="Extract events and tasks" key="extract" state="ai.extract" handler="saveAiFeature" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="AI writing assistance" key="manual" state="ai.manual" handler="saveAiFeature" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Auto-classify new emails") key="classify" state="ai.classify" handler="saveAiFeature" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Extract events and tasks") key="extract" state="ai.extract" handler="saveAiFeature" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("AI writing assistance") key="manual" state="ai.manual" handler="saveAiFeature" accent="toggle-module" %}
   <hr class="border-base-300" />
   <div
     class="text-xs font-semibold uppercase tracking-wide text-base-content/60"
   >
-    Notifications
+    {% translate "Notifications" %}
   </div>
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Notify me about</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Notify me about" %}</label>
     <select
       class="select select-sm w-full"
       :value="notifyMode"
       @change="saveNotifyMode($event.target.value)"
     >
-      <option value="all">All new emails</option>
-      <option value="labels">Only labels I chose</option>
-      <option value="never">Never</option>
+      <option value="all">{% translate "All new emails" %}</option>
+      <option value="labels">{% translate "Only labels I chose" %}</option>
+      <option value="never">{% translate "Never" %}</option>
     </select>
   </div>
   <template x-if="notifyMode === 'labels' && !ai.classify">
-    <inline-alert type="warning" message="Auto-classify is off, so no email gets labelled and no notification is sent." class="mt-1"></inline-alert>
+    <inline-alert type="warning" message="{% translate "Auto-classify is off, so no email gets labelled and no notification is sent." %}" class="mt-1"></inline-alert>
   </template>
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Max notifications per folder at once</label>
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+    >{% translate "Max notifications per folder at once" %}</label>
     <select
       class="select select-sm w-full"
       :value="notifyBurst"
@@ -70,7 +73,7 @@
       <option value="50">50</option>
     </select>
     <p class="text-xs text-base-content/50 mt-1">
-      When several emails arrive together, only the first ones are notified. The rest still appear in your inbox.
+      {% translate "When several emails arrive together, only the first ones are notified. The rest still appear in your inbox." %}
     </p>
   </div>
 </div>

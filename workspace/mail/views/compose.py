@@ -2,6 +2,7 @@ import logging
 
 from django.conf import settings
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -35,7 +36,7 @@ class MailSendView(APIView):
             account = MailAccount.objects.get(uuid=d["account_id"], owner=request.user)
         except MailAccount.DoesNotExist:
             return Response(
-                {"detail": "Account not found"},
+                {"detail": _("Account not found")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -52,7 +53,9 @@ class MailSendView(APIView):
             if ws_files is None:
                 return Response(
                     {
-                        "detail": "One or more workspace files not found or not accessible."
+                        "detail": _(
+                            "One or more workspace files not found or not accessible."
+                        )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -63,7 +66,10 @@ class MailSendView(APIView):
         if total_size > settings.MAIL_MAX_ATTACHMENTS_SIZE:
             limit_mb = settings.MAIL_MAX_ATTACHMENTS_SIZE / (1024 * 1024)
             return Response(
-                {"detail": f"Attachments are limited to {limit_mb:g} MB per email."},
+                {
+                    "detail": _("Attachments are limited to %(limit)s MB per email.")
+                    % {"limit": f"{limit_mb:g}"}
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -77,7 +83,10 @@ class MailSendView(APIView):
             except FileNotFoundError, OSError:
                 close_all(ws_file_handles)
                 return Response(
-                    {"detail": f'File "{ws_file.name}" content is unavailable.'},
+                    {
+                        "detail": _('File "%(name)s" content is unavailable.')
+                        % {"name": ws_file.name}
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -106,7 +115,7 @@ class MailSendView(APIView):
                 "Failed to send email from %s: %s", scrub(account.email), scrub(str(e))
             )
             return Response(
-                {"status": "error", "error": "Failed to send email"},
+                {"status": "error", "error": _("Failed to send email")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         finally:
@@ -127,7 +136,7 @@ class MailDraftView(APIView):
             account = MailAccount.objects.get(uuid=d["account_id"], owner=request.user)
         except MailAccount.DoesNotExist:
             return Response(
-                {"detail": "Account not found"},
+                {"detail": _("Account not found")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -152,7 +161,7 @@ class MailDraftView(APIView):
                     status=status.HTTP_201_CREATED,
                 )
             return Response(
-                {"detail": "Failed to save draft"},
+                {"detail": _("Failed to save draft")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception as e:
@@ -161,7 +170,7 @@ class MailDraftView(APIView):
                 "Failed to save draft for %s: %s", scrub(account.email), scrub(str(e))
             )
             return Response(
-                {"detail": "Failed to save draft"},
+                {"detail": _("Failed to save draft")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

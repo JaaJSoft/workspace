@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:04+0000\n"
+"POT-Creation-Date: 2026-11-13 16:46+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -776,10 +776,6 @@ msgid "Show hidden files"
 msgstr "Afficher les fichiers cachés"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
-msgid "Confirm before delete"
-msgstr "Confirmer avant de supprimer"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
 msgid "Compact file list"
 msgstr "Liste de fichiers compacte"
 
@@ -1145,10 +1141,6 @@ msgstr "Sélectionnez un fichier de votre espace de travail."
 #: ui/templates/files/ui/partials/file_picker.html
 msgid "Select a destination folder."
 msgstr "Sélectionnez un dossier de destination."
-
-#: ui/templates/files/ui/partials/file_picker.html
-msgid "Failed to create folder"
-msgstr "Échec de la création du dossier"
 
 #: ui/templates/files/ui/partials/file_picker.html
 msgid "No files found"
@@ -2137,6 +2129,7 @@ msgid "Back"
 msgstr "Précédent"
 
 #: ui/templates/files/ui/shared_page.html
+msgctxt "history navigation"
 msgid "Forward"
 msgstr "Suivant"
 

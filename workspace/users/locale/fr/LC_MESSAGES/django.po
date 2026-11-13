@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:04+0000\n"
+"POT-Creation-Date: 2026-11-13 16:46+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -222,11 +222,6 @@ msgstr "Avatar supprimé."
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "Failed to remove avatar."
 msgstr "Impossible de supprimer l’avatar."
-
-#: ui/templates/users/ui/partials/settings_profile.html
-#: ui/templates/users/ui/partials/settings_tokens.html
-msgid "Network error."
-msgstr "Erreur réseau."
 
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "Role saved."

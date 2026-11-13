@@ -1,6 +1,7 @@
 import logging
 
 from django.db import transaction
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -211,7 +212,7 @@ class MailRuleTestView(APIView):
         except SchemaError:
             # Avoid surfacing the raw Pydantic exception (CodeQL info-exposure).
             return Response(
-                {"detail": "Invalid conditions payload."},
+                {"detail": _("Invalid conditions payload.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({"matched": matched, "message_id": str(message.uuid)})

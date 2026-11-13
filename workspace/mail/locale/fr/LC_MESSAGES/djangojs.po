@@ -1,0 +1,456 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-13 14:02+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/mail/ui/js/mail.js
+msgid "Select files to attach to the email."
+msgstr "Choisissez les fichiers à joindre à l’e-mail."
+
+#: ui/static/mail/ui/js/mail.js
+msgid "OAuth2 connection failed"
+msgstr "Échec de la connexion OAuth2"
+
+#: ui/static/mail/ui/js/mail.js
+msgid "%(count)s result"
+msgid_plural "%(count)s results"
+msgstr[0] "%(count)s résultat"
+msgstr[1] "%(count)s de résultats"
+msgstr[2] "%(count)s résultats"
+
+#: ui/static/mail/ui/js/mail.js
+msgctxt "messages"
+msgid "%(count)s selected"
+msgid_plural "%(count)s selected"
+msgstr[0] "%(count)s sélectionné"
+msgstr[1] "%(count)s de sélectionnés"
+msgstr[2] "%(count)s sélectionnés"
+
+#: ui/static/mail/ui/js/mail.js ui/static/mail/ui/js/mail_folders.js
+msgid "%(count)s message"
+msgid_plural "%(count)s messages"
+msgstr[0] "%(count)s message"
+msgstr[1] "%(count)s de messages"
+msgstr[2] "%(count)s messages"
+
+#: ui/static/mail/ui/js/mail.js
+msgctxt "messages"
+msgid "%(count)s unread"
+msgid_plural "%(count)s unread"
+msgstr[0] "%(count)s non lu"
+msgstr[1] "%(count)s de non lus"
+msgstr[2] "%(count)s non lus"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Could not auto-detect settings for this email. Please fill in manually."
+msgstr ""
+"Impossible de détecter automatiquement les paramètres de cette adresse. "
+"Renseignez-les manuellement."
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Auto-detection failed. Please fill in settings manually."
+msgstr ""
+"La détection automatique a échoué. Renseignez les paramètres manuellement."
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Failed to add account"
+msgstr "Échec de l’ajout du compte"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Network error. Please check your connection and try again."
+msgstr "Erreur réseau. Vérifiez votre connexion et réessayez."
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgctxt "dialog title"
+msgid "Sync"
+msgstr "Synchronisation"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Failed to sync account"
+msgstr "Échec de la synchronisation du compte"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Failed: %(error)s"
+msgstr "Échec : %(error)s"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Connection Test"
+msgstr "Test de connexion"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Remove Account"
+msgstr "Supprimer le compte"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "This will delete the account and all synced messages. Continue?"
+msgstr ""
+"Le compte et tous ses messages synchronisés seront supprimés. Continuer ?"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Failed to remove account"
+msgstr "Échec de la suppression du compte"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Failed to save account"
+msgstr "Échec de l’enregistrement du compte"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Failed to save signature"
+msgstr "Échec de l’enregistrement de la signature"
+
+#: ui/static/mail/ui/js/mail_ai.js
+msgid "Failed to start summarization"
+msgstr "Impossible de lancer le résumé"
+
+#: ui/static/mail/ui/js/mail_ai.js
+msgid "AI task timed out"
+msgstr "La tâche IA a expiré"
+
+#: ui/static/mail/ui/js/mail_ai.js
+msgid "AI task failed"
+msgstr "La tâche IA a échoué"
+
+#: ui/static/mail/ui/js/mail_ai.js
+msgid "Failed to start AI composition"
+msgstr "Impossible de lancer la rédaction par IA"
+
+#: ui/static/mail/ui/js/mail_ai.js
+msgid "AI composition timed out"
+msgstr "La rédaction par IA a expiré"
+
+#: ui/static/mail/ui/js/mail_ai.js
+msgid "AI composition failed"
+msgstr "La rédaction par IA a échoué"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "Restore draft"
+msgstr "Restaurer le brouillon"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "You have an unsaved draft. Would you like to restore it?"
+msgstr "Vous avez un brouillon non envoyé. Voulez-vous le restaurer ?"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "On %(date)s, %(sender)s wrote:"
+msgstr "Le %(date)s, %(sender)s a écrit :"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "Forwarded message from %(sender)s:"
+msgstr "Message transféré de %(sender)s :"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "Unknown"
+msgstr "Inconnu"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "Directory"
+msgstr "Annuaire"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgctxt "recipient suggestions from past mail"
+msgid "Recent"
+msgstr "Récents"
+
+#: ui/static/mail/ui/js/mail_compose.js ui/static/mail/ui/js/mail_helpers.js
+msgid "Could not add to contacts"
+msgstr "Impossible d’ajouter aux contacts"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "%(name)s added to contacts"
+msgstr "%(name)s ajouté aux contacts"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "%(name)s is already in your contacts"
+msgstr "%(name)s fait déjà partie de vos contacts"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "Please add at least one recipient"
+msgstr "Ajoutez au moins un destinataire"
+
+#: ui/static/mail/ui/js/mail_compose.js
+msgid "Failed to send email"
+msgstr "Échec de l’envoi de l’e-mail"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Create a subfolder in \"%(name)s\"."
+msgstr "Créer un sous-dossier dans « %(name)s »."
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Enter a name for the new folder."
+msgstr "Saisissez un nom pour le nouveau dossier."
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Rename folder"
+msgstr "Renommer le dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to rename folder"
+msgstr "Échec du renommage du dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Delete \"%(name)s\" and all its messages? This cannot be undone."
+msgstr ""
+"Supprimer « %(name)s » et tous ses messages ? Cette action est irréversible."
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to delete folder"
+msgstr "Échec de la suppression du dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "/ (Root)"
+msgstr "/ (Racine)"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Move folder"
+msgstr "Déplacer le dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Move \"%(name)s\" to:"
+msgstr "Déplacer « %(name)s » vers :"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to move folder"
+msgstr "Échec du déplacement du dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Hide folder"
+msgstr "Masquer le dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid ""
+"Hide \"%(name)s\"? It will no longer appear in the sidebar or search "
+"results. You can restore it from the account menu."
+msgstr ""
+"Masquer « %(name)s » ? Il n’apparaîtra plus dans la barre latérale ni dans "
+"les résultats de recherche. Vous pourrez le restaurer depuis le menu du "
+"compte."
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to hide folder"
+msgstr "Échec du masquage du dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "This account has no other folder to merge into."
+msgstr "Ce compte n’a aucun autre dossier dans lequel fusionner."
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Merge folder"
+msgstr "Fusionner le dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid ""
+"Mail in \"%(name)s\" will show up in the folder you pick, and new mail will "
+"be filed there. Nothing moves on the server."
+msgstr ""
+"Les e-mails de « %(name)s » apparaîtront dans le dossier choisi, et les "
+"nouveaux e-mails y seront classés. Rien n’est déplacé sur le serveur."
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to merge folder"
+msgstr "Échec de la fusion du dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to unmerge folder"
+msgstr "Échec de la défusion du dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to update folder"
+msgstr "Échec de la mise à jour du dossier"
+
+#: ui/static/mail/ui/js/mail_folders.js
+msgid "Failed to restore folder"
+msgstr "Échec de la restauration du dossier"
+
+#: ui/static/mail/ui/js/mail_helpers.js
+msgid "Copy email"
+msgstr "Copier l’adresse"
+
+#: ui/static/mail/ui/js/mail_labels.js
+msgid "Failed to save label."
+msgstr "Échec de l’enregistrement de l’étiquette."
+
+#: ui/static/mail/ui/js/mail_labels.js
+msgid "Delete label \"%(name)s\"? Messages won't be deleted."
+msgstr ""
+"Supprimer l’étiquette « %(name)s » ? Les messages ne seront pas supprimés."
+
+#: ui/static/mail/ui/js/mail_messages.js
+msgid "Move this message to trash?"
+msgstr "Placer ce message dans la corbeille ?"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "From %(sender)s"
+msgstr "De %(sender)s"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Mark as read"
+msgstr "Marquer comme lu"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Mark as unread"
+msgstr "Marquer comme non lu"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Star"
+msgstr "Activer le suivi"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Unstar"
+msgstr "Désactiver le suivi"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "%(count)s condition -> %(actions)s"
+msgid_plural "%(count)s conditions -> %(actions)s"
+msgstr[0] "%(count)s condition -> %(actions)s"
+msgstr[1] "%(count)s de conditions -> %(actions)s"
+msgstr[2] "%(count)s conditions -> %(actions)s"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "no actions"
+msgstr "aucune action"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "%(matched)s of %(scanned)s scanned message matches this rule."
+msgid_plural "%(matched)s of %(scanned)s scanned messages match this rule."
+msgstr[0] ""
+"%(matched)s message analysé sur %(scanned)s correspond à cette règle."
+msgstr[1] ""
+"%(matched)s sur %(scanned)s de messages analysés correspondent à cette règle."
+msgstr[2] ""
+"%(matched)s sur %(scanned)s messages analysés correspondent à cette règle."
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Applied to %(count)s message."
+msgid_plural "Applied to %(count)s messages."
+msgstr[0] "Appliquée à %(count)s message."
+msgstr[1] "Appliquée à %(count)s de messages."
+msgstr[2] "Appliquée à %(count)s messages."
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "%(count)s action failed on the mail server (IMAP)."
+msgid_plural "%(count)s actions failed on the mail server (IMAP)."
+msgstr[0] "%(count)s action a échoué sur le serveur de messagerie (IMAP)."
+msgstr[1] "%(count)s d’actions ont échoué sur le serveur de messagerie (IMAP)."
+msgstr[2] "%(count)s actions ont échoué sur le serveur de messagerie (IMAP)."
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Folder has %(total)s messages; only the 500 most recent were scanned."
+msgstr ""
+"Le dossier contient %(total)s messages ; seuls les 500 plus récents ont été "
+"analysés."
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Apply rule"
+msgstr "Appliquer la règle"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid ""
+"Apply rule \"%(name)s\" to the selected folder now? Actions like move and "
+"delete cannot be undone."
+msgstr ""
+"Appliquer la règle « %(name)s » au dossier choisi maintenant ? Les actions "
+"comme le déplacement et la suppression sont irréversibles."
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Apply"
+msgstr "Appliquer"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Delete rule"
+msgstr "Supprimer la règle"
+
+#: ui/static/mail/ui/js/mail_rules.js
+msgid "Delete rule \"%(name)s\"? This cannot be undone."
+msgstr "Supprimer la règle « %(name)s » ? Cette action est irréversible."
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "To"
+msgstr "À"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Cc"
+msgstr "Cc"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "To or Cc"
+msgstr "À ou Cc"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Subject"
+msgstr "Objet"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Body"
+msgstr "Corps"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Has attachments"
+msgstr "A des pièces jointes"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Is starred"
+msgstr "Est suivi"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "contains"
+msgstr "contient"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "equals"
+msgstr "est égal à"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "starts with"
+msgstr "commence par"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "ends with"
+msgstr "se termine par"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "matches regex"
+msgstr "correspond à l’expression régulière"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "in list"
+msgstr "dans la liste"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "is true"
+msgstr "est vrai"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "is false"
+msgstr "est faux"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "greater than"
+msgstr "après"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "less than"
+msgstr "avant"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Invalid conditions JSON"
+msgstr "JSON des conditions non valide"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Invalid actions JSON"
+msgstr "JSON des actions non valide"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Invalid JSON"
+msgstr "JSON non valide"
+
+#: ui/static/mail/ui/js/mail_rules_form.js
+msgid "Network error - please retry."
+msgstr "Erreur réseau - veuillez réessayer."

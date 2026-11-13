@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:04+0000\n"
+"POT-Creation-Date: 2026-11-13 16:46+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -945,14 +945,6 @@ msgstr "Vue agenda"
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "Close panel / modal"
 msgstr "Fermer le panneau / la fenêtre"
-
-#: ui/templates/calendar/ui/partials/help_dialog.html
-msgid "Command palette"
-msgstr "Palette de commandes"
-
-#: ui/templates/calendar/ui/partials/help_dialog.html
-msgid "Show this help"
-msgstr "Afficher cette aide"
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "Calendar Management"

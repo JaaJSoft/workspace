@@ -5,6 +5,7 @@ import logging
 from django.http import HttpResponseBadRequest, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -81,7 +82,7 @@ def oauth2_callback(request):
             request,
             {
                 "type": "oauth2-error",
-                "error": "Invalid state parameter. Please try again.",
+                "error": _("Invalid state parameter. Please try again."),
             },
         )
 
@@ -90,7 +91,7 @@ def oauth2_callback(request):
             request,
             {
                 "type": "oauth2-error",
-                "error": "Missing provider. Please try again.",
+                "error": _("Missing provider. Please try again."),
             },
         )
 
@@ -105,7 +106,7 @@ def oauth2_callback(request):
             request,
             {
                 "type": "oauth2-error",
-                "error": "Failed to exchange authorization code. Please try again.",
+                "error": _("Failed to exchange authorization code. Please try again."),
             },
         )
 
@@ -118,7 +119,7 @@ def oauth2_callback(request):
             request,
             {
                 "type": "oauth2-error",
-                "error": "Could not determine email address from provider.",
+                "error": _("Could not determine email address from provider."),
             },
         )
 

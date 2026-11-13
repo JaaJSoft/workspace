@@ -8,10 +8,12 @@ when it is synced: ``notify_new_messages`` runs inside the IMAP sync,
 import logging
 
 from django.db.models import F
+from django.utils import translation
+from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 from workspace.notifications.services.notifications import mark_sources_read, notify
-from workspace.users.services.settings import get_module_settings
+from workspace.users.services.settings import get_module_settings, get_user_language
 
 from ..models import MailMessage
 from .ai_settings import is_mail_ai_feature_enabled
@@ -66,16 +68,17 @@ def _is_notifiable_folder(folder) -> bool:
 
 
 def _notify_messages(user, messages, *, priority) -> int:
-    for message in messages:
-        notify(
-            recipient=user,
-            origin="mail",
-            title=message.from_name or message.from_email or "New email",
-            body=message.subject or "(no subject)",
-            url=f"/mail?message={message.uuid}",
-            priority=priority,
-            source=message,
-        )
+    with translation.override(get_user_language(user)):
+        for message in messages:
+            notify(
+                recipient=user,
+                origin="mail",
+                title=message.from_name or message.from_email or _("New email"),
+                body=message.subject or _("(no subject)"),
+                url=f"/mail?message={message.uuid}",
+                priority=priority,
+                source=message,
+            )
     return len(messages)
 
 

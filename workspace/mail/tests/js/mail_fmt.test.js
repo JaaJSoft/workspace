@@ -10,6 +10,7 @@ function makeApp(userTz) {
   const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail.js', {
 document: { getElementById: () => null },
     sidebarPreference: { initial: () => false, save: () => {} },
+    getUserLocale: () => 'en-US',
     // Domain mixins live in separate files; the formatters under test are
     // defined in mail.js itself, so empty stubs are enough.
     attachmentInputMixin: mixinStub,

@@ -1,8 +1,10 @@
+{% load i18n %}
 {% comment %}
   The three blocks that come and go with the rail carry their first-paint
   state in the HTML (the stored preference, and whether any account exists)
   and drop it through the object-form binding once Alpine takes over.
 {% endcomment %}
+{% translate "Merged: %(names)s" as merged_title %}
 <!-- All Inboxes (unified view) — expanded -->
 <div
   x-show="accounts.length > 0 && !sidebarCollapsed()"
@@ -18,7 +20,7 @@
     <span class="shrink-0 text-module">
       <i data-lucide="inbox" class="w-4 h-4"></i>
     </span>
-    <span class="flex-1 text-left truncate">All Inboxes</span>
+    <span class="flex-1 text-left truncate">{% translate "All Inboxes" %}</span>
     <span
       x-show="getTotalInboxUnread() > 0"
       class="badge badge-xs badge-module"
@@ -36,7 +38,7 @@
     type="button"
     class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
     :class="unifiedInbox ? 'bg-module/15 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
-    title="All Inboxes"
+    title="{% translate "All Inboxes" %}"
     @click="selectUnifiedInbox()"
   >
     <i data-lucide="inbox" class="w-5 h-5"></i>
@@ -83,12 +85,12 @@
       <div
         class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
       >
-        Folders
+        {% translate "Folders" %}
         <button
           type="button"
           class="btn btn-ghost btn-square btn-xs"
           @click="_createFolder(account.uuid)"
-          title="New folder"
+          title="{% translate "New folder" %}"
         >
           <i data-lucide="plus" class="w-3 h-3"></i>
         </button>
@@ -122,7 +124,7 @@
           <span
             x-show="(node.folder.aliases || []).length > 0"
             class="shrink-0 text-base-content/40"
-            :title="'Merged: ' + (node.folder.aliases || []).map(a => a.display_name).join(', ')"
+            :title="interpolate('{{ merged_title|escapejs }}', { names: (node.folder.aliases || []).map(a => a.display_name).join(', ') }, true)"
           >
             <i data-lucide="git-merge" class="w-3 h-3"></i>
           </span>
@@ -154,12 +156,12 @@
         <div
           class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
         >
-          Labels
+          {% translate "Labels" %}
           <button
             type="button"
             class="btn btn-ghost btn-square btn-xs"
             @click="showLabelModal(account.uuid)"
-            title="New label"
+            title="{% translate "New label" %}"
           >
             <i data-lucide="plus" class="w-3 h-3"></i>
           </button>
@@ -206,7 +208,7 @@
           @click="showLabelModal(account.uuid)"
         >
           <i data-lucide="tag" class="w-4 h-4"></i>
-          Add label
+          {% translate "Add label" %}
         </button>
       </div>
     </template>
@@ -256,6 +258,6 @@
     @click="showAddAccount()"
   >
     <i data-lucide="plus-circle" class="w-4 h-4"></i>
-    Add account
+    {% translate "Add account" %}
   </button>
 </div>

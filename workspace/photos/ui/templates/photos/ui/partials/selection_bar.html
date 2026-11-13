@@ -13,8 +13,6 @@
   a photo only the album serves takes Add to album and Hide away.
 {% endcomment %}
 {% load i18n %}
-{% translate "%(count)s selected" context "one photo" as one_selected_label %}
-{% translate "%(count)s selected" context "several photos" as many_selected_label %}
 {% translate "Add to favorites" as add_favorites_label %}
 {% translate "Remove from favorites" as remove_favorites_label %}
 <div
@@ -40,7 +38,7 @@
     </button>
     <span
       class="text-sm font-medium whitespace-nowrap px-1"
-      x-text="interpolate(selection.length === 1 ? '{{ one_selected_label|escapejs }}' : '{{ many_selected_label|escapejs }}', { count: selection.length }, true)"
+      x-text="selectedLabel(selection.length)"
       data-selection-count
     ></span>
     <button

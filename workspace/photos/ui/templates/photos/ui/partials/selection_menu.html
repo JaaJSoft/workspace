@@ -8,8 +8,6 @@ The file rows wait for the registry's answer about every selected photo
 (selectionActions is null meanwhile) and show only what all of them offer.
 {% endcomment %}
 {% load i18n %}
-{% translate "%(count)s photo selected" as one_selected_label %}
-{% translate "%(count)s photos selected" as many_selected_label %}
 {% translate "Add to favorites" as add_favorites_label %}
 {% translate "Remove from favorites" as remove_favorites_label %}
 {% translate "Mark as sensitive" as mark_sensitive_label %}
@@ -19,7 +17,7 @@ The file rows wait for the registry's answer about every selected photo
     <ul class="menu menu-sm p-0 w-full">
       <li class="menu-title py-1">
         <span
-          x-text="interpolate(selection.length === 1 ? '{{ one_selected_label|escapejs }}' : '{{ many_selected_label|escapejs }}', { count: selection.length }, true)"
+          x-text="selectedLabel(selection.length)"
         ></span>
       </li>
       {% include "ui/partials/context_menu_item.html" with show="selectionShows('toggle_favorite')" li_class_expr="selectionRule('toggle_favorite')" icon="star" icon_alt="star-off" icon_toggle="selectionFavoriteAdds()" label_expr=favorite_label_expr click="favoriteSelection()" only %}

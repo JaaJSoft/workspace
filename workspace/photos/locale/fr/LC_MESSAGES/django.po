@@ -3,13 +3,80 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:46+0000\n"
+"POT-Creation-Date: 2026-11-13 14:07+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
+
+#: actions/album.py
+msgid "Edit description"
+msgstr "Modifier la description"
+
+#: actions/album.py
+msgid "Sort by capture date"
+msgstr "Trier par date de prise de vue"
+
+#: actions/album.py
+msgid "Sort manually"
+msgstr "Trier manuellement"
+
+#: actions/album.py
+msgid "Add photos"
+msgstr "Ajouter des photos"
+
+#: actions/album.py ui/templates/photos/ui/partials/context_menu.html
+#: ui/templates/photos/ui/partials/selection_bar.html
+#: ui/templates/photos/ui/partials/selection_menu.html
+msgid "Remove from album"
+msgstr "Retirer de l’album"
+
+#: actions/album.py
+msgid "Reorder"
+msgstr "Réorganiser"
+
+#: actions/album.py ui/templates/photos/ui/partials/context_menu.html
+msgid "Set as cover"
+msgstr "Définir comme couverture"
+
+#: actions/album.py
+msgid "Download album"
+msgstr "Télécharger l’album"
+
+#: actions/album.py
+msgid "Leave album"
+msgstr "Quitter l’album"
+
+#: actions/album.py
+msgid "Delete album"
+msgstr "Supprimer l’album"
+
+#: actions/face.py ui/templates/photos/ui/partials/face_selection_bar.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "That's right"
+msgstr "C’est bien ça"
+
+#: actions/face.py ui/templates/photos/ui/partials/face_selection_bar.html
+msgid "Not this person"
+msgstr "Pas cette personne"
+
+#: activity.py
+#, python-format
+msgid "%(count)s photo to %(title)s"
+msgid_plural "%(count)s photos to %(title)s"
+msgstr[0] "%(count)s photo dans %(title)s"
+msgstr[1] "%(count)s de photos dans %(title)s"
+msgstr[2] "%(count)s photos dans %(title)s"
+
+#: activity.py
+msgid "Album shared"
+msgstr "Album partagé"
+
+#: activity.py
+msgid "Photos added"
+msgstr "Photos ajoutées"
 
 #: apps.py
 msgid "Browse your photos and videos by the day they were taken."
@@ -30,3 +97,1857 @@ msgstr "Photos favorites"
 #: apps.py
 msgid "Undated photos"
 msgstr "Photos sans date"
+
+#: models.py ui/templates/photos/ui/partials/album_header.html
+msgctxt "album role"
+msgid "Viewer"
+msgstr "Lecteur"
+
+#: models.py ui/templates/photos/ui/partials/album_header.html
+msgctxt "album role"
+msgid "Contributor"
+msgstr "Contributeur"
+
+#: models.py ui/templates/photos/ui/partials/album_header.html
+msgctxt "album role"
+msgid "Manager"
+msgstr "Gestionnaire"
+
+#: search.py
+#, python-format
+msgid "Photos showing “%(text)s”"
+msgstr "Photos montrant « %(text)s »"
+
+#: search.py
+msgid "Person"
+msgstr "Personne"
+
+#: search.py
+msgid "Album"
+msgstr "Album"
+
+#: services/album_notifications.py
+#, python-format
+msgid "%(user)s shared the album \"%(title)s\" with you"
+msgstr "%(user)s a partagé l’album « %(title)s » avec vous"
+
+#: services/album_notifications.py
+#, python-format
+msgid "%(user)s removed you from the album \"%(title)s\""
+msgstr "%(user)s vous a retiré de l’album « %(title)s »"
+
+#: services/album_notifications.py
+#, python-format
+msgid "The album \"%(title)s\" is no longer shared with you"
+msgstr "L’album « %(title)s » n’est plus partagé avec vous"
+
+#: services/album_notifications.py
+msgid "You can browse it, add photos and manage it."
+msgstr "Vous pouvez le parcourir, y ajouter des photos et le gérer."
+
+#: services/album_notifications.py
+msgid "You can browse it and add your own photos."
+msgstr "Vous pouvez le parcourir et y ajouter vos propres photos."
+
+#: services/album_notifications.py
+msgid "You can browse its photos."
+msgstr "Vous pouvez parcourir ses photos."
+
+#: services/album_notifications.py
+#, python-format
+msgid "You are now a manager of the album \"%(title)s\""
+msgstr "Vous êtes désormais gestionnaire de l’album « %(title)s »"
+
+#: services/album_notifications.py
+#, python-format
+msgid "You are now a contributor to the album \"%(title)s\""
+msgstr "Vous êtes désormais contributeur de l’album « %(title)s »"
+
+#: services/album_notifications.py
+#, python-format
+msgid "You are now a viewer of the album \"%(title)s\""
+msgstr "Vous êtes désormais lecteur de l’album « %(title)s »"
+
+#: services/album_notifications.py
+#, python-format
+msgid "%(name)s added %(count)s photo to \"%(title)s\""
+msgid_plural "%(name)s added %(count)s photos to \"%(title)s\""
+msgstr[0] "%(name)s a ajouté %(count)s photo à « %(title)s »"
+msgstr[1] "%(name)s a ajouté %(count)s de photos à « %(title)s »"
+msgstr[2] "%(name)s a ajouté %(count)s photos à « %(title)s »"
+
+#: services/album_notifications.py
+#, python-format
+msgid "%(first)s and %(second)s added %(count)s photo to \"%(title)s\""
+msgid_plural "%(first)s and %(second)s added %(count)s photos to \"%(title)s\""
+msgstr[0] "%(first)s et %(second)s ont ajouté %(count)s photo à « %(title)s »"
+msgstr[1] ""
+"%(first)s et %(second)s ont ajouté %(count)s de photos à « %(title)s »"
+msgstr[2] "%(first)s et %(second)s ont ajouté %(count)s photos à « %(title)s »"
+
+#: services/album_notifications.py
+#, python-format
+msgid "%(name)s and %(others)s others added %(count)s photo to \"%(title)s\""
+msgid_plural ""
+"%(name)s and %(others)s others added %(count)s photos to \"%(title)s\""
+msgstr[0] ""
+"%(name)s et %(others)s autres ont ajouté %(count)s photo à « %(title)s »"
+msgstr[1] ""
+"%(name)s et %(others)s autres ont ajouté %(count)s de photos à « %(title)s »"
+msgstr[2] ""
+"%(name)s et %(others)s autres ont ajouté %(count)s photos à « %(title)s »"
+
+#: services/details.py
+msgid "Flash"
+msgstr "Flash"
+
+#: services/details.py
+#, python-format
+msgid "%(length)s mm (35 mm eq.)"
+msgstr "%(length)s mm (éq. 35 mm)"
+
+#: services/details.py
+#, python-format
+msgid "%(actual)s (%(length)s mm eq.)"
+msgstr "%(actual)s (éq. %(length)s mm)"
+
+#: ui/templates/photos/ui/base.html
+msgid "Drop photos and videos to import them"
+msgstr "Déposez des photos et des vidéos pour les importer"
+
+#: ui/templates/photos/ui/base.html
+#, python-format
+msgid "They are saved to %(folder)s in Files"
+msgstr "Elles sont enregistrées dans %(folder)s, dans Fichiers"
+
+#: ui/templates/photos/ui/index.html
+#: ui/templates/photos/ui/partials/person_header.html
+#: ui/templates/photos/ui/people.html
+msgid "All people"
+msgstr "Toutes les personnes"
+
+#: ui/templates/photos/ui/index.html
+msgid "Describe a photo"
+msgstr "Décrire une photo"
+
+#: ui/templates/photos/ui/index.html
+msgid "Search photos by description"
+msgstr "Rechercher des photos par description"
+
+#: ui/templates/photos/ui/index.html
+msgid "Describe a photo…"
+msgstr "Décrivez une photo…"
+
+#: ui/templates/photos/ui/index.html
+msgid "Close the search"
+msgstr "Fermer la recherche"
+
+#: ui/templates/photos/ui/index.html
+msgid ""
+"New photos and videos show up here once their capture date has been read."
+msgstr ""
+"Les nouvelles photos et vidéos apparaissent ici une fois leur date de prise "
+"de vue lue."
+
+#: ui/templates/photos/ui/index.html
+#, python-format
+msgid "%(counter)s being analyzed"
+msgid_plural "%(counter)s being analyzed"
+msgstr[0] "%(counter)s en cours d’analyse"
+msgstr[1] "%(counter)s en cours d’analyse"
+msgstr[2] "%(counter)s en cours d’analyse"
+
+#: ui/templates/photos/ui/index.html
+msgid "Import photos and videos"
+msgstr "Importer des photos et des vidéos"
+
+#: ui/templates/photos/ui/index.html
+msgctxt "photos import button"
+msgid "Import"
+msgstr "Importer"
+
+#: ui/templates/photos/ui/index.html
+msgid "Back to latest"
+msgstr "Revenir aux plus récentes"
+
+#: ui/templates/photos/ui/index.html
+#: ui/templates/photos/ui/partials/person_header.html
+#, python-format
+msgid "Open %(name)s in People"
+msgstr "Ouvrir %(name)s dans Personnes"
+
+#: ui/templates/photos/ui/index.html
+#: ui/templates/photos/ui/partials/person_header.html
+msgid "Person options"
+msgstr "Options de la personne"
+
+#: ui/templates/photos/ui/index.html
+msgid "Back to the timeline"
+msgstr "Revenir à la chronologie"
+
+#: ui/templates/photos/ui/index.html
+msgid "This album is empty"
+msgstr "Cet album est vide"
+
+#: ui/templates/photos/ui/index.html
+msgid ""
+"An album gathers photos from anywhere in your library without moving them in "
+"Files. Select photos in the timeline, then choose Add to album."
+msgstr ""
+"Un album rassemble des photos de toute votre bibliothèque sans les déplacer "
+"dans Fichiers. Sélectionnez des photos dans la chronologie, puis choisissez "
+"Ajouter à un album."
+
+#: ui/templates/photos/ui/index.html
+msgid "Go to the timeline"
+msgstr "Aller à la chronologie"
+
+#: ui/templates/photos/ui/index.html
+msgid "Nothing hidden"
+msgstr "Rien de masqué"
+
+#: ui/templates/photos/ui/index.html
+msgid ""
+"Hide photos from their menu, or whole folders from Preferences. Hidden "
+"photos stay out of the timeline, albums, people and search, and stay where "
+"they are in Files."
+msgstr ""
+"Masquez des photos depuis leur menu, ou des dossiers entiers depuis les "
+"Préférences. Les photos masquées n’apparaissent plus dans la chronologie, "
+"les albums, les personnes et la recherche, et restent où elles sont dans "
+"Fichiers."
+
+#: ui/templates/photos/ui/index.html
+msgid "No photos yet"
+msgstr "Aucune photo pour l’instant"
+
+#: ui/templates/photos/ui/index.html
+msgid ""
+"Import photos and videos, or drop them here. Everything you keep in Files "
+"shows up too, by the day it was taken."
+msgstr ""
+"Importez des photos et des vidéos, ou déposez-les ici. Tout ce que vous "
+"gardez dans Fichiers apparaît aussi, selon le jour de la prise de vue."
+
+#: ui/templates/photos/ui/index.html
+msgid "Import photos"
+msgstr "Importer des photos"
+
+#: ui/templates/photos/ui/index.html
+msgid "Go to Files"
+msgstr "Aller dans Fichiers"
+
+#: ui/templates/photos/ui/index.html
+msgid "Nothing here"
+msgstr "Rien ici"
+
+#: ui/templates/photos/ui/index.html
+msgid "No video matches this view."
+msgstr "Aucune vidéo ne correspond à cette vue."
+
+#: ui/templates/photos/ui/index.html
+msgid "No photo matches this view."
+msgstr "Aucune photo ne correspond à cette vue."
+
+#: ui/templates/photos/ui/index.html
+msgid "Nothing in your library matches this view."
+msgstr "Rien dans votre bibliothèque ne correspond à cette vue."
+
+#: ui/templates/photos/ui/map.html
+msgid "With a location"
+msgstr "Avec un lieu"
+
+#: ui/templates/photos/ui/map.html
+msgid "Zoom in"
+msgstr "Zoom avant"
+
+#: ui/templates/photos/ui/map.html
+msgid "Zoom out"
+msgstr "Zoom arrière"
+
+#: ui/templates/photos/ui/map.html
+msgid "Show every photo"
+msgstr "Afficher toutes les photos"
+
+#: ui/templates/photos/ui/map.html
+msgid "Loading the map…"
+msgstr "Chargement de la carte…"
+
+#: ui/templates/photos/ui/map.html
+msgid "The photos could not be loaded. Reload the page to try again."
+msgstr ""
+"Les photos n’ont pas pu être chargées. Rechargez la page pour réessayer."
+
+#: ui/templates/photos/ui/map.html
+msgid "No photo with a location here"
+msgstr "Aucune photo avec un lieu ici"
+
+#: ui/templates/photos/ui/map.html
+msgid ""
+"Photos taken with location turned on are placed by themselves. You can also "
+"set where a photo was taken from its details."
+msgstr ""
+"Les photos prises avec la localisation activée sont placées d’elles-mêmes. "
+"Vous pouvez aussi indiquer où une photo a été prise depuis ses détails."
+
+#: ui/templates/photos/ui/map.html
+msgid "All dates"
+msgstr "Toutes les dates"
+
+#: ui/templates/photos/ui/map.html
+msgctxt "map period start"
+msgid "From"
+msgstr "Début"
+
+#: ui/templates/photos/ui/map.html
+msgctxt "map period end"
+msgid "To"
+msgstr "Fin"
+
+#: ui/templates/photos/ui/map.html
+msgid "Photos in this area"
+msgstr "Photos de cette zone"
+
+#: ui/templates/photos/ui/map.html
+msgid "See where your photos were taken"
+msgstr "Voyez où vos photos ont été prises"
+
+#: ui/templates/photos/ui/map.html
+msgid "No photo of this library has a location yet."
+msgstr "Aucune photo de cette bibliothèque n’a encore de lieu."
+
+#: ui/templates/photos/ui/map.html
+#, python-format
+msgid "This library holds %(count_label)s with a location."
+msgstr "Cette bibliothèque contient %(count_label)s avec un lieu."
+
+#: ui/templates/photos/ui/map.html
+#, python-format
+msgid ""
+"The map is loaded from %(server)s, which then receives the areas you browse "
+"and the location of each photo you open."
+msgstr ""
+"La carte est chargée depuis %(server)s, qui reçoit alors les zones que vous "
+"parcourez et le lieu de chaque photo que vous ouvrez."
+
+#: ui/templates/photos/ui/map.html
+msgid "Show the map"
+msgstr "Afficher la carte"
+
+#: ui/templates/photos/ui/partials/album_header.html
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "Share album"
+msgstr "Partager l’album"
+
+#: ui/templates/photos/ui/partials/album_header.html
+msgid "Album actions"
+msgstr "Actions de l’album"
+
+#: ui/templates/photos/ui/partials/album_header.html
+msgid "Manual order"
+msgstr "Ordre manuel"
+
+#: ui/templates/photos/ui/partials/album_header.html
+msgid "By capture date"
+msgstr "Par date de prise de vue"
+
+#: ui/templates/photos/ui/partials/album_header.html
+#, python-format
+msgid "%(counter)s member"
+msgid_plural "%(counter)s members"
+msgstr[0] "%(counter)s membre"
+msgstr[1] "%(counter)s de membres"
+msgstr[2] "%(counter)s membres"
+
+#: ui/templates/photos/ui/partials/album_header.html
+#: ui/templates/photos/ui/partials/sidebar_album.html
+#: ui/templates/photos/ui/shared_album.html
+#, python-format
+msgid "Shared by %(name)s"
+msgstr "Partagé par %(name)s"
+
+#: ui/templates/photos/ui/partials/album_menu.html
+msgid "Nothing you can change here"
+msgstr "Rien à modifier ici"
+
+#: ui/templates/photos/ui/partials/album_picker.html
+#: ui/templates/photos/ui/partials/context_menu.html
+#: ui/templates/photos/ui/partials/selection_bar.html
+#: ui/templates/photos/ui/partials/selection_menu.html
+msgid "Add to album"
+msgstr "Ajouter à un album"
+
+#: ui/templates/photos/ui/partials/album_picker.html
+#: ui/templates/photos/ui/partials/sidebar_nav.html
+msgid "New album"
+msgstr "Nouvel album"
+
+#: ui/templates/photos/ui/partials/album_picker.html
+msgid "Loading albums…"
+msgstr "Chargement des albums…"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "Members"
+msgstr "Membres"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgctxt "album role"
+msgid "Owner"
+msgstr "Propriétaire"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "New"
+msgstr "Nouveau"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "Remove from the album"
+msgstr "Retirer de l’album"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid ""
+"Viewers browse the album, contributors also add their own photos, managers "
+"can change everything."
+msgstr ""
+"Les lecteurs parcourent l’album, les contributeurs y ajoutent aussi leurs "
+"photos, les gestionnaires peuvent tout modifier."
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "Viewers can download the originals"
+msgstr "Les lecteurs peuvent télécharger les originaux"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "Revoke link"
+msgstr "Révoquer le lien"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "Allow downloading the originals"
+msgstr "Autoriser le téléchargement des originaux"
+
+#: ui/templates/photos/ui/partials/album_share_modal.html
+msgid "They keep their EXIF metadata, the place they were taken included."
+msgstr "Ils conservent leurs métadonnées EXIF, lieu de prise de vue compris."
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+#: ui/templates/photos/ui/partials/context_menu.html
+#: ui/templates/photos/ui/partials/selection_bar.html
+#: ui/templates/photos/ui/partials/selection_menu.html
+msgid "Edit date & location"
+msgstr "Modifier la date et le lieu"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Date & time"
+msgstr "Date et heure"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Date and time"
+msgstr "Date et heure"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "capture details mode"
+msgid "Keep"
+msgstr "Garder"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "capture details mode"
+msgid "Shift"
+msgstr "Décaler"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "capture details mode"
+msgid "Set"
+msgstr "Définir"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "capture details mode"
+msgid "From file"
+msgstr "Du fichier"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "time shift"
+msgid "Direction"
+msgstr "Sens"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Later"
+msgstr "Plus tard"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Earlier"
+msgstr "Plus tôt"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Days"
+msgstr "Jours"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "days unit"
+msgid "d"
+msgstr "j"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Hours"
+msgstr "Heures"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "hours unit"
+msgid "h"
+msgstr "h"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Minutes"
+msgstr "Minutes"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "minutes unit"
+msgid "min"
+msgstr "min"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Photos without a date are left as they are."
+msgstr "Les photos sans date restent telles quelles."
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "capture date"
+msgid "Date"
+msgstr "Date"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "capture time"
+msgid "Time"
+msgstr "Heure"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid ""
+"Leave the time empty to keep each photo's own time (noon for photos without "
+"a date)."
+msgstr ""
+"Laissez l’heure vide pour garder l’heure de chaque photo (midi pour les "
+"photos sans date)."
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid ""
+"Use the date the camera wrote in the file, or the one in its name, again."
+msgstr ""
+"Reprendre la date que l’appareil a écrite dans le fichier, ou celle de son "
+"nom."
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "photo place"
+msgid "Location"
+msgstr "Lieu"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgctxt "capture details mode"
+msgid "Remove"
+msgstr "Retirer"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Coordinates"
+msgstr "Coordonnées"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Not a position: paste coordinates or a map link."
+msgstr ""
+"Ce n’est pas une position : collez des coordonnées ou un lien de carte."
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Coordinates, or a link copied from OpenStreetMap or Google Maps."
+msgstr "Des coordonnées, ou un lien copié depuis OpenStreetMap ou Google Maps."
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Check on OpenStreetMap"
+msgstr "Vérifier sur OpenStreetMap"
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "The photos will show no location, whatever their file says."
+msgstr "Les photos n’afficheront aucun lieu, quoi qu’indique leur fichier."
+
+#: ui/templates/photos/ui/partials/capture_details_dialog.html
+msgid "Use the position the camera wrote in the file again."
+msgstr "Reprendre la position que l’appareil a écrite dans le fichier."
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Change name…"
+msgstr "Changer le nom…"
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Add a name…"
+msgstr "Ajouter un nom…"
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Use as contact photo"
+msgstr "Utiliser comme photo du contact"
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Hide from People"
+msgstr "Masquer dans Personnes"
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Show in People"
+msgstr "Afficher dans Personnes"
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Merge with…"
+msgstr "Fusionner avec…"
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Remove name"
+msgstr "Retirer le nom"
+
+#: ui/templates/photos/ui/partials/cluster_menu_rows.html
+msgid "Ungroup"
+msgstr "Dégrouper"
+
+#: ui/templates/photos/ui/partials/context_menu.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "People in this video"
+msgstr "Personnes dans cette vidéo"
+
+#: ui/templates/photos/ui/partials/context_menu.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "People in this photo"
+msgstr "Personnes sur cette photo"
+
+#: ui/templates/photos/ui/partials/context_menu.html
+msgid "Similar photos"
+msgstr "Photos similaires"
+
+#: ui/templates/photos/ui/partials/context_menu.html
+#: ui/templates/photos/ui/partials/selection_bar.html
+#: ui/templates/photos/ui/partials/selection_menu.html
+msgid "Hide from library"
+msgstr "Masquer de la bibliothèque"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#: ui/templates/photos/ui/partials/name_dialog.html
+#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
+msgid "Who is this?"
+msgstr "Qui est-ce ?"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#, python-format
+msgid "Who are these %%(count)s faces?"
+msgstr "Qui sont ces %%(count)s visages ?"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#: ui/templates/photos/ui/partials/name_dialog.html
+msgid "Pick a contact, or type a new name to add one to People."
+msgstr ""
+"Choisissez un contact, ou saisissez un nouveau nom pour l’ajouter aux "
+"personnes."
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#: ui/templates/photos/ui/partials/merge_dialog.html
+#: ui/templates/photos/ui/partials/name_dialog.html
+#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
+#, python-format
+msgid "%%(count)s photo"
+msgstr "%%(count)s photo"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+#: ui/templates/photos/ui/partials/merge_dialog.html
+#: ui/templates/photos/ui/partials/name_dialog.html
+#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
+#, python-format
+msgid "%%(count)s photos"
+msgstr "%%(count)s photos"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+#, python-format
+msgid "Unnamed person with %%(count)s photos"
+msgstr "Personne sans nom, %%(count)s photos"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+#: ui/templates/photos/ui/partials/name_dialog.html
+#: ui/templates/photos/ui/partials/review_card.html
+#, python-format
+msgid "Add “%%(name)s” to People"
+msgstr "Ajouter « %%(name)s » aux personnes"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+#: ui/templates/photos/ui/people.html
+msgid "Not named yet"
+msgstr "Pas encore nommées"
+
+#: ui/templates/photos/ui/partials/face_assign_dialog.html
+msgid "Someone new, no name yet"
+msgstr "Quelqu’un de nouveau, encore sans nom"
+
+#: ui/templates/photos/ui/partials/face_selection_bar.html
+#: ui/templates/photos/ui/partials/silhouette_selection_bar.html
+#, python-format
+msgid "%%(count)s selected"
+msgstr "Sélection : %%(count)s"
+
+#: ui/templates/photos/ui/partials/face_selection_bar.html
+#: ui/templates/photos/ui/partials/silhouette_selection_bar.html
+#, python-format
+msgid "Not %(name)s"
+msgstr "Pas %(name)s"
+
+#: ui/templates/photos/ui/partials/face_selection_bar.html
+msgid "Selected faces"
+msgstr "Visages sélectionnés"
+
+#: ui/templates/photos/ui/partials/face_selection_bar.html
+#: ui/templates/photos/ui/partials/silhouette_selection_bar.html
+msgid "Move to another person"
+msgstr "Déplacer vers une autre personne"
+
+#: ui/templates/photos/ui/partials/face_selection_bar.html
+#: ui/templates/photos/ui/partials/silhouette_selection_bar.html
+msgid "Hide: nobody to name"
+msgstr "Masquer : personne à nommer"
+
+#: ui/templates/photos/ui/partials/face_tile.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "Face"
+msgstr "Visage"
+
+#: ui/templates/photos/ui/partials/face_tile.html
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "Confirmed"
+msgstr "Confirmé"
+
+#: ui/templates/photos/ui/partials/face_tile.html
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Open the photo"
+msgstr "Ouvrir la photo"
+
+#: ui/templates/photos/ui/partials/face_tile.html
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Open the video"
+msgstr "Ouvrir la vidéo"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "No face was found in this video, or it has not been read yet."
+msgstr ""
+"Aucun visage n’a été trouvé dans cette vidéo, ou elle n’a pas encore été "
+"analysée."
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "No face was found in this photo, or it has not been read yet."
+msgstr ""
+"Aucun visage n’a été trouvé sur cette photo, ou elle n’a pas encore été "
+"analysée."
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+#, python-format
+msgid "Play the video from %%(time)s"
+msgstr "Lire la vidéo à partir de %%(time)s"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+#, python-format
+msgid "at %%(time)s"
+msgstr "à %%(time)s"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "Already another face here: both are kept as one person"
+msgstr ""
+"Déjà un autre visage ici : les deux sont gardés comme une seule personne"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+#, python-format
+msgid ""
+"Unnamed person with %%(count)s photos, the same person as another face here"
+msgstr ""
+"Personne sans nom, %%(count)s photos, la même personne qu’un autre visage ici"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "Change person"
+msgstr "Changer de personne"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "Who is it?"
+msgstr "Qui est-ce ?"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "Same person"
+msgstr "Même personne"
+
+#: ui/templates/photos/ui/partials/faces_dialog.html
+msgid "New person"
+msgstr "Nouvelle personne"
+
+#: ui/templates/photos/ui/partials/header_tabs.html
+msgid "Library"
+msgstr "Bibliothèque"
+
+#: ui/templates/photos/ui/partials/header_tabs.html
+msgid "Media type"
+msgstr "Type de média"
+
+#: ui/templates/photos/ui/partials/hidden_faces.html
+#: ui/templates/photos/ui/partials/review_card.html
+#: ui/templates/photos/ui/person_faces.html
+#: ui/templates/photos/ui/person_silhouettes.html
+#, python-format
+msgid "The next %%(count)s come once these are settled."
+msgstr "Encore %%(count)s à venir une fois ceux-ci traités."
+
+#: ui/templates/photos/ui/partials/hidden_faces.html
+msgid "Hidden faces"
+msgstr "Visages masqués"
+
+#: ui/templates/photos/ui/partials/map_photos.html
+#, python-format
+msgid ""
+"<span class=\"font-medium text-base-content\" data-testid=\"map-photos-"
+"count\">%(count)s</span> in this area"
+msgstr ""
+"<span class=\"font-medium text-base-content\" data-testid=\"map-photos-"
+"count\">%(count)s</span> dans cette zone"
+
+#: ui/templates/photos/ui/partials/map_photos.html
+msgid "Nothing was taken in this area. Move the map or zoom out to see more."
+msgstr ""
+"Rien n’a été pris dans cette zone. Déplacez la carte ou dézoomez pour en "
+"voir plus."
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+#: ui/templates/photos/ui/people.html
+msgid "Merge people"
+msgstr "Fusionner des personnes"
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+msgid ""
+"Pick the people who are the same person as this one. Their photos move here, "
+"and the people you pick disappear from the list."
+msgstr ""
+"Choisissez les personnes qui sont la même que celle-ci. Leurs photos sont "
+"déplacées ici, et les personnes choisies disparaissent de la liste."
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+msgid "This person"
+msgstr "Cette personne"
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+#, python-format
+msgid "Merge %%(count)s people"
+msgstr "Fusionner %%(count)s personnes"
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+msgid "Search by name"
+msgstr "Rechercher par nom"
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+msgid "There is no one else to merge with."
+msgstr "Il n’y a personne d’autre avec qui fusionner."
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+msgid "No one by that name."
+msgstr "Personne ne porte ce nom."
+
+#: ui/templates/photos/ui/partials/merge_dialog.html
+msgid "These are named after different people. Which name should stay?"
+msgstr "Elles portent des noms de personnes différentes. Quel nom garder ?"
+
+#: ui/templates/photos/ui/partials/name_dialog.html
+msgid "Change name"
+msgstr "Changer le nom"
+
+#: ui/templates/photos/ui/partials/name_dialog.html
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "No contact yet: type a name to add one to People."
+msgstr ""
+"Aucune personne pour l’instant : saisissez un nom pour l’ajouter à Personnes."
+
+#: ui/templates/photos/ui/partials/people_pick_bar.html
+#, python-format
+msgid "%%(count)s picked"
+msgstr "Choisies : %%(count)s"
+
+#: ui/templates/photos/ui/partials/people_pick_bar.html
+msgid "Pick who is the same person"
+msgstr "Choisissez qui est la même personne"
+
+#: ui/templates/photos/ui/partials/people_pick_bar.html
+msgid "People picked to merge"
+msgstr "Personnes choisies pour la fusion"
+
+#: ui/templates/photos/ui/partials/people_pick_bar.html
+msgid "Stop picking"
+msgstr "Arrêter la sélection"
+
+#: ui/templates/photos/ui/partials/person_card.html
+#, python-format
+msgid "%(counter)s photo"
+msgid_plural "%(counter)s photos"
+msgstr[0] "%(counter)s photo"
+msgstr[1] "%(counter)s de photos"
+msgstr[2] "%(counter)s photos"
+
+#: ui/templates/photos/ui/partials/person_card.html
+#, python-format
+msgid "%(name)s, %(photos)s"
+msgstr "%(name)s, %(photos)s"
+
+#: ui/templates/photos/ui/partials/person_card.html
+msgid "Add a name"
+msgstr "Ajouter un nom"
+
+#: ui/templates/photos/ui/partials/person_card.html
+#, python-format
+msgid "Pick %(name)s"
+msgstr "Choisir %(name)s"
+
+#: ui/templates/photos/ui/partials/person_card.html
+msgid "Pick this person"
+msgstr "Choisir cette personne"
+
+#: ui/templates/photos/ui/partials/person_header.html
+#, python-format
+msgid "%%(count)s silhouette"
+msgstr "%%(count)s silhouette"
+
+#: ui/templates/photos/ui/partials/person_header.html
+#, python-format
+msgid "%%(count)s silhouettes"
+msgstr "%%(count)s silhouettes"
+
+#: ui/templates/photos/ui/partials/person_header.html
+#, python-format
+msgid "%(counter)s silhouette"
+msgid_plural "%(counter)s silhouettes"
+msgstr[0] "%(counter)s silhouette"
+msgstr[1] "%(counter)s de silhouettes"
+msgstr[2] "%(counter)s silhouettes"
+
+#: ui/templates/photos/ui/partials/person_header.html
+#, python-format
+msgid "%%(count)s face"
+msgstr "%%(count)s visage"
+
+#: ui/templates/photos/ui/partials/person_header.html
+#, python-format
+msgid "%%(count)s faces"
+msgstr "%%(count)s visages"
+
+#: ui/templates/photos/ui/partials/person_header.html
+#, python-format
+msgid "%(counter)s face"
+msgid_plural "%(counter)s faces"
+msgstr[0] "%(counter)s visage"
+msgstr[1] "%(counter)s de visages"
+msgstr[2] "%(counter)s visages"
+
+#: ui/templates/photos/ui/partials/person_header.html
+msgid "Which faces"
+msgstr "Quels visages"
+
+#: ui/templates/photos/ui/partials/person_photos_section.html
+#, python-format
+msgid "See all %(counter)s photo in Photos"
+msgid_plural "See all %(counter)s photos in Photos"
+msgstr[0] "Voir %(counter)s photo dans Photos"
+msgstr[1] "Voir les %(counter)s de photos dans Photos"
+msgstr[2] "Voir les %(counter)s photos dans Photos"
+
+#: ui/templates/photos/ui/partials/photo_tile.html
+#, python-format
+msgid "Select %(name)s"
+msgstr "Sélectionner %(name)s"
+
+#: ui/templates/photos/ui/partials/photo_tile.html
+#, python-format
+msgid "More actions for %(name)s"
+msgstr "Plus d’actions pour %(name)s"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+#, python-format
+msgid "Show %%(name)s again"
+msgstr "Réafficher %%(name)s"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Tile shape"
+msgstr "Forme des vignettes"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Square"
+msgstr "Carrée"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Original proportions"
+msgstr "Proportions d’origine"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Always show badges"
+msgstr "Toujours afficher les badges"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Play videos on hover"
+msgstr "Lire les vidéos au survol"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Open Photos on"
+msgstr "Ouvrir Photos sur"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Library the timeline opens on"
+msgstr "Bibliothèque à l’ouverture de la chronologie"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Media type the timeline opens on"
+msgstr "Type de média à l’ouverture de la chronologie"
+
+#: ui/templates/photos/ui/partials/preferences_content.html ui/views.py
+msgid "Photos and videos"
+msgstr "Photos et vidéos"
+
+#: ui/templates/photos/ui/partials/preferences_content.html ui/views.py
+msgid "Photos only"
+msgstr "Photos seulement"
+
+#: ui/templates/photos/ui/partials/preferences_content.html ui/views.py
+msgid "Videos only"
+msgstr "Vidéos seulement"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Import folder"
+msgstr "Dossier d’import"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Change the import folder"
+msgstr "Changer le dossier d’import"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Sort imports into year/month"
+msgstr "Classer les imports par année/mois"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Tag photos automatically"
+msgstr "Étiqueter les photos automatiquement"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Blur sensitive photos"
+msgstr "Flouter les photos sensibles"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Unblur on hover"
+msgstr "Déflouter au survol"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Show in the viewer without asking"
+msgstr "Afficher dans la visionneuse sans demander"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Show locations on a map"
+msgstr "Afficher les lieux sur une carte"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+#, python-format
+msgid ""
+"In a photo's properties and on the Map page. The map is loaded from "
+"%(server)s, which then receives the location of each photo you open and the "
+"areas you browse."
+msgstr ""
+"Dans les propriétés d’une photo et sur la page Carte. La carte est chargée "
+"depuis %(server)s, qui reçoit alors le lieu de chaque photo que vous ouvrez "
+"et les zones que vous parcourez."
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Show Hidden in the sidebar"
+msgstr "Afficher Masquées dans la barre latérale"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Show in the library again"
+msgstr "Réafficher dans la bibliothèque"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Hide a folder…"
+msgstr "Masquer un dossier…"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid ""
+"Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to back "
+"up your phone here"
+msgstr ""
+"Indiquez cette adresse à une application de synchronisation WebDAV "
+"(PhotoSync, FolderSync, ...) pour sauvegarder votre téléphone ici"
+
+#: ui/templates/photos/ui/partials/preferences_content.html
+msgid "Phone backup (WebDAV)"
+msgstr "Sauvegarde du téléphone (WebDAV)"
+
+#. Translators: Django date format of when a photo was taken, in its properties, e.g. "Nov. 13, 2026, 4:30 p.m.".
+#: ui/templates/photos/ui/partials/properties_section.html
+msgctxt "photo taken date format"
+msgid "N j, Y, P"
+msgstr "j N Y, H:i"
+
+#: ui/templates/photos/ui/partials/properties_section.html
+#, python-format
+msgid "Taken %(date)s"
+msgstr "Prise le %(date)s"
+
+#: ui/templates/photos/ui/partials/properties_section.html
+msgid "Open in OpenStreetMap"
+msgstr "Ouvrir dans OpenStreetMap"
+
+#: ui/templates/photos/ui/partials/properties_section.html
+msgid "See nearby photos"
+msgstr "Voir les photos à proximité"
+
+#: ui/templates/photos/ui/partials/properties_section.html
+msgid "Hide the map"
+msgstr "Masquer la carte"
+
+#: ui/templates/photos/ui/partials/properties_section.html
+msgid "Show on a map"
+msgstr "Afficher sur une carte"
+
+#: ui/templates/photos/ui/partials/properties_section.html
+#, python-format
+msgid ""
+"The map is loaded from %(server)s, which then receives the location of each "
+"photo you open."
+msgstr ""
+"La carte est chargée depuis %(server)s, qui reçoit alors le lieu de chaque "
+"photo que vous ouvrez."
+
+#: ui/templates/photos/ui/partials/review_card.html
+#, python-format
+msgid "%%(count)s left out"
+msgstr "Écartés : %%(count)s"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Put back"
+msgstr "Remettre"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Not them: leave out"
+msgstr "Pas cette personne : écarter"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Left out, put back"
+msgstr "Écarté, remettre"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Person, leave out"
+msgstr "Personne, écarter"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Face, leave out"
+msgstr "Visage, écarter"
+
+#: ui/templates/photos/ui/partials/review_card.html
+#, python-format
+msgid ""
+"%%(count)s more faces of this group, closer to the rest, go with the answer."
+msgstr ""
+"%%(count)s autres visages de ce groupe, plus proches du reste, suivront la "
+"réponse."
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Someone else? Type a name"
+msgstr "Quelqu’un d’autre ? Saisissez un nom"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Who is this? Type a name"
+msgstr "Qui est-ce ? Saisissez un nom"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Nobody to name: leave this person out of People"
+msgstr "Personne à nommer : retirer cette personne des personnes"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Nobody to name: hide these people"
+msgstr "Personne à nommer : masquer ces personnes"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Nobody to name: hide these faces"
+msgstr "Personne à nommer : masquer ces visages"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "pick the contact"
+msgstr "choisir le contact"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "show contacts"
+msgstr "afficher les contacts"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "See the photos in a new tab"
+msgstr "Voir les photos dans un nouvel onglet"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgid "Contacts"
+msgstr "Contacts"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgctxt "keyboard hint"
+msgid "contacts"
+msgstr "contacts"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgctxt "keyboard hint"
+msgid "next group"
+msgstr "groupe suivant"
+
+#: ui/templates/photos/ui/partials/review_card.html
+msgctxt "keyboard hint"
+msgid "hide"
+msgstr "masquer"
+
+#: ui/templates/photos/ui/partials/selection_bar.html
+msgid "Selected photos"
+msgstr "Photos sélectionnées"
+
+#: ui/templates/photos/ui/partials/selection_bar.html
+msgid "Select all (Ctrl+A)"
+msgstr "Tout sélectionner (Ctrl+A)"
+
+#: ui/templates/photos/ui/partials/selection_bar.html
+msgid "Edit date and location"
+msgstr "Modifier la date et le lieu"
+
+#: ui/templates/photos/ui/partials/sidebar_nav.html ui/views.py
+msgctxt "photos library"
+msgid "Timeline"
+msgstr "Chronologie"
+
+#: ui/templates/photos/ui/partials/sidebar_nav.html ui/views.py
+msgctxt "photos view"
+msgid "Hidden"
+msgstr "Masquées"
+
+#: ui/templates/photos/ui/partials/sidebar_nav.html ui/views.py
+msgid "Map"
+msgstr "Carte"
+
+#: ui/templates/photos/ui/partials/sidebar_nav.html
+msgid "Albums"
+msgstr "Albums"
+
+#: ui/templates/photos/ui/partials/sidebar_nav.html
+msgid "Jump to"
+msgstr "Aller à"
+
+#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
+#, python-format
+msgid "Who are these %%(count)s people?"
+msgstr "Qui sont ces %%(count)s personnes ?"
+
+#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
+msgid "Pick someone whose face is in your photos."
+msgstr "Choisissez quelqu’un dont le visage figure dans vos photos."
+
+#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
+msgid "Nobody with a face in your photos has this name."
+msgstr "Personne ayant un visage dans vos photos ne porte ce nom."
+
+#: ui/templates/photos/ui/partials/silhouette_selection_bar.html
+msgid "Selected silhouettes"
+msgstr "Silhouettes sélectionnées"
+
+#. Translators: Django date format of a month header in the photo timeline, e.g. "November 2026".
+#: ui/templates/photos/ui/partials/timeline_page.html
+msgctxt "month header date format"
+msgid "F Y"
+msgstr "F Y"
+
+#. Translators: Django date format of a day header in the photo timeline, e.g. "Fri 13 Nov".
+#: ui/templates/photos/ui/partials/timeline_page.html
+msgctxt "day header date format"
+msgid "D j M"
+msgstr "D j M"
+
+#. Translators: Django date format of a day header's tooltip in the photo timeline, e.g. "Friday 13 November 2026".
+#: ui/templates/photos/ui/partials/timeline_page.html
+msgctxt "day header full date format"
+msgid "l j F Y"
+msgstr "l j F Y"
+
+#: ui/templates/photos/ui/partials/timeline_page.html ui/views.py
+msgid "Undated"
+msgstr "Sans date"
+
+#: ui/templates/photos/ui/partials/timeline_page.html
+msgid "No capture date in these files. Most recent upload first."
+msgstr ""
+"Aucune date de prise de vue dans ces fichiers. Les plus récemment envoyés "
+"d’abord."
+
+#: ui/templates/photos/ui/people.html
+msgctxt "people page title"
+msgid "Hidden"
+msgstr "Masqués"
+
+#: ui/templates/photos/ui/people.html
+#, python-format
+msgid "%(counter)s person"
+msgid_plural "%(counter)s people"
+msgstr[0] "%(counter)s personne"
+msgstr[1] "%(counter)s de personnes"
+msgstr[2] "%(counter)s personnes"
+
+#: ui/templates/photos/ui/people.html
+#, python-format
+msgid "Looking for faces: %%(analyzed)s of %%(total)s photos and videos"
+msgstr "Recherche de visages : %%(analyzed)s sur %%(total)s photos et vidéos"
+
+#: ui/templates/photos/ui/people.html
+msgid "Photos are read for faces in the background, a few at a time."
+msgstr ""
+"Les photos sont analysées en arrière-plan, quelques-unes à la fois, pour y "
+"trouver des visages."
+
+#: ui/templates/photos/ui/people.html
+#, python-format
+msgid "Looking for faces: %(analyzed)s of %(total)s photos and videos"
+msgstr "Recherche de visages : %(analyzed)s sur %(total)s photos et vidéos"
+
+#: ui/templates/photos/ui/people.html
+msgid "Pick several people who are the same person, then merge them"
+msgstr "Choisissez plusieurs personnes qui sont la même, puis fusionnez-les"
+
+#: ui/templates/photos/ui/people.html
+msgid "Name people and check faces one after the other"
+msgstr "Nommer les personnes et vérifier les visages l’un après l’autre"
+
+#: ui/templates/photos/ui/people.html
+msgctxt "faces review button"
+msgid "Review"
+msgstr "Vérifier"
+
+#: ui/templates/photos/ui/people.html
+#, python-format
+msgid "%(counter)s person to name"
+msgid_plural "%(counter)s people to name"
+msgstr[0] "%(counter)s personne à nommer"
+msgstr[1] "%(counter)s de personnes à nommer"
+msgstr[2] "%(counter)s personnes à nommer"
+
+#: ui/templates/photos/ui/people.html
+msgid "Face grouping options"
+msgstr "Options du regroupement des visages"
+
+#: ui/templates/photos/ui/people.html
+msgid "Hidden people and faces"
+msgstr "Personnes et visages masqués"
+
+#: ui/templates/photos/ui/people.html
+msgid "Turn off face grouping"
+msgstr "Désactiver le regroupement des visages"
+
+#: ui/templates/photos/ui/people.html
+msgid "Find the people in your photos"
+msgstr "Retrouvez les personnes de vos photos"
+
+#: ui/templates/photos/ui/people.html
+msgid ""
+"Turn this on and Workspace looks for faces in your photos, then groups the "
+"ones that look like the same person, so every photo of someone is one click "
+"away."
+msgstr ""
+"Activez cette option et Workspace recherche les visages dans vos photos, "
+"puis regroupe ceux qui semblent appartenir à la même personne : toutes les "
+"photos de quelqu’un sont alors à portée de clic."
+
+#: ui/templates/photos/ui/people.html
+msgid ""
+"<strong>What is computed:</strong> where each face is in a photo, a small "
+"picture of it, and a numeric description of its features that lets faces be "
+"compared. That description is biometric data."
+msgstr ""
+"<strong>Ce qui est calculé :</strong> la position de chaque visage dans une "
+"photo, une petite image de celui-ci et une description numérique de ses "
+"traits qui permet de comparer les visages. Cette description est une donnée "
+"biométrique."
+
+#: ui/templates/photos/ui/people.html
+msgid ""
+"<strong>Where:</strong> on this server only. No photo and no face is sent "
+"anywhere."
+msgstr ""
+"<strong>Où :</strong> sur ce serveur uniquement. Aucune photo ni aucun "
+"visage n’est envoyé ailleurs."
+
+#: ui/templates/photos/ui/people.html
+msgid ""
+"<strong>Which photos:</strong> your own photos in Files. Group folders and "
+"photos shared with you are left out."
+msgstr ""
+"<strong>Quelles photos :</strong> vos propres photos dans Fichiers. Les "
+"dossiers de groupe et les photos partagées avec vous sont exclus."
+
+#: ui/templates/photos/ui/people.html
+msgid ""
+"<strong>Turning it off</strong> deletes every face, every group and every "
+"face picture right away. Your photos are not touched."
+msgstr ""
+"<strong>La désactivation</strong> supprime immédiatement tous les visages, "
+"tous les groupes et toutes les images de visages. Vos photos ne sont pas "
+"modifiées."
+
+#: ui/templates/photos/ui/people.html
+msgid "Turn on face grouping"
+msgstr "Activer le regroupement des visages"
+
+#: ui/templates/photos/ui/people.html
+msgid "Named people"
+msgstr "Personnes nommées"
+
+#: ui/templates/photos/ui/people.html
+msgid "No one is hidden"
+msgstr "Personne n’est masqué"
+
+#: ui/templates/photos/ui/people.html
+msgid "People and faces you hide show up here."
+msgstr "Les personnes et visages que vous masquez apparaissent ici."
+
+#: ui/templates/photos/ui/people.html
+msgid "People show up here as your photos are read for faces."
+msgstr ""
+"Les personnes apparaissent ici à mesure que les visages de vos photos sont "
+"analysés."
+
+#: ui/templates/photos/ui/people.html
+msgid "No face was found in your photos so far."
+msgstr "Aucun visage n’a été trouvé dans vos photos pour l’instant."
+
+#: ui/templates/photos/ui/people_review.html
+#, python-format
+msgid "%%(count)s more waiting"
+msgstr "Encore %%(count)s en attente"
+
+#: ui/templates/photos/ui/people_review.html
+msgid "That’s all for now"
+msgstr "C’est tout pour l’instant"
+
+#: ui/templates/photos/ui/people_review.html
+msgid ""
+"They come once these are settled. Look again to bring in the faces read "
+"since this page opened."
+msgstr ""
+"Ils arrivent une fois ceux-ci traités. Relancez la recherche pour ajouter "
+"les visages analysés depuis l’ouverture de cette page."
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Faces read since this page opened show up when you look again."
+msgstr ""
+"Les visages analysés depuis l’ouverture de cette page apparaissent quand "
+"vous relancez la recherche."
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Looking…"
+msgstr "Recherche…"
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Look for new faces"
+msgstr "Chercher de nouveaux visages"
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Look for new faces to check"
+msgstr "Chercher de nouveaux visages à vérifier"
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Back to People"
+msgstr "Retour aux personnes"
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Review people"
+msgstr "Vérifier les personnes"
+
+#: ui/templates/photos/ui/people_review.html
+msgid ""
+"People to name: groups of faces nobody is named for yet. Faces to check: "
+"faces under a named person, or in no group, that may be someone else."
+msgstr ""
+"Personnes à nommer : groupes de visages auxquels aucun nom n’est encore "
+"associé. Visages à vérifier : visages rattachés à une personne nommée, ou à "
+"aucun groupe, qui pourraient être quelqu’un d’autre."
+
+#: ui/templates/photos/ui/people_review.html
+msgid ""
+"Say who each group is. Tap a face that isn't them to leave it out: it comes "
+"back in a group of its own."
+msgstr ""
+"Indiquez qui est chaque groupe. Touchez un visage qui n’en fait pas partie "
+"pour l’écarter : il revient dans un groupe à part."
+
+#: ui/templates/photos/ui/people_review.html
+msgid ""
+"Say who each group is. Click a face that isn't them to leave it out: it "
+"comes back in a group of its own."
+msgstr ""
+"Indiquez qui est chaque groupe. Cliquez sur un visage qui n’en fait pas "
+"partie pour l’écarter : il revient dans un groupe à part."
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Everyone is sorted out"
+msgstr "Tout le monde est identifié"
+
+#: ui/templates/photos/ui/people_review.html
+msgid ""
+"New people and faces to check show up here as more photos are read for faces."
+msgstr ""
+"Les nouvelles personnes et les visages à vérifier apparaissent ici à mesure "
+"que d’autres photos sont analysées."
+
+#: ui/templates/photos/ui/people_review.html
+msgid "Look again"
+msgstr "Relancer la recherche"
+
+#: ui/templates/photos/ui/person_faces.html
+msgid ""
+"The faces least like the others come first. Pick the ones that are someone "
+"else, then say who they are or take them out."
+msgstr ""
+"Les visages les moins ressemblants aux autres viennent en premier. "
+"Choisissez ceux qui sont quelqu’un d’autre, puis indiquez de qui il s’agit "
+"ou retirez-les."
+
+#: ui/templates/photos/ui/person_faces.html
+msgid "No face here"
+msgstr "Aucun visage ici"
+
+#: ui/templates/photos/ui/person_faces.html
+msgid "No face of this person matches this view."
+msgstr "Aucun visage de cette personne ne correspond à cette vue."
+
+#: ui/templates/photos/ui/person_silhouettes.html
+#, python-format
+msgid ""
+"The people you said are %(name)s in photos where their face does not show. "
+"Pick the ones that are someone else."
+msgstr ""
+"Les personnes que vous avez identifiées comme %(name)s sur des photos où "
+"leur visage n’apparaît pas. Choisissez celles qui sont quelqu’un d’autre."
+
+#: ui/templates/photos/ui/person_silhouettes.html
+msgid "No silhouette here"
+msgstr "Aucune silhouette ici"
+
+#: ui/templates/photos/ui/person_silhouettes.html
+#, python-format
+msgid "Nobody seen without their face is %(name)s anymore."
+msgstr "Plus personne vu sans son visage n’est identifié comme %(name)s."
+
+#: ui/templates/photos/ui/shared_album.html
+msgid "Shared album"
+msgstr "Album partagé"
+
+#: ui/templates/photos/ui/shared_album.html
+msgid "Download all"
+msgstr "Tout télécharger"
+
+#: ui/templates/photos/ui/shared_album.html
+msgid "Back to the album"
+msgstr "Retour à l’album"
+
+#: ui/templates/photos/ui/shared_album.html
+msgid "No preview for this file."
+msgstr "Aucun aperçu pour ce fichier."
+
+#: ui/templates/photos/ui/shared_album.html
+msgid "Previous photo"
+msgstr "Photo précédente"
+
+#: ui/templates/photos/ui/shared_album.html
+msgid "Next photo"
+msgstr "Photo suivante"
+
+#: ui/templates/photos/ui/shared_album.html
+msgid "This album is empty."
+msgstr "Cet album est vide."
+
+#: ui/views.py
+msgctxt "media type"
+msgid "All"
+msgstr "Tout"
+
+#: ui/views.py
+msgctxt "photos library"
+msgid "Mine"
+msgstr "Les miennes"
+
+#: ui/views.py
+msgctxt "photos library"
+msgid "All"
+msgstr "Toutes"
+
+#. Translators: Django date format of a day in an album's date range, e.g. "14 Jul 2024".
+#: ui/views.py
+msgctxt "album date range format"
+msgid "j M Y"
+msgstr "j M Y"
+
+#. Translators: Django date format of the first day of an album's date
+#. range within one year, e.g. "14 Jul" in "14 Jul - 2 Aug 2024".
+#: ui/views.py
+msgctxt "album date range start format"
+msgid "j M"
+msgstr "j M"
+
+#: ui/views.py
+#, python-format
+msgid "%(start)s - %(end)s"
+msgstr "%(start)s - %(end)s"
+
+#: ui/views.py
+#, python-format
+msgid "%(count)s video"
+msgid_plural "%(count)s videos"
+msgstr[0] "%(count)s vidéo"
+msgstr[1] "%(count)s de vidéos"
+msgstr[2] "%(count)s vidéos"
+
+#: ui/views.py
+#, python-format
+msgid "%(count)s photo"
+msgid_plural "%(count)s photos"
+msgstr[0] "%(count)s photo"
+msgstr[1] "%(count)s de photos"
+msgstr[2] "%(count)s photos"
+
+#: ui/views.py
+msgid "My photos"
+msgstr "Mes photos"
+
+#: ui/views.py
+msgid "Not analyzed yet"
+msgstr "Pas encore analysée"
+
+#: ui/views.py
+msgid ""
+"This video has not been analyzed yet. Similar photos show up once it has "
+"been, usually within the hour."
+msgstr ""
+"Cette vidéo n’a pas encore été analysée. Les photos similaires apparaîtront "
+"ensuite, en général dans l’heure."
+
+#: ui/views.py
+msgid ""
+"This photo has not been analyzed yet. Similar photos show up once it has "
+"been, usually within the hour."
+msgstr ""
+"Cette photo n’a pas encore été analysée. Les photos similaires apparaîtront "
+"ensuite, en général dans l’heure."
+
+#: ui/views.py
+msgid "No similar photo"
+msgstr "Aucune photo similaire"
+
+#: ui/views.py
+msgid "Nothing in this library looks like this video."
+msgstr "Rien dans cette bibliothèque ne ressemble à cette vidéo."
+
+#: ui/views.py
+msgid "Nothing in this library looks like this photo."
+msgstr "Rien dans cette bibliothèque ne ressemble à cette photo."
+
+#: ui/views.py
+#, python-format
+msgid "Similar to %(name)s"
+msgstr "Similaires à %(name)s"
+
+#: ui/views.py
+msgid "The search could not run right now. Try again in a moment."
+msgstr ""
+"La recherche n’a pas pu s’exécuter pour le moment. Réessayez dans un instant."
+
+#: ui/views.py
+#, python-format
+msgid "“%(query)s”"
+msgstr "« %(query)s »"
+
+#: ui/views.py
+msgid "No match"
+msgstr "Aucun résultat"
+
+#: ui/views.py
+msgid ""
+"No photo or video in this library matches this description. Describe what it "
+"shows: a place, an object, a scene."
+msgstr ""
+"Aucune photo ni vidéo de cette bibliothèque ne correspond à cette "
+"description. Décrivez ce qu’elle montre : un lieu, un objet, une scène."
+
+#: ui/views.py
+msgid "Near-duplicates"
+msgstr "Quasi-doublons"
+
+#: ui/views.py
+msgid "Almost the same shot."
+msgstr "Presque la même prise de vue."
+
+#: ui/views.py
+msgctxt "photos ranking heading"
+msgid "Similar"
+msgstr "Similaires"
+
+#: ui/views.py
+msgid "Unnamed person"
+msgstr "Personne sans nom"
+
+#: ui/views.py
+#, python-format
+msgid "%(count)s person to name"
+msgid_plural "%(count)s people to name"
+msgstr[0] "%(count)s personne à nommer"
+msgstr[1] "%(count)s de personnes à nommer"
+msgstr[2] "%(count)s personnes à nommer"
+
+#: ui/views.py
+#, python-format
+msgid "%(count)s to check"
+msgid_plural "%(count)s to check"
+msgstr[0] "%(count)s à vérifier"
+msgstr[1] "%(count)s à vérifier"
+msgstr[2] "%(count)s à vérifier"
+
+#: ui/views.py
+msgid "Faces"
+msgstr "Visages"
+
+#: ui/views.py
+msgid "Silhouettes"
+msgstr "Silhouettes"
+
+#: ui/views.py
+msgctxt "faces"
+msgid "All"
+msgstr "Tous"
+
+#: ui/views.py
+msgctxt "faces"
+msgid "Not confirmed"
+msgstr "Non confirmés"
+
+#: ui/views.py
+msgctxt "faces"
+msgid "Confirmed"
+msgstr "Confirmés"
+
+#: views/album_files.py views/albums.py views/hidden.py
+#, python-format
+msgid "Too many files (max %(max)s)."
+msgstr "Trop de fichiers (%(max)s au maximum)."
+
+#: views/album_links.py
+msgid "This link has expired."
+msgstr "Ce lien a expiré."
+
+#: views/album_sharing.py
+msgid "The expiry must be in the future."
+msgstr "L’expiration doit être dans le futur."
+
+#: views/album_sharing.py
+msgid "The owner already holds the album."
+msgstr "Le propriétaire détient déjà l’album."
+
+#: views/albums.py
+msgid "One or more files are not photos you can open."
+msgstr ""
+"Un ou plusieurs fichiers ne sont pas des photos que vous pouvez ouvrir."
+
+#: views/albums.py
+msgid "The cover must be a photo of the album."
+msgstr "La couverture doit être une photo de l’album."
+
+#: views/albums.py
+msgid "Only photos of the album can be moved, next to another."
+msgstr ""
+"Seules les photos de l’album peuvent être déplacées, à côté d’une autre."
+
+#: views/appearances.py views/faces.py
+msgid "Too late to undo."
+msgstr "Trop tard pour annuler."
+
+#: views/capture_details.py
+msgid "Nothing to change."
+msgstr "Rien à modifier."
+
+#: views/capture_details.py
+msgid "A shift needs a number of minutes other than 0."
+msgstr "Un décalage doit compter un nombre de minutes différent de 0."
+
+#: views/capture_details.py
+msgid "One or more photos not found."
+msgstr "Une ou plusieurs photos sont introuvables."
+
+#: views/capture_details.py
+msgid "One or more photos cannot be corrected."
+msgstr "Une ou plusieurs photos ne peuvent pas être corrigées."
+
+#: views/faces.py
+msgid "Another face of this photo is already in that group."
+msgstr "Un autre visage de cette photo est déjà dans ce groupe."
+
+#: views/faces.py
+msgid "The cover must be one of the group's faces."
+msgstr "La couverture doit être l’un des visages du groupe."
+
+#: views/faces.py
+msgid "This person has no face picture to use yet."
+msgstr "Cette personne n’a pas encore de photo de visage à utiliser."
+
+#: views/faces.py
+msgid "Name this group after a contact first."
+msgstr "Associez d’abord ce groupe à une personne."
+
+#: views/faces.py
+msgid "No such contact."
+msgstr "Cette personne n’existe pas."
+
+#: views/faces.py
+msgid "No such face."
+msgstr "Ce visage n’existe pas."
+
+#: views/faces.py
+msgid "These are named after different people: pick the name to keep."
+msgstr ""
+"Ces groupes portent les noms de personnes différentes : choisissez le nom à "
+"garder."
+
+#: views/faces.py
+msgid "The face is in no group."
+msgstr "Le visage n’est dans aucun groupe."
+
+#: views/faces.py
+msgid "The face has left that group since."
+msgstr "Le visage a quitté ce groupe entre-temps."
+
+#: views/faces.py
+msgid "No such cluster."
+msgstr "Ce groupe n’existe pas."
+
+#: views/faces.py
+msgid "The face is in no cluster."
+msgstr "Le visage n’est dans aucun groupe."
+
+#: views/hidden.py
+msgid "Malformed UUID in files."
+msgstr "UUID mal formé dans « files »."
+
+#: views/hidden.py
+msgid "files must be a non-empty list."
+msgstr "« files » doit être une liste non vide."
+
+#: views/hidden.py
+msgid "One or more files are not photos or folders you can hide."
+msgstr ""
+"Un ou plusieurs fichiers ne sont pas des photos ou des dossiers que vous "
+"pouvez masquer."
+
+#: views/import_folder.py
+msgid "Choose a folder you can add files to."
+msgstr "Choisissez un dossier dans lequel vous pouvez ajouter des fichiers."
+
+#: views/import_folder.py
+#, python-format
+msgid "Send a list of 1 to %(max)s file uuids."
+msgstr "Envoyez une liste de 1 à %(max)s UUID de fichiers."
+
+#: views/import_folder.py
+msgid "Every item must be a file uuid."
+msgstr "Chaque élément doit être un UUID de fichier."
+
+#: views/library_map.py
+msgid "Unknown media type."
+msgstr "Type de média inconnu."

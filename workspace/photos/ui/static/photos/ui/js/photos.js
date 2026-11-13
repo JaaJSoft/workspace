@@ -1388,9 +1388,10 @@ window.photosApp = function photosApp() {
       return photosCountLabel(count);
     },
 
-    // "3 selected", for the selection bar and menu.
+    // "3 selected", for the selection bar and menu. The context keeps it apart
+    // from Files' msgid: in French the word agrees with "photo".
     selectedLabel(count) {
-      return interpolate(ngettext('%(count)s selected', '%(count)s selected', count), { count }, true);
+      return interpolate(npgettext('selected photos', '%(count)s selected', '%(count)s selected', count), { count }, true);
     },
 
     albumAllows(actionId) {

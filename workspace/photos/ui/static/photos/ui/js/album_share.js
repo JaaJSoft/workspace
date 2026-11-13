@@ -4,9 +4,17 @@
 // modal; a link is created or revoked at once.
 
 const ALBUM_ROLES = [
-  { value: 'viewer', label: 'Viewer', hint: 'Browses the album' },
-  { value: 'contributor', label: 'Contributor', hint: 'Also adds their own photos, and removes them' },
-  { value: 'manager', label: 'Manager', hint: 'Also edits the album, its members and its links' },
+  { value: 'viewer', label: pgettext('album role', 'Viewer'), hint: gettext('Browses the album') },
+  {
+    value: 'contributor',
+    label: pgettext('album role', 'Contributor'),
+    hint: gettext('Also adds their own photos, and removes them'),
+  },
+  {
+    value: 'manager',
+    label: pgettext('album role', 'Manager'),
+    hint: gettext('Also edits the album, its members and its links'),
+  },
 ];
 
 // A member is a user, a group or a project, and their ids overlap: every map
@@ -209,8 +217,8 @@ window.albumShareModal = function albumShareModal() {
     },
 
     entrySubtitle(entry) {
-      if (entry.type === 'project') return 'Project';
-      if (entry.type === 'group') return 'Group';
+      if (entry.type === 'project') return gettext('Project');
+      if (entry.type === 'group') return gettext('Group');
       return `${entry.first_name || ''} ${entry.last_name || ''}`.trim();
     },
 
@@ -249,9 +257,13 @@ window.albumShareModal = function albumShareModal() {
       }
       this.saving = false;
       if (failed) {
-        window.AppAlert.error(`Some changes failed (${failed} error${failed > 1 ? 's' : ''})`);
+        window.AppAlert.error(interpolate(ngettext(
+          'Some changes failed (%(count)s error)',
+          'Some changes failed (%(count)s errors)',
+          failed,
+        ), { count: failed }, true));
       } else {
-        window.AppAlert.success('Sharing updated');
+        window.AppAlert.success(gettext('Sharing updated'));
       }
       window.dispatchEvent(new CustomEvent('album-shares-changed', { detail: { uuid: this.albumUuid } }));
       this.closeModal();
@@ -307,7 +319,7 @@ window.albumShareModal = function albumShareModal() {
         this.closeLinkForm();
         this.copyLink(link.url);
       } catch (_) {
-        window.AppAlert.error('Failed to create the link');
+        window.AppAlert.error(gettext('Failed to create the link'));
       }
       this.creatingLink = false;
     },
@@ -321,24 +333,27 @@ window.albumShareModal = function albumShareModal() {
         if (!response.ok && response.status !== 404) throw new Error(String(response.status));
         this.links = this.links.filter((link) => link.uuid !== linkUuid);
       } catch (_) {
-        window.AppAlert.error('Failed to revoke the link');
+        window.AppAlert.error(gettext('Failed to revoke the link'));
       }
     },
 
     copyLink(url) {
       navigator.clipboard.writeText(url)
-        .then(() => window.AppAlert.success('Link copied to clipboard', { duration: 2000 }))
+        .then(() => window.AppAlert.success(gettext('Link copied to clipboard'), { duration: 2000 }))
         .catch(() => {});
     },
 
     formatExpiry(expiresAt) {
-      if (!expiresAt) return 'Permanent';
+      if (!expiresAt) return gettext('Permanent');
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      return `Until ${new Date(expiresAt).toLocaleDateString(undefined, { timeZone: tz })}`;
+      const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+      const date = new Date(expiresAt).toLocaleDateString(locale, { timeZone: tz });
+      return interpolate(gettext('Until %(date)s'), { date }, true);
     },
 
     viewsLabel(count) {
-      return count === 1 ? '1 view' : `${count || 0} views`;
+      const views = count || 0;
+      return interpolate(ngettext('%(count)s view', '%(count)s views', views), { count: views }, true);
     },
   };
 };

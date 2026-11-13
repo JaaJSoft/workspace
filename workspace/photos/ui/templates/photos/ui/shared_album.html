@@ -1,5 +1,5 @@
 {% extends "files/ui/shared_base.html" %}
-{% load static %}
+{% load i18n static %}
 {% comment %}
   The page a public album link opens, for anyone with the link: the album's
   grid without the app shell, and the viewer. The expired and password cards
@@ -10,7 +10,7 @@
   the photo in place, the arrows go to the ones around it, the album name
   goes back to the grid. Each URL carries the visitor's access token.
 {% endcomment %}
-{% block title %}{{ album.title|default:"Shared album" }} - Workspace{% endblock %}
+{% block title %}{% if album.title %}{{ album.title }}{% else %}{% translate "Shared album" %}{% endif %} - Workspace{% endblock %}
 {% block module_class %}module-lime{% endblock %}
 {% block head_extra %}
   {# Not base.html: what the viewers and the grid use is loaded here. #}
@@ -63,7 +63,10 @@
               </h1>
               <p class="text-sm opacity-80">
                 {{ count_label }}{% if date_range %} · {{ date_range }}{% endif %}
-                · shared by {{ album.owner.get_full_name|default:album.owner.username }}
+                ·
+                {% blocktranslate trimmed with name=album.owner.get_full_name|default:album.owner.username %}
+                  Shared by {{ name }}
+                {% endblocktranslate %}
               </p>
             </div>
             {% if archive_url and not photo %}
@@ -73,7 +76,7 @@
                 data-shared-archive
               >
                 <i data-lucide="download" class="w-4 h-4"></i>
-                <span class="max-sm:hidden">Download all</span>
+                <span class="max-sm:hidden">{% translate "Download all" %}</span>
               </a>
             {% endif %}
           </div>
@@ -85,8 +88,8 @@
               href="{{ album_url }}"
               x-target.push="shared-album-content"
               class="btn btn-ghost btn-sm btn-square"
-              title="Back to the album"
-              aria-label="Back to the album"
+              title="{% translate 'Back to the album' %}"
+              aria-label="{% translate 'Back to the album' %}"
             >
               <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </a>
@@ -101,7 +104,7 @@
                 data-shared-download
               >
                 <i data-lucide="download" class="w-4 h-4"></i>
-                <span class="max-sm:hidden">Download</span>
+                <span class="max-sm:hidden">{% translate "Download" %}</span>
               </a>
             {% endif %}
           </div>
@@ -110,7 +113,7 @@
               {# The viewers size themselves with h-full: this card grows with its content, so the box needs a height. #}
               <div class="h-[70vh]">{{ photo.viewer_html|safe }}</div>
             {% else %}
-              <div class="p-12 text-center text-base-content/60">No preview for this file.</div>
+              <div class="p-12 text-center text-base-content/60">{% translate "No preview for this file." %}</div>
             {% endif %}
             {% if photo.previous_url %}
               <a
@@ -118,8 +121,8 @@
                 href="{{ photo.previous_url }}"
                 x-target.push="shared-album-content"
                 class="btn btn-circle absolute left-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm"
-                title="Previous photo"
-                aria-label="Previous photo"
+                title="{% translate 'Previous photo' %}"
+                aria-label="{% translate 'Previous photo' %}"
               >
                 <i data-lucide="chevron-left" class="w-5 h-5"></i>
               </a>
@@ -130,8 +133,8 @@
                 href="{{ photo.next_url }}"
                 x-target.push="shared-album-content"
                 class="btn btn-circle absolute right-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm"
-                title="Next photo"
-                aria-label="Next photo"
+                title="{% translate 'Next photo' %}"
+                aria-label="{% translate 'Next photo' %}"
               >
                 <i data-lucide="chevron-right" class="w-5 h-5"></i>
               </a>
@@ -144,7 +147,7 @@
           {% if entries %}
             <div class="p-2 sm:p-4">{% include "photos/ui/partials/timeline_page.html" %}</div>
           {% else %}
-            <div class="p-12 text-center text-base-content/60">This album is empty.</div>
+            <div class="p-12 text-center text-base-content/60">{% translate "This album is empty." %}</div>
           {% endif %}
         {% endif %}
       </div>

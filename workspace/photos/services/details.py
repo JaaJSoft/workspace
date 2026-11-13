@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from urllib.parse import urlencode
 
+from django.utils.translation import gettext as _
+
 from workspace.files.services.details import current_media_info
 from workspace.files.services.thumbnails.generation import VIDEO_LABELS
 
@@ -158,7 +160,7 @@ def _exposure(item):
     if item.exposure_bias is not None and round(item.exposure_bias, 1) != 0:
         parts.append(f"{round(item.exposure_bias, 1):+g} EV")
     if item.flash_fired:
-        parts.append("Flash")
+        parts.append(_("Flash"))
     return parts
 
 
@@ -174,11 +176,14 @@ def _focal_length(focal_length, focal_length_35mm):
     if focal_length is None and focal_length_35mm is None:
         return ""
     if focal_length is None:
-        return f"{focal_length_35mm} mm (35 mm eq.)"
+        return _("%(length)s mm (35 mm eq.)") % {"length": focal_length_35mm}
     actual = f"{_decimal(focal_length)} mm"
     if focal_length_35mm is None or focal_length_35mm == round(focal_length):
         return actual
-    return f"{actual} ({focal_length_35mm} mm eq.)"
+    return _("%(actual)s (%(length)s mm eq.)") % {
+        "actual": actual,
+        "length": focal_length_35mm,
+    }
 
 
 def _location(item):

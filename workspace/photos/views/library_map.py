@@ -2,6 +2,7 @@
 of a library, for the browser to group by what crowds on screen."""
 
 from django.http import Http404
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -69,6 +70,6 @@ class LibraryMapView(APIView):
             files = files.filter(media_item__media_type=media_type)
         elif media_type != ALL_TYPES:
             return Response(
-                {"detail": "Unknown media type."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": _("Unknown media type.")}, status=status.HTTP_400_BAD_REQUEST
             )
         return Response({"points": map_points(files, get_user_timezone(request.user))})

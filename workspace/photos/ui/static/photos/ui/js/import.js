@@ -85,9 +85,11 @@ window.photosImportMixin = function photosImportMixin() {
       const media = files.filter(photosImportable);
       const rejected = files.length - media.length;
       if (rejected) {
-        window.AppAlert.warning(
-          `${rejected} file${rejected > 1 ? 's' : ''} skipped: only photos and videos can be imported here`
-        );
+        window.AppAlert.warning(interpolate(ngettext(
+          '%(count)s file skipped: only photos and videos can be imported here',
+          '%(count)s files skipped: only photos and videos can be imported here',
+          rejected,
+        ), { count: rejected }, true));
       }
       if (!media.length) return;
       // Resolved per batch: the default folder is only created once something goes into it.
@@ -100,7 +102,7 @@ window.photosImportMixin = function photosImportMixin() {
         if (!response.ok) throw new Error();
         folder = await response.json();
       } catch (_) {
-        window.AppAlert.error('Could not open the import folder');
+        window.AppAlert.error(gettext('Could not open the import folder'));
         return;
       }
       this.importFolder = folder;
@@ -161,16 +163,16 @@ window.photosImportMixin = function photosImportMixin() {
 
     async chooseImportFolder() {
       const picked = await AppDialog.folderPicker({
-        title: 'Import folder',
-        message: 'Choose where photos and videos imported from Photos are saved.',
-        okLabel: 'Select',
+        title: gettext('Import folder'),
+        message: gettext('Choose where photos and videos imported from Photos are saved.'),
+        okLabel: gettext('Select'),
         okClass: 'btn-module',
         icon: 'folder-input',
         iconClass: 'bg-module/15 text-module',
       });
       if (!picked) return;
       if (!picked.uuid) {
-        window.AppAlert.warning('Choose a folder inside the space, not the space itself');
+        window.AppAlert.warning(gettext('Choose a folder inside the space, not the space itself'));
         return;
       }
       try {
@@ -181,12 +183,12 @@ window.photosImportMixin = function photosImportMixin() {
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
-          window.AppAlert.error(body.folder || 'Could not save the import folder');
+          window.AppAlert.error(body.folder || gettext('Could not save the import folder'));
           return;
         }
         this.importFolder = body;
       } catch (_) {
-        window.AppAlert.error('Could not save the import folder');
+        window.AppAlert.error(gettext('Could not save the import folder'));
       }
     },
 

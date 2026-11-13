@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.db import transaction
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import serializers, status
@@ -19,6 +20,8 @@ from ..services import capture_details
 # A selection of a few long trips; the limit only bounds one request.
 MAX_FILES = 2000
 _MAX_SHIFT_MINUTES = int(capture_details.MAX_SHIFT / timedelta(minutes=1))
+# DRF's own message, so the answer reads like any other missing field.
+_REQUIRED = serializers.Field.default_error_messages["required"]
 
 
 class CaptureDetailsSerializer(serializers.Serializer):
@@ -43,19 +46,17 @@ class CaptureDetailsSerializer(serializers.Serializer):
         date_mode = attrs.get("date_mode")
         location_mode = attrs.get("location_mode")
         if not date_mode and not location_mode:
-            raise serializers.ValidationError("Nothing to change.")
+            raise serializers.ValidationError(_("Nothing to change."))
         if date_mode == "shift" and not attrs.get("shift_minutes"):
             raise serializers.ValidationError(
-                {"shift_minutes": "A shift needs a number of minutes other than 0."}
+                {"shift_minutes": _("A shift needs a number of minutes other than 0.")}
             )
         if date_mode == "set" and "date" not in attrs:
-            raise serializers.ValidationError({"date": "This field is required."})
+            raise serializers.ValidationError({"date": _REQUIRED})
         if location_mode == "set":
             for field in ("latitude", "longitude"):
                 if field not in attrs:
-                    raise serializers.ValidationError(
-                        {field: "This field is required."}
-                    )
+                    raise serializers.ValidationError({field: _REQUIRED})
         return attrs
 
 
@@ -103,7 +104,7 @@ class CaptureDetailsView(APIView):
         )
         if len(files) != len(uuids):
             return Response(
-                {"detail": "One or more photos not found."},
+                {"detail": _("One or more photos not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         permissions = get_permissions_bulk(request.user, files)
@@ -112,7 +113,7 @@ class CaptureDetailsView(APIView):
             for f in files
         ):
             return Response(
-                {"detail": "One or more photos cannot be corrected."},
+                {"detail": _("One or more photos cannot be corrected.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

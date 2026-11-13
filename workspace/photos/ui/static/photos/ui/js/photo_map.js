@@ -35,7 +35,7 @@ window.photoMapPreference = function photoMapPreference() {
         if (!response.ok) throw new Error(String(response.status));
       } catch (_) {
         this.savingMapPreference = false;
-        window.AppAlert.error('Could not save the preference');
+        window.AppAlert.error(gettext('Could not save the preference'));
         return;
       }
       window.dispatchEvent(new CustomEvent('photo-map-preference', { detail: { enabled } }));

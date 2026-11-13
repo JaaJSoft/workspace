@@ -55,7 +55,7 @@ window.photosHiddenMixin = function photosHiddenMixin() {
       try {
         result = await photosJson('POST', hide ? PHOTOS_HIDDEN_API : `${PHOTOS_HIDDEN_API}/remove`, { files });
       } catch (_) {
-        window.AppAlert.error(hide ? 'Failed to hide' : 'Failed to unhide');
+        window.AppAlert.error(hide ? gettext('Failed to hide') : gettext('Failed to unhide'));
         return;
       } finally {
         this.hiddenBusy = false;
@@ -76,38 +76,42 @@ window.photosHiddenMixin = function photosHiddenMixin() {
         this._refresh(['photos-nav', emptied ? 'photos-content' : 'photos-header']);
       }
       if (moved.length) {
-        const count = photosCountLabel(moved.length);
+        const count = moved.length;
         window.AppAlert.success(
-          hide ? `Hid ${count} from your library` : `${count} back in your library`,
+          interpolate(hide
+            ? ngettext('Hid %(count)s photo from your library', 'Hid %(count)s photos from your library', count)
+            : ngettext('%(count)s photo back in your library', '%(count)s photos back in your library', count),
+          { count }, true),
           { duration: 2500 },
         );
       }
       if (kept.size) {
-        const its = kept.size === 1 ? 'its folder' : 'their folder';
-        window.AppAlert.warning(
-          `${photosCountLabel(kept.size)} still hidden by ${its}: unhide the folder in Preferences`,
-        );
+        window.AppAlert.warning(interpolate(ngettext(
+          '%(count)s photo still hidden by its folder: unhide the folder in Preferences',
+          '%(count)s photos still hidden by their folder: unhide the folder in Preferences',
+          kept.size,
+        ), { count: kept.size }, true));
       }
     },
 
     async hideFolder() {
       const picked = await AppDialog.folderPicker({
-        title: 'Hide a folder',
-        message: 'Its photos and videos, subfolders included, leave your library. They stay in Files.',
-        okLabel: 'Hide',
+        title: gettext('Hide a folder'),
+        message: gettext('Its photos and videos, subfolders included, leave your library. They stay in Files.'),
+        okLabel: gettext('Hide'),
         okClass: 'btn-module',
         icon: 'eye-off',
         iconClass: 'bg-module/15 text-module',
       });
       if (!picked) return;
       if (!picked.uuid) {
-        window.AppAlert.warning('Choose a folder inside My Files, not My Files itself');
+        window.AppAlert.warning(gettext('Choose a folder inside My Files, not My Files itself'));
         return;
       }
       try {
         await photosJson('POST', PHOTOS_HIDDEN_API, { files: [picked.uuid] });
       } catch (_) {
-        window.AppAlert.error('Could not hide the folder');
+        window.AppAlert.error(gettext('Could not hide the folder'));
         return;
       }
       await this._reloadHiddenFolders();
@@ -118,7 +122,7 @@ window.photosHiddenMixin = function photosHiddenMixin() {
       try {
         await photosJson('POST', `${PHOTOS_HIDDEN_API}/remove`, { files: [folder.uuid] });
       } catch (_) {
-        window.AppAlert.error('Could not show the folder again');
+        window.AppAlert.error(gettext('Could not show the folder again'));
         return;
       }
       this.hiddenFolders = this.hiddenFolders.filter((f) => f.uuid !== folder.uuid);

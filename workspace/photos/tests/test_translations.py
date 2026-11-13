@@ -19,6 +19,7 @@ from workspace.photos.services.album_sharing import share_album, unshare_album
 from workspace.photos.services.albums import add_items, create_album
 from workspace.users.services.settings import set_setting
 
+from .faces import faces_on
 from .images import make_photo
 
 User = get_user_model()
@@ -26,6 +27,62 @@ User = get_user_model()
 
 def _at(day):
     return datetime(2024, 7, day, 12, tzinfo=UTC)
+
+
+class PhotosPageLanguageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="camille", password="p")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_library_renders_in_french(self):
+        set_setting(self.user, "core", "language", "fr")
+        response = self.client.get("/photos")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Chronologie")
+        self.assertContains(response, "Nouvel album")
+        self.assertNotContains(response, "New album")
+
+    def test_library_stays_english_by_default(self):
+        response = self.client.get("/photos")
+        self.assertContains(response, "New album")
+        self.assertNotContains(response, "Nouvel album")
+
+    @faces_on
+    def test_people_page_renders_in_french(self):
+        set_setting(self.user, "core", "language", "fr")
+        response = self.client.get("/photos/people")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Activer le regroupement des visages")
+        self.assertNotContains(response, "Turn on face grouping")
+
+
+class AlbumActionLabelLanguageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="camille", password="p")
+        self.client.force_login(self.user)
+        self.album = create_album(self.user, "Trip")
+
+    def tearDown(self):
+        cache.clear()
+
+    def labels(self):
+        response = self.client.post(
+            "/api/v1/photos/albums/actions",
+            {"uuids": [str(self.album.uuid)]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        return {a["id"]: a["label"] for a in response.json()[str(self.album.uuid)]}
+
+    def test_labels_follow_the_user_language(self):
+        set_setting(self.user, "core", "language", "fr")
+        self.assertEqual(self.labels()["add_items"], "Ajouter des photos")
+
+    def test_labels_default_to_english(self):
+        self.assertEqual(self.labels()["add_items"], "Add photos")
 
 
 class AlbumNotificationLanguageTests(TestCase):

@@ -659,9 +659,10 @@ jobs:
         run: uv run python manage.py test workspace.files -v 2
 
   # The Django matrix runs on SQLite, so the pgvector backend of the vector
-  # index (common.vectors) only runs here, against a server that ships the
-  # extension. The test database is created by a superuser, which pgvector
-  # (not a trusted extension) needs to be enabled.
+  # index (common.vectors) only runs here per commit, against a server that
+  # ships the extension (postgres-nightly runs every suite there once a day).
+  # The test database is created by a superuser, which pgvector (not a
+  # trusted extension) needs to be enabled.
   pgvector:
     runs-on: ubuntu-latest
     name: Vectors (pgvector)

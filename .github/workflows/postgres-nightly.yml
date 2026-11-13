@@ -1,0 +1,71 @@
+name: postgres-nightly
+
+# Every module suite once a night on PostgreSQL. The per-commit matrix runs on
+# SQLite, the default database, and the pgvector job of tests.yml only runs
+# the checks known to depend on PostgreSQL. The rest drifts silently: a
+# FOR UPDATE PostgreSQL refuses, a full-text index that missed words, tests
+# that only held because SQLite reuses row ids after a rollback. One job, no
+# matrix: nobody waits on it, and its cost is a single runner a day.
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    name: Tests (PostgreSQL)
+    timeout-minutes: 120
+    services:
+      postgres:
+        # The pgvector image, as in tests.yml: the vector index tests need the
+        # extension, and the test database is created by a superuser, which
+        # pgvector (not a trusted extension) needs to be enabled.
+        image: mirror.gcr.io/pgvector/pgvector:0.8.1-pg17
+        env:
+          POSTGRES_USER: workspace
+          POSTGRES_PASSWORD: workspace
+          POSTGRES_DB: workspace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U workspace"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # As in the test matrix: the media tests skip without the binaries.
+      - name: Install ffmpeg
+        uses: ./.github/actions/apt-install
+        timeout-minutes: 10
+        with:
+          packages: --no-install-recommends ffmpeg
+
+      # One process: a failure the parallel runner cannot pickle stops the
+      # whole run instead of being reported, which is the opposite of what a
+      # nightly diagnosis needs. The E2E suites skip without E2E=1.
+      - name: Run every module suite on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+          WORKSPACE_PGVECTOR_TESTS: '1'
+          PYTHONWARNINGS: default
+        run: uv run python manage.py test workspace

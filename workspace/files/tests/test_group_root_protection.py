@@ -12,6 +12,8 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import File
 from workspace.files.services import trash, tree
 from workspace.files.tests import test_webdav
@@ -121,7 +123,10 @@ class GroupRootWebDAVTests(_GroupRootFixture, TestCase):
     def setUp(self):
         from workspace.files.webdav.app import create_webdav_app
 
-        self._app = create_webdav_app()
+        self._app = served_in_test(create_webdav_app())
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         self._fixture()
         self.auth = test_webdav._basic_auth_header("alice", "pass123")
 

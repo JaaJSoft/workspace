@@ -6,6 +6,8 @@ from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import File, FileScan
 from workspace.files.search import search_files
 from workspace.files.services import tree
@@ -655,7 +657,10 @@ class CopyEnforcementTests(APITestCase):
         from workspace.files.webdav.app import create_webdav_app
 
         dav = test_webdav.WebDAVIntegrationTests()
-        dav._app = create_webdav_app()
+        dav._app = served_in_test(create_webdav_app())
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         dav.auth = test_webdav._basic_auth_header("enf", "p")
 
         code, _, _ = dav._request(

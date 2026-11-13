@@ -13,9 +13,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.signals import request_finished
 from django.db import DatabaseError, connection
 from django.db.backends.base.base import BaseDatabaseWrapper
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
 from wsgidav.dav_error import (
@@ -27,6 +28,7 @@ from wsgidav.dav_error import (
 from workspace.common.dav.auth import clear_auth_cache
 from workspace.common.storage.facade import BlobStorage
 from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import (
     File,
     FileFavorite,
@@ -1241,6 +1243,28 @@ class CreateWebdavAppTests(TestCase):
         self.assertIsNotNone(provider.lock_manager)
 
 
+class RequestSignalsTests(SimpleTestCase):
+    """/dav is served outside Django's handler, so the app sends the request
+    signals itself: they are what closes the request's connections."""
+
+    def test_a_client_gone_mid_response_still_finishes_the_request(self):
+        from workspace.files.webdav.app import _RequestSignals
+
+        finished = mock.Mock()
+        request_finished.connect(finished)
+        self.addCleanup(request_finished.disconnect, finished)
+
+        def dav_app(environ, start_response):
+            yield b"first"
+            yield b"second"
+
+        response = served_in_test(_RequestSignals(dav_app))({}, mock.Mock())
+        next(response)
+        response.close()
+
+        finished.assert_called_once()
+
+
 # ── Integration (full WSGI stack) ─────────────────────────────────────
 
 
@@ -1261,9 +1285,12 @@ class WebDAVIntegrationTests(TestCase):
         super().setUpClass()
         from workspace.files.webdav.app import create_webdav_app
 
-        cls._app = create_webdav_app()
+        cls._app = served_in_test(create_webdav_app())
 
     def setUp(self):
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         self.user = User.objects.create_user(
             username="davint", email="int@test.com", password="pass123"
         )
@@ -1405,6 +1432,11 @@ class WebDAVIntegrationTests(TestCase):
         request's connection: under gevent each request has its own, and one
         left open stays until a garbage collection finds it.
         """
+        from workspace.files.webdav.app import create_webdav_app
+
+        # Without served_in_test, which silences the receiver this is about:
+        # the patched close records the call and leaves the connection open.
+        self._app = create_webdav_app()
         events = []
 
         def record_query(execute, sql, params, many, context):

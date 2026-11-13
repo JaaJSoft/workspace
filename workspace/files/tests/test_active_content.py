@@ -17,6 +17,8 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import File, FileShareLink
 from workspace.files.services import tree
 
@@ -197,9 +199,12 @@ class WebDAVActiveTypesTests(TestCase):
         super().setUpClass()
         from workspace.files.webdav.app import create_webdav_app
 
-        cls._app = create_webdav_app()
+        cls._app = served_in_test(create_webdav_app())
 
     def setUp(self):
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         self.user = User.objects.create_user(username="davactive", password="pass123")
 
     def _get(self, path, method="GET", **extra):

@@ -23,8 +23,10 @@ from django.db import transaction
 from django.test import TestCase
 from wsgidav.dav_error import DAVError
 
+from workspace.common.dav.auth import clear_auth_cache
 from workspace.common.storage.s3 import MIN_PART_SIZE
 from workspace.common.tests.s3 import S3StoragesMixin
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import File
 from workspace.files.services import disk_sync, trash, tree
 from workspace.files.services.content_writes import update_content
@@ -320,11 +322,14 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
         super().setUpClass()
         from workspace.files.webdav.app import create_webdav_app
 
-        cls._app = create_webdav_app()
+        cls._app = served_in_test(create_webdav_app())
 
     def setUp(self):
         super().setUp()
         self.addCleanup(cache.clear)
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         self.user = User.objects.create_user(username="davs3", password="pass123")
 
     def dav(self, method, path, body=b""):

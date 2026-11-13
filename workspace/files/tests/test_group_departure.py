@@ -17,7 +17,9 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.common.dav.auth import clear_auth_cache
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.activity import FilesActivityProvider
 from workspace.files.models import (
     FILE_FEED_Q,
@@ -249,7 +251,10 @@ class FormerMemberWebDAVTests(_DepartureFixture, TestCase):
     def setUp(self):
         from workspace.files.webdav.app import create_webdav_app
 
-        self._app = create_webdav_app()
+        self._app = served_in_test(create_webdav_app())
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         self._fixture()
         self.alice.groups.remove(self.team)
         self.auth = test_webdav._basic_auth_header("alice", "pass123")

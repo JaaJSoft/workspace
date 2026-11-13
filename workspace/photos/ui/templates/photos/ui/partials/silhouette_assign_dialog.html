@@ -3,16 +3,26 @@
   contacts with a face in the library: a person's photos are listed through
   their faces. State in silhouetteBoard() (faces.js).
 {% endcomment %}
+{% load i18n %}
+{% translate "Who is this?" as who_one %}
+{% translate "Who are these %(count)s people?" as who_many %}
+{% translate "Pick someone whose face is in your photos." as assign_subtitle %}
+{% translate "%(count)s photo" as photo_count_one %}
+{% translate "%(count)s photos" as photo_count_other %}
 <dialog id="silhouette-assign-dialog" class="modal">
   <div class="modal-box max-w-md">
-    {% include "ui/partials/dialog_header.html" with icon="user-round-pen" title_expr="selectedFaces.length === 1 ? 'Who is this?' : 'Who are these ' + selectedFaces.length + ' people?'" subtitle="Pick someone whose face is in your photos." only %}
+    {% with one_js=who_one|escapejs many_js=who_many|escapejs %}
+      {% with title_js="selectedFaces.length === 1 ? '"|add:one_js|add:"' : interpolate('"|add:many_js|add:"', { count: selectedFaces.length }, true)" %}
+        {% include "ui/partials/dialog_header.html" with icon="user-round-pen" title_expr=title_js subtitle=assign_subtitle only %}
+      {% endwith %}
+    {% endwith %}
 
     <label class="input input-sm flex items-center gap-2 w-full">
       <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
       <input
         type="text"
         class="grow"
-        placeholder="Name"
+        placeholder="{% translate 'Name' %}"
         autocomplete="off"
         x-model="assignDialog.query"
         @input.debounce.250ms="searchAssign()"
@@ -51,7 +61,7 @@
             <span class="flex-1 truncate" x-text="option.name"></span>
             <span
               class="text-xs text-base-content/60 tabular-nums"
-              x-text="option.photo_count + (option.photo_count === 1 ? ' photo' : ' photos')"
+              x-text="interpolate(option.photo_count === 1 ? '{{ photo_count_one|escapejs }}' : '{{ photo_count_other|escapejs }}', { count: option.photo_count }, true)"
             ></span>
           </button>
         </li>
@@ -60,17 +70,17 @@
         x-show="!silhouetteAssignOptions().length"
         class="px-3 py-3 text-sm text-base-content/60"
       >
-        Nobody with a face in your photos has this name.
+        {% translate "Nobody with a face in your photos has this name." %}
       </li>
     </ul>
 
     <div class="modal-action">
       <form method="dialog">
-        <button type="submit" class="btn btn-ghost btn-sm">Cancel</button>
+        <button type="submit" class="btn btn-ghost btn-sm">{% translate "Cancel" %}</button>
       </form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

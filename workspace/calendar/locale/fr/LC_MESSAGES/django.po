@@ -346,10 +346,6 @@ msgstr ""
 "autre application d’agenda, en lecture seule."
 
 #: ui/templates/calendar/ui/partials/_calendar_modals.html
-msgid "Create link"
-msgstr "Créer le lien"
-
-#: ui/templates/calendar/ui/partials/_calendar_modals.html
 msgid "New link"
 msgstr "Nouveau lien"
 

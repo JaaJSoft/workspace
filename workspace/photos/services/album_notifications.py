@@ -57,9 +57,7 @@ def share_recipients(share, *, exclude):
 def notify_shared(share, *, acting_user):
     """Tell everyone *share* reaches that they were added to the album."""
     album = share.album
-    for users in in_recipient_languages(
-        share_recipients(share, exclude=acting_user)
-    ):
+    for users in in_recipient_languages(share_recipients(share, exclude=acting_user)):
         notify_many(
             recipients=users,
             origin="photos",
@@ -76,9 +74,7 @@ def notify_shared(share, *, acting_user):
 def notify_role_changed(share, *, acting_user):
     """Tell everyone *share* reaches what they may do now."""
     album = share.album
-    for users in in_recipient_languages(
-        share_recipients(share, exclude=acting_user)
-    ):
+    for users in in_recipient_languages(share_recipients(share, exclude=acting_user)):
         notify_many(
             recipients=users,
             origin="photos",
@@ -93,9 +89,7 @@ def notify_role_changed(share, *, acting_user):
 
 def notify_removed(share, *, acting_user):
     """Tell everyone *share* reached that it was taken away from them."""
-    for users in in_recipient_languages(
-        share_recipients(share, exclude=acting_user)
-    ):
+    for users in in_recipient_languages(share_recipients(share, exclude=acting_user)):
         notify_many(
             recipients=users,
             origin="photos",

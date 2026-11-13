@@ -85,3 +85,14 @@ class TimeAgoFrenchTests(TestCase):
         self.assertEqual(self._ago(minutes=5), "il y a 5 min")
         self.assertEqual(self._ago(hours=2), "il y a 2 h")
         self.assertEqual(self._ago(days=3), "il y a 3 j")
+
+    def test_absolute_date_follows_the_active_language(self):
+        with translation.override("fr"):
+            self.assertEqual(
+                time_ago(datetime(2026, 7, 1, 12, 0, tzinfo=UTC), now=self.NOW),
+                "1 juil.",
+            )
+            self.assertEqual(
+                time_ago(datetime(2025, 11, 3, 12, 0, tzinfo=UTC), now=self.NOW),
+                "3 nov. 2025",
+            )

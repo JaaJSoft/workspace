@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
+from django.utils.translation import gettext
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
@@ -62,7 +63,7 @@ class MessageListView(CacheControlMixin, APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -157,7 +158,7 @@ class MessageListView(CacheControlMixin, APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -170,13 +171,13 @@ class MessageListView(CacheControlMixin, APIView):
 
         if not body and not files and not file_uuids:
             return Response(
-                {"detail": "Message must have text or at least one file."},
+                {"detail": gettext("Message must have text or at least one file.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if len(files) + len(file_uuids) > 10:
             return Response(
-                {"detail": "Maximum 10 files per message."},
+                {"detail": gettext("Maximum 10 files per message.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -184,7 +185,10 @@ class MessageListView(CacheControlMixin, APIView):
         for f in files:
             if f.size > max_file_size:
                 return Response(
-                    {"detail": f'File "{f.name}" exceeds the 50 MB limit.'},
+                    {
+                        "detail": gettext('File "%(name)s" exceeds the 50 MB limit.')
+                        % {"name": f.name}
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -203,20 +207,26 @@ class MessageListView(CacheControlMixin, APIView):
         if duration is not None:
             if len(files) != 1 or file_uuids:
                 return Response(
-                    {"detail": '"duration" requires exactly one uploaded file.'},
+                    {
+                        "detail": gettext(
+                            '"duration" requires exactly one uploaded file.'
+                        )
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if not 0 < duration <= settings.CHAT_VOICE_MAX_SECONDS:
                 return Response(
                     {
-                        "detail": "Voice messages must last between 0 and "
-                        f"{settings.CHAT_VOICE_MAX_SECONDS} seconds."
+                        "detail": gettext(
+                            "Voice messages must last between 0 and %(max)s seconds."
+                        )
+                        % {"max": settings.CHAT_VOICE_MAX_SECONDS}
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if pinned_viewers[0] != "audio":
                 return Response(
-                    {"detail": '"duration" is only valid for an audio file.'},
+                    {"detail": gettext('"duration" is only valid for an audio file.')},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -225,7 +235,11 @@ class MessageListView(CacheControlMixin, APIView):
             picked_files = resolve_accessible_files(request.user, file_uuids)
             if picked_files is None:
                 return Response(
-                    {"detail": "One or more files not found or not accessible."},
+                    {
+                        "detail": gettext(
+                            "One or more files not found or not accessible."
+                        )
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -252,7 +266,11 @@ class MessageListView(CacheControlMixin, APIView):
                 )
             except Message.DoesNotExist:
                 return Response(
-                    {"detail": "Reply target message not found in this conversation."},
+                    {
+                        "detail": gettext(
+                            "Reply target message not found in this conversation."
+                        )
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -309,7 +327,11 @@ class MessageListView(CacheControlMixin, APIView):
         except (FileNotFoundError, OSError) as exc:
             logger.warning("Workspace file content unavailable: %s", scrub(str(exc)))
             return Response(
-                {"detail": "One or more workspace file contents are unavailable."},
+                {
+                    "detail": gettext(
+                        "One or more workspace file contents are unavailable."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -381,7 +403,7 @@ class MessageDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -395,13 +417,13 @@ class MessageDetailView(APIView):
             )
         except Message.DoesNotExist:
             return Response(
-                {"detail": "Message not found."},
+                {"detail": gettext("Message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if message.author_id != request.user.id:
             return Response(
-                {"detail": "Only the author can edit this message."},
+                {"detail": gettext("Only the author can edit this message.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -410,7 +432,7 @@ class MessageDetailView(APIView):
 
         if not edit_message(message, serializer.validated_data["body"]):
             return Response(
-                {"detail": "Message not found."},
+                {"detail": gettext("Message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -448,7 +470,7 @@ class MessageDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -465,7 +487,7 @@ class MessageDetailView(APIView):
             )
         except Message.DoesNotExist:
             return Response(
-                {"detail": "Message not found."},
+                {"detail": gettext("Message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -473,13 +495,13 @@ class MessageDetailView(APIView):
         is_bot_message = hasattr(message.author, "bot_profile")
         if not is_author and not is_bot_message:
             return Response(
-                {"detail": "Only the author can delete this message."},
+                {"detail": gettext("Only the author can delete this message.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if not soft_delete_message(message):
             return Response(
-                {"detail": "Message not found."},
+                {"detail": gettext("Message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -510,14 +532,14 @@ class ReactionToggleView(APIView):
             )
         except Message.DoesNotExist:
             return Response(
-                {"detail": "Message not found."},
+                {"detail": gettext("Message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -565,7 +587,7 @@ class MessageReadersView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -577,7 +599,7 @@ class MessageReadersView(APIView):
             )
         except Message.DoesNotExist:
             return Response(
-                {"detail": "Message not found."},
+                {"detail": gettext("Message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -629,7 +651,7 @@ class MarkReadView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

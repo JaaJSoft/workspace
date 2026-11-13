@@ -1,6 +1,7 @@
 import logging
 
 from django.utils import timezone
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -25,7 +26,7 @@ class ScheduledMessageListView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -63,7 +64,7 @@ class ScheduledMessageDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -78,12 +79,16 @@ class ScheduledMessageDetailView(APIView):
         )
         if not schedule:
             return Response(
-                {"detail": "Scheduled message not found."},
+                {"detail": gettext("Scheduled message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         if not can_manage_bot_task(request.user, schedule):
             return Response(
-                {"detail": "Only the person who scheduled this message can change it."},
+                {
+                    "detail": gettext(
+                        "Only the person who scheduled this message can change it."
+                    )
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -116,7 +121,7 @@ class ScheduledMessageDetailView(APIView):
         ).update(**changes, updated_at=timezone.now())
         if not updated:
             return Response(
-                {"detail": "Scheduled message not found."},
+                {"detail": gettext("Scheduled message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         schedule.refresh_from_db()
@@ -132,7 +137,7 @@ class ScheduledMessageDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -143,12 +148,16 @@ class ScheduledMessageDetailView(APIView):
         ).first()
         if not schedule:
             return Response(
-                {"detail": "Scheduled message not found."},
+                {"detail": gettext("Scheduled message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         if not can_manage_bot_task(request.user, schedule):
             return Response(
-                {"detail": "Only the person who scheduled this message can change it."},
+                {
+                    "detail": gettext(
+                        "Only the person who scheduled this message can change it."
+                    )
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 

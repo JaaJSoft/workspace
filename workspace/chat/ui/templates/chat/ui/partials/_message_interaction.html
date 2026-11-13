@@ -1,3 +1,4 @@
+{% load i18n %}
 {% if not msg.interaction.interacted_at %}
   <div
     class="mt-3 flex flex-col gap-1.5"
@@ -39,7 +40,9 @@
     {% endfor %}
     {% if msg.conversation.kind == "group" %}
       <div class="text-xs text-base-content/40 mt-0.5">
-        Répondu par {{ msg.interaction.interacted_by.get_full_name|default:msg.interaction.interacted_by.username }}
+        {% blocktranslate trimmed with name=msg.interaction.interacted_by.get_full_name|default:msg.interaction.interacted_by.username %}
+          Answered by {{ name }}
+        {% endblocktranslate %}
       </div>
     {% endif %}
   </div>

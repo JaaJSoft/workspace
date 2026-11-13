@@ -3,6 +3,7 @@ import logging
 from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -48,14 +49,14 @@ class MessageInteractionAnswerView(APIView):
         raw = request.data.get("option_index")
         if raw is None:
             return Response(
-                {"detail": "option_index is required"},
+                {"detail": gettext("option_index is required")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             option_index = int(raw)
         except TypeError, ValueError:
             return Response(
-                {"detail": "option_index must be an integer"},
+                {"detail": gettext("option_index must be an integer")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -80,7 +81,7 @@ class MessageInteractionAnswerView(APIView):
         options = (interaction.payload or {}).get("options", [])
         if not (0 <= option_index < len(options)):
             return Response(
-                {"detail": "option_index out of range"},
+                {"detail": gettext("option_index out of range")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -100,7 +101,7 @@ class MessageInteractionAnswerView(APIView):
                         status=status.HTTP_200_OK,
                     )
                 return Response(
-                    {"detail": "already answered"},
+                    {"detail": gettext("already answered")},
                     status=status.HTTP_409_CONFLICT,
                 )
 

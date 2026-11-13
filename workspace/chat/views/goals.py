@@ -1,5 +1,6 @@
 import logging
 
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -42,7 +43,7 @@ class AgentGoalListView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -70,14 +71,14 @@ class AgentGoalListView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         bot_user = _get_bot_member(conversation_id)
         if bot_user is None:
             return Response(
-                {"detail": "This conversation has no AI bot."},
+                {"detail": gettext("This conversation has no AI bot.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -92,14 +93,15 @@ class AgentGoalListView(APIView):
         ).count()
         if active_count >= AgentGoal.MAX_ACTIVE_PER_CONVERSATION:
             return Response(
-                {"detail": "Too many active goals in this conversation."},
+                {"detail": gettext("Too many active goals in this conversation.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         goal_text = data["goal"].strip()
         if not goal_text:
             return Response(
-                {"detail": "Goal is required."}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": gettext("Goal is required.")},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         title = (data.get("title") or "").strip() or goal_text[:200]
 
@@ -148,19 +150,19 @@ class AgentGoalDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         goal = self._get_goal(conversation_id, goal_id)
         if not goal:
             return Response(
-                {"detail": "Agent goal not found."},
+                {"detail": gettext("Agent goal not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         if not can_manage_bot_task(request.user, goal):
             return Response(
-                {"detail": "Only the person who set this goal can change it."},
+                {"detail": gettext("Only the person who set this goal can change it.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -173,7 +175,7 @@ class AgentGoalDetailView(APIView):
         # next_check_at, since the row was loaded.
         if not update_open_goal(goal, serializer.validated_data):
             return Response(
-                {"detail": "Agent goal not found."},
+                {"detail": gettext("Agent goal not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         goal.refresh_from_db()
@@ -186,19 +188,19 @@ class AgentGoalDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         goal = self._get_goal(conversation_id, goal_id)
         if not goal:
             return Response(
-                {"detail": "Agent goal not found."},
+                {"detail": gettext("Agent goal not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         if not can_manage_bot_task(request.user, goal):
             return Response(
-                {"detail": "Only the person who set this goal can change it."},
+                {"detail": gettext("Only the person who set this goal can change it.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -206,7 +208,7 @@ class AgentGoalDetailView(APIView):
             goal, AgentGoal.Status.ABANDONED, goal.outcome or "Stopped by the user."
         ):
             return Response(
-                {"detail": "Agent goal not found."},
+                {"detail": gettext("Agent goal not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -1,6 +1,7 @@
 import logging
 
 from django.conf import settings
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -46,14 +47,14 @@ class CallJoinView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         if is_bot_conversation(conversation_id):
             return Response(
-                {"detail": "Calls are not available in AI conversations."},
+                {"detail": gettext("Calls are not available in AI conversations.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             session, _, _ = calls.start_or_join_call(request.user, conversation_id)
         except calls.CallFull:
             return Response(
-                {"detail": "Call is full."}, status=status.HTTP_409_CONFLICT
+                {"detail": gettext("Call is full.")}, status=status.HTTP_409_CONFLICT
             )
         return Response(
             {
@@ -93,13 +94,17 @@ class CallSignalView(APIView):
             or not isinstance(signal, dict)
         ):
             return Response(
-                {"detail": "to_user_id (int) and signal (object) are required."},
+                {
+                    "detail": gettext(
+                        "to_user_id (int) and signal (object) are required."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         # The target must be an active member of this same conversation.
         if not is_active_member(to_user_id, conversation_id):
             return Response(
-                {"detail": "Target is not a member."},
+                {"detail": gettext("Target is not a member.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         # Signals are scoped to the active call session, so the envelope must
@@ -108,7 +113,7 @@ class CallSignalView(APIView):
         session = calls.get_active_call(conversation_id)
         if session is None:
             return Response(
-                {"detail": "No active call."},
+                {"detail": gettext("No active call.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         send_signal(session.uuid, to_user_id, request.user.id, signal)
@@ -163,7 +168,7 @@ class CallDiagnosticSignalView(APIView):
         ):
             return Response(
                 {
-                    "detail": (
+                    "detail": gettext(
                         "lane (to_caller|to_callee), signal (object) and "
                         "run_id (string) are required."
                     )

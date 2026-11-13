@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:50+0000\n"
+"POT-Creation-Date: 2026-11-13 14:04+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -238,10 +238,6 @@ msgid "High"
 msgstr "haute"
 
 #: templates/core/partials/notifications.html
-msgid "Notifications"
-msgstr "Notifications"
-
-#: templates/core/partials/notifications.html
 msgid "Mark all read"
 msgstr "Tout marquer lu"
 
@@ -401,10 +397,6 @@ msgstr ""
 #: templates/core/partials/search/scope_toggle.html
 msgid "Mine only"
 msgstr "Mes éléments"
-
-#: templates/core/partials/search/search_input.html
-msgid "Search..."
-msgstr "Rechercher..."
 
 #: templates/core/partials/search/search_results.html
 msgctxt "search match"

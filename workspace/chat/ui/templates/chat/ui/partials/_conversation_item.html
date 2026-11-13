@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Conversation Item Partial
 =========================
@@ -56,14 +57,14 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
             x-show="conversations.find(c => c.uuid === '{{ conv.uuid|escapejs }}')?.is_bot_conversation"
             x-cloak
             class="text-secondary shrink-0"
-            title="AI Bot"
+            title="{% translate 'AI Bot' %}"
           >
             <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
           </span>
           {% if conv.groups.all %}
             <span
               class="text-base-content/40 shrink-0"
-              title="Group-linked conversation"
+              title="{% translate 'Group-linked conversation' %}"
             >
               <i data-lucide="users" class="w-3.5 h-3.5"></i>
             </span>
@@ -87,7 +88,7 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
           <span
             class="hidden group-hover/conv:inline-flex [@media(hover:none)]:inline-flex btn btn-ghost btn-xs btn-square min-h-0 h-5 w-5"
             @click.stop="openConvContextMenu($event, '{{ conv.uuid|escapejs }}', '{{ conv.kind|escapejs }}'{% if pinned %}, true{% endif %})"
-            title="More options"
+            title="{% translate 'More options' %}"
           >
             <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>
           </span>

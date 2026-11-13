@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:58+0000\n"
+"POT-Creation-Date: 2026-11-13 14:04+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -852,10 +852,6 @@ msgid "Poll vote notifications"
 msgstr "Notifications de vote aux sondages"
 
 #: ui/templates/calendar/ui/partials/_sidebar.html
-msgid "close sidebar"
-msgstr "fermer la barre latérale"
-
-#: ui/templates/calendar/ui/partials/_sidebar.html
 msgid "My calendars"
 msgstr "Mes calendriers"
 
@@ -913,10 +909,6 @@ msgstr "Accepter"
 #: ui/templates/calendar/ui/partials/event_context_menu.html
 msgid "Decline"
 msgstr "Refuser"
-
-#: ui/templates/calendar/ui/partials/help_dialog.html
-msgid "Keyboard Shortcuts"
-msgstr "Raccourcis clavier"
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "Go to today"

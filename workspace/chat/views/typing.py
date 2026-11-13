@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -24,7 +25,7 @@ class TypingIndicatorView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member."},
+                {"detail": gettext("Not a member.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -66,7 +67,11 @@ class ConversationClearView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         if not can_clear_conversation(request.user, conversation_id):
             return Response(
-                {"detail": "Only a private conversation with an AI can be cleared."},
+                {
+                    "detail": gettext(
+                        "Only a private conversation with an AI can be cleared."
+                    )
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 

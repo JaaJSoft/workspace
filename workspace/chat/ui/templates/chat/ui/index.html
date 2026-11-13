@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}Chat - Workspace{% endblock %}
+{% block title %}{% translate "Chat" %} - Workspace{% endblock %}
 
 {% block extra_head %}
   {% comment %}In <head> and not deferred on purpose: <conversation-avatar> must
@@ -64,7 +64,11 @@ be defined before the parser reaches the markup using it, or server-rendered
     class="drawer-side z-40 h-full overflow-visible!"
     :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''"
   >
-    <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    <label
+      for="chat-drawer"
+      aria-label="{% translate 'close sidebar' %}"
+      class="drawer-overlay"
+    ></label>
 
     <!-- Sidebar -->
     {% comment %}
@@ -97,7 +101,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                 type="button"
                 class="btn btn-ghost btn-sm btn-square hover:text-secondary"
                 @click="botFilter = ''; showBotPicker = true"
-                title="New AI Chat"
+                title="{% translate 'New AI Chat' %}"
               >
                 <i data-lucide="sparkles" class="w-4 h-4"></i>
               </button>
@@ -106,7 +110,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               type="button"
               class="btn btn-ghost btn-sm btn-square mr-1 hover:text-module"
               @click="showNewConversationDialog()"
-              title="New conversation (Alt+N)"
+              title="{% translate 'New conversation (Alt+N)' %}"
             >
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
@@ -140,7 +144,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             <input
               type="search"
               class="grow [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
-              placeholder="Search conversations"
+              placeholder="{% translate 'Search conversations' %}"
               x-model="convSearch"
               @input.debounce.300ms="refreshList()"
               @keydown.escape.stop="convSearch = ''; refreshList()"
@@ -151,7 +155,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               x-cloak
               @click="convSearch = ''; refreshList()"
               class="btn btn-ghost btn-xs btn-square -mr-1"
-              title="Clear search"
+              title="{% translate 'Clear search' %}"
             >
               <i data-lucide="x" class="w-3 h-3"></i>
             </button>
@@ -179,9 +183,10 @@ be defined before the parser reaches the markup using it, or server-rendered
       >
         <ul class="menu p-0 w-full">
           {% if ai_enabled %}
-            {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip="New AI Chat" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+            {% include "ui/partials/drawer_item.html" with icon="sparkles" label=_("AI") color="secondary" onclick="botFilter = ''; showBotPicker = true" tooltip=_("New AI Chat") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           {% endif %}
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="module" onclick="showNewConversationDialog()" tooltip="New chat" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% translate "New" context "new conversation" as new_conversation_short %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label=new_conversation_short color="module" onclick="showNewConversationDialog()" tooltip=_("New chat") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
@@ -201,13 +206,15 @@ be defined before the parser reaches the markup using it, or server-rendered
           <div class="flex items-center gap-2">
             <i data-lucide="phone-call" class="w-4 h-4 text-success shrink-0"></i>
             <div class="flex flex-col min-w-0 leading-tight flex-1">
-              <span class="text-xs font-semibold text-success">Call in progress</span>
+              <span class="text-xs font-semibold text-success">{% translate "Call in progress" %}</span>
               <span
                 class="text-[0.6rem] text-base-content/60 truncate"
-                x-text="callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '')"
+                x-text="callParticipantCountLabel()"
               ></span>
             </div>
           </div>
+          {% translate "Return to room" as return_to_room_label %}
+          {% translate "Join call" as join_call_label %}
           <button
             type="button"
             class="btn btn-xs btn-success gap-1"
@@ -215,7 +222,7 @@ be defined before the parser reaches the markup using it, or server-rendered
           >
             <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
             <span
-              x-text="callBannerAction() === 'return' ? 'Return to room' : 'Join call'"
+              x-text="callBannerAction() === 'return' ? '{{ return_to_room_label|escapejs }}' : '{{ join_call_label|escapejs }}'"
             ></span>
           </button>
         </div>
@@ -225,7 +232,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               type="button"
               class="flex items-center justify-center w-10 h-10 p-0! rounded-lg text-success hover:bg-success/10 transition-colors"
               @click="openCallRoom(callSession && callSession.conversation_id)"
-              title="Open voice room"
+              title="{% translate 'Open voice room' %}"
             >
               <i data-lucide="phone-call" class="w-5 h-5 shrink-0"></i>
             </button>
@@ -236,17 +243,23 @@ be defined before the parser reaches the markup using it, or server-rendered
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0 w-full">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip="Help" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('chat-help-dialog').showModal()" tooltip=_("Help") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
       <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
       <div class="border-t border-base-300 py-4 px-3">
+        {% translate "Expand sidebar" as expand_sidebar_label %}
+        {% translate "Collapse sidebar" as collapse_sidebar_label %}
         <ul class="menu p-0 hidden lg:block w-full">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
+          {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+            {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
+            {% endwith %}
+          {% endwith %}
         </ul>
         <ul class="menu p-0 lg:hidden w-full">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip=_("Preferences") collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
     </aside>

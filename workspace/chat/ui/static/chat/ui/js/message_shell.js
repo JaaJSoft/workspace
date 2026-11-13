@@ -167,7 +167,7 @@
         const badge = el('span', 'badge badge-xs badge-secondary gap-0.5');
         badge.setAttribute('x-show', `isBotMessage({author: {id: ${authorId}}})`);
         badge.setAttribute('x-cloak', '');
-        badge.textContent = 'AI';
+        badge.textContent = gettext('AI');
         row.appendChild(badge);
       }
       return row;
@@ -194,7 +194,7 @@
 
       if (bubble.hasAttribute('data-deleted')) {
         bubble.classList.add('msg-bubble', 'rounded-2xl', 'text-sm', 'italic', 'bg-base-200', 'text-base-content/40');
-        bubble.textContent = 'Message deleted';
+        bubble.textContent = gettext('Message deleted');
         column.appendChild(bubble);
         return;
       }
@@ -339,7 +339,7 @@
       const text = el('div', 'min-w-0 flex-1');
       if (deleted) {
         const span = el('span', 'text-xs italic opacity-50');
-        span.textContent = 'Message deleted';
+        span.textContent = gettext('Message deleted');
         text.appendChild(span);
       } else {
         const authorEl = el('span', 'text-xs font-semibold text-module');
@@ -390,7 +390,7 @@
       // .stop inside the mosaic: the whole cell opens the viewer on click.
       // x-on:, not the @ shorthand: setAttribute rejects '@' in a name.
       btn.setAttribute(grid ? 'x-on:click.stop' : 'x-on:click', `saveAttachmentToFiles('${item.uuid}')`);
-      btn.setAttribute('title', 'Save to Files');
+      btn.setAttribute('title', gettext('Save to Files'));
       btn.appendChild(icon('folder-down', chip ? 'w-3.5 h-3.5' : 'w-3 h-3'));
       return btn;
     }

@@ -11,7 +11,13 @@
   textarea) - see the composerMode preference in input.js. Below sm it is
   always the plain mobile textarea.
 {% endcomment %}
-{% load static %}
+{% load i18n static %}
+{% translate "Replying to %(name)s" as replying_to_label %}
+{% translate "Back to formatted text" as back_to_formatted_label %}
+{% translate "Edit as markdown" as edit_as_markdown_label %}
+{% translate "Markdown supported" as markdown_supported_label %}
+{% translate "Markdown syntax is applied as you type" as markdown_live_label %}
+{% translate "Esc" context "keyboard key" as esc_key %}
 <!-- Input area -->
 <div
   class="p-3 bg-base-100 border-t border-base-300"
@@ -32,7 +38,7 @@
     <div class="flex-1 min-w-0">
       <span
         class="text-module font-semibold text-xs"
-        x-text="'Replying to ' + (replyingTo?.author || '')"
+        x-text="interpolate('{{ replying_to_label|escapejs }}', { name: replyingTo?.author || '' }, true)"
       ></span>
       <p
         class="text-xs text-base-content/60 truncate"
@@ -43,7 +49,7 @@
       type="button"
       class="btn btn-ghost btn-xs btn-square shrink-0"
       @click="cancelReply()"
-      title="Cancel reply (Esc)"
+      title="{% translate 'Cancel reply (Esc)' %}"
     >
       <i data-lucide="x" class="w-3 h-3"></i>
     </button>
@@ -56,7 +62,11 @@
     class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-module/15 rounded-lg text-sm"
   >
     <i data-lucide="pencil" class="w-4 h-4 text-module"></i>
-    <span class="text-module flex-1">Editing - <kbd class="kbd kbd-xs">Esc</kbd> to cancel</span>
+    <span class="text-module flex-1">
+      {% blocktranslate trimmed %}
+        Editing - <kbd class="kbd kbd-xs">{{ esc_key }}</kbd> to cancel
+      {% endblocktranslate %}
+    </span>
     <button
       type="button"
       class="btn btn-ghost btn-xs btn-square"
@@ -132,7 +142,7 @@
                padding-top:8px;
                padding-bottom:8px"
         class="textarea textarea-ghost w-full max-h-24 resize-none px-3 focus:outline-hidden text-sm border-0! outline-0! bg-transparent!"
-        placeholder="Message..."
+        placeholder="{% translate 'Message...' %}"
         rows="1"
       ></textarea>
     </div>
@@ -142,7 +152,7 @@
       x-show="recorderSupported && !hasComposerContent()"
       x-cloak
       @click="startRecording()"
-      title="Record a voice message"
+      title="{% translate 'Record a voice message' %}"
     >
       <i data-lucide="mic" class="w-5 h-5"></i>
     </button>
@@ -151,8 +161,8 @@
       class="btn btn-module btn-square shrink-0 w-9.5 h-9.5 min-h-0"
       x-show="!recorderSupported || hasComposerContent()"
       @click="sendOrEdit()"
-      title="Send"
-      aria-label="Send message"
+      title="{% translate 'Send' %}"
+      aria-label="{% translate 'Send message' %}"
       :disabled="!hasComposerContent() || (botTyping && isBotConversation(activeConversation))"
     >
       <i data-lucide="send" class="w-4.5 h-4.5"></i>
@@ -178,7 +188,7 @@
       type="button"
       class="btn btn-ghost btn-square shrink-0 min-h-0 w-9.5 h-9.5 sm:w-8 sm:h-8"
       @click="cancelRecording()"
-      title="Discard"
+      title="{% translate 'Discard' %}"
     >
       <i data-lucide="trash-2" class="w-5 h-5 sm:w-4 sm:h-4"></i>
     </button>
@@ -186,7 +196,7 @@
       type="button"
       class="btn btn-error btn-square shrink-0 min-h-0 w-9.5 h-9.5 sm:w-8 sm:h-8"
       @click="stopRecording()"
-      title="Stop"
+      title="{% translate 'Stop' %}"
     >
       <i data-lucide="square" class="w-5 h-5 sm:w-4 sm:h-4"></i>
     </button>
@@ -229,7 +239,7 @@
             class="range range-xs flex-1 min-w-0"
             :value="progressPercent()"
             @input="seekToPercent($event.target.value)"
-            aria-label="Seek"
+            aria-label="{% translate 'Seek' %}"
           />
           <span
             class="text-[0.65rem] opacity-70 tabular-nums shrink-0"
@@ -242,7 +252,7 @@
         class="btn btn-ghost btn-square shrink-0 min-h-0 w-9.5 h-9.5 sm:w-8 sm:h-8"
         @click="cancelRecording()"
         :disabled="sendingRecording"
-        title="Discard"
+        title="{% translate 'Discard' %}"
       >
         <i data-lucide="trash-2" class="w-5 h-5 sm:w-4 sm:h-4"></i>
       </button>
@@ -251,7 +261,7 @@
         class="btn btn-module btn-square shrink-0 min-h-0 w-9.5 h-9.5 sm:w-8 sm:h-8"
         @click="sendRecording()"
         :disabled="sendingRecording"
-        title="Send"
+        title="{% translate 'Send' %}"
       >
         <i data-lucide="send" class="w-4.5 h-4.5 sm:w-3.5 sm:h-3.5"></i>
       </button>
@@ -271,7 +281,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         :class="formatActive('bold') && 'btn-active'"
-        title="Bold (Ctrl+B)"
+        title="{% translate 'Bold (Ctrl+B)' %}"
         @mousedown.prevent
         @click="applyFormat('bold')"
       >
@@ -281,7 +291,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         :class="formatActive('italic') && 'btn-active'"
-        title="Italic (Ctrl+I)"
+        title="{% translate 'Italic (Ctrl+I)' %}"
         @mousedown.prevent
         @click="applyFormat('italic')"
       >
@@ -291,7 +301,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         :class="formatActive('strike') && 'btn-active'"
-        title="Strikethrough (Ctrl+Shift+X)"
+        title="{% translate 'Strikethrough (Ctrl+Shift+X)' %}"
         @mousedown.prevent
         @click="applyFormat('strike')"
       >
@@ -301,7 +311,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         :class="formatActive('code') && 'btn-active'"
-        title="Code (Ctrl+E)"
+        title="{% translate 'Code (Ctrl+E)' %}"
         @mousedown.prevent
         @click="applyFormat('code')"
       >
@@ -311,7 +321,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         :class="formatActive('link') && 'btn-active'"
-        title="Insert link"
+        title="{% translate 'Insert link' %}"
         @mousedown.prevent
         @click="insertLink()"
       >
@@ -321,7 +331,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         :class="composerMode === 'markdown' && 'btn-active'"
-        :title="composerMode === 'markdown' ? 'Back to formatted text' : 'Edit as markdown'"
+        :title="composerMode === 'markdown' ? '{{ back_to_formatted_label|escapejs }}' : '{{ edit_as_markdown_label|escapejs }}'"
         :aria-pressed="composerMode === 'markdown'"
         @mousedown.prevent
         @click="toggleComposerMode()"
@@ -337,7 +347,7 @@
           type="button"
           class="btn btn-ghost btn-xs btn-square opacity-40 hover:opacity-100"
           tabindex="0"
-          title="Keyboard shortcuts"
+          title="{% translate 'Keyboard shortcuts' %}"
         >
           <i data-lucide="circle-help" class="w-3.5 h-3.5"></i>
         </button>
@@ -345,28 +355,30 @@
           tabindex="0"
           class="dropdown-content mb-2 p-3 bg-base-100 border border-base-300 rounded-lg shadow-lg w-56 z-50"
         >
-          <p class="text-xs font-semibold mb-1.5">Keyboard shortcuts</p>
+          <p class="text-xs font-semibold mb-1.5">{% translate "Keyboard shortcuts" %}</p>
           <div
             class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs text-base-content/70"
           >
-            <span>Send</span>            <kbd class="kbd kbd-xs">Enter</kbd>
-            <span>New line</span>         <kbd class="kbd kbd-xs">Shift+Enter</kbd>
-            <span>Bold</span>             <kbd class="kbd kbd-xs">Ctrl+B</kbd>
-            <span>Italic</span>           <kbd class="kbd kbd-xs">Ctrl+I</kbd>
-            <span>Code</span>             <kbd class="kbd kbd-xs">Ctrl+E</kbd>
-            <span>Strikethrough</span>    <kbd class="kbd kbd-xs">Ctrl+Shift+X</kbd>
-            <span>Edit last msg</span>    <kbd class="kbd kbd-xs">Arrow Up</kbd>
-            <span>Cancel edit</span>      <kbd class="kbd kbd-xs">Esc</kbd>
-            <span>Search messages</span>   <kbd class="kbd kbd-xs">Ctrl+F</kbd>
-            <span>Conversation info</span> <kbd class="kbd kbd-xs">Alt+I</kbd>
-            <span>New chat</span>          <kbd class="kbd kbd-xs">Alt+N</kbd>
-            <span>Mention user</span>      <kbd class="kbd kbd-xs">@</kbd>
+            <span>{% translate "Send" %}</span>            <kbd
+              class="kbd kbd-xs"
+            >{% translate "Enter" context "keyboard key" %}</kbd>
+            <span>{% translate "New line" %}</span>         <kbd class="kbd kbd-xs">{% translate "Shift" context "keyboard key" %}+{% translate "Enter" context "keyboard key" %}</kbd>
+            <span>{% translate "Bold" %}</span>             <kbd class="kbd kbd-xs">Ctrl+B</kbd>
+            <span>{% translate "Italic" %}</span>           <kbd class="kbd kbd-xs">Ctrl+I</kbd>
+            <span>{% translate "Code" %}</span>             <kbd class="kbd kbd-xs">Ctrl+E</kbd>
+            <span>{% translate "Strikethrough" %}</span>    <kbd class="kbd kbd-xs">Ctrl+{% translate "Shift" context "keyboard key" %}+X</kbd>
+            <span>{% translate "Edit last msg" %}</span>    <kbd class="kbd kbd-xs">{% translate "Arrow Up" context "keyboard key" %}</kbd>
+            <span>{% translate "Cancel edit" %}</span>      <kbd class="kbd kbd-xs">{{ esc_key }}</kbd>
+            <span>{% translate "Search messages" %}</span>   <kbd class="kbd kbd-xs">Ctrl+F</kbd>
+            <span>{% translate "Conversation info" %}</span> <kbd class="kbd kbd-xs">Alt+I</kbd>
+            <span>{% translate "New chat" %}</span>          <kbd class="kbd kbd-xs">Alt+N</kbd>
+            <span>{% translate "Mention user" %}</span>      <kbd class="kbd kbd-xs">@</kbd>
           </div>
           <p
             class="text-xs text-base-content/40 mt-2"
-            x-text="composerMode === 'markdown' ? 'Markdown supported' : 'Markdown syntax is applied as you type'"
+            x-text="composerMode === 'markdown' ? '{{ markdown_supported_label|escapejs }}' : '{{ markdown_live_label|escapejs }}'"
           >
-            Markdown supported
+            {{ markdown_supported_label }}
           </p>
         </div>
       </div>
@@ -377,7 +389,7 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square"
-        title="Emoji"
+        title="{% translate 'Emoji' %}"
         @click="openEmojiPicker('input', $event)"
       >
         <i data-lucide="smile" class="w-3.5 h-3.5"></i>
@@ -394,7 +406,7 @@
         x-show="recorderSupported && !hasComposerContent()"
         x-cloak
         @click="startRecording()"
-        title="Record a voice message"
+        title="{% translate 'Record a voice message' %}"
       >
         <i data-lucide="mic" class="w-3.5 h-3.5"></i>
       </button>
@@ -404,8 +416,8 @@
         type="button"
         class="btn btn-module btn-sm btn-square"
         @click="sendOrEdit()"
-        title="Send"
-        aria-label="Send message"
+        title="{% translate 'Send' %}"
+        aria-label="{% translate 'Send message' %}"
         :disabled="!hasComposerContent() || (botTyping && isBotConversation(activeConversation))"
       >
         <i data-lucide="send" class="w-3.5 h-3.5"></i>
@@ -417,7 +429,7 @@
       x-show="richComposerActive()"
       x-init="mountRichComposer($el)"
       data-bundle-url="{% static 'chat/ui/js/vendor/rich-composer/rich-composer.js' %}"
-      data-placeholder="Type a message..."
+      data-placeholder="{% translate 'Type a message...' %}"
       class="msg-body prose prose-sm max-w-none"
     ></div>
 
@@ -430,7 +442,7 @@
       @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
       @paste="handlePaste($event)"
       class="textarea textarea-ghost w-full min-h-10 max-h-32 resize-none leading-snug px-3 py-1.5 focus:outline-hidden focus:border-transparent bg-transparent!"
-      placeholder="Type a message..."
+      placeholder="{% translate 'Type a message...' %}"
       rows="1"
     ></textarea>
   </div>

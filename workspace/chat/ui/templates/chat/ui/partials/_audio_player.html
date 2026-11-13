@@ -1,4 +1,6 @@
-{% load l10n %}
+{% load i18n l10n %}
+{% translate "Pause" as pause_label %}
+{% translate "Play" as play_label %}
 {% comment %}
    Inline audio player for one attachment.
    Context: att (MessageAttachment), is_own (bool).
@@ -28,8 +30,8 @@
       type="button"
       class="btn btn-ghost btn-xs btn-circle shrink-0"
       @click="toggle()"
-      :title="playing ? 'Pause' : 'Play'"
-      :aria-label="playing ? 'Pause' : 'Play'"
+      :title="playing ? '{{ pause_label|escapejs }}' : '{{ play_label|escapejs }}'"
+      :aria-label="playing ? '{{ pause_label|escapejs }}' : '{{ play_label|escapejs }}'"
     >
       <i data-lucide="play" class="w-4 h-4" x-show="!playing"></i>
       <i data-lucide="pause" class="w-4 h-4" x-show="playing" x-cloak></i>
@@ -43,7 +45,7 @@
       class="range range-xs flex-1 min-w-0"
       :value="progressPercent()"
       @input="seekToPercent($event.target.value)"
-      aria-label="Seek"
+      aria-label="{% translate 'Seek' %}"
     />
 
     <span
@@ -56,14 +58,14 @@
       class="btn btn-ghost btn-xs px-1 tabular-nums shrink-0"
       @click="cycleSpeed()"
       x-text="speedLabel()"
-      title="Playback speed"
+      title="{% translate 'Playback speed' %}"
     ></button>
 
     <button
       type="button"
       class="btn btn-ghost btn-xs btn-square shrink-0"
       @click="detailsOpen = !detailsOpen"
-      title="File details"
+      title="{% translate 'File details' %}"
       :aria-expanded="detailsOpen"
     >
       <i
@@ -86,7 +88,7 @@
       href="/api/v1/chat/attachments/{{ att.uuid }}"
       download="{{ att.original_name }}"
       class="btn btn-ghost btn-xs btn-square shrink-0"
-      title="Download"
+      title="{% translate 'Download' %}"
     >
       <i data-lucide="download" class="w-3.5 h-3.5"></i>
     </a>
@@ -94,7 +96,7 @@
       type="button"
       class="btn btn-ghost btn-xs btn-square shrink-0"
       @click="saveAttachmentToFiles('{{ att.uuid|escapejs }}')"
-      title="Save to Files"
+      title="{% translate 'Save to Files' %}"
     >
       <i data-lucide="folder-down" class="w-3.5 h-3.5"></i>
     </button>

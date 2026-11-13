@@ -1,6 +1,7 @@
 import logging
 
 from django.utils import timezone
+from django.utils.translation import gettext
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -40,7 +41,7 @@ class BotRetryView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         if not hasattr(target.author, "bot_profile"):
             return Response(
-                {"detail": "Only bot messages can be retried."},
+                {"detail": gettext("Only bot messages can be retried.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -56,7 +57,7 @@ class BotRetryView(APIView):
         )
         if not last_user_msg:
             return Response(
-                {"detail": "No user message found to retry."},
+                {"detail": gettext("No user message found to retry.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -90,7 +91,8 @@ class BotCancelView(APIView):
 
         if not cancelled:
             return Response(
-                {"detail": "No active task found."}, status=status.HTTP_404_NOT_FOUND
+                {"detail": gettext("No active task found.")},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         return Response({"status": "cancelled"})
@@ -110,7 +112,11 @@ class ConversationRegenerateTitleView(APIView):
 
         if not is_bot_conversation(conversation_id):
             return Response(
-                {"detail": "Only AI conversations support title regeneration."},
+                {
+                    "detail": gettext(
+                        "Only AI conversations support title regeneration."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -120,7 +126,7 @@ class ConversationRegenerateTitleView(APIView):
         ).exists()
         if not has_messages:
             return Response(
-                {"detail": "The conversation has no messages yet."},
+                {"detail": gettext("The conversation has no messages yet.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

@@ -1,8 +1,4 @@
+{% load i18n %}
 {% for r in quick_reactions %}
-  <button
-    type="button"
-    class="btn btn-ghost btn-xs btn-square text-base leading-none{% if r.has_mine %} bg-module/25 text-module hover:bg-module/30{% endif %}"
-    @click="toggleReaction('{{ message_uuid|escapejs }}', '{{ r.emoji|escapejs }}')"
-    {% if r.has_mine %}title="You reacted with {{ r.emoji }}"{% endif %}
-  >{{ r.emoji }}</button>
+  <button type="button" class="btn btn-ghost btn-xs btn-square text-base leading-none{% if r.has_mine %} bg-module/25 text-module hover:bg-module/30{% endif %}" @click="toggleReaction('{{ message_uuid|escapejs }}', '{{ r.emoji|escapejs }}')" {% if r.has_mine %}title="{% blocktranslate trimmed with emoji=r.emoji %}You reacted with {{ emoji }}{% endblocktranslate %}"{% endif %}>{{ r.emoji }}</button>
 {% endfor %}

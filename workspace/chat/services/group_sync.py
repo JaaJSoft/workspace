@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext
 from rest_framework.exceptions import PermissionDenied
 
 from .conversations import ensure_group_admin, lock_conversation
@@ -98,7 +99,9 @@ def create_group_conversation(user, groups, title=""):
 
     groups = list(groups)
     if not user.groups.filter(pk__in=[g.pk for g in groups]).exists():
-        raise PermissionDenied("You must belong to at least one of the groups.")
+        raise PermissionDenied(
+            gettext("You must belong to at least one of the groups.")
+        )
 
     conversation = Conversation.objects.create(
         kind=Conversation.Kind.GROUP,

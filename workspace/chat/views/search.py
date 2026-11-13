@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.db.models import Count, F, Max, Min, Q
 from django.utils import timezone
+from django.utils.translation import gettext
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -51,7 +52,7 @@ class ConversationMessageSearchView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -75,7 +76,7 @@ class ConversationMessageSearchView(APIView):
         )
         if not has_any:
             return Response(
-                {"detail": "At least one search criterion is required."},
+                {"detail": gettext("At least one search criterion is required.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -94,7 +95,7 @@ class ConversationMessageSearchView(APIView):
                 qs = qs.filter(author_id=int(author_id))
             except ValueError:
                 return Response(
-                    {"detail": "Invalid author id."},
+                    {"detail": gettext("Invalid author id.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -111,7 +112,7 @@ class ConversationMessageSearchView(APIView):
             # Reject unknown values rather than silently treating them as
             # "no filter".
             return Response(
-                {"detail": "Invalid date_range."},
+                {"detail": gettext("Invalid date_range.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -123,7 +124,7 @@ class ConversationMessageSearchView(APIView):
             parsed = parse_date(date_from)
             if parsed is None:
                 return Response(
-                    {"detail": "Invalid date_from."},
+                    {"detail": gettext("Invalid date_from.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             start, _ = local_date_range(parsed, parsed)
@@ -132,7 +133,7 @@ class ConversationMessageSearchView(APIView):
             parsed = parse_date(date_to)
             if parsed is None:
                 return Response(
-                    {"detail": "Invalid date_to."},
+                    {"detail": gettext("Invalid date_to.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             _, end = local_date_range(parsed, parsed)
@@ -195,7 +196,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -229,7 +230,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
             qs = qs.exclude(media_q)
         elif media_type != "all":
             return Response(
-                {"detail": "Invalid media type."},
+                {"detail": gettext("Invalid media type.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -239,7 +240,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
             limit = min(max(int(request.query_params.get("limit", 24)), 0), 100)
         except TypeError, ValueError:
             return Response(
-                {"detail": "Invalid pagination parameters."},
+                {"detail": gettext("Invalid pagination parameters.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         items = qs[offset : offset + limit]
@@ -288,7 +289,7 @@ class ConversationStatsView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

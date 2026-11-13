@@ -1,10 +1,12 @@
+{% load i18n %}
 <dialog
   x-ref="addMemberDialog"
   class="modal"
   @keydown.escape="$refs.addMemberDialog.close()"
 >
   <div class="modal-box max-w-md p-0 flex flex-col overflow-visible">
-    {% include "ui/partials/dialog_header.html" with icon="user-plus" title="Add members" close_expr="$refs.addMemberDialog.close()" class="px-5 pt-5 pb-2" only %}
+    {% translate "Add members" as add_members_title %}
+    {% include "ui/partials/dialog_header.html" with icon="user-plus" title=add_members_title close_expr="$refs.addMemberDialog.close()" class="px-5 pt-5 pb-2" only %}
 
     <!-- Body -->
     <div class="px-5 pb-5 flex flex-col gap-3">
@@ -13,7 +15,7 @@
         <label class="fieldset-legend">
           <span
             class="text-xs font-medium uppercase tracking-wide text-base-content/50"
-          >Search users</span>
+          >{% translate "Search users" %}</span>
         </label>
         <div class="relative">
           <div
@@ -30,7 +32,7 @@
               type="text"
               x-ref="addMemberSearchInput"
               class="grow bg-transparent outline-hidden text-sm min-w-32 h-6"
-              placeholder="Search users..."
+              placeholder="{% translate 'Search users...' %}"
               x-model="addMemberSearchQuery"
               @input.debounce.300ms="searchUsersForAdd()"
               @keydown="handleAddMemberKeydown($event)"
@@ -80,7 +82,7 @@
             @click.outside="addMemberShowDropdown = false"
             class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
           >
-            No users found
+            {% translate "No users found" %}
           </div>
         </div>
       </div>
@@ -92,7 +94,7 @@
           class="btn btn-ghost btn-sm"
           @click="$refs.addMemberDialog.close()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="button"
@@ -103,7 +105,7 @@
           <template x-if="!addMemberSaving">
             <span class="flex items-center gap-1.5">
               <i data-lucide="user-plus" class="w-4 h-4"></i>
-              Add
+              {% translate "Add" context "add members" %}
             </span>
           </template>
           <span x-show="addMemberSaving" class="loading loading-spinner loading-xs"></span>
@@ -112,6 +114,6 @@
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

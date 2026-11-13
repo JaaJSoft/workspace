@@ -2,7 +2,10 @@ import json
 
 from django import template
 from django.utils import timezone
+from django.utils.formats import date_format
+from django.utils.translation import gettext, pgettext
 
+from workspace.chat.services.calls import call_duration_label
 from workspace.chat.services.tool_calls import display_args
 
 register = template.Library()
@@ -15,15 +18,20 @@ def date_label(value):
         return ""
     today = timezone.localdate()
     if value == today:
-        return "Today"
+        return gettext("Today")
     diff = (today - value).days
     if diff == 1:
-        return "Yesterday"
-    # Use %#d on Windows, %-d on Unix for day without leading zero
-    try:
-        return value.strftime("%b %-d")
-    except ValueError:
-        return value.strftime("%b %#d")
+        return gettext("Yesterday")
+    # Translators: a date format for Django's date filter; "M j" reads "Feb 5".
+    return date_format(value, pgettext("chat day separator format", "M j"))
+
+
+@register.filter
+def call_duration(tool_data):
+    """A call system message's duration, in the reader's language."""
+    if not isinstance(tool_data, dict):
+        return ""
+    return call_duration_label(tool_data)
 
 
 @register.filter

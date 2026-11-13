@@ -1,5 +1,6 @@
 from django.db.models import CharField, Q, Value
 from django.db.models.functions import Concat
+from django.utils.translation import gettext, pgettext
 
 from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.services.conversations import user_conversation_ids
@@ -52,7 +53,7 @@ def search_conversations(query, user, limit):
                 match_type="title",
                 type_icon="users",
                 module_slug="chat",
-                tags=(SearchTag("Group", "info"),),
+                tags=(SearchTag(gettext("Group"), "info"),),
             )
         )
 
@@ -117,7 +118,7 @@ def search_chat_messages(query, user, limit):
                 match_type="message",
                 type_icon="message-square",
                 module_slug="chat",
-                tags=(SearchTag("Message", "info"),),
+                tags=(SearchTag(pgettext("search result type", "Message"), "info"),),
             )
         )
     return results

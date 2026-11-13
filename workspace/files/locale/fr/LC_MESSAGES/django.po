@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:53+0000\n"
+"POT-Creation-Date: 2026-11-13 14:04+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -553,10 +553,6 @@ msgid "Next page"
 msgstr "Page suivante"
 
 #: ui/templates/files/ui/index.html
-msgid "close sidebar"
-msgstr "fermer la barre latérale"
-
-#: ui/templates/files/ui/index.html
 msgid "Quick Access"
 msgstr "Accès rapide"
 
@@ -888,10 +884,6 @@ msgstr "Extension personnalisée"
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Extension"
 msgstr "Extension"
-
-#: ui/templates/files/ui/partials/dialogs.html
-msgid "Keyboard Shortcuts"
-msgstr "Raccourcis clavier"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Go back"
@@ -1380,10 +1372,6 @@ msgstr "Créer un dossier"
 #: ui/templates/files/ui/partials/group_folder_dialog.html
 msgid "Create Group Folder"
 msgstr "Créer un dossier de groupe"
-
-#: ui/templates/files/ui/partials/group_folder_dialog.html
-msgid "Group"
-msgstr "Groupe"
 
 #: ui/templates/files/ui/partials/group_folder_dialog.html
 msgid "Select a group"
@@ -2392,10 +2380,6 @@ msgid "Toggle minimap"
 msgstr "Afficher/masquer la minicarte"
 
 #: ui/templates/files/ui/viewers/text_viewer.html
-msgid "AI"
-msgstr "IA"
-
-#: ui/templates/files/ui/viewers/text_viewer.html
 msgid "Improve"
 msgstr "Améliorer"
 
@@ -2578,10 +2562,6 @@ msgstr ""
 #: views/operations.py
 msgid "No such operation."
 msgstr "Cette opération n’existe pas."
-
-#: views/operations.py views/uploads.py
-msgid "Folder not found."
-msgstr "Dossier introuvable."
 
 #: views/operations.py
 msgid "Too many operations in progress. Wait for one to finish."

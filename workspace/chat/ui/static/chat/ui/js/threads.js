@@ -100,7 +100,7 @@ window.chatThreadsMixin = function chatThreadsMixin() {
         .querySelectorAll(`[data-thread-count="${rootUuid}"]`)
         .forEach((label) => {
           const next = (parseInt(label.textContent, 10) || 0) + 1;
-          label.textContent = `${next} ${next === 1 ? 'reply' : 'replies'}`;
+          label.textContent = interpolate(ngettext('%(count)s reply', '%(count)s replies', next), { count: next }, true);
         });
     },
   };

@@ -2,15 +2,24 @@
 Rows of the conversation context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from conversation_pane.html.
 {% endcomment %}
+{% load i18n %}
+{% translate "Conversation info" as info_label %}
+{% translate "Copy link" as copy_link_label %}
+{% translate "Pin conversation" as pin_label %}
+{% translate "Unpin conversation" as unpin_label %}
+{% translate "Rename" as rename_label %}
+{% translate "Regenerate title" as regenerate_label %}
+{% translate "Add members" as add_members_label %}
+{% translate "Leave conversation" as leave_label %}
 <ul class="menu menu-sm p-0 w-full">
-  {% include "ui/partials/context_menu_item.html" with icon="info" label="Conversation info" click="ctxMenuAction('info')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="link" label="Copy link" click="ctxMenuAction('copy_link')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="!ctxMenu.isPinned" icon="pin" label="Pin conversation" click="ctxMenuAction('pin')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isPinned" icon="pin-off" label="Unpin conversation" click="ctxMenuAction('unpin')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isAdmin || ctxMenu.isBot" icon="pencil" label="Rename" click="ctxMenuAction('rename')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isBot" icon="sparkles" label="Regenerate title" click="ctxMenuAction('regenerate_title')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isAdmin && !ctxMenu.isGroupLinked" icon="user-plus" label="Add members" click="ctxMenuAction('add_members')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="info" label=info_label click="ctxMenuAction('info')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="link" label=copy_link_label click="ctxMenuAction('copy_link')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="!ctxMenu.isPinned" icon="pin" label=pin_label click="ctxMenuAction('pin')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isPinned" icon="pin-off" label=unpin_label click="ctxMenuAction('unpin')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isAdmin || ctxMenu.isBot" icon="pencil" label=rename_label click="ctxMenuAction('rename')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isBot" icon="sparkles" label=regenerate_label click="ctxMenuAction('regenerate_title')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="ctxMenu.isAdmin && !ctxMenu.isGroupLinked" icon="user-plus" label=add_members_label click="ctxMenuAction('add_members')" only %}
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="log-out" label="Leave conversation" tone="error" click="ctxMenuAction('leave')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="log-out" label=leave_label tone="error" click="ctxMenuAction('leave')" only %}
 </ul>

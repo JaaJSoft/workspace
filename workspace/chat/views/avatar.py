@@ -2,6 +2,7 @@ import logging
 
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse
+from django.utils.translation import gettext
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.parsers import MultiPartParser
@@ -57,39 +58,47 @@ class GroupAvatarUploadView(APIView):
         role = get_conversation_role(request.user, conversation_id)
         if role is None:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
         if conversation.kind != Conversation.Kind.GROUP:
             return Response(
-                {"detail": "Avatars are only supported for group conversations."},
+                {
+                    "detail": gettext(
+                        "Avatars are only supported for group conversations."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if role != ConversationMember.Role.ADMIN:
             return Response(
-                {"detail": "Only group admins can change the avatar."},
+                {"detail": gettext("Only group admins can change the avatar.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         image = request.FILES.get("image")
         if not image:
             return Response(
-                {"errors": ["No image provided."]},
+                {"errors": [gettext("No image provided.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if image.content_type not in AVATAR_ALLOWED_TYPES:
             return Response(
-                {"errors": ["Unsupported image type. Use JPEG, PNG, WebP, or GIF."]},
+                {
+                    "errors": [
+                        gettext("Unsupported image type. Use JPEG, PNG, WebP, or GIF.")
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if image.size > AVATAR_MAX_SIZE:
             return Response(
-                {"errors": ["Image too large. Maximum size is 10 MB."]},
+                {"errors": [gettext("Image too large. Maximum size is 10 MB.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -100,13 +109,13 @@ class GroupAvatarUploadView(APIView):
             crop_h = float(request.data.get("crop_h", 0))
         except TypeError, ValueError:
             return Response(
-                {"errors": ["Invalid crop coordinates."]},
+                {"errors": [gettext("Invalid crop coordinates.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if crop_w <= 0 or crop_h <= 0:
             return Response(
-                {"errors": ["Crop width and height must be positive."]},
+                {"errors": [gettext("Crop width and height must be positive.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -130,10 +139,10 @@ class GroupAvatarUploadView(APIView):
                 exc_info=True,
             )
             return Response(
-                {"errors": ["Invalid image or crop parameters."]},
+                {"errors": [gettext("Invalid image or crop parameters.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response({"message": "Group avatar updated successfully."})
+        return Response({"message": gettext("Group avatar updated successfully.")})
 
     @extend_schema(
         summary="Delete group avatar",
@@ -149,25 +158,29 @@ class GroupAvatarUploadView(APIView):
         role = get_conversation_role(request.user, conversation_id)
         if role is None:
             return Response(
-                {"detail": "Not a member of this conversation."},
+                {"detail": gettext("Not a member of this conversation.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
         if conversation.kind != Conversation.Kind.GROUP:
             return Response(
-                {"detail": "Avatars are only supported for group conversations."},
+                {
+                    "detail": gettext(
+                        "Avatars are only supported for group conversations."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if role != ConversationMember.Role.ADMIN:
             return Response(
-                {"detail": "Only group admins can change the avatar."},
+                {"detail": gettext("Only group admins can change the avatar.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         group_avatar_service.delete_group_avatar(conversation)
-        return Response({"message": "Group avatar removed."})
+        return Response({"message": gettext("Group avatar removed.")})
 
 
 @extend_schema(tags=["Chat - Conversations"])

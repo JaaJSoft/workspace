@@ -1,12 +1,16 @@
+{% load i18n %}
+{% translate "%(count)s result" as result_count_one %}
+{% translate "%(count)s results" as result_count_other %}
 <!-- Search panel header -->
 <div
   class="px-4 py-3 border-b border-base-300 flex items-center justify-between"
 >
-  <h4 class="font-semibold text-sm">Search messages</h4>
+  <h4 class="font-semibold text-sm">{% translate "Search messages" %}</h4>
   <button
     type="button"
     class="btn btn-ghost btn-xs btn-square"
     @click="closeSearchPanel()"
+    title="{% translate 'Close' %}"
   >
     <i data-lucide="x" class="w-3.5 h-3.5"></i>
   </button>
@@ -24,12 +28,13 @@
       @keydown="handleSearchKeydown($event)"
       @keydown.escape="closeSearchPanel()"
       class="grow"
-      placeholder="Search..."
+      placeholder="{% translate 'Search...' %}"
     />
     <span
       x-show="searchQuery"
       class="btn btn-ghost btn-xs btn-square"
       @click="searchQuery = ''; searchMessages()"
+      title="{% translate 'Clear search' %}"
     >
       <i data-lucide="x" class="w-3 h-3"></i>
     </span>
@@ -44,7 +49,7 @@
       @click="searchFiltersExpanded = !searchFiltersExpanded"
     >
       <i data-lucide="sliders-horizontal" class="w-3 h-3"></i>
-      Filters
+      {% translate "Filters" %}
       <span x-show="hasActiveSearchFilters()" class="badge badge-xs badge-module"></span>
     </button>
     <button
@@ -54,7 +59,7 @@
       @click="clearSearchFilters()"
     >
       <i data-lucide="x" class="w-3 h-3"></i>
-      Clear
+      {% translate "Clear" %}
     </button>
   </div>
 
@@ -71,13 +76,13 @@
   >
     <!-- Sender filter -->
     <div>
-      <label class="text-xs font-medium text-base-content/60 mb-1 block">Sender</label>
+      <label class="text-xs font-medium text-base-content/60 mb-1 block">{% translate "Sender" %}</label>
       <select
         class="select select-xs w-full"
         x-model="searchFilterAuthor"
         @change="searchMessages()"
       >
-        <option value="">Anyone</option>
+        <option value="">{% translate "Anyone" %}</option>
         <template x-for="m in (activeConversation?.members || [])" :key="m.user.id">
           <option :value="m.user.id" x-text="memberDisplayName(m)"></option>
         </template>
@@ -86,17 +91,17 @@
 
     <!-- Date filter -->
     <div>
-      <label class="text-xs font-medium text-base-content/60 mb-1 block">Date</label>
+      <label class="text-xs font-medium text-base-content/60 mb-1 block">{% translate "Date" %}</label>
       <select
         class="select select-xs w-full"
         x-model="searchFilterDateRange"
         @change="searchMessages()"
       >
-        <option value="">Any time</option>
-        <option value="today">Today</option>
-        <option value="7d">Last 7 days</option>
-        <option value="30d">Last 30 days</option>
-        <option value="custom">Custom range</option>
+        <option value="">{% translate "Any time" %}</option>
+        <option value="today">{% translate "Today" %}</option>
+        <option value="7d">{% translate "Last 7 days" %}</option>
+        <option value="30d">{% translate "Last 30 days" %}</option>
+        <option value="custom">{% translate "Custom range" %}</option>
       </select>
       <!-- Custom date inputs -->
       <div x-show="searchFilterDateRange === 'custom'" class="flex gap-2 mt-1">
@@ -105,21 +110,21 @@
           class="input input-xs flex-1"
           x-model="searchFilterDateFrom"
           @change="searchMessages()"
-          placeholder="From"
+          placeholder="{% translate 'From' %}"
         />
         <input
           type="date"
           class="input input-xs flex-1"
           x-model="searchFilterDateTo"
           @change="searchMessages()"
-          placeholder="To"
+          placeholder="{% translate 'To' context 'date range end' %}"
         />
       </div>
     </div>
 
     <!-- Attachment filters -->
     <div>
-      <label class="text-xs font-medium text-base-content/60 mb-1 block">Attachments</label>
+      <label class="text-xs font-medium text-base-content/60 mb-1 block">{% translate "Attachments" %}</label>
       <div class="flex gap-1">
         <button
           type="button"
@@ -128,7 +133,7 @@
           @click="searchFilterHasFiles = !searchFilterHasFiles; if (searchFilterHasFiles) searchFilterHasImages = false; searchMessages()"
         >
           <i data-lucide="paperclip" class="w-3 h-3"></i>
-          Has files
+          {% translate "Has files" %}
         </button>
         <button
           type="button"
@@ -137,7 +142,7 @@
           @click="searchFilterHasImages = !searchFilterHasImages; if (searchFilterHasImages) searchFilterHasFiles = false; searchMessages()"
         >
           <i data-lucide="image" class="w-3 h-3"></i>
-          Has images
+          {% translate "Has images" %}
         </button>
       </div>
     </div>
@@ -153,7 +158,9 @@
     x-show="!searchLoading && (searchQuery.trim().length >= 2 || hasActiveSearchFilters()) && searchResults.length > 0"
     class="text-xs text-base-content/50"
   >
-    <span x-text="searchResults.length"></span> result<span x-show="searchResults.length !== 1">s</span>
+    <span
+      x-text="interpolate(searchResults.length === 1 ? '{{ result_count_one|escapejs }}' : '{{ result_count_other|escapejs }}', { count: searchResults.length }, true)"
+    ></span>
   </div>
 
   <!-- Results list -->
@@ -199,7 +206,7 @@
       data-lucide="search-x"
       class="w-8 h-8 mx-auto text-base-content/20 mb-2"
     ></i>
-    <p class="text-sm text-base-content/40">No messages found</p>
+    <p class="text-sm text-base-content/40">{% translate "No messages found" %}</p>
   </div>
 
   <!-- Empty state: prompt -->
@@ -211,6 +218,6 @@
       data-lucide="search"
       class="w-8 h-8 mx-auto text-base-content/20 mb-2"
     ></i>
-    <p class="text-sm text-base-content/40">Type at least 2 characters or use filters</p>
+    <p class="text-sm text-base-content/40">{% translate "Type at least 2 characters or use filters" %}</p>
   </div>
 </div>

@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
   One thread: header, the root message and its replies, and a composer.
 
@@ -27,13 +28,13 @@
   >
     <h4 class="font-semibold text-sm flex items-center gap-2">
       <i data-lucide="messages-square" class="w-4 h-4 text-module"></i>
-      Thread
+      {% translate "Thread" %}
     </h4>
     <button
       type="button"
       class="btn btn-ghost btn-xs btn-square"
       @click="closeThread()"
-      title="Close thread"
+      title="{% translate 'Close thread' %}"
     >
       <i data-lucide="x" class="w-3.5 h-3.5"></i>
     </button>
@@ -55,7 +56,7 @@
         @click="loadMoreMessages()"
         :disabled="loadingMoreMessages"
       >
-        <span x-show="!loadingMoreMessages">Load older replies</span>
+        <span x-show="!loadingMoreMessages">{% translate "Load older replies" %}</span>
         <span
           x-show="loadingMoreMessages"
           class="loading loading-spinner loading-xs"

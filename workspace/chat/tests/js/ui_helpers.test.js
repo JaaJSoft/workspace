@@ -14,6 +14,7 @@ const matchMediaStub = (q) => ({
 
 const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/ui_helpers.js', {
   matchMedia: matchMediaStub,
+  getUserLocale: () => 'en-US',
 });
 
 test('chatUiHelpersMixin is exposed on window', () => {
@@ -83,6 +84,7 @@ test('isSmallScreen reads matchMedia at (max-width: 639px)', () => {
 
 const tzCtx = loadScript('workspace/chat/ui/static/chat/ui/js/ui_helpers.js', {
   matchMedia: matchMediaStub,
+  getUserLocale: () => 'en-US',
 });
 tzCtx.getUserTimeZone = () => 'Asia/Tokyo';
 const tzMixin = tzCtx.chatUiHelpersMixin();
@@ -94,4 +96,19 @@ test('formatDate crosses the day boundary in the configured timezone', () => {
 
 test('formatDateTime crosses the day boundary in the configured timezone', () => {
   assert.match(tzMixin.formatDateTime('2026-01-31T20:00:00Z'), /Feb 1|1 févr/);
+});
+
+// ── Count labels ──────────────────────────────────────────────
+
+test('pinnedCountLabel picks the plural form for the count', () => {
+  const h = ctx.chatUiHelpersMixin();
+  assert.equal(h.pinnedCountLabel(1), '1 pin');
+  assert.equal(h.pinnedCountLabel(3), '3 pins');
+});
+
+test('callBannerLabel names the participant count once known', () => {
+  const h = ctx.chatUiHelpersMixin();
+  assert.equal(h.callBannerLabel(0), 'Call in progress');
+  assert.equal(h.callBannerLabel(1), 'Call in progress - 1 participant');
+  assert.equal(h.callBannerLabel(4), 'Call in progress - 4 participants');
 });

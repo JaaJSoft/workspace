@@ -145,7 +145,7 @@ window.chatCallMixin = function chatCallMixin() {
         this._localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (e) {
         this.joiningCall = false;
-        window.AppAlert.error('Microphone permission is required to join a call.');
+        window.AppAlert.error(gettext('Microphone permission is required to join a call.'));
         return;
       }
       let resp;
@@ -162,7 +162,7 @@ window.chatCallMixin = function chatCallMixin() {
       if (resp.status === 409) {
         this._teardownLocal();
         this.joiningCall = false;
-        window.AppAlert.warning('This call is full.');
+        window.AppAlert.warning(gettext('This call is full.'));
         return;
       }
       const data = await resp.json();
@@ -241,8 +241,17 @@ window.chatCallMixin = function chatCallMixin() {
       if (win) {
         try { win.focus(); } catch (e) { /* background-tab focus may be denied */ }
       } else {
-        window.AppAlert.warning('Allow pop-ups to open the voice room.');
+        window.AppAlert.warning(gettext('Allow pop-ups to open the voice room.'));
       }
+    },
+
+    callParticipantCountLabel() {
+      const count = this.callParticipants.length;
+      return interpolate(
+        ngettext('%(count)s participant', '%(count)s participants', count),
+        { count },
+        true,
+      );
     },
 
     callBannerAction() {
@@ -291,7 +300,7 @@ window.chatCallMixin = function chatCallMixin() {
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
         });
       } catch (e) {
-        window.AppAlert.error('Camera permission is required to turn on video.');
+        window.AppAlert.error(gettext('Camera permission is required to turn on video.'));
         return;
       }
       // The user may have toggled again or left while the permission prompt was

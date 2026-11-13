@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:43+0000\n"
+"POT-Creation-Date: 2026-11-13 14:14+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -29,6 +29,21 @@ msgstr "il y a %(count)s h"
 #, python-format
 msgid "%(count)sd ago"
 msgstr "il y a %(count)s j"
+
+#. Translators: Django date format of a "time ago" label older than a
+#. week, "Feb 01". Mirror the month and day order of the browser's
+#. Intl short date in your language (French: "j N", "1 juil."); the
+#. two only disagree on a few month abbreviations ("fév." / "févr.").
+#: dates.py
+msgctxt "time ago date"
+msgid "M d"
+msgstr "j N"
+
+#. Translators: same as "M d", with the year: "Feb 01, 2025".
+#: dates.py
+msgctxt "time ago date with year"
+msgid "M d, Y"
+msgstr "j N Y"
 
 #: templates/ui/partials/attachment_menu.html
 msgid "Attach files"
@@ -215,6 +230,10 @@ msgid "Activity"
 msgstr "Activité"
 
 #: vocabulary.py
+msgid "AI"
+msgstr "IA"
+
+#: vocabulary.py
 msgid "All day"
 msgstr "Toute la journée"
 
@@ -237,6 +256,14 @@ msgstr "Retour"
 #: vocabulary.py
 msgid "Base URL:"
 msgstr "URL de base :"
+
+#: vocabulary.py
+msgid "Bold"
+msgstr "Gras"
+
+#: vocabulary.py
+msgid "bold"
+msgstr "gras"
 
 #: vocabulary.py
 msgid "Calendar"
@@ -267,6 +294,18 @@ msgid "close"
 msgstr "fermer"
 
 #: vocabulary.py
+msgid "close sidebar"
+msgstr "fermer la barre latérale"
+
+#: vocabulary.py
+msgid "Code block"
+msgstr "Bloc de code"
+
+#: vocabulary.py
+msgid "code block"
+msgstr "bloc de code"
+
+#: vocabulary.py
 msgid "Collapse"
 msgstr "Replier"
 
@@ -287,6 +326,10 @@ msgid "Continue"
 msgstr "Continuer"
 
 #: vocabulary.py
+msgid "Copied!"
+msgstr "Copié !"
+
+#: vocabulary.py
 msgid "Copy link"
 msgstr "Copier le lien"
 
@@ -299,6 +342,14 @@ msgid "Create"
 msgstr "Créer"
 
 #: vocabulary.py
+msgid "Crop width and height must be positive."
+msgstr "La largeur et la hauteur du recadrage doivent être positives."
+
+#: vocabulary.py
+msgid "Crop your photo"
+msgstr "Recadrez votre photo"
+
+#: vocabulary.py
 msgid "Dashboard"
 msgstr "Tableau de bord"
 
@@ -307,8 +358,16 @@ msgid "Default"
 msgstr "Par défaut"
 
 #: vocabulary.py
+msgid "Delete message"
+msgstr "Supprimer le message"
+
+#: vocabulary.py
 msgid "Delete permanently"
 msgstr "Supprimer définitivement"
+
+#: vocabulary.py
+msgid "Discard"
+msgstr "Abandonner"
 
 #: vocabulary.py
 msgid "Dismiss"
@@ -359,8 +418,16 @@ msgid "Folder name"
 msgstr "Nom du dossier"
 
 #: vocabulary.py
+msgid "Folder not found."
+msgstr "Dossier introuvable."
+
+#: vocabulary.py
 msgid "Folders"
 msgstr "Dossiers"
+
+#: vocabulary.py
+msgid "From"
+msgstr "De"
 
 #: vocabulary.py
 msgid "Full API docs are available at"
@@ -371,6 +438,10 @@ msgid "Generate"
 msgstr "Générer"
 
 #: vocabulary.py
+msgid "Group"
+msgstr "Groupe"
+
+#: vocabulary.py
 msgid "Groups"
 msgstr "Groupes"
 
@@ -379,8 +450,44 @@ msgid "Hide password"
 msgstr "Masquer le mot de passe"
 
 #: vocabulary.py
+msgid "Image too large. Maximum size is 10 MB."
+msgstr "Image trop volumineuse. La taille maximale est de 10 Mo."
+
+#: vocabulary.py
 msgid "Imports"
 msgstr "Importations"
+
+#: vocabulary.py
+msgid "Inline code"
+msgstr "Code en ligne"
+
+#: vocabulary.py
+msgid "inline code"
+msgstr "code en ligne"
+
+#: vocabulary.py
+msgid "Invalid crop coordinates."
+msgstr "Coordonnées de recadrage invalides."
+
+#: vocabulary.py
+msgid "Invalid image or crop parameters."
+msgstr "Image ou paramètres de recadrage invalides."
+
+#: vocabulary.py
+msgid "Italic"
+msgstr "Italique"
+
+#: vocabulary.py
+msgid "italic"
+msgstr "italique"
+
+#: vocabulary.py
+msgid "Keyboard Shortcuts"
+msgstr "Raccourcis clavier"
+
+#: vocabulary.py
+msgid "link"
+msgstr "lien"
 
 #: vocabulary.py
 msgid "Link copied to clipboard"
@@ -409,6 +516,14 @@ msgstr "Emplacement"
 #: vocabulary.py
 msgid "Mail"
 msgstr "E-mails"
+
+#: vocabulary.py
+msgid "Markdown Formatting"
+msgstr "Mise en forme Markdown"
+
+#: vocabulary.py
+msgid "Markdown supported"
+msgstr "Markdown pris en charge"
 
 #: vocabulary.py
 msgid "Merge"
@@ -451,8 +566,28 @@ msgid "Next"
 msgstr "Suivant"
 
 #: vocabulary.py
+msgid "No image provided."
+msgstr "Aucune image fournie."
+
+#: vocabulary.py
+msgid "No one yet"
+msgstr "Personne pour l’instant"
+
+#: vocabulary.py
+msgid "No users found"
+msgstr "Aucun utilisateur trouvé"
+
+#: vocabulary.py
 msgid "Notes"
 msgstr "Notes"
+
+#: vocabulary.py
+msgid "Nothing"
+msgstr "Rien"
+
+#: vocabulary.py
+msgid "Notifications"
+msgstr "Notifications"
 
 #: vocabulary.py
 msgid "Open"
@@ -461,6 +596,10 @@ msgstr "Ouvrir"
 #: vocabulary.py
 msgid "Pause"
 msgstr "Pause"
+
+#: vocabulary.py
+msgid "Paused"
+msgstr "En pause"
 
 #: vocabulary.py
 msgid "People"
@@ -491,6 +630,10 @@ msgid "Reload"
 msgstr "Recharger"
 
 #: vocabulary.py
+msgid "Remove member"
+msgstr "Retirer le membre"
+
+#: vocabulary.py
 msgid "Rename"
 msgstr "Renommer"
 
@@ -499,8 +642,16 @@ msgid "Replace"
 msgstr "Remplacer"
 
 #: vocabulary.py
+msgid "Reply"
+msgstr "Répondre"
+
+#: vocabulary.py
 msgid "Restore"
 msgstr "Restaurer"
+
+#: vocabulary.py
+msgid "Result"
+msgstr "Résultat"
 
 #: vocabulary.py
 msgid "Resume"
@@ -519,8 +670,24 @@ msgid "Save failed"
 msgstr "Échec de l’enregistrement"
 
 #: vocabulary.py
+msgid "Save to Files"
+msgstr "Enregistrer dans Fichiers"
+
+#: vocabulary.py
 msgid "Search"
 msgstr "Rechercher"
+
+#: vocabulary.py
+msgid "Search users..."
+msgstr "Rechercher des utilisateurs..."
+
+#: vocabulary.py
+msgid "Search..."
+msgstr "Rechercher..."
+
+#: vocabulary.py
+msgid "Send message"
+msgstr "Envoyer un message"
 
 #: vocabulary.py
 msgid "Settings"
@@ -558,8 +725,24 @@ msgid "Sort by"
 msgstr "Trier par"
 
 #: vocabulary.py
+msgid "Stop"
+msgstr "Arrêter"
+
+#: vocabulary.py
+msgid "Strikethrough"
+msgstr "Barré"
+
+#: vocabulary.py
+msgid "strikethrough"
+msgstr "barré"
+
+#: vocabulary.py
 msgid "Summary"
 msgstr "Résumé"
+
+#: vocabulary.py
+msgid "Syntax"
+msgstr "Syntaxe"
 
 #: vocabulary.py
 msgid "Tag name"
@@ -590,8 +773,16 @@ msgid "Unknown error"
 msgstr "Erreur inconnue"
 
 #: vocabulary.py
+msgid "Unsupported image type. Use JPEG, PNG, WebP, or GIF."
+msgstr "Type d’image non pris en charge. Utilisez JPEG, PNG, WebP ou GIF."
+
+#: vocabulary.py
 msgid "Upload failed."
 msgstr "Échec de l’envoi."
+
+#: vocabulary.py
+msgid "Uploading..."
+msgstr "Envoi..."
 
 #: vocabulary.py
 msgid "Use your session cookie or API token."
@@ -604,3 +795,27 @@ msgstr "Coffre"
 #: vocabulary.py
 msgid "Videos"
 msgstr "Vidéos"
+
+#: vocabulary.py
+msgid "Yesterday"
+msgstr "Hier"
+
+#: vocabulary.py
+msgctxt "keyboard key"
+msgid "Arrow Up"
+msgstr "Flèche haut"
+
+#: vocabulary.py
+msgctxt "keyboard key"
+msgid "Enter"
+msgstr "Entrée"
+
+#: vocabulary.py
+msgctxt "keyboard key"
+msgid "Esc"
+msgstr "Échap"
+
+#: vocabulary.py
+msgctxt "keyboard key"
+msgid "Shift"
+msgstr "Maj"

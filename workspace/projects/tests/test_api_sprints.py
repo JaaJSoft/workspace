@@ -360,6 +360,43 @@ class ScrumBoardEntryApiTests(ScrumProjectMixin, APITestCase):
         task.refresh_from_db()
         self.assertEqual(task.sprint_id, self.sprint.pk)
 
+    def test_patch_status_onto_the_board_records_the_sprint_join_once(self):
+        task = create_task(self.scrum, self.admin, title="t")
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f"/api/v1/projects/{self.scrum.uuid}/tasks/{task.uuid}",
+            {"status": str(self.todo.uuid)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            list(
+                TaskEvent.objects.filter(
+                    task=task, type=TaskEvent.Type.SPRINT
+                ).values_list("from_value", "to_value", "to_ref")
+            ),
+            [("", "Sprint 1", self.sprint.pk)],
+        )
+
+    def test_patch_sprint_and_status_records_the_chosen_sprint_once(self):
+        planned = self.scrum.sprints.create(name="Sprint 2")
+        task = create_task(self.scrum, self.admin, title="t")
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f"/api/v1/projects/{self.scrum.uuid}/tasks/{task.uuid}",
+            {"sprint": str(planned.uuid), "status": str(self.todo.uuid)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            list(
+                TaskEvent.objects.filter(
+                    task=task, type=TaskEvent.Type.SPRINT
+                ).values_list("from_value", "to_value", "to_ref")
+            ),
+            [("", "Sprint 2", planned.pk)],
+        )
+
     def test_patch_sprint_records_event(self):
         task = create_task(self.scrum, self.admin, title="t")
         self.client.force_authenticate(self.member)

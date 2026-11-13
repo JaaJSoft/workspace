@@ -2,9 +2,17 @@
   Merge face clusters: pick the people who are in fact the one the dialog
   was opened on. State lives in facesMixin() (faces.js).
 {% endcomment %}
+{% load i18n %}
+{% translate "Merge people" as merge_title %}
+{% translate "Pick the people who are the same person as this one. Their photos move here, and the people you pick disappear from the list." as merge_subtitle %}
+{% translate "This person" as this_person_label %}
+{% translate "%(count)s photo" as photo_count_one %}
+{% translate "%(count)s photos" as photo_count_other %}
+{% translate "Merge %(count)s people" as merge_count_label %}
+{% translate "Merge" as merge_label %}
 <dialog id="merge-clusters-dialog" class="modal">
   <div class="modal-box max-w-lg">
-    {% include "ui/partials/dialog_header.html" with icon="combine" title="Merge people" subtitle="Pick the people who are the same person as this one. Their photos move here, and the people you pick disappear from the list." only %}
+    {% include "ui/partials/dialog_header.html" with icon="combine" title=merge_title subtitle=merge_subtitle only %}
     <div class="flex items-center gap-3 mb-4">
       <img
         :src="mergeDialog.target?.cover_url"
@@ -13,8 +21,8 @@
       />
       <span
         class="text-sm font-medium"
-        x-text="mergeDialog.target?.person_name || 'This person'"
-      >This person</span>
+        x-text="mergeDialog.target?.person_name || '{{ this_person_label|escapejs }}'"
+      >{{ this_person_label }}</span>
     </div>
 
     <label
@@ -25,8 +33,8 @@
       <input
         type="search"
         class="grow"
-        placeholder="Search by name"
-        aria-label="Search by name"
+        placeholder="{% translate 'Search by name' %}"
+        aria-label="{% translate 'Search by name' %}"
         x-model="mergeDialog.query"
       />
     </label>
@@ -38,14 +46,14 @@
       x-cloak
       class="text-sm text-base-content/60 py-6 text-center"
     >
-      There is no one else to merge with.
+      {% translate "There is no one else to merge with." %}
     </p>
     <p
       x-show="!mergeDialog.loading && mergeDialog.clusters.length > 0 && visibleMergeClusters().length === 0"
       x-cloak
       class="text-sm text-base-content/60 py-6 text-center"
     >
-      No one by that name.
+      {% translate "No one by that name." %}
     </p>
     <div
       x-show="!mergeDialog.loading"
@@ -71,7 +79,7 @@
           ></span>
           <span
             class="text-xs text-base-content/60 tabular-nums"
-            x-text="cluster.photo_count + (cluster.photo_count === 1 ? ' photo' : ' photos')"
+            x-text="interpolate(cluster.photo_count === 1 ? '{{ photo_count_one|escapejs }}' : '{{ photo_count_other|escapejs }}', { count: cluster.photo_count }, true)"
           ></span>
           <span
             x-show="isMergeSelected(cluster)"
@@ -89,7 +97,7 @@
       x-cloak
       class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3"
     >
-      <p class="text-sm mb-2">These are named after different people. Which name should stay?</p>
+      <p class="text-sm mb-2">{% translate "These are named after different people. Which name should stay?" %}</p>
       <template x-for="choice in mergeDialog.choices || []" :key="choice.uuid">
         <label class="flex items-center gap-2 py-1 cursor-pointer">
           <input
@@ -110,7 +118,7 @@
         class="btn btn-ghost btn-sm"
         @click="closeMergeDialog()"
       >
-        Cancel
+        {% translate "Cancel" %}
       </button>
       <button
         type="button"
@@ -124,12 +132,12 @@
           class="loading loading-spinner loading-xs"
         ></span>
         <span
-          x-text="mergeDialog.selected.length > 1 ? 'Merge ' + mergeDialog.selected.length + ' people' : 'Merge'"
+          x-text="mergeDialog.selected.length > 1 ? interpolate('{{ merge_count_label|escapejs }}', { count: mergeDialog.selected.length }, true) : '{{ merge_label|escapejs }}'"
         ></span>
       </button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

@@ -3,6 +3,12 @@
   book), or create one from the typed name. State lives in the naming
   section of photosFacesMixin() (faces.js).
 {% endcomment %}
+{% load i18n %}
+{% translate "Change name" as change_name_label %}
+{% translate "Who is this?" as who_label %}
+{% translate "%(count)s photo" as photo_count_one %}
+{% translate "%(count)s photos" as photo_count_other %}
+{% translate "Add “%(name)s” to People" as add_to_people_label %}
 <dialog id="name-person-dialog" class="modal">
   <div class="modal-box max-w-md">
     {% comment %}
@@ -27,9 +33,11 @@
         <div class="min-w-0">
           <h3
             class="font-bold text-lg leading-tight"
-            x-text="nameDialog.target?.person ? 'Change name' : 'Who is this?'"
+            x-text="nameDialog.target?.person ? '{{ change_name_label|escapejs }}' : '{{ who_label|escapejs }}'"
           ></h3>
-          <p class="text-sm text-base-content/60 mt-0.5">Pick a contact, or type a new name to add one to People.</p>
+          <p
+            class="text-sm text-base-content/60 mt-0.5"
+          >{% translate "Pick a contact, or type a new name to add one to People." %}</p>
         </div>
       </div>
     </div>
@@ -40,7 +48,7 @@
         <input
           type="text"
           class="grow"
-          placeholder="Name"
+          placeholder="{% translate 'Name' %}"
           autocomplete="off"
           x-model="nameDialog.query"
           @input.debounce.250ms="searchNames()"
@@ -78,7 +86,7 @@
             <span
               class="text-xs text-base-content/60 tabular-nums"
               x-show="person.photo_count"
-              x-text="person.photo_count + (person.photo_count === 1 ? ' photo' : ' photos')"
+              x-text="interpolate(person.photo_count === 1 ? '{{ photo_count_one|escapejs }}' : '{{ photo_count_other|escapejs }}', { count: person.photo_count }, true)"
             ></span>
           </button>
         </li>
@@ -95,9 +103,10 @@
           >
             <i data-lucide="user-plus" class="w-4 h-4"></i>
           </span>
-          <span class="flex-1 truncate">
-            Add “<span x-text="nameDialog.query.trim()"></span>” to People
-          </span>
+          <span
+            class="flex-1 truncate"
+            x-text="interpolate('{{ add_to_people_label|escapejs }}', { name: nameDialog.query.trim() }, true)"
+          ></span>
         </button>
       </li>
       <li
@@ -105,7 +114,7 @@
         x-cloak
         class="px-3 py-4 text-sm text-base-content/60"
       >
-        No contact yet: type a name to add one to People.
+        {% translate "No contact yet: type a name to add one to People." %}
       </li>
     </ul>
 
@@ -115,10 +124,10 @@
         x-cloak
         class="loading loading-spinner loading-sm mr-auto self-center"
       ></span>
-      <button type="button" class="btn btn-ghost btn-sm" @click="closeNameDialog()">Cancel</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="closeNameDialog()">{% translate "Cancel" %}</button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

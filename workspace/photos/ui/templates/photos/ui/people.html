@@ -1,4 +1,5 @@
 {% extends "photos/ui/base.html" %}
+{% load i18n %}
 
 {% block photos_content %}
   <header
@@ -8,22 +9,40 @@
       {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
       <i data-lucide="scan-face" class="w-5 h-5 text-module shrink-0"></i>
       <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-        <h1 class="text-lg font-semibold truncate">{% if show_hidden %}Hidden{% else %}People{% endif %}</h1>
+        <h1 class="text-lg font-semibold truncate">
+          {% if show_hidden %}
+            {% translate "Hidden" context "people page title" %}
+          {% else %}
+            {% translate "People" %}
+          {% endif %}
+        </h1>
         {% if faces_enabled %}
-          <span
-            class="text-sm text-base-content/60"
-          >{{ people_count }} {% if people_count == 1 %}person{% else %}people{% endif %}</span>
+          <span class="text-sm text-base-content/60">
+            {% blocktranslate trimmed count counter=people_count %}
+              {{ counter }} person
+            {% plural %}
+              {{ counter }} people
+            {% endblocktranslate %}
+          </span>
         {% endif %}
       </div>
       {% if analyzing %}
         {# Polls the progress, and reloads the grid once the last photo is read. #}
+        {% translate "Looking for faces: %(analyzed)s of %(total)s photos and videos" as looking_label %}
         <span
           class="badge badge-ghost gap-1.5 max-sm:hidden"
           x-data="facesProgress({{ progress.analyzed }}, {{ progress.total }})"
-          title="Photos are read for faces in the background, a few at a time."
+          title="{% translate 'Photos are read for faces in the background, a few at a time.' %}"
         >
           <span class="loading loading-spinner loading-xs"></span>
-          <span>Looking for faces: <span class="tabular-nums" x-text="analyzed">{{ progress.analyzed }}</span> of <span class="tabular-nums" x-text="total">{{ progress.total }}</span> photos and videos</span>
+          <span
+            class="tabular-nums"
+            x-text="interpolate('{{ looking_label|escapejs }}', { analyzed, total }, true)"
+          >
+            {% blocktranslate trimmed with analyzed=progress.analyzed total=progress.total %}
+              Looking for faces: {{ analyzed }} of {{ total }} photos and videos
+            {% endblocktranslate %}
+          </span>
         </span>
       {% endif %}
       {% if faces_enabled %}
@@ -32,12 +51,12 @@
             type="button"
             class="btn btn-ghost btn-sm gap-1"
             :class="{ 'btn-active': peoplePicking }"
-            title="Pick several people who are the same person, then merge them"
-            aria-label="Merge people"
+            title="{% translate 'Pick several people who are the same person, then merge them' %}"
+            aria-label="{% translate 'Merge people' %}"
             @click="peoplePicking ? stopPickingPeople() : startPickingPeople()"
           >
             <i data-lucide="combine" class="w-4 h-4"></i>
-            <span class="max-sm:hidden">Merge</span>
+            <span class="max-sm:hidden">{% translate "Merge" %}</span>
           </button>
         {% endif %}
         {% if not show_hidden and people_count %}
@@ -45,14 +64,14 @@
             href="{{ review_url }}"
             x-target.push="photos-nav photos-content"
             class="btn btn-module btn-sm gap-1"
-            title="Name people and check faces one after the other"
+            title="{% translate 'Name people and check faces one after the other' %}"
           >
             <i data-lucide="user-pen" class="w-4 h-4"></i>
-            <span class="max-sm:hidden">Review</span>
+            <span class="max-sm:hidden">{% translate "Review" context "faces review button" %}</span>
             {% if unnamed_count %}
               <span
                 class="badge badge-sm tabular-nums border-0 bg-module-content/20 text-module-content"
-                title="{{ unnamed_count }} {% if unnamed_count == 1 %}person{% else %}people{% endif %} to name"
+                title="{% blocktranslate trimmed count counter=unnamed_count %}{{ counter }} person to name{% plural %}{{ counter }} people to name{% endblocktranslate %}"
               >{{ unnamed_count }}</span>
             {% endif %}
           </a>
@@ -64,7 +83,7 @@
             class="btn btn-ghost btn-sm gap-1"
           >
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            <span class="max-sm:hidden">All people</span>
+            <span class="max-sm:hidden">{% translate "All people" %}</span>
           </a>
         {% endif %}
         <div class="dropdown dropdown-end">
@@ -72,7 +91,7 @@
             type="button"
             tabindex="0"
             class="btn btn-ghost btn-sm btn-square"
-            aria-label="Face grouping options"
+            aria-label="{% translate 'Face grouping options' %}"
           >
             <i data-lucide="more-vertical" class="w-4 h-4"></i>
           </button>
@@ -89,7 +108,7 @@
                   @click="document.activeElement.blur()"
                 >
                   <i data-lucide="eye-off" class="w-4 h-4"></i>
-                  Hidden people and faces
+                  {% translate "Hidden people and faces" %}
                 </a>
               </li>
             {% endif %}
@@ -100,7 +119,7 @@
                 @click="document.activeElement.blur(); turnFacesOff()"
               >
                 <i data-lucide="power-off" class="w-4 h-4"></i>
-                Turn off face grouping
+                {% translate "Turn off face grouping" %}
               </button>
             </li>
           </ul>
@@ -116,28 +135,44 @@
       <div class="rounded-full bg-module/10 p-5">
         <i data-lucide="scan-face" class="w-10 h-10 text-module"></i>
       </div>
-      <h2 class="text-lg font-semibold">Find the people in your photos</h2>
+      <h2 class="text-lg font-semibold">{% translate "Find the people in your photos" %}</h2>
       <p class="text-sm text-base-content/70">
-        Turn this on and Workspace looks for faces in your photos, then groups the ones that look like the same person, so every photo of someone is one click away.
+        {% translate "Turn this on and Workspace looks for faces in your photos, then groups the ones that look like the same person, so every photo of someone is one click away." %}
       </p>
       <ul
         class="w-full space-y-3 rounded-box bg-base-200 p-4 text-left text-sm"
       >
         <li class="flex gap-3">
           <i data-lucide="scan-face" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
-          <span><strong>What is computed:</strong> where each face is in a photo, a small picture of it, and a numeric description of its features that lets faces be compared. That description is biometric data.</span>
+          <span>
+            {% blocktranslate trimmed %}
+              <strong>What is computed:</strong> where each face is in a photo, a small picture of it, and a numeric description of its features that lets faces be compared. That description is biometric data.
+            {% endblocktranslate %}
+          </span>
         </li>
         <li class="flex gap-3">
           <i data-lucide="server" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
-          <span><strong>Where:</strong> on this server only. No photo and no face is sent anywhere.</span>
+          <span>
+            {% blocktranslate trimmed %}
+              <strong>Where:</strong> on this server only. No photo and no face is sent anywhere.
+            {% endblocktranslate %}
+          </span>
         </li>
         <li class="flex gap-3">
           <i data-lucide="images" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
-          <span><strong>Which photos:</strong> your own photos in Files. Group folders and photos shared with you are left out.</span>
+          <span>
+            {% blocktranslate trimmed %}
+              <strong>Which photos:</strong> your own photos in Files. Group folders and photos shared with you are left out.
+            {% endblocktranslate %}
+          </span>
         </li>
         <li class="flex gap-3">
           <i data-lucide="trash-2" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
-          <span><strong>Turning it off</strong> deletes every face, every group and every face picture right away. Your photos are not touched.</span>
+          <span>
+            {% blocktranslate trimmed %}
+              <strong>Turning it off</strong> deletes every face, every group and every face picture right away. Your photos are not touched.
+            {% endblocktranslate %}
+          </span>
         </li>
       </ul>
       <button
@@ -151,7 +186,7 @@
           x-cloak
           class="loading loading-spinner loading-xs"
         ></span>
-        Turn on face grouping
+        {% translate "Turn on face grouping" %}
       </button>
     </div>
   {% elif named or unnamed or hidden_faces.total %}
@@ -164,7 +199,7 @@
       {% if hidden_faces.total %}x-data="faceBoard('photos-hidden-faces-data')"{% endif %}
     >
       {% if named %}
-        <section aria-label="Named people">
+        <section aria-label="{% translate 'Named people' %}">
           <div
             class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-x-4 gap-y-5"
           >
@@ -181,7 +216,7 @@
               id="people-unnamed-title"
               class="mb-3 text-sm font-semibold uppercase tracking-wider text-base-content/60"
             >
-              Not named yet
+              {% translate "Not named yet" %}
             </h2>
           {% endif %}
           <div
@@ -208,12 +243,16 @@
         <i data-lucide="scan-face" class="w-10 h-10 text-module"></i>
       </div>
       {% if show_hidden %}
-        <h2 class="text-lg font-semibold">No one is hidden</h2>
-        <p class="text-sm text-base-content/60 max-w-sm">People and faces you hide show up here.</p>
+        <h2 class="text-lg font-semibold">{% translate "No one is hidden" %}</h2>
+        <p class="text-sm text-base-content/60 max-w-sm">{% translate "People and faces you hide show up here." %}</p>
       {% else %}
-        <h2 class="text-lg font-semibold">No one yet</h2>
+        <h2 class="text-lg font-semibold">{% translate "No one yet" %}</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
-          {% if analyzing %}People show up here as your photos are read for faces.{% else %}No face was found in your photos so far.{% endif %}
+          {% if analyzing %}
+            {% translate "People show up here as your photos are read for faces." %}
+          {% else %}
+            {% translate "No face was found in your photos so far." %}
+          {% endif %}
         </p>
       {% endif %}
     </div>

@@ -5,6 +5,15 @@
   faceSelectionMixin() (faces.js). Reads cluster, the card of the
   person on screen.
 {% endcomment %}
+{% load i18n %}
+{% translate "%(count)s selected" as selected_label %}
+{% if cluster.person %}
+  {% blocktranslate trimmed with name=cluster.person.name asvar reject_label %}
+    Not {{ name }}
+  {% endblocktranslate %}
+{% else %}
+  {% translate "Not this person" as reject_label %}
+{% endif %}
 <div
   x-show="selectedFaces.length > 0"
   x-cloak
@@ -15,26 +24,26 @@
   <div
     class="pointer-events-auto flex items-center gap-0.5 sm:gap-2 rounded-full shadow-xl bg-base-100 border border-base-300 pl-2 pr-2 py-1.5 max-w-full"
     role="toolbar"
-    aria-label="Selected faces"
+    aria-label="{% translate 'Selected faces' %}"
   >
     <button
       type="button"
       class="btn btn-ghost btn-sm btn-circle"
-      title="Clear selection"
-      aria-label="Clear selection"
+      title="{% translate 'Clear selection' %}"
+      aria-label="{% translate 'Clear selection' %}"
       @click="clearFaceSelection()"
     >
       <i data-lucide="x" class="w-4 h-4"></i>
     </button>
     <span
       class="text-sm font-medium whitespace-nowrap px-1"
-      x-text="selectedFaces.length === 1 ? '1 selected' : selectedFaces.length + ' selected'"
+      x-text="interpolate('{{ selected_label|escapejs }}', { count: selectedFaces.length }, true)"
     ></span>
     <button
       type="button"
       class="btn btn-ghost btn-sm btn-circle"
-      title="Select all"
-      aria-label="Select all"
+      title="{% translate 'Select all' %}"
+      aria-label="{% translate 'Select all' %}"
       @click="selectAllFaces()"
     >
       <i data-lucide="check-check" class="w-4 h-4"></i>
@@ -47,12 +56,12 @@
     <button
       type="button"
       class="btn btn-module btn-sm rounded-full gap-1.5"
-      title="Move to another person"
+      title="{% translate 'Move to another person' %}"
       x-show="faceAllows('assign')"
       @click="runFaceAction('assign')"
     >
       <i data-lucide="user-round-pen" class="w-4 h-4"></i>
-      <span class="max-sm:hidden">Move to...</span>
+      <span class="max-sm:hidden">{% translate "Move to..." %}</span>
     </button>
     <button
       type="button"
@@ -61,19 +70,17 @@
       @click="runFaceAction('confirm')"
     >
       <i data-lucide="check" class="w-4 h-4"></i>
-      <span class="max-sm:hidden">That's right</span>
+      <span class="max-sm:hidden">{% translate "That's right" %}</span>
     </button>
     <button
       type="button"
       class="btn btn-ghost btn-sm rounded-full gap-1.5 text-error"
-      title="{% if cluster.person %}Not {{ cluster.person.name }}{% else %}Not this person{% endif %}"
+      title="{{ reject_label }}"
       x-show="faceAllows('reject')"
       @click="runFaceAction('reject')"
     >
       <i data-lucide="user-x" class="w-4 h-4"></i>
-      <span
-        class="max-sm:hidden max-w-40 truncate"
-      >{% if cluster.person %}Not {{ cluster.person.name }}{% else %}Not this person{% endif %}</span>
+      <span class="max-sm:hidden max-w-40 truncate">{{ reject_label }}</span>
     </button>
     <button
       type="button"
@@ -82,13 +89,13 @@
       @click="runFaceAction('unhide')"
     >
       <i data-lucide="eye" class="w-4 h-4"></i>
-      <span class="max-sm:hidden">Unhide</span>
+      <span class="max-sm:hidden">{% translate "Unhide" %}</span>
     </button>
     <button
       type="button"
       class="btn btn-ghost btn-sm btn-circle"
-      title="Hide: nobody to name"
-      aria-label="Hide"
+      title="{% translate 'Hide: nobody to name' %}"
+      aria-label="{% translate 'Hide' %}"
       x-show="faceAllows('hide')"
       @click="runFaceAction('hide')"
     >

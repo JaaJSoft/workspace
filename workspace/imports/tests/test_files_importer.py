@@ -466,7 +466,9 @@ class FilesImporterTests(ImporterTestCase):
         )
 
     def test_root_folder_name_is_sanitised(self):
-        self.conn.label = "Nextcloud/Home " + "x" * 300
+        # As long as the column takes: the " import" suffix carries the
+        # folder name past 255 characters.
+        self.conn.label = "Nextcloud/Home " + "x" * 240
         self.conn.save()
         job = self._job()
         self.assertIs(self._run(job), Outcome.DONE)

@@ -369,6 +369,9 @@ class ProjectListQueryCountTests(ProjectTestMixin, APITestCase):
     def test_query_count_does_not_scale_with_project_count(self):
         self.client.force_authenticate(self.admin)
         self._add_projects(2)
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get("/api/v1/projects")
 
         with CaptureQueriesContext(connection) as ctx_baseline:
             self.client.get("/api/v1/projects")

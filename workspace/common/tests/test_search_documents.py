@@ -96,6 +96,10 @@ class SqliteDocumentTests(TestCase):
 
 
 class NoFts5Tests(TestCase):
+    def setUp(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("A SQLite build without FTS5")
+
     def test_write_is_a_silent_noop_without_fts5(self):
         # No FTS5 means content search is simply unavailable; writing a
         # document must not raise and must not touch a nonexistent table.

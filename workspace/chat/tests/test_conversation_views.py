@@ -142,6 +142,9 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
         """Adding more conversations must not add queries to the list endpoint."""
         self.client.force_authenticate(self.creator)
 
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get(self.URL)
         with CaptureQueriesContext(connection) as ctx_baseline:
             self.client.get(self.URL)
         baseline = len(ctx_baseline)
@@ -171,6 +174,9 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
         """Adding more members to a conversation must not add queries."""
         self.client.force_authenticate(self.creator)
 
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get(self.URL)
         with CaptureQueriesContext(connection) as ctx_baseline:
             self.client.get(self.URL)
         baseline = len(ctx_baseline)
@@ -204,6 +210,9 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
         ConversationMember.objects.create(conversation=bot_conv1, user=bot1)
 
         self.client.force_authenticate(self.creator)
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get(self.URL)
         with CaptureQueriesContext(connection) as ctx_baseline:
             self.client.get(self.URL)
         baseline = len(ctx_baseline)
@@ -506,6 +515,9 @@ class ConversationCreateViewTests(ChatTestMixin, APITestCase):
         ]
 
         self.client.force_authenticate(self.creator)
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get(self.URL)
 
         with CaptureQueriesContext(connection) as ctx_small:
             resp = self.client.post(

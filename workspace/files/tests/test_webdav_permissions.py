@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
+from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import File, FileShare
 from workspace.files.services import tree
 from workspace.files.tests import test_webdav
@@ -26,7 +28,10 @@ class WebDAVSharePermissionTests(TestCase):
 
         # A fresh app per test: wsgidav keeps DAV locks in memory, and a lock
         # taken by one test would answer 423 to the next one on that path.
-        self._app = create_webdav_app()
+        self._app = served_in_test(create_webdav_app())
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         self.user = User.objects.create_user(username="davguest", password="pass123")
         self.owner = User.objects.create_user(username="davowner", password="pass123")
         self.auth = test_webdav._basic_auth_header("davguest", "pass123")

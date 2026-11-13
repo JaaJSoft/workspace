@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connections
 from django.test import TestCase
 
 from workspace.core.management.commands.migrate_to_postgres import (
@@ -31,6 +32,16 @@ class PreCheckTests(TestCase):
             with self.assertRaises(CommandError) as ctx:
                 call_command("migrate_to_postgres", "postgres://u:p@host/db")
             self.assertIn("expected SQLite", str(ctx.exception))
+
+    def setUp(self):
+        # The checks of the target run once the source passed its own, and
+        # the suite may itself run on PostgreSQL.
+        source = patch.dict(
+            connections["default"].settings_dict,
+            {"ENGINE": "django.db.backends.sqlite3"},
+        )
+        source.start()
+        self.addCleanup(source.stop)
 
     def test_rejects_non_postgres_target(self):
         with self.assertRaises(CommandError) as ctx:

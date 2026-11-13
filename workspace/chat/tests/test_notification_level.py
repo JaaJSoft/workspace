@@ -114,6 +114,9 @@ class NotificationLevelReadTests(ChatTestMixin, APITestCase):
     def test_list_reads_the_level_without_extra_queries(self):
         """The level rides the members prefetch the list already does; it
         must not reintroduce one query per conversation."""
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get("/api/v1/chat/conversations")
         with CaptureQueriesContext(connection) as ctx:
             self.client.get("/api/v1/chat/conversations")
         baseline = len(ctx.captured_queries)

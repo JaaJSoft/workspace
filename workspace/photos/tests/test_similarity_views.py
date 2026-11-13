@@ -273,7 +273,7 @@ class VideoFrameViewTests(RankedViewTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/webp")
         self.assertIn("private", response["Cache-Control"])
-        response.close()
+        b"".join(response.streaming_content)
 
     def test_404_to_whoever_cannot_open_the_video(self):
         User.objects.create_user(username="bob", password="p")

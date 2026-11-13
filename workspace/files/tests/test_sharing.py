@@ -262,7 +262,7 @@ class ShareAPITests(APITestCase):
         self.client.force_authenticate(user=self.other_user)
         resp = self.client.get(f"/api/v1/files/{self.file.uuid}/content")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        resp.close()
+        b"".join(resp.streaming_content)
 
     def test_shared_file_download_accessible(self):
         FileShare.objects.create(
@@ -273,7 +273,7 @@ class ShareAPITests(APITestCase):
         self.client.force_authenticate(user=self.other_user)
         resp = self.client.get(f"/api/v1/files/{self.file.uuid}/download")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        resp.close()
+        b"".join(resp.streaming_content)
 
     def test_unshared_file_content_denied(self):
         self.client.force_authenticate(user=self.other_user)

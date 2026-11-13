@@ -57,7 +57,7 @@ class SqlGenerationTests(SimpleTestCase):
                 "\n"
                 "ALTER TABLE chat_message ADD COLUMN search_tsv tsvector\n"
                 "  GENERATED ALWAYS AS (\n"
-                "    setweight(to_tsvector('simple', f_unaccent("
+                "    setweight(to_tsvector('simple', f_fts_text("
                 "left(coalesce(body, ''), 100000))), 'A')\n"
                 "  ) STORED;\n"
                 "\n"
@@ -79,9 +79,9 @@ class SqlGenerationTests(SimpleTestCase):
                 "\n"
                 "ALTER TABLE t ADD COLUMN search_tsv tsvector\n"
                 "  GENERATED ALWAYS AS (\n"
-                "    setweight(to_tsvector('simple', f_unaccent("
+                "    setweight(to_tsvector('simple', f_fts_text("
                 "coalesce(a, ''))), 'A') ||\n"
-                "    setweight(to_tsvector('simple', f_unaccent("
+                "    setweight(to_tsvector('simple', f_fts_text("
                 "left(coalesce(b, ''), 50))), 'B')\n"
                 "  ) STORED;\n"
                 "\n"
@@ -101,17 +101,17 @@ class SqlGenerationTests(SimpleTestCase):
     def test_pg_forward_weighted_multi_column(self):
         sql = MAIL_LIKE.pg_forward_sql()
         self.assertIn(
-            "setweight(to_tsvector('simple', f_unaccent(coalesce(subject, ''))), 'A')",
+            "setweight(to_tsvector('simple', f_fts_text(coalesce(subject, ''))), 'A')",
             sql,
         )
         self.assertIn(
             "setweight(to_tsvector('simple', "
-            "f_unaccent(coalesce(from_email, ''))), 'B')",
+            "f_fts_text(coalesce(from_email, ''))), 'B')",
             sql,
         )
         self.assertIn(
             "setweight(to_tsvector('simple', "
-            "f_unaccent(left(coalesce(body_text, ''), 100000))), 'D')",
+            "f_fts_text(left(coalesce(body_text, ''), 100000))), 'D')",
             sql,
         )
         # One setweight per column, joined with tsvector concatenation.
@@ -276,8 +276,8 @@ class DerivedPostgresSqlTests(SimpleTestCase):
         sql = FILES_LIKE.pg_update_sql()
         self.assertEqual(sql.count("%s"), 3)  # one per field, plus the pk
         self.assertIn("UPDATE files_file SET search_tsv =", sql)
-        self.assertIn("setweight(to_tsvector('simple', f_unaccent(%s)), 'A')", sql)
-        self.assertIn("setweight(to_tsvector('simple', f_unaccent(%s)), 'C')", sql)
+        self.assertIn("setweight(to_tsvector('simple', f_fts_text(%s)), 'A')", sql)
+        self.assertIn("setweight(to_tsvector('simple', f_fts_text(%s)), 'C')", sql)
         self.assertTrue(sql.rstrip().endswith("WHERE uuid = %s"))
 
 

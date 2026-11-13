@@ -8,6 +8,8 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase, override_settings
 
+from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.wsgi import served_in_test
 from workspace.files.services import tree
 from workspace.imports.models import ImportConnection
 from workspace.imports.providers.base import (
@@ -275,6 +277,9 @@ class AgainstOurOwnServerTests(TestCase):
     def setUp(self):
         from workspace.wsgi import application
 
+        # DAV logins are cached per username and password, which tests reuse:
+        # a cached login from an earlier test names a user it rolled back.
+        clear_auth_cache()
         self.remote_user = User.objects.create_user(username="bob", password="bobpw")
         docs = tree.create_folder(self.remote_user, "Documents")
         tree.create_file(
@@ -283,7 +288,7 @@ class AgainstOurOwnServerTests(TestCase):
         tree.create_file(
             self.remote_user, "root.md", None, content=ContentFile(b"# root")
         )
-        self.transport = httpx2.WSGITransport(app=application)
+        self.transport = httpx2.WSGITransport(app=served_in_test(application))
         self.conn = ImportConnection(
             owner=self.remote_user,
             provider="webdav",

@@ -184,6 +184,31 @@ class UnlinkFileTests(ProjectTestMixin, TestCase):
         unlink_file(second, actor=self.admin)
         self.assertFalse(FileShare.objects.exists())
 
+    def test_a_link_that_inherited_the_share_while_loaded_still_revokes_it(self):
+        # Two members unlink both links at once: the second was loaded before
+        # the first handed it the share, so its instance still says it owns
+        # nothing. The decision has to be read once the share is locked.
+        other_task = create_task(self.project, self.admin, title="Review it")
+        (second,) = link_files(self.admin, other_task, [self.doc])
+        stale_second = TaskFileLink.objects.get(pk=second.pk)
+        unlink_file(self.link, actor=self.admin)
+
+        unlink_file(stale_second, actor=self.admin)
+
+        self.assertFalse(TaskFileLink.objects.exists())
+        self.assertFalse(FileShare.objects.exists())
+        self.assertIsNone(get_permission(self.member, self.doc))
+
+    def test_a_link_already_unlinked_leaves_no_second_event(self):
+        stale = TaskFileLink.objects.get(pk=self.link.pk)
+        unlink_file(self.link, actor=self.admin)
+
+        unlink_file(stale, actor=self.admin)
+
+        self.assertEqual(
+            self.task.events.filter(type=TaskEvent.Type.FILE_UNLINKED).count(), 1
+        )
+
     def test_deleting_the_task_revokes_the_share_its_link_created(self):
         delete_task(self.task, actor=self.admin)
         self.assertFalse(TaskFileLink.objects.exists())

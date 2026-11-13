@@ -81,6 +81,8 @@ class FallbackBranchTests(TestCase):
         )
 
     def test_fallback_filters_and_annotates_rank(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("Only SQLite falls back, on a build without FTS5")
         orig = fts.fts5_available
         fts.fts5_available = lambda: False
         try:
@@ -116,6 +118,64 @@ class FallbackBranchTests(TestCase):
                 self.assertEqual(list(qs), [], f"blank query {blank!r} matched rows")
         finally:
             fts.fts5_available = orig
+
+
+class PostgresFtsBranchTests(TestCase):
+    """Exercise the real PostgreSQL branch against a generated tsvector column,
+    built from the declaration inside the test's transaction."""
+
+    def setUp(self):
+        if connection.vendor != "postgresql":
+            self.skipTest("PostgreSQL required")
+        with connection.cursor() as c:
+            c.execute(USER_NAME_FTS.pg_forward_sql())
+
+    def _usernames(self, query):
+        qs = fts.apply_fulltext(User.objects.all(), query, index=USER_NAME_FTS)
+        return {u.username for u in qs}
+
+    def test_a_word_is_found_inside_a_file_name(self):
+        # PostgreSQL's parser reads these as one host, file, email or
+        # version token each, and never as the words they hold.
+        names = {
+            "report": "quarterly-report.pdf",
+            "beach": "sunset-beach.jpg",
+            "img": "IMG_2024.jpg",
+            "bob": "bob@example.org",
+            "notes": "a/b/notes.txt",
+            "14": "v3.14",
+        }
+        for username, first_name in names.items():
+            User.objects.create_user(username=username, first_name=first_name)
+
+        for word in names:
+            with self.subTest(word=word):
+                self.assertEqual(self._usernames(word), {word})
+
+    def test_the_query_is_cut_like_the_text(self):
+        User.objects.create_user(username="pdf", first_name="quarterly-report.pdf")
+        User.objects.create_user(username="other", first_name="quarterly figures")
+
+        self.assertEqual(self._usernames("quarterly-report.pdf"), {"pdf"})
+        self.assertEqual(self._usernames("report quarterly"), {"pdf"})
+        self.assertEqual(self._usernames("REPORT.PDF"), {"pdf"})
+
+    def test_accents_are_ignored(self):
+        User.objects.create_user(username="cv", first_name="Résumé.odt")
+
+        self.assertEqual(self._usernames("resume"), {"cv"})
+
+    def test_every_word_must_match_and_none_is_an_operator(self):
+        User.objects.create_user(username="both", first_name="red or blue")
+        User.objects.create_user(username="red", first_name="red")
+
+        self.assertEqual(self._usernames("red or blue"), {"both"})
+        self.assertEqual(self._usernames("red -blue"), {"both"})
+
+    def test_punctuation_alone_matches_nothing(self):
+        User.objects.create_user(username="dots", first_name="...")
+
+        self.assertEqual(self._usernames("..."), set())
 
 
 class SqliteFtsBranchTests(TestCase):

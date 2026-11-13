@@ -238,6 +238,9 @@ class MigrateBatchTests(TestCase):
                 self.assertEqual(self._post(items).status_code, 204)
             return sum(q["sql"].lstrip().upper().startswith("SELECT") for q in queries)
 
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get("/api/v1/vault/vaults")
         self.assertEqual(selects(2), selects(6))
 
     def test_empty_description_stays_empty(self):

@@ -4,7 +4,7 @@ import logging
 from urllib.parse import urlparse
 
 from django.conf import settings as django_settings
-from django.db import close_old_connections
+from django.core.signals import request_finished, request_started
 from wsgidav.dav_error import (
     HTTP_FORBIDDEN,
     DAVError,
@@ -77,14 +77,19 @@ def _build_lock_storage():
     )
 
 
-class _RequestConnections:
-    """Close the request's database connections, as Django's handler does.
+class _RequestSignals:
+    """Send ``request_started`` and ``request_finished``, as Django's handler does.
 
-    /dav is served outside Django, so nothing sends ``request_started`` and
-    ``request_finished``, the signals that drop a connection once its request
-    is over. Under gevent every request has a connection of its own, and one
-    left open lingers until a garbage collection reaches it - with its page
-    cache on SQLite, out of the pool on PostgreSQL.
+    /dav is served outside Django, so nothing else sends them, and they are
+    what drops a connection once its request is over (``close_old_connections``
+    is connected to both). Under gevent every request has a connection of its
+    own, and one left open lingers until a garbage collection reaches it -
+    with its page cache on SQLite, out of the pool on PostgreSQL.
+
+    Sending the signals rather than closing the connections here leaves the
+    test harness the hook Django's test client uses: it disconnects
+    ``close_old_connections`` for the request, so the request runs on the
+    connection holding the test's transaction instead of closing it.
 
     A generator, like the ``WsgiDAVApp`` it wraps: the server closes it when
     the response is sent or the client is gone, which runs the ``finally``.
@@ -98,11 +103,11 @@ class _RequestConnections:
 
     def __call__(self, environ, start_response):
         # Before authentication, which is the first query of a request.
-        close_old_connections()
+        request_started.send(sender=self.__class__, environ=environ)
         try:
             yield from self._app(environ, start_response)
         finally:
-            close_old_connections()
+            request_finished.send(sender=self.__class__)
 
     def __getattr__(self, name):
         return getattr(self._app, name)
@@ -197,7 +202,7 @@ def create_webdav_app():
     }
     app = WsgiDAVApp(config)
     _install_app_lock_manager(app, _build_lock_storage())
-    return _RequestConnections(_StoredContentHeaders(app))
+    return _RequestSignals(_StoredContentHeaders(app))
 
 
 def _install_app_lock_manager(app, storage):

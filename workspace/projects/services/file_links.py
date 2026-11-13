@@ -96,14 +96,27 @@ def unlink_file(link, *, actor=None):
     link goes: while other links remain, the flag moves to the oldest of
     them. A share that predates every link is left alone. The share row is
     locked first so two concurrent last unlinks cannot both see the other's
-    link and leave the share behind.
+    link and leave the share behind. Whether *link* owns the share is read
+    once that lock is held: a concurrent unlink may have handed it over since
+    *link* was loaded.
     """
     with transaction.atomic():
         share = (
-            FileShare.objects.select_for_update()
+            # Only the share row: PostgreSQL refuses to lock the nullable
+            # side of the outer join select_related builds.
+            FileShare.objects.select_for_update(of=("self",))
             .select_related("file", "shared_with_project")
-            .get(pk=link.share_id)
+            .filter(pk=link.share_id)
+            .first()
         )
+        owns_share = (
+            TaskFileLink.objects.filter(pk=link.pk)
+            .values_list("owns_share", flat=True)
+            .first()
+        )
+        if share is None or owns_share is None:
+            # Unlinked meanwhile, by a concurrent call that already did it all.
+            return
         file_obj = share.file
         record_task_event(
             link.task,
@@ -113,7 +126,7 @@ def unlink_file(link, *, actor=None):
             to_ref=file_obj.uuid,
         )
         link.delete()
-        if not link.owns_share:
+        if not owns_share:
             return
         heir = (
             TaskFileLink.objects.filter(share=share)

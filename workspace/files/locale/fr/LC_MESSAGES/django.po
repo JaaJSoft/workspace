@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:46+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -36,20 +36,6 @@ msgstr "Analyser le stockage"
 #: ui/templates/files/ui/shared_page.html
 msgid "Open in new tab"
 msgstr "Ouvrir dans un nouvel onglet"
-
-#: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
-#: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/node_card.html
-#: ui/templates/files/ui/partials/node_row.html
-msgid "Add to favorites"
-msgstr "Ajouter aux favoris"
-
-#: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
-#: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/node_card.html
-#: ui/templates/files/ui/partials/node_row.html
-msgid "Remove from favorites"
-msgstr "Retirer des favoris"
 
 #: actions/organize.py
 msgid "Pin to sidebar"
@@ -553,10 +539,6 @@ msgid "Next page"
 msgstr "Page suivante"
 
 #: ui/templates/files/ui/index.html
-msgid "Quick Access"
-msgstr "Accès rapide"
-
-#: ui/templates/files/ui/index.html
 #: ui/templates/files/ui/partials/file_picker.html ui/views.py
 msgid "My Files"
 msgstr "Mes fichiers"
@@ -786,14 +768,6 @@ msgstr "Sections de la barre latérale"
 #: ui/templates/files/ui/partials/_preferences_content.html
 msgid "Show pinned folders"
 msgstr "Afficher les dossiers épinglés"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
-msgid "Show group folders"
-msgstr "Afficher les dossiers de groupe"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
-msgid "Show tags"
-msgstr "Afficher les étiquettes"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
 msgid "Default sort"
@@ -1377,14 +1351,6 @@ msgstr "Le dossier portera le nom du groupe"
 msgid "All your groups already have a folder."
 msgstr "Tous vos groupes ont déjà un dossier."
 
-#: ui/templates/files/ui/partials/group_folders_section.html
-msgid "Create group folder"
-msgstr "Créer un dossier de groupe"
-
-#: ui/templates/files/ui/partials/group_folders_section.html
-msgid "No group folders"
-msgstr "Aucun dossier de groupe"
-
 #: ui/templates/files/ui/partials/new_menu.html
 msgid "New Folder"
 msgstr "Nouveau dossier"
@@ -1600,10 +1566,6 @@ msgstr "Liens publics"
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Password protected"
 msgstr "Protégé par mot de passe"
-
-#: ui/templates/files/ui/partials/properties_content.html
-msgid "Views"
-msgstr "Vues"
 
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Last access"
@@ -1883,10 +1845,6 @@ msgstr[2] "%(counter)s correspondances"
 #, python-format
 msgid "Open %(name)s"
 msgstr "Ouvrir %(name)s"
-
-#: ui/templates/files/ui/partials/storage_analysis.html
-msgid "Move to trash"
-msgstr "Mettre à la corbeille"
 
 #: ui/templates/files/ui/partials/storage_analysis.html
 #, python-format
@@ -2243,10 +2201,6 @@ msgstr "Génération..."
 #: ui/templates/files/ui/viewers/image_viewer.html
 msgid "Save as copy"
 msgstr "Enregistrer une copie"
-
-#: ui/templates/files/ui/viewers/image_viewer.html
-msgid "Root"
-msgstr "Racine"
 
 #: ui/templates/files/ui/viewers/image_viewer.html
 msgid "Discard edits"

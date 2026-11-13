@@ -6,6 +6,7 @@ outer `<div id="notes-sidebar">` wrapper is rendered here (not in the parent
 template) - alpine-ajax needs the id in the response to merge it, and removes
 the target element outright when an OK response lacks it.
 {% endcomment %}
+{% load i18n %}
 <div
   class="flex-1 overflow-y-auto py-2 px-3"
   id="notes-sidebar"
@@ -24,16 +25,17 @@ the target element outright when an OK response lacks it.
     >
       <span class="flex items-center gap-2">
         <i data-lucide="zap" class="w-3 h-3"></i>
-        Quick Access
+        {% translate "Quick Access" %}
       </span>
     </div>
     <ul class="space-y-1">
-      {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="My Notes" color="module" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="My Notes" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-      {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeView === 'favorites'" onclick="setView('favorites')" tooltip="Favorites" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-      {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="module" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-      {% include "ui/partials/drawer_item.html" with icon="waypoints" label="Graph" color="module" active_binding="activeView === 'graph'" onclick="setView('graph')" tooltip="Graph" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label=_("My Notes") color="module" active_binding="activeView === 'all'" onclick="setView('all')" tooltip=_("My Notes") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      {% include "ui/partials/drawer_item.html" with icon="star" label=_("Favorites") color="warning" active_binding="activeView === 'favorites'" onclick="setView('favorites')" tooltip=_("Favorites") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      {% translate "Recent" context "recent notes" as recent_label %}
+      {% include "ui/partials/drawer_item.html" with icon="clock" label=recent_label color="module" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip=recent_label collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      {% include "ui/partials/drawer_item.html" with icon="waypoints" label=_("Graph") color="module" active_binding="activeView === 'graph'" onclick="setView('graph')" tooltip=_("Graph") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       <template x-if="notePrefs.showJournal">
-        {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="module" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        {% include "ui/partials/drawer_item.html" with icon="book-open" label=_("Journal") color="module" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip=_("Journal") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </template>
     </ul>
   </div>
@@ -50,13 +52,13 @@ the target element outright when an OK response lacks it.
     >
       <span class="flex items-center gap-2">
         <i data-lucide="folder-tree" class="w-3 h-3"></i>
-        Folders
+        {% translate "Folders" %}
       </span>
       <button
         type="button"
         class="btn btn-ghost btn-square btn-xs"
         @click="showCreateFolderDialog()"
-        title="New folder"
+        title="{% translate 'New folder' %}"
       >
         <i data-lucide="plus" class="w-3 h-3"></i>
       </button>
@@ -75,14 +77,14 @@ the target element outright when an OK response lacks it.
     >
       <span class="flex items-center gap-2">
         <i data-lucide="users" class="w-3 h-3"></i>
-        Groups
+        {% translate "Groups" %}
       </span>
       {% if available_groups %}
         <button
           type="button"
           class="btn btn-ghost btn-square btn-xs"
-          @click="document.getElementById('notes-create-group-folder-dialog').showModal()"
-          title="Create group folder"
+          @click="document.getElementById('create-group-folder-dialog').showModal()"
+          title="{% translate 'Create group folder' %}"
         >
           <i data-lucide="plus" class="w-3 h-3"></i>
         </button>
@@ -94,7 +96,7 @@ the target element outright when an OK response lacks it.
         class="list-none px-3 py-2 text-sm text-base-content/40"
         x-show="sidebarGroupFolders.length === 0 && $refs.hasAvailableGroups"
       >
-        No group folders
+        {% translate "No group folders" %}
       </li>
     </ul>
   </div>

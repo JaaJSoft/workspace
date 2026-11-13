@@ -1,0 +1,110 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-13 13:58+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Default notes folder"
+msgstr "Dossier des notes par défaut"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Choose where new notes are created by default."
+msgstr "Choisissez où les nouvelles notes sont créées par défaut."
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Journal folder"
+msgstr "Dossier du journal"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Choose which folder to use for daily journal notes."
+msgstr "Choisissez le dossier des notes quotidiennes du journal."
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Not set"
+msgstr "Non défini"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "My Notes"
+msgstr "Mes notes"
+
+#: ui/static/notes/ui/js/notes.js
+msgctxt "recent notes"
+msgid "Recent"
+msgstr "Récentes"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Journal"
+msgstr "Journal"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Graph"
+msgstr "Graphe"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Tag"
+msgstr "Étiquette"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "New note"
+msgstr "Nouvelle note"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Enter a name for the note"
+msgstr "Saisissez un nom pour la note"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "My note"
+msgstr "Ma note"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Delete note"
+msgstr "Supprimer la note"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Are you sure you want to delete \"%(name)s\"?"
+msgstr "Voulez-vous vraiment supprimer « %(name)s » ?"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Move note"
+msgstr "Déplacer la note"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Choose a destination for \"%(name)s\""
+msgstr "Choisissez une destination pour « %(name)s »"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Move here"
+msgstr "Déplacer ici"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Move \"%(name)s\" to trash? Notes inside will also be moved."
+msgstr ""
+"Mettre « %(name)s » à la corbeille ? Les notes qu’il contient y seront aussi "
+"déplacées."
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Create a subfolder in \"%(name)s\""
+msgstr "Créer un sous-dossier dans « %(name)s »"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Subfolder name"
+msgstr "Nom du sous-dossier"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "%(count)s result"
+msgid_plural "%(count)s results"
+msgstr[0] "%(count)s résultat"
+msgstr[1] "%(count)s de résultats"
+msgstr[2] "%(count)s résultats"
+
+#: ui/static/notes/ui/js/notes.js
+msgid "Show notes tagged %(name)s"
+msgstr "Afficher les notes étiquetées « %(name)s »"

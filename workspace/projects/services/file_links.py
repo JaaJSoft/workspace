@@ -100,7 +100,9 @@ def unlink_file(link, *, actor=None):
     """
     with transaction.atomic():
         share = (
-            FileShare.objects.select_for_update()
+            # Only the share row: PostgreSQL refuses to lock the nullable
+            # side of the outer join select_related builds.
+            FileShare.objects.select_for_update(of=("self",))
             .select_related("file", "shared_with_project")
             .get(pk=link.share_id)
         )

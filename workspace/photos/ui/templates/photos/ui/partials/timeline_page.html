@@ -12,6 +12,13 @@
   tile_template swaps the tile: a public album link draws its own, with
   nothing but the picture and the way to open it.
 {% endcomment %}
+{% load i18n %}
+{# Translators: Django date format of a month header in the photo timeline, e.g. "November 2026". #}
+{% translate "F Y" context "month header date format" as month_format %}
+{# Translators: Django date format of a day header in the photo timeline, e.g. "Fri 13 Nov". #}
+{% translate "D j M" context "day header date format" as day_format %}
+{# Translators: Django date format of a day header's tooltip in the photo timeline, e.g. "Friday 13 November 2026". #}
+{% translate "l j F Y" context "day header full date format" as day_title_format %}
 <div
   id="timeline-grid"
   x-merge="append"
@@ -23,7 +30,7 @@
         class="basis-full px-1 pt-5 first:pt-0 text-xl font-bold"
         data-month="{{ entry.date|date:'Y-m' }}"
       >
-        {{ entry.date|date:"F Y" }}
+        {{ entry.date|date:month_format }}
       </h2>
     {% elif entry.kind == "day" %}
       {# No margin on a phone: three tiles and their gaps fill the line exactly, as in a grid. #}
@@ -37,9 +44,9 @@
         {% else %}
           <h3
             class="h-7 px-1 text-sm font-medium leading-7 text-base-content/70 whitespace-nowrap"
-            title="{{ entry.date|date:'l j F Y' }}"
+            title="{{ entry.date|date:day_title_format }}"
           >
-            {{ entry.date|date:"D j M" }}
+            {{ entry.date|date:day_format }}
           </h3>
         {% endif %}
         <div class="flex flex-wrap gap-1">
@@ -55,8 +62,10 @@
       </div>
     {% elif entry.kind == "undated" %}
       <div class="basis-full px-1 pt-5 first:pt-0 pb-2" data-undated>
-        <h2 class="text-xl font-bold">Undated</h2>
-        <p class="text-sm text-base-content/60">No capture date in these files. Most recent upload first.</p>
+        <h2 class="text-xl font-bold">{% translate "Undated" %}</h2>
+        <p
+          class="text-sm text-base-content/60"
+        >{% translate "No capture date in these files. Most recent upload first." %}</p>
       </div>
     {% else %}
       {% include tile_template|default:"photos/ui/partials/photo_tile.html" with file=entry.file %}
@@ -78,7 +87,7 @@
         <span class="inline-flex" x-show="loading" x-cloak>
           <span class="loading loading-spinner loading-sm"></span>
         </span>
-        Load more
+        {% translate "Load more" %}
       </button>
     </div>
   {% endif %}

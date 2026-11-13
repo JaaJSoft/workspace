@@ -11,6 +11,8 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import dateformat, timezone
 from django.utils.cache import patch_cache_control, patch_vary_headers
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext, pgettext
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.booleans import is_truthy
@@ -338,9 +340,9 @@ def _type_tabs(counts, media_type, params, defaults, page="photos_ui:index"):
     if media_type is None and not (counts["photos"] and counts["videos"]):
         return []
     choices = [
-        (None, "All", "Photos and videos", "image-play"),
-        (MediaItem.MediaType.PHOTO, "Photos", "Photos only", "image"),
-        (MediaItem.MediaType.VIDEO, "Videos", "Videos only", "video"),
+        (None, pgettext("media type", "All"), _("Photos and videos"), "image-play"),
+        (MediaItem.MediaType.PHOTO, _("Photos"), _("Photos only"), "image"),
+        (MediaItem.MediaType.VIDEO, _("Videos"), _("Videos only"), "video"),
     ]
     return [
         {
@@ -367,9 +369,12 @@ def _scope_tabs(user, scope, filter_params, defaults, page="photos_ui:index"):
     shared = scope == SHARED or has_shared_photos(user)
     if not groups and not shared and scope == MINE:
         return []
-    choices = [(MINE, "Mine", "user"), (ALL, "All", "layers")]
+    choices = [
+        (MINE, pgettext("photos library", "Mine"), "user"),
+        (ALL, pgettext("photos library", "All"), "layers"),
+    ]
     if shared:
-        choices.append((SHARED, "Shared with me", "share-2"))
+        choices.append((SHARED, _("Shared with me"), "share-2"))
     choices += [(group, group.name, "users") for group in groups]
     return [
         {
@@ -458,11 +463,20 @@ def _date_range_label(first, last, tz):
         return ""
     first = timezone.localtime(first, tz).date()
     last = timezone.localtime(last, tz).date()
+    # Translators: Django date format of a day in an album's date range, e.g. "14 Jul 2024".
+    day_format = pgettext("album date range format", "j M Y")
     if first == last:
-        return dateformat.format(first, "j M Y")
+        return dateformat.format(first, day_format)
     if first.year == last.year:
-        return f"{dateformat.format(first, 'j M')} - {dateformat.format(last, 'j M Y')}"
-    return f"{dateformat.format(first, 'j M Y')} - {dateformat.format(last, 'j M Y')}"
+        # Translators: Django date format of the first day of an album's date
+        # range within one year, e.g. "14 Jul" in "14 Jul - 2 Aug 2024".
+        start_format = pgettext("album date range start format", "j M")
+    else:
+        start_format = day_format
+    return _("%(start)s - %(end)s") % {
+        "start": dateformat.format(first, start_format),
+        "end": dateformat.format(last, day_format),
+    }
 
 
 def _count_label(counts, media_type):
@@ -475,12 +489,19 @@ def _count_label(counts, media_type):
         counts = counts | {"videos": 0}
     elif media_type == MediaItem.MediaType.VIDEO:
         counts = counts | {"photos": 0}
-    parts = [
-        f"{count} {noun}{'s' if count != 1 else ''}"
-        for noun, count in (("photo", counts["photos"]), ("video", counts["videos"]))
-        if count
-    ]
-    return ", ".join(parts) or "0 photos"
+    parts = []
+    if counts["photos"]:
+        parts.append(_photo_count(counts["photos"]))
+    if counts["videos"]:
+        parts.append(
+            ngettext("%(count)s video", "%(count)s videos", counts["videos"])
+            % {"count": counts["videos"]}
+        )
+    return ", ".join(parts) or _photo_count(0)
+
+
+def _photo_count(count):
+    return ngettext("%(count)s photo", "%(count)s photos", count) % {"count": count}
 
 
 def _display_context(user):
@@ -583,9 +604,9 @@ def _who_card(who):
 def _scope_choices(user):
     """The libraries the timeline can open on, for the Preferences panel."""
     choices = [
-        {"value": MINE, "label": "My photos"},
-        {"value": ALL, "label": "All"},
-        {"value": SHARED, "label": "Shared with me"},
+        {"value": MINE, "label": _("My photos")},
+        {"value": ALL, "label": pgettext("photos library", "All")},
+        {"value": SHARED, "label": _("Shared with me")},
     ]
     choices += [
         {"value": _scope_token(group), "label": group.name}
@@ -655,22 +676,27 @@ def _similar_ranking(request, scope, raw_uuid):
     if source is None:
         raise Http404
     matches = similar_photos(request.user, source, scope)
-    kind = (
-        "video"
-        if source.media_item.media_type == MediaItem.MediaType.VIDEO
-        else "photo"
-    )
+    is_video = source.media_item.media_type == MediaItem.MediaType.VIDEO
     if matches is None:
-        empty_title = "Not analyzed yet"
-        empty_text = (
-            f"This {kind} has not been analyzed yet. Similar photos show up "
-            "once it has been, usually within the hour."
-        )
+        empty_title = _("Not analyzed yet")
+        if is_video:
+            empty_text = _(
+                "This video has not been analyzed yet. Similar photos show up "
+                "once it has been, usually within the hour."
+            )
+        else:
+            empty_text = _(
+                "This photo has not been analyzed yet. Similar photos show up "
+                "once it has been, usually within the hour."
+            )
     else:
-        empty_title = "No similar photo"
-        empty_text = f"Nothing in this library looks like this {kind}."
+        empty_title = _("No similar photo")
+        if is_video:
+            empty_text = _("Nothing in this library looks like this video.")
+        else:
+            empty_text = _("Nothing in this library looks like this photo.")
     return _Ranking(
-        title=f"Similar to {source.name}",
+        title=_("Similar to %(name)s") % {"name": source.name},
         icon="images",
         params={"similar": str(source.pk)},
         matches=matches,
@@ -685,14 +711,14 @@ def _description_ranking(request, scope, query):
         matches = search_by_description(request.user, query, scope)
     except QueryEmbeddingUnavailable:
         matches = []
-        error = "The search could not run right now. Try again in a moment."
+        error = _("The search could not run right now. Try again in a moment.")
     return _Ranking(
-        title=f"“{query}”",
+        title=_("“%(query)s”") % {"query": query},
         icon="search",
         params={"q": query},
         matches=matches,
-        empty_title="No match",
-        empty_text=(
+        empty_title=_("No match"),
+        empty_text=_(
             "No photo or video in this library matches this description. "
             "Describe what it shows: a place, an object, a scene."
         ),
@@ -708,8 +734,8 @@ def _ranked_entries(similar, photos, matches):
         return [{"kind": "photo", "file": photo} for photo in photos]
     duplicates = {m.file_id for m in matches if m.near_duplicate}
     groups = (
-        ("Near-duplicates", "Almost the same shot.", True),
-        ("Similar", "", False),
+        (_("Near-duplicates"), _("Almost the same shot."), True),
+        (pgettext("photos ranking heading", "Similar"), "", False),
     )
     entries = []
     for title, note, near in groups:
@@ -839,7 +865,7 @@ def index(request):
     view_params = scope_params | filter_params
     years = [
         {
-            "label": str(year) if year is not None else "Undated",
+            "label": str(year) if year is not None else _("Undated"),
             "count": count,
             "url": _url_with(
                 view_params | {"date": str(year) if year is not None else UNDATED}
@@ -851,15 +877,23 @@ def index(request):
 
     if who is not None:
         active_view, icon = "people", "scan-face"
-        title = who.person.display_name if who.person else "Unnamed person"
+        title = who.person.display_name if who.person else _("Unnamed person")
     elif hidden:
-        active_view, title, icon = "hidden", "Hidden", "eye-off"
+        active_view, title, icon = (
+            "hidden",
+            pgettext("photos view", "Hidden"),
+            "eye-off",
+        )
     elif tag is not None:
         active_view, title, icon = f"tag:{tag.uuid}", tag.name, tag.icon or "tag"
     elif favorites:
-        active_view, title, icon = "favorites", "Favorites", "star"
+        active_view, title, icon = "favorites", _("Favorites"), "star"
     else:
-        active_view, title, icon = "timeline", "Timeline", "images"
+        active_view, title, icon = (
+            "timeline",
+            pgettext("photos library", "Timeline"),
+            "images",
+        )
 
     context = {
         "person_views": _person_views(request.user, who, "photos")
@@ -1018,7 +1052,7 @@ def library_map(request):
     context = {
         "active_view": "map",
         "is_map_view": True,
-        "title": "Map",
+        "title": _("Map"),
         "count_label": _count_label(counts, media_type),
         "view_empty": not (counts["photos"] or counts["videos"]),
         "map_enabled": enabled,
@@ -1473,7 +1507,7 @@ def _people_shell_context(user):
     return {
         "active_view": "people",
         "is_people_view": True,
-        "title": "People",
+        "title": _("People"),
         "tags": [
             {"tag": t, "url": _url_with({"tag": str(t.uuid)}), "active": False}
             for t in library_tags(user, MINE)
@@ -1691,9 +1725,15 @@ def _review_left_label(to_name, to_check):
     """The review page's header count; leftLabel() in faces.js keeps it."""
     parts = []
     if to_name:
-        parts.append(f"{to_name} {'person' if to_name == 1 else 'people'} to name")
+        parts.append(
+            ngettext("%(count)s person to name", "%(count)s people to name", to_name)
+            % {"count": to_name}
+        )
     if to_check:
-        parts.append(f"{to_check} to check")
+        parts.append(
+            ngettext("%(count)s to check", "%(count)s to check", to_check)
+            % {"count": to_check}
+        )
     return " · ".join(parts)
 
 
@@ -1721,13 +1761,13 @@ def _person_views(user, who, active):
     query = urlencode(who.params)
     views = [
         {
-            "label": "Photos",
+            "label": _("Photos"),
             "icon": "images",
             "url": _url_with(who.params),
             "active": active == "photos",
         },
         {
-            "label": "Faces",
+            "label": _("Faces"),
             "icon": "scan-face",
             "url": f"{reverse('photos_ui:person_faces')}?{query}",
             "active": active == "faces",
@@ -1738,7 +1778,7 @@ def _person_views(user, who, active):
     ):
         views.append(
             {
-                "label": "Silhouettes",
+                "label": _("Silhouettes"),
                 "icon": "person-standing",
                 "url": f"{reverse('photos_ui:person_silhouettes')}?{query}",
                 "active": active == "silhouettes",
@@ -1767,7 +1807,7 @@ def person_faces_view(request):
     base = f"{reverse('photos_ui:person_faces')}?{urlencode(who.params)}"
     context = {
         **_people_shell_context(request.user),
-        "title": who.person.display_name if who.person else "Unnamed person",
+        "title": who.person.display_name if who.person else _("Unnamed person"),
         "cluster": _who_card(who),
         "person_views": _person_views(request.user, who, "faces"),
         "board": {"faces": _face_items(page.face_ids), "total": page.total},
@@ -1779,9 +1819,9 @@ def person_faces_view(request):
                 "active": value == show,
             }
             for value, label in (
-                (ALL_FACES, "All"),
-                (TO_CHECK, "Not confirmed"),
-                (CONFIRMED, "Confirmed"),
+                (ALL_FACES, pgettext("faces", "All")),
+                (TO_CHECK, pgettext("faces", "Not confirmed")),
+                (CONFIRMED, pgettext("faces", "Confirmed")),
             )
         ],
     }

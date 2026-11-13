@@ -1,4 +1,4 @@
-{% load file_filters photos_filters %}
+{% load i18n file_filters photos_filters %}
 {% comment %}
   A square tile of the timeline, a fixed size so that day groups line up: the
   --photo-tile width the size slider sets on the page root. On a phone it is a
@@ -161,7 +161,7 @@
     <input
       type="checkbox"
       class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-xs"
-      aria-label="Select {{ file.name }}"
+      aria-label="{% blocktranslate trimmed with name=file.name %}Select {{ name }}{% endblocktranslate %}"
       data-select
       @click.stop="toggleTileSelection($el.closest('[data-uuid]'), $event)"
     />
@@ -181,8 +181,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs hidden group-data-[favorite='1']:inline-flex [[data-tile-badges=hover]_.group:not(:hover):not(:focus-within)_&]:opacity-0"
-        title="Remove from favorites"
-        aria-label="Remove from favorites"
+        title="{% translate 'Remove from favorites' %}"
+        aria-label="{% translate 'Remove from favorites' %}"
         @click.stop="toggleTileFavorite($el)"
       >
         <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
@@ -190,8 +190,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 focus:opacity-100 group-data-[favorite='1']:hidden [@media(hover:none)]:hidden"
-        title="Add to favorites"
-        aria-label="Add to favorites"
+        title="{% translate 'Add to favorites' %}"
+        aria-label="{% translate 'Add to favorites' %}"
         @click.stop="toggleTileFavorite($el)"
       >
         <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
@@ -201,8 +201,8 @@
   <button
     type="button"
     class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:hidden [@media(hover:none)]:group-data-[selected='1']:inline-flex [@media(hover:none)]:group-data-[selected='1']:opacity-100"
-    title="More actions"
-    aria-label="More actions for {{ file.name }}"
+    title="{% translate 'More actions' %}"
+    aria-label="{% blocktranslate trimmed with name=file.name %}More actions for {{ name }}{% endblocktranslate %}"
     aria-haspopup="menu"
     @click.stop="openCtxMenu($event, $el.closest('[data-uuid]'), $el)"
   >

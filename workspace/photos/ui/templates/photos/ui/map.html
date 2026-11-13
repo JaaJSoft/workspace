@@ -1,5 +1,7 @@
 {% extends "photos/ui/base.html" %}
 
+{% load i18n %}
+
 {% comment %}
   The Map page: the located photos of the library on a map
   (photos/ui/js/library_map.js), and the grid of those in the area on screen
@@ -15,7 +17,10 @@
         <i data-lucide="map" class="w-5 h-5 text-module shrink-0"></i>
         <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
           <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
-          <span class="text-sm text-base-content/60" title="With a location">{{ count_label }}</span>
+          <span
+            class="text-sm text-base-content/60"
+            title="{% translate 'With a location' %}"
+          >{{ count_label }}</span>
         </div>
       </div>
       {% include "photos/ui/partials/header_tabs.html" %}
@@ -36,8 +41,8 @@
               <button
                 type="button"
                 class="btn btn-sm btn-square join-item bg-base-100/90 backdrop-blur-sm border-base-300"
-                title="Zoom in"
-                aria-label="Zoom in"
+                title="{% translate 'Zoom in' %}"
+                aria-label="{% translate 'Zoom in' %}"
                 @click="zoomIn()"
               >
                 <i data-lucide="plus" class="w-4 h-4"></i>
@@ -45,8 +50,8 @@
               <button
                 type="button"
                 class="btn btn-sm btn-square join-item bg-base-100/90 backdrop-blur-sm border-base-300"
-                title="Zoom out"
-                aria-label="Zoom out"
+                title="{% translate 'Zoom out' %}"
+                aria-label="{% translate 'Zoom out' %}"
                 @click="zoomOut()"
               >
                 <i data-lucide="minus" class="w-4 h-4"></i>
@@ -55,8 +60,8 @@
             <button
               type="button"
               class="btn btn-sm btn-square shadow-md bg-base-100/90 backdrop-blur-sm border-base-300"
-              title="Show every photo"
-              aria-label="Show every photo"
+              title="{% translate 'Show every photo' %}"
+              aria-label="{% translate 'Show every photo' %}"
               :disabled="mapLoading || mapEmpty"
               @click="fitAll()"
               data-testid="library-map-fit"
@@ -76,7 +81,7 @@
             >
               <i data-lucide="loader-circle" class="w-6 h-6"></i>
             </span>
-            <span class="sr-only">Loading the map…</span>
+            <span class="sr-only">{% translate "Loading the map…" %}</span>
           </div>
 
           <div
@@ -93,13 +98,15 @@
                 <i data-lucide="map-pin-off" class="w-6 h-6 text-module"></i>
               </div>
               <template x-if="mapFailed">
-                <p class="text-sm">The photos could not be loaded. Reload the page to try again.</p>
+                <p class="text-sm">{% translate "The photos could not be loaded. Reload the page to try again." %}</p>
               </template>
               <template x-if="!mapFailed">
                 <div class="space-y-1">
-                  <h2 class="font-semibold">No photo with a location here</h2>
+                  <h2 class="font-semibold">{% translate "No photo with a location here" %}</h2>
                   <p class="text-sm text-base-content/60">
-                    Photos taken with location turned on are placed by themselves. You can also set where a photo was taken from its details.
+                    {% blocktranslate trimmed %}
+                      Photos taken with location turned on are placed by themselves. You can also set where a photo was taken from its details.
+                    {% endblocktranslate %}
                   </p>
                 </div>
               </template>
@@ -125,7 +132,7 @@
                 x-show="periodActive()"
                 @click="resetPeriod()"
               >
-                All dates
+                {% translate "All dates" %}
               </button>
             </div>
             {# The bars stay off a phone, where the map is short enough already. #}
@@ -150,7 +157,7 @@
                 x-model.number="periodFrom"
                 @input="onPeriodInput('from')"
                 class="library-map-range"
-                aria-label="From"
+                aria-label="{% translate 'From' context 'map period start' %}"
                 data-testid="library-map-period-from"
               />
               <input
@@ -161,7 +168,7 @@
                 x-model.number="periodTo"
                 @input="onPeriodInput('to')"
                 class="library-map-range"
-                aria-label="To"
+                aria-label="{% translate 'To' context 'map period end' %}"
                 data-testid="library-map-period-to"
               />
             </div>
@@ -172,7 +179,7 @@
         <aside
           class="min-h-0 max-lg:flex-1 lg:w-92 xl:w-108 shrink-0 overflow-y-auto border-base-300 max-lg:border-t lg:border-l bg-base-100 sm:[--photo-tile:6.75rem] xl:[--photo-tile:8rem]"
           data-scroll-root
-          aria-label="Photos in this area"
+          aria-label="{% translate 'Photos in this area' %}"
         >
           <div id="map-photos" class="flex justify-center py-10">
             <span class="loading loading-spinner text-module"></span>
@@ -189,10 +196,18 @@
         <div class="rounded-full bg-module/10 p-5">
           <i data-lucide="map" class="w-10 h-10 text-module"></i>
         </div>
-        <h2 class="text-lg font-semibold">See where your photos were taken</h2>
+        <h2 class="text-lg font-semibold">{% translate "See where your photos were taken" %}</h2>
         <p class="text-sm text-base-content/60 max-w-md">
-          {% if view_empty %}No photo of this library has a location yet.{% else %}This library holds {{ count_label }} with a location.{% endif %}
-          The map is loaded from {{ map_offer_server }}, which then receives the areas you browse and the location of each photo you open.
+          {% if view_empty %}
+            {% translate "No photo of this library has a location yet." %}
+          {% else %}
+            {% blocktranslate trimmed %}
+              This library holds {{ count_label }} with a location.
+            {% endblocktranslate %}
+          {% endif %}
+          {% blocktranslate trimmed with server=map_offer_server %}
+            The map is loaded from {{ server }}, which then receives the areas you browse and the location of each photo you open.
+          {% endblocktranslate %}
         </p>
         <button
           type="button"
@@ -202,7 +217,7 @@
           data-testid="library-map-enable"
         >
           <i data-lucide="map" class="w-4 h-4"></i>
-          Show the map
+          {% translate "Show the map" %}
         </button>
       </div>
     {% endif %}

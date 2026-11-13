@@ -725,7 +725,8 @@ class HistoryHeaderTests(TestCase):
         self.assertEqual(header.index("]"), len(header) - 1)
 
     def test_a_blank_display_name_falls_back_to_the_username(self):
-        self.user.first_name = "\x00"
+        # Nothing printable, and not NUL, which PostgreSQL refuses to store.
+        self.user.first_name = "\x07"
         self.user.save()
         self._post(self.user, "hi", self.t0)
         (header,) = self._headers()

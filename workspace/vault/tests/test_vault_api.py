@@ -380,6 +380,9 @@ class VaultEntryCountTests(TestCase):
         which is the shape the listing's prefetch exists to avoid."""
         for _ in range(2):
             self._entry(self.vault)
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get("/api/v1/vault/vaults")
         with CaptureQueriesContext(connection) as few:
             self.client.get("/api/v1/vault/vaults")
 

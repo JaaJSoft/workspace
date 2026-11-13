@@ -261,6 +261,9 @@ class BatchPurgeTests(TestCase):
         rewrite would pass every other test in this file."""
         alone = self._entry(fields=["password"])
         several = [self._entry(fields=["password"]) for _ in range(3)]
+        # A user's first request also records their presence: measure from
+        # the second, the one every later request looks like.
+        self.client.get("/api/v1/vault/vaults")
 
         with CaptureQueriesContext(connection) as one_row:
             self.assertEqual(self._post({"uuids": [str(alone.uuid)]}).status_code, 200)

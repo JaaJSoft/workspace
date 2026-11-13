@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 from django.db.models.functions import Lower
 from django.urls import reverse
 from django.utils import dateformat, timezone
+from django.utils.translation import gettext as _
 
 from workspace.common.search import apply_fulltext
 from workspace.common.text import fold_text
@@ -63,7 +64,7 @@ def search_by_description_entry(query, user, limit, scope=SearchScope.ALL):
     return [
         SearchResult(
             uuid=f"photos-description:{text}",
-            name=f"Photos showing “{text}”",
+            name=_("Photos showing “%(text)s”") % {"text": text},
             url=f"{reverse('photos_ui:index')}?{urlencode({'q': text, 'scope': library})}",
             matched_value=text,
             match_type="content",
@@ -93,7 +94,7 @@ def search_people(query, user, limit):
             match_type="name",
             type_icon="scan-face",
             module_slug="photos",
-            tags=(SearchTag("Person", "info"),),
+            tags=(SearchTag(_("Person"), "info"),),
         )
         for card in person_cards(clusters)[:limit]
     ]
@@ -117,7 +118,7 @@ def search_albums(query, user, limit, *, mine=False):
             match_type="name",
             type_icon="book-image",
             module_slug="photos",
-            tags=(SearchTag("Album", "success"),),
+            tags=(SearchTag(_("Album"), "success"),),
         )
         for album in albums.order_by(Lower("title"), "uuid")[:limit]
     ]

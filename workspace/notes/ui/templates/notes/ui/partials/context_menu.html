@@ -8,45 +8,52 @@ rendered from whatever the registry returns; only the rows the registry
 knows nothing about (sidebar visibility, "Open in Files") are written out
 here. Tags have no context menu: the tag manager dialog holds their actions.
 {% endcomment %}
-<ul
-  class="menu menu-sm p-0 w-full"
-  x-show="ctxMenu.type === 'folder' || ctxMenu.type === 'group_folder'"
->
-  <li x-show="ctxMenu.actions === null">
-    <span class="gap-3 rounded-sm pointer-events-none">
-      <span class="loading loading-spinner loading-xs"></span>
-      <span>Loading…</span>
-    </span>
-  </li>
-  <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" click="ctxFolderAction(action)" class_expr="action.css_class || ''" only %}
-  </template>
-  {% comment %}Depth 0-2 only, so the new child is still visible at level 4.{% endcomment %}
-  <template x-if="ctxMenu.actions !== null && (ctxMenu.data?.depth ?? 0) < 3">
-    {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label="New subfolder" click="ctxFolderAction({id: 'create_subfolder'})" only %}
-  </template>
-  <template x-if="ctxMenu.actions !== null">
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="eye" icon_alt="eye-off" icon_toggle="isHidden(ctxMenu.data?.uuid)" label_expr="isHidden(ctxMenu.data?.uuid) ? 'Show in sidebar' : 'Hide from sidebar'" click="ctxAction('hide')" only %}
-  </template>
-  <template x-if="ctxMenu.actions !== null">
-    {% include "ui/partials/context_menu_item.html" with icon="hard-drive" label="Open in Files" href_expr="'/files/' + ctxMenu.data?.uuid" click="closeCtxMenu()" only %}
-  </template>
-</ul>
+{% load i18n %}
+{% translate "Show in sidebar" as show_in_sidebar_label %}
+{% translate "Hide from sidebar" as hide_from_sidebar_label %}
+{% with show_js=show_in_sidebar_label|escapejs hide_js=hide_from_sidebar_label|escapejs %}
+  {% with sidebar_visibility_expr="isHidden(ctxMenu.data?.uuid) ? '"|add:show_js|add:"' : '"|add:hide_js|add:"'" %}
+    <ul
+      class="menu menu-sm p-0 w-full"
+      x-show="ctxMenu.type === 'folder' || ctxMenu.type === 'group_folder'"
+    >
+      <li x-show="ctxMenu.actions === null">
+        <span class="gap-3 rounded-sm pointer-events-none">
+          <span class="loading loading-spinner loading-xs"></span>
+          <span>{% translate "Loading…" %}</span>
+        </span>
+      </li>
+      <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" click="ctxFolderAction(action)" class_expr="action.css_class || ''" only %}
+      </template>
+      {% comment %}Depth 0-2 only, so the new child is still visible at level 4.{% endcomment %}
+      <template x-if="ctxMenu.actions !== null && (ctxMenu.data?.depth ?? 0) < 3">
+        {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label=_("New subfolder") click="ctxFolderAction({id: 'create_subfolder'})" only %}
+      </template>
+      <template x-if="ctxMenu.actions !== null">
+        {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="eye" icon_alt="eye-off" icon_toggle="isHidden(ctxMenu.data?.uuid)" label_expr=sidebar_visibility_expr click="ctxAction('hide')" only %}
+      </template>
+      <template x-if="ctxMenu.actions !== null">
+        {% include "ui/partials/context_menu_item.html" with icon="hard-drive" label=_("Open in Files") href_expr="'/files/' + ctxMenu.data?.uuid" click="closeCtxMenu()" only %}
+      </template>
+    </ul>
 
-<ul class="menu menu-sm p-0 w-full" x-show="ctxMenu.type === 'note'">
-  <li x-show="ctxMenu.actions === null">
-    <span class="gap-3 rounded-sm pointer-events-none">
-      <span class="loading loading-spinner loading-xs"></span>
-      <span>Loading…</span>
-    </span>
-  </li>
-  <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" click="ctxNoteAction(action)" class_expr="action.css_class || ''" only %}
-  </template>
-  <template x-if="ctxMenu.actions !== null">
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="folder-input" label="Move to folder" click="ctxNoteAction({id: 'move'})" only %}
-  </template>
-  <template x-if="ctxMenu.actions !== null">
-    {% include "ui/partials/context_menu_item.html" with icon="hard-drive" label="Open in Files" href_expr="openInFilesHref(ctxMenu.data)" click="closeCtxMenu()" only %}
-  </template>
-</ul>
+    <ul class="menu menu-sm p-0 w-full" x-show="ctxMenu.type === 'note'">
+      <li x-show="ctxMenu.actions === null">
+        <span class="gap-3 rounded-sm pointer-events-none">
+          <span class="loading loading-spinner loading-xs"></span>
+          <span>{% translate "Loading…" %}</span>
+        </span>
+      </li>
+      <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" click="ctxNoteAction(action)" class_expr="action.css_class || ''" only %}
+      </template>
+      <template x-if="ctxMenu.actions !== null">
+        {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="folder-input" label=_("Move to folder") click="ctxNoteAction({id: 'move'})" only %}
+      </template>
+      <template x-if="ctxMenu.actions !== null">
+        {% include "ui/partials/context_menu_item.html" with icon="hard-drive" label=_("Open in Files") href_expr="openInFilesHref(ctxMenu.data)" click="closeCtxMenu()" only %}
+      </template>
+    </ul>
+  {% endwith %}
+{% endwith %}

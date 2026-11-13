@@ -1,7 +1,9 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
-{% block title %}Notes{% endblock %}
+{% block title %}
+  {% translate "Notes" %}
+{% endblock %}
 
 {% block extra_head %}
   <!-- Milkdown Crepe editor styles (ProseMirror, KaTeX, crepe common theme) - vendored, built by scripts/frontend -->
@@ -33,7 +35,11 @@
 
 {% block drawer_sidebar %}
   <div class="drawer-side z-40 h-full overflow-visible!">
-    <label for="notes-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    <label
+      for="notes-drawer"
+      aria-label="{% translate 'close sidebar' %}"
+      class="drawer-overlay"
+    ></label>
 
     <!-- Sidebar -->
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
@@ -68,17 +74,23 @@
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0 w-full">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label=_("Help") color="module" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip=_("Help (?)") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
+        {% translate "Expand sidebar" as expand_sidebar_label %}
+        {% translate "Collapse sidebar" as collapse_sidebar_label %}
         <ul class="menu p-0 hidden lg:block w-full">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+            {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+            {% endwith %}
+          {% endwith %}
         </ul>
         <ul class="menu p-0 lg:hidden w-full">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label=_("Preferences") color="module" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip=_("Preferences") collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
     </aside>
@@ -86,6 +98,11 @@
 {% endblock %}
 
 {% block content %}
+  {% translate "Renaming is disabled for this note" as rename_disabled_label %}
+  {% translate "Unavailable for this note" as unavailable_label %}
+  {% translate "Add to favorites" as add_favorite_label %}
+  {% translate "Remove from favorites" as remove_favorite_label %}
+  {% translate "Delete note" as delete_note_label %}
   <div class="h-full min-w-0 bg-base-100">
     <div class="h-full flex min-w-0" x-show="activeView !== 'graph'">
 
@@ -115,7 +132,7 @@
               type="button"
               class="btn btn-ghost btn-sm btn-square lg:hidden"
               @click="closeNote()"
-              aria-label="Back to the list"
+              aria-label="{% translate 'Back to the list' %}"
             >
               <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
@@ -128,7 +145,7 @@
               @change="renameNote($event.target.value)"
               :readonly="!canDoOnSelected('rename')"
               :class="!canDoOnSelected('rename') ? 'cursor-not-allowed opacity-70' : ''"
-              :title="!canDoOnSelected('rename') ? 'Renaming is disabled for this note' : ''"
+              :title="!canDoOnSelected('rename') ? '{{ rename_disabled_label|escapejs }}' : ''"
             />
           </div>
           <div class="flex items-center gap-1 shrink-0">
@@ -137,7 +154,7 @@
               class="btn btn-ghost btn-sm btn-square"
               @click="toggleFavorite(selectedNote)"
               :disabled="togglingFavorite || !canDoOnSelected('toggle_favorite')"
-              :title="!canDoOnSelected('toggle_favorite') ? 'Unavailable for this note' : (selectedNote?.is_favorite ? 'Remove from favorites' : 'Add to favorites')"
+              :title="!canDoOnSelected('toggle_favorite') ? '{{ unavailable_label|escapejs }}' : (selectedNote?.is_favorite ? '{{ remove_favorite_label|escapejs }}' : '{{ add_favorite_label|escapejs }}')"
             >
               <span
                 class="loading loading-spinner loading-xs"
@@ -156,14 +173,14 @@
               type="button"
               class="btn btn-ghost btn-sm btn-square"
               @click="moveNote(selectedNote.uuid, selectedNote.name)"
-              title="Move to folder"
+              title="{% translate 'Move to folder' %}"
             >
               <i data-lucide="folder-input" class="w-4 h-4"></i>
             </button>
             <a
               class="btn btn-ghost btn-sm btn-square"
               :href="openInFilesHref(selectedNote)"
-              title="Open in Files"
+              title="{% translate 'Open in Files' %}"
             >
               <i data-lucide="hard-drive" class="w-4 h-4"></i>
             </a>
@@ -172,7 +189,7 @@
               class="btn btn-ghost btn-sm btn-square text-error"
               @click="deleteNote()"
               :disabled="!canDoOnSelected('delete')"
-              :title="!canDoOnSelected('delete') ? 'Unavailable for this note' : 'Delete note'"
+              :title="!canDoOnSelected('delete') ? '{{ unavailable_label|escapejs }}' : '{{ delete_note_label|escapejs }}'"
             >
               <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
@@ -202,7 +219,7 @@
           >
             <div class="text-center">
               <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
-              <p class="text-lg font-medium mb-2">Failed to load note</p>
+              <p class="text-lg font-medium mb-2">{% translate "Failed to load note" %}</p>
               <p class="text-sm text-base-content/60" x-text="viewerError"></p>
             </div>
           </div>
@@ -213,13 +230,13 @@
           >
             <div class="text-center">
               <i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
-              <p class="text-lg font-medium">Select or create a note</p>
+              <p class="text-lg font-medium">{% translate "Select or create a note" %}</p>
               <label
                 for="notes-drawer"
                 class="btn btn-module btn-sm mt-4 lg:hidden cursor-pointer"
               >
                 <i data-lucide="menu" class="w-4 h-4"></i>
-                Open notes
+                {% translate "Open notes" %}
               </label>
             </div>
           </div>
@@ -235,7 +252,7 @@
       @click="createNote()"
       x-show="!selectedNote && ['all', 'folder', 'group_folder'].includes(activeView)"
       x-cloak
-      aria-label="New note"
+      aria-label="{% translate 'New note' %}"
     >
       <i data-lucide="plus" class="w-5 h-5"></i>
     </button>
@@ -248,81 +265,22 @@
   {% include "notes/ui/partials/help_dialog.html" %}
   {% include "files/ui/partials/file_embed_viewer.html" %}
 
-  <!-- Create Group Folder Dialog -->
-  <dialog id="notes-create-group-folder-dialog" class="modal">
-    <div class="modal-box" x-data="{ selectedGroup: '' }">
-      {% include "ui/partials/dialog_header.html" with icon="users" title="Create Group Folder" only %}
-      {% if available_groups %}
-        <form
-          @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.noteGroupSelect.options[$refs.noteGroupSelect.selectedIndex].text } })); document.getElementById('notes-create-group-folder-dialog').close(); }"
-        >
-          <div class="fieldset">
-            <label class="fieldset-legend">
-              <span>Group</span>
-            </label>
-            <select
-              x-model="selectedGroup"
-              x-ref="noteGroupSelect"
-              class="select w-full"
-              required
-            >
-              <option value="" disabled selected>Select a group</option>
-              {% for g in available_groups %}
-                <option value="{{ g.id }}">{{ g.name }}</option>
-              {% endfor %}
-            </select>
-            <label class="label whitespace-normal">
-              <span>The folder will be named after the group</span>
-            </label>
-          </div>
-          <div class="modal-action">
-            <button
-              type="button"
-              class="btn btn-sm"
-              onclick="document.getElementById('notes-create-group-folder-dialog').close()"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="btn btn-module btn-sm"
-              :disabled="!selectedGroup"
-            >
-              Create
-            </button>
-          </div>
-        </form>
-      {% else %}
-        <p class="text-base-content/60 text-sm">All your groups already have a folder.</p>
-        <div class="modal-action">
-          <button
-            type="button"
-            class="btn btn-sm"
-            onclick="document.getElementById('notes-create-group-folder-dialog').close()"
-          >
-            Close
-          </button>
-        </div>
-      {% endif %}
-    </div>
-    <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
-    </form>
-  </dialog>
+  {% include "files/ui/partials/group_folder_dialog.html" %}
 
   <!-- Mobile preferences dialog -->
   <dialog id="notes-prefs-dialog" class="modal" x-data="notesPreferences()">
     <div class="modal-box">
-      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title="Preferences" only %}
+      {% translate "Preferences" as preferences_title %}
+      {% include "ui/partials/dialog_header.html" with icon="sliders-horizontal" title=preferences_title only %}
       <div>{% include "notes/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
-          <button type="submit" class="btn btn-sm">Close</button>
+          <button type="submit" class="btn btn-sm">{% translate "Close" %}</button>
         </form>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button type="submit">close</button>
+      <button type="submit">{% translate "close" %}</button>
     </form>
   </dialog>
 {% endblock %}

@@ -1,0 +1,52 @@
+{% load i18n %}
+{% comment %}
+  The Markdown cheat sheet of a help dialog: one row per syntax, each sample
+  written in the reader's language so the result column matches it.
+  Parameters:
+    math - also list the $$...$$ block, for an editor that renders LaTeX
+{% endcomment %}
+{% translate "bold" as bold %}
+{% translate "italic" as italic %}
+{% translate "strikethrough" as strikethrough %}
+{% translate "inline code" as inline_code %}
+{% translate "link" as link %}
+<table class="table table-sm">
+  <thead>
+    <tr>
+      <th>{% translate "Syntax" %}</th>
+      <th>{% translate "Result" %}</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>**{{ bold }}**</code></td>
+      <td><strong>{{ bold }}</strong></td>
+    </tr>
+    <tr>
+      <td><code>*{{ italic }}*</code></td>
+      <td><em>{{ italic }}</em></td>
+    </tr>
+    <tr>
+      <td><code>~~{{ strikethrough }}~~</code></td>
+      <td><s>{{ strikethrough }}</s></td>
+    </tr>
+    <tr>
+      <td><code>`{{ inline_code }}`</code></td>
+      <td><code>{{ inline_code }}</code></td>
+    </tr>
+    <tr>
+      <td><code>[{{ link }}](url)</code></td>
+      <td><a class="link link-module">{{ link }}</a></td>
+    </tr>
+    <tr>
+      <td><code>```{% translate "code block" %}```</code></td>
+      <td>{% translate "Code block" %}</td>
+    </tr>
+    {% if math %}
+      <tr>
+        <td><code>$$math$$</code></td>
+        <td>{% translate "LaTeX math (KaTeX)" %}</td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>

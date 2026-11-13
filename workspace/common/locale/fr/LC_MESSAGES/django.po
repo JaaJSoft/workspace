@@ -173,6 +173,46 @@ msgstr "Enregistrement..."
 msgid "Saved"
 msgstr "Enregistré"
 
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "bold"
+msgstr "gras"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "italic"
+msgstr "italique"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "strikethrough"
+msgstr "barré"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "inline code"
+msgstr "code en ligne"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "link"
+msgstr "lien"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "Syntax"
+msgstr "Syntaxe"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "Result"
+msgstr "Résultat"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "code block"
+msgstr "bloc de code"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "Code block"
+msgstr "Bloc de code"
+
+#: templates/ui/partials/markdown_syntax_table.html
+msgid "LaTeX math (KaTeX)"
+msgstr "Formules LaTeX (KaTeX)"
+
 #: templates/ui/partials/password_generator.html vocabulary.py
 msgid "Password"
 msgstr "Mot de passe"
@@ -248,6 +288,10 @@ msgid "Activity"
 msgstr "Activité"
 
 #: vocabulary.py
+msgid "Add to favorites"
+msgstr "Ajouter aux favoris"
+
+#: vocabulary.py
 msgid "AI"
 msgstr "IA"
 
@@ -284,10 +328,6 @@ msgid "Bold"
 msgstr "Gras"
 
 #: vocabulary.py
-msgid "bold"
-msgstr "gras"
-
-#: vocabulary.py
 msgid "Calendar"
 msgstr "Calendrier"
 
@@ -318,14 +358,6 @@ msgstr "fermer"
 #: vocabulary.py
 msgid "close sidebar"
 msgstr "fermer la barre latérale"
-
-#: vocabulary.py
-msgid "Code block"
-msgstr "Bloc de code"
-
-#: vocabulary.py
-msgid "code block"
-msgstr "bloc de code"
 
 #: vocabulary.py
 msgid "Collapse"
@@ -384,6 +416,10 @@ msgid "Create"
 msgstr "Créer"
 
 #: vocabulary.py
+msgid "Create group folder"
+msgstr "Créer un dossier de groupe"
+
+#: vocabulary.py
 msgid "Crop width and height must be positive."
 msgstr "La largeur et la hauteur du recadrage doivent être positives."
 
@@ -402,6 +438,10 @@ msgstr "Date"
 #: vocabulary.py
 msgid "Default"
 msgstr "Par défaut"
+
+#: vocabulary.py
+msgid "Default view"
+msgstr "Vue par défaut"
 
 #: vocabulary.py
 msgid "Delete folder"
@@ -508,6 +548,10 @@ msgid "Groups"
 msgstr "Groupes"
 
 #: vocabulary.py
+msgid "Help (?)"
+msgstr "Aide (?)"
+
+#: vocabulary.py
 msgid "Hidden folders"
 msgstr "Dossiers masqués"
 
@@ -536,10 +580,6 @@ msgid "Inline code"
 msgstr "Code en ligne"
 
 #: vocabulary.py
-msgid "inline code"
-msgstr "code en ligne"
-
-#: vocabulary.py
 msgid "Invalid crop coordinates."
 msgstr "Coordonnées de recadrage invalides."
 
@@ -552,16 +592,8 @@ msgid "Italic"
 msgstr "Italique"
 
 #: vocabulary.py
-msgid "italic"
-msgstr "italique"
-
-#: vocabulary.py
 msgid "Keyboard Shortcuts"
 msgstr "Raccourcis clavier"
-
-#: vocabulary.py
-msgid "link"
-msgstr "lien"
 
 #: vocabulary.py
 msgid "Link copied to clipboard"
@@ -628,6 +660,10 @@ msgid "Move to folder"
 msgstr "Déplacer vers un dossier"
 
 #: vocabulary.py
+msgid "Move to trash"
+msgstr "Mettre à la corbeille"
+
+#: vocabulary.py
 msgid "Move to..."
 msgstr "Déplacer vers..."
 
@@ -668,8 +704,16 @@ msgid "Next"
 msgstr "Suivant"
 
 #: vocabulary.py
+msgid "No group folders"
+msgstr "Aucun dossier de groupe"
+
+#: vocabulary.py
 msgid "No image provided."
 msgstr "Aucune image fournie."
+
+#: vocabulary.py
+msgid "No notes found"
+msgstr "Aucune note trouvée"
 
 #: vocabulary.py
 msgid "No one yet"
@@ -694,6 +738,10 @@ msgstr "Notifications"
 #: vocabulary.py
 msgid "Open"
 msgstr "Ouvrir"
+
+#: vocabulary.py
+msgid "Open in Files"
+msgstr "Ouvrir dans Fichiers"
 
 #: vocabulary.py
 msgid "Open in People"
@@ -732,8 +780,16 @@ msgid "Properties"
 msgstr "Propriétés"
 
 #: vocabulary.py
+msgid "Quick Access"
+msgstr "Accès rapide"
+
+#: vocabulary.py
 msgid "Reload"
 msgstr "Recharger"
+
+#: vocabulary.py
+msgid "Remove from favorites"
+msgstr "Retirer des favoris"
 
 #: vocabulary.py
 msgid "Remove member"
@@ -764,10 +820,6 @@ msgid "Restore"
 msgstr "Restaurer"
 
 #: vocabulary.py
-msgid "Result"
-msgstr "Résultat"
-
-#: vocabulary.py
 msgid "Resume"
 msgstr "Reprendre"
 
@@ -778,6 +830,10 @@ msgstr "Réessayer"
 #: vocabulary.py
 msgid "Revoke"
 msgstr "Révoquer"
+
+#: vocabulary.py
+msgid "Root"
+msgstr "Racine"
 
 #: vocabulary.py
 msgid "Save failed"
@@ -816,8 +872,16 @@ msgid "Show"
 msgstr "Afficher"
 
 #: vocabulary.py
+msgid "Show group folders"
+msgstr "Afficher les dossiers de groupe"
+
+#: vocabulary.py
 msgid "Show password"
 msgstr "Afficher le mot de passe"
+
+#: vocabulary.py
+msgid "Show tags"
+msgstr "Afficher les étiquettes"
 
 #: vocabulary.py
 msgid "Show this help"
@@ -851,16 +915,8 @@ msgid "Strikethrough"
 msgstr "Barré"
 
 #: vocabulary.py
-msgid "strikethrough"
-msgstr "barré"
-
-#: vocabulary.py
 msgid "Summary"
 msgstr "Résumé"
-
-#: vocabulary.py
-msgid "Syntax"
-msgstr "Syntaxe"
 
 #: vocabulary.py
 msgid "Tag name"
@@ -913,6 +969,10 @@ msgstr "Coffre"
 #: vocabulary.py
 msgid "Videos"
 msgstr "Vidéos"
+
+#: vocabulary.py
+msgid "Views"
+msgstr "Vues"
 
 #: vocabulary.py
 msgid "Yesterday"

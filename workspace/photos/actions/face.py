@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from workspace.common.actions import BaseAction
 from workspace.photos.models import Face
 
@@ -19,7 +21,7 @@ class BaseFaceAction(BaseAction):
 @FaceActionRegistry.register
 class ConfirmFaceAction(BaseFaceAction):
     id = "confirm"
-    label = "That's right"
+    label = _("That's right")
     icon = "check"
 
     def is_available(self, user, obj):
@@ -29,14 +31,14 @@ class ConfirmFaceAction(BaseFaceAction):
 @FaceActionRegistry.register
 class AssignFaceAction(BaseFaceAction):
     id = "assign"
-    label = "Move to..."
+    label = _("Move to...")
     icon = "user-round-pen"
 
 
 @FaceActionRegistry.register
 class RejectFaceAction(BaseFaceAction):
     id = "reject"
-    label = "Not this person"
+    label = _("Not this person")
     icon = "user-x"
     css_class = "text-error"
 
@@ -47,7 +49,7 @@ class RejectFaceAction(BaseFaceAction):
 @FaceActionRegistry.register
 class HideFaceAction(BaseFaceAction):
     id = "hide"
-    label = "Hide"
+    label = _("Hide")
     icon = "eye-off"
 
     def is_available(self, user, obj):
@@ -57,7 +59,7 @@ class HideFaceAction(BaseFaceAction):
 @FaceActionRegistry.register
 class UnhideFaceAction(BaseFaceAction):
     id = "unhide"
-    label = "Unhide"
+    label = _("Unhide")
     icon = "eye"
 
     def is_available(self, user, obj):

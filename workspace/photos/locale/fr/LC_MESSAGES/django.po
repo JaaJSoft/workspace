@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:07+0000\n"
+"POT-Creation-Date: 2026-11-13 14:16+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1354,7 +1354,7 @@ msgstr "F Y"
 #: ui/templates/photos/ui/partials/timeline_page.html
 msgctxt "day header date format"
 msgid "D j M"
-msgstr "D j M"
+msgstr "D j N"
 
 #. Translators: Django date format of a day header's tooltip in the photo timeline, e.g. "Friday 13 November 2026".
 #: ui/templates/photos/ui/partials/timeline_page.html
@@ -1675,14 +1675,14 @@ msgstr "Toutes"
 #: ui/views.py
 msgctxt "album date range format"
 msgid "j M Y"
-msgstr "j M Y"
+msgstr "j N Y"
 
 #. Translators: Django date format of the first day of an album's date
 #. range within one year, e.g. "14 Jul" in "14 Jul - 2 Aug 2024".
 #: ui/views.py
 msgctxt "album date range start format"
 msgid "j M"
-msgstr "j M"
+msgstr "j N"
 
 #: ui/views.py
 #, python-format

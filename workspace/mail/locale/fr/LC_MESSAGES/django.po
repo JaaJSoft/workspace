@@ -36,7 +36,7 @@ msgstr "Nouvel e-mail"
 
 #: models.py
 msgid "Inbox"
-msgstr "Boîte de réception"
+msgstr "Reçus"
 
 #: models.py
 msgid "Sent"
@@ -342,7 +342,7 @@ msgid ""
 "rest still appear in your inbox."
 msgstr ""
 "Quand plusieurs e-mails arrivent ensemble, seuls les premiers sont notifiés. "
-"Les autres apparaissent quand même dans votre boîte de réception."
+"Les autres apparaissent quand même dans votre boîte mail."
 
 #: ui/templates/mail/ui/partials/_rules_header_actions.html
 msgid "Switch to comfortable view"

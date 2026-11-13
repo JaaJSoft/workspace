@@ -54,7 +54,7 @@ class MailFolderLanguageTests(TestCase):
     def test_folder_type_label_is_translated(self):
         folder = MailFolder(account=self.account, name="INBOX", folder_type="inbox")
         with translation.override("fr"):
-            self.assertEqual(folder.get_folder_type_display(), "Boîte de réception")
+            self.assertEqual(folder.get_folder_type_display(), "Reçus")
         self.assertEqual(folder.get_folder_type_display(), "Inbox")
 
     def _hide_inbox(self):

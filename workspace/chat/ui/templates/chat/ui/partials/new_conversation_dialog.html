@@ -126,7 +126,11 @@
             <span class="badge badge-outline gap-1">
               <i data-lucide="users" class="w-3 h-3"></i>
               <span x-text="g.name"></span>
-              <button type="button" @click="removeSelectedGroup(g.id)" aria-label="{% translate 'Remove' context 'remove item' %}">
+              <button
+                type="button"
+                @click="removeSelectedGroup(g.id)"
+                aria-label="{% translate 'Remove' context 'remove item' %}"
+              >
                 <i data-lucide="x" class="w-3 h-3"></i>
               </button>
             </span>

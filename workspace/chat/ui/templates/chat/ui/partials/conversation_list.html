@@ -26,7 +26,11 @@ reference the parent chatApp() x-data scope.
         >
           <i data-lucide="search-x" class="w-6 h-6 text-base-content/50"></i>
         </div>
-        <p class="text-sm text-base-content/60">{% blocktranslate trimmed %}No conversations match “{{ search_query }}”.{% endblocktranslate %}</p>
+        <p class="text-sm text-base-content/60">
+          {% blocktranslate trimmed %}
+            No conversations match “{{ search_query }}”.
+          {% endblocktranslate %}
+        </p>
       {% else %}
         <div
           class="w-12 h-12 mx-auto mb-3 rounded-full bg-module/15 flex items-center justify-center"

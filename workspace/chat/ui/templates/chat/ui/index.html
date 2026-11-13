@@ -64,7 +64,11 @@ be defined before the parser reaches the markup using it, or server-rendered
     class="drawer-side z-40 h-full overflow-visible!"
     :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''"
   >
-    <label for="chat-drawer" aria-label="{% translate 'close sidebar' %}" class="drawer-overlay"></label>
+    <label
+      for="chat-drawer"
+      aria-label="{% translate 'close sidebar' %}"
+      class="drawer-overlay"
+    ></label>
 
     <!-- Sidebar -->
     {% comment %}

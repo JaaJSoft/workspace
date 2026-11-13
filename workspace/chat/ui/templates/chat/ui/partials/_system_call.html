@@ -11,15 +11,15 @@ Visual only - no behavioral assertions in tests for this markup.
     <i data-lucide="phone" class="w-3.5 h-3.5 text-module"></i>
     {% if message.tool_data.state == "ended" %}
       {% with duration_label=message.tool_data|call_duration %}
-      {% if duration_label %}
-        <span>
-          {% blocktranslate trimmed with duration=duration_label %}
-            Call ended - {{ duration }}
-          {% endblocktranslate %}
-        </span>
-      {% else %}
-        <span>{% translate "Call ended" %}</span>
-      {% endif %}
+        {% if duration_label %}
+          <span>
+            {% blocktranslate trimmed with duration=duration_label %}
+              Call ended - {{ duration }}
+            {% endblocktranslate %}
+          </span>
+        {% else %}
+          <span>{% translate "Call ended" %}</span>
+        {% endif %}
       {% endwith %}
     {% else %}
       <span>{% translate "Call started" %}</span>

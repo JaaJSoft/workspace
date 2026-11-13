@@ -37,7 +37,9 @@ copy opens with no box.
         :disabled="_cropUploading"
       >
         <span x-show="_cropUploading" class="loading loading-spinner loading-sm"></span>
-        <span x-text="_cropUploading ? '{{ uploading_label|escapejs }}' : '{{ confirm_label|escapejs }}'"></span>
+        <span
+          x-text="_cropUploading ? '{{ uploading_label|escapejs }}' : '{{ confirm_label|escapejs }}'"
+        ></span>
       </button>
     </div>
   </div>

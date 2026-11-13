@@ -32,32 +32,45 @@ room. Anchored on the icon alone, a short reply sent it under the sidebar.
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tabular-nums">
         {% if usage.prompt_tokens is not None %}
           <dt class="text-base-content/60">{% translate "Input" context "AI tokens" %}</dt>
-          <dd class="text-right" title="{% blocktranslate trimmed count counter=usage.prompt_tokens %}{{ counter }} token{% plural %}{{ counter }} tokens{% endblocktranslate %}">
+          <dd
+            class="text-right"
+            title="{% blocktranslate trimmed count counter=usage.prompt_tokens %}{{ counter }} token{% plural %}{{ counter }} tokens{% endblocktranslate %}"
+          >
             {{ usage.prompt_tokens|compact_number }}
           </dd>
         {% endif %}
         {% if usage.completion_tokens is not None %}
           <dt class="text-base-content/60">{% translate "Output" context "AI tokens" %}</dt>
-          <dd class="text-right" title="{% blocktranslate trimmed count counter=usage.completion_tokens %}{{ counter }} token{% plural %}{{ counter }} tokens{% endblocktranslate %}">
+          <dd
+            class="text-right"
+            title="{% blocktranslate trimmed count counter=usage.completion_tokens %}{{ counter }} token{% plural %}{{ counter }} tokens{% endblocktranslate %}"
+          >
             {{ usage.completion_tokens|compact_number }}
           </dd>
         {% endif %}
         {% if usage.total_tokens is not None %}
           <dt class="text-base-content/60">{% translate "Total" context "AI tokens" %}</dt>
-          <dd class="text-right" title="{% blocktranslate trimmed count counter=usage.total_tokens %}{{ counter }} token{% plural %}{{ counter }} tokens{% endblocktranslate %}">
+          <dd
+            class="text-right"
+            title="{% blocktranslate trimmed count counter=usage.total_tokens %}{{ counter }} token{% plural %}{{ counter }} tokens{% endblocktranslate %}"
+          >
             {{ usage.total_tokens|compact_number }}
           </dd>
         {% endif %}
         {% if usage.seconds is not None %}
           <dt class="text-base-content/60">{% translate "Time" context "AI generation duration" %}</dt>
           <dd class="text-right">
-            {% blocktranslate trimmed with seconds=usage.seconds|floatformat:1 %}{{ seconds }}s{% endblocktranslate %}
+            {% blocktranslate trimmed with seconds=usage.seconds|floatformat:1 %}
+              {{ seconds }}s
+            {% endblocktranslate %}
           </dd>
         {% endif %}
         {% if usage.tokens_per_second is not None %}
           <dt class="text-base-content/60">{% translate "Speed" %}</dt>
           <dd class="text-right">
-            {% blocktranslate trimmed with speed=usage.tokens_per_second|floatformat:"-1" %}{{ speed }} tok/s{% endblocktranslate %}
+            {% blocktranslate trimmed with speed=usage.tokens_per_second|floatformat:"-1" %}
+              {{ speed }} tok/s
+            {% endblocktranslate %}
           </dd>
         {% endif %}
       </dl>

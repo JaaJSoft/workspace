@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:04+0000\n"
+"POT-Creation-Date: 2026-11-13 16:49+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -65,10 +65,6 @@ msgstr "La page que vous cherchez n’existe pas ou a été déplacée."
 #: templates/500.html
 msgid "Server Error"
 msgstr "Erreur du serveur"
-
-#: templates/500.html
-msgid "Something went wrong"
-msgstr "Une erreur est survenue"
 
 #: templates/500.html
 msgid "An unexpected error occurred. Our team has been notified."

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:46+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -155,10 +155,6 @@ msgstr "JPEG, PNG, WebP ou GIF. 10 Mo maximum."
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "About You"
 msgstr "À propos de vous"
-
-#: ui/templates/users/ui/partials/settings_profile.html
-msgid "Role"
-msgstr "Rôle"
 
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "ex: Lead Backend, Designer..."

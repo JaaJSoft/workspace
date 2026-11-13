@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:46+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -37,20 +37,6 @@ msgstr "Analyser le stockage"
 msgid "Open in new tab"
 msgstr "Ouvrir dans un nouvel onglet"
 
-#: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
-#: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/node_card.html
-#: ui/templates/files/ui/partials/node_row.html
-msgid "Add to favorites"
-msgstr "Ajouter aux favoris"
-
-#: actions/organize.py ui/templates/files/ui/partials/file_viewer_inline.html
-#: ui/templates/files/ui/partials/file_viewer_modal.html
-#: ui/templates/files/ui/partials/node_card.html
-#: ui/templates/files/ui/partials/node_row.html
-msgid "Remove from favorites"
-msgstr "Retirer des favoris"
-
 #: actions/organize.py
 msgid "Pin to sidebar"
 msgstr "Épingler dans la barre latérale"
@@ -60,20 +46,8 @@ msgid "Unpin from sidebar"
 msgstr "Désépingler de la barre latérale"
 
 #: actions/organize.py
-msgid "Mark as sensitive"
-msgstr "Marquer comme sensible"
-
-#: actions/organize.py
-msgid "Unmark as sensitive"
-msgstr "Retirer la marque sensible"
-
-#: actions/organize.py
 msgid "Create shortcut"
 msgstr "Créer un raccourci"
-
-#: actions/transfer.py
-msgid "Download as ZIP"
-msgstr "Télécharger en ZIP"
 
 #: apps.py
 msgid "Store, organize and share files."
@@ -86,10 +60,6 @@ msgstr "Fichiers favoris"
 #: apps.py
 msgid "Recent files"
 msgstr "Fichiers récents"
-
-#: apps.py search.py ui/templates/files/ui/index.html ui/views.py
-msgid "Shared with me"
-msgstr "Partagés avec moi"
 
 #: models.py
 msgid "A shortcut opens a file or a folder."
@@ -1191,10 +1161,6 @@ msgid "Stop slideshow"
 msgstr "Arrêter le diaporama"
 
 #: ui/templates/files/ui/partials/file_viewer_inline.html
-msgid "Slideshow"
-msgstr "Diaporama"
-
-#: ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
 msgid "File viewer"
 msgstr "Visionneuse de fichiers"
@@ -1593,11 +1559,6 @@ msgid "Your access"
 msgstr "Votre accès"
 
 #: ui/templates/files/ui/partials/properties_content.html
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Public links"
-msgstr "Liens publics"
-
-#: ui/templates/files/ui/partials/properties_content.html
 msgid "Password protected"
 msgstr "Protégé par mot de passe"
 
@@ -1612,15 +1573,6 @@ msgstr "Dernier accès"
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Expires"
 msgstr "Expire"
-
-#: ui/templates/files/ui/partials/properties_content.html
-msgid "Permanent"
-msgstr "Permanent"
-
-#: ui/templates/files/ui/partials/properties_content.html
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "No public links"
-msgstr "Aucun lien public"
 
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Manage links"
@@ -1665,33 +1617,13 @@ msgstr ""
 "d’autre ne peut voir votre écran."
 
 #: ui/templates/files/ui/partials/share_modal.html
-msgid "Add people"
-msgstr "Ajouter des personnes"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Search by username or name..."
-msgstr "Rechercher par identifiant ou nom..."
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Add a group"
-msgstr "Ajouter un groupe"
-
-#: ui/templates/files/ui/partials/share_modal.html
 #: ui/templates/files/ui/shared_base.html
 msgid "Shared with"
 msgstr "Partagé avec"
 
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Not shared with anyone yet"
-msgstr "Pas encore partagé"
-
 #: ui/templates/files/ui/partials/share_modal.html ui/views.py
 msgid "Read & write"
 msgstr "Lecture et écriture"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Undo removal"
-msgstr "Annuler la suppression"
 
 #: ui/templates/files/ui/partials/share_modal.html
 msgid "Remove access"
@@ -1714,24 +1646,8 @@ msgid "Max uploads"
 msgstr "Téléversements max."
 
 #: ui/templates/files/ui/partials/share_modal.html
-msgid "Expiration (optional)"
-msgstr "Expiration (facultatif)"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Password (optional)"
-msgstr "Mot de passe (facultatif)"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Leave empty for no password"
-msgstr "Laisser vide pour aucun mot de passe"
-
-#: ui/templates/files/ui/partials/share_modal.html
 msgid "Generate a password"
 msgstr "Générer un mot de passe"
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Create link"
-msgstr "Créer le lien"
 
 #: ui/templates/files/ui/partials/shared_dropzone.html
 #, python-format
@@ -1883,10 +1799,6 @@ msgstr[2] "%(counter)s correspondances"
 #, python-format
 msgid "Open %(name)s"
 msgstr "Ouvrir %(name)s"
-
-#: ui/templates/files/ui/partials/storage_analysis.html
-msgid "Move to trash"
-msgstr "Mettre à la corbeille"
 
 #: ui/templates/files/ui/partials/storage_analysis.html
 #, python-format
@@ -2569,20 +2481,8 @@ msgid "This share link has expired."
 msgstr "Ce lien de partage a expiré."
 
 #: views/share_links.py
-msgid "Password required."
-msgstr "Mot de passe requis."
-
-#: views/share_links.py
 msgid "Invalid or expired access token."
 msgstr "Jeton d’accès invalide ou expiré."
-
-#: views/share_links.py
-msgid "This link has no password."
-msgstr "Ce lien n'a pas de mot de passe."
-
-#: views/share_links.py
-msgid "Invalid password."
-msgstr "Mot de passe incorrect."
 
 #: views/share_links.py
 msgid "File has no content."
@@ -2635,10 +2535,6 @@ msgstr "Seuls les fichiers peuvent être partagés."
 #: viewsets/share.py
 msgid "Project not found."
 msgstr "Projet introuvable."
-
-#: viewsets/share.py
-msgid "Cannot share with yourself."
-msgstr "Vous ne pouvez pas partager avec vous-même."
 
 #: viewsets/share.py
 msgid "User not found."

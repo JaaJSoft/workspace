@@ -16,9 +16,7 @@ The file rows wait for the registry's answer about every selected photo
   {% with favorite_label_expr="selectionFavoriteAdds() ? '"|add:add_favorites_js|add:"' : '"|add:remove_favorites_js|add:"'" sensitive_label_expr="selectionSensitiveAdds() ? '"|add:mark_sensitive_js|add:"' : '"|add:unmark_sensitive_js|add:"'" %}
     <ul class="menu menu-sm p-0 w-full">
       <li class="menu-title py-1">
-        <span
-          x-text="selectedPhotosLabel(selection.length)"
-        ></span>
+        <span x-text="selectedPhotosLabel(selection.length)"></span>
       </li>
       {% include "ui/partials/context_menu_item.html" with show="selectionShows('toggle_favorite')" li_class_expr="selectionRule('toggle_favorite')" icon="star" icon_alt="star-off" icon_toggle="selectionFavoriteAdds()" label_expr=favorite_label_expr click="favoriteSelection()" only %}
       {% include "ui/partials/context_menu_item.html" with show="selectionShows('add_to_album')" li_class_expr="selectionRule('add_to_album')" icon="book-plus" label=_("Add to album") click="closeSelectionMenu(); openAlbumPicker(selection)" only %}

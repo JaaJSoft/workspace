@@ -1,6 +1,7 @@
 """REST endpoints for the folder photos imported from the Photos page go to."""
 
 from django.db import transaction
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -67,7 +68,7 @@ class ImportFolderView(APIView):
         folder = writable_folder(request.user, _body(request).get("folder"))
         if folder is None:
             return Response(
-                {"folder": "Choose a folder you can add files to."},
+                {"folder": _("Choose a folder you can add files to.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         choose_import_folder(request.user, folder)
@@ -107,13 +108,16 @@ class ImportByDateView(APIView):
         raw = _body(request).get("files")
         if not isinstance(raw, list) or not raw or len(raw) > MAX_FILES:
             return Response(
-                {"files": f"Send a list of 1 to {MAX_FILES} file uuids."},
+                {
+                    "files": _("Send a list of 1 to %(max)s file uuids.")
+                    % {"max": MAX_FILES}
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         uuids = [parse_uuid_or_none(value) for value in raw]
         if None in uuids:
             return Response(
-                {"files": "Every item must be a file uuid."},
+                {"files": _("Every item must be a file uuid.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         queued = 0

@@ -89,7 +89,8 @@ function photosShiftedWallClock(iso, minutes) {
   if (!date) return '';
   const at = new Date(`${date}T${time}:00Z`);
   at.setUTCMinutes(at.getUTCMinutes() + minutes);
-  return at.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+  const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+  return at.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
 }
 
 function photosCaptureState() {
@@ -188,7 +189,7 @@ window.photosCaptureDetailsMixin = function photosCaptureDetailsMixin() {
       try {
         result = await photosJson('POST', PHOTOS_CAPTURE_API, body);
       } catch (_) {
-        window.AppAlert.error('Failed to update the photos');
+        window.AppAlert.error(gettext('Failed to update the photos'));
         return;
       } finally {
         d.saving = false;
@@ -208,10 +209,19 @@ window.photosCaptureDetailsMixin = function photosCaptureDetailsMixin() {
 function photosCaptureReport(body, result, total) {
   if (body.date_mode === 'shift' && result.dated < total) {
     const skipped = total - result.dated;
-    return `Moved ${photosCountLabel(result.dated)}, ${skipped} without a date left as is`;
+    const moved = interpolate(ngettext(
+      'Moved %(count)s photo', 'Moved %(count)s photos', result.dated,
+    ), { count: result.dated }, true);
+    return interpolate(ngettext(
+      '%(moved)s, %(count)s without a date left as is',
+      '%(moved)s, %(count)s without a date left as is',
+      skipped,
+    ), { moved, count: skipped }, true);
   }
   if (body.date_mode === 'restore' || body.location_mode === 'restore') {
-    return `Reading ${photosCountLabel(total)} again from the file`;
+    return interpolate(ngettext(
+      'Reading %(count)s photo again from the file', 'Reading %(count)s photos again from the file', total,
+    ), { count: total }, true);
   }
-  return `Updated ${photosCountLabel(total)}`;
+  return interpolate(ngettext('Updated %(count)s photo', 'Updated %(count)s photos', total), { count: total }, true);
 }

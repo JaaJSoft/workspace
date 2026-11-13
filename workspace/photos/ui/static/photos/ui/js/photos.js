@@ -136,7 +136,7 @@ function photosRange(ordered, from, to) {
 }
 
 function photosCountLabel(count) {
-  return count === 1 ? '1 photo' : `${count} photos`;
+  return interpolate(ngettext('%(count)s photo', '%(count)s photos', count), { count }, true);
 }
 
 // Saves a response body as a file named `filename`.
@@ -439,7 +439,7 @@ window.photosApp = function photosApp() {
           if (this._prefVersions[key] !== version) return;
           this.photoPrefs[key] = previous;
           this._applyRootAttribute(key, previous);
-          window.AppAlert.error('Could not save the preference');
+          window.AppAlert.error(gettext('Could not save the preference'));
         });
     },
 
@@ -877,8 +877,8 @@ window.photosApp = function photosApp() {
       const url = new URL(window.location.origin + window.location.pathname);
       url.searchParams.set('open', uuid);
       navigator.clipboard.writeText(url.toString())
-        .then(() => window.AppAlert.success('Link copied to clipboard', { duration: 2000 }))
-        .catch(() => window.AppAlert.error('Failed to copy link'));
+        .then(() => window.AppAlert.success(gettext('Link copied to clipboard'), { duration: 2000 }))
+        .catch(() => window.AppAlert.error(gettext('Failed to copy link')));
     },
 
     // The star on a tile. The server only renders it where the registry
@@ -903,7 +903,7 @@ window.photosApp = function photosApp() {
         if (tile) tile.dataset.favorite = isFavorite ? '0' : '1';
         this._forgetActions([uuid]);
       } catch (_) {
-        window.AppAlert.error('Failed to update favorites');
+        window.AppAlert.error(gettext('Failed to update favorites'));
       }
     },
 
@@ -918,7 +918,7 @@ window.photosApp = function photosApp() {
         });
         if (!response.ok) throw new Error();
       } catch (_) {
-        window.AppAlert.error('Failed to update the photos');
+        window.AppAlert.error(gettext('Failed to update the photos'));
         return false;
       }
       uuids.forEach((uuid) => {
@@ -939,19 +939,21 @@ window.photosApp = function photosApp() {
           tile.querySelectorAll('[data-name-title]').forEach((el) => { el.title = newName; });
           tile.querySelectorAll('img[alt]').forEach((el) => { el.alt = newName; });
           const menuButton = tile.querySelector('[aria-haspopup="menu"]');
-          if (menuButton) menuButton.setAttribute('aria-label', `More actions for ${newName}`);
+          if (menuButton) menuButton.setAttribute('aria-label', interpolate(gettext('More actions for %(name)s'), { name: newName }, true));
         }
         this.reloadPropertiesPanel();
       } catch (err) {
-        window.AppAlert.error(err.message || 'Failed to rename');
+        window.AppAlert.error(err.message || gettext('Failed to rename'));
       }
     },
 
     async trashPhoto(uuid, name) {
       const ok = await AppDialog.confirm({
-        title: 'Move to trash',
-        message: `Move "${name}" to the trash? It can be restored from the Files trash.`,
-        okLabel: 'Move to trash',
+        title: gettext('Move to trash'),
+        message: interpolate(
+          gettext('Move "%(name)s" to the trash? It can be restored from the Files trash.'), { name }, true,
+        ),
+        okLabel: gettext('Move to trash'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -964,7 +966,7 @@ window.photosApp = function photosApp() {
         // Reported below, like an item the server turned down.
       }
       if (!report || !window.operationDoneUuids(report, [uuid]).length) {
-        window.AppAlert.error('Failed to move the photo to the trash');
+        window.AppAlert.error(gettext('Failed to move the photo to the trash'));
         return;
       }
       if (this.propertiesUuid === uuid) this.closePropertiesPanel();
@@ -1208,7 +1210,12 @@ window.photosApp = function photosApp() {
       } else if (done === 0) {
         window.AppAlert.error(failure);
       } else {
-        window.AppAlert.warning(`${success}, ${total - done} failed`);
+        const failed = total - done;
+        window.AppAlert.warning(interpolate(
+          ngettext('%(done)s, %(count)s failed', '%(done)s, %(count)s failed', failed),
+          { done: success, count: failed },
+          true,
+        ));
       }
     },
 
@@ -1226,11 +1233,14 @@ window.photosApp = function photosApp() {
         if (tile) tile.dataset.favorite = add ? '1' : '0';
       });
       this._forgetActions(done);
-      const count = photosCountLabel(done.length);
+      const count = done.length;
       this._reportEach(
-        done.length, uuids.length,
-        add ? `Added ${count} to favorites` : `Removed ${count} from favorites`,
-        'Failed to update favorites',
+        count, uuids.length,
+        interpolate(add
+          ? ngettext('Added %(count)s photo to favorites', 'Added %(count)s photos to favorites', count)
+          : ngettext('Removed %(count)s photo from favorites', 'Removed %(count)s photos from favorites', count),
+        { count }, true),
+        gettext('Failed to update favorites'),
       );
       this.clearSelection();
     },
@@ -1245,9 +1255,12 @@ window.photosApp = function photosApp() {
       const done = await this.markSensitive(uuids, add);
       this.selectionBusy = false;
       if (!done) return;
-      const count = photosCountLabel(uuids.length);
+      const count = uuids.length;
       window.AppAlert.success(
-        add ? `Marked ${count} as sensitive` : `Unmarked ${count} as sensitive`,
+        interpolate(add
+          ? ngettext('Marked %(count)s photo as sensitive', 'Marked %(count)s photos as sensitive', count)
+          : ngettext('Unmarked %(count)s photo as sensitive', 'Unmarked %(count)s photos as sensitive', count),
+        { count }, true),
         { duration: 2500 },
       );
       this.clearSelection();
@@ -1271,7 +1284,7 @@ window.photosApp = function photosApp() {
         if (!response.ok) throw new Error(String(response.status));
         await photosSaveBlob(response, 'photos.zip');
       } catch (_) {
-        window.AppAlert.error('Failed to download the photos');
+        window.AppAlert.error(gettext('Failed to download the photos'));
       }
       this.selectionBusy = false;
     },
@@ -1281,9 +1294,13 @@ window.photosApp = function photosApp() {
       if (!this.selectionAllows('delete')) return;
       const uuids = this.selection.slice();
       const ok = await AppDialog.confirm({
-        title: 'Move to trash',
-        message: `Move ${photosCountLabel(uuids.length)} to the trash? They can be restored from the Files trash.`,
-        okLabel: 'Move to trash',
+        title: gettext('Move to trash'),
+        message: interpolate(ngettext(
+          'Move %(count)s photo to the trash? It can be restored from the Files trash.',
+          'Move %(count)s photos to the trash? They can be restored from the Files trash.',
+          uuids.length,
+        ), { count: uuids.length }, true),
+        okLabel: gettext('Move to trash'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -1301,8 +1318,10 @@ window.photosApp = function photosApp() {
       this._removeTiles(done);
       this._reportEach(
         done.length, uuids.length,
-        `Moved ${photosCountLabel(done.length)} to the trash`,
-        'Failed to move the photos to the trash',
+        interpolate(ngettext(
+          'Moved %(count)s photo to the trash', 'Moved %(count)s photos to the trash', done.length,
+        ), { count: done.length }, true),
+        gettext('Failed to move the photos to the trash'),
       );
       this.clearSelection();
       if (!done.length) return;
@@ -1369,6 +1388,11 @@ window.photosApp = function photosApp() {
       return photosCountLabel(count);
     },
 
+    // "3 selected", for the selection bar and menu.
+    selectedLabel(count) {
+      return interpolate(ngettext('%(count)s selected', '%(count)s selected', count), { count }, true);
+    },
+
     albumAllows(actionId) {
       return this.albumUuid !== null && this.albumActions.includes(actionId);
     },
@@ -1380,17 +1404,17 @@ window.photosApp = function photosApp() {
         const album = await photosJson('POST', ALBUMS_API, { title });
         window.location.href = album.url;
       } catch (_) {
-        window.AppAlert.error('Failed to create the album');
+        window.AppAlert.error(gettext('Failed to create the album'));
       }
     },
 
     _askAlbumTitle(value = '') {
       return AppDialog.prompt({
-        title: value ? 'Rename album' : 'New album',
-        message: value ? '' : 'Albums gather photos without moving them in Files.',
+        title: value ? gettext('Rename album') : gettext('New album'),
+        message: value ? '' : gettext('Albums gather photos without moving them in Files.'),
         value,
-        placeholder: 'Summer 2024',
-        okLabel: value ? 'Rename' : 'Create',
+        placeholder: gettext('Summer 2024'),
+        okLabel: value ? gettext('Rename') : gettext('Create'),
         okClass: 'btn-module',
         icon: 'book-image',
         iconClass: 'bg-module/15 text-module',
@@ -1417,7 +1441,7 @@ window.photosApp = function photosApp() {
         if (generation !== this._pickerGeneration) return;
         this.picker.albums = allowed;
       } catch (_) {
-        if (generation === this._pickerGeneration) window.AppAlert.error('Failed to load your albums');
+        if (generation === this._pickerGeneration) window.AppAlert.error(gettext('Failed to load your albums'));
       }
       if (generation === this._pickerGeneration) this.picker.loading = false;
     },
@@ -1437,12 +1461,16 @@ window.photosApp = function photosApp() {
         this.clearSelection();
         const added = result ? result.added : 0;
         window.AppAlert.success(
-          added ? `Added ${photosCountLabel(added)} to "${album.title}"` : `Already in "${album.title}"`,
+          added
+            ? interpolate(ngettext(
+              'Added %(count)s photo to "%(album)s"', 'Added %(count)s photos to "%(album)s"', added,
+            ), { count: added, album: album.title }, true)
+            : interpolate(gettext('Already in "%(album)s"'), { album: album.title }, true),
           { duration: 3000 },
         );
         this._refresh(['photos-nav']);
       } catch (_) {
-        window.AppAlert.error('Failed to add to the album');
+        window.AppAlert.error(gettext('Failed to add to the album'));
       }
       this.picker.busy = false;
     },
@@ -1455,10 +1483,12 @@ window.photosApp = function photosApp() {
       try {
         const album = await photosJson('POST', ALBUMS_API, { title, files });
         this.clearSelection();
-        window.AppAlert.success(`Created "${album.title}" with ${photosCountLabel(album.count)}`, { duration: 3000 });
+        window.AppAlert.success(interpolate(ngettext(
+          'Created "%(album)s" with %(count)s photo', 'Created "%(album)s" with %(count)s photos', album.count,
+        ), { album: album.title, count: album.count }, true), { duration: 3000 });
         this._refresh(['photos-nav']);
       } catch (_) {
-        window.AppAlert.error('Failed to create the album');
+        window.AppAlert.error(gettext('Failed to create the album'));
       }
     },
 
@@ -1470,12 +1500,14 @@ window.photosApp = function photosApp() {
       try {
         await photosJson('POST', `${ALBUMS_API}/${uuid}/items/remove`, { files });
       } catch (_) {
-        window.AppAlert.error('Failed to remove from the album');
+        window.AppAlert.error(gettext('Failed to remove from the album'));
         return;
       }
       this._removeTiles(files);
       this.clearSelection();
-      window.AppAlert.success(`Removed ${photosCountLabel(files.length)} from the album`, { duration: 2000 });
+      window.AppAlert.success(interpolate(ngettext(
+        'Removed %(count)s photo from the album', 'Removed %(count)s photos from the album', files.length,
+      ), { count: files.length }, true), { duration: 2000 });
       // Emptied: the whole listing, for its empty state.
       const emptied = !document.querySelector('#timeline-grid [data-uuid]');
       this._refresh(['photos-nav', emptied ? 'photos-content' : 'photos-header']);
@@ -1487,7 +1519,7 @@ window.photosApp = function photosApp() {
       try {
         await photosJson('PATCH', `${ALBUMS_API}/${uuid}`, { cover: fileUuid });
       } catch (_) {
-        window.AppAlert.error('Failed to set the cover');
+        window.AppAlert.error(gettext('Failed to set the cover'));
         return;
       }
       this._refresh(['photos-nav', 'photos-header']);
@@ -1525,10 +1557,10 @@ window.photosApp = function photosApp() {
           }
           case 'edit_description': {
             const description = await AppDialog.prompt({
-              title: 'Album description',
+              title: gettext('Album description'),
               value: album.description || '',
-              placeholder: 'What these photos are about',
-              okLabel: 'Save',
+              placeholder: gettext('What these photos are about'),
+              okLabel: gettext('Save'),
               okClass: 'btn-module',
               icon: 'align-left',
               iconClass: 'bg-module/15 text-module',
@@ -1559,9 +1591,11 @@ window.photosApp = function photosApp() {
           }
           case 'leave': {
             const ok = await AppDialog.confirm({
-              title: 'Leave album',
-              message: `Leave "${album.title}"? The photos you added stay in it.`,
-              okLabel: 'Leave album',
+              title: gettext('Leave album'),
+              message: interpolate(
+                gettext('Leave "%(album)s"? The photos you added stay in it.'), { album: album.title }, true,
+              ),
+              okLabel: gettext('Leave album'),
               okClass: 'btn-error',
               icon: 'log-out',
               iconClass: 'bg-error/10 text-error',
@@ -1573,9 +1607,11 @@ window.photosApp = function photosApp() {
           }
           case 'delete': {
             const ok = await AppDialog.confirm({
-              title: 'Delete album',
-              message: `Delete "${album.title}"? Its photos stay where they are in Files.`,
-              okLabel: 'Delete album',
+              title: gettext('Delete album'),
+              message: interpolate(
+                gettext('Delete "%(album)s"? Its photos stay where they are in Files.'), { album: album.title }, true,
+              ),
+              okLabel: gettext('Delete album'),
               okClass: 'btn-error',
               icon: 'trash-2',
               iconClass: 'bg-error/10 text-error',
@@ -1587,7 +1623,7 @@ window.photosApp = function photosApp() {
           }
         }
       } catch (_) {
-        window.AppAlert.error('Failed to update the album');
+        window.AppAlert.error(gettext('Failed to update the album'));
       }
     },
 
@@ -1654,7 +1690,7 @@ window.photosApp = function photosApp() {
           [side]: target,
         });
       } catch (_) {
-        window.AppAlert.error('Failed to reorder the album');
+        window.AppAlert.error(gettext('Failed to reorder the album'));
         return;
       }
       const moved = drag.uuids.map((u) => this._tile(u)).filter(Boolean);

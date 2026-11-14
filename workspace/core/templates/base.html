@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n static ui_tags %}
 {% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
 <html
@@ -16,39 +16,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Workspace{% endblock %}</title>
     {% comment %}
-      Hovering a same-origin link prefetches its page. The server decides what
-      is actually served: only views marked @prefetchable answer a prefetch
-      (workspace/common/prefetch.py), every other one is refused before it runs.
-      Links alpine-ajax intercepts never navigate, so they are left out.
-      A page under a script-src policy without 'inline-speculation-rules' empties
-      the block: the browser refuses an inline rule set there.
+      Hovering a link to a page whose view is marked @prefetchable prefetches it
+      (workspace/common/prefetch.py). A page under a script-src policy without
+      'inline-speculation-rules' empties the block: the browser refuses an inline
+      rule set there.
     {% endcomment %}
     {% block speculation_rules %}
-      <script type="speculationrules">
-        {
-          "prefetch": [{
-            "source": "document",
-            "where": {
-              "and": [{
-                "href_matches": {
-                  "pathname": "/*"
-                }
-              }, {
-                "not": {
-                  "href_matches": {
-                    "pathname": "/api/*"
-                  }
-                }
-              }, {
-                "not": {
-                  "selector_matches": "[x-target], [x-target\\.push], [x-target\\.replace], [download], [target=_blank]"
-                }
-              }]
-            },
-            "eagerness": "moderate"
-          }]
-        }
-      </script>
+      {% speculation_rules %}
     {% endblock %}
 
     <!-- Tailwind + DaisyUI + Typography - locally built (see scripts/frontend/:

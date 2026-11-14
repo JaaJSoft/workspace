@@ -1,12 +1,20 @@
+import json
+import re
+
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from django.test import RequestFactory, SimpleTestCase
+from django.template import Context, Template
+from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.urls import include, path, re_path
 from django.views import View
 
 from workspace.common.middleware import PrefetchGateMiddleware
 from workspace.common.prefetch import (
     is_prefetchable,
     prefetchable,
+    prefetchable_paths,
+    prefetchable_routes,
+    speculation_rules,
     speculative_purpose,
 )
 
@@ -24,6 +32,69 @@ def opted_in(request, **kwargs):
 class OptedInView(View):
     def get(self, request):
         return HttpResponse("class")
+
+
+module_patterns = (
+    [
+        path("", opted_in, name="index"),
+        path("/<uuid:pk>/card", opted_in, name="card"),
+        path("/plain", plain, name="plain"),
+    ],
+    "module",
+)
+
+urlpatterns = [
+    path("", opted_in, name="home"),
+    path("module", include(module_patterns)),
+    path("space/<int:pk>/", include([path("inside", opted_in, name="inside")])),
+    path("class", OptedInView.as_view(), name="class"),
+    path("unnamed", opted_in),
+    re_path(r"^legacy/(\d+)$", opted_in, name="legacy"),
+    path("plain", plain, name="plain"),
+]
+
+URLCONF = "workspace.common.tests.test_prefetch"
+
+
+@override_settings(ROOT_URLCONF=URLCONF)
+class SpeculationRulesTests(SimpleTestCase):
+    def test_routes_of_marked_views_with_their_parameters(self):
+        self.assertEqual(
+            sorted(prefetchable_routes()),
+            [
+                ("class", False),
+                ("home", False),
+                ("inside", True),
+                ("legacy", True),
+                ("module:card", True),
+                ("module:index", False),
+            ],
+        )
+
+    def test_rules_name_the_paths_of_routes_without_a_parameter(self):
+        self.assertEqual(prefetchable_paths(), ("/", "/class", "/module"))
+        rule = speculation_rules()["prefetch"][0]
+        self.assertEqual(rule["eagerness"], "moderate")
+        conditions = rule["where"]["and"]
+        self.assertEqual(
+            conditions[0]["href_matches"],
+            [{"pathname": "/"}, {"pathname": "/class"}, {"pathname": "/module"}],
+        )
+        self.assertIn("[x-target\\.push]", conditions[1]["not"]["selector_matches"])
+
+    def test_template_tag_renders_the_rules(self):
+        html = Template("{% load ui_tags %}{% speculation_rules %}").render(Context())
+        match = re.fullmatch(r'<script type="speculationrules">(.*)</script>', html)
+        self.assertIsNotNone(match)
+        self.assertEqual(json.loads(match[1]), speculation_rules())
+
+
+@override_settings(ROOT_URLCONF="workspace.common.tests.test_prefetch_plain_urls")
+class NoMarkedViewTests(SimpleTestCase):
+    def test_nothing_is_rendered(self):
+        self.assertIsNone(speculation_rules())
+        html = Template("{% load ui_tags %}{% speculation_rules %}").render(Context())
+        self.assertEqual(html, "")
 
 
 class SpeculativePurposeTests(SimpleTestCase):

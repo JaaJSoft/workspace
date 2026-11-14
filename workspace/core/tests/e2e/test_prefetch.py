@@ -1,10 +1,9 @@
 """A link to a ``@prefetchable`` page is fetched on hover and the click uses it.
 
-The Speculation Rules in ``base.html`` are only checked by the browser: an
-invalid rule set is dropped silently, and a rule that matches too little
-prefetches nothing. So the check is the browser's own verdict - the
-``deliveryType`` of the navigation the click produced. A page that did not opt
-in is requested too, and refused by the server, so the click loads it again.
+The Speculation Rules are generated on the server, but only the browser checks
+them: an invalid rule set is dropped silently, and a rule that matches too
+little prefetches nothing. So the check is the browser's own verdict - the
+``deliveryType`` of the navigation the click produced.
 """
 
 from __future__ import annotations
@@ -57,10 +56,8 @@ class PrefetchOnHoverTests(PlaywrightTestCase):
             self._delivery_after_hover("/files?view=list"), "navigational-prefetch"
         )
 
-    def test_a_parameterized_route_is_prefetched(self):
-        self.assertEqual(
-            self._delivery_after_hover("/users/profile/alice"), "navigational-prefetch"
-        )
+    def test_a_route_with_a_parameter_is_not_prefetched(self):
+        self.assertEqual(self._delivery_after_hover("/users/profile/alice"), "")
 
     def test_a_page_that_did_not_opt_in_is_not_prefetched(self):
         self.assertEqual(self._delivery_after_hover("/files/trash"), "")

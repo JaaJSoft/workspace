@@ -6,12 +6,25 @@ already downloaded. That request runs the view for someone who may never open
 the page. A view is therefore refused to a prefetch unless it declares, with
 ``@prefetchable``, that it has no effect a visit would have.
 
-The browser's rules stay broad - any same-origin link - and the declaration on
-the view is the only list of what may be prefetched: ``PrefetchGateMiddleware``
-refuses a speculative request for every other view before it runs.
+The declaration on the view is the only list of what may be prefetched. The
+browser's rules are derived from it - the marked routes without a parameter,
+reversed to the paths links point at - and ``PrefetchGateMiddleware`` refuses a
+speculative request for every other view before it runs, whatever asked for it.
 """
 
+import functools
+import re
+
+from django.conf import settings
 from django.http import HttpResponse
+from django.urls import URLResolver, get_resolver, reverse
+
+# A link alpine-ajax intercepts swaps a fragment through fetch() and never
+# navigates, so prefetching its page would be wasted work. A modifier missing
+# here only costs that wasted prefetch.
+AJAX_LINK_SELECTOR = r"[x-target], [x-target\.push], [x-target\.replace]"
+
+_URL_PATTERN_SYNTAX = re.compile(r"([\\:*?+(){}\[\]])")
 
 PREFETCHABLE_ATTRIBUTE = "prefetchable"
 
@@ -61,3 +74,61 @@ def refused_speculation():
     # normally on click. Never a 204: a prefetched 204 used as the navigation
     # would leave the user on the page they clicked from.
     return HttpResponse(status=403, headers={"Cache-Control": "no-store"})
+
+
+def prefetchable_routes(urlconf=None):
+    """``(url name, takes parameters)`` of every named route served by a marked view."""
+    return _walk(get_resolver(urlconf).url_patterns, "", False)
+
+
+def _walk(patterns, namespace, takes_parameters):
+    for entry in patterns:
+        parameterized = takes_parameters or bool(entry.pattern.regex.groups)
+        if isinstance(entry, URLResolver):
+            inner = f"{namespace}{entry.namespace}:" if entry.namespace else namespace
+            yield from _walk(entry.url_patterns, inner, parameterized)
+        elif entry.name and is_prefetchable(entry.callback):
+            yield f"{namespace}{entry.name}", parameterized
+
+
+@functools.cache
+def _prefetchable_paths(urlconf):
+    # A route with a parameter stands for many paths, which the rules could only
+    # name through a pattern: it is served to a prefetch, never asked for.
+    return tuple(
+        sorted(
+            reverse(name, urlconf=urlconf)
+            for name, takes_parameters in prefetchable_routes(urlconf)
+            if not takes_parameters
+        )
+    )
+
+
+def prefetchable_paths():
+    return _prefetchable_paths(settings.ROOT_URLCONF)
+
+
+def speculation_rules():
+    """The Speculation Rules document of the site, or None when no view opted in."""
+    paths = prefetchable_paths()
+    if not paths:
+        return None
+    return {
+        "prefetch": [
+            {
+                "source": "document",
+                "where": {
+                    "and": [
+                        {
+                            "href_matches": [
+                                {"pathname": _URL_PATTERN_SYNTAX.sub(r"\\\1", path)}
+                                for path in paths
+                            ]
+                        },
+                        {"not": {"selector_matches": AJAX_LINK_SELECTOR}},
+                    ]
+                },
+                "eagerness": "moderate",
+            }
+        ]
+    }

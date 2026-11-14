@@ -14,24 +14,14 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
-from django.urls import URLResolver, get_resolver, reverse
+from django.urls import reverse
 
-from workspace.common.prefetch import is_prefetchable
+from workspace.common.prefetch import prefetchable_routes
 from workspace.files.models import File
 
 PREFETCH = {"Sec-Purpose": "prefetch"}
 
 _WRITE = re.compile(r"^\s*(INSERT|UPDATE|DELETE|REPLACE)\b", re.IGNORECASE)
-
-
-def prefetchable_url_names(patterns=None, namespace=""):
-    """``(url name, takes parameters)`` of every route served by a marked view."""
-    for entry in get_resolver().url_patterns if patterns is None else patterns:
-        if isinstance(entry, URLResolver):
-            inner = f"{namespace}{entry.namespace}:" if entry.namespace else namespace
-            yield from prefetchable_url_names(entry.url_patterns, inner)
-        elif is_prefetchable(entry.callback):
-            yield f"{namespace}{entry.name}", bool(entry.pattern.regex.groupindex)
 
 
 def _folder(user):
@@ -58,12 +48,12 @@ class PrefetchableViewsTests(TestCase):
         self.client.force_login(self.user)
 
     def test_some_views_opted_in(self):
-        self.assertIn(("dashboard:index", False), set(prefetchable_url_names()))
+        self.assertIn(("dashboard:index", False), set(prefetchable_routes()))
 
     def test_every_parameterized_route_has_a_case(self):
         missing = [
             name
-            for name, takes_parameters in prefetchable_url_names()
+            for name, takes_parameters in prefetchable_routes()
             if takes_parameters and name not in PARAMETER_CASES
         ]
         self.assertEqual(
@@ -71,7 +61,7 @@ class PrefetchableViewsTests(TestCase):
         )
 
     def test_a_prefetch_writes_nothing_and_sends_no_task(self):
-        for name, takes_parameters in prefetchable_url_names():
+        for name, takes_parameters in prefetchable_routes():
             kwargs = PARAMETER_CASES[name](self.user) if takes_parameters else None
             url = reverse(name, kwargs=kwargs)
             with self.subTest(url=url):

@@ -773,7 +773,7 @@ MailMessage.objects.filter(folder=folder, imap_uid__in=uids).update(is_read=True
 
 ### Prefetch - a page view opts in with `@prefetchable`, never by default
 
-`base.html` carries Speculation Rules: hovering a same-origin link prefetches its page, so the click finds it already downloaded. The view therefore runs for someone who may never open the page. The rules stay broad on purpose, and the server decides: `PrefetchGateMiddleware` refuses a speculative request (`Sec-Purpose: prefetch`) with a 403, before the view runs, unless the view is marked `@prefetchable` (`workspace/common/prefetch.py`). The decorator is the only list of prefetchable pages - never mirror it in the rules or on links.
+`base.html` renders Speculation Rules (`{% speculation_rules %}`): hovering a link to a prefetchable page downloads it ahead of the click. The view therefore runs for someone who may never open the page, so only views marked `@prefetchable` (`workspace/common/prefetch.py`) take part. The decorator is the only list: the rules name the paths of the marked routes without a parameter (walked from the resolver, reversed with `reverse()`), and `PrefetchGateMiddleware` refuses a speculative request (`Sec-Purpose: prefetch`) for any other view with a 403, before it runs. Never mirror the list on links or in a template.
 
 ```python
 @prefetchable
@@ -784,7 +784,9 @@ def index(request): ...
 - Mark a view only when a visit leaves nothing behind: no "last opened" setting (`projects.overview` records one, so `/projects` is not marked), no mark-as-read, no activity entry, no task sent. Idempotent first-visit setup is fine. `core/tests/test_prefetchable_views.py` visits every marked route as a prefetch and fails on any write or task; a marked route with a parameter needs a case in its `PARAMETER_CASES`, keyed by URL name.
 - A view that redirects is only worth marking when its target is marked too: the browser follows the redirect as a prefetch, and the gate refuses it.
 - Prefetch only, never prerender: a prerender runs the page's scripts, and the gate always refuses it.
+- A route with a parameter is never in the rules (naming it would take a URL Pattern regex): marking its view only lets it answer a prefetch, and the no-write test still visits it.
 - Links alpine-ajax intercepts (`x-target`, `x-target.push`, `x-target.replace`) are left out of the rules: their click never navigates.
+- A page under its own `script-src` policy (the vault) empties `{% block speculation_rules %}`: the browser refuses an inline rule set there.
 - An invalid rule set is dropped by the browser without an error. `core/tests/e2e/test_prefetch.py` checks in a real browser that the click is served from the prefetch.
 
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`

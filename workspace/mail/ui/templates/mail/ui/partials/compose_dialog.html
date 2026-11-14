@@ -5,22 +5,11 @@
   <div
     class="modal-box w-full h-full max-w-none lg:max-w-2xl lg:h-[80vh] rounded-none lg:rounded-2xl flex flex-col p-0"
   >
-    <!-- Header -->
-    <div
-      class="flex items-center justify-between p-4 border-b border-base-300"
-    >
-      <h3
-        class="font-semibold"
-        x-text="compose.is_reply ? compose.subject : '{{ new_message_label|escapejs }}'"
-      ></h3>
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm btn-square"
-        @click="closeCompose()"
-      >
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
+    {% with new_message_js=new_message_label|escapejs %}
+      {% with compose_title="compose.is_reply ? compose.subject : '"|add:new_message_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="pen-line" title_expr=compose_title close_expr="closeCompose()" class="p-4 border-b border-base-300 shrink-0" only %}
+      {% endwith %}
+    {% endwith %}
 
     <!-- Compose form -->
     <form

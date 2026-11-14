@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
+from workspace.common.prefetch import prefetchable
 from workspace.core.services.activity import (
     allowed_activity_sources,
     annotate_time_ago,
@@ -105,6 +106,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     return context
 
 
+@prefetchable
 @login_required
 def index(request):
     """Dashboard home page.

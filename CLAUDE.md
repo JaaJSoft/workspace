@@ -771,6 +771,22 @@ MailMessage.objects.filter(folder=folder, imap_uid__in=uids).update(is_read=True
 
 **`bulk_update` is rewritten once, never pass a `batch_size` for the limit or for speed.** `workspace/common/bulk_update.py` wraps `QuerySet.bulk_update`, and every caller keeps writing `bulk_update`. Plain values go out as one `UPDATE ... FROM (VALUES ...)` through `django-fast-update`: a single pass over the rows, where Django writes a `CASE` holding one `WHEN` per object and per field, whose cost is the square of the batch. 12000 rows on three fields take 0.2 s instead of 3.5 s on SQLite, 0.6 s instead of 4.2 s on PostgreSQL. What that form cannot express stays with Django's own - a value that is an expression (`F()`), an object listed twice, a model spread over several tables, a queryset that is filtered or sliced - and there the wrapper sizes the batches: 500 objects per statement unless the caller names a `batch_size`, and never more than the statement really binds. Django sizes them wrong twice: as wide as the database allows, which on PostgreSQL is every object in one statement (four minutes for those 12000 rows), and as if an object bound one parameter per field plus two where it binds two per field plus one, which overran SQLite's limit from 6553 objects on three fields. `common/tests/test_bulk_update.py` holds a test that fails the day Django counts its parameters right.
 
+### Prefetch - a page view opts in with `@prefetchable`, never by default
+
+`base.html` carries Speculation Rules: hovering a same-origin link prefetches its page, so the click finds it already downloaded. The view therefore runs for someone who may never open the page. The rules stay broad on purpose, and the server decides: `PrefetchGateMiddleware` refuses a speculative request (`Sec-Purpose: prefetch`) with a 403, before the view runs, unless the view is marked `@prefetchable` (`workspace/common/prefetch.py`). The decorator is the only list of prefetchable pages - never mirror it in the rules or on links.
+
+```python
+@prefetchable
+@login_required
+def index(request): ...
+```
+
+- Mark a view only when a visit leaves nothing behind: no "last opened" setting (`projects.overview` records one, so `/projects` is not marked), no mark-as-read, no activity entry, no task sent. Idempotent first-visit setup is fine. `core/tests/test_prefetchable_views.py` visits every marked route as a prefetch and fails on any write or task; a marked route with a parameter needs a case in its `PARAMETER_CASES`, keyed by URL name.
+- A view that redirects is only worth marking when its target is marked too: the browser follows the redirect as a prefetch, and the gate refuses it.
+- Prefetch only, never prerender: a prerender runs the page's scripts, and the gate always refuses it.
+- Links alpine-ajax intercepts (`x-target`, `x-target.push`, `x-target.replace`) are left out of the rules: their click never navigates.
+- An invalid rule set is dropped by the browser without an error. `core/tests/e2e/test_prefetch.py` checks in a real browser that the click is served from the prefetch.
+
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
 
 Two recurring bugs land here, both because Python's loose typing or Django's deep-cleaning layer surface as confusing 500s instead of clean 4xxs:

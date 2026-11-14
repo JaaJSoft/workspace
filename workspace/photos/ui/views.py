@@ -14,6 +14,7 @@ from django.utils.cache import patch_cache_control, patch_vary_headers
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.booleans import is_truthy
+from workspace.common.prefetch import prefetchable
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
 from workspace.files.sensitivity import (
@@ -800,6 +801,7 @@ def _ranked(request, query, similar):
     return _render_page(request, "photos/ui/index.html", context)
 
 
+@prefetchable
 @login_required
 @ensure_csrf_cookie
 def index(request):

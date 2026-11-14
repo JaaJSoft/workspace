@@ -10,6 +10,7 @@ from django.utils.translation import pgettext_lazy
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.exceptions import ValidationError
 
+from workspace.common.prefetch import prefetchable
 from workspace.common.text import fold_text
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.people.actions import actions_for
@@ -101,6 +102,7 @@ def _list_context(request):
     }
 
 
+@prefetchable
 @login_required
 @ensure_csrf_cookie
 def index(request):

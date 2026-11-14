@@ -31,6 +31,7 @@ from workspace.chat.services.conversations import (
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.dates import time_ago
+from workspace.common.prefetch import prefetchable
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.users.services.settings import get_setting
 
@@ -165,6 +166,7 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
     return conv_list
 
 
+@prefetchable
 @login_required
 @ensure_csrf_cookie
 def chat_view(request, conversation_uuid=None):

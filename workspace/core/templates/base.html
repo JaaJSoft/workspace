@@ -15,6 +15,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Workspace{% endblock %}</title>
+    {% comment %}
+      Hovering a same-origin link prefetches its page. The server decides what
+      is actually served: only views marked @prefetchable answer a prefetch
+      (workspace/common/prefetch.py), every other one is refused before it runs.
+      Links alpine-ajax intercepts never navigate, so they are left out.
+    {% endcomment %}
+    <script type="speculationrules">
+      {
+        "prefetch": [{
+          "source": "document",
+          "where": {"and": [
+            {"href_matches": {"pathname": "/*"}},
+            {"not": {"href_matches": {"pathname": "/api/*"}}},
+            {"not": {"selector_matches": "[x-target], [x-target\\.push], [x-target\\.replace], [download], [target=_blank]"}}
+          ]},
+          "eagerness": "moderate"
+        }]
+      }
+    </script>
 
     <!-- Tailwind + DaisyUI + Typography - locally built (see scripts/frontend/:
        input.css, module-hues.js). Replaces the Tailwind Play

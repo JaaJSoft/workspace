@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import ngettext, pgettext_lazy
 
+from workspace.common.prefetch import prefetchable
 from workspace.core.services.activity import (
     allowed_activity_sources,
     annotate_time_ago,
@@ -182,6 +183,7 @@ def _get_profile_activity_context(
     }
 
 
+@prefetchable
 @login_required
 def profile_view(request, username=None):
     if username is None:
@@ -281,6 +283,7 @@ def profile_activity_feed(request, username):
     return redirect("users_ui:profile_by_username", username=username)
 
 
+@prefetchable
 @login_required
 def settings_view(request):
     from django.conf import settings as django_settings

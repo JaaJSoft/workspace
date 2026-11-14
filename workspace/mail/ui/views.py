@@ -3,6 +3,7 @@ from django.http import HttpResponseBadRequest
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.common.prefetch import prefetchable
 from workspace.mail.models import MailAccount
 from workspace.mail.serializers import MailAccountSerializer
 from workspace.mail.services.ai_settings import (
@@ -18,6 +19,7 @@ from workspace.people.queries import person_with_email, user_persons
 from workspace.users.queries import active_user_with_email
 
 
+@prefetchable
 @login_required
 @ensure_csrf_cookie
 def index(request):

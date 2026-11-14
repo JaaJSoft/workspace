@@ -1,11 +1,13 @@
 {# Reads the preferences and import state of photosApp() (photos/ui/js/photos.js, import.js). #}
+{% load i18n %}
+{% translate "Show %(name)s again" as show_folder_again_label %}
 <div class="space-y-3">
   <div>
     <label
       class="text-sm text-base-content/60 block mb-1"
       for="photos-pref-tile-shape"
     >
-      Tile shape
+      {% translate "Tile shape" %}
     </label>
     <select
       id="photos-pref-tile-shape"
@@ -14,19 +16,19 @@
       @change="savePhotoPref('tile_shape', $event.target.value)"
       data-testid="photos-pref-tile-shape"
     >
-      <option value="square">Square</option>
-      <option value="original">Original proportions</option>
+      <option value="square">{% translate "Square" %}</option>
+      <option value="original">{% translate "Original proportions" %}</option>
     </select>
   </div>
-  {% include "ui/partials/pref_toggle.html" with label="Always show badges" state="photoPrefs.tile_badges" change="savePhotoPref('tile_badges', $event.target.checked)" accent="toggle-module" %}
-  {% include "ui/partials/pref_toggle.html" with label="Play videos on hover" state="photoPrefs.video_hover_preview" change="savePhotoPref('video_hover_preview', $event.target.checked)" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Always show badges") state="photoPrefs.tile_badges" change="savePhotoPref('tile_badges', $event.target.checked)" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Play videos on hover") state="photoPrefs.video_hover_preview" change="savePhotoPref('video_hover_preview', $event.target.checked)" accent="toggle-module" %}
   <hr class="border-base-300" />
   <div>
     <label
       class="text-sm text-base-content/60 block mb-1"
       for="photos-pref-scope"
     >
-      Open Photos on
+      {% translate "Open Photos on" %}
     </label>
     <div class="space-y-2">
       <select
@@ -34,7 +36,7 @@
         class="select select-sm w-full"
         :value="photoPrefs.default_scope"
         @change="savePhotoPref('default_scope', $event.target.value)"
-        aria-label="Library the timeline opens on"
+        aria-label="{% translate 'Library the timeline opens on' %}"
         data-testid="photos-pref-scope"
       >
         {% for choice in scope_choices %}
@@ -45,18 +47,18 @@
         class="select select-sm w-full"
         :value="photoPrefs.default_media_type"
         @change="savePhotoPref('default_media_type', $event.target.value)"
-        aria-label="Media type the timeline opens on"
+        aria-label="{% translate 'Media type the timeline opens on' %}"
         data-testid="photos-pref-media-type"
       >
-        <option value="all">Photos and videos</option>
-        <option value="photo">Photos only</option>
-        <option value="video">Videos only</option>
+        <option value="all">{% translate "Photos and videos" %}</option>
+        <option value="photo">{% translate "Photos only" %}</option>
+        <option value="video">{% translate "Videos only" %}</option>
       </select>
     </div>
   </div>
   <hr class="border-base-300" />
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Import folder</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Import folder" %}</label>
     <div
       class="input input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
       @mousedown.prevent
@@ -68,20 +70,20 @@
         type="button"
         class="btn btn-ghost btn-xs btn-square"
         tabindex="-1"
-        aria-label="Change the import folder"
+        aria-label="{% translate 'Change the import folder' %}"
       >
         <i data-lucide="pen-line" class="w-3 h-3"></i>
       </button>
     </div>
   </div>
-  {% include "ui/partials/pref_toggle.html" with label="Sort imports into year/month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Sort imports into year/month") state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
   {% if embeddings_available %}
-    {% include "ui/partials/pref_toggle.html" with label="Tag photos automatically" state="photoPrefs.auto_tags" change="savePhotoPref('auto_tags', $event.target.checked)" accent="toggle-module" %}
+    {% include "ui/partials/pref_toggle.html" with label=_("Tag photos automatically") state="photoPrefs.auto_tags" change="savePhotoPref('auto_tags', $event.target.checked)" accent="toggle-module" %}
   {% endif %}
   <hr class="border-base-300" />
   <div data-testid="photos-sensitive-blur">
     <div class="flex items-center justify-between gap-2">
-      <label for="photos-sensitive-blur" class="text-sm">Blur sensitive photos</label>
+      <label for="photos-sensitive-blur" class="text-sm">{% translate "Blur sensitive photos" %}</label>
       <span class="text-xs text-base-content/60" x-text="sensitiveBlurLabel()"></span>
     </div>
     <input
@@ -109,21 +111,23 @@
   <div class="pl-4 space-y-3" x-show="photoPrefs.sensitive_blur !== 'off'">
     {# A touch screen has no hover: the toggle would do nothing there. #}
     <div class="[@media(hover:none)]:hidden">
-      {% include "ui/partials/pref_toggle.html" with label="Unblur on hover" state="photoPrefs.reveal_sensitive_on_hover" change="savePhotoPref('reveal_sensitive_on_hover', $event.target.checked)" accent="toggle-module" %}
+      {% include "ui/partials/pref_toggle.html" with label=_("Unblur on hover") state="photoPrefs.reveal_sensitive_on_hover" change="savePhotoPref('reveal_sensitive_on_hover', $event.target.checked)" accent="toggle-module" %}
     </div>
-    {% include "ui/partials/pref_toggle.html" with label="Show in the viewer without asking" state="photoPrefs.reveal_sensitive_in_viewer" change="savePhotoPref('reveal_sensitive_in_viewer', $event.target.checked)" accent="toggle-module" %}
+    {% include "ui/partials/pref_toggle.html" with label=_("Show in the viewer without asking") state="photoPrefs.reveal_sensitive_in_viewer" change="savePhotoPref('reveal_sensitive_in_viewer', $event.target.checked)" accent="toggle-module" %}
   </div>
   {% if map_available %}
     <div data-testid="photos-pref-show-map">
-      {% include "ui/partials/pref_toggle.html" with label="Show locations on a map" state="photoPrefs.show_map" change="savePhotoPref('show_map', $event.target.checked)" accent="toggle-module" %}
+      {% include "ui/partials/pref_toggle.html" with label=_("Show locations on a map") state="photoPrefs.show_map" change="savePhotoPref('show_map', $event.target.checked)" accent="toggle-module" %}
       <p class="text-xs text-base-content/50 mt-1">
-        In a photo's properties and on the Map page. The map is loaded from {{ map_server }}, which then receives the location of each photo you open and the areas you browse.
+        {% blocktranslate trimmed with server=map_server %}
+          In a photo's properties and on the Map page. The map is loaded from {{ server }}, which then receives the location of each photo you open and the areas you browse.
+        {% endblocktranslate %}
       </p>
     </div>
   {% endif %}
-  {% include "ui/partials/pref_toggle.html" with label="Show Hidden in the sidebar" state="photoPrefs.show_hidden" change="savePhotoPref('show_hidden', $event.target.checked)" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label=_("Show Hidden in the sidebar") state="photoPrefs.show_hidden" change="savePhotoPref('show_hidden', $event.target.checked)" accent="toggle-module" %}
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Hidden folders</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Hidden folders" %}</label>
     <ul class="space-y-1 mb-1" data-testid="photos-hidden-folders">
       <template x-for="folder in hiddenFolders" :key="folder.uuid">
         <li class="flex items-center gap-2 bg-base-200 rounded-sm px-2 py-1">
@@ -136,8 +140,8 @@
           <button
             type="button"
             class="btn btn-ghost btn-xs btn-square"
-            :aria-label="'Show ' + folder.name + ' again'"
-            title="Show in the library again"
+            :aria-label="interpolate('{{ show_folder_again_label|escapejs }}', { name: folder.name }, true)"
+            title="{% translate 'Show in the library again' %}"
             @click="unhideFolder(folder)"
           >
             <i data-lucide="x" class="w-3 h-3"></i>
@@ -152,15 +156,15 @@
       data-testid="photos-hide-folder"
     >
       <i data-lucide="folder-x" class="w-4 h-4"></i>
-      Hide a folder…
+      {% translate "Hide a folder…" %}
     </button>
   </div>
   <div x-show="importFolder && !importFolder.group">
     <label
       class="text-sm text-base-content/60 block mb-1"
-      title="Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to back up your phone here"
+      title="{% translate 'Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to back up your phone here' %}"
     >
-      Phone backup (WebDAV)
+      {% translate "Phone backup (WebDAV)" %}
     </label>
     <code
       class="block bg-base-200 px-2 py-1 rounded-sm text-xs break-all select-all"

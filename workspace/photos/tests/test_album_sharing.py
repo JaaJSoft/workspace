@@ -415,7 +415,7 @@ class SharesApiTests(SharingTestCase):
         self.assertEqual(AlbumShare.objects.get().role, "manager")
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.bob, title__contains="now manager"
+                recipient=self.bob, title__contains="now a manager"
             ).exists()
         )
 
@@ -713,4 +713,4 @@ class ShareNotificationPatchTests(SharingTestCase):
         ) as notify_many:
             self.share()
 
-        self.assertEqual(notify_many.call_args.kwargs["recipients"], [])
+        notify_many.assert_not_called()

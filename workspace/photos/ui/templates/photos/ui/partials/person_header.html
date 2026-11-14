@@ -1,9 +1,27 @@
 {% comment %}
   The header of a person's faces or silhouettes: who, how many, the menu of
   the person, the tabs. Reads title, cluster, count, person_views and shows
-  from the view; unit and units name what is counted. `total` is the
-  board's count, kept as tiles leave.
+  from the view; counted ("faces" or "silhouettes") names what is counted.
+  `total` is the board's count, kept as tiles leave.
 {% endcomment %}
+{% load i18n %}
+{% if counted == "silhouettes" %}
+  {% translate "%(count)s silhouette" as count_one %}
+  {% translate "%(count)s silhouettes" as count_other %}
+  {% blocktranslate trimmed count counter=count asvar count_label %}
+    {{ counter }} silhouette
+  {% plural %}
+    {{ counter }} silhouettes
+  {% endblocktranslate %}
+{% else %}
+  {% translate "%(count)s face" as count_one %}
+  {% translate "%(count)s faces" as count_other %}
+  {% blocktranslate trimmed count counter=count asvar count_label %}
+    {{ counter }} face
+  {% plural %}
+    {{ counter }} faces
+  {% endblocktranslate %}
+{% endif %}
 <header
   class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur-sm"
 >
@@ -13,8 +31,8 @@
       href="{{ people_url }}"
       x-target.push="photos-nav photos-content"
       class="btn btn-ghost btn-sm btn-square shrink-0"
-      title="All people"
-      aria-label="All people"
+      title="{% translate 'All people' %}"
+      aria-label="{% translate 'All people' %}"
     >
       <i data-lucide="arrow-left" class="w-4 h-4"></i>
     </a>
@@ -27,16 +45,19 @@
     {% endif %}
     <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
       <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
-      <span class="text-sm text-base-content/60"><span class="tabular-nums" x-text="total">{{ count }}</span> <span x-text="total === 1 ? '{{ unit|escapejs }}' : '{{ units|escapejs }}'">{% if count == 1 %}{{ unit }}{% else %}{{ units }}{% endif %}</span></span>
+      <span
+        class="text-sm text-base-content/60 tabular-nums"
+        x-text="interpolate(total === 1 ? '{{ count_one|escapejs }}' : '{{ count_other|escapejs }}', { count: total }, true)"
+      >{{ count_label }}</span>
     </div>
     {% if cluster.person %}
       <a
         href="{{ cluster.person.url }}"
         class="btn btn-ghost btn-sm gap-1"
-        title="Open {{ cluster.person.name }} in People"
+        title="{% blocktranslate trimmed with name=cluster.person.name %}Open {{ name }} in People{% endblocktranslate %}"
       >
         <i data-lucide="contact" class="w-4 h-4"></i>
-        <span class="max-sm:hidden">Open in People</span>
+        <span class="max-sm:hidden">{% translate "Open in People" %}</span>
       </a>
     {% endif %}
     <div class="dropdown dropdown-end">
@@ -44,7 +65,7 @@
         type="button"
         tabindex="0"
         class="btn btn-ghost btn-sm btn-square"
-        aria-label="Person options"
+        aria-label="{% translate 'Person options' %}"
       >
         <i data-lucide="more-vertical" class="w-4 h-4"></i>
       </button>
@@ -59,7 +80,10 @@
   <div class="flex flex-wrap items-center gap-2 px-4 pb-2">
     {% include "photos/ui/partials/person_view_tabs.html" %}
     {% if shows %}
-      <nav class="flex items-center gap-1 ml-auto" aria-label="Which faces">
+      <nav
+        class="flex items-center gap-1 ml-auto"
+        aria-label="{% translate 'Which faces' %}"
+      >
         {% for item in shows %}
           <a
             href="{{ item.url }}"

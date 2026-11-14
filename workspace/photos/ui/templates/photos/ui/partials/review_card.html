@@ -4,6 +4,25 @@
   answer; the answer is the guess, a contact, a new name, or nobody to name.
   State and actions in facesReview() (faces.js).
 {% endcomment %}
+{% load i18n %}
+{% translate "%(count)s left out" as left_out_label %}
+{% translate "Put back" as put_back_label %}
+{% translate "Not them: leave out" as leave_out_title %}
+{% translate "Left out, put back" as left_out_aria %}
+{% translate "Person, leave out" as person_leave_out_aria %}
+{% translate "Face, leave out" as face_leave_out_aria %}
+{% translate "Open the photo" as open_photo_label %}
+{% translate "Open the video" as open_video_label %}
+{% translate "%(count)s more faces of this group, closer to the rest, go with the answer." as more_faces_label %}
+{% translate "The next %(count)s come once these are settled." as next_label %}
+{% translate "Someone else? Type a name" as someone_else_placeholder %}
+{% translate "Who is this? Type a name" as who_placeholder %}
+{% translate "Nobody to name: leave this person out of People" as hide_cluster_title %}
+{% translate "Nobody to name: hide these people" as hide_people_title %}
+{% translate "Nobody to name: hide these faces" as hide_faces_title %}
+{% translate "pick the contact" as pick_contact_hint %}
+{% translate "show contacts" as show_contacts_hint %}
+{% translate "Add “%(name)s” to People" as add_to_people_label %}
 <section
   class="rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 transition scroll-mt-20"
   :class="{ 'opacity-60 pointer-events-none': saving === card.key, 'ring-2 ring-module/40': isActive(card) }"
@@ -16,7 +35,7 @@
         target="_blank"
         rel="noopener"
         class="block w-11 h-11 shrink-0 overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module"
-        title="See the photos in a new tab"
+        title="{% translate 'See the photos in a new tab' %}"
       >
         <img :src="card.cover_url" alt="" class="w-full h-full object-cover" />
       </a>
@@ -37,13 +56,15 @@
       x-show="card.excluded.length"
       x-cloak
     >
-      <span x-text="card.excluded.length + ' left out'"></span>
+      <span
+        x-text="interpolate('{{ left_out_label|escapejs }}', { count: card.excluded.length }, true)"
+      ></span>
       <button
         type="button"
         class="btn btn-ghost btn-xs"
         @click="card.excluded = []"
       >
-        Put back
+        {{ put_back_label }}
       </button>
     </div>
   </div>
@@ -58,8 +79,8 @@
           class="absolute inset-0 overflow-hidden rounded-lg bg-base-200 ring-2 ring-offset-1 ring-offset-base-100 transition focus-visible:outline-hidden"
           :class="isExcluded(card, face.uuid) ? 'ring-error/60' : 'ring-transparent hover:ring-error/40 focus-visible:ring-module'"
           :aria-pressed="isExcluded(card, face.uuid)"
-          :title="isExcluded(card, face.uuid) ? 'Put back' : 'Not them: leave out'"
-          :aria-label="isExcluded(card, face.uuid) ? 'Left out, put back' : (asksAboutBodies(card) ? 'Person, leave out' : 'Face, leave out')"
+          :title="isExcluded(card, face.uuid) ? '{{ put_back_label|escapejs }}' : '{{ leave_out_title|escapejs }}'"
+          :aria-label="isExcluded(card, face.uuid) ? '{{ left_out_aria|escapejs }}' : (asksAboutBodies(card) ? '{{ person_leave_out_aria|escapejs }}' : '{{ face_leave_out_aria|escapejs }}')"
           @click="toggleExcluded(card, face.uuid); keepKeyboard(card)"
         >
           <img
@@ -83,8 +104,8 @@
         <button
           type="button"
           class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 border-0 shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-          :title="face.timestamp == null ? 'Open the photo' : 'Open the video'"
-          :aria-label="face.timestamp == null ? 'Open the photo' : 'Open the video'"
+          :title="face.timestamp == null ? '{{ open_photo_label|escapejs }}' : '{{ open_video_label|escapejs }}'"
+          :aria-label="face.timestamp == null ? '{{ open_photo_label|escapejs }}' : '{{ open_video_label|escapejs }}'"
           @click="openFacePhoto(face)"
         >
           <i data-lucide="maximize-2" class="w-3 h-3"></i>
@@ -96,9 +117,7 @@
     x-show="card.total > card.faces.length"
     x-cloak
     class="mt-2 text-xs text-base-content/60"
-    x-text="card.kind === 'cluster'
-      ? (card.total - card.faces.length) + ' more faces of this group, closer to the rest, go with the answer.'
-      : 'The next ' + (card.total - card.faces.length) + ' come once these are settled.'"
+    x-text="interpolate(card.kind === 'cluster' ? '{{ more_faces_label|escapejs }}' : '{{ next_label|escapejs }}', { count: card.total - card.faces.length }, true)"
   ></p>
 
   <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -128,9 +147,9 @@
         <input
           type="text"
           class="grow"
-          :placeholder="card.guess ? 'Someone else? Type a name' : 'Who is this? Type a name'"
+          :placeholder="card.guess ? '{{ someone_else_placeholder|escapejs }}' : '{{ who_placeholder|escapejs }}'"
           autocomplete="off"
-          aria-label="Name"
+          aria-label="{% translate 'Name' %}"
           x-effect="if (focusRequest && focusRequest.key === card.key) { const scroll = focusRequest.scroll; focusRequest = null; $nextTick(() => focusField($el, scroll)) }"
           :value="isActive(card) ? query : ''"
           :disabled="saving !== null"
@@ -151,7 +170,7 @@
         x-cloak
         class="absolute z-10 inset-x-0 mt-1 menu menu-sm w-full p-1 max-h-64 flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 shadow-lg"
         role="listbox"
-        aria-label="Contacts"
+        aria-label="{% translate 'Contacts' %}"
       >
         <template
           x-for="(option, i) in otherOptions(card)"
@@ -189,7 +208,9 @@
               </template>
               <span class="flex-1 truncate text-left">
                 <template x-if="option.kind === 'create'">
-                  <span>Add “<span x-text="option.name"></span>” to People</span>
+                  <span
+                    x-text="interpolate('{{ add_to_people_label|escapejs }}', { name: option.name }, true)"
+                  ></span>
                 </template>
                 <template x-if="option.kind === 'person'">
                   <span x-text="option.person.name"></span>
@@ -208,7 +229,7 @@
           class="px-3 py-3 text-sm text-base-content/60"
           x-text="noOptionsLabel(card)"
         >
-          No contact yet: type a name to add one to People.
+          {% translate "No contact yet: type a name to add one to People." %}
         </li>
       </ul>
     </div>
@@ -217,11 +238,11 @@
       type="button"
       class="btn btn-ghost btn-sm gap-1"
       :disabled="saving !== null || !keptCount(card)"
-      :title="card.kind === 'cluster' ? 'Nobody to name: leave this person out of People' : (asksAboutBodies(card) ? 'Nobody to name: hide these people' : 'Nobody to name: hide these faces')"
+      :title="card.kind === 'cluster' ? '{{ hide_cluster_title|escapejs }}' : (asksAboutBodies(card) ? '{{ hide_people_title|escapejs }}' : '{{ hide_faces_title|escapejs }}')"
       @click="hideCard(card)"
     >
       <i data-lucide="eye-off" class="w-4 h-4"></i>
-      Hide
+      {% translate "Hide" %}
     </button>
   </div>
   <p
@@ -230,11 +251,19 @@
     class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/50 max-sm:hidden"
   >
     <span><kbd class="kbd kbd-xs">↵</kbd> <span
-   x-text="pickerOpen ? 'pick the contact' : (card.guess ? guessLabel(card) : 'show contacts')"
+   x-text="pickerOpen ? '{{ pick_contact_hint|escapejs }}' : (card.guess ? guessLabel(card) : '{{ show_contacts_hint|escapejs }}')"
  ></span></span>
-    <span><kbd class="kbd kbd-xs">↑</kbd> <kbd class="kbd kbd-xs">↓</kbd> contacts</span>
-    <span><kbd class="kbd kbd-xs">Tab</kbd> next group</span>
-    <span><kbd class="kbd kbd-xs">Alt</kbd> <kbd class="kbd kbd-xs">H</kbd> hide</span>
-    <span><kbd class="kbd kbd-xs">Esc</kbd> close</span>
+    <span><kbd
+  class="kbd kbd-xs"
+>↑</kbd> <kbd
+   class="kbd kbd-xs"
+ >↓</kbd> {% translate "contacts" context "keyboard hint" %}</span>
+    <span><kbd class="kbd kbd-xs">Tab</kbd> {% translate "next group" context "keyboard hint" %}</span>
+    <span><kbd
+  class="kbd kbd-xs"
+>Alt</kbd> <kbd
+   class="kbd kbd-xs"
+ >H</kbd> {% translate "hide" context "keyboard hint" %}</span>
+    <span><kbd class="kbd kbd-xs">Esc</kbd> {% translate "close" %}</span>
   </p>
 </section>

@@ -23,9 +23,6 @@ const LIBRARY_MAP_SPLIT_MS = 320;
 const LIBRARY_MAP_ANIMATED_MAX = 300;
 // The grid and the URL follow the map once it has rested this long, in ms.
 const LIBRARY_MAP_FOLLOW_MS = 250;
-const LIBRARY_MAP_MONTH_FORMAT = new Intl.DateTimeFormat('en', {
-  month: 'short', year: 'numeric', timeZone: 'UTC',
-});
 
 const LIBRARY_MAP_IMAGE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" '
   + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
@@ -57,7 +54,10 @@ window.libraryMapUtils = {
   },
 
   monthLabel(index) {
-    return LIBRARY_MAP_MONTH_FORMAT.format(new Date(Date.UTC(Math.floor(index / 12), index % 12, 1)));
+    const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+    return new Intl.DateTimeFormat(locale, {
+      month: 'short', year: 'numeric', timeZone: 'UTC',
+    }).format(new Date(Date.UTC(Math.floor(index / 12), index % 12, 1)));
   },
 
   // The box the server reads (west,south,east,north), from the edges of
@@ -460,7 +460,9 @@ window.libraryMap = function libraryMap() {
           iconSize: [size, size],
           iconAnchor: [size / 2, size / 2],
         }),
-        title: item.group ? `${item.count} photos` : (point[MAP_POINT.video] ? 'Video' : 'Photo'),
+        title: item.group
+          ? interpolate(ngettext('%(count)s photo', '%(count)s photos', item.count), { count: item.count }, true)
+          : (point[MAP_POINT.video] ? gettext('Video') : gettext('Photo')),
         riseOnHover: true,
       });
       marker.on('add', () => {

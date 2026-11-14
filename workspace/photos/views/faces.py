@@ -11,6 +11,7 @@ from django.db.models import F
 from django.db.models.functions import Lower
 from django.http import FileResponse, HttpResponse
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -66,19 +67,19 @@ def _correction(fn, *args, **kwargs):
         fn(*args, **kwargs)
     except face_corrections.PhotoAlreadyInCluster:
         raise ValidationError(
-            {"detail": "Another face of this photo is already in that group."}
+            {"detail": _("Another face of this photo is already in that group.")}
         ) from None
     except face_corrections.CoverNotInCluster:
         raise ValidationError(
-            {"detail": "The cover must be one of the group's faces."}
+            {"detail": _("The cover must be one of the group's faces.")}
         ) from None
     except face_people.NoCover:
         raise ValidationError(
-            {"detail": "This person has no face picture to use yet."}
+            {"detail": _("This person has no face picture to use yet.")}
         ) from None
     except face_people.Unnamed:
         raise ValidationError(
-            {"detail": "Name this group after a contact first."}
+            {"detail": _("Name this group after a contact first.")}
         ) from None
 
 
@@ -86,7 +87,7 @@ def _person(user, uuid, field):
     """The contact *uuid* names, if the user can see it; a 400 otherwise."""
     person = reachable_person(user, uuid)
     if person is None:
-        raise ValidationError({field: "No such contact."})
+        raise ValidationError({field: _("No such contact.")})
     return person
 
 
@@ -151,7 +152,7 @@ class FaceClusterViewSet(
             .first()
         )
         if face is None:
-            raise ValidationError({"face": "No such face."})
+            raise ValidationError({"face": _("No such face.")})
         cluster = face_corrections.start_cluster(face)
         created = user_face_clusters(request.user).get(pk=cluster.pk)
         return Response(
@@ -232,7 +233,9 @@ class FaceClusterViewSet(
             names = user_persons(request.user).filter(pk__in=exc.person_ids)
             raise ValidationError(
                 {
-                    "detail": "These are named after different people: pick the name to keep.",
+                    "detail": _(
+                        "These are named after different people: pick the name to keep."
+                    ),
                     "persons": [
                         {"uuid": str(p.pk), "name": p.display_name} for p in names
                     ],
@@ -325,10 +328,10 @@ class FaceViewSet(
         if "cluster_id" in data:
             if data["cluster_id"] is None:
                 if face.cluster_id is None:
-                    raise ValidationError({"cluster": "The face is in no group."})
+                    raise ValidationError({"cluster": _("The face is in no group.")})
                 if not face_corrections.reject_face(face):
                     raise ValidationError(
-                        {"cluster": "The face has left that group since."}
+                        {"cluster": _("The face has left that group since.")}
                     )
                 return
             cluster = (
@@ -337,11 +340,11 @@ class FaceViewSet(
                 .first()
             )
             if cluster is None:
-                raise ValidationError({"cluster": "No such cluster."})
+                raise ValidationError({"cluster": _("No such cluster.")})
             _correction(face_corrections.confirm_face, face, cluster)
         elif data.get("assignment") == face.Assignment.CONFIRMED:
             if face.cluster is None:
-                raise ValidationError({"assignment": "The face is in no cluster."})
+                raise ValidationError({"assignment": _("The face is in no cluster.")})
             _correction(face_corrections.confirm_face, face, face.cluster)
 
     def _to_new_person(self, face, name):
@@ -591,7 +594,7 @@ class FaceBatchView(APIView):
             return None
         cluster = user_face_clusters(self.request.user).filter(pk=uuid).first()
         if cluster is None:
-            raise ValidationError({"cluster": "No such cluster."})
+            raise ValidationError({"cluster": _("No such cluster.")})
         return cluster
 
 
@@ -615,6 +618,6 @@ class FaceUndoView(APIView):
             )
         except face_batches.UndoExpired:
             return Response(
-                {"detail": "Too late to undo."}, status=status.HTTP_410_GONE
+                {"detail": _("Too late to undo.")}, status=status.HTTP_410_GONE
             )
         return Response({"restored": restored})

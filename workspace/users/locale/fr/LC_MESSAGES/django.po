@@ -157,10 +157,6 @@ msgid "About You"
 msgstr "À propos de vous"
 
 #: ui/templates/users/ui/partials/settings_profile.html
-msgid "Role"
-msgstr "Rôle"
-
-#: ui/templates/users/ui/partials/settings_profile.html
 msgid "ex: Lead Backend, Designer..."
 msgstr "ex. : Lead backend, Designer..."
 

@@ -16,10 +16,13 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 from workspace.common.logging import scrub
 from workspace.notifications.services.notifications import notify_many, notify_stream
+from workspace.users.services.settings import get_user_languages, in_recipient_languages
 
 from ..models import Album, AlbumShare
 
@@ -34,10 +37,6 @@ ADDITIONS_STREAM = "additions"
 
 def album_url(album):
     return reverse("photos_ui:album", args=[album.uuid])
-
-
-def _count_label(count):
-    return "1 photo" if count == 1 else f"{count} photos"
 
 
 def share_recipients(share, *, exclude):
@@ -58,61 +57,84 @@ def share_recipients(share, *, exclude):
 def notify_shared(share, *, acting_user):
     """Tell everyone *share* reaches that they were added to the album."""
     album = share.album
-    notify_many(
-        recipients=share_recipients(share, exclude=acting_user),
-        origin="photos",
-        icon="book-image",
-        title=f'{acting_user.username} shared the album "{album.title}" with you',
-        body=f"You can {_ROLE_VERBS[share.role]}.",
-        url=album_url(album),
-        actor=acting_user,
-        source=album,
-    )
+    for users in in_recipient_languages(share_recipients(share, exclude=acting_user)):
+        notify_many(
+            recipients=users,
+            origin="photos",
+            icon="book-image",
+            title=_('%(user)s shared the album "%(title)s" with you')
+            % {"user": acting_user.username, "title": album.title},
+            body=_role_abilities(share.role),
+            url=album_url(album),
+            actor=acting_user,
+            source=album,
+        )
 
 
 def notify_role_changed(share, *, acting_user):
     """Tell everyone *share* reaches what they may do now."""
     album = share.album
-    notify_many(
-        recipients=share_recipients(share, exclude=acting_user),
-        origin="photos",
-        icon="book-image",
-        title=f'Your role in the album "{album.title}" is now {share.get_role_display().lower()}',
-        body=f"You can {_ROLE_VERBS[share.role]}.",
-        url=album_url(album),
-        actor=acting_user,
-        source=album,
-    )
+    for users in in_recipient_languages(share_recipients(share, exclude=acting_user)):
+        notify_many(
+            recipients=users,
+            origin="photos",
+            icon="book-image",
+            title=_new_role_title(share.role, album.title),
+            body=_role_abilities(share.role),
+            url=album_url(album),
+            actor=acting_user,
+            source=album,
+        )
 
 
 def notify_removed(share, *, acting_user):
     """Tell everyone *share* reached that it was taken away from them."""
-    notify_many(
-        recipients=share_recipients(share, exclude=acting_user),
-        origin="photos",
-        icon="book-image",
-        title=f'{acting_user.username} removed you from the album "{share.album.title}"',
-        actor=acting_user,
-    )
+    for users in in_recipient_languages(share_recipients(share, exclude=acting_user)):
+        notify_many(
+            recipients=users,
+            origin="photos",
+            icon="book-image",
+            title=_('%(user)s removed you from the album "%(title)s"')
+            % {"user": acting_user.username, "title": share.album.title},
+            actor=acting_user,
+        )
 
 
 def notify_revoked(share):
     """Tell everyone *share* reached that it went with its maker's right to
     share the album (``album_revocation``)."""
-    notify_many(
-        recipients=share_recipients(share, exclude=share.shared_by),
-        origin="photos",
-        icon="book-image",
-        title=f'The album "{share.album.title}" is no longer shared with you',
-        actor=share.shared_by,
-    )
+    for users in in_recipient_languages(
+        share_recipients(share, exclude=share.shared_by)
+    ):
+        notify_many(
+            recipients=users,
+            origin="photos",
+            icon="book-image",
+            title=_('The album "%(title)s" is no longer shared with you')
+            % {"title": share.album.title},
+            actor=share.shared_by,
+        )
 
 
-_ROLE_VERBS = {
-    AlbumShare.Role.VIEWER: "browse its photos",
-    AlbumShare.Role.CONTRIBUTOR: "browse it and add your own photos",
-    AlbumShare.Role.MANAGER: "browse it, add photos and manage it",
-}
+def _role_abilities(role):
+    """What *role* lets its holder do, as a sentence of its own."""
+    if role == AlbumShare.Role.MANAGER:
+        return _("You can browse it, add photos and manage it.")
+    if role == AlbumShare.Role.CONTRIBUTOR:
+        return _("You can browse it and add your own photos.")
+    return _("You can browse its photos.")
+
+
+def _new_role_title(role, title):
+    """One whole sentence per role: the role's name agrees with the rest of
+    the sentence differently in each language."""
+    if role == AlbumShare.Role.MANAGER:
+        text = _('You are now a manager of the album "%(title)s"')
+    elif role == AlbumShare.Role.CONTRIBUTOR:
+        text = _('You are now a contributor to the album "%(title)s"')
+    else:
+        text = _('You are now a viewer of the album "%(title)s"')
+    return text % {"title": title}
 
 
 def additions_cache_key(album_uuid):
@@ -145,15 +167,42 @@ def schedule_additions_notification(album):
 
 
 def _additions_title(album, people, count):
-    """ "bob added 3 photos to "Trip"", naming at most two people."""
-    names = [person.username for person in people]
-    if len(names) == 1:
-        who = names[0]
-    elif len(names) == 2:
-        who = f"{names[0]} and {names[1]}"
+    """ "bob added 3 photos to "Trip"", naming at most two people.
+
+    One sentence per shape of the subject: the verb agrees with it.
+    """
+    values = {"count": count, "title": album.title}
+    if len(people) == 1:
+        text = ngettext(
+            '%(name)s added %(count)s photo to "%(title)s"',
+            '%(name)s added %(count)s photos to "%(title)s"',
+            count,
+        )
+        values["name"] = people[0].username
+    elif len(people) == 2:
+        text = ngettext(
+            '%(first)s and %(second)s added %(count)s photo to "%(title)s"',
+            '%(first)s and %(second)s added %(count)s photos to "%(title)s"',
+            count,
+        )
+        values["first"], values["second"] = people[0].username, people[1].username
     else:
-        who = f"{names[0]} and {len(names) - 1} others"
-    return f'{who} added {_count_label(count)} to "{album.title}"'
+        # Three people at least: "others" is always two or more.
+        text = ngettext(
+            '%(name)s and %(others)s others added %(count)s photo to "%(title)s"',
+            '%(name)s and %(others)s others added %(count)s photos to "%(title)s"',
+            count,
+        )
+        values["name"], values["others"] = people[0].username, len(people) - 1
+    return text % values
+
+
+def _by_language(user_ids):
+    """*user_ids* grouped by the language each reads."""
+    grouped = {}
+    for user_id, language in get_user_languages(user_ids).items():
+        grouped.setdefault(language, []).append(user_id)
+    return grouped.items()
 
 
 def announce_additions(album_uuid):
@@ -193,16 +242,20 @@ def announce_additions(album_uuid):
                 audiences.setdefault(others, []).append(member)
         for others, recipients in audiences.items():
             people = sorted((adders[pk] for pk in others), key=lambda u: u.username)
-            notify_stream(
-                recipient_ids=recipients,
-                source=album,
-                origin="photos",
-                icon="image-plus",
-                title=_additions_title(album, people, sum(counts[pk] for pk in others)),
-                url=album_url(album),
-                actor=people[0],
-                stream=ADDITIONS_STREAM,
-            )
+            count = sum(counts[pk] for pk in others)
+            for language, user_ids in _by_language(recipients):
+                with translation.override(language):
+                    title = _additions_title(album, people, count)
+                notify_stream(
+                    recipient_ids=user_ids,
+                    source=album,
+                    origin="photos",
+                    icon="image-plus",
+                    title=title,
+                    url=album_url(album),
+                    actor=people[0],
+                    stream=ADDITIONS_STREAM,
+                )
 
     # Last, so the next add starts a fresh window.
     cache.delete(additions_cache_key(album_uuid))

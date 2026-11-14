@@ -16,71 +16,78 @@ A photo of a shared album the viewer cannot open in Files (albumScoped) has
 no file action and no place in Files: its menu is the viewer, the download
 the album allows (through the album), and the album rows.
 {% endcomment %}
-<ul class="menu menu-sm p-0 w-full">
-  <li x-show="ctxMenu.actions === null">
-    <span class="gap-3 rounded-sm pointer-events-none">
-      <span class="loading loading-spinner loading-xs"></span>
-      <span>Loading…</span>
-    </span>
-  </li>
-  <template x-if="ctxShows('open')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('open')" icon="eye" label="Open" click="closeCtxMenu(); openPhoto(_tile(ctxMenu.photo.uuid))" only %}
-  </template>
-  <template x-if="ctxShows('similar')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('similar')" icon="images" label="Similar photos" click="showSimilar(ctxMenu.photo.uuid); closeCtxMenu()" only %}
-  </template>
-  <template x-if="ctxShows('faces')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('faces')" icon="scan-face" label_expr="ctxMenu.photo?.mediaType === 'video' ? 'People in this video' : 'People in this photo'" click="openFacesDialog(ctxMenu.photo)" only %}
-  </template>
-  <template x-if="ctxShows('toggle_favorite')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('toggle_favorite')" icon="star" icon_class_expr="ctxAction('toggle_favorite')?.state?.is_favorite ? 'text-warning fill-current' : ''" label_expr="ctxAction('toggle_favorite')?.label" click="runCtxAction(ctxAction('toggle_favorite'))" only %}
-  </template>
-  <template x-if="ctxShows('add_to_album')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('add_to_album')" icon="book-plus" label="Add to album" click="closeCtxMenu(); openAlbumPicker([ctxMenu.photo.uuid])" only %}
-  </template>
-  <template x-if="ctxShows('share')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('share')" icon="share-2" label="Share" click="runCtxAction(ctxAction('share'))" only %}
-  </template>
-  <template x-if="ctxShows('download')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('download')" icon="download" label="Download" href_expr="ctxDownloadUrl()" download_expr="ctxMenu.photo?.name" click="closeCtxMenu()" only %}
-  </template>
-  <template x-if="ctxShows('album_cover')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('album_cover')" icon="image-up" label="Set as cover" click="closeCtxMenu(); setAlbumCover(ctxMenu.photo.uuid)" only %}
-  </template>
-  <template x-if="ctxShows('remove_from_album')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('remove_from_album')" icon="image-minus" label="Remove from album" click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
-  </template>
-  <template x-if="ctxShows('person_cover')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('person_cover')" icon="image-up" label="Set as cover" click="useAsCover(ctxMenu.photo)" only %}
-  </template>
-  <template x-if="ctxShows('not_this_person')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('not_this_person')" icon="user-x" label_expr="notPersonLabel(currentCluster()?.person?.name)" tone="error" click="rejectFromCluster(ctxMenu.photo)" only %}
-  </template>
-  <template x-if="ctxShows('open_in_files')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('open_in_files')" icon="hard-drive" label="Open in Files" href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}
-  </template>
-  <template x-if="ctxShows('copy_link')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('copy_link')" icon="link" label="Copy link" click="runCtxAction(ctxAction('copy_link'))" only %}
-  </template>
-  <template x-if="ctxShows('rename')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('rename')" icon="pencil" label="Rename" click="runCtxAction(ctxAction('rename'))" only %}
-  </template>
-  <template x-if="ctxShows('edit_details')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('edit_details')" icon="calendar-clock" label="Edit date & location" click="closeCtxMenu(); openCaptureDialog([ctxMenu.photo.uuid])" only %}
-  </template>
-  <template x-if="ctxShows('properties')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('properties')" icon="info" label="Properties" click="runCtxAction(ctxAction('properties'))" only %}
-  </template>
-  <template x-if="ctxShows('toggle_sensitive')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('toggle_sensitive')" icon_expr="ctxAction('toggle_sensitive')?.icon" label_expr="ctxAction('toggle_sensitive')?.label" click="runCtxAction(ctxAction('toggle_sensitive'))" only %}
-  </template>
-  <template x-if="ctxShows('hide')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('hide')" icon="eye-off" label="Hide from library" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], true)" only %}
-  </template>
-  <template x-if="ctxShows('unhide')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('unhide')" icon="eye" label="Unhide" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], false)" only %}
-  </template>
-  <template x-if="ctxShows('delete')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('delete')" icon="trash-2" label="Move to trash" tone="error" click="runCtxAction(ctxAction('delete'))" only %}
-  </template>
-</ul>
+{% load i18n %}
+{% translate "People in this video" as people_video_label %}
+{% translate "People in this photo" as people_photo_label %}
+{% with people_video_js=people_video_label|escapejs people_photo_js=people_photo_label|escapejs %}
+  {% with faces_label_expr="ctxMenu.photo?.mediaType === 'video' ? '"|add:people_video_js|add:"' : '"|add:people_photo_js|add:"'" %}
+    <ul class="menu menu-sm p-0 w-full">
+      <li x-show="ctxMenu.actions === null">
+        <span class="gap-3 rounded-sm pointer-events-none">
+          <span class="loading loading-spinner loading-xs"></span>
+          <span>{% translate "Loading…" %}</span>
+        </span>
+      </li>
+      <template x-if="ctxShows('open')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('open')" icon="eye" label=_("Open") click="closeCtxMenu(); openPhoto(_tile(ctxMenu.photo.uuid))" only %}
+      </template>
+      <template x-if="ctxShows('similar')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('similar')" icon="images" label=_("Similar photos") click="showSimilar(ctxMenu.photo.uuid); closeCtxMenu()" only %}
+      </template>
+      <template x-if="ctxShows('faces')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('faces')" icon="scan-face" label_expr=faces_label_expr click="openFacesDialog(ctxMenu.photo)" only %}
+      </template>
+      <template x-if="ctxShows('toggle_favorite')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('toggle_favorite')" icon="star" icon_class_expr="ctxAction('toggle_favorite')?.state?.is_favorite ? 'text-warning fill-current' : ''" label_expr="ctxAction('toggle_favorite')?.label" click="runCtxAction(ctxAction('toggle_favorite'))" only %}
+      </template>
+      <template x-if="ctxShows('add_to_album')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('add_to_album')" icon="book-plus" label=_("Add to album") click="closeCtxMenu(); openAlbumPicker([ctxMenu.photo.uuid])" only %}
+      </template>
+      <template x-if="ctxShows('share')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('share')" icon="share-2" label=_("Share") click="runCtxAction(ctxAction('share'))" only %}
+      </template>
+      <template x-if="ctxShows('download')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('download')" icon="download" label=_("Download") href_expr="ctxDownloadUrl()" download_expr="ctxMenu.photo?.name" click="closeCtxMenu()" only %}
+      </template>
+      <template x-if="ctxShows('album_cover')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('album_cover')" icon="image-up" label=_("Set as cover") click="closeCtxMenu(); setAlbumCover(ctxMenu.photo.uuid)" only %}
+      </template>
+      <template x-if="ctxShows('remove_from_album')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('remove_from_album')" icon="image-minus" label=_("Remove from album") click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
+      </template>
+      <template x-if="ctxShows('person_cover')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('person_cover')" icon="image-up" label=_("Set as cover") click="useAsCover(ctxMenu.photo)" only %}
+      </template>
+      <template x-if="ctxShows('not_this_person')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('not_this_person')" icon="user-x" label_expr="notPersonLabel(currentCluster()?.person?.name)" tone="error" click="rejectFromCluster(ctxMenu.photo)" only %}
+      </template>
+      <template x-if="ctxShows('open_in_files')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('open_in_files')" icon="hard-drive" label=_("Open in Files") href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}
+      </template>
+      <template x-if="ctxShows('copy_link')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('copy_link')" icon="link" label=_("Copy link") click="runCtxAction(ctxAction('copy_link'))" only %}
+      </template>
+      <template x-if="ctxShows('rename')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('rename')" icon="pencil" label=_("Rename") click="runCtxAction(ctxAction('rename'))" only %}
+      </template>
+      <template x-if="ctxShows('edit_details')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('edit_details')" icon="calendar-clock" label=_("Edit date & location") click="closeCtxMenu(); openCaptureDialog([ctxMenu.photo.uuid])" only %}
+      </template>
+      <template x-if="ctxShows('properties')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('properties')" icon="info" label=_("Properties") click="runCtxAction(ctxAction('properties'))" only %}
+      </template>
+      <template x-if="ctxShows('toggle_sensitive')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('toggle_sensitive')" icon_expr="ctxAction('toggle_sensitive')?.icon" label_expr="ctxAction('toggle_sensitive')?.label" click="runCtxAction(ctxAction('toggle_sensitive'))" only %}
+      </template>
+      <template x-if="ctxShows('hide')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('hide')" icon="eye-off" label=_("Hide from library") click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], true)" only %}
+      </template>
+      <template x-if="ctxShows('unhide')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('unhide')" icon="eye" label=_("Unhide") click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], false)" only %}
+      </template>
+      <template x-if="ctxShows('delete')">
+        {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('delete')" icon="trash-2" label=_("Move to trash") tone="error" click="runCtxAction(ctxAction('delete'))" only %}
+      </template>
+    </ul>
+  {% endwith %}
+{% endwith %}

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 13:10+0000\n"
+"POT-Creation-Date: 2026-11-14 20:09+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -288,6 +288,14 @@ msgid "Activity"
 msgstr "Activité"
 
 #: vocabulary.py
+msgid "Add a group"
+msgstr "Ajouter un groupe"
+
+#: vocabulary.py
+msgid "Add people"
+msgstr "Ajouter des personnes"
+
+#: vocabulary.py
 msgid "Add to favorites"
 msgstr "Ajouter aux favoris"
 
@@ -330,6 +338,10 @@ msgstr "Gras"
 #: vocabulary.py
 msgid "Calendar"
 msgstr "Calendrier"
+
+#: vocabulary.py
+msgid "Cannot share with yourself."
+msgstr "Vous ne pouvez pas partager avec vous-même."
 
 #: vocabulary.py
 msgid "Chat"
@@ -404,6 +416,10 @@ msgid "Copy link"
 msgstr "Copier le lien"
 
 #: vocabulary.py
+msgid "Could not save the preference"
+msgstr "Impossible d’enregistrer la préférence"
+
+#: vocabulary.py
 msgid "Could not save."
 msgstr "Impossible d’enregistrer."
 
@@ -418,6 +434,10 @@ msgstr "Créer"
 #: vocabulary.py
 msgid "Create group folder"
 msgstr "Créer un dossier de groupe"
+
+#: vocabulary.py
+msgid "Create link"
+msgstr "Créer le lien"
 
 #: vocabulary.py
 msgid "Crop width and height must be positive."
@@ -480,6 +500,10 @@ msgid "Download"
 msgstr "Télécharger"
 
 #: vocabulary.py
+msgid "Download as ZIP"
+msgstr "Télécharger en ZIP"
+
+#: vocabulary.py
 msgid "Events"
 msgstr "Événements"
 
@@ -488,12 +512,24 @@ msgid "Expand sidebar"
 msgstr "Déplier la barre latérale"
 
 #: vocabulary.py
+msgid "Expiration (optional)"
+msgstr "Expiration (facultatif)"
+
+#: vocabulary.py
 msgid "Failed to copy link"
 msgstr "Impossible de copier le lien"
 
 #: vocabulary.py
 msgid "Failed to create folder"
 msgstr "Impossible de créer le dossier"
+
+#: vocabulary.py
+msgid "Failed to rename"
+msgstr "Impossible de renommer"
+
+#: vocabulary.py
+msgid "Failed to update favorites"
+msgstr "Impossible de mettre à jour les favoris"
 
 #: vocabulary.py
 msgid "Favorites"
@@ -588,12 +624,20 @@ msgid "Invalid image or crop parameters."
 msgstr "Image ou paramètres de recadrage invalides."
 
 #: vocabulary.py
+msgid "Invalid password."
+msgstr "Mot de passe incorrect."
+
+#: vocabulary.py
 msgid "Italic"
 msgstr "Italique"
 
 #: vocabulary.py
 msgid "Keyboard Shortcuts"
 msgstr "Raccourcis clavier"
+
+#: vocabulary.py
+msgid "Leave empty for no password"
+msgstr "Laisser vide pour aucun mot de passe"
 
 #: vocabulary.py
 msgid "Link copied to clipboard"
@@ -622,6 +666,10 @@ msgstr "Emplacement"
 #: vocabulary.py
 msgid "Mail"
 msgstr "E-mails"
+
+#: vocabulary.py
+msgid "Mark as sensitive"
+msgstr "Marquer comme sensible"
 
 #: vocabulary.py
 msgid "Markdown Formatting"
@@ -720,8 +768,16 @@ msgid "No one yet"
 msgstr "Personne pour l’instant"
 
 #: vocabulary.py
+msgid "No public links"
+msgstr "Aucun lien public"
+
+#: vocabulary.py
 msgid "No users found"
 msgstr "Aucun utilisateur trouvé"
+
+#: vocabulary.py
+msgid "Not shared with anyone yet"
+msgstr "Pas encore partagé"
 
 #: vocabulary.py
 msgid "Notes"
@@ -748,6 +804,14 @@ msgid "Open in People"
 msgstr "Ouvrir dans Personnes"
 
 #: vocabulary.py
+msgid "Password (optional)"
+msgstr "Mot de passe (facultatif)"
+
+#: vocabulary.py
+msgid "Password required."
+msgstr "Mot de passe requis."
+
+#: vocabulary.py
 msgid "Pause"
 msgstr "Pause"
 
@@ -758,6 +822,10 @@ msgstr "En pause"
 #: vocabulary.py
 msgid "People"
 msgstr "Personnes"
+
+#: vocabulary.py
+msgid "Permanent"
+msgstr "Permanent"
 
 #: vocabulary.py
 msgid "Photos"
@@ -772,12 +840,20 @@ msgid "Profile"
 msgstr "Profil"
 
 #: vocabulary.py
+msgid "Project"
+msgstr "Projet"
+
+#: vocabulary.py
 msgid "Projects"
 msgstr "Projets"
 
 #: vocabulary.py
 msgid "Properties"
 msgstr "Propriétés"
+
+#: vocabulary.py
+msgid "Public links"
+msgstr "Liens publics"
 
 #: vocabulary.py
 msgid "Quick Access"
@@ -832,6 +908,10 @@ msgid "Revoke"
 msgstr "Révoquer"
 
 #: vocabulary.py
+msgid "Role"
+msgstr "Rôle"
+
+#: vocabulary.py
 msgid "Root"
 msgstr "Racine"
 
@@ -848,12 +928,20 @@ msgid "Search"
 msgstr "Rechercher"
 
 #: vocabulary.py
+msgid "Search by username or name..."
+msgstr "Rechercher par identifiant ou nom..."
+
+#: vocabulary.py
 msgid "Search users..."
 msgstr "Rechercher des utilisateurs..."
 
 #: vocabulary.py
 msgid "Search..."
 msgstr "Rechercher..."
+
+#: vocabulary.py
+msgid "Select all"
+msgstr "Tout sélectionner"
 
 #: vocabulary.py
 msgid "Send message"
@@ -866,6 +954,14 @@ msgstr "Paramètres"
 #: vocabulary.py
 msgid "Share"
 msgstr "Partager"
+
+#: vocabulary.py
+msgid "Shared with me"
+msgstr "Partagés avec moi"
+
+#: vocabulary.py
+msgid "Sharing updated"
+msgstr "Partage mis à jour"
 
 #: vocabulary.py
 msgid "Show"
@@ -903,6 +999,14 @@ msgstr ""
 "passe."
 
 #: vocabulary.py
+msgid "Slideshow"
+msgstr "Diaporama"
+
+#: vocabulary.py
+msgid "Something went wrong"
+msgstr "Une erreur s’est produite"
+
+#: vocabulary.py
 msgid "Sort by"
 msgstr "Trier par"
 
@@ -927,6 +1031,10 @@ msgid "Tags"
 msgstr "Étiquettes"
 
 #: vocabulary.py
+msgid "This link has no password."
+msgstr "Ce lien n’a pas de mot de passe."
+
+#: vocabulary.py
 msgid "Today"
 msgstr "Aujourd’hui"
 
@@ -943,8 +1051,20 @@ msgid "Undo"
 msgstr "Annuler"
 
 #: vocabulary.py
+msgid "Undo removal"
+msgstr "Annuler la suppression"
+
+#: vocabulary.py
+msgid "Unhide"
+msgstr "Réafficher"
+
+#: vocabulary.py
 msgid "Unknown error"
 msgstr "Erreur inconnue"
+
+#: vocabulary.py
+msgid "Unmark as sensitive"
+msgstr "Ne plus marquer comme sensible"
 
 #: vocabulary.py
 msgid "Unsupported image type. Use JPEG, PNG, WebP, or GIF."

@@ -4,7 +4,7 @@
   own face clusters count, so a shared contact shows each viewer their own
   photos.
 {% endcomment %}
-{% load file_filters photos_filters %}
+{% load file_filters i18n photos_filters %}
 {% photos_of_person user person as strip %}
 <div class="grid grid-cols-4 gap-1">
   {% for photo in strip.photos %}
@@ -30,5 +30,9 @@
 </div>
 <a href="{{ strip.url }}" class="btn btn-ghost btn-sm gap-2 w-full">
   <i data-lucide="images" class="w-4 h-4"></i>
-  See all {{ strip.count }} photo{{ strip.count|pluralize }} in Photos
+  {% blocktranslate trimmed count counter=strip.count %}
+    See all {{ counter }} photo in Photos
+  {% plural %}
+    See all {{ counter }} photos in Photos
+  {% endblocktranslate %}
 </a>

@@ -6,6 +6,12 @@
   layer over the card takes the click and the keyboard: it picks instead of
   opening, and the card's own link and button leave the tab order.
 {% endcomment %}
+{% load i18n %}
+{% blocktranslate trimmed count counter=card.photo_count asvar photo_count_label %}
+  {{ counter }} photo
+{% plural %}
+  {{ counter }} photos
+{% endblocktranslate %}
 {% with key=card.clusters|join:"," %}
   <div
     class="group relative flex flex-col items-center gap-1"
@@ -17,14 +23,7 @@
     data-hidden="{{ card.hidden|yesno:'1,0' }}"
     @contextmenu.prevent="peoplePicking || openClusterMenu($event, $el)"
   >
-    <a
-      href="{{ card.url }}"
-      x-target.push="photos-nav photos-content"
-      class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
-      :class="{ 'ring-2 ring-module': peoplePicking && isPeopleCardPicked('{{ key|escapejs }}') }"
-      :tabindex="peoplePicking ? -1 : null"
-      title="{% if card.person %}{{ card.person.name }}, {% endif %}{{ card.photo_count }} photo{{ card.photo_count|pluralize }}"
-    >
+    <a href="{{ card.url }}" x-target.push="photos-nav photos-content" class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module" :class="{ 'ring-2 ring-module': peoplePicking && isPeopleCardPicked('{{ key|escapejs }}') }" :tabindex="peoplePicking ? -1 : null" title="{% if card.person %}{% blocktranslate trimmed with name=card.person.name photos=photo_count_label %}{{ name }}, {{ photos }}{% endblocktranslate %}{% else %}{{ photo_count_label }}{% endif %}">
       {% if card.cover_url %}
         <img
           src="{{ card.cover_url }}"
@@ -51,32 +50,23 @@
         :tabindex="peoplePicking ? -1 : null"
         @click="openNameDialog({ uuid: '{{ card.uuid|escapejs }}', cover_url: '{{ card.cover_url|default:''|escapejs }}' })"
       >
-        Add a name
+        {% translate "Add a name" %}
       </button>
     {% endif %}
-    <span class="text-xs text-base-content/60 tabular-nums">
-      {{ card.photo_count }} photo{{ card.photo_count|pluralize }}
-    </span>
+    <span class="text-xs text-base-content/60 tabular-nums">{{ photo_count_label }}</span>
     <button
       type="button"
       class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
-      title="More actions"
-      aria-label="More actions"
+      title="{% translate 'More actions' %}"
+      aria-label="{% translate 'More actions' %}"
       aria-haspopup="menu"
       x-show="!peoplePicking"
       @click.stop="openClusterMenu($event, $el.closest('[data-clusters]'), $el)"
     >
       <i data-lucide="more-vertical" class="w-4 h-4"></i>
     </button>
-    <button
-      type="button"
-      x-show="peoplePicking"
-      x-cloak
-      class="absolute inset-0 z-10 rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
-      :aria-pressed="isPeopleCardPicked('{{ key|escapejs }}') ? 'true' : 'false'"
-      aria-label="Pick {% if card.person %}{{ card.person.name }}{% else %}this person{% endif %}"
-      @click="togglePeopleCard('{{ key|escapejs }}')"
-    ></button>
+    <button type="button" x-show="peoplePicking" x-cloak class="absolute inset-0 z-10 rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module" :aria-pressed="isPeopleCardPicked('{{ key|escapejs }}') ? 'true' : 'false'" aria-label="{% if card.person %}{% blocktranslate trimmed with name=card.person.name %}Pick {{ name }}{% endblocktranslate %}{% else %}{% translate 'Pick this person' %}{% endif %}" @click="togglePeopleCard('{{ key|escapejs }}')">
+    </button>
     <span
       x-show="peoplePicking"
       x-cloak

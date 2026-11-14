@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 19:43+0000\n"
+"POT-Creation-Date: 2026-11-14 20:09+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -366,10 +366,6 @@ msgstr "Échéance"
 msgctxt "task reminder"
 msgid "Overdue"
 msgstr "En retard"
-
-#: search.py
-msgid "Project"
-msgstr "Projet"
 
 #: serializers.py
 msgid "Color must be a #rrggbb value."

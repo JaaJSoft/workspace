@@ -1,8 +1,8 @@
 {% extends photos_shell|default:"base_with_navbar.html" %}
 
-{% load static properties_section_assets %}
+{% load i18n static properties_section_assets %}
 
-{% block title %}Photos - Workspace{% endblock %}
+{% block title %}{% translate "Photos" %} - Workspace{% endblock %}
 
 {% block extra_head %}
   {% properties_section_stylesheets %}
@@ -45,7 +45,11 @@
 
 {% block drawer_sidebar %}
   <div class="drawer-side z-40 h-full overflow-visible!">
-    <label for="photos-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    <label
+      for="photos-drawer"
+      aria-label="{% translate 'close sidebar' %}"
+      class="drawer-overlay"
+    ></label>
 
     {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
     <aside
@@ -74,8 +78,14 @@
       {% endblock %}
       <!-- Bottom action: collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
+        {% translate "Expand sidebar" as expand_sidebar_label %}
+        {% translate "Collapse sidebar" as collapse_sidebar_label %}
         <ul class="menu p-0 w-full">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% with expand_js=expand_sidebar_label|escapejs collapse_js=collapse_sidebar_label|escapejs %}
+            {% with toggle_label_expr="collapsed ? '"|add:expand_js|add:"' : '"|add:collapse_js|add:"'" %}
+              {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label=_("Collapse") color="module" onclick="toggleCollapse()" title_binding=toggle_label_expr aria_label_binding=toggle_label_expr collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+            {% endwith %}
+          {% endwith %}
         </ul>
       </div>
     </aside>
@@ -134,7 +144,7 @@
       <span class="inline-flex text-module animate-spin">
         <i data-lucide="loader-circle" class="w-8 h-8"></i>
       </span>
-      <span class="sr-only">Loading…</span>
+      <span class="sr-only">{% translate "Loading…" %}</span>
     </div>
     <div
       x-show="importDropActive"
@@ -145,9 +155,11 @@
     >
       <div class="text-center">
         <i data-lucide="image-up" class="w-12 h-12 mx-auto mb-3 text-module"></i>
-        <p class="text-lg font-semibold text-module">Drop photos and videos to import them</p>
+        <p class="text-lg font-semibold text-module">{% translate "Drop photos and videos to import them" %}</p>
         <p class="text-sm text-base-content/60">
-          They are saved to <span class="font-medium" x-text="importFolderLabel()"></span> in Files
+          {% blocktranslate trimmed with folder='<span class="font-medium" x-text="importFolderLabel()"></span>' %}
+            They are saved to {{ folder }} in Files
+          {% endblocktranslate %}
         </p>
       </div>
     </div>

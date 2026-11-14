@@ -136,10 +136,6 @@ msgstr[0] "%(count)s en échec"
 msgstr[1] "%(count)s en échec"
 msgstr[2] "%(count)s en échec"
 
-#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_actions.js
-msgid "Failed to rename"
-msgstr "Impossible de renommer"
-
 #: ui/static/files/ui/js/browser.js
 msgid "Restore folder?"
 msgstr "Restaurer le dossier ?"
@@ -178,14 +174,6 @@ msgstr ""
 #: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
 msgid "Empty trash"
 msgstr "Vider la corbeille"
-
-#: ui/static/files/ui/js/browser.js
-msgid "Something went wrong"
-msgstr "Une erreur s’est produite"
-
-#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_viewer.js
-msgid "Failed to update favorites"
-msgstr "Impossible de mettre à jour les favoris"
 
 #: ui/static/files/ui/js/browser.js
 msgid "Failed to update the files"
@@ -540,17 +528,9 @@ msgstr "Afficher dans Fichiers : %(path)s"
 msgid "This folder cannot be pinned"
 msgstr "Ce dossier ne peut pas être épinglé"
 
-#: ui/static/files/ui/js/preferences.js
-msgid "Could not save the preference"
-msgstr "Impossible d’enregistrer la préférence"
-
 #: ui/static/files/ui/js/properties_panel.js
 msgid "Failed to load properties"
 msgstr "Impossible de charger les propriétés"
-
-#: ui/static/files/ui/js/share_modal.js
-msgid "Project"
-msgstr "Projet"
 
 #: ui/static/files/ui/js/share_modal.js
 msgid "Some changes failed (%(count)s error)"
@@ -558,10 +538,6 @@ msgid_plural "Some changes failed (%(count)s errors)"
 msgstr[0] "Certaines modifications ont échoué (%(count)s erreur)"
 msgstr[1] "Certaines modifications ont échoué (%(count)s d’erreurs)"
 msgstr[2] "Certaines modifications ont échoué (%(count)s erreurs)"
-
-#: ui/static/files/ui/js/share_modal.js
-msgid "Sharing updated"
-msgstr "Partage mis à jour"
 
 #: ui/static/files/ui/js/share_modal.js
 msgid "That password could not be copied."
@@ -578,10 +554,6 @@ msgstr "Téléversement seul"
 #: ui/static/files/ui/js/share_modal.js
 msgid "Read and upload"
 msgstr "Lecture et téléversement"
-
-#: ui/static/files/ui/js/share_modal.js
-msgid "Permanent"
-msgstr "Permanent"
 
 #: ui/static/files/ui/js/shared_dropzone.js
 #: ui/static/files/ui/js/upload_queue.js

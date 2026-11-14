@@ -7,9 +7,25 @@
   moment it was seen and a link playing the video from there. State lives in
   photosFacesMixin() (faces.js).
 {% endcomment %}
+{% load i18n %}
+{% translate "People in this video" as video_title %}
+{% translate "People in this photo" as photo_title %}
+{% translate "No face was found in this video, or it has not been read yet." as no_face_video %}
+{% translate "No face was found in this photo, or it has not been read yet." as no_face_photo %}
+{% translate "Play the video from %(time)s" as play_from_label %}
+{% translate "at %(time)s" as at_time_label %}
+{% translate "Already another face here: both are kept as one person" as taken_label %}
+{% translate "%(count)s photos" as photo_count_other %}
+{% translate "Unnamed person with %(count)s photos" as unnamed_person_label %}
+{% translate "Unnamed person with %(count)s photos, the same person as another face here" as unnamed_taken_label %}
+{% translate "Add “%(name)s” to People" as add_to_people_label %}
 <dialog id="photo-faces-dialog" class="modal" @close="facesDialogClosed()">
   <div class="modal-box max-w-lg">
-    {% include "ui/partials/dialog_header.html" with icon="scan-face" title_expr="facesDialogIsVideo() ? 'People in this video' : 'People in this photo'" subtitle_expr="facesDialog.photo?.name" only %}
+    {% with video_js=video_title|escapejs photo_js=photo_title|escapejs %}
+      {% with title_js="facesDialogIsVideo() ? '"|add:video_js|add:"' : '"|add:photo_js|add:"'" %}
+        {% include "ui/partials/dialog_header.html" with icon="scan-face" title_expr=title_js subtitle_expr="facesDialog.photo?.name" only %}
+      {% endwith %}
+    {% endwith %}
 
     <div x-show="facesDialog.loading" class="flex justify-center py-8">
       <span class="loading loading-spinner loading-md"></span>
@@ -20,7 +36,7 @@
       class="text-sm text-base-content/60 py-6 text-center"
     >
       <span
-        x-text="facesDialogIsVideo() ? 'No face was found in this video, or it has not been read yet.' : 'No face was found in this photo, or it has not been read yet.'"
+        x-text="facesDialogIsVideo() ? '{{ no_face_video|escapejs }}' : '{{ no_face_photo|escapejs }}'"
       ></span>
     </p>
 
@@ -30,7 +46,7 @@
           <div class="flex items-center gap-3">
             <img
               :src="face.crop_url"
-              alt="Face"
+              alt="{% translate 'Face' %}"
               class="w-12 h-12 rounded-full object-cover shrink-0 bg-base-200"
             />
             <i
@@ -53,17 +69,19 @@
               <span
                 x-show="face.assignment === 'confirmed'"
                 class="badge badge-sm badge-success badge-outline shrink-0"
-              >Confirmed</span>
+              >{% translate "Confirmed" %}</span>
             </div>
             <template x-if="face.timestamp != null">
               <button
                 type="button"
                 class="btn btn-ghost btn-xs shrink-0 tabular-nums"
-                :title="'Play the video from ' + faceTime(face)"
+                :title="interpolate('{{ play_from_label|escapejs }}', { time: faceTime(face) }, true)"
                 @click="watchFace(face)"
               >
                 <i data-lucide="play" class="w-3.5 h-3.5"></i>
-                <span x-text="'at ' + faceTime(face)"></span>
+                <span
+                  x-text="interpolate('{{ at_time_label|escapejs }}', { time: faceTime(face) }, true)"
+                ></span>
               </button>
             </template>
           </div>
@@ -76,7 +94,7 @@
               @click="confirmFace(face)"
             >
               <i data-lucide="check" class="w-3.5 h-3.5"></i>
-              That's right
+              {% translate "That's right" %}
             </button>
             <button
               type="button"
@@ -95,7 +113,7 @@
               @click="togglePicker(face)"
             >
               <i data-lucide="users-round" class="w-3.5 h-3.5"></i>
-              Change person
+              {% translate "Change person" %}
             </button>
           </div>
           <div
@@ -108,7 +126,7 @@
               <input
                 type="text"
                 class="grow"
-                placeholder="Who is it?"
+                placeholder="{% translate 'Who is it?' %}"
                 autocomplete="off"
                 x-model="facesDialog.query"
                 @input.debounce.250ms="searchFacePersons()"
@@ -144,7 +162,7 @@
                     <template x-if="facePersonTaken(face, person)">
                       <span
                         class="flex items-center gap-1.5 text-xs text-base-content/60 shrink-0"
-                        title="Already another face here: both are kept as one person"
+                        title="{{ taken_label }}"
                       >
                         <img
                           :src="facePersonTaken(face, person).crop_url"
@@ -152,7 +170,7 @@
                           class="w-5 h-5 rounded-full object-cover"
                         />
                         <i data-lucide="link" class="w-3.5 h-3.5"></i>
-                        Same person
+                        {% translate "Same person" %}
                       </span>
                     </template>
                   </button>
@@ -170,9 +188,10 @@
                   >
                     <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
                   </span>
-                  <span class="flex-1 truncate">
-                    Add “<span x-text="facesDialog.query.trim()"></span>” to People
-                  </span>
+                  <span
+                    class="flex-1 truncate"
+                    x-text="interpolate('{{ add_to_people_label|escapejs }}', { name: facesDialog.query.trim() }, true)"
+                  ></span>
                 </button>
               </li>
             </ul>
@@ -180,15 +199,15 @@
               <p
                 class="px-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/60"
               >
-                Not named yet
+                {% translate "Not named yet" %}
               </p>
               <div class="grid grid-cols-6 gap-2">
                 {# Someone who has no name yet and no cluster either: the face starts one of its own. #}
                 <button
                   type="button"
                   class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
-                  title="New person"
-                  aria-label="New person"
+                  title="{% translate 'New person' %}"
+                  aria-label="{% translate 'New person' %}"
                   :disabled="facesDialog.busy"
                   @click="startCluster(face)"
                 >
@@ -198,8 +217,8 @@
                   <button
                     type="button"
                     class="relative aspect-square rounded-full ring-offset-2 ring-offset-base-200 hover:ring-2 hover:ring-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
-                    :title="faceClusterTaken(face, cluster) ? 'Already another face here: both are kept as one person' : cluster.photo_count + ' photos'"
-                    :aria-label="'Unnamed person with ' + cluster.photo_count + ' photos' + (faceClusterTaken(face, cluster) ? ', the same person as another face here' : '')"
+                    :title="faceClusterTaken(face, cluster) ? '{{ taken_label|escapejs }}' : interpolate('{{ photo_count_other|escapejs }}', { count: cluster.photo_count }, true)"
+                    :aria-label="interpolate(faceClusterTaken(face, cluster) ? '{{ unnamed_taken_label|escapejs }}' : '{{ unnamed_person_label|escapejs }}', { count: cluster.photo_count }, true)"
                     :disabled="facesDialog.busy"
                     @click="assignFace(face, cluster)"
                   >
@@ -224,10 +243,10 @@
     </ul>
 
     <div class="modal-action">
-      <button type="button" class="btn btn-sm" @click="closeFacesDialog()">Done</button>
+      <button type="button" class="btn btn-sm" @click="closeFacesDialog()">{% translate "Done" %}</button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

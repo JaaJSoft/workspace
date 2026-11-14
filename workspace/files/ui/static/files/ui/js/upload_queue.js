@@ -862,7 +862,8 @@ document.addEventListener('alpine:init', () => {
     send: window.sendFileUpload,
     discard: window.discardFileUploads,
     notify: (type) => window.dispatchEvent(new CustomEvent(type)),
-    confirm: (options) => window.AppDialog.confirm(options),
+    // AppDialog is a top-level const of dialogs.js: a global binding, not a property of window.
+    confirm: (options) => AppDialog.confirm(options),
     release: window.releaseFileUpload,
   }));
 

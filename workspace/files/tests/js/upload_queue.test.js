@@ -652,3 +652,64 @@ test('a report with more failures than it lists counts nothing as discarded', as
   assert.deepEqual(Array.from(await discard(uploads('a.jpg', 'b.jpg', 'c.jpg'))), []);
   assert.deepEqual(runs, [['trash', ['u-a.jpg', 'u-b.jpg', 'u-c.jpg']]]);
 });
+
+// The store the upload panel binds to, wired by the page's alpine:init
+// listener to the real dialogs.js, which declares AppDialog with a top-level
+// `const`: a global lexical binding, never a property of window.
+function pageStore() {
+  const listeners = {};
+  const shown = [];
+  const element = (id) => ({
+    id,
+    firstChild: null,
+    className: '',
+    textContent: '',
+    removeChild() {},
+    appendChild() {},
+    addEventListener() {},
+    removeEventListener() {},
+    focus() {},
+    close() {},
+    showModal() { shown.push(id); },
+  });
+  const elements = {};
+  const stores = {};
+  const ctx = loadScripts(
+    [
+      'workspace/common/static/ui/js/dialogs.js',
+      'workspace/common/static/ui/js/filesize.js',
+      'workspace/files/ui/static/files/ui/js/upload_queue.js',
+    ],
+    {
+      document: {
+        addEventListener: (name, fn) => { listeners[name] = fn; },
+        getElementById: (id) => (elements[id] ||= element(id)),
+        createElement: () => ({ setAttribute() {} }),
+      },
+      Alpine: {
+        store: (name, value) => (value === undefined ? stores[name] : (stores[name] = value)),
+        effect: () => {},
+      },
+      addEventListener: () => {},
+      dispatchEvent: () => {},
+      CustomEvent: class {},
+    },
+  );
+  // The script defines the real transport; an upload here never finishes.
+  ctx.sendFileUpload = () => ({ promise: new Promise(() => {}), abort() {} });
+  listeners['alpine:init']();
+  return { store: stores.uploads, shown, elements };
+}
+
+test('closing the panel with uploads in flight asks through the page dialog', async () => {
+  const { store, shown, elements } = pageStore();
+  store.add([{ file: file('big.mov'), folderId: 'a' }]);
+
+  const closing = store.close();
+  await settle();
+
+  assert.deepEqual(shown, ['app-dialog-confirm']);
+  assert.equal(elements['app-dialog-confirm-title'].textContent, 'Cancel uploads?');
+  assert.equal(store.items.length, 1, 'nothing is cancelled before the answer');
+  closing.catch(() => {});
+});

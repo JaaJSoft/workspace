@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14.1"
 
 [[package]]
@@ -3552,7 +3552,7 @@ wheels = [
 
 [[package]]
 name = "workspace"
-version = "0.43.0"
+version = "0.44.0"
 source = { editable = "." }
 dependencies = [
     { name = "authlib" },

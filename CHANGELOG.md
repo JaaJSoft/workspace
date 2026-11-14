@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.44.0 - Photos & Sync
+
+### Highlights
+
+Meet Photos: your pictures and videos in one timeline that recognizes people, tags what it sees and puts your trips on a map. Your calendars and contacts now sync with your phone too.
+
+### Photos
+
+A new module for the photos and videos already in your files, with nothing to import or copy.
+
+- **Timeline:** every photo and video in one timeline, sorted by the day it was taken. Photos open full screen, and a picture with no date in its metadata is dated from its file name. Camera RAW photos (DNG, CR2, CR3, NEF, ARW and more) have their thumbnails and open like any other photo.
+- **Albums:** gather photos into personal or group albums, and play an album, or whatever the viewer is showing, as a slideshow.
+- **Shared photos:** a tab shows the photos other people shared with you, and each of your groups has its own library.
+- **People:** faces are recognized and grouped into people you name once. Someone seen from behind or too far away is found by their body and clothes. The Review page then asks "Is this Léa?", and nobody is ever named without your answer.
+- **Search:** photos and videos are tagged automatically with what they show (a dog, a beach). You can search the library by describing a picture, or find the photos similar to one.
+- **Map:** a Map page places every located photo, with a slider to narrow it to a period, and each photo shows its spot in its properties. Maps stay off until you turn them on, because the map server learns which places you look at.
+- **Editing:** rotate and crop from the viewer and go back to the original at any time. You can also correct the date and location of a whole batch: shift the time of a camera on the wrong clock, set one date for scanned prints, or place photos from a map link. Your files themselves are never rewritten.
+- **Privacy:** sensitive photos are blurred in the grid, at the level you choose, and unblur when you hover them.
+
+### Calendar & Contacts
+
+- Sync your calendars both ways with the calendar app of your phone or computer (iPhone, Mac, Android with DAVx5, Thunderbird). Any calendar can also be shared as a read-only subscription link, which you can revoke.
+- Contacts sync the same way with your phone's contacts app: your own address book and the one of each of your groups.
+- Dates now follow each person's own timezone everywhere: all-day events no longer show up a day early or vanish in the evening, depending on where you live.
+
+### Files
+
+- E-books (EPUB, MOBI, AZW3, FB2, CBZ) open in a reader with a table of contents, page turns and adjustable text size.
+- Create shortcuts to files and folders, for example to file something shared with you in one of your own folders. A shortcut keeps working when its target is renamed or moved.
+- Files now open in place of the listing instead of in a pop-up, with the folder path still above. A Properties button (or Ctrl+I) shows the details beside the file, and the viewer says which folder the file sits in.
+- Moving, copying, trashing or restoring many files at once runs in the background, with its progress in a new Operations panel. A file that cannot go through is reported with its reason while the rest carries on.
+- On Android and Windows, the installed app appears in the system share menu: share files from another app and pick the folder they go into.
+- Uploads survive the screen locking or a quick switch to another app, and pick up again by themselves when the network comes back. An upload stuck on a dead connection is retried instead of hanging.
+- A freshly uploaded picture shows its thumbnail right away, and refreshing a large folder during an upload is many times lighter.
+- PDFs and office documents show their title, author, page count and dates in their properties, and search finds a document by its title or author.
+- Videos and audio files show their dimensions, length and codec in their properties.
+
+### Notes
+
+- Embed a file from Files in a note: images, videos and audio show inline, other files as a card. Type `![[` or drag a file onto the editor. Embedded files also show up in the notes graph.
+
+### Chat
+
+- Group conversations now have admins. Adding and removing members, renaming the group and changing its description or picture are now reserved to them, so a removed member can no longer be invited back by anyone and a group always keeps someone in charge. The creator is the first admin, and the oldest member takes over when the last admin leaves.
+- On a phone, the conversation menu (pin, regenerate title) now opens from a button in the conversation header.
+
+### Search
+
+- Searching no longer depends on accents: "helene" finds "Hélène" and "reunion" finds "Réunion", in conversations, people, mail recipients, albums, notifications and file filters.
+
+### Interface
+
+- Every dialog now opens with the same header, with its icon and title.
+- Actions that only appeared on hover are now reachable on phones and tablets.
+- Module pages start loading when you rest the pointer on their link, so switching modules feels instant.
+- Online status updates use far less traffic, and only tell you about the people a page actually shows.
+
+### Security
+
+- An HTML or SVG file opened from its link now downloads instead of opening as a page, so a file cannot run code with your session. The in-app viewers still show them.
+- A bot can no longer change or cancel another member's goals and scheduled messages.
+
+### Fixes
+
+- Several emails about the same event no longer create the same calendar event two or three times under different titles.
+- The bot's typing bubble stays up for as long as the reply is being written.
+- Pinning a folder by drag works when another folder is already pinned.
+- On a phone, the browser's back button closes the properties panel instead of leaving the page.
+- A cancelled bot reply is no longer posted anyway, and "mark all read" in Mail no longer comes back unread on the next sync.
+- Very large mail folders sync again.
+- The shared poll page counts your own vote in its participant count.
+- Reopening the new task dialog while a task is still being saved no longer leaves the Save button disabled.
+- Closing the upload panel with uploads in progress asks for confirmation again.
+
 ## 0.43.0 - Uploads & Privacy
 
 ### Highlights

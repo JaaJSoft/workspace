@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 17:02+0000\n"
+"POT-Creation-Date: 2026-11-14 20:58+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -324,6 +324,41 @@ msgstr "Impossible d’annuler"
 #: ui/static/photos/ui/js/faces.js
 msgid "Put back"
 msgstr "Remis en place"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face"
+msgid_plural "%(count)s faces"
+msgstr[0] "%(count)s visage"
+msgstr[1] "%(count)s de visages"
+msgstr[2] "%(count)s visages"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s silhouette"
+msgid_plural "%(count)s silhouettes"
+msgstr[0] "%(count)s silhouette"
+msgstr[1] "%(count)s de silhouettes"
+msgstr[2] "%(count)s silhouettes"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s more comes once these are settled."
+msgid_plural "The next %(count)s come once these are settled."
+msgstr[0] "Encore %(count)s à venir une fois ceux-ci traités."
+msgstr[1] "Encore %(count)s à venir une fois ceux-ci traités."
+msgstr[2] "Encore %(count)s à venir une fois ceux-ci traités."
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"%(count)s more face of this group, closer to the rest, goes with the answer."
+msgid_plural ""
+"%(count)s more faces of this group, closer to the rest, go with the answer."
+msgstr[0] ""
+"%(count)s autre visage de ce groupe, plus proche du reste, suivra la réponse."
+msgstr[1] ""
+"%(count)s d’autres visages de ce groupe, plus proches du reste, suivront la "
+"réponse."
+msgstr[2] ""
+"%(count)s autres visages de ce groupe, plus proches du reste, suivront la "
+"réponse."
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Could not correct the faces"

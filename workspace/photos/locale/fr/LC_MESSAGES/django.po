@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 13:10+0000\n"
+"POT-Creation-Date: 2026-11-14 20:58+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -882,14 +882,6 @@ msgid "Media type"
 msgstr "Type de média"
 
 #: ui/templates/photos/ui/partials/hidden_faces.html
-#: ui/templates/photos/ui/partials/review_card.html
-#: ui/templates/photos/ui/person_faces.html
-#: ui/templates/photos/ui/person_silhouettes.html
-#, python-format
-msgid "The next %%(count)s come once these are settled."
-msgstr "Encore %%(count)s à venir une fois ceux-ci traités."
-
-#: ui/templates/photos/ui/partials/hidden_faces.html
 msgid "Hidden faces"
 msgstr "Visages masqués"
 
@@ -1001,31 +993,11 @@ msgstr "Choisir cette personne"
 
 #: ui/templates/photos/ui/partials/person_header.html
 #, python-format
-msgid "%%(count)s silhouette"
-msgstr "%%(count)s silhouette"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
-msgid "%%(count)s silhouettes"
-msgstr "%%(count)s silhouettes"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
 msgid "%(counter)s silhouette"
 msgid_plural "%(counter)s silhouettes"
 msgstr[0] "%(counter)s silhouette"
 msgstr[1] "%(counter)s de silhouettes"
 msgstr[2] "%(counter)s silhouettes"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
-msgid "%%(count)s face"
-msgstr "%%(count)s visage"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
-msgid "%%(count)s faces"
-msgstr "%%(count)s visages"
 
 #: ui/templates/photos/ui/partials/person_header.html
 #, python-format
@@ -1233,14 +1205,6 @@ msgstr "Personne, écarter"
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "Face, leave out"
 msgstr "Visage, écarter"
-
-#: ui/templates/photos/ui/partials/review_card.html
-#, python-format
-msgid ""
-"%%(count)s more faces of this group, closer to the rest, go with the answer."
-msgstr ""
-"%%(count)s autres visages de ce groupe, plus proches du reste, suivront la "
-"réponse."
 
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "Someone else? Type a name"

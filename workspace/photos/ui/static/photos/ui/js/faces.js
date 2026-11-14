@@ -961,8 +961,40 @@ async function undoClusterAnswer(cluster, answer, tokens) {
 // Spread into a board component, whose init() calls initFaceSelection().
 // The board defines facesSettled(done, action), which takes the corrected
 // faces off its own lists.
+// The counts a page of faces shows next to what it lists. Each picks its
+// plural form by the locale's rule, the way the server-rendered count does:
+// in French 0 takes the singular, so `count === 1` would get it wrong.
+function faceCountLabel(count) {
+  return interpolate(ngettext('%(count)s face', '%(count)s faces', count), { count }, true);
+}
+
+function silhouetteCountLabel(count) {
+  return interpolate(ngettext('%(count)s silhouette', '%(count)s silhouettes', count), { count }, true);
+}
+
+// The faces of a list past the ones the page holds.
+function nextFacesLabel(count) {
+  return interpolate(ngettext(
+    '%(count)s more comes once these are settled.',
+    'The next %(count)s come once these are settled.',
+    count,
+  ), { count }, true);
+}
+
+// The faces of a group past the ones its review card shows.
+function moreGroupFacesLabel(count) {
+  return interpolate(ngettext(
+    '%(count)s more face of this group, closer to the rest, goes with the answer.',
+    '%(count)s more faces of this group, closer to the rest, go with the answer.',
+    count,
+  ), { count }, true);
+}
+
 window.faceSelectionMixin = function faceSelectionMixin() {
   return {
+    faceCountLabel,
+    silhouetteCountLabel,
+    nextFacesLabel,
     selectedFaces: [],
     // null while the registry has not answered for the whole selection.
     faceActions: [],
@@ -1558,6 +1590,12 @@ window.facesReview = function facesReview() {
 
     photoLabel(count) {
       return interpolate(ngettext('%(count)s photo', '%(count)s photos', count), { count }, true);
+    },
+
+    // What is left of a card past the faces it shows.
+    remainingLabel(card) {
+      const count = card.total - card.faces.length;
+      return card.kind === 'cluster' ? moreGroupFacesLabel(count) : nextFacesLabel(count);
     },
 
     // Mirrors _review_left_label() in photos/ui/views.py.

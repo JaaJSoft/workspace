@@ -2,7 +2,6 @@
 {% load i18n %}
 
 {% block photos_content %}
-  {% translate "The next %(count)s come once these are settled." as next_label %}
   {{ cluster|json_script:"photos-cluster-data" }}
   {{ board|json_script:"photos-person-faces-data" }}
   <div
@@ -28,7 +27,7 @@
             x-show="total > faces.length"
             x-cloak
             class="mt-3 text-xs text-base-content/60"
-            x-text="interpolate('{{ next_label|escapejs }}', { count: total - faces.length }, true)"
+            x-text="nextFacesLabel(total - faces.length)"
           ></p>
         </div>
       </template>

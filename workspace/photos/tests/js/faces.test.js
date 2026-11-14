@@ -1325,3 +1325,35 @@ test('looking for new faces waits for the card being settled', async () => {
   assert.equal(component.reloads, 0);
   assert.equal(component.refreshing, false);
 });
+
+// French plural rule, as the JavaScript catalog applies it: 0 and 1 take the
+// first form. The stub returns which form was picked, so a count compared to
+// 1 by hand instead of going through ngettext shows up as the wrong form.
+function frenchFaces() {
+  return loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    ngettext: (singular, plural, count) => (count <= 1 ? `one:${singular}` : `other:${plural}`),
+  });
+}
+
+test('a board count picks its plural form by the locale rule', () => {
+  const board = frenchFaces().faceSelectionMixin();
+
+  assert.equal(board.faceCountLabel(0), 'one:0 face');
+  assert.equal(board.silhouetteCountLabel(0), 'one:0 silhouette');
+  assert.equal(board.faceCountLabel(4), 'other:4 faces');
+});
+
+test('the faces past the page say one in the singular', () => {
+  const ctx = frenchFaces();
+
+  assert.equal(ctx.faceSelectionMixin().nextFacesLabel(1), 'one:1 more comes once these are settled.');
+  const review = ctx.facesReview();
+  assert.equal(
+    review.remainingLabel({ kind: 'cluster', total: 3, faces: [{}, {}] }),
+    'one:1 more face of this group, closer to the rest, goes with the answer.',
+  );
+  assert.equal(
+    review.remainingLabel({ kind: 'outfit', total: 5, faces: [{}] }),
+    'other:The next 4 come once these are settled.',
+  );
+});

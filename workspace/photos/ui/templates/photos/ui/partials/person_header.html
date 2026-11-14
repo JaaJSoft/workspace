@@ -6,16 +6,12 @@
 {% endcomment %}
 {% load i18n %}
 {% if counted == "silhouettes" %}
-  {% translate "%(count)s silhouette" as count_one %}
-  {% translate "%(count)s silhouettes" as count_other %}
   {% blocktranslate trimmed count counter=count asvar count_label %}
     {{ counter }} silhouette
   {% plural %}
     {{ counter }} silhouettes
   {% endblocktranslate %}
 {% else %}
-  {% translate "%(count)s face" as count_one %}
-  {% translate "%(count)s faces" as count_other %}
   {% blocktranslate trimmed count counter=count asvar count_label %}
     {{ counter }} face
   {% plural %}
@@ -47,7 +43,7 @@
       <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
       <span
         class="text-sm text-base-content/60 tabular-nums"
-        x-text="interpolate(total === 1 ? '{{ count_one|escapejs }}' : '{{ count_other|escapejs }}', { count: total }, true)"
+        x-text="{% if counted == 'silhouettes' %}silhouetteCountLabel(total){% else %}faceCountLabel(total){% endif %}"
       >{{ count_label }}</span>
     </div>
     {% if cluster.person %}

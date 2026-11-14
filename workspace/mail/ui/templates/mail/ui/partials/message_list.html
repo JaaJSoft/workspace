@@ -1,18 +1,23 @@
 <!-- Message list header -->
+{% load i18n %}
+{% translate "All Inboxes" as all_inboxes_label %}
+{% translate "Messages" as messages_label %}
+{% translate "Unknown" context "mail sender" as unknown_sender_label %}
+{% translate "(no subject)" as no_subject_label %}
 <div
   class="px-4 py-3 border-b border-base-300 flex items-center gap-2 bg-base-100"
 >
   {% include "ui/partials/drawer_toggle.html" with drawer_id="mail-drawer" class="lg:hidden" %}
   <h3
     class="font-semibold text-sm flex-1 truncate"
-    x-text="unifiedInbox ? 'All Inboxes' : (selectedLabel?.name || selectedFolder?.display_name || 'Messages')"
+    x-text="unifiedInbox ? '{{ all_inboxes_label|escapejs }}' : (selectedLabel?.name || selectedFolder?.display_name || '{{ messages_label|escapejs }}')"
   ></h3>
   <button
     type="button"
     class="btn btn-ghost btn-sm lg:btn-xs btn-square"
     @click="classifyFolder()"
     :disabled="classifyingFolder"
-    title="Classify with AI"
+    title="{% translate "Classify with AI" %}"
   >
     <i
       data-lucide="sparkles"
@@ -30,7 +35,7 @@
     class="btn btn-ghost btn-sm lg:btn-xs btn-square"
     @click="refreshFolder()"
     :disabled="unifiedInbox ? accounts.some(a => syncingAccounts[a.uuid]) : syncingAccounts[selectedFolder?.account_id || selectedLabel?.account_id] === true"
-    title="Refresh"
+    title="{% translate "Refresh" %}"
   >
     <i
       data-lucide="refresh-cw"
@@ -56,7 +61,7 @@
     <input
       type="text"
       class="input input-xs w-full pl-8 pr-7 text-sm"
-      placeholder="Search messages..."
+      placeholder="{% translate "Search messages..." %}"
       x-model="filters.search"
       @input="onSearchInput()"
       @keydown.escape.stop="filters.search = ''; applyFilters()"
@@ -79,7 +84,7 @@
       :class="filters.unread ? 'btn-module' : 'btn-ghost'"
       @click="toggleFilter('unread')"
     >
-      <i data-lucide="mail" class="w-3 h-3"></i> Unread
+      <i data-lucide="mail" class="w-3 h-3"></i> {% translate "Unread" context "mail filter" %}
     </button>
     <button
       type="button"
@@ -87,7 +92,7 @@
       :class="filters.starred ? 'btn-warning' : 'btn-ghost'"
       @click="toggleFilter('starred')"
     >
-      <i data-lucide="star" class="w-3 h-3"></i> Starred
+      <i data-lucide="star" class="w-3 h-3"></i> {% translate "Starred" context "mail filter" %}
     </button>
     <button
       type="button"
@@ -95,13 +100,13 @@
       :class="filters.attachments ? 'btn-module' : 'btn-ghost'"
       @click="toggleFilter('attachments')"
     >
-      <i data-lucide="paperclip" class="w-3 h-3"></i> Attachments
+      <i data-lucide="paperclip" class="w-3 h-3"></i> {% translate "Attachments" %}
     </button>
     <div class="flex-1"></div>
     <span
       class="text-xs text-base-content/50"
       x-show="_hasActiveFilters()"
-      x-text="totalMessages + ' result' + (totalMessages !== 1 ? 's' : '')"
+      x-text="countLabel('results', totalMessages)"
     ></span>
     <button
       type="button"
@@ -109,7 +114,7 @@
       x-show="_hasActiveFilters()"
       @click="clearFilters()"
     >
-      Clear
+      {% translate "Clear" %}
     </button>
   </div>
 </div>
@@ -122,7 +127,7 @@
 >
   <span
     class="text-base-content/60 mr-1"
-    x-text="selectedMessages.length + ' selected'"
+    x-text="countLabel('selected', selectedMessages.length)"
   ></span>
   <span
     class="loading loading-spinner loading-xs text-module"
@@ -134,7 +139,7 @@
     class="btn btn-ghost btn-xs"
     @click="batchAction('mark_read')"
     :disabled="batchInProgress"
-    title="Mark read"
+    title="{% translate "Mark read" %}"
   >
     <i data-lucide="mail-open" class="w-3.5 h-3.5"></i>
   </button>
@@ -143,7 +148,7 @@
     class="btn btn-ghost btn-xs"
     @click="batchAction('mark_unread')"
     :disabled="batchInProgress"
-    title="Mark unread"
+    title="{% translate "Mark unread" %}"
   >
     <i data-lucide="mail" class="w-3.5 h-3.5"></i>
   </button>
@@ -152,7 +157,7 @@
     class="btn btn-ghost btn-xs"
     @click="batchAction('star')"
     :disabled="batchInProgress"
-    title="Star"
+    title="{% translate "Star" %}"
   >
     <i data-lucide="star" class="w-3.5 h-3.5"></i>
   </button>
@@ -160,7 +165,7 @@
     type="button"
     class="btn btn-ghost btn-xs"
     :disabled="batchInProgress"
-    title="Move to"
+    title="{% translate "Move to" %}"
     @click="_showMoveDialog([...selectedMessages])"
   >
     <i data-lucide="folder-input" class="w-3.5 h-3.5"></i>
@@ -170,7 +175,7 @@
     class="btn btn-ghost btn-xs text-error"
     @click="batchAction('delete')"
     :disabled="batchInProgress"
-    title="Delete"
+    title="{% translate "Delete" %}"
   >
     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
   </button>
@@ -181,7 +186,7 @@
     @click="selectedMessages = []"
     :disabled="batchInProgress"
   >
-    Clear
+    {% translate "Clear" %}
   </button>
 </div>
 
@@ -199,7 +204,7 @@
   >
     <div class="text-center text-base-content/40 py-12">
       <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
-      <p class="text-sm">No messages</p>
+      <p class="text-sm">{% translate "No messages" %}</p>
     </div>
   </div>
 
@@ -236,7 +241,7 @@
           <span
             class="text-sm truncate flex-1"
             :class="msg.is_read ? 'text-base-content/70' : 'text-base-content'"
-            x-html="highlightSearch(cleanName(msg.from_address?.name) || msg.from_address?.email || 'Unknown')"
+            x-html="highlightSearch(cleanName(msg.from_address?.name) || msg.from_address?.email || '{{ unknown_sender_label|escapejs }}')"
           ></span>
           <span
             class="text-xs text-base-content/50 shrink-0"
@@ -247,7 +252,7 @@
         <div
           class="text-sm truncate"
           :class="msg.is_read ? 'text-base-content/60' : ''"
-          x-html="highlightSearch(msg.subject || '(no subject)')"
+          x-html="highlightSearch(msg.subject || '{{ no_subject_label|escapejs }}')"
         ></div>
         <!-- Label badges -->
         <div
@@ -309,7 +314,7 @@
       @click="loadMoreMessages()"
       :disabled="loadingMoreMessages"
     >
-      <span x-show="!loadingMoreMessages">Load more</span>
+      <span x-show="!loadingMoreMessages">{% translate "Load more" %}</span>
       <span
         x-show="loadingMoreMessages"
         class="loading loading-spinner loading-xs"

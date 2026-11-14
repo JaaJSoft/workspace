@@ -22,10 +22,10 @@ window.mailComposeMixin = function mailComposeMixin() {
         const saved = this._getLocalStorageDraft();
         if (saved && ((saved.to && saved.to.length) || saved.subject || saved.body)) {
           const restore = await AppDialog.confirm({
-            title: 'Restore draft',
-            message: 'You have an unsaved draft. Would you like to restore it?',
-            okLabel: 'Restore',
-            cancelLabel: 'Discard',
+            title: gettext('Restore draft'),
+            message: gettext('You have an unsaved draft. Would you like to restore it?'),
+            okLabel: gettext('Restore'),
+            cancelLabel: gettext('Discard'),
             icon: 'file-edit',
             iconClass: 'bg-info/10 text-info',
           });
@@ -86,7 +86,10 @@ window.mailComposeMixin = function mailComposeMixin() {
       this.showCompose({
         to: from,
         subject,
-        body: `\n\n---\nOn ${this.formatFullDate(msg.date)}, ${msg.from_address?.name || from} wrote:\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
+        body: '\n\n---\n' + interpolate(gettext('On %(date)s, %(sender)s wrote:'), {
+          date: this.formatFullDate(msg.date),
+          sender: msg.from_address?.name || from,
+        }, true) + `\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
         account_id: msg.account_id,
         is_reply: true,
         reply_message_id: msg.uuid,
@@ -107,7 +110,10 @@ window.mailComposeMixin = function mailComposeMixin() {
         to: [...new Set(toAddrs)],
         cc: [...new Set(ccAddrs)],
         subject,
-        body: `\n\n---\nOn ${this.formatFullDate(msg.date)}, ${msg.from_address?.name || from} wrote:\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
+        body: '\n\n---\n' + interpolate(gettext('On %(date)s, %(sender)s wrote:'), {
+          date: this.formatFullDate(msg.date),
+          sender: msg.from_address?.name || from,
+        }, true) + `\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
         account_id: msg.account_id,
         is_reply: true,
         reply_message_id: msg.uuid,
@@ -118,7 +124,9 @@ window.mailComposeMixin = function mailComposeMixin() {
       const subject = msg.subject?.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject || ''}`;
       this.showCompose({
         subject,
-        body: `\n\n---\nForwarded message from ${msg.from_address?.name || msg.from_address?.email || 'Unknown'}:\n\n${msg.body_text || msg.snippet || ''}`,
+        body: '\n\n---\n' + interpolate(gettext('Forwarded message from %(sender)s:'), {
+          sender: msg.from_address?.name || msg.from_address?.email || gettext('Unknown'),
+        }, true) + `\n\n${msg.body_text || msg.snippet || ''}`,
         account_id: msg.account_id,
         is_reply: true,
       });
@@ -245,7 +253,11 @@ window.mailComposeMixin = function mailComposeMixin() {
     },
 
     _acSectionLabel(kind) {
-      return { person: 'Contacts', account: 'Directory', history: 'Recent' }[kind];
+      return {
+        person: gettext('Contacts'),
+        account: gettext('Directory'),
+        history: pgettext('recipient suggestions from past mail', 'Recent'),
+      }[kind];
     },
 
     // Promote a directory account or a history correspondent to a person, or
@@ -260,19 +272,19 @@ window.mailComposeMixin = function mailComposeMixin() {
       try {
         const res = await this._fetch('/api/v1/people/promote', { method: 'POST', body });
         if (!res.ok) {
-          AppAlert.error('Could not add to contacts');
+          AppAlert.error(gettext('Could not add to contacts'));
           return;
         }
         const person = await res.json();
         row.person_uuid = person.uuid;
-        const open = [{ label: 'Open', onClick: () => window.open(this._acPersonUrl(row), '_blank', 'noopener') }];
+        const open = [{ label: gettext('Open'), onClick: () => window.open(this._acPersonUrl(row), '_blank', 'noopener') }];
         if (res.status === 201) {
-          AppAlert.success(`${person.display_name} added to contacts`, { actions: open });
+          AppAlert.success(interpolate(gettext('%(name)s added to contacts'), { name: person.display_name }, true), { actions: open });
         } else {
-          AppAlert.info(`${person.display_name} is already in your contacts`, { actions: open });
+          AppAlert.info(interpolate(gettext('%(name)s is already in your contacts'), { name: person.display_name }, true), { actions: open });
         }
       } catch (e) {
-        AppAlert.error('Could not add to contacts');
+        AppAlert.error(gettext('Could not add to contacts'));
       } finally {
         row.promoting = false;
       }
@@ -293,7 +305,7 @@ window.mailComposeMixin = function mailComposeMixin() {
       if (this._tagInput.bcc) this.addTag('bcc', this._tagInput.bcc);
 
       if (!this.compose.to.length) {
-        this.compose.error = 'Please add at least one recipient';
+        this.compose.error = gettext('Please add at least one recipient');
         return;
       }
 
@@ -331,13 +343,13 @@ window.mailComposeMixin = function mailComposeMixin() {
           if (draftId) this._deleteDraft(draftId);
         } else {
           const data = await res.json().catch(() => ({}));
-          this.compose.error = data.detail || data.error || 'Failed to send email';
+          this.compose.error = data.detail || data.error || gettext('Failed to send email');
         }
       } catch (e) {
         // Network failure (offline, DNS, CORS, abort) - fetch rejects without
         // ever touching res.ok. Without this catch, sending=true would stick
         // and lock the dialog spinner indefinitely.
-        this.compose.error = 'Failed to send email';
+        this.compose.error = gettext('Failed to send email');
       } finally {
         this.compose.sending = false;
       }

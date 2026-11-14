@@ -171,7 +171,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
                 :class="canGoForward ? 'text-base-content' : 'text-base-content/20'"
-                title="{% translate 'Forward' %}"
+                title="{% translate 'Forward' context 'history navigation' %}"
                 :disabled="!canGoForward"
                 @click="window.folderNav.forward()"
               >

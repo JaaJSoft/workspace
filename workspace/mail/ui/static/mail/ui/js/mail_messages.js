@@ -301,9 +301,9 @@ window.mailMessagesMixin = function mailMessagesMixin() {
 
     async deleteMessage(msg) {
       const ok = await AppDialog.confirm({
-        title: 'Delete message',
-        message: 'Move this message to trash?',
-        okLabel: 'Delete',
+        title: gettext('Delete message'),
+        message: gettext('Move this message to trash?'),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

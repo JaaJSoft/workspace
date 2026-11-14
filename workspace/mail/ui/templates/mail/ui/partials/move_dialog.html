@@ -5,23 +5,30 @@ destination folders, from getMoveTargetFolders), moveSelectedId, moveMsgUuids,
 moveCount. The folder rows are the same _folder_options.html partial used by the
 rules folder dropdown, so the picker looks identical everywhere.
 {% endcomment %}
+{% load i18n %}
+{% translate "Select a destination folder." as move_one_text %}
+{% translate "Move %(count)s messages to:" as move_many_text %}
 <dialog id="mail-move-dialog" class="modal">
   <div class="modal-box max-w-sm">
-    {% include "ui/partials/dialog_header.html" with icon="folder-input" title="Move to" subtitle_expr="moveCount === 1 ? 'Select a destination folder.' : `Move ${moveCount} messages to:`" only %}
+    {% with one_js=move_one_text|escapejs many_js=move_many_text|escapejs %}
+      {% with move_subtitle="moveCount === 1 ? '"|add:one_js|add:"' : interpolate('"|add:many_js|add:"', { count: moveCount }, true)" %}
+        {% include "ui/partials/dialog_header.html" with icon="folder-input" title=_("Move to") subtitle_expr=move_subtitle only %}
+      {% endwith %}
+    {% endwith %}
     {% include "mail/ui/partials/_folder_list.html" with model="moveSelectedId" folders="moveTargets" %}
     <div class="modal-action">
-      <button type="button" class="btn btn-ghost btn-sm" @click="moveCancel()">Cancel</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="moveCancel()">{% translate "Cancel" %}</button>
       <button
         type="button"
         class="btn btn-module btn-sm"
         :disabled="!moveSelectedId"
         @click="moveConfirm()"
       >
-        Move
+        {% translate "Move" %}
       </button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

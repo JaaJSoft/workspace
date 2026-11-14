@@ -1,5 +1,6 @@
 import logging
 
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -88,7 +89,7 @@ class MailAttachmentSaveToFilesView(APIView):
             )
         except MailAttachment.DoesNotExist:
             return Response(
-                {"detail": "Attachment not found."},
+                {"detail": _("Attachment not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -109,7 +110,7 @@ class MailAttachmentSaveToFilesView(APIView):
                 )
             except File.DoesNotExist:
                 return Response(
-                    {"detail": "Folder not found."},
+                    {"detail": _("Folder not found.")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -138,7 +139,7 @@ class MailAttachmentSaveToFilesView(APIView):
                 )
         except FileNotFoundError:
             return Response(
-                {"detail": "Attachment not found."},
+                {"detail": _("Attachment not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         except OSError:
@@ -149,6 +150,6 @@ class MailAttachmentSaveToFilesView(APIView):
             raise
 
         return Response(
-            {"detail": "File saved.", "file_uuid": str(file_obj.uuid)},
+            {"detail": _("File saved."), "file_uuid": str(file_obj.uuid)},
             status=status.HTTP_201_CREATED,
         )

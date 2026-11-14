@@ -149,7 +149,7 @@ function mailApp() {
     // Each mixin returns an object literal with its own methods. They all
     // share the same `this` at runtime — state stays in this root object.
     ...window.attachmentInputMixin({
-      pickerMessage: 'Select files to attach to the email.',
+      pickerMessage: gettext('Select files to attach to the email.'),
     }),
     ...mailAccountsMixin(),
     ...mailFoldersMixin(),
@@ -243,7 +243,7 @@ function mailApp() {
           this.syncAccount(data.account.uuid);
 
         } else if (data?.type === 'oauth2-error') {
-          this.accountError = data.error || 'OAuth2 connection failed';
+          this.accountError = data.error || gettext('OAuth2 connection failed');
         }
       };
 
@@ -423,6 +423,17 @@ function mailApp() {
       }
     },
 
+    countLabel(kind, count) {
+      const n = count || 0;
+      const forms = {
+        results: ngettext('%(count)s result', '%(count)s results', n),
+        selected: npgettext('messages', '%(count)s selected', '%(count)s selected', n),
+        messages: ngettext('%(count)s message', '%(count)s messages', n),
+        unread: npgettext('messages', '%(count)s unread', '%(count)s unread', n),
+      };
+      return interpolate(forms[kind], { count: n }, true);
+    },
+
     formatDate(dateStr) {
       if (!dateStr) return '';
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
@@ -433,17 +444,17 @@ function mailApp() {
         ? window.userTzDayKey(d) === window.userTzDayKey(now)
         : d.getDate() === now.getDate();
       if (diff < 86400000 && sameDay) {
-        return d.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleTimeString(window.getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
       }
       if (diff < 604800000) {
-        return d.toLocaleDateString([], { timeZone: tz, weekday: 'short' });
+        return d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, weekday: 'short' });
       }
       const opts = { timeZone: tz, month: 'short', day: 'numeric' };
       const yearKey = (x) => window.userTzDayKey
         ? window.userTzDayKey(x).slice(0, 4)
         : String(x.getFullYear());
       if (yearKey(d) !== yearKey(now)) opts.year = 'numeric';
-      return d.toLocaleDateString([], opts);
+      return d.toLocaleDateString(window.getUserLocale(), opts);
     },
 
     // An all-day event's start is a bare 'YYYY-MM-DD' day label: it names a
@@ -459,7 +470,7 @@ function mailApp() {
     formatFullDate(dateStr) {
       if (!dateStr) return '';
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      return new Date(dateStr).toLocaleString([], {
+      return new Date(dateStr).toLocaleString(window.getUserLocale(), {
         timeZone: tz,
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit',

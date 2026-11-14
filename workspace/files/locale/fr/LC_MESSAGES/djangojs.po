@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:04+0000\n"
+"POT-Creation-Date: 2026-11-13 16:46+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -32,10 +32,6 @@ msgstr "Déplacer « %(name)s » dans la corbeille ?"
 #: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
 msgid "Move to trash"
 msgstr "Mettre à la corbeille"
-
-#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/file_actions.js
-msgid "Failed to create folder"
-msgstr "Impossible de créer le dossier"
 
 #: ui/static/files/ui/js/browser.js
 msgid "File name is required"

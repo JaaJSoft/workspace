@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:14+0000\n"
+"POT-Creation-Date: 2026-11-13 16:46+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -234,6 +234,10 @@ msgid "AI"
 msgstr "IA"
 
 #: vocabulary.py
+msgid "Add label"
+msgstr "Ajouter une étiquette"
+
+#: vocabulary.py
 msgid "All day"
 msgstr "Toute la journée"
 
@@ -318,8 +322,20 @@ msgid "Columns"
 msgstr "Colonnes"
 
 #: vocabulary.py
+msgid "Command palette"
+msgstr "Palette de commandes"
+
+#: vocabulary.py
 msgid "Comments"
 msgstr "Commentaires"
+
+#: vocabulary.py
+msgid "Confirm before delete"
+msgstr "Confirmer avant de supprimer"
+
+#: vocabulary.py
+msgid "Contacts"
+msgstr "Contacts"
 
 #: vocabulary.py
 msgid "Continue"
@@ -354,8 +370,20 @@ msgid "Dashboard"
 msgstr "Tableau de bord"
 
 #: vocabulary.py
+msgid "Date"
+msgstr "Date"
+
+#: vocabulary.py
 msgid "Default"
 msgstr "Par défaut"
+
+#: vocabulary.py
+msgid "Delete folder"
+msgstr "Supprimer le dossier"
+
+#: vocabulary.py
+msgid "Delete label"
+msgstr "Supprimer l’étiquette"
 
 #: vocabulary.py
 msgid "Delete message"
@@ -398,6 +426,10 @@ msgid "Failed to copy link"
 msgstr "Impossible de copier le lien"
 
 #: vocabulary.py
+msgid "Failed to create folder"
+msgstr "Impossible de créer le dossier"
+
+#: vocabulary.py
 msgid "Favorites"
 msgstr "Favoris"
 
@@ -426,6 +458,10 @@ msgid "Folders"
 msgstr "Dossiers"
 
 #: vocabulary.py
+msgid "Forward"
+msgstr "Transférer"
+
+#: vocabulary.py
 msgid "From"
 msgstr "De"
 
@@ -444,6 +480,14 @@ msgstr "Groupe"
 #: vocabulary.py
 msgid "Groups"
 msgstr "Groupes"
+
+#: vocabulary.py
+msgid "Hidden folders"
+msgstr "Dossiers masqués"
+
+#: vocabulary.py
+msgid "Hide"
+msgstr "Masquer"
 
 #: vocabulary.py
 msgid "Hide password"
@@ -538,12 +582,36 @@ msgid "More actions"
 msgstr "Plus d’actions"
 
 #: vocabulary.py
+msgid "Move"
+msgstr "Déplacer"
+
+#: vocabulary.py
+msgid "Move failed"
+msgstr "Échec du déplacement"
+
+#: vocabulary.py
+msgid "Move to"
+msgstr "Déplacer vers"
+
+#: vocabulary.py
+msgid "Move to folder"
+msgstr "Déplacer vers un dossier"
+
+#: vocabulary.py
+msgid "Move to..."
+msgstr "Déplacer vers..."
+
+#: vocabulary.py
 msgid "Name"
 msgstr "Nom"
 
 #: vocabulary.py
 msgid "Navigation"
 msgstr "Navigation"
+
+#: vocabulary.py
+msgid "Network error."
+msgstr "Erreur réseau."
 
 #: vocabulary.py
 msgid "Network error. Please try again."
@@ -556,6 +624,10 @@ msgstr "Jamais"
 #: vocabulary.py
 msgid "New folder"
 msgstr "Nouveau dossier"
+
+#: vocabulary.py
+msgid "New subfolder"
+msgstr "Nouveau sous-dossier"
 
 #: vocabulary.py
 msgid "New tag"
@@ -592,6 +664,10 @@ msgstr "Notifications"
 #: vocabulary.py
 msgid "Open"
 msgstr "Ouvrir"
+
+#: vocabulary.py
+msgid "Open in People"
+msgstr "Ouvrir dans Personnes"
 
 #: vocabulary.py
 msgid "Pause"
@@ -632,6 +708,14 @@ msgstr "Recharger"
 #: vocabulary.py
 msgid "Remove member"
 msgstr "Retirer le membre"
+
+#: vocabulary.py
+msgid "Remove"
+msgstr "Enlever"
+
+#: vocabulary.py
+msgid "Remove label"
+msgstr "Retirer l’étiquette"
 
 #: vocabulary.py
 msgid "Rename"
@@ -704,6 +788,10 @@ msgstr "Afficher"
 #: vocabulary.py
 msgid "Show password"
 msgstr "Afficher le mot de passe"
+
+#: vocabulary.py
+msgid "Show this help"
+msgstr "Afficher cette aide"
 
 #: vocabulary.py
 msgid "Sign In"

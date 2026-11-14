@@ -22,7 +22,7 @@ window.mailAiMixin = function mailAiMixin() {
         });
         if (!resp.ok) {
           const err = await resp.json();
-          throw new Error(err.detail || 'Failed to start summarization');
+          throw new Error(err.detail || gettext('Failed to start summarization'));
         }
         const task = await resp.json();
         if (!summary.isCurrent()) return;
@@ -48,7 +48,7 @@ window.mailAiMixin = function mailAiMixin() {
         if (++attempts > maxAttempts) {
           stop();
           this.aiSummarizing = false;
-          AppDialog.error({ message: 'AI task timed out' });
+          AppDialog.error({ message: gettext('AI task timed out') });
           return;
         }
         try {
@@ -62,7 +62,7 @@ window.mailAiMixin = function mailAiMixin() {
             this.aiSummarizing = false;
             stop();
           } else if (task.status === 'failed') {
-            AppDialog.error({ message: task.error || 'AI task failed' });
+            AppDialog.error({ message: task.error || gettext('AI task failed') });
             this.aiSummarizing = false;
             stop();
           }
@@ -109,7 +109,7 @@ window.mailAiMixin = function mailAiMixin() {
         });
         if (!resp.ok) {
           const err = await resp.json();
-          throw new Error(err.detail || 'Failed to start AI composition');
+          throw new Error(err.detail || gettext('Failed to start AI composition'));
         }
         const task = await resp.json();
         this._pollAIComposeTask(task.uuid);
@@ -137,7 +137,7 @@ window.mailAiMixin = function mailAiMixin() {
         if (++attempts > maxAttempts) {
           stop();
           this.aiComposing = false;
-          AppDialog.error({ message: 'AI composition timed out' });
+          AppDialog.error({ message: gettext('AI composition timed out') });
           return;
         }
         try {
@@ -158,7 +158,7 @@ window.mailAiMixin = function mailAiMixin() {
             this.aiComposePrompt = '';
             stop();
           } else if (task.status === 'failed') {
-            AppDialog.error({ message: task.error || 'AI composition failed' });
+            AppDialog.error({ message: task.error || gettext('AI composition failed') });
             this.aiComposing = false;
             stop();
           }

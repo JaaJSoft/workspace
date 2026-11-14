@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -105,13 +106,13 @@ class MailFolder(models.Model):
     """IMAP folder synced from a mail account."""
 
     class FolderType(models.TextChoices):
-        INBOX = "inbox", "Inbox"
-        SENT = "sent", "Sent"
-        DRAFTS = "drafts", "Drafts"
-        TRASH = "trash", "Trash"
-        SPAM = "spam", "Spam"
-        ARCHIVE = "archive", "Archive"
-        OTHER = "other", "Other"
+        INBOX = "inbox", _("Inbox")
+        SENT = "sent", _("Sent")
+        DRAFTS = "drafts", _("Drafts")
+        TRASH = "trash", _("Trash")
+        SPAM = "spam", _("Spam")
+        ARCHIVE = "archive", _("Archive")
+        OTHER = "other", _("Other")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     account = models.ForeignKey(

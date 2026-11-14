@@ -328,16 +328,16 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
     async _createFolder(accountUuid, parentFolder) {
       const isSubfolder = parentFolder && parentFolder.folder_type === 'other';
-      const title = isSubfolder ? 'New subfolder' : 'New folder';
+      const title = isSubfolder ? gettext('New subfolder') : gettext('New folder');
       const message = isSubfolder
-        ? `Create a subfolder in "${parentFolder.display_name}".`
-        : 'Enter a name for the new folder.';
+        ? interpolate(gettext('Create a subfolder in "%(name)s".'), { name: parentFolder.display_name }, true)
+        : gettext('Enter a name for the new folder.');
 
       const name = await AppDialog.prompt({
         title,
         message,
-        placeholder: 'Folder name',
-        okLabel: 'Create',
+        placeholder: gettext('Folder name'),
+        okLabel: gettext('Create'),
         okClass: 'btn-module',
         icon: 'folder-plus',
         iconClass: 'bg-module/15 text-module',
@@ -363,7 +363,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to create folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to create folder') });
       }
     },
 
@@ -371,9 +371,9 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       if (folder.folder_type !== 'other') return;
 
       const name = await AppDialog.prompt({
-        title: 'Rename folder',
+        title: gettext('Rename folder'),
         value: folder.display_name,
-        okLabel: 'Rename',
+        okLabel: gettext('Rename'),
         okClass: 'btn-module',
         icon: 'pencil',
         iconClass: 'bg-module/15 text-module',
@@ -397,7 +397,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to rename folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to rename folder') });
       }
     },
 
@@ -405,9 +405,13 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       if (folder.folder_type !== 'other') return;
 
       const ok = await AppDialog.confirm({
-        title: 'Delete folder',
-        message: `Delete "${folder.display_name}" and all its messages? This cannot be undone.`,
-        okLabel: 'Delete',
+        title: gettext('Delete folder'),
+        message: interpolate(
+          gettext('Delete "%(name)s" and all its messages? This cannot be undone.'),
+          { name: folder.display_name },
+          true,
+        ),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
@@ -434,7 +438,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to delete folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to delete folder') });
       }
     },
 
@@ -457,7 +461,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       }
 
       // Build target options: root + eligible folders
-      const options = [{ label: '/ (Root)', value: '' }];
+      const options = [{ label: gettext('/ (Root)'), value: '' }];
       const tree = this.getFolderTree(accountUuid);
       const flatten = (nodes, depth) => {
         for (const node of nodes) {
@@ -483,11 +487,11 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       const currentParent = lastSep > 0 ? folder.name.substring(0, lastSep) : '';
 
       const selected = await AppDialog.select({
-        title: 'Move folder',
-        message: `Move "${folder.display_name}" to:`,
+        title: gettext('Move folder'),
+        message: interpolate(gettext('Move "%(name)s" to:'), { name: folder.display_name }, true),
         options,
         value: currentParent,
-        okLabel: 'Move',
+        okLabel: gettext('Move'),
         okClass: 'btn-module',
         icon: 'folder-input',
         iconClass: 'bg-module/15 text-module',
@@ -510,7 +514,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to move folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to move folder') });
       }
     },
 
@@ -519,9 +523,13 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       if (folder.folder_type !== 'other') return;
 
       const ok = await AppDialog.confirm({
-        title: 'Hide folder',
-        message: `Hide "${folder.display_name}"? It will no longer appear in the sidebar or search results. You can restore it from the account menu.`,
-        okLabel: 'Hide',
+        title: gettext('Hide folder'),
+        message: interpolate(
+          gettext('Hide "%(name)s"? It will no longer appear in the sidebar or search results. You can restore it from the account menu.'),
+          { name: folder.display_name },
+          true,
+        ),
+        okLabel: gettext('Hide'),
         okClass: 'btn-module',
         icon: 'eye-off',
         iconClass: 'bg-module/15 text-module',
@@ -548,7 +556,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
 
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to hide folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to hide folder') });
       }
     },
 
@@ -562,15 +570,19 @@ window.mailFoldersMixin = function mailFoldersMixin() {
           value: f.uuid,
         }));
       if (options.length === 0) {
-        await AppDialog.error({ message: 'This account has no other folder to merge into.' });
+        await AppDialog.error({ message: gettext('This account has no other folder to merge into.') });
         return;
       }
 
       const target = await AppDialog.select({
-        title: 'Merge folder',
-        message: `Mail in "${folder.display_name}" will show up in the folder you pick, and new mail will be filed there. Nothing moves on the server.`,
+        title: gettext('Merge folder'),
+        message: interpolate(
+          gettext('Mail in "%(name)s" will show up in the folder you pick, and new mail will be filed there. Nothing moves on the server.'),
+          { name: folder.display_name },
+          true,
+        ),
         options,
-        okLabel: 'Merge',
+        okLabel: gettext('Merge'),
         okClass: 'btn-module',
         icon: 'git-merge',
         iconClass: 'bg-module/15 text-module',
@@ -593,7 +605,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to merge folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to merge folder') });
       }
     },
 
@@ -629,7 +641,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to unmerge folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to unmerge folder') });
       }
     },
 
@@ -649,7 +661,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to update folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to update folder') });
       }
     },
 
@@ -677,7 +689,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        await AppDialog.error({ message: data.detail || 'Failed to restore folder' });
+        await AppDialog.error({ message: data.detail || gettext('Failed to restore folder') });
       }
     },
 
@@ -746,7 +758,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       // Custom drag image label
       const count = ids.length;
       const label = document.createElement('div');
-      label.textContent = count === 1 ? '1 message' : `${count} messages`;
+      label.textContent = interpolate(ngettext('%(count)s message', '%(count)s messages', count), { count }, true);
       label.className = 'badge badge-module badge-sm';
       label.style.position = 'absolute';
       label.style.top = '-9999px';

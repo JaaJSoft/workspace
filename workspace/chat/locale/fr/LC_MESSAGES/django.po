@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:14+0000\n"
+"POT-Creation-Date: 2026-11-13 16:46+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1023,10 +1023,6 @@ msgstr "Expéditeur"
 #: ui/templates/chat/ui/partials/search_panel.html
 msgid "Anyone"
 msgstr "Tout le monde"
-
-#: ui/templates/chat/ui/partials/search_panel.html
-msgid "Date"
-msgstr "Date"
 
 #: ui/templates/chat/ui/partials/search_panel.html
 msgid "Any time"

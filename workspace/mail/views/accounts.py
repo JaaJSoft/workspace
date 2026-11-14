@@ -1,5 +1,6 @@
 import logging
 
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -39,7 +40,7 @@ class MailAutodiscoverView(APIView):
         email = (request.data.get("email") or "").strip()
         if not email or "@" not in email:
             return Response(
-                {"detail": "A valid email address is required"},
+                {"detail": _("A valid email address is required")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -49,7 +50,7 @@ class MailAutodiscoverView(APIView):
         if servers is None:
             logger.info("Autodiscover found nothing for domain %s", scrub(domain))
             return Response(
-                {"detail": "Could not auto-detect settings for this domain"},
+                {"detail": _("Could not auto-detect settings for this domain")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -167,11 +168,11 @@ class MailAccountTestView(APIView):
             {
                 "imap": {
                     "success": imap_ok,
-                    "error": None if imap_ok else "Connection failed",
+                    "error": None if imap_ok else _("Connection failed"),
                 },
                 "smtp": {
                     "success": smtp_ok,
-                    "error": None if smtp_ok else "Connection failed",
+                    "error": None if smtp_ok else _("Connection failed"),
                 },
             }
         )
@@ -197,7 +198,7 @@ class MailAccountSyncView(APIView):
 
         if not account.is_active:
             return Response(
-                {"detail": "Account is inactive"}, status=status.HTTP_409_CONFLICT
+                {"detail": _("Account is inactive")}, status=status.HTTP_409_CONFLICT
             )
 
         from ..tasks import sync_single_account
@@ -212,7 +213,7 @@ class MailAccountSyncView(APIView):
         except Exception:
             logger.exception("Failed to queue sync for %s", scrub(account.email))
             return Response(
-                {"status": "error", "error": "Sync could not be queued"},
+                {"status": "error", "error": _("Sync could not be queued")},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         return Response(

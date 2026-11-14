@@ -3,6 +3,7 @@ import logging
 from django.db import transaction
 from django.db.models import Count, Prefetch
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -297,7 +298,7 @@ class MailBatchActionView(APIView):
                 )
             except MailFolder.DoesNotExist:
                 return Response(
-                    {"detail": "Target folder not found"},
+                    {"detail": _("Target folder not found")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
             if target_folder.account.owner != request.user:

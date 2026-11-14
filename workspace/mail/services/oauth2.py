@@ -10,6 +10,10 @@ import time
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.requests_client import OAuth2Session
 from django.conf import settings
+from django.utils import translation
+from django.utils.translation import gettext
+
+from workspace.users.services.settings import get_user_language
 
 logger = logging.getLogger(__name__)
 
@@ -256,11 +260,15 @@ def _handle_revoked_token(account):
 
     from workspace.notifications.services.notifications import notify
 
-    notify(
-        recipient=account.owner,
-        origin="mail",
-        title=f"Mail account {account.email} disconnected",
-        body="Authorization was revoked or expired. Please reconnect your account.",
-        url="/mail",
-        priority="high",
-    )
+    with translation.override(get_user_language(account.owner)):
+        notify(
+            recipient=account.owner,
+            origin="mail",
+            title=gettext("Mail account %(email)s disconnected")
+            % {"email": account.email},
+            body=gettext(
+                "Authorization was revoked or expired. Please reconnect your account."
+            ),
+            url="/mail",
+            priority="high",
+        )

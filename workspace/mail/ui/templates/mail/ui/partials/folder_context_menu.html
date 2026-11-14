@@ -6,21 +6,34 @@ Everything below the first separator only applies to user-created folders:
 the IMAP special folders (Inbox, Sent, ...) can't be renamed, moved, hidden
 or deleted, hence the shared `folder_type !== 'other'` disabling.
 {% endcomment %}
+{% load i18n %}
+{% translate "Enable auto-labeling" as enable_classify_label %}
+{% translate "Disable auto-labeling" as disable_classify_label %}
+{% translate "New subfolder" as new_subfolder_label %}
+{% translate "New folder" as new_folder_label %}
 <ul class="menu menu-sm p-0 w-full">
-  {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label="Refresh" click="folderCtxAction('refresh')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="mail-check" label="Mark all as read" click="folderCtxAction('mark_all_read')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="palette" label="Change icon" click="folderCtxAction('change_icon')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="tags" label_expr="folderCtx.folder?.ai_classify_disabled ? 'Enable auto-labeling' : 'Disable auto-labeling'" click="folderCtxAction('toggle_classify')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="refresh-cw" label=_("Refresh") click="folderCtxAction('refresh')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="mail-check" label=_("Mark all as read") click="folderCtxAction('mark_all_read')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="palette" label=_("Change icon") click="folderCtxAction('change_icon')" only %}
+  {% with enable_js=enable_classify_label|escapejs disable_js=disable_classify_label|escapejs %}
+    {% with classify_expr="folderCtx.folder?.ai_classify_disabled ? '"|add:enable_js|add:"' : '"|add:disable_js|add:"'" %}
+      {% include "ui/partials/context_menu_item.html" with icon="tags" label_expr=classify_expr click="folderCtxAction('toggle_classify')" only %}
+    {% endwith %}
+  {% endwith %}
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label_expr="folderCtx.folder?.folder_type === 'other' ? 'New subfolder' : 'New folder'" click="folderCtxAction('create')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Rename" click="folderCtxAction('rename')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="folder-input" label="Move to..." click="folderCtxAction('move')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="eye-off" label="Hide" click="folderCtxAction('hide')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="git-merge" label="Merge into..." click="folderCtxAction('merge')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="git-pull-request-arrow" label="Merged folders..." click="folderCtxAction('merged_folders')" show="(folderCtx.folder?.aliases || []).length > 0" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="folderCtxAction('delete')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% with subfolder_js=new_subfolder_label|escapejs folder_js=new_folder_label|escapejs %}
+    {% with create_expr="folderCtx.folder?.folder_type === 'other' ? '"|add:subfolder_js|add:"' : '"|add:folder_js|add:"'" %}
+      {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label_expr=create_expr click="folderCtxAction('create')" only %}
+    {% endwith %}
+  {% endwith %}
+  {% include "ui/partials/context_menu_item.html" with icon="pencil" label=_("Rename") click="folderCtxAction('rename')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="folder-input" label=_("Move to...") click="folderCtxAction('move')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="eye-off" label=_("Hide") click="folderCtxAction('hide')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="git-merge" label=_("Merge into...") click="folderCtxAction('merge')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="git-pull-request-arrow" label=_("Merged folders...") click="folderCtxAction('merged_folders')" show="(folderCtx.folder?.aliases || []).length > 0" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label=_("Delete") tone="error" click="folderCtxAction('delete')" class_expr="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''" only %}
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="cloud-download" label="Sync account" click="folderCtxAction('sync')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="cloud-download" label=_("Sync account") click="folderCtxAction('sync')" only %}
 </ul>

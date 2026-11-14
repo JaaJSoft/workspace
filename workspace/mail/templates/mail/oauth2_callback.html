@@ -1,10 +1,15 @@
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
+{% translate "Account connected! You can close this window." as connected_text %}
+{% translate "Error: %(error)s" as error_text %}
+{% translate "Unknown error" as unknown_error_text %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ LANGUAGE_CODE }}">
   <head>
-    <title>Connecting account...</title>
+    <title>{% translate "Connecting account..." %}</title>
   </head>
   <body>
-    <p id="status">Connecting your account...</p>
+    <p id="status">{% translate "Connecting your account..." %}</p>
     {{ result|json_script:"oauth2-result" }}
     <script>
       (function() {
@@ -30,9 +35,9 @@
         } else {
           const el = document.getElementById('status');
           if (result.type === 'oauth2-success') {
-            el.textContent = 'Account connected! You can close this window.';
+            el.textContent = '{{ connected_text|escapejs }}';
           } else {
-            el.textContent = 'Error: ' + (result.error || 'Unknown error');
+            el.textContent = '{{ error_text|escapejs }}'.replace('%(error)s', result.error || '{{ unknown_error_text|escapejs }}');
           }
         }
       })();

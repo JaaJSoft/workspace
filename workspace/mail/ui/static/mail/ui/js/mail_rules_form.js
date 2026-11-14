@@ -7,16 +7,16 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
 
   return {
     rulesConditionFields: [
-      { value: 'from', label: 'From' },
-      { value: 'to', label: 'To' },
-      { value: 'cc', label: 'Cc' },
-      { value: 'recipient', label: 'To or Cc' },
-      { value: 'subject', label: 'Subject' },
-      { value: 'body', label: 'Body' },
-      { value: 'folder', label: 'Folder' },
-      { value: 'has_attachments', label: 'Has attachments' },
-      { value: 'is_starred', label: 'Is starred' },
-      { value: 'date', label: 'Date' },
+      { value: 'from', label: gettext('From') },
+      { value: 'to', label: gettext('To') },
+      { value: 'cc', label: gettext('Cc') },
+      { value: 'recipient', label: gettext('To or Cc') },
+      { value: 'subject', label: gettext('Subject') },
+      { value: 'body', label: gettext('Body') },
+      { value: 'folder', label: gettext('Folder') },
+      { value: 'has_attachments', label: gettext('Has attachments') },
+      { value: 'is_starred', label: gettext('Is starred') },
+      { value: 'date', label: gettext('Date') },
     ],
 
     rulesCompatibleOps(field) {
@@ -26,6 +26,21 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
       if (BOOL_FIELDS.includes(field)) return ['is_true', 'is_false'];
       if (DATE_FIELDS.includes(field)) return ['greater_than', 'less_than'];
       return [];
+    },
+
+    rulesOpLabel(op) {
+      return {
+        contains: gettext('contains'),
+        equals: gettext('equals'),
+        starts_with: gettext('starts with'),
+        ends_with: gettext('ends with'),
+        matches_regex: gettext('matches regex'),
+        in_list: gettext('in list'),
+        is_true: gettext('is true'),
+        is_false: gettext('is false'),
+        greater_than: gettext('greater than'),
+        less_than: gettext('less than'),
+      }[op] || op.replace(/_/g, ' ');
     },
 
     rulesNeedsValue(op) {
@@ -127,7 +142,7 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
         JSON.parse(this.rulesForm.advancedConditionsText);
         this.rulesForm.error = '';
       } catch (e) {
-        this.rulesForm.error = 'Invalid conditions JSON';
+        this.rulesForm.error = gettext('Invalid conditions JSON');
       }
     },
 
@@ -136,7 +151,7 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
         JSON.parse(this.rulesForm.advancedActionsText);
         this.rulesForm.error = '';
       } catch (e) {
-        this.rulesForm.error = 'Invalid actions JSON';
+        this.rulesForm.error = gettext('Invalid actions JSON');
       }
     },
 
@@ -150,7 +165,7 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
           conditions = JSON.parse(this.rulesForm.advancedConditionsText);
           actions = JSON.parse(this.rulesForm.advancedActionsText);
         } catch (e) {
-          this.rulesForm.error = 'Invalid JSON';
+          this.rulesForm.error = gettext('Invalid JSON');
           return null;
         }
       }
@@ -192,7 +207,7 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
         this.rulesEditing = null;
         await this._loadRules();
       } catch (e) {
-        this.rulesForm.error = (e && e.message) || 'Network error - please retry.';
+        this.rulesForm.error = (e && e.message) || gettext('Network error - please retry.');
       } finally {
         this.rulesForm.saving = false;
       }

@@ -2,7 +2,8 @@
 Rows of the label context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from index.html.
 {% endcomment %}
+{% load i18n %}
 <ul class="menu menu-sm p-0 w-full">
-  {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Edit" click="labelCtxAction('edit')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="labelCtxAction('delete')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="pencil" label=_("Edit") click="labelCtxAction('edit')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label=_("Delete") tone="error" click="labelCtxAction('delete')" only %}
 </ul>

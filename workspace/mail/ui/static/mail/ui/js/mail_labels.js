@@ -67,10 +67,10 @@ window.mailLabelsMixin = function mailLabelsMixin() {
           this.closeLabelModal();
         } else {
           const data = await resp.json().catch(() => ({}));
-          m.error = data.name?.[0] || data.description?.[0] || data.detail || 'Failed to save label.';
+          m.error = data.name?.[0] || data.description?.[0] || data.detail || gettext('Failed to save label.');
         }
       } catch (e) {
-        m.error = 'Network error.';
+        m.error = gettext('Network error.');
       } finally {
         m.saving = false;
       }
@@ -82,9 +82,9 @@ window.mailLabelsMixin = function mailLabelsMixin() {
       const m = this.labelModal;
       if (!m.uuid) return;
       const confirmed = await AppDialog.confirm({
-        title: 'Delete label',
-        message: `Delete label "${m.name}"? Messages won't be deleted.`,
-        okLabel: 'Delete',
+        title: gettext('Delete label'),
+        message: interpolate(gettext('Delete label "%(name)s"? Messages won\'t be deleted.'), { name: m.name }, true),
+        okLabel: gettext('Delete'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

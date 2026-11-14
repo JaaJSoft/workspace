@@ -1,6 +1,7 @@
 import logging
 
 from django.db import transaction
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -64,7 +65,11 @@ class MailLabelListView(APIView):
             account=account, name=ser.validated_data["name"]
         ).exists():
             return Response(
-                {"detail": "A label with this name already exists for this account."},
+                {
+                    "detail": _(
+                        "A label with this name already exists for this account."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -106,7 +111,9 @@ class MailLabelDetailView(APIView):
             if MailLabel.objects.filter(account=label.account, name=new_name).exists():
                 return Response(
                     {
-                        "detail": "A label with this name already exists for this account."
+                        "detail": _(
+                            "A label with this name already exists for this account."
+                        )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -168,7 +175,7 @@ class MailMessageLabelView(APIView):
         )
         if labels.count() != len(ser.validated_data["label_ids"]):
             return Response(
-                {"detail": "One or more labels do not belong to this account."},
+                {"detail": _("One or more labels do not belong to this account.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -204,7 +211,7 @@ class MailMessageLabelView(APIView):
         # client-side bugs early.
         if len(affected_labels) != len(ser.validated_data["label_ids"]):
             return Response(
-                {"detail": "One or more labels do not belong to this account."},
+                {"detail": _("One or more labels do not belong to this account.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         MailMessageLabel.objects.filter(

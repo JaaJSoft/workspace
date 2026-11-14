@@ -2,18 +2,27 @@
 Rows of the message context menu. The panel around them is
 `ui/partials/context_menu_panel.html`, included from index.html.
 {% endcomment %}
+{% load i18n %}
+{% translate "Unstar" as unstar_label %}
+{% translate "Star" context "verb" as star_label %}
+{% translate "Mark unread" as mark_unread_label %}
+{% translate "Mark read" as mark_read_label %}
 <ul class="menu menu-sm p-0 w-full">
-  {% include "ui/partials/context_menu_item.html" with icon="reply" label="Reply" click="msgCtxAction('reply')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="reply-all" label="Reply all" click="msgCtxAction('reply_all')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="forward" label="Forward" click="msgCtxAction('forward')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="reply" label=_("Reply") click="msgCtxAction('reply')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="reply-all" label=_("Reply all") click="msgCtxAction('reply_all')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="forward" label=_("Forward") click="msgCtxAction('forward')" only %}
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="star" label_expr="msgCtx.msg?.is_starred ? 'Unstar' : 'Star'" click="msgCtxAction('toggle_star')" only %}
-  {% include "ui/partials/context_menu_item.html" with icon="mail" icon_alt="mail-open" icon_toggle="msgCtx.msg?.is_read" label_expr="msgCtx.msg?.is_read ? 'Mark unread' : 'Mark read'" click="msgCtxAction('toggle_read')" only %}
+  {% with unstar_js=unstar_label|escapejs star_js=star_label|escapejs unread_js=mark_unread_label|escapejs read_js=mark_read_label|escapejs %}
+    {% with star_expr="msgCtx.msg?.is_starred ? '"|add:unstar_js|add:"' : '"|add:star_js|add:"'" read_expr="msgCtx.msg?.is_read ? '"|add:unread_js|add:"' : '"|add:read_js|add:"'" %}
+      {% include "ui/partials/context_menu_item.html" with icon="star" label_expr=star_expr click="msgCtxAction('toggle_star')" only %}
+      {% include "ui/partials/context_menu_item.html" with icon="mail" icon_alt="mail-open" icon_toggle="msgCtx.msg?.is_read" label_expr=read_expr click="msgCtxAction('toggle_read')" only %}
+    {% endwith %}
+  {% endwith %}
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="folder-input" label="Move to..." click="msgCtxAction('move')" only %}
-  {% include "ui/partials/context_menu_item.html" with show="msgCtx.msg && msgCtx.msg.from_address && msgCtx.msg.from_address.email" icon="filter" label="Create filter" aria_label="Create filter from sender" click="msgCtxAction('create_rule_from_sender')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="folder-input" label=_("Move to...") click="msgCtxAction('move')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="msgCtx.msg && msgCtx.msg.from_address && msgCtx.msg.from_address.email" icon="filter" label=_("Create filter") aria_label=_("Create filter from sender") click="msgCtxAction('create_rule_from_sender')" only %}
 
   <hr class="my-1 border-base-300" />
   {% comment %}Label toggles: a leading icon in the label's own color and a
@@ -42,5 +51,5 @@ Rows of the message context menu. The panel around them is
   </template>
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="msgCtxAction('delete')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label=_("Delete") tone="error" click="msgCtxAction('delete')" only %}
 </ul>

@@ -76,40 +76,7 @@
       to editing the raw Markdown instead.
     {% endblocktranslate %}
   </p>
-  <table class="table table-sm">
-    <thead>
-      <tr>
-        <th>{% translate "Syntax" %}</th>
-        <th>{% translate "Result" %}</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>**{% translate "bold" %}**</code></td>
-        <td><strong>{% translate "bold" %}</strong></td>
-      </tr>
-      <tr>
-        <td><code>*{% translate "italic" %}*</code></td>
-        <td><em>{% translate "italic" %}</em></td>
-      </tr>
-      <tr>
-        <td><code>~~{% translate "strikethrough" %}~~</code></td>
-        <td><s>{% translate "strikethrough" %}</s></td>
-      </tr>
-      <tr>
-        <td><code>`{% translate "inline code" %}`</code></td>
-        <td><code>{% translate "inline code" %}</code></td>
-      </tr>
-      <tr>
-        <td><code>[{% translate "link" %}](url)</code></td>
-        <td><a class="link link-module">{% translate "link" %}</a></td>
-      </tr>
-      <tr>
-        <td><code>```{% translate "code block" %}```</code></td>
-        <td>{% translate "Code block" %}</td>
-      </tr>
-    </tbody>
-  </table>
+  {% include "ui/partials/markdown_syntax_table.html" only %}
   ---
   message-circle | {% translate "Conversations" %}
   <ul>

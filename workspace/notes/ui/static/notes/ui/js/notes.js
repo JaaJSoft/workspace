@@ -51,16 +51,16 @@ window.notesPreferences = function notesPreferences() {
 
         async pickDefaultFolder() {
             const folder = await AppDialog.folderPicker({
-                title: 'Default notes folder',
-                message: 'Choose where new notes are created by default.',
-                okLabel: 'Select',
+                title: gettext('Default notes folder'),
+                message: gettext('Choose where new notes are created by default.'),
+                okLabel: gettext('Select'),
                 okClass: 'btn-module',
                 icon: 'folder-pen',
                 iconClass: 'bg-module/15 text-module',
             });
             if (!folder) return;
             this.prefs.defaultFolderUuid = folder.uuid;
-            this.defaultFolderName = folder.name || 'Root';
+            this.defaultFolderName = folder.name || gettext('Root');
             if (folder.uuid) {
                 try {
                     const r = await fetch('/api/v1/files/' + folder.uuid);
@@ -73,16 +73,16 @@ window.notesPreferences = function notesPreferences() {
 
         async pickJournalFolder() {
             const folder = await AppDialog.folderPicker({
-                title: 'Journal folder',
-                message: 'Choose which folder to use for daily journal notes.',
-                okLabel: 'Select',
+                title: gettext('Journal folder'),
+                message: gettext('Choose which folder to use for daily journal notes.'),
+                okLabel: gettext('Select'),
                 okClass: 'btn-module',
                 icon: 'book-open',
                 iconClass: 'bg-module/15 text-module',
             });
             if (!folder) return;
             this.prefs.journalFolderUuid = folder.uuid;
-            this.journalFolderName = folder.name || 'Root';
+            this.journalFolderName = folder.name || gettext('Root');
             if (folder.uuid) {
                 try {
                     const r2 = await fetch('/api/v1/files/' + folder.uuid);
@@ -98,20 +98,20 @@ window.notesPreferences = function notesPreferences() {
                 try {
                     const r = await fetch('/api/v1/files/' + this.prefs.defaultFolderUuid);
                     if (r.ok) { const f = await r.json(); this.defaultFolderName = f.path || f.name; }
-                    else this.defaultFolderName = 'Not set';
-                } catch(e) { this.defaultFolderName = 'Not set'; }
+                    else this.defaultFolderName = gettext('Not set');
+                } catch(e) { this.defaultFolderName = gettext('Not set'); }
             } else {
-                this.defaultFolderName = 'Not set';
+                this.defaultFolderName = gettext('Not set');
             }
 
             if (this.prefs.journalFolderUuid) {
                 try {
                     const r2 = await fetch('/api/v1/files/' + this.prefs.journalFolderUuid);
                     if (r2.ok) { const f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
-                    else this.journalFolderName = 'Not set';
-                } catch(e) { this.journalFolderName = 'Not set'; }
+                    else this.journalFolderName = gettext('Not set');
+                } catch(e) { this.journalFolderName = gettext('Not set'); }
             } else {
-                this.journalFolderName = 'Not set';
+                this.journalFolderName = gettext('Not set');
             }
         },
 
@@ -142,14 +142,20 @@ window.notesApp = function notesApp(config) {
     config = config || {};
     const prefs = window._notesPrefsCache;
     const initialView = config.view || prefs.defaultView || 'all';
-    const titleMap = { all: 'My Notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal', graph: 'Graph' };
+    const titleMap = {
+        all: gettext('My Notes'),
+        favorites: gettext('Favorites'),
+        recent: pgettext('recent notes', 'Recent'),
+        journal: gettext('Journal'),
+        graph: gettext('Graph'),
+    };
 
     return {
         // Sidebar
         collapsed: window.sidebarPreference.initial(),
         activeView: initialView,
         activeId: config.id || null,
-        viewTitle: titleMap[initialView] || 'My Notes',
+        viewTitle: titleMap[initialView] || titleMap.all,
         graphScope: 'mine',
         graphKind: 'all',
         graphSearch: '',
@@ -240,7 +246,7 @@ window.notesApp = function notesApp(config) {
                 window.addEventListener('create-group-folder', function(e) {
                     window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
                         .then(function() { self.refreshSidebar(); })
-                        .catch(function() {});
+                        .catch(function(err) { window.AppAlert.error(err.message); });
                 });
             }
 
@@ -308,9 +314,9 @@ window.notesApp = function notesApp(config) {
             if (this._gPending) {
                 const key = e.key.toLowerCase();
                 this._gPending = false;
-                if (key === 'a') { e.preventDefault(); this.setView('all', null, 'My Notes'); return; }
-                if (key === 'f') { e.preventDefault(); this.setView('favorites', null, 'Favorites'); return; }
-                if (key === 'r') { e.preventDefault(); this.setView('recent', null, 'Recent'); return; }
+                if (key === 'a') { e.preventDefault(); this.setView('all'); return; }
+                if (key === 'f') { e.preventDefault(); this.setView('favorites'); return; }
+                if (key === 'r') { e.preventDefault(); this.setView('recent'); return; }
                 if (key === 'j') { e.preventDefault(); this.openJournal(); return; }
                 // unknown follow-up key falls through to single-key handling
             }
@@ -468,23 +474,23 @@ window.notesApp = function notesApp(config) {
             this._closeDrawerOnMobile();
 
             if (view === 'graph') {
-                this.viewTitle = 'Graph';
+                this.viewTitle = gettext('Graph');
             } else if (view === 'all') {
-                this.viewTitle = 'My Notes';
+                this.viewTitle = gettext('My Notes');
             } else if (view === 'favorites') {
-                this.viewTitle = 'Favorites';
+                this.viewTitle = gettext('Favorites');
             } else if (view === 'recent') {
-                this.viewTitle = 'Recent';
+                this.viewTitle = pgettext('recent notes', 'Recent');
             } else if (view === 'tag') {
                 if (!name && id) {
                     const tag = this.allTags.find((t) => t.uuid === id);
                     if (tag) name = tag.name;
                 }
-                this.viewTitle = name || 'Tag';
+                this.viewTitle = name || gettext('Tag');
             } else if (view === 'folder' || view === 'group_folder') {
-                this.viewTitle = name || 'Folder';
+                this.viewTitle = name || gettext('Folder');
             } else {
-                this.viewTitle = 'My Notes';
+                this.viewTitle = gettext('My Notes');
                 this.activeView = 'all';
             }
 
@@ -658,7 +664,7 @@ window.notesApp = function notesApp(config) {
             const restoring = !!(options && options.restoring);
             this.activeView = 'journal';
             this.activeId = null;
-            this.viewTitle = 'Journal';
+            this.viewTitle = gettext('Journal');
             this._closeDrawerOnMobile();
 
             const journalUuid = this.notePrefs.journalFolderUuid;
@@ -804,10 +810,10 @@ window.notesApp = function notesApp(config) {
 
         async createNote() {
             let name = await AppDialog.prompt({
-                title: 'New note',
-                message: 'Enter a name for the note',
-                placeholder: 'My note',
-                okLabel: 'Create',
+                title: gettext('New note'),
+                message: gettext('Enter a name for the note'),
+                placeholder: gettext('My note'),
+                okLabel: gettext('Create'),
                 okClass: 'btn-module',
                 icon: 'file-plus',
                 iconClass: 'bg-module/15 text-module',
@@ -855,9 +861,13 @@ window.notesApp = function notesApp(config) {
             if (!this.canDoOnSelected('delete')) return;
             if (window._notesPrefsCache.confirmBeforeDelete) {
                 const ok = await AppDialog.confirm({
-                    title: 'Delete note',
-                    message: 'Are you sure you want to delete "' + this.noteName(this.selectedNote) + '"?',
-                    okLabel: 'Delete',
+                    title: gettext('Delete note'),
+                    message: interpolate(
+                        gettext('Are you sure you want to delete "%(name)s"?'),
+                        { name: this.noteName(this.selectedNote) },
+                        true,
+                    ),
+                    okLabel: gettext('Delete'),
                     okClass: 'btn-error',
                     icon: 'trash-2',
                     iconClass: 'bg-error/10 text-error',
@@ -990,9 +1000,13 @@ window.notesApp = function notesApp(config) {
                 }
             } else if (action.id === 'delete') {
                 AppDialog.confirm({
-                    title: 'Delete note',
-                    message: 'Are you sure you want to delete "' + (name || '').replace(/\.md$/i, '') + '"?',
-                    okLabel: 'Delete',
+                    title: gettext('Delete note'),
+                    message: interpolate(
+                        gettext('Are you sure you want to delete "%(name)s"?'),
+                        { name: (name || '').replace(/\.md$/i, '') },
+                        true,
+                    ),
+                    okLabel: gettext('Delete'),
                     okClass: 'btn-error',
                     icon: 'trash-2',
                     iconClass: 'bg-error/10 text-error',
@@ -1015,9 +1029,9 @@ window.notesApp = function notesApp(config) {
         async moveNote(uuid, name) {
             const displayName = (name || '').replace(/\.md$/i, '');
             const folder = await AppDialog.folderPicker({
-                title: 'Move note',
-                message: 'Choose a destination for "' + displayName + '"',
-                okLabel: 'Move here',
+                title: gettext('Move note'),
+                message: interpolate(gettext('Choose a destination for "%(name)s"'), { name: displayName }, true),
+                okLabel: gettext('Move here'),
                 okClass: 'btn-primary',
                 icon: 'folder-input',
                 iconClass: 'bg-primary/10 text-primary',
@@ -1065,9 +1079,13 @@ window.notesApp = function notesApp(config) {
                 const uuid = m.data.uuid;
                 const name = m.data.name;
                 AppDialog.confirm({
-                    title: 'Delete folder',
-                    message: 'Move "' + name + '" to trash? Notes inside will also be moved.',
-                    okLabel: 'Move to trash',
+                    title: gettext('Delete folder'),
+                    message: interpolate(
+                        gettext('Move "%(name)s" to trash? Notes inside will also be moved.'),
+                        { name: name },
+                        true,
+                    ),
+                    okLabel: gettext('Move to trash'),
                     okClass: 'btn-error',
                     icon: 'trash-2',
                     iconClass: 'bg-error/10 text-error',
@@ -1084,10 +1102,10 @@ window.notesApp = function notesApp(config) {
 
         async _createSubfolder(parentFolder) {
             const name = await AppDialog.prompt({
-                title: 'New subfolder',
-                message: 'Create a subfolder in "' + parentFolder.name + '"',
-                placeholder: 'Subfolder name',
-                okLabel: 'Create',
+                title: gettext('New subfolder'),
+                message: interpolate(gettext('Create a subfolder in "%(name)s"'), { name: parentFolder.name }, true),
+                placeholder: gettext('Subfolder name'),
+                okLabel: gettext('Create'),
                 okClass: 'btn-module',
                 icon: 'folder-plus',
                 iconClass: 'bg-module/15 text-module',
@@ -1291,7 +1309,7 @@ window.notesApp = function notesApp(config) {
             if (this.activeView === 'tag') {
                 const tag = this.allTags.find((t) => t.uuid === this.activeId);
                 if (!tag) {
-                    await this.setView('all', null, 'My Notes');
+                    await this.setView('all');
                     return;
                 }
                 this.viewTitle = tag.name;
@@ -1483,11 +1501,26 @@ window.notesApp = function notesApp(config) {
             return note.name.replace(/\.md$/i, '');
         },
 
+        // "100+ results" when more pages remain: the list only knows a floor.
+        resultCountLabel() {
+            const count = this.notes.length;
+            return interpolate(
+                ngettext('%(count)s result', '%(count)s results', count),
+                { count: count + (this.hasMoreNotes ? '+' : '') },
+                true,
+            );
+        },
+
+        tagChipTitle(tag) {
+            return interpolate(gettext('Show notes tagged %(name)s'), { name: tag.name }, true);
+        },
+
         formatDate(dateStr) {
             if (!dateStr) return '';
             const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
             const d = new Date(dateStr);
-            return d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const locale = window.getUserLocale ? window.getUserLocale() : undefined;
+            return d.toLocaleDateString(locale, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         },
 
         toggleCollapse() {

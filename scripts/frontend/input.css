@@ -77,6 +77,15 @@
   }
 }
 
+/* No theme gets daisyUI's depth effect (the gradient and inset shadows it
+   paints on buttons, inputs, toggles and checkboxes): every component stays
+   flat. daisyUI declares the themes in the base layer, so this unlayered rule
+   wins whichever theme is active, nested [data-theme] previews included. */
+:root,
+[data-theme] {
+  --depth: 0;
+}
+
 /* A checkbox shares --radius-selector with badges and toggles: at the pill
    radius above it would be a circle. It keeps daisyUI 4's square-ish 0.5rem
    in those two themes. */

@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.utils.translation import gettext as _
 
 from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 
@@ -20,7 +21,7 @@ def search_projects(query, user, limit, scope=SearchScope.ALL):
             match_type="project",
             type_icon="square-kanban",
             module_slug="projects",
-            tags=(SearchTag("Project", "accent"),),
+            tags=(SearchTag(_("Project"), "accent"),),
         )
         for p in projects
     ]

@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from ..models import Project, ProjectMember, ProjectNotificationLevel
 
@@ -50,7 +51,7 @@ def add_member(project, user, *, role=ProjectMember.Role.MEMBER):
     apply the role change with guards (e.g., cannot demote the last active admin).
     """
     if project.type == Project.Type.PERSONAL:
-        raise ProjectRuleError("Personal projects cannot have members.")
+        raise ProjectRuleError(_("Personal projects cannot have members."))
     member, created = ProjectMember.objects.get_or_create(
         project=project,
         user=user,
@@ -74,7 +75,7 @@ def change_member_role(member, new_role):
             and new_role != ProjectMember.Role.ADMIN
             and not _other_active_admins_locked(member)
         ):
-            raise LastAdminError("Cannot demote the last admin of a project.")
+            raise LastAdminError(_("Cannot demote the last admin of a project."))
         member.role = new_role
         member.save(update_fields=["role"])
     return member
@@ -93,8 +94,10 @@ def remove_member(member):
             member
         ):
             raise LastAdminError(
-                "Cannot remove the last admin of a project. "
-                "Promote another admin first or delete the project."
+                _(
+                    "Cannot remove the last admin of a project. "
+                    "Promote another admin first or delete the project."
+                )
             )
         member.left_at = timezone.now()
         member.save(update_fields=["left_at"])

@@ -2,6 +2,7 @@
 
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Q
+from django.utils.translation import gettext, gettext_noop
 
 from ..models import Task, TaskEvent, TaskLink, TaskStatus
 from ..queries import user_project_ids
@@ -27,7 +28,7 @@ LINK_LABELS = {
 }
 
 
-_DUPLICATE_DETAIL = "These tasks are already linked with this type."
+_DUPLICATE_DETAIL = gettext_noop("These tasks are already linked with this type.")
 
 
 def _same_type_link_exists(source, target, canonical):
@@ -52,7 +53,7 @@ def create_link(anchor, other, relation, *, actor=None):
     canonical, is_reversed = RELATIONS[relation]
     source, target = (other, anchor) if is_reversed else (anchor, other)
     if source.pk == target.pk:
-        raise ProjectRuleError("A task cannot be linked to itself.")
+        raise ProjectRuleError(gettext("A task cannot be linked to itself."))
     with transaction.atomic():
         # Deterministic lock order (by pk): two opposite-direction creates
         # would otherwise lock the rows in opposite order and deadlock.
@@ -62,11 +63,11 @@ def create_link(anchor, other, relation, *, actor=None):
             .order_by("pk")
         )
         if _same_type_link_exists(source, target, canonical):
-            raise ProjectRuleError(_DUPLICATE_DETAIL)
+            raise ProjectRuleError(gettext(_DUPLICATE_DETAIL))
         if canonical == TaskLink.Type.BLOCKS and _reaches_through_blocks(
             target, source
         ):
-            raise ProjectRuleError("This link would make a task block itself.")
+            raise ProjectRuleError(gettext("This link would make a task block itself."))
         try:
             link = TaskLink.objects.create(
                 source=source, target=target, type=canonical, created_by=actor
@@ -74,7 +75,7 @@ def create_link(anchor, other, relation, *, actor=None):
         except IntegrityError:
             # Same-direction race on backends where the row locks don't
             # serialize the pre-check; the unique constraint is the backstop.
-            raise ProjectRuleError(_DUPLICATE_DETAIL) from None
+            raise ProjectRuleError(gettext(_DUPLICATE_DETAIL)) from None
         _record_link_events(link, TaskEvent.Type.LINKED, actor)
     return link
 

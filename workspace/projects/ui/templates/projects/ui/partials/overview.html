@@ -1,4 +1,4 @@
-{% load ui_filters %}
+{% load i18n ui_filters %}
 <div id="overview" class="w-full max-w-6xl mx-auto flex flex-col gap-4">
   <div
     class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-xs w-full"
@@ -7,21 +7,21 @@
       <div class="stat-figure text-module">
         <i data-lucide="square-kanban" class="w-6 h-6"></i>
       </div>
-      <div class="stat-title">On the board</div>
+      <div class="stat-title">{% translate "On the board" %}</div>
       <div class="stat-value text-2xl">{{ board_count }}</div>
     </div>
     <div class="stat">
       <div class="stat-figure text-module">
         <i data-lucide="list-todo" class="w-6 h-6"></i>
       </div>
-      <div class="stat-title">In backlog</div>
+      <div class="stat-title">{% translate "In backlog" %}</div>
       <div class="stat-value text-2xl">{{ backlog_count }}</div>
     </div>
     <div class="stat">
       <div class="stat-figure text-success">
         <i data-lucide="circle-check" class="w-6 h-6"></i>
       </div>
-      <div class="stat-title">Done</div>
+      <div class="stat-title">{% translate "Done" context "task count" %}</div>
       <div class="stat-value text-2xl">{{ done_count }}</div>
     </div>
   </div>
@@ -31,23 +31,31 @@
       <section class="rounded-box bg-base-200 p-4">
         <h2 class="font-semibold mb-2 flex items-center gap-2">
           <i data-lucide="info" class="w-4 h-4 text-module"></i>
-          About
+          {% translate "About" %}
         </h2>
         {% if project.description %}
           <p class="text-base-content/80 whitespace-pre-line">{{ project.description }}</p>
         {% else %}
-          <p class="text-base-content/50 italic">No description yet.</p>
+          <p class="text-base-content/50 italic">{% translate "No description yet." %}</p>
         {% endif %}
         <p class="text-sm text-base-content/60 mt-3 flex items-center gap-1.5">
           <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-          Created {{ project.created_at|date:"DATE_FORMAT" }}{% if project.created_by %} by {{ project.created_by.username }}{% endif %}
+          {% if project.created_by %}
+            {% blocktranslate trimmed with date=project.created_at|date:"DATE_FORMAT" username=project.created_by.username %}
+              Created {{ date }} by {{ username }}
+            {% endblocktranslate %}
+          {% else %}
+            {% blocktranslate trimmed with date=project.created_at|date:"DATE_FORMAT" %}
+              Created {{ date }}
+            {% endblocktranslate %}
+          {% endif %}
         </p>
       </section>
 
       <section class="rounded-box bg-base-200 p-4">
         <h2 class="font-semibold mb-2 flex items-center gap-2">
           <i data-lucide="history" class="w-4 h-4 text-module"></i>
-          Recent activity
+          {% translate "Recent activity" %}
         </h2>
         <ul class="flex flex-col gap-3">
           {% for ev in recent_events %}
@@ -76,7 +84,7 @@
               </div>
             </li>
           {% empty %}
-            <li class="text-sm text-base-content/50 italic">No activity yet.</li>
+            <li class="text-sm text-base-content/50 italic">{% translate "No activity yet." %}</li>
           {% endfor %}
         </ul>
       </section>
@@ -86,13 +94,15 @@
       <section class="rounded-box bg-base-200 p-4">
         <h2 class="font-semibold mb-2 flex items-center gap-2">
           <i data-lucide="users" class="w-4 h-4 text-module"></i>
-          Members
+          {% translate "Members" %}
         </h2>
         <ul class="flex flex-col gap-2">
           {% for m in members %}
             <li class="flex items-center gap-2 text-sm">
               <user-avatar user-id="{{ m.user.id }}" username="{{ m.user.username }}" size="xs" presence card name href="/users/profile/{{ m.user.username }}"></user-avatar>
-              {% if m.role == "admin" %}<span class="badge badge-ghost badge-sm">Admin</span>{% endif %}
+              {% if m.role == "admin" %}
+                <span class="badge badge-ghost badge-sm">{% translate "Admin" context "project role" %}</span>
+              {% endif %}
             </li>
           {% endfor %}
         </ul>
@@ -102,7 +112,7 @@
         <section id="overview-epics" class="rounded-box bg-base-200 p-4">
           <h2 class="font-semibold mb-2 flex items-center gap-2">
             <i data-lucide="layers" class="w-4 h-4 text-module"></i>
-            Epics
+            {% translate "Epics" %}
           </h2>
           <ul class="flex flex-col gap-3">
             {% for e in open_epics %}
@@ -114,9 +124,11 @@
                   ></span>
                   <span class="font-medium truncate">{{ e.name }}</span>
                   {% if e.target_date %}
+                    {# Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25". #}
+                    {% translate "M j" context "short due date format" as due_date_format %}
                     <span
                       class="ml-auto shrink-0 text-xs font-mono {% if e.target_date < today %}text-error{% else %}text-base-content/60{% endif %}"
-                    >{{ e.target_date|date:"M d" }}</span>
+                    >{{ e.target_date|date:due_date_format }}</span>
                   {% endif %}
                 </div>
                 <div class="flex items-center gap-2">
@@ -126,19 +138,27 @@
                       style="width: {% widthratio e.done_task_count e.task_count|default:1 100 %}%"
                     ></div>
                   </div>
-                  <span
-                    class="text-xs text-base-content/60 font-mono shrink-0"
-                  >{{ e.done_task_count }}/{{ e.task_count }} done</span>
+                  <span class="text-xs text-base-content/60 font-mono shrink-0">
+                    {% blocktranslate trimmed count counter=e.done_task_count with total=e.task_count %}
+                      {{ counter }}/{{ total }} done
+                    {% plural %}
+                      {{ counter }}/{{ total }} done
+                    {% endblocktranslate %}
+                  </span>
                 </div>
               </li>
             {% empty %}
-              <li class="text-sm text-base-content/50 italic">No open epics.</li>
+              <li class="text-sm text-base-content/50 italic">{% translate "No open epics." %}</li>
             {% endfor %}
           </ul>
           {% if closed_epic_count %}
-            <p
-              class="text-xs text-base-content/50 mt-3"
-            >{{ closed_epic_count }} completed epic{{ closed_epic_count|pluralize }}</p>
+            <p class="text-xs text-base-content/50 mt-3">
+              {% blocktranslate trimmed count counter=closed_epic_count %}
+                {{ counter }} completed epic
+              {% plural %}
+                {{ counter }} completed epics
+              {% endblocktranslate %}
+            </p>
           {% endif %}
         </section>
       {% endif %}
@@ -147,7 +167,7 @@
         <section class="rounded-box bg-base-200 p-4">
           <h2 class="font-semibold mb-2 flex items-center gap-2">
             <i data-lucide="tags" class="w-4 h-4 text-module"></i>
-            Labels
+            {% translate "Labels" %}
           </h2>
           <div class="flex flex-wrap gap-1.5">
             {% for label in labels_data %}

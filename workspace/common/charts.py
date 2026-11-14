@@ -1,6 +1,9 @@
 import math
 from datetime import timedelta
 
+from django.utils import dateformat
+from django.utils.translation import pgettext
+
 # Fixed viewBox units, not pixels: the SVG scales to fill its container.
 _WIDTH = 720
 _HEIGHT = 220
@@ -446,22 +449,41 @@ def _gantt_axis(start, end, scale, px, x_of):
         if scale == "week":
             minors.append({"x": _n(x_of(day))})
             if first or day.weekday() == 0:
-                majors.append({"x": _n(x_of(day)), "label": day.strftime("%b %d")})
+                majors.append({"x": _n(x_of(day)), "label": _week_label(day)})
             if day.weekday() >= 5:
                 weekends.append({"x": _n(x_of(day)), "width": _n(px)})
         elif scale == "month":
             if day.weekday() == 0:
                 minors.append({"x": _n(x_of(day))})
             if first or day.day == 1:
-                majors.append({"x": _n(x_of(day)), "label": day.strftime("%b %Y")})
+                majors.append({"x": _n(x_of(day)), "label": _month_label(day)})
         else:
             if day.day == 1:
                 minors.append({"x": _n(x_of(day))})
             if first or (day.day == 1 and day.month in _QUARTER_START_MONTHS):
                 quarter = (day.month - 1) // 3 + 1
-                majors.append({"x": _n(x_of(day)), "label": f"Q{quarter} {day.year}"})
+                majors.append(
+                    {"x": _n(x_of(day)), "label": _quarter_label(quarter, day.year)}
+                )
         day += timedelta(days=1)
     return {"majors": majors, "minors": minors, "weekends": weekends}
+
+
+def _week_label(day):
+    # Translators: a PHP-style date format (Django's date filter) for a day on a chart's date axis, e.g. "Sep 07".
+    return dateformat.format(day, pgettext("chart axis day", "M d"))
+
+
+def _month_label(day):
+    # Translators: a PHP-style date format (Django's date filter) for a month on a chart's date axis, e.g. "Sep 2026".
+    return dateformat.format(day, pgettext("chart axis month", "M Y"))
+
+
+def _quarter_label(quarter, year):
+    return pgettext("chart axis quarter", "Q%(quarter)s %(year)s") % {
+        "quarter": quarter,
+        "year": year,
+    }
 
 
 def _truncate(label):

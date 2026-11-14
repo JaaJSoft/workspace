@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from ..models import Project, Sprint, TaskStatus
 from .members import ProjectRuleError
@@ -21,9 +22,9 @@ def convert_project_type(project, new_type, *, actor=None):
     if new_type == project.type:
         return project
     if Project.Type.PERSONAL in (new_type, project.type):
-        raise ProjectTypeError("Personal projects cannot change type.")
+        raise ProjectTypeError(_("Personal projects cannot change type."))
     if new_type not in (Project.Type.KANBAN, Project.Type.SCRUM):
-        raise ProjectTypeError("Unknown project type.")
+        raise ProjectTypeError(_("Unknown project type."))
     with transaction.atomic():
         # Locking every sprint row serializes a conversion against a
         # concurrent start/complete, the same way complete_sprint does.

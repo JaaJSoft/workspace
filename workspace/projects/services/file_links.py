@@ -9,6 +9,7 @@ copied: renames and edits follow through.
 """
 
 from django.db import IntegrityError, transaction
+from django.utils.translation import gettext, gettext_noop
 
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileShare
@@ -20,7 +21,9 @@ from ..models import Task, TaskEvent, TaskFileLink
 from .events import record_task_event
 from .members import ProjectRuleError
 
-_CANNOT_SHARE_DETAIL = "One or more files cannot be shared with the project."
+_CANNOT_SHARE_DETAIL = gettext_noop(
+    "One or more files cannot be shared with the project."
+)
 
 
 def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
@@ -44,7 +47,7 @@ def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
         if not ActionRegistry.is_action_available(
             "share", user, file_obj, permission=permissions.get(file_obj.pk)
         ):
-            raise ProjectRuleError(_CANNOT_SHARE_DETAIL)
+            raise ProjectRuleError(gettext(_CANNOT_SHARE_DETAIL))
     created = []
     with transaction.atomic():
         list(Task.objects.select_for_update().filter(pk=task.pk))

@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Epic dropdown: single-value selector matching _status_selector.html, since a
 task belongs to at most one epic. Unlike the status selector the rows are
@@ -47,7 +48,7 @@ Params:
       <span
         class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
       ></span>
-      <span class="truncate text-base-content/60">No epic</span>
+      <span class="truncate text-base-content/60">{% translate "No epic" %}</span>
     </span>
     <span
       x-show="{{ model_expr }}"
@@ -87,7 +88,7 @@ Params:
           <span
             class="w-2.5 h-2.5 rounded-full border border-dashed border-base-content/40 shrink-0"
           ></span>
-          <span class="text-sm">No epic</span>
+          <span class="text-sm">{% translate "No epic" %}</span>
         </button>
       </li>
       <template x-for="epic in openEpics()" :key="epic.uuid">
@@ -120,7 +121,7 @@ Params:
             <input
               type="text"
               class="input input-ghost input-xs h-6 min-h-0 w-full px-0 text-sm"
-              placeholder="New epic..."
+              placeholder="{% translate "New epic..." %}"
               maxlength="100"
               x-model="newEpic"
               @click.stop

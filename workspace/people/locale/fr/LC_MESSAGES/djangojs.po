@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-28 18:43+0000\n"
+"POT-Creation-Date: 2026-11-13 13:52+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -69,10 +69,6 @@ msgstr "À exporter : %(contacts)s et %(lists)s."
 #: ui/static/people/ui/js/people.js
 msgid "Could not refresh the lists."
 msgstr "Impossible d’actualiser les listes."
-
-#: ui/static/people/ui/js/people.js
-msgid "Could not save."
-msgstr "Impossible d’enregistrer."
 
 #: ui/static/people/ui/js/people.js
 msgid "Could not add to the list."

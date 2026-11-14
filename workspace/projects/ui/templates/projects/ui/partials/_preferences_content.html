@@ -1,6 +1,7 @@
+{% load i18n %}
 <div class="space-y-3">
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Due-date reminder time</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Due-date reminder time" %}</label>
     <select
       class="select select-sm w-full"
       :value="prefs.reminder_hour"
@@ -8,26 +9,26 @@
     >
       {% for value, label in reminder_hours %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
     </select>
-    <p class="text-xs text-base-content/60 mt-1">Tasks assigned to you remind you once when they fall due and once more when overdue, after this hour of your day.</p>
+    <p class="text-xs text-base-content/60 mt-1">{% translate "Tasks assigned to you remind you once when they fall due and once more when overdue, after this hour of your day." %}</p>
   </div>
   <div>
-    <label class="text-sm text-base-content/60 block mb-1">Notifications</label>
+    <label class="text-sm text-base-content/60 block mb-1">{% translate "Notifications" %}</label>
     <select
       class="select select-sm w-full"
       :value="prefs.notify_level"
       @change="update('notify_level', $event.target.value)"
     >
-      <option value="all">All (in-app + push)</option>
-      <option value="in_app">In-app only</option>
-      <option value="none">Nothing</option>
+      <option value="all">{% translate "All (in-app + push)" %}</option>
+      <option value="in_app">{% translate "In-app only" %}</option>
+      <option value="none">{% translate "Nothing" %}</option>
     </select>
     <p class="text-xs text-base-content/60 mt-1">
-      Applies to every project; the bell in a project's header can override it per project.
+      {% translate "Applies to every project; the bell in a project's header can override it per project." %}
     </p>
   </div>
   <div>
     <label class="flex items-center justify-between gap-2 cursor-pointer">
-      <span class="text-sm text-base-content/60">Auto-watch tasks</span>
+      <span class="text-sm text-base-content/60">{% translate "Auto-watch tasks" %}</span>
       <input
         type="checkbox"
         class="toggle toggle-sm"
@@ -36,7 +37,7 @@
       />
     </label>
     <p class="text-xs text-base-content/60 mt-1">
-      Commenting on a task or being assigned to it subscribes you to its updates.
+      {% translate "Commenting on a task or being assigned to it subscribes you to its updates." %}
     </p>
   </div>
 </div>

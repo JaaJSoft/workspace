@@ -1,10 +1,12 @@
+{% load i18n %}
 {% if writable %}
+  {% translate "Add sprint" as add_sprint_label %}
   <button
     type="button"
     class="btn btn-ghost btn-sm btn-square"
     @click="toggleAdd()"
-    aria-label="Add sprint"
-    title="Add sprint"
+    aria-label="{{ add_sprint_label }}"
+    title="{{ add_sprint_label }}"
   >
     <i data-lucide="plus" class="w-4 h-4"></i>
   </button>

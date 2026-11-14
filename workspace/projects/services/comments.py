@@ -1,9 +1,11 @@
 """Task comments: creation and notification fan-out."""
 
 from django.contrib.auth import get_user_model
+from django.utils.translation import gettext as _
 
 from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
 from workspace.notifications.services.notifications import notify_stream
+from workspace.users.services.settings import in_recipient_languages
 
 from ..models import TaskComment, TaskEvent
 from ..queries import project_users
@@ -36,16 +38,18 @@ def _notify_mentioned(task, actor, mentioned):
     recipients, priority_map = apply_levels(task.project_id, mentioned)
     if not recipients:
         return
-    notify_stream(
-        recipient_ids=[u.pk for u in recipients],
-        source=task,
-        origin="projects",
-        title=f'{actor.username} mentioned you in a comment on "{task.title}"',
-        url=_task_url(task),
-        actor=actor,
-        default_priority="high",
-        priority_map=priority_map,
-    )
+    for users in in_recipient_languages(recipients):
+        notify_stream(
+            recipient_ids=[u.pk for u in users],
+            source=task,
+            origin="projects",
+            title=_('%(actor)s mentioned you in a comment on "%(task)s"')
+            % {"actor": actor.username, "task": task.title},
+            url=_task_url(task),
+            actor=actor,
+            default_priority="high",
+            priority_map=priority_map,
+        )
 
 
 def notify_comment_added(task, actor, body):
@@ -81,12 +85,13 @@ def notify_comment_added(task, actor, body):
         u for u in recipients if u.pk != actor.pk and u.pk not in mentioned_ids
     ]
     recipients, priority_map = apply_levels(task.project_id, recipients)
-    if recipients:
+    for users in in_recipient_languages(recipients):
         notify_stream(
-            recipient_ids=[u.pk for u in recipients],
+            recipient_ids=[u.pk for u in users],
             source=task,
             origin="projects",
-            title=f'{actor.username} commented on "{task.title}"',
+            title=_('%(actor)s commented on "%(task)s"')
+            % {"actor": actor.username, "task": task.title},
             url=_task_url(task),
             actor=actor,
             priority_map=priority_map,

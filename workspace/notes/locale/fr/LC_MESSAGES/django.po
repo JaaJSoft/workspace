@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:46+0000\n"
+"POT-Creation-Date: 2026-11-13 14:16+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -15,7 +15,9 @@ msgstr ""
 msgid "Write and organize markdown notes."
 msgstr "Rédigez et organisez des notes en Markdown."
 
-#: apps.py
+#: apps.py ui/templates/notes/ui/notes.html
+#: ui/templates/notes/ui/partials/help_dialog.html
+#: ui/templates/notes/ui/partials/note_list.html
 msgid "New note"
 msgstr "Nouvelle note"
 
@@ -30,3 +32,315 @@ msgstr "Notes favorites"
 #: apps.py
 msgid "Recent notes"
 msgstr "Notes récentes"
+
+#: ui/templates/notes/ui/notes.html
+msgid "Renaming is disabled for this note"
+msgstr "Le renommage est désactivé pour cette note"
+
+#: ui/templates/notes/ui/notes.html
+msgid "Unavailable for this note"
+msgstr "Indisponible pour cette note"
+
+#: ui/templates/notes/ui/notes.html
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Delete note"
+msgstr "Supprimer la note"
+
+#: ui/templates/notes/ui/notes.html
+msgid "Back to the list"
+msgstr "Retour à la liste"
+
+#: ui/templates/notes/ui/notes.html
+msgid "Failed to load note"
+msgstr "Impossible de charger la note"
+
+#: ui/templates/notes/ui/notes.html
+msgid "Select or create a note"
+msgstr "Sélectionnez ou créez une note"
+
+#: ui/templates/notes/ui/notes.html
+msgid "Open notes"
+msgstr "Ouvrir les notes"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Not set"
+msgstr "Non défini"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Show journal"
+msgstr "Afficher le journal"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Compact note list"
+msgstr "Liste de notes compacte"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Show folders"
+msgstr "Afficher les dossiers"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+#: ui/templates/notes/ui/partials/sidebar.html
+msgid "My Notes"
+msgstr "Mes notes"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+#: ui/templates/notes/ui/partials/sidebar.html
+msgctxt "recent notes"
+msgid "Recent"
+msgstr "Récentes"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+#: ui/templates/notes/ui/partials/graph.html
+#: ui/templates/notes/ui/partials/help_dialog.html
+#: ui/templates/notes/ui/partials/sidebar.html
+msgid "Journal"
+msgstr "Journal"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Sort notes by"
+msgstr "Trier les notes par"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Last modified"
+msgstr "Dernière modification"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Date created"
+msgstr "Date de création"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Default notes folder"
+msgstr "Dossier des notes par défaut"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Journal folder"
+msgstr "Dossier du journal"
+
+#: ui/templates/notes/ui/partials/_preferences_content.html
+msgid "Show hidden items"
+msgstr "Afficher les éléments masqués"
+
+#: ui/templates/notes/ui/partials/context_menu.html
+msgid "Show in sidebar"
+msgstr "Afficher dans la barre latérale"
+
+#: ui/templates/notes/ui/partials/context_menu.html
+msgid "Hide from sidebar"
+msgstr "Masquer de la barre latérale"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgctxt "graph scope"
+msgid "My notes"
+msgstr "Miennes"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgctxt "all notes"
+msgid "All"
+msgstr "Toutes"
+
+#: ui/templates/notes/ui/partials/graph.html
+#: ui/templates/notes/ui/partials/note_list.html
+msgid "Search notes..."
+msgstr "Rechercher..."
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "All notes"
+msgstr "Toutes les notes"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "Regular notes"
+msgstr "Notes ordinaires"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "Filter tags..."
+msgstr "Filtrer les étiquettes..."
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "Clear filter"
+msgstr "Effacer le filtre"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "No tags found"
+msgstr "Aucune étiquette trouvée"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "Reset view"
+msgstr "Réinitialiser la vue"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "Legend"
+msgstr "Légende"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgctxt "favorite note"
+msgid "Favorite"
+msgstr "Favorite"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "Note"
+msgstr "Note"
+
+#: ui/templates/notes/ui/partials/graph.html
+msgid "Embedded file"
+msgstr "Fichier intégré"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Next note"
+msgstr "Note suivante"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Previous note"
+msgstr "Note précédente"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Close note / blur input"
+msgstr "Fermer la note / quitter le champ"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Go to My Notes"
+msgstr "Aller à Mes notes"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Go to Favorites"
+msgstr "Aller aux favoris"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Go to Recent"
+msgstr "Aller aux notes récentes"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Go to Journal (today)"
+msgstr "Aller au journal (aujourd’hui)"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Rename current note"
+msgstr "Renommer la note ouverte"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Star / unstar note"
+msgstr "Ajouter la note aux favoris ou l’en retirer"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Create</strong> &mdash; Click the <kbd class=\"kbd kbd-xs\">+</kbd> "
+"button in the note list panel to create a new note."
+msgstr ""
+"<strong>Créer</strong> &mdash; Cliquez sur le bouton <kbd class=\"kbd kbd-"
+"xs\">+</kbd> de la liste des notes pour créer une note."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Edit</strong> &mdash; Select a note to open the Markdown editor with "
+"live preview."
+msgstr ""
+"<strong>Modifier</strong> &mdash; Sélectionnez une note pour l’ouvrir dans "
+"l’éditeur Markdown avec aperçu en direct."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Rename</strong> &mdash; Click the note title in the editor toolbar "
+"to rename it."
+msgstr ""
+"<strong>Renommer</strong> &mdash; Cliquez sur le titre de la note dans la "
+"barre d’outils de l’éditeur pour la renommer."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Favorite</strong> &mdash; Click the star icon to mark a note as "
+"favorite."
+msgstr ""
+"<strong>Favori</strong> &mdash; Cliquez sur l’étoile pour ajouter une note "
+"aux favoris."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Tags</strong> &mdash; Use the tag manager to organize notes with "
+"labels."
+msgstr ""
+"<strong>Étiquettes</strong> &mdash; Utilisez le gestionnaire d’étiquettes "
+"pour classer vos notes."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Delete</strong> &mdash; Click the trash icon in the toolbar "
+"(confirmation can be toggled in preferences)."
+msgstr ""
+"<strong>Supprimer</strong> &mdash; Cliquez sur la corbeille de la barre "
+"d’outils (la confirmation se règle dans les préférences)."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Folders & Organization"
+msgstr "Dossiers et organisation"
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Folders</strong> &mdash; Organize notes in a nested folder tree (up "
+"to 4 levels deep)."
+msgstr ""
+"<strong>Dossiers</strong> &mdash; Rangez vos notes dans une arborescence de "
+"dossiers (jusqu’à 4 niveaux)."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Group folders</strong> &mdash; Create shared folders linked to your "
+"groups."
+msgstr ""
+"<strong>Dossiers de groupe</strong> &mdash; Créez des dossiers partagés liés "
+"à vos groupes."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Quick access</strong> &mdash; Use My Notes, Favorites, Recent, and "
+"Journal views in the sidebar."
+msgstr ""
+"<strong>Accès rapide</strong> &mdash; Passez d’une vue à l’autre depuis la "
+"barre latérale : Mes notes, Favoris, Récentes et Journal."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Context menu</strong> &mdash; Right-click folders for quick actions."
+msgstr ""
+"<strong>Menu contextuel</strong> &mdash; Faites un clic droit sur un dossier "
+"pour ses actions rapides."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Tags</strong> &mdash; Star a tag in the tag manager to keep it in "
+"the sidebar; click a chip on a note to see everything with that tag."
+msgstr ""
+"<strong>Étiquettes</strong> &mdash; Marquez une étiquette d’une étoile dans "
+"le gestionnaire pour la garder dans la barre latérale ; cliquez sur une "
+"étiquette d’une note pour voir tout ce qui la porte."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Daily notes</strong> &mdash; The journal automatically creates a "
+"note for today's date."
+msgstr ""
+"<strong>Notes quotidiennes</strong> &mdash; Le journal crée automatiquement "
+"une note à la date du jour."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Auto-folder</strong> &mdash; A dedicated \"Journal\" folder is "
+"created the first time you use it."
+msgstr ""
+"<strong>Dossier automatique</strong> &mdash; Un dossier « Journal » dédié "
+"est créé à la première utilisation."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid ""
+"<strong>Toggle</strong> &mdash; Show or hide the Journal entry in "
+"preferences."
+msgstr ""
+"<strong>Affichage</strong> &mdash; Affichez ou masquez l’entrée Journal dans "
+"les préférences."
+
+#: ui/templates/notes/ui/partials/help_dialog.html
+msgid "Notes use a rich Markdown editor with support for:"
+msgstr ""
+"Les notes s’écrivent dans un éditeur Markdown enrichi qui prend en charge :"
+
+#: ui/templates/notes/ui/partials/sidebar.html
+msgid "Graph"
+msgstr "Graphe"

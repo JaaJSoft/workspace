@@ -1,3 +1,5 @@
+{% load i18n %}
+{% translate "Tags" as tags_label %}
 <!-- Note list header -->
 <div class="flex items-center gap-2 p-3 border-b border-base-300">
   {% include "ui/partials/drawer_toggle.html" with drawer_id="notes-drawer" class="lg:hidden" %}
@@ -9,7 +11,7 @@
     type="button"
     class="btn btn-ghost btn-sm lg:btn-xs btn-square"
     @click="createNote()"
-    title="New note"
+    title="{% translate 'New note' %}"
     x-show="['all', 'folder', 'group_folder'].includes(activeView)"
     x-cloak
   >
@@ -19,7 +21,7 @@
     type="button"
     class="btn btn-ghost btn-sm lg:btn-xs btn-square"
     @click="applyFilters()"
-    title="Refresh"
+    title="{% translate 'Refresh' %}"
     :disabled="loadingNotes"
   >
     <i data-lucide="refresh-cw" class="w-3.5 h-3.5" x-show="!loadingNotes"></i>
@@ -42,7 +44,7 @@
     <input
       type="text"
       class="input input-xs w-full pl-8 pr-7 text-sm"
-      placeholder="Search notes..."
+      placeholder="{% translate 'Search notes...' %}"
       x-model="filters.search"
       @input="onSearchInput()"
       @keydown.escape.stop="filters.search = ''; applyFilters()"
@@ -53,6 +55,7 @@
       x-show="filters.search"
       x-cloak
       @click="filters.search = ''; applyFilters()"
+      aria-label="{% translate 'Clear' %}"
     >
       <i data-lucide="x" class="w-3 h-3"></i>
     </button>
@@ -67,7 +70,7 @@
       x-show="activeView !== 'favorites'"
       x-cloak
     >
-      <i data-lucide="star" class="w-3 h-3"></i> Favorites
+      <i data-lucide="star" class="w-3 h-3"></i> {% translate "Favorites" %}
     </button>
     <!-- Tag multi-select dropdown -->
     <div
@@ -82,7 +85,9 @@
         @click="showTagDropdown = !showTagDropdown"
       >
         <i data-lucide="tag" class="w-3 h-3"></i>
-        <span x-text="filters.tags.length > 0 ? selectedTagNames() : 'Tags'"></span>
+        <span
+          x-text="filters.tags.length > 0 ? selectedTagNames() : '{{ tags_label|escapejs }}'"
+        ></span>
         <i data-lucide="chevron-down" class="w-3 h-3"></i>
       </button>
       <div
@@ -110,7 +115,7 @@
     <span
       class="text-xs text-base-content/50"
       x-show="_hasActiveFilters()"
-      x-text="notes.length + (hasMoreNotes ? '+' : '') + ' result' + (notes.length !== 1 ? 's' : '')"
+      x-text="resultCountLabel()"
     ></span>
     <button
       type="button"
@@ -118,7 +123,7 @@
       x-show="_hasActiveFilters()"
       @click="clearFilters()"
     >
-      Clear
+      {% translate "Clear" %}
     </button>
   </div>
 </div>
@@ -167,7 +172,7 @@
         x-show="!notePrefs.compactList && note.tags && note.tags.length"
       >
         <template x-for="t in note.tags" :key="t.uuid">
-          <tag-chip :name="t.name" :color="t.color" size="sm" class="cursor-pointer" @click.stop="setView('tag', t.uuid, t.name)" :title="'Show notes tagged ' + t.name"></tag-chip>
+          <tag-chip :name="t.name" :color="t.color" size="sm" class="cursor-pointer" @click.stop="setView('tag', t.uuid, t.name)" :title="tagChipTitle(t)"></tag-chip>
         </template>
       </div>
     </button>
@@ -193,14 +198,14 @@
       class="btn btn-ghost btn-xs text-base-content/60"
       @click="loadMoreNotes()"
     >
-      Load more
+      {% translate "Load more" %}
     </button>
   </div>
   <div
     x-show="notes.length === 0 && !loadingNotes"
     class="p-4 text-center text-sm text-base-content/40"
   >
-    No notes found
+    {% translate "No notes found" %}
   </div>
   <!-- Skeleton loading -->
   <template x-if="loadingNotes">

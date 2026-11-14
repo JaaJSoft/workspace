@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.utils.html import escapejs
 
 from workspace.projects.services.tasks import create_task
+from workspace.users.services.settings import set_setting
 
 from .base import ProjectTestMixin
 from .test_ui import SettingsCleanupMixin
@@ -31,6 +32,14 @@ class BoardEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.board()
         self.assertContains(resp, '"target_date": "2026-10-03"')
         self.assertContains(resp, '"display_date": "Oct 03"')
+
+    def test_display_date_follows_the_users_language(self):
+        self.epic.target_date = date(2026, 10, 3)
+        self.epic.save(update_fields=["target_date"])
+        set_setting(self.member, "core", "language", "fr")
+        self.client.force_login(self.member)
+        resp = self.board()
+        self.assertContains(resp, '"display_date": "3 oct."')
 
     def test_card_shows_the_epic_badge(self):
         create_task(

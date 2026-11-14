@@ -1,3 +1,6 @@
+{% load i18n %}
+{# Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25". #}
+{% translate "M j" context "short due date format" as due_date_format %}
 {# concentric radius: board column is rounded-box with p-3, so inner radius = rounded-box - 0.75rem #}
 <li
   class="card rounded-[max(0px,calc(var(--radius-box)-0.75rem))] bg-base-100 border border-base-300 shadow-xs hover:shadow-md transition-shadow select-none {% if writable and not card_readonly %}cursor-grab{% endif %}"
@@ -27,7 +30,7 @@
       {% if task.subtask_count %}
         <span
           class="flex items-center gap-1 {% if task.subtask_done_count == task.subtask_count %}text-success{% endif %}"
-          title="Checklist"
+          title="{% translate "Checklist" %}"
         >
           <i data-lucide="square-check-big" class="w-3 h-3"></i>{{ task.subtask_done_count }}/{{ task.subtask_count }}
         </span>
@@ -35,17 +38,17 @@
       {% if task.is_blocked %}
         <span
           class="flex items-center gap-1 text-error font-medium"
-          title="Blocked by an open task"
+          title="{% translate "Blocked by an open task" %}"
           data-blocked-badge
         >
-          <i data-lucide="ban" class="w-3 h-3"></i>Blocked
+          <i data-lucide="ban" class="w-3 h-3"></i>{% translate "Blocked" context "task state" %}
         </span>
       {% endif %}
       {% if task.due_date %}
         <span
           class="flex items-center gap-1 {% if task.due_date < today and task.status.category != "done" %}text-error font-medium{% endif %}"
         >
-          <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:"M j" }}
+          <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:due_date_format }}
         </span>
       {% endif %}
       {% if task.assignees.all %}

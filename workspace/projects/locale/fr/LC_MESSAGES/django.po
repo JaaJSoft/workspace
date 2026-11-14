@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:46+0000\n"
+"POT-Creation-Date: 2026-11-13 16:58+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -11,6 +11,2515 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
 
+#: actions/project.py
+msgid "Manage members"
+msgstr "Gérer les membres"
+
+#: actions/project.py
+msgid "Manage labels"
+msgstr "Gérer les étiquettes"
+
+#: actions/project.py
+msgid "Manage epics"
+msgstr "Gérer les epics"
+
+#: actions/project.py ui/templates/projects/ui/partials/_sprint_switcher.html
+msgid "Manage sprints"
+msgstr "Gérer les sprints"
+
+#: actions/project.py
+msgid "Manage groups"
+msgstr "Gérer les groupes"
+
+#: actions/project.py
+msgctxt "project action"
+msgid "Archive"
+msgstr "Archiver"
+
+#: actions/project.py
+msgctxt "project action"
+msgid "Unarchive"
+msgstr "Désarchiver"
+
+#: actions/task.py
+msgctxt "task action"
+msgid "Move"
+msgstr "Déplacer"
+
+#: actions/task.py
+msgctxt "task action"
+msgid "Assign"
+msgstr "Assigner"
+
+#: actions/task.py ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Set due date"
+msgstr "Définir l’échéance"
+
+#: actions/task.py ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Set priority"
+msgstr "Définir la priorité"
+
+#: actions/task.py
+msgid "Set labels"
+msgstr "Définir les étiquettes"
+
+#: actions/task.py
+msgid "Set epic"
+msgstr "Définir l’epic"
+
+#: actions/task.py
+msgctxt "task action"
+msgid "Link"
+msgstr "Lier"
+
+#: actions/task.py ui/templates/projects/ui/partials/task_panel.html
+msgid "Link file"
+msgstr "Lier un fichier"
+
+#: actions/task.py
+msgctxt "task action"
+msgid "Comment"
+msgstr "Commenter"
+
 #: apps.py
 msgid "Plan work with kanban boards and backlogs."
 msgstr "Planifiez le travail avec des tableaux kanban et des backlogs."
+
+#: models.py
+msgctxt "project type"
+msgid "Personal"
+msgstr "Personnel"
+
+#: models.py
+msgctxt "project type"
+msgid "Kanban"
+msgstr "Kanban"
+
+#: models.py
+msgctxt "project type"
+msgid "Scrum"
+msgstr "Scrum"
+
+#: models.py ui/templates/projects/ui/partials/settings.html
+msgid "Story points"
+msgstr "Points d’effort"
+
+#: models.py
+msgid "Hours"
+msgstr "Heures"
+
+#: models.py ui/templates/projects/ui/partials/overview.html
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "project role"
+msgid "Admin"
+msgstr "Administrateur"
+
+#: models.py ui/templates/projects/ui/partials/settings.html
+msgctxt "project role"
+msgid "Member"
+msgstr "Membre"
+
+#: models.py ui/templates/projects/ui/partials/_content.html
+msgid "All notifications"
+msgstr "Toutes les notifications"
+
+#: models.py ui/templates/projects/ui/partials/_content.html
+#: ui/templates/projects/ui/partials/_preferences_content.html
+msgid "In-app only"
+msgstr "Dans l’application uniquement"
+
+#: models.py ui/templates/projects/ui/partials/settings.html
+#: ui/templates/projects/ui/partials/timeline.html ui/views.py
+msgctxt "status category"
+msgid "Backlog"
+msgstr "Backlog"
+
+#: models.py ui/templates/projects/ui/partials/settings.html
+#: ui/templates/projects/ui/partials/timeline.html ui/views.py
+msgctxt "status category"
+msgid "Active"
+msgstr "En cours"
+
+#: models.py ui/templates/projects/ui/partials/settings.html
+#: ui/templates/projects/ui/partials/timeline.html ui/views.py
+msgctxt "status category"
+msgid "Done"
+msgstr "Terminé"
+
+#: models.py ui/templates/projects/ui/partials/_sprint_switcher.html
+msgctxt "sprint state"
+msgid "Planned"
+msgstr "Planifié"
+
+#: models.py ui/templates/projects/ui/partials/_sprint_switcher.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgctxt "sprint state"
+msgid "Active"
+msgstr "Actif"
+
+#: models.py ui/templates/projects/ui/partials/_sprint_switcher.html
+msgctxt "sprint state"
+msgid "Closed"
+msgstr "Clôturé"
+
+#: models.py ui/templates/projects/ui/partials/_bulk_toolbar.html
+#: ui/templates/projects/ui/partials/_priority_selector.html
+msgctxt "task priority"
+msgid "Low"
+msgstr "Basse"
+
+#: models.py ui/templates/projects/ui/partials/_bulk_toolbar.html
+#: ui/templates/projects/ui/partials/_priority_selector.html
+msgctxt "task priority"
+msgid "Medium"
+msgstr "Moyenne"
+
+#: models.py ui/templates/projects/ui/partials/_bulk_toolbar.html
+#: ui/templates/projects/ui/partials/_priority_selector.html
+msgctxt "task priority"
+msgid "High"
+msgstr "Haute"
+
+#: models.py ui/templates/projects/ui/partials/_bulk_toolbar.html
+#: ui/templates/projects/ui/partials/_priority_selector.html
+msgctxt "task priority"
+msgid "Urgent"
+msgstr "Urgente"
+
+#: models.py
+msgid "Epic belongs to another project."
+msgstr "Cet epic appartient à un autre projet."
+
+#: models.py
+msgid "Sprint belongs to another project."
+msgstr "Ce sprint appartient à un autre projet."
+
+#: models.py serializers.py
+msgid "Start date cannot be after the due date."
+msgstr "La date de début ne peut pas être postérieure à l’échéance."
+
+#: models.py
+msgctxt "task link"
+msgid "Blocks"
+msgstr "Bloque"
+
+#: models.py
+msgctxt "task link"
+msgid "Duplicates"
+msgstr "Duplique"
+
+#: models.py
+msgctxt "task link"
+msgid "Relates to"
+msgstr "Lié à"
+
+#: models.py
+msgctxt "task event"
+msgid "Created"
+msgstr "Créée"
+
+#: models.py
+msgctxt "task event"
+msgid "Updated"
+msgstr "Modifiée"
+
+#: models.py
+msgctxt "task event"
+msgid "Assigned"
+msgstr "Assignée"
+
+#: models.py
+msgctxt "task event"
+msgid "Moved"
+msgstr "Déplacée"
+
+#: models.py
+msgctxt "task event"
+msgid "Completed"
+msgstr "Terminée"
+
+#: models.py
+msgctxt "task event"
+msgid "Deleted"
+msgstr "Supprimée"
+
+#: models.py
+msgctxt "task event"
+msgid "Commented"
+msgstr "Commentée"
+
+#: models.py
+msgctxt "task event"
+msgid "Estimated"
+msgstr "Estimée"
+
+#: models.py
+msgctxt "task event"
+msgid "Epic"
+msgstr "Epic"
+
+#: models.py
+msgctxt "task event"
+msgid "Sprint"
+msgstr "Sprint"
+
+#: models.py
+msgctxt "task event"
+msgid "Attached"
+msgstr "Fichier joint"
+
+#: models.py
+msgctxt "task event"
+msgid "Detached"
+msgstr "Fichier retiré"
+
+#: models.py
+msgctxt "task event"
+msgid "Linked"
+msgstr "Liée"
+
+#: models.py
+msgctxt "task event"
+msgid "Unlinked"
+msgstr "Déliée"
+
+#: models.py
+msgctxt "task event"
+msgid "File linked"
+msgstr "Fichier lié"
+
+#: models.py
+msgctxt "task event"
+msgid "File unlinked"
+msgstr "Fichier délié"
+
+#: models.py
+msgid "Task created"
+msgstr "Tâche créée"
+
+#: models.py
+msgid "Task updated"
+msgstr "Tâche modifiée"
+
+#: models.py
+msgid "Task assigned"
+msgstr "Tâche assignée"
+
+#: models.py
+msgid "Task moved"
+msgstr "Tâche déplacée"
+
+#: models.py
+msgid "Task completed"
+msgstr "Tâche terminée"
+
+#: models.py
+msgid "Task deleted"
+msgstr "Tâche supprimée"
+
+#: models.py
+msgid "Comment added"
+msgstr "Commentaire ajouté"
+
+#: models.py
+msgid "Estimate changed"
+msgstr "Estimation modifiée"
+
+#: models.py
+msgid "Epic changed"
+msgstr "Epic modifié"
+
+#: models.py
+msgid "Sprint changed"
+msgstr "Sprint modifié"
+
+#: models.py
+msgid "File attached"
+msgstr "Fichier joint"
+
+#: models.py
+msgid "File removed"
+msgstr "Fichier retiré"
+
+#: models.py
+msgid "Link added"
+msgstr "Lien ajouté"
+
+#: models.py
+msgid "Link removed"
+msgstr "Lien retiré"
+
+#: models.py
+msgid "File linked"
+msgstr "Fichier lié"
+
+#: models.py
+msgid "File unlinked"
+msgstr "Fichier délié"
+
+#: models.py
+msgctxt "task reminder"
+msgid "Due"
+msgstr "Échéance"
+
+#: models.py
+msgctxt "task reminder"
+msgid "Overdue"
+msgstr "En retard"
+
+#: search.py
+msgid "Project"
+msgstr "Projet"
+
+#: serializers.py
+msgid "Color must be a #rrggbb value."
+msgstr "La couleur doit être une valeur #rrggbb."
+
+#: serializers.py
+msgid "Use the convert endpoint to change the project type."
+msgstr "Utilisez la conversion du projet pour changer son type."
+
+#: serializers.py
+msgid "Personal projects are created automatically."
+msgstr "Les projets personnels sont créés automatiquement."
+
+#: serializers.py
+msgid "Use 2-10 letters and digits, starting with a letter."
+msgstr "Utilisez 2 à 10 lettres et chiffres, en commençant par une lettre."
+
+#: serializers.py
+msgid "Another project already uses this key."
+msgstr "Un autre projet utilise déjà cette clé."
+
+#: serializers.py
+msgid "You can only attach groups you belong to."
+msgstr "Vous ne pouvez associer que des groupes dont vous êtes membre."
+
+#: serializers.py
+msgid "Personal projects cannot be attached to groups."
+msgstr "Un projet personnel ne peut pas être associé à des groupes."
+
+#: serializers.py
+msgid "A label with this name already exists in this project."
+msgstr "Une étiquette de ce nom existe déjà dans ce projet."
+
+#: serializers.py
+msgid "An epic with this name already exists in this project."
+msgstr "Un epic de ce nom existe déjà dans ce projet."
+
+#: serializers.py
+msgid "A sprint with this name already exists in this project."
+msgstr "Un sprint de ce nom existe déjà dans ce projet."
+
+#: serializers.py
+msgid "End date cannot be before the start date."
+msgstr "La date de fin ne peut pas précéder la date de début."
+
+#: serializers.py
+msgid "A column with this name already exists in this project."
+msgstr "Une colonne de ce nom existe déjà dans ce projet."
+
+#: serializers.py
+msgid "Category cannot be changed."
+msgstr "La catégorie ne peut pas être modifiée."
+
+#: serializers.py
+#, python-format
+msgid "%(username)s is not a member of this project."
+msgstr "%(username)s n’est pas membre de ce projet."
+
+#: serializers.py
+msgid "No change requested."
+msgstr "Aucune modification demandée."
+
+#: serializers.py
+msgid "A user cannot be both assigned and unassigned."
+msgstr "Un utilisateur ne peut pas être à la fois assigné et désassigné."
+
+#: serializers.py
+msgid "A label cannot be both added and removed."
+msgstr "Une étiquette ne peut pas être à la fois ajoutée et retirée."
+
+#: serializers.py
+msgid "Title cannot be blank."
+msgstr "Le titre ne peut pas être vide."
+
+#: services/analytics.py ui/templates/projects/ui/partials/_task_filters.html
+msgid "Unassigned"
+msgstr "Non assignée"
+
+#: services/assignments.py
+#, python-format
+msgid "%(actor)s assigned you to \"%(task)s\""
+msgstr "%(actor)s vous a assigné « %(task)s »"
+
+#: services/assignments.py
+#, python-format
+msgid "%(actor)s assigned you to %(count)s task in %(project)s"
+msgid_plural "%(actor)s assigned you to %(count)s tasks in %(project)s"
+msgstr[0] "%(actor)s vous a assigné %(count)s tâche dans %(project)s"
+msgstr[1] "%(actor)s vous a assigné %(count)s de tâches dans %(project)s"
+msgstr[2] "%(actor)s vous a assigné %(count)s tâches dans %(project)s"
+
+#: services/comments.py
+#, python-format
+msgid "%(actor)s mentioned you in a comment on \"%(task)s\""
+msgstr "%(actor)s vous a mentionné dans un commentaire sur « %(task)s »"
+
+#: services/comments.py
+#, python-format
+msgid "%(actor)s commented on \"%(task)s\""
+msgstr "%(actor)s a commenté « %(task)s »"
+
+#: services/conversion.py
+msgid "Personal projects cannot change type."
+msgstr "Le type d’un projet personnel ne peut pas changer."
+
+#: services/conversion.py
+msgid "Unknown project type."
+msgstr "Type de projet inconnu."
+
+#: services/events.py
+msgctxt "task link"
+msgid "blocks"
+msgstr "bloque"
+
+#: services/events.py
+msgctxt "task link"
+msgid "is blocked by"
+msgstr "est bloquée par"
+
+#: services/events.py
+msgctxt "task link"
+msgid "duplicates"
+msgstr "duplique"
+
+#: services/events.py
+msgctxt "task link"
+msgid "is duplicated by"
+msgstr "est dupliquée par"
+
+#: services/events.py
+msgctxt "task link"
+msgid "relates to"
+msgstr "est liée à"
+
+#: services/events.py
+#, python-format
+msgid "Estimate changed: %(old)s → %(new)s"
+msgstr "Estimation modifiée : %(old)s → %(new)s"
+
+#: services/events.py
+#, python-format
+msgid "Estimate set to %(value)s"
+msgstr "Estimation fixée à %(value)s"
+
+#: services/events.py
+msgid "Estimate removed"
+msgstr "Estimation retirée"
+
+#: services/events.py
+#, python-format
+msgid "Epic changed: %(old)s → %(new)s"
+msgstr "Epic modifié : %(old)s → %(new)s"
+
+#: services/events.py
+#, python-format
+msgid "Epic set to %(name)s"
+msgstr "Epic défini sur %(name)s"
+
+#: services/events.py
+msgid "Epic removed"
+msgstr "Epic retiré"
+
+#: services/events.py
+#, python-format
+msgid "Sprint changed: %(old)s → %(new)s"
+msgstr "Sprint modifié : %(old)s → %(new)s"
+
+#: services/events.py
+#, python-format
+msgid "Added to sprint %(name)s"
+msgstr "Ajoutée au sprint %(name)s"
+
+#: services/events.py
+#, python-format
+msgid "Removed from sprint %(name)s"
+msgstr "Retirée du sprint %(name)s"
+
+#: services/events.py
+#, python-format
+msgid "%(event)s: %(direction)s %(reference)s"
+msgstr "%(event)s : %(direction)s %(reference)s"
+
+#: services/events.py
+#, python-format
+msgid "%(event)s: %(file)s"
+msgstr "%(event)s : %(file)s"
+
+#: services/file_links.py
+msgid "One or more files cannot be shared with the project."
+msgstr "Un ou plusieurs fichiers ne peuvent pas être partagés avec le projet."
+
+#: services/history.py
+msgid "< 1 day"
+msgstr "< 1 jour"
+
+#: services/history.py
+msgid "1-2 days"
+msgstr "1-2 jours"
+
+#: services/history.py
+msgid "2-4 days"
+msgstr "2-4 jours"
+
+#: services/history.py
+msgid "4-7 days"
+msgstr "4-7 jours"
+
+#: services/history.py
+msgid "1-2 weeks"
+msgstr "1-2 sem."
+
+#: services/history.py
+msgid "2-4 weeks"
+msgstr "2-4 sem."
+
+#: services/history.py
+msgid "> 4 weeks"
+msgstr "> 4 sem."
+
+#: services/links.py
+msgid "These tasks are already linked with this type."
+msgstr "Ces tâches sont déjà liées par ce type de lien."
+
+#: services/links.py
+msgid "A task cannot be linked to itself."
+msgstr "Une tâche ne peut pas être liée à elle-même."
+
+#: services/links.py
+msgid "This link would make a task block itself."
+msgstr "Ce lien ferait qu’une tâche se bloque elle-même."
+
+#: services/members.py
+msgid "Personal projects cannot have members."
+msgstr "Un projet personnel ne peut pas avoir de membres."
+
+#: services/members.py
+msgid "Cannot demote the last admin of a project."
+msgstr "Impossible de rétrograder le dernier administrateur d’un projet."
+
+#: services/members.py
+msgid ""
+"Cannot remove the last admin of a project. Promote another admin first or "
+"delete the project."
+msgstr ""
+"Impossible de retirer le dernier administrateur d’un projet. Nommez d’abord "
+"un autre administrateur ou supprimez le projet."
+
+#: services/projects.py ui/templates/projects/ui/project.html
+msgid "Backlog"
+msgstr "Backlog"
+
+#: services/projects.py
+msgid "To do"
+msgstr "À faire"
+
+#: services/projects.py
+msgid "In progress"
+msgstr "En cours"
+
+#: services/projects.py
+msgctxt "personal project name"
+msgid "Personal"
+msgstr "Personnel"
+
+#: services/sprints.py
+msgid "Only a planned sprint can be started."
+msgstr "Seul un sprint planifié peut être démarré."
+
+#: services/sprints.py
+msgid "Another sprint is already active."
+msgstr "Un autre sprint est déjà actif."
+
+#: services/sprints.py
+msgid "Only the active sprint can be completed."
+msgstr "Seul le sprint actif peut être terminé."
+
+#: services/sprints.py
+msgid "Target sprint must be another open sprint of this project."
+msgstr "Le sprint cible doit être un autre sprint ouvert de ce projet."
+
+#: services/sprints.py views/viewsets.py
+msgid "Unknown sprint for this project."
+msgstr "Sprint inconnu pour ce projet."
+
+#: services/sprints.py
+msgid "Tasks cannot be assigned to a closed sprint."
+msgstr "Impossible d’ajouter des tâches à un sprint clôturé."
+
+#: services/sprints.py
+msgid "The active sprint must be completed, not deleted."
+msgstr "Le sprint actif doit être terminé, pas supprimé."
+
+#: services/timeline.py
+#, python-format
+msgid "from %(date)s"
+msgstr "début %(date)s"
+
+#: services/timeline.py
+#, python-format
+msgid "due %(date)s"
+msgstr "échéance %(date)s"
+
+#: services/timeline.py
+msgctxt "timeline tooltip"
+msgid "overdue"
+msgstr "en retard"
+
+#. Translators: a PHP-style date format (Django's date filter) for a date on the timeline, e.g. "Oct 05".
+#: services/timeline.py
+msgctxt "timeline date"
+msgid "M d"
+msgstr "j N"
+
+#: services/timeline.py ui/templates/projects/ui/partials/_epic_selector.html
+msgid "No epic"
+msgstr "Sans epic"
+
+#: services/watchers.py
+msgid "Someone"
+msgstr "Quelqu’un"
+
+#: services/watchers.py
+#, python-format
+msgid "%(actor)s completed \"%(task)s\""
+msgstr "%(actor)s a terminé « %(task)s »"
+
+#: services/watchers.py
+#, python-format
+msgid "%(actor)s moved \"%(task)s\" to %(status)s"
+msgstr "%(actor)s a déplacé « %(task)s » vers %(status)s"
+
+#. Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25".
+#: tasks.py ui/templates/projects/ui/partials/_backlog_row.html
+#: ui/templates/projects/ui/partials/analytics.html
+#: ui/templates/projects/ui/partials/board.html
+#: ui/templates/projects/ui/partials/overview.html
+#: ui/templates/projects/ui/partials/task_card.html
+msgctxt "short due date format"
+msgid "M j"
+msgstr "j N"
+
+#: tasks.py
+#, python-format
+msgid "Overdue since %(date)s · %(project)s"
+msgstr "En retard depuis le %(date)s · %(project)s"
+
+#: tasks.py
+#, python-format
+msgid "Due today · %(project)s"
+msgstr "Échéance aujourd’hui · %(project)s"
+
+#: ui/templates/projects/ui/partials/_backlog_row.html
+msgid "Select task"
+msgstr "Sélectionner la tâche"
+
+#: ui/templates/projects/ui/partials/_backlog_row.html
+msgid "Send to current sprint"
+msgstr "Envoyer dans le sprint en cours"
+
+#: ui/templates/projects/ui/partials/_backlog_row.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Send to board"
+msgstr "Vers le tableau"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "<span x-text=\"selected.length\"></span> selected"
+msgstr "Sélection : <span x-text=\"selected.length\"></span>"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Assign or unassign"
+msgstr "Assigner ou désassigner"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Assign"
+msgstr "Assigner"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Unassign"
+msgstr "Désassigner"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Search members"
+msgstr "Rechercher des membres"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Add or remove a label"
+msgstr "Ajouter ou retirer une étiquette"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Label"
+msgstr "Étiquette"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Search labels"
+msgstr "Rechercher des étiquettes"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+#: ui/templates/projects/ui/partials/_task_filters.html
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Priority"
+msgstr "Priorité"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Due date"
+msgstr "Échéance"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Apply"
+msgstr "Appliquer"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Clear due date"
+msgstr "Effacer l’échéance"
+
+#: ui/templates/projects/ui/partials/_bulk_toolbar.html
+msgid "Delete the selected tasks"
+msgstr "Supprimer les tâches sélectionnées"
+
+#: ui/templates/projects/ui/partials/_collection_loading.html
+msgid "Loading tasks…"
+msgstr "Chargement des tâches…"
+
+#: ui/templates/projects/ui/partials/_content.html
+#: ui/templates/projects/ui/project.html
+msgctxt "project state"
+msgid "Archived"
+msgstr "Archivé"
+
+#: ui/templates/projects/ui/partials/_content.html
+#, python-format
+msgid "Notifications: %%(level)s"
+msgstr "Notifications : %%(level)s"
+
+#: ui/templates/projects/ui/partials/_content.html
+msgid "Notification level"
+msgstr "Niveau de notification"
+
+#: ui/templates/projects/ui/partials/_content.html
+#, python-format
+msgid "Default · %%(level)s"
+msgstr "Par défaut · %%(level)s"
+
+#: ui/templates/projects/ui/partials/_distribution_card.html
+msgid "Nothing open here."
+msgstr "Rien d’ouvert ici."
+
+#: ui/templates/projects/ui/partials/_epic_selector.html
+msgid "New epic..."
+msgstr "Nouvel epic..."
+
+#: ui/templates/projects/ui/partials/_estimate_badge.html
+msgid "Estimate"
+msgstr "Estimation"
+
+#: ui/templates/projects/ui/partials/_label_selector.html
+msgid "Add label..."
+msgstr "Ajouter une étiquette..."
+
+#: ui/templates/projects/ui/partials/_label_selector.html
+#, python-format
+msgid "Create \"%(query)s\""
+msgstr "Créer « %(query)s »"
+
+#: ui/templates/projects/ui/partials/_label_selector.html
+msgid "No matching epics"
+msgstr "Aucun epic correspondant"
+
+#: ui/templates/projects/ui/partials/_label_selector.html
+msgid "No matching labels"
+msgstr "Aucune étiquette correspondante"
+
+#: ui/templates/projects/ui/partials/_label_selector.html
+msgid "Could not create the epic."
+msgstr "Impossible de créer l’epic."
+
+#: ui/templates/projects/ui/partials/_label_selector.html
+msgid "Could not create the label."
+msgstr "Impossible de créer l’étiquette."
+
+#: ui/templates/projects/ui/partials/_preferences_content.html
+msgid "Due-date reminder time"
+msgstr "Heure du rappel d’échéance"
+
+#: ui/templates/projects/ui/partials/_preferences_content.html
+msgid ""
+"Tasks assigned to you remind you once when they fall due and once more when "
+"overdue, after this hour of your day."
+msgstr ""
+"Vous recevez un rappel pour les tâches qui vous sont assignées à leur "
+"échéance, puis un autre en cas de retard, après cette heure de votre journée."
+
+#: ui/templates/projects/ui/partials/_preferences_content.html
+msgid "All (in-app + push)"
+msgstr "Toutes (application + push)"
+
+#: ui/templates/projects/ui/partials/_preferences_content.html
+msgid ""
+"Applies to every project; the bell in a project's header can override it per "
+"project."
+msgstr ""
+"S’applique à tous les projets ; la cloche dans l’en-tête d’un projet permet "
+"de la modifier pour ce projet."
+
+#: ui/templates/projects/ui/partials/_preferences_content.html
+msgid "Auto-watch tasks"
+msgstr "Suivre les tâches automatiquement"
+
+#: ui/templates/projects/ui/partials/_preferences_content.html
+msgid ""
+"Commenting on a task or being assigned to it subscribes you to its updates."
+msgstr "Commenter une tâche ou y être assigné vous abonne à ses mises à jour."
+
+#: ui/templates/projects/ui/partials/_priority_selector.html
+msgid "All priorities"
+msgstr "Toutes les priorités"
+
+#: ui/templates/projects/ui/partials/_sprint_switcher.html
+msgctxt "sprint scope"
+msgid "Unplanned"
+msgstr "Hors sprint"
+
+#: ui/templates/projects/ui/partials/_sprint_switcher.html
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "Search sprints"
+msgstr "Rechercher des sprints"
+
+#: ui/templates/projects/ui/partials/_sprint_switcher.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Whole backlog"
+msgstr "Tout le backlog"
+
+#: ui/templates/projects/ui/partials/_sprint_switcher.html
+msgid "No started sprint yet."
+msgstr "Aucun sprint démarré pour l’instant."
+
+#: ui/templates/projects/ui/partials/_sprint_switcher.html
+msgid "Hide closed sprints"
+msgstr "Masquer les sprints clôturés"
+
+#: ui/templates/projects/ui/partials/_sprint_switcher.html
+#: ui/templates/projects/ui/partials/board.html
+msgid "New sprint"
+msgstr "Nouveau sprint"
+
+#: ui/templates/projects/ui/partials/_sprints_header_actions.html
+msgid "Add sprint"
+msgstr "Ajouter un sprint"
+
+#: ui/templates/projects/ui/partials/_status_selector.html
+msgid "All statuses"
+msgstr "Tous les statuts"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Search tasks"
+msgstr "Rechercher…"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Assignee"
+msgstr "Responsable"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Filter by assignee"
+msgstr "Filtrer par responsable"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Unassigned tasks"
+msgstr "Tâches non assignées"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Epic"
+msgstr "Epic"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Filter by epic"
+msgstr "Filtrer par epic"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Filter by label"
+msgstr "Filtrer par étiquette"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Filter by priority"
+msgstr "Filtrer par priorité"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+#: ui/templates/projects/ui/partials/all_tasks.html
+msgid "Status"
+msgstr "Statut"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Filter by status"
+msgstr "Filtrer par statut"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Clear all filters"
+msgstr "Effacer tous les filtres"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Remove the unassigned filter"
+msgstr "Retirer le filtre « non assignée »"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Remove the priority filter"
+msgstr "Retirer le filtre de priorité"
+
+#: ui/templates/projects/ui/partials/_task_filters.html
+msgid "Remove the status filter"
+msgstr "Retirer le filtre de statut"
+
+#: ui/templates/projects/ui/partials/_task_popover_card.html
+#, python-format
+msgid "Due %(date)s"
+msgstr "Échéance : %(date)s"
+
+#: ui/templates/projects/ui/partials/_task_popover_card.html
+msgid "Open task"
+msgstr "Ouvrir la tâche"
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Select all tasks"
+msgstr "Sélectionner toutes les tâches"
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Task"
+msgstr "Tâche"
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgctxt "estimate column"
+msgid "Est."
+msgstr "Est."
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgctxt "due date column"
+msgid "Due"
+msgstr "Échéance"
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Assignees"
+msgstr "Responsables"
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+#: ui/templates/projects/ui/partials/timeline.html
+#, python-format
+msgid ""
+"Only the first %(counter)s task is shown - narrow the filters to see the "
+"rest."
+msgid_plural ""
+"Only the first %(counter)s tasks are shown - narrow the filters to see the "
+"rest."
+msgstr[0] ""
+"Seule la première tâche est affichée : affinez les filtres pour voir les "
+"autres."
+msgstr[1] ""
+"Seules les %(counter)s premières tâches sont affichées : affinez les filtres "
+"pour voir les autres."
+msgstr[2] ""
+"Seules les %(counter)s premières tâches sont affichées : affinez les filtres "
+"pour voir les autres."
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "No tasks match the current filters."
+msgstr "Aucune tâche ne correspond aux filtres."
+
+#: ui/templates/projects/ui/partials/all_tasks.html
+msgid "This project has no tasks yet."
+msgstr "Ce projet n’a pas encore de tâche."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Nothing to chart yet"
+msgstr "Rien à afficher pour l’instant"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid ""
+"Create a few tasks and move them across the board. Throughput and "
+"distribution appear here as soon as there is history to read."
+msgstr ""
+"Créez quelques tâches et faites-les avancer sur le tableau. Le débit et la "
+"répartition s’affichent ici dès qu’il y a un historique à lire."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgctxt "task count"
+msgid "Completed"
+msgstr "Terminées"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "last 12 weeks"
+msgstr "12 dernières semaines"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgctxt "task count"
+msgid "Created"
+msgstr "Créées"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Net change"
+msgstr "Variation nette"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "backlog growing"
+msgstr "backlog en hausse"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "backlog shrinking"
+msgstr "backlog en baisse"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "backlog unchanged"
+msgstr "backlog stable"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Throughput"
+msgstr "Débit"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "completed per week"
+msgstr "terminées par semaine"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Created vs completed"
+msgstr "Créées et terminées"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Weekly, oldest first. The final bar covers the current week so far."
+msgstr ""
+"Par semaine, de la plus ancienne à la plus récente. La dernière barre couvre "
+"la semaine en cours."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Tasks created and completed per week over the last 12 weeks"
+msgstr "Tâches créées et terminées par semaine sur les 12 dernières semaines"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Cycle and lead time"
+msgstr "Temps de cycle et délai"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid ""
+"Tasks finished in the last 12 weeks. Lead time runs from creation to "
+"completion, cycle time from the first move onto the board."
+msgstr ""
+"Tâches terminées au cours des 12 dernières semaines. Le délai court de la "
+"création à la fin, le temps de cycle du premier passage sur le tableau à la "
+"fin."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Cycle time"
+msgstr "Temps de cycle"
+
+#: ui/templates/projects/ui/partials/analytics.html
+#, python-format
+msgid "%(days)s d"
+msgstr "%(days)s j"
+
+#: ui/templates/projects/ui/partials/analytics.html
+#, python-format
+msgid "median · 85%% within –"
+msgstr "médiane · 85 %% en moins de –"
+
+#: ui/templates/projects/ui/partials/analytics.html
+#, python-format
+msgid "median · 85%% within %(days)s d"
+msgstr "médiane · 85 %% en moins de %(days)s j"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Lead time"
+msgstr "Délai"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgctxt "task count"
+msgid "Finished"
+msgstr "Terminées"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "task measured"
+msgid_plural "tasks measured"
+msgstr[0] "tâche mesurée"
+msgstr[1] "de tâches mesurées"
+msgstr[2] "tâches mesurées"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Number of tasks per lead and cycle time bracket"
+msgstr "Nombre de tâches par tranche de délai et de temps de cycle"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "No task finished in the last 12 weeks yet."
+msgstr "Aucune tâche terminée au cours des 12 dernières semaines."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Cumulative flow"
+msgstr "Flux cumulé"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid ""
+"How many tasks sat in the backlog, on the board and in done at the end of "
+"each day. A widening middle band means work piles up faster than it finishes."
+msgstr ""
+"Nombre de tâches dans le backlog, sur le tableau et terminées à la fin de "
+"chaque jour. Une bande centrale qui s’élargit signifie que le travail "
+"s’accumule plus vite qu’il ne se termine."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Tasks per status category per day over the last 12 weeks"
+msgstr ""
+"Tâches par catégorie de statut et par jour sur les 12 dernières semaines"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Sprint burndown"
+msgstr "Burndown du sprint"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Pick a sprint"
+msgstr "Choisir un sprint"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Points left at the end of each sprint day against an even pace to zero."
+msgstr ""
+"Points restant à la fin de chaque jour du sprint, comparés à un rythme "
+"régulier jusqu’à zéro."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Hours left at the end of each sprint day against an even pace to zero."
+msgstr ""
+"Heures restant à la fin de chaque jour du sprint, comparées à un rythme "
+"régulier jusqu’à zéro."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Tasks left at the end of each sprint day against an even pace to zero."
+msgstr ""
+"Tâches restant à la fin de chaque jour du sprint, comparées à un rythme "
+"régulier jusqu’à zéro."
+
+#: ui/templates/projects/ui/partials/analytics.html
+#, python-format
+msgid "%(counter)s task without an estimate is not counted."
+msgid_plural "%(counter)s tasks without an estimate are not counted."
+msgstr[0] "%(counter)s tâche sans estimation n’est pas comptée."
+msgstr[1] "%(counter)s de tâches sans estimation ne sont pas comptées."
+msgstr[2] "%(counter)s tâches sans estimation ne sont pas comptées."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Remaining"
+msgstr "Restant"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "points still open"
+msgstr "points encore ouverts"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "hours still open"
+msgstr "heures encore ouvertes"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "tasks still open"
+msgstr "tâches encore ouvertes"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Scope"
+msgstr "Périmètre"
+
+#: ui/templates/projects/ui/partials/analytics.html
+#, python-format
+msgid "grew from %(initial)s at the start"
+msgstr "en hausse depuis %(initial)s au départ"
+
+#: ui/templates/projects/ui/partials/analytics.html
+#, python-format
+msgid "down from %(initial)s at the start"
+msgstr "en baisse depuis %(initial)s au départ"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "points planned, unchanged"
+msgstr "points prévus, inchangé"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "hours planned, unchanged"
+msgstr "heures prévues, inchangé"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "tasks planned, unchanged"
+msgstr "tâches prévues, inchangé"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Sprint"
+msgstr "Sprint"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgctxt "sprint without an end date"
+msgid "open"
+msgstr "ouvert"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Remaining effort per sprint day against the ideal pace"
+msgstr "Effort restant par jour de sprint par rapport au rythme idéal"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Start a sprint to see its burndown here."
+msgstr "Démarrez un sprint pour voir son burndown ici."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Velocity"
+msgstr "Vélocité"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid ""
+"Points completed per closed sprint, with the average over the last three."
+msgstr ""
+"Points terminés par sprint clôturé, avec la moyenne des trois derniers."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid ""
+"Hours completed per closed sprint, with the average over the last three."
+msgstr ""
+"Heures terminées par sprint clôturé, avec la moyenne des trois derniers."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid ""
+"Tasks completed per closed sprint, with the average over the last three."
+msgstr ""
+"Tâches terminées par sprint clôturé, avec la moyenne des trois derniers."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Last sprint"
+msgstr "Dernier sprint"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "points completed"
+msgstr "points terminés"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "hours completed"
+msgstr "heures terminées"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "tasks completed"
+msgstr "tâches terminées"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Average"
+msgstr "Moyenne"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "over the last three sprints"
+msgstr "sur les trois derniers sprints"
+
+#: ui/templates/projects/ui/partials/analytics.html
+#, python-format
+msgid "over %(counter)s sprint"
+msgid_plural "over %(counter)s sprints"
+msgstr[0] "sur %(counter)s sprint"
+msgstr[1] "sur %(counter)s de sprints"
+msgstr[2] "sur %(counter)s sprints"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid ""
+"Effort completed per closed sprint with the rolling three-sprint average"
+msgstr ""
+"Effort terminé par sprint clôturé avec la moyenne glissante sur trois sprints"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Velocity appears once a sprint has been completed."
+msgstr "La vélocité apparaît dès qu’un sprint est terminé."
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Open by column"
+msgstr "Ouvertes par colonne"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Open by assignee"
+msgstr "Ouvertes par responsable"
+
+#: ui/templates/projects/ui/partials/analytics.html
+msgid "Open by priority"
+msgstr "Ouvertes par priorité"
+
+#: ui/templates/projects/ui/partials/backlog.html
+#: ui/templates/projects/ui/partials/board.html
+#: ui/templates/projects/ui/partials/task_modal.html
+msgid "New task"
+msgstr "Nouvelle tâche"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Send to a sprint"
+msgstr "Envoyer dans un sprint"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Send to sprint"
+msgstr "Vers un sprint"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "No open sprint - create one from the sprint menu."
+msgstr "Aucun sprint ouvert : créez-en un depuis le menu des sprints."
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Remove from sprint"
+msgstr "Retirer du sprint"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgctxt "send tasks to the board"
+msgid "Send"
+msgstr "Envoyer"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Send to a specific column"
+msgstr "Envoyer dans une colonne précise"
+
+#: ui/templates/projects/ui/partials/backlog.html
+#: ui/templates/projects/ui/partials/board.html
+msgid "Estimate total · task count"
+msgstr "Estimation totale · nombre de tâches"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgctxt "hours estimate unit"
+msgid "h"
+msgstr "h"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgctxt "story points estimate unit"
+msgid "pt"
+msgstr "pt"
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "Every backlog task is planned into a sprint."
+msgstr "Toutes les tâches du backlog sont planifiées dans un sprint."
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "No backlog tasks in this sprint."
+msgstr "Aucune tâche du backlog dans ce sprint."
+
+#: ui/templates/projects/ui/partials/backlog.html
+msgid "The backlog is empty."
+msgstr "Le backlog est vide."
+
+#: ui/templates/projects/ui/partials/board.html
+msgid "No active sprint"
+msgstr "Aucun sprint actif"
+
+#: ui/templates/projects/ui/partials/board.html
+msgid "Complete sprint"
+msgstr "Terminer le sprint"
+
+#: ui/templates/projects/ui/partials/board.html
+msgid "Start a planned sprint to bring its tasks onto the board."
+msgstr "Démarrez un sprint planifié pour amener ses tâches sur le tableau."
+
+#: ui/templates/projects/ui/partials/board.html
+#, python-format
+msgid "%(counter)s task"
+msgid_plural "%(counter)s tasks"
+msgstr[0] "%(counter)s tâche"
+msgstr[1] "%(counter)s de tâches"
+msgstr[2] "%(counter)s tâches"
+
+#: ui/templates/projects/ui/partials/board.html
+msgctxt "sprint"
+msgid "Start"
+msgstr "Démarrer"
+
+#: ui/templates/projects/ui/partials/board.html
+msgid "Create a sprint, then plan it from the backlog."
+msgstr "Créez un sprint, puis planifiez-le depuis le backlog."
+
+#: ui/templates/projects/ui/partials/board.html
+msgid "A project admin can create and start sprints."
+msgstr "Un administrateur du projet peut créer et démarrer des sprints."
+
+#: ui/templates/projects/ui/partials/board.html
+#, python-format
+msgid ""
+"Only the first %(limit)s task is shown - narrow the filters to see the rest."
+msgid_plural ""
+"Only the first %(limit)s tasks are shown - narrow the filters to see the "
+"rest."
+msgstr[0] ""
+"Seule %(limit)s tâche est affichée - affinez les filtres pour voir le reste."
+msgstr[1] ""
+"Seules les %(limit)s premières tâches sont affichées - affinez les filtres "
+"pour voir le reste."
+msgstr[2] ""
+"Seules les %(limit)s premières tâches sont affichées - affinez les filtres "
+"pour voir le reste."
+
+#: ui/templates/projects/ui/partials/board.html
+#, python-format
+msgctxt "hidden tasks"
+msgid "%(counter)s hidden"
+msgid_plural "%(counter)s hidden"
+msgstr[0] "%(counter)s masquée"
+msgstr[1] "%(counter)s masquées"
+msgstr[2] "%(counter)s masquées"
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid "Close dialog"
+msgstr "Fermer la fenêtre"
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid "Views"
+msgstr "Vues"
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Overview</strong> &mdash; Task counts and recent activity at a "
+"glance."
+msgstr ""
+"<strong>Vue d’ensemble</strong> &mdash; Nombre de tâches et activité récente "
+"en un coup d’œil."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Board</strong> &mdash; Kanban columns for active work. Drag cards "
+"between columns or reorder them within one."
+msgstr ""
+"<strong>Tableau</strong> &mdash; Colonnes kanban pour le travail en cours. "
+"Faites glisser les cartes d’une colonne à l’autre ou réordonnez-les dans une "
+"colonne."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Backlog</strong> &mdash; Tasks waiting to be planned, kept off the "
+"board until you move them."
+msgstr ""
+"<strong>Backlog</strong> &mdash; Les tâches en attente de planification, "
+"gardées hors du tableau jusqu’à ce que vous les y déplaciez."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>All tasks</strong> &mdash; A flat list of every task in the project, "
+"grouped by column."
+msgstr ""
+"<strong>Toutes les tâches</strong> &mdash; La liste à plat de toutes les "
+"tâches du projet, regroupées par colonne."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Timeline</strong> &mdash; Tasks and dated epics on a date axis. Give "
+"a task a start date to draw it as a bar; zoom between week, month and "
+"quarter."
+msgstr ""
+"<strong>Chronologie</strong> &mdash; Les tâches et les epics datés sur un "
+"axe temporel. Donnez une date de début à une tâche pour l’afficher sous "
+"forme de barre ; zoomez par semaine, mois ou trimestre."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid "Tasks"
+msgstr "Tâches"
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Create</strong> &mdash; Use the New task button on the board or "
+"backlog."
+msgstr ""
+"<strong>Créer</strong> &mdash; Utilisez le bouton Nouvelle tâche du tableau "
+"ou du backlog."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Details</strong> &mdash; Click a card to open the task panel: "
+"description, status, priority, due date, assignees, labels, comments, and "
+"activity."
+msgstr ""
+"<strong>Détails</strong> &mdash; Cliquez sur une carte pour ouvrir le "
+"panneau de la tâche : description, statut, priorité, échéance, responsables, "
+"étiquettes, commentaires et activité."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Priorities</strong> &mdash; Rank tasks Low, Medium, High, or Urgent."
+msgstr ""
+"<strong>Priorités</strong> &mdash; Classez les tâches en Basse, Moyenne, "
+"Haute ou Urgente."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+#, python-format
+msgid ""
+"<strong>References</strong> &mdash; Every task gets a reference like "
+"<code>%(key)s-42</code>. Mention it in a description or comment to link to "
+"that task, or share a URL ending in <code>?task=%(key)s-42</code> to deep-"
+"link it."
+msgstr ""
+"<strong>Références</strong> &mdash; Chaque tâche reçoit une référence comme "
+"<code>%(key)s-42</code>. Mentionnez-la dans une description ou un "
+"commentaire pour créer un lien vers cette tâche, ou partagez une URL se "
+"terminant par <code>?task=%(key)s-42</code> pour y renvoyer directement."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Filters</strong> &mdash; Narrow the board or lists by text, "
+"assignee, priority, or label."
+msgstr ""
+"<strong>Filtres</strong> &mdash; Affinez le tableau ou les listes par texte, "
+"responsable, priorité ou étiquette."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid "Members & Sharing"
+msgstr "Membres et partage"
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Personal project</strong> &mdash; A private project is created for "
+"you automatically."
+msgstr ""
+"<strong>Projet personnel</strong> &mdash; Un projet privé est créé "
+"automatiquement pour vous."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Shared projects</strong> &mdash; Create more projects and invite "
+"members as Admin or Member."
+msgstr ""
+"<strong>Projets partagés</strong> &mdash; Créez d’autres projets et invitez "
+"des membres en tant qu’Administrateur ou Membre."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Groups</strong> &mdash; Link a project to groups to give every group "
+"member access."
+msgstr ""
+"<strong>Groupes</strong> &mdash; Associez un projet à des groupes pour "
+"donner accès à tous leurs membres."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid "Project Settings"
+msgstr "Paramètres du projet"
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>General</strong> &mdash; Admins can rename the project, edit its "
+"description and key, and choose how long done tasks stay on the board."
+msgstr ""
+"<strong>Général</strong> &mdash; Les administrateurs peuvent renommer le "
+"projet, modifier sa description et sa clé, et choisir combien de temps les "
+"tâches terminées restent sur le tableau."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Columns</strong> &mdash; Add, rename, recolor, and reorder board "
+"columns."
+msgstr ""
+"<strong>Colonnes</strong> &mdash; Ajoutez, renommez, recolorez et réordonnez "
+"les colonnes du tableau."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Labels</strong> &mdash; Manage the project's shared label palette."
+msgstr ""
+"<strong>Étiquettes</strong> &mdash; Gérez la palette d’étiquettes partagée "
+"du projet."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Epics</strong> &mdash; Epics can carry a target date; dated epics "
+"appear as markers on the timeline."
+msgstr ""
+"<strong>Epics</strong> &mdash; Un epic peut avoir une date cible ; les epics "
+"datés apparaissent comme des repères sur la chronologie."
+
+#: ui/templates/projects/ui/partials/help_dialog.html
+msgid ""
+"<strong>Danger zone</strong> &mdash; Archive a project to make it read-only, "
+"or delete it for good."
+msgstr ""
+"<strong>Zone de danger</strong> &mdash; Archivez un projet pour le passer en "
+"lecture seule, ou supprimez-le définitivement."
+
+#: ui/templates/projects/ui/partials/overview.html
+msgid "On the board"
+msgstr "Sur le tableau"
+
+#: ui/templates/projects/ui/partials/overview.html
+msgid "In backlog"
+msgstr "Dans le backlog"
+
+#: ui/templates/projects/ui/partials/overview.html
+msgctxt "task count"
+msgid "Done"
+msgstr "Terminées"
+
+#: ui/templates/projects/ui/partials/overview.html
+msgid "About"
+msgstr "À propos"
+
+#: ui/templates/projects/ui/partials/overview.html
+msgid "No description yet."
+msgstr "Pas encore de description."
+
+#: ui/templates/projects/ui/partials/overview.html
+#, python-format
+msgid "Created %(date)s by %(username)s"
+msgstr "Créé le %(date)s par %(username)s"
+
+#: ui/templates/projects/ui/partials/overview.html
+#, python-format
+msgid "Created %(date)s"
+msgstr "Créé le %(date)s"
+
+#: ui/templates/projects/ui/partials/overview.html
+msgid "Recent activity"
+msgstr "Activité récente"
+
+#: ui/templates/projects/ui/partials/overview.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No activity yet."
+msgstr "Aucune activité pour l’instant."
+
+#: ui/templates/projects/ui/partials/overview.html
+msgid "Members"
+msgstr "Membres"
+
+#: ui/templates/projects/ui/partials/overview.html
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Epics"
+msgstr "Epics"
+
+#: ui/templates/projects/ui/partials/overview.html
+#, python-format
+msgid "%(counter)s/%(total)s done"
+msgid_plural "%(counter)s/%(total)s done"
+msgstr[0] "%(counter)s/%(total)s terminée"
+msgstr[1] "%(counter)s/%(total)s terminées"
+msgstr[2] "%(counter)s/%(total)s terminées"
+
+#: ui/templates/projects/ui/partials/overview.html
+msgid "No open epics."
+msgstr "Aucun epic ouvert."
+
+#: ui/templates/projects/ui/partials/overview.html
+#, python-format
+msgid "%(counter)s completed epic"
+msgid_plural "%(counter)s completed epics"
+msgstr[0] "%(counter)s epic terminé"
+msgstr[1] "%(counter)s d’epics terminés"
+msgstr[2] "%(counter)s epics terminés"
+
+#: ui/templates/projects/ui/partials/overview.html
+#: ui/templates/projects/ui/partials/settings.html
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Labels"
+msgstr "Étiquettes"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Project details, board setup and access."
+msgstr "Détails du projet, configuration du tableau et accès."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "settings section"
+msgid "General"
+msgstr "Général"
+
+#: ui/templates/projects/ui/partials/settings.html
+#: ui/templates/projects/ui/project.html
+msgctxt "project field"
+msgid "Description"
+msgstr "Description"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "project key"
+msgid "Key"
+msgstr "Clé"
+
+#: ui/templates/projects/ui/partials/settings.html
+#, python-format
+msgid ""
+"Used in task references (%(key)s-42). Changing it changes every reference "
+"shown."
+msgstr ""
+"Utilisée dans les références des tâches (%(key)s-42). La modifier change "
+"toutes les références affichées."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Completed tasks visibility"
+msgstr "Visibilité des tâches terminées"
+
+#. Translators: tick labels of the completed tasks visibility slider, a number of days in very few characters.
+#: ui/templates/projects/ui/partials/settings.html
+#, python-format
+msgid "%(days)sd"
+msgstr "%(days)s j"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid ""
+"Tasks completed longer ago than this are hidden from the board's Done "
+"columns. They are not deleted and still count everywhere else."
+msgstr ""
+"Les tâches terminées depuis plus longtemps sont masquées des colonnes "
+"Terminé du tableau. Elles ne sont pas supprimées et restent comptées partout "
+"ailleurs."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Task estimation"
+msgstr "Estimation des tâches"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "task estimation"
+msgid "Disabled"
+msgstr "Désactivée"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "estimate unit"
+msgid "Hours"
+msgstr "Heures"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid ""
+"Adds an estimate field to tasks, with totals per board column. Switching the "
+"unit keeps the stored numbers and only relabels them."
+msgstr ""
+"Ajoute un champ d’estimation aux tâches, avec un total par colonne du "
+"tableau. Changer d’unité conserve les valeurs saisies et ne change que leur "
+"libellé."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "settings section"
+msgid "Access"
+msgstr "Accès"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Share this project with a group or add people directly."
+msgstr ""
+"Partagez ce projet avec un groupe ou ajoutez des personnes directement."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Attach one of your groups"
+msgstr "Associer l’un de vos groupes"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Detach group"
+msgstr "Dissocier le groupe"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "No groups attached."
+msgstr "Aucun groupe associé."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid ""
+"Members of attached groups get member access implicitly; they are not listed "
+"below."
+msgstr ""
+"Les membres des groupes associés ont implicitement un accès membre ; ils ne "
+"sont pas listés ci-dessous."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Add a member by username or name"
+msgstr "Ajouter un membre par identifiant ou nom"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Board model"
+msgstr "Modèle de tableau"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid ""
+"Tasks, columns, comments and history are kept either way. Converting takes "
+"effect immediately."
+msgstr ""
+"Tâches, colonnes, commentaires et historique sont conservés dans les deux "
+"cas. La conversion prend effet immédiatement."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "board model"
+msgid "Current"
+msgstr "Actuel"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Convert to scrum"
+msgstr "Convertir en scrum"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Convert to kanban"
+msgstr "Convertir en kanban"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Add column"
+msgstr "Ajouter une colonne"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "status category"
+msgid "Category"
+msgstr "Catégorie"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "settings form"
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Column color"
+msgstr "Couleur de la colonne"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Delete column"
+msgstr "Supprimer la colonne"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Reopen epic"
+msgstr "Rouvrir l’epic"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Close epic"
+msgstr "Clôturer l’epic"
+
+#: ui/templates/projects/ui/partials/settings.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No description."
+msgstr "Aucune description."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Search epics"
+msgstr "Rechercher des epics"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "epics"
+msgid "Open only"
+msgstr "Ouverts uniquement"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Add epic"
+msgstr "Ajouter un epic"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Target date (optional)"
+msgstr "Date cible (facultative)"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Description (optional)"
+msgstr "Description (facultative)"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Epic color"
+msgstr "Couleur de l’epic"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Target date"
+msgstr "Date cible"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "epic state"
+msgid "Closed"
+msgstr "Clôturé"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Delete epic"
+msgstr "Supprimer l’epic"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "No epics yet."
+msgstr "Aucun epic pour l’instant."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "No epics match."
+msgstr "Aucun epic ne correspond."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Label color"
+msgstr "Couleur de l’étiquette"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "No labels yet."
+msgstr "Aucune étiquette pour l’instant."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Danger zone"
+msgstr "Zone de danger"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Unarchive project"
+msgstr "Désarchiver le projet"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Archive project"
+msgstr "Archiver le projet"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Make the project editable again."
+msgstr "Rend le projet de nouveau modifiable."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Read-only for everyone until unarchived."
+msgstr "Lecture seule pour tous jusqu’au désarchivage."
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Unarchive"
+msgstr "Désarchiver"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgctxt "verb"
+msgid "Archive"
+msgstr "Archiver"
+
+#: ui/templates/projects/ui/partials/settings.html
+msgid "Delete project"
+msgstr "Supprimer le projet"
+
+#: ui/templates/projects/ui/partials/settings.html
+#, python-format
+msgid "Permanently deletes %(name)s and all its tasks."
+msgstr "Supprime définitivement %(name)s et toutes ses tâches."
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "No goal."
+msgstr "Aucun objectif."
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "Sprints"
+msgstr "Sprints"
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "Plan sprints from the backlog; start and complete them from the board."
+msgstr ""
+"Planifiez les sprints depuis le backlog ; démarrez-les et terminez-les "
+"depuis le tableau."
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgctxt "sprints"
+msgid "Hide closed"
+msgstr "Masquer les clôturés"
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgctxt "sprint start date"
+msgid "Start"
+msgstr "Début"
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgctxt "sprint end date"
+msgid "End"
+msgstr "Fin"
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "Goal (optional)"
+msgstr "Objectif (facultatif)"
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgctxt "sprint"
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "Delete sprint"
+msgstr "Supprimer le sprint"
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "No sprints yet."
+msgstr "Aucun sprint pour l’instant."
+
+#: ui/templates/projects/ui/partials/sprints_dialog.html
+msgid "No sprints match."
+msgstr "Aucun sprint ne correspond."
+
+#: ui/templates/projects/ui/partials/task_card.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Checklist"
+msgstr "Liste de contrôle"
+
+#: ui/templates/projects/ui/partials/task_card.html
+msgid "Blocked by an open task"
+msgstr "Bloquée par une tâche ouverte"
+
+#: ui/templates/projects/ui/partials/task_card.html
+msgctxt "task state"
+msgid "Blocked"
+msgstr "Bloquée"
+
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task field"
+msgid "Status"
+msgstr "Statut"
+
+#: ui/templates/projects/ui/partials/task_modal.html
+msgctxt "task field"
+msgid "Title"
+msgstr "Titre"
+
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task field"
+msgid "Description"
+msgstr "Description"
+
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Start date"
+msgstr "Date de début"
+
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+#, python-format
+msgid "Estimate (%(unit)s)"
+msgstr "Estimation (%(unit)s)"
+
+#: ui/templates/projects/ui/partials/task_modal.html
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Add assignee..."
+msgstr "Ajouter un responsable..."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Back to board"
+msgstr "Retour au tableau"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+#, python-format
+msgid "Notifications: %%(state)s"
+msgstr "Notifications : %%(state)s"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Watch task"
+msgstr "Suivre la tâche"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Default · follows involvement"
+msgstr "Par défaut · selon votre implication"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task watch state"
+msgid "Watching"
+msgstr "Suivie"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task watch state"
+msgid "Muted"
+msgstr "En sourdine"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Watchers"
+msgstr "Observateurs"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Delete task"
+msgstr "Supprimer la tâche"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Close panel"
+msgstr "Fermer le panneau"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No assignees."
+msgstr "Aucun responsable."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No labels."
+msgstr "Aucune étiquette."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Remove item"
+msgstr "Retirer l’élément"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Add an item..."
+msgstr "Ajouter un élément..."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Add item"
+msgstr "Ajouter l’élément"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No checklist."
+msgstr "Aucune liste de contrôle."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Linked tasks"
+msgstr "Tâches liées"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Remove link"
+msgstr "Retirer le lien"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No linked tasks."
+msgstr "Aucune tâche liée."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Link type"
+msgstr "Type de lien"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task link type"
+msgid "blocks"
+msgstr "bloque"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task link type"
+msgid "is blocked by"
+msgstr "est bloquée par"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task link type"
+msgid "duplicates"
+msgstr "duplique"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task link type"
+msgid "is duplicated by"
+msgstr "est dupliquée par"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "task link type"
+msgid "relates to"
+msgstr "est liée à"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Reference or title..."
+msgstr "Référence ou titre..."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No matching tasks"
+msgstr "Aucune tâche correspondante"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Linked files"
+msgstr "Fichiers liés"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Members can edit"
+msgstr "Les membres peuvent modifier"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Unlink file"
+msgstr "Délier le fichier"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No linked files."
+msgstr "Aucun fichier lié."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Link to the task"
+msgstr "Lier à la tâche"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid ""
+"Linking shares the files with every member of the project. The share shows "
+"up on each file and can be revoked there."
+msgstr ""
+"Lier des fichiers les partage avec tous les membres du projet. Le partage "
+"apparaît sur chaque fichier et peut y être révoqué."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Members can view"
+msgstr "Les membres peuvent consulter"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgctxt "link files to a task"
+msgid "Link"
+msgstr "Lier"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Attachments"
+msgstr "Pièces jointes"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Remove attachment"
+msgstr "Retirer la pièce jointe"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "No attachments."
+msgstr "Aucune pièce jointe."
+
+#: ui/templates/projects/ui/partials/task_panel.html
+msgid "Attach"
+msgstr "Joindre"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+#, python-format
+msgctxt "task metadata"
+msgid "Created %(date)s by %(user)s"
+msgstr "Créée le %(date)s par %(user)s"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+#, python-format
+msgctxt "task metadata"
+msgid "Created %(date)s"
+msgstr "Créée le %(date)s"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+#, python-format
+msgctxt "task metadata"
+msgid "Updated %(date)s"
+msgstr "Modifiée le %(date)s"
+
+#: ui/templates/projects/ui/partials/task_panel.html
+#, python-format
+msgctxt "task metadata"
+msgid "Completed %(date)s"
+msgstr "Terminée le %(date)s"
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgid "Nothing to place on the timeline yet"
+msgstr "Rien à placer sur la chronologie pour l’instant"
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgid ""
+"Give tasks a start or due date to draw them here, and give an epic a target "
+"date from the project settings to mark what lands when."
+msgstr ""
+"Donnez une date de début ou une échéance aux tâches pour les afficher ici, "
+"et une date cible aux epics dans les paramètres du projet pour marquer les "
+"jalons."
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgid "Give tasks a start or due date to draw them here."
+msgstr ""
+"Donnez une date de début ou une échéance aux tâches pour les afficher ici."
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgid "Zoom"
+msgstr "Zoom"
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgctxt "timeline legend"
+msgid "Overdue"
+msgstr "En retard"
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgid "Epic target"
+msgstr "Cible d’epic"
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgid "Sprint band"
+msgstr "Période de sprint"
+
+#: ui/templates/projects/ui/partials/timeline.html
+msgid "Tasks and epic target dates of the project on a date axis"
+msgstr "Tâches et dates cibles des epics du projet sur un axe temporel"
+
+#: ui/templates/projects/ui/partials/timeline.html
+#, python-format
+msgid "%(counter)s task has no dates and is not shown."
+msgid_plural "%(counter)s tasks have no dates and are not shown."
+msgstr[0] "%(counter)s tâche n’a pas de date et n’est pas affichée."
+msgstr[1] "%(counter)s de tâches n’ont pas de date et ne sont pas affichées."
+msgstr[2] "%(counter)s tâches n’ont pas de date et ne sont pas affichées."
+
+#: ui/templates/projects/ui/partials/timeline.html
+#, python-format
+msgid "%(counter)s task falls outside the visible range."
+msgid_plural "%(counter)s tasks fall outside the visible range."
+msgstr[0] "%(counter)s tâche est hors de la plage visible."
+msgstr[1] "%(counter)s de tâches sont hors de la plage visible."
+msgstr[2] "%(counter)s tâches sont hors de la plage visible."
+
+#: ui/templates/projects/ui/partials/timeline.html
+#, python-format
+msgid "%(counter)s epic falls outside the visible range."
+msgid_plural "%(counter)s epics fall outside the visible range."
+msgstr[0] "%(counter)s epic est hors de la plage visible."
+msgstr[1] "%(counter)s d’epics sont hors de la plage visible."
+msgstr[2] "%(counter)s epics sont hors de la plage visible."
+
+#: ui/templates/projects/ui/project.html
+msgid "New project"
+msgstr "Nouveau projet"
+
+#: ui/templates/projects/ui/project.html
+msgctxt "project view"
+msgid "Timeline"
+msgstr "Chronologie"
+
+#: ui/templates/projects/ui/project.html
+msgid "Overview"
+msgstr "Vue d’ensemble"
+
+#: ui/templates/projects/ui/project.html
+msgid "Board"
+msgstr "Tableau"
+
+#: ui/templates/projects/ui/project.html
+msgid "All tasks"
+msgstr "Toutes les tâches"
+
+#: ui/templates/projects/ui/project.html
+msgid "Analytics"
+msgstr "Statistiques"
+
+#: ui/templates/projects/ui/project.html
+msgid "Help (?)"
+msgstr "Aide (?)"
+
+#: ui/templates/projects/ui/project.html
+msgid "Could not create the project."
+msgstr "Impossible de créer le projet."
+
+#: ui/templates/projects/ui/project.html
+msgid "Board and backlog for your tasks"
+msgstr "Tableau et backlog pour vos tâches"
+
+#: ui/templates/projects/ui/project.html
+msgid "Continuous board"
+msgstr "Tableau continu"
+
+#: ui/templates/projects/ui/project.html
+msgid "Timeboxed sprints"
+msgstr "Sprints à durée fixe"
+
+#: ui/views.py
+msgid "A continuous board where every column is always visible."
+msgstr "Un tableau continu où chaque colonne est toujours visible."
+
+#: ui/views.py
+msgid "Timeboxed sprints; the board shows one sprint at a time."
+msgstr "Des sprints à durée fixe ; le tableau affiche un sprint à la fois."
+
+#. Translators: a PHP-style date format (Django's date filter) for an
+#. epic's target date in a picker, e.g. "Oct 03".
+#: ui/views.py
+msgctxt "epic target date"
+msgid "M d"
+msgstr "j N"
+
+#: ui/views.py
+msgctxt "timeline scale"
+msgid "Week"
+msgstr "Semaine"
+
+#: ui/views.py
+msgctxt "timeline scale"
+msgid "Month"
+msgstr "Mois"
+
+#: ui/views.py
+msgctxt "timeline scale"
+msgid "Quarter"
+msgstr "Trimestre"
+
+#: ui/views.py
+msgctxt "tasks chart series"
+msgid "Created"
+msgstr "Créées"
+
+#: ui/views.py
+msgctxt "tasks chart series"
+msgid "Completed"
+msgstr "Terminées"
+
+#: ui/views.py
+msgctxt "chart series"
+msgid "Lead time"
+msgstr "Délai total"
+
+#: ui/views.py
+msgctxt "chart series"
+msgid "Cycle time"
+msgstr "Temps de cycle"
+
+#: ui/views.py
+msgctxt "burndown series"
+msgid "Ideal"
+msgstr "Idéal"
+
+#: ui/views.py
+msgctxt "burndown series"
+msgid "Remaining"
+msgstr "Restant"
+
+#: ui/views.py
+msgctxt "velocity chart series"
+msgid "Completed"
+msgstr "Réalisé"
+
+#: ui/views.py
+msgctxt "velocity chart series"
+msgid "3-sprint average"
+msgstr "Moyenne sur 3 sprints"
+
+#. Translators: a PHP-style date format (Django's date filter) for a day
+#. on a chart axis, e.g. "Oct 05".
+#: ui/views.py
+msgctxt "chart day label format"
+msgid "M d"
+msgstr "j N"
+
+#: ui/views.py
+#, python-format
+msgid "No viewer available for %(type)s"
+msgstr "Aucune visionneuse disponible pour %(type)s"
+
+#: views/viewsets.py
+msgid "Project is archived."
+msgstr "Le projet est archivé."
+
+#: views/viewsets.py
+msgid "Personal projects cannot be deleted."
+msgstr "Un projet personnel ne peut pas être supprimé."
+
+#: views/viewsets.py
+msgid "Personal projects cannot be archived."
+msgstr "Un projet personnel ne peut pas être archivé."
+
+#: views/viewsets.py
+msgid "Admin role required."
+msgstr "Rôle d’administrateur requis."
+
+#: views/viewsets.py
+msgid "User not found."
+msgstr "Utilisateur introuvable."
+
+#: views/viewsets.py
+msgid "Sprints require a scrum project."
+msgstr "Les sprints nécessitent un projet Scrum."
+
+#: views/viewsets.py
+msgid "Unknown target sprint for this project."
+msgstr "Sprint cible inconnu pour ce projet."
+
+#: views/viewsets.py
+msgid "Unknown target column for this project."
+msgstr "Colonne cible inconnue pour ce projet."
+
+#: views/viewsets.py
+msgid "Unknown status for this project."
+msgstr "Colonne inconnue pour ce projet."
+
+#: views/viewsets.py
+msgid "Task not found."
+msgstr "Tâche introuvable."
+
+#: views/viewsets.py
+msgid "You can only modify your own comments."
+msgstr "Vous ne pouvez modifier que vos propres commentaires."
+
+#: views/viewsets.py
+#, python-format
+msgid "Maximum %(count)s attachment per request."
+msgid_plural "Maximum %(count)s attachments per request."
+msgstr[0] "%(count)s pièce jointe au maximum par requête."
+msgstr[1] "%(count)s de pièces jointes au maximum par requête."
+msgstr[2] "%(count)s pièces jointes au maximum par requête."
+
+#: views/viewsets.py
+#, python-format
+msgid "File \"%(name)s\" exceeds the 50 MB limit."
+msgstr "Le fichier « %(name)s » dépasse la limite de 50 Mo."
+
+#: views/viewsets.py
+msgid "One or more files not found or not accessible."
+msgstr "Un ou plusieurs fichiers sont introuvables ou inaccessibles."
+
+#: views/viewsets.py
+msgid "One or more workspace file contents are unavailable."
+msgstr "Le contenu d’un ou plusieurs fichiers de Workspace est indisponible."

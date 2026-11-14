@@ -1,63 +1,135 @@
-{% load ui_tags %}
+{% load i18n ui_tags %}
 {% help_items as items %}
-  keyboard | Keyboard Shortcuts | checked
+  keyboard | {% translate "Keyboard Shortcuts" %} | checked
   <table class="table table-sm">
     <tbody>
       <tr>
         <td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">K</kbd></td>
-        <td>Command palette</td>
+        <td>{% translate "Command palette" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">Esc</kbd></td>
-        <td>Close dialog</td>
+        <td>{% translate "Close dialog" %}</td>
       </tr>
       <tr>
         <td><kbd class="kbd kbd-sm">?</kbd></td>
-        <td>Show this help</td>
+        <td>{% translate "Show this help" %}</td>
       </tr>
     </tbody>
   </table>
   ---
-  square-kanban | Views
+  square-kanban | {% translate "Views" %}
   <ul>
-    <li><strong>Overview</strong> &mdash; Task counts and recent activity at a glance.</li>
-    <li><strong>Board</strong> &mdash; Kanban columns for active work. Drag cards between columns or reorder them within one.</li>
-    <li><strong>Backlog</strong> &mdash; Tasks waiting to be planned, kept off the board until you move them.</li>
-    <li><strong>All tasks</strong> &mdash; A flat list of every task in the project, grouped by column.</li>
-    <li><strong>Timeline</strong> &mdash; Tasks and dated epics on a date axis. Give a task a start date to draw it as a bar; zoom between week, month and quarter.</li>
-  </ul>
-  ---
-  list-todo | Tasks
-  <ul>
-    <li><strong>Create</strong> &mdash; Use the New task button on the board or backlog.</li>
-    <li><strong>Details</strong> &mdash; Click a card to open the task panel: description, status, priority, due date, assignees, labels, comments, and activity.</li>
-    <li><strong>Priorities</strong> &mdash; Rank tasks Low, Medium, High, or Urgent.</li>
-    <li><strong>References</strong> &mdash; Every task gets a reference like <code>{{ project.key }}-42</code>. Mention it in a description or comment to link to that task, or share a URL ending in <code>?task={{ project.key }}-42</code> to deep-link it.</li>
-    <li><strong>Filters</strong> &mdash; Narrow the board or lists by text, assignee, priority, or label.</li>
-  </ul>
-  ---
-  users | Members &amp; Sharing
-  <ul>
-    <li><strong>Personal project</strong> &mdash; A private project is created for you automatically.</li>
-    <li><strong>Shared projects</strong> &mdash; Create more projects and invite members as Admin or Member.</li>
-    <li><strong>Groups</strong> &mdash; Link a project to groups to give every group member access.</li>
-  </ul>
-  ---
-  settings | Project Settings
-  <ul>
-    <li><strong>General</strong> &mdash; Admins can rename the project, edit its description and key, and choose how long done tasks stay on the board.</li>
-    <li><strong>Columns</strong> &mdash; Add, rename, recolor, and reorder board columns.</li>
-    <li><strong>Labels</strong> &mdash; Manage the project's shared label palette.</li>
-    <li><strong>Epics</strong> &mdash; Epics can carry a target date; dated epics appear as markers on the timeline.</li>
-    <li><strong>Danger zone</strong> &mdash; Archive a project to make it read-only, or delete it for good.</li>
-  </ul>
-  ---
-  code | API Access
-  <ul>
-    <li><strong>Base URL:</strong> <code>/api/v1/projects</code></li>
-    <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
     <li>
-      <strong>Documentation:</strong> Full API docs are available at
+      {% blocktranslate trimmed %}
+        <strong>Overview</strong> &mdash; Task counts and recent activity at a glance.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Board</strong> &mdash; Kanban columns for active work. Drag cards between columns or reorder them within one.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Backlog</strong> &mdash; Tasks waiting to be planned, kept off the board until you move them.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>All tasks</strong> &mdash; A flat list of every task in the project, grouped by column.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Timeline</strong> &mdash; Tasks and dated epics on a date axis. Give a task a start date to draw it as a bar; zoom between week, month and quarter.
+      {% endblocktranslate %}
+    </li>
+  </ul>
+  ---
+  list-todo | {% translate "Tasks" %}
+  <ul>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Create</strong> &mdash; Use the New task button on the board or backlog.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Details</strong> &mdash; Click a card to open the task panel: description, status, priority, due date, assignees, labels, comments, and activity.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Priorities</strong> &mdash; Rank tasks Low, Medium, High, or Urgent.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed with key=project.key %}
+        <strong>References</strong> &mdash; Every task gets a reference like <code>{{ key }}-42</code>. Mention it in a description or comment to link to that task, or share a URL ending in <code>?task={{ key }}-42</code> to deep-link it.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Filters</strong> &mdash; Narrow the board or lists by text, assignee, priority, or label.
+      {% endblocktranslate %}
+    </li>
+  </ul>
+  ---
+  users | {% translate "Members & Sharing" %}
+  <ul>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Personal project</strong> &mdash; A private project is created for you automatically.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Shared projects</strong> &mdash; Create more projects and invite members as Admin or Member.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Groups</strong> &mdash; Link a project to groups to give every group member access.
+      {% endblocktranslate %}
+    </li>
+  </ul>
+  ---
+  settings | {% translate "Project Settings" %}
+  <ul>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>General</strong> &mdash; Admins can rename the project, edit its description and key, and choose how long done tasks stay on the board.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Columns</strong> &mdash; Add, rename, recolor, and reorder board columns.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Labels</strong> &mdash; Manage the project's shared label palette.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Epics</strong> &mdash; Epics can carry a target date; dated epics appear as markers on the timeline.
+      {% endblocktranslate %}
+    </li>
+    <li>
+      {% blocktranslate trimmed %}
+        <strong>Danger zone</strong> &mdash; Archive a project to make it read-only, or delete it for good.
+      {% endblocktranslate %}
+    </li>
+  </ul>
+  ---
+  code | {% translate "API Access" %}
+  <ul>
+    <li><strong>{% translate "Base URL:" %}</strong> <code>/api/v1/projects</code></li>
+    <li><strong>{% translate "Authentication:" %}</strong> {% translate "Use your session cookie or API token." %}</li>
+    <li>
+      <strong>{% translate "Documentation:" %}</strong> {% translate "Full API docs are available at" %}
       <a href="/schema/swagger-ui/" class="link link-module">/schema/swagger-ui/</a>.
     </li>
   </ul>

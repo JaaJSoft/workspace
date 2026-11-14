@@ -10,7 +10,10 @@ levels still apply on top (``notification_levels``).
 
 from collections import defaultdict
 
+from django.utils.translation import gettext
+
 from workspace.notifications.services.notifications import notify_stream
+from workspace.users.services.settings import in_recipient_languages
 
 from ..models import TaskStatus, TaskWatcher
 from ..queries import project_users
@@ -103,18 +106,29 @@ def notify_status_changed(moved, actor):
         recipients, priority_map = apply_levels(project.pk, watchers)
         if not recipients:
             continue
-        who = actor.username if actor else "Someone"
-        if task.status.category == TaskStatus.Category.DONE:
-            title = f'{who} completed "{task.title}"'
-        else:
-            title = f'{who} moved "{task.title}" to {task.status.name}'
-        notify_stream(
-            recipient_ids=[u.pk for u in recipients],
-            source=task,
-            origin="projects",
-            title=title,
-            url=_task_url(task),
-            actor=actor,
-            priority_map=priority_map,
-            stream="status",
-        )
+        for users in in_recipient_languages(recipients):
+            notify_stream(
+                recipient_ids=[u.pk for u in users],
+                source=task,
+                origin="projects",
+                title=_status_change_title(task, actor),
+                url=_task_url(task),
+                actor=actor,
+                priority_map=priority_map,
+                stream="status",
+            )
+
+
+def _status_change_title(task, actor):
+    """The notification title, in the language active for its recipients."""
+    who = actor.username if actor else gettext("Someone")
+    if task.status.category == TaskStatus.Category.DONE:
+        return gettext('%(actor)s completed "%(task)s"') % {
+            "actor": who,
+            "task": task.title,
+        }
+    return gettext('%(actor)s moved "%(task)s" to %(status)s') % {
+        "actor": who,
+        "task": task.title,
+        "status": task.status.name,
+    }

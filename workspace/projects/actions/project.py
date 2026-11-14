@@ -1,3 +1,6 @@
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
+
 from . import ProjectActionRegistry
 from .base import ActionCategory, BaseProjectAction, NotOnPersonalProjectMixin
 
@@ -5,7 +8,7 @@ from .base import ActionCategory, BaseProjectAction, NotOnPersonalProjectMixin
 @ProjectActionRegistry.register
 class RenameProjectAction(BaseProjectAction):
     id = "rename"
-    label = "Rename"
+    label = _("Rename")
     icon = "pencil"
     category = ActionCategory.EDIT
     target_types = ("project",)
@@ -15,7 +18,7 @@ class RenameProjectAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class ManageMembersAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "manage_members"
-    label = "Manage members"
+    label = _("Manage members")
     icon = "users"
     category = ActionCategory.MEMBERS
     target_types = ("project",)
@@ -25,7 +28,7 @@ class ManageMembersAction(NotOnPersonalProjectMixin, BaseProjectAction):
 @ProjectActionRegistry.register
 class ManageLabelsAction(BaseProjectAction):
     id = "manage_labels"
-    label = "Manage labels"
+    label = _("Manage labels")
     icon = "tags"
     category = ActionCategory.ORGANIZE
     target_types = ("project",)
@@ -35,7 +38,7 @@ class ManageLabelsAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class ManageEpicsAction(BaseProjectAction):
     id = "manage_epics"
-    label = "Manage epics"
+    label = _("Manage epics")
     icon = "layers"
     category = ActionCategory.ORGANIZE
     target_types = ("project",)
@@ -45,7 +48,7 @@ class ManageEpicsAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class ManageSprintsAction(BaseProjectAction):
     id = "manage_sprints"
-    label = "Manage sprints"
+    label = _("Manage sprints")
     icon = "timer"
     category = ActionCategory.ORGANIZE
     target_types = ("project",)
@@ -61,7 +64,7 @@ class ManageSprintsAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class AttachGroupAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "attach_group"
-    label = "Manage groups"
+    label = _("Manage groups")
     icon = "shield"
     category = ActionCategory.MEMBERS
     target_types = ("project",)
@@ -71,7 +74,7 @@ class AttachGroupAction(NotOnPersonalProjectMixin, BaseProjectAction):
 @ProjectActionRegistry.register
 class ArchiveProjectAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "archive"
-    label = "Archive"
+    label = pgettext_lazy("project action", "Archive")
     icon = "archive"
     category = ActionCategory.DANGER
     target_types = ("project",)
@@ -81,7 +84,7 @@ class ArchiveProjectAction(NotOnPersonalProjectMixin, BaseProjectAction):
 @ProjectActionRegistry.register
 class UnarchiveProjectAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "unarchive"
-    label = "Unarchive"
+    label = pgettext_lazy("project action", "Unarchive")
     icon = "archive-restore"
     category = ActionCategory.ORGANIZE
     target_types = ("project",)
@@ -97,7 +100,7 @@ class UnarchiveProjectAction(NotOnPersonalProjectMixin, BaseProjectAction):
 @ProjectActionRegistry.register
 class DeleteProjectAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "delete"
-    label = "Delete"
+    label = _("Delete")
     icon = "trash-2"
     category = ActionCategory.DANGER
     target_types = ("project",)

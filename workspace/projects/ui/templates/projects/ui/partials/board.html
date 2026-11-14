@@ -1,17 +1,21 @@
+{% load i18n %}
 <div id="board" class="flex flex-col gap-3 min-h-0">
   {% if project.type == "scrum" %}
     {% if sprint_data %}{{ sprint_data|json_script:"board-sprint-data" }}{% endif %}
     <div class="flex flex-wrap items-center gap-3">
       {% url 'projects_ui:board' project.uuid as sprint_switcher_url %}
-      {% include "projects/ui/partials/_sprint_switcher.html" with options=sprints selected=selected_sprint base_url=sprint_switcher_url empty_label="No active sprint" with_closed_toggle=has_closed_sprints %}
+      {% translate "No active sprint" as no_active_sprint_label %}
+      {% include "projects/ui/partials/_sprint_switcher.html" with options=sprints selected=selected_sprint base_url=sprint_switcher_url empty_label=no_active_sprint_label with_closed_toggle=has_closed_sprints %}
       {% if selected_sprint %}
         <span
           class="text-sm text-base-content/60 hidden sm:flex items-center gap-2 min-w-0"
         >
           {% if selected_sprint.start_date %}
+            {# Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25". #}
+            {% translate "M j" context "short due date format" as due_date_format %}
             <span class="flex items-center gap-1 shrink-0">
               <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-              {{ selected_sprint.start_date|date:"M j" }}{% if selected_sprint.end_date %} &ndash; {{ selected_sprint.end_date|date:"M j" }}{% endif %}
+              {{ selected_sprint.start_date|date:due_date_format }}{% if selected_sprint.end_date %} &ndash; {{ selected_sprint.end_date|date:due_date_format }}{% endif %}
             </span>
           {% endif %}
           {% if selected_sprint.goal %}<span class="truncate">{{ selected_sprint.goal }}</span>{% endif %}
@@ -23,7 +27,7 @@
             @click="completeSprint('{{ selected_sprint.uuid|escapejs }}', '{{ selected_sprint.name|escapejs }}')"
           >
             <i data-lucide="flag" class="w-4 h-4"></i>
-            Complete sprint
+            {% translate "Complete sprint" %}
           </button>
         {% endif %}
       {% endif %}
@@ -42,14 +46,22 @@
           class="rounded-box border border-base-300 bg-base-100 p-8 flex flex-col items-center gap-3 text-center"
         >
           <i data-lucide="timer" class="w-10 h-10 text-base-content/30"></i>
-          <p class="font-medium">No active sprint</p>
+          <p class="font-medium">{% translate "No active sprint" %}</p>
           {% if planned_sprints %}
-            <p class="text-sm text-base-content/60">Start a planned sprint to bring its tasks onto the board.</p>
+            <p
+              class="text-sm text-base-content/60"
+            >{% translate "Start a planned sprint to bring its tasks onto the board." %}</p>
             <ul class="w-full max-w-md flex flex-col gap-2 mt-2">
               {% for s in planned_sprints %}
                 <li class="rounded-box bg-base-200 p-3 flex items-center gap-3 text-left">
                   <span class="font-medium truncate flex-1">{{ s.name }}</span>
-                  <span class="badge badge-ghost badge-sm">{{ s.task_count }} task{{ s.task_count|pluralize }}</span>
+                  <span class="badge badge-ghost badge-sm">
+                    {% blocktranslate trimmed count counter=s.task_count %}
+                      {{ counter }} task
+                    {% plural %}
+                      {{ counter }} tasks
+                    {% endblocktranslate %}
+                  </span>
                   {% if role == "admin" and writable %}
                     <button
                       type="button"
@@ -57,14 +69,16 @@
                       @click="startSprint('{{ s.uuid|escapejs }}', '{{ s.name|escapejs }}')"
                     >
                       <i data-lucide="play" class="w-3.5 h-3.5"></i>
-                      Start
+                      {% translate "Start" context "sprint" %}
                     </button>
                   {% endif %}
                 </li>
               {% endfor %}
             </ul>
           {% elif role == "admin" %}
-            <p class="text-sm text-base-content/60">Create a sprint, then plan it from the backlog.</p>
+            <p
+              class="text-sm text-base-content/60"
+            >{% translate "Create a sprint, then plan it from the backlog." %}</p>
             {% if writable %}
               <button
                 type="button"
@@ -72,16 +86,21 @@
                 @click="openSprints({ add: true })"
               >
                 <i data-lucide="plus" class="w-4 h-4"></i>
-                New sprint
+                {% translate "New sprint" %}
               </button>
             {% endif %}
           {% else %}
-            <p class="text-sm text-base-content/60">A project admin can create and start sprints.</p>
+            <p class="text-sm text-base-content/60">{% translate "A project admin can create and start sprints." %}</p>
           {% endif %}
         </div>
       {% else %}
         {% if tasks_truncated %}
-          <inline-alert type="warning" message="Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest."></inline-alert>
+          {% blocktranslate trimmed count limit=task_render_limit asvar truncated_message %}
+            Only the first {{ limit }} task is shown - narrow the filters to see the rest.
+          {% plural %}
+            Only the first {{ limit }} tasks are shown - narrow the filters to see the rest.
+          {% endblocktranslate %}
+          <inline-alert type="warning" message="{{ truncated_message }}"></inline-alert>
         {% endif %}
         <div class="flex gap-3 overflow-x-auto items-start pb-4">
           {% for column in columns %}
@@ -105,7 +124,7 @@
                     {# One combined chip: the united number is the estimate total, the bare one the task count. #}
                     <span
                       class="badge badge-ghost badge-sm font-mono"
-                      title="Estimate total · task count"
+                      title="{% translate "Estimate total · task count" %}"
                     >
                       {{ column.estimate_total|floatformat:"-1" }}{% if project.estimate_unit == "hours" %}h{% else %}pt{% endif %} · {{ column.tasks|length }}
                     </span>
@@ -116,7 +135,7 @@
                     <button
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"
-                      title="New task"
+                      title="{% translate "New task" %}"
                       @click="newTask('{{ column.status.uuid|escapejs }}')"
                     >
                       <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -132,7 +151,11 @@
               {% if column.hidden_count %}
                 <p class="text-xs text-base-content/50 mt-2 flex items-center gap-1.5">
                   <i data-lucide="eye-off" class="w-3 h-3"></i>
-                  {{ column.hidden_count }} hidden
+                  {% blocktranslate trimmed count counter=column.hidden_count context "hidden tasks" %}
+                    {{ counter }} hidden
+                  {% plural %}
+                    {{ counter }} hidden
+                  {% endblocktranslate %}
                 </p>
               {% endif %}
             </section>

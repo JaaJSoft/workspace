@@ -1,6 +1,11 @@
 """Notification fan-out for task assignment."""
 
+from django.utils import translation
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
+
 from workspace.notifications.services.notifications import notify, notify_stream
+from workspace.users.services.settings import get_user_language, in_recipient_languages
 
 from .notification_levels import apply_levels
 
@@ -20,16 +25,18 @@ def notify_assigned(task, actor, assignees):
     recipients, priority_map = apply_levels(task.project_id, recipients)
     if not recipients:
         return
-    notify_stream(
-        recipient_ids=[u.pk for u in recipients],
-        source=task,
-        origin="projects",
-        title=f'{actor.username} assigned you to "{task.title}"',
-        url=_task_url(task),
-        actor=actor,
-        priority_map=priority_map,
-        stream="assignment",
-    )
+    for group in in_recipient_languages(recipients):
+        notify_stream(
+            recipient_ids=[u.pk for u in group],
+            source=task,
+            origin="projects",
+            title=_('%(actor)s assigned you to "%(task)s"')
+            % {"actor": actor.username, "task": task.title},
+            url=_task_url(task),
+            actor=actor,
+            priority_map=priority_map,
+            stream="assignment",
+        )
 
 
 def notify_bulk_assigned(project, actor, tasks_by_user):
@@ -50,10 +57,16 @@ def notify_bulk_assigned(project, actor, tasks_by_user):
         recipients, priority_map = apply_levels(project.pk, [user])
         if not recipients:
             continue
+        with translation.override(get_user_language(user)):
+            title = ngettext(
+                "%(actor)s assigned you to %(count)s task in %(project)s",
+                "%(actor)s assigned you to %(count)s tasks in %(project)s",
+                len(tasks),
+            ) % {"actor": actor.username, "count": len(tasks), "project": project.name}
         notify(
             recipient=user,
             origin="projects",
-            title=f"{actor.username} assigned you to {len(tasks)} tasks in {project.name}",
+            title=title,
             url=f"/projects/{project.uuid}/tasks?assignee={user.pk}",
             actor=actor,
             priority=priority_map.get(user.pk, "normal"),

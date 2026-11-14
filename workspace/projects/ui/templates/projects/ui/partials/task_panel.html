@@ -1,3 +1,5 @@
+{% load i18n %}
+{% translate "Status" context "task field" as status_label %}
 {# Task detail panel: read view with per-field inline editing (Jira-style). #}
 {# Swapped via alpine-ajax (target id "task-panel"); also included by #}
 {# project.html on ?task= deep links. Action availability is rendered #}
@@ -27,7 +29,7 @@
       type="button"
       class="btn btn-sm btn-square btn-ghost lg:hidden -ml-1"
       @click="closePanel()"
-      aria-label="Back to board"
+      aria-label="{% translate "Back to board" %}"
     >
       <i data-lucide="arrow-left" class="w-4 h-4"></i>
     </button>
@@ -43,12 +45,13 @@
       username: '{{ request.user.username|escapejs }}',
       })"
     >
+      {% translate "Notifications: %(state)s" as watch_title %}
       <button
         type="button"
         tabindex="0"
         class="btn btn-sm btn-ghost gap-1 px-2"
-        aria-label="Watch task"
-        :title="'Notifications: ' + label(state)"
+        aria-label="{% translate "Watch task" %}"
+        :title="interpolate('{{ watch_title|escapejs }}', { state: label(state) }, true)"
       >
         <i
           x-show="state !== 'muted'"
@@ -72,7 +75,7 @@
             @click="document.activeElement.blur(); reset()"
             :class="state === '' ? 'menu-active' : ''"
           >
-            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Default · follows involvement
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> {% translate "Default · follows involvement" %}
           </a>
         </li>
         <li>
@@ -80,7 +83,7 @@
             @click="document.activeElement.blur(); set('watching')"
             :class="state === 'watching' ? 'menu-active' : ''"
           >
-            <i data-lucide="eye" class="w-4 h-4"></i> Watching
+            <i data-lucide="eye" class="w-4 h-4"></i> {% translate "Watching" context "task watch state" %}
           </a>
         </li>
         <li>
@@ -88,10 +91,10 @@
             @click="document.activeElement.blur(); set('muted')"
             :class="state === 'muted' ? 'menu-active' : ''"
           >
-            <i data-lucide="eye-off" class="w-4 h-4"></i> Muted
+            <i data-lucide="eye-off" class="w-4 h-4"></i> {% translate "Muted" context "task watch state" %}
           </a>
         </li>
-        <li x-show="watchers.length" class="menu-title"><span>Watchers</span></li>
+        <li x-show="watchers.length" class="menu-title"><span>{% translate "Watchers" %}</span></li>
         <template x-for="w in watchers" :key="w.id">
           <li class="pointer-events-none">
             <span class="text-base-content/70">
@@ -101,12 +104,14 @@
         </template>
       </ul>
     </div>
+    {% translate "Copied" as copied_label %}
+    {% translate "Copy link" as copy_link_label %}
     <button
       type="button"
       class="btn btn-sm btn-square btn-ghost"
       @click="copyLink('{{ project.key|escapejs }}-{{ panel_task.number|escapejs }}')"
-      aria-label="Copy link"
-      :title="linkCopied ? 'Copied' : 'Copy link'"
+      aria-label="{{ copy_link_label }}"
+      :title="linkCopied ? '{{ copied_label|escapejs }}' : '{{ copy_link_label|escapejs }}'"
     >
       <span x-show="!linkCopied" class="inline-flex"><i data-lucide="link" class="w-4 h-4"></i></span>
       <span x-show="linkCopied" x-cloak class="inline-flex text-success">
@@ -118,8 +123,8 @@
         type="button"
         class="btn btn-sm btn-square btn-ghost text-error"
         @click="removeTask()"
-        aria-label="Delete task"
-        title="Delete task"
+        aria-label="{% translate "Delete task" %}"
+        title="{% translate "Delete task" %}"
       >
         <i data-lucide="trash-2" class="w-4 h-4"></i>
       </button>
@@ -128,7 +133,7 @@
       type="button"
       class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mr-1"
       @click="closePanel()"
-      aria-label="Close panel"
+      aria-label="{% translate "Close panel" %}"
     >
       <i data-lucide="x" class="w-4 h-4"></i>
     </button>
@@ -171,23 +176,23 @@
   <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
     <div class="grid grid-cols-2 gap-2">
       <div class="fieldset min-w-0">
-        <div class="fieldset-legend"><span class="text-xs">Status</span></div>
+        <div class="fieldset-legend"><span class="text-xs">{{ status_label }}</span></div>
         {% if "move" in panel_action_ids %}
-          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" on_change="commitField('status', data.status)" label="Status" %}
+          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" on_change="commitField('status', data.status)" label=status_label %}
         {% else %}
-          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" disabled=True label="Status" %}
+          {% include "projects/ui/partials/_status_selector.html" with model_expr="data.status" disabled=True label=status_label %}
         {% endif %}
       </div>
       <div class="fieldset min-w-0">
-        <div class="fieldset-legend"><span class="text-xs">Priority</span></div>
+        <div class="fieldset-legend"><span class="text-xs">{% translate "Priority" %}</span></div>
         {% if "set_priority" in panel_action_ids %}
-          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" on_change="commitField('priority', data.priority)" label="Priority" %}
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" on_change="commitField('priority', data.priority)" label=_("Priority") %}
         {% else %}
-          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" disabled=True label="Priority" %}
+          {% include "projects/ui/partials/_priority_selector.html" with model_expr="data.priority" disabled=True label=_("Priority") %}
         {% endif %}
       </div>
       <label class="fieldset min-w-0">
-        <div class="fieldset-legend"><span class="text-xs">Start date</span></div>
+        <div class="fieldset-legend"><span class="text-xs">{% translate "Start date" %}</span></div>
         <input
           type="date"
           class="input input-sm w-full min-w-0"
@@ -198,7 +203,7 @@
         />
       </label>
       <label class="fieldset min-w-0">
-        <div class="fieldset-legend"><span class="text-xs">Due date</span></div>
+        <div class="fieldset-legend"><span class="text-xs">{% translate "Due date" %}</span></div>
         <input
           type="date"
           class="input input-sm w-full min-w-0"
@@ -211,7 +216,11 @@
       {% if project.estimate_unit %}
         <label class="fieldset min-w-0">
           <div class="fieldset-legend">
-            <span class="text-xs">Estimate ({{ project.get_estimate_unit_display|lower }})</span>
+            <span class="text-xs">
+              {% blocktranslate trimmed with unit=project.get_estimate_unit_display|lower %}
+                Estimate ({{ unit }})
+              {% endblocktranslate %}
+            </span>
           </div>
           {# '' commits as null (unestimated); '0' is a real value, hence the explicit check. #}
           <input
@@ -231,11 +240,11 @@
         class="fieldset col-span-2 min-w-0"
         {% if role != "admin" %}x-show="openEpics().length || data.epic" x-cloak{% endif %}
       >
-        <div class="fieldset-legend"><span class="text-xs">Epic</span></div>
+        <div class="fieldset-legend"><span class="text-xs">{% translate "Epic" %}</span></div>
         {% if "set_epic" in panel_action_ids %}
-          {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" on_change="commitField('epic', data.epic || null)" label="Epic" %}
+          {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" on_change="commitField('epic', data.epic || null)" label=_("Epic") %}
         {% else %}
-          {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" disabled=True label="Epic" %}
+          {% include "projects/ui/partials/_epic_selector.html" with model_expr="data.epic" disabled=True label=_("Epic") %}
         {% endif %}
       </div>
     </div>
@@ -252,7 +261,7 @@
             :data-lucide="sectionsOpen.assignees ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Assignees</span>
+          <span>{% translate "Assignees" %}</span>
           <span
             class="font-mono normal-case"
             x-show="data.assignees.length"
@@ -276,10 +285,10 @@
           x-show="!data.assignees.length"
           x-cloak
         >
-          No assignees.
+          {% translate "No assignees." %}
         </p>
         <div x-show="can('assign') && unassignedUsers().length" x-cloak>
-          {% include "users/ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder="Add assignee..." local_source="unassignedUsers()" %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder=_("Add assignee...") local_source="unassignedUsers()" %}
         </div>
       </div>
     </section>
@@ -297,7 +306,7 @@
               :data-lucide="sectionsOpen.labels ? 'chevron-down' : 'chevron-right'"
               class="w-3.5 h-3.5 shrink-0"
             ></i>
-            <span>Labels</span>
+            <span>{% translate "Labels" %}</span>
             <span
               class="font-mono normal-case"
               x-show="data.labels.length"
@@ -326,7 +335,7 @@
             x-show="!data.labels.length"
             x-cloak
           >
-            No labels.
+            {% translate "No labels." %}
           </p>
           {% if "set_labels" in panel_action_ids %}
             {% include "projects/ui/partials/_label_selector.html" with on_select_event="panel-label-selected" all_source="labels" selected_source="data.labels" %}
@@ -347,7 +356,7 @@
             :data-lucide="sectionsOpen.description ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Description</span>
+          <span>{% translate "Description" context "task field" %}</span>
         </button>
       </h3>
       <div x-show="sectionsOpen.description">
@@ -359,7 +368,7 @@
             {% if panel_description_html %}
               <div class="prose prose-sm max-w-none">{{ panel_description_html|safe }}</div>
             {% else %}
-              <p class="text-sm text-base-content/50 italic">No description.</p>
+              <p class="text-sm text-base-content/50 italic">{% translate "No description." %}</p>
             {% endif %}
           </div>
         </template>
@@ -369,18 +378,18 @@
               class="textarea w-full text-sm"
               rows="6"
               x-model="draft"
-              placeholder="Markdown supported"
+              placeholder="{% translate "Markdown supported" %}"
               x-init="$el.focus()"
               @keydown.escape="cancelEdit()"
             ></textarea>
             <div class="flex justify-end gap-2 mt-1">
-              <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
+              <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">{% translate "Cancel" %}</button>
               <button
                 type="button"
                 class="btn btn-module btn-xs"
                 @click="commitDraft('description')"
               >
-                Save
+                {% translate "Save" %}
               </button>
             </div>
           </div>
@@ -400,7 +409,7 @@
             :data-lucide="sectionsOpen.checklist ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Checklist</span>
+          <span>{% translate "Checklist" %}</span>
           <span
             class="font-mono normal-case"
             x-show="subtasks.length"
@@ -467,7 +476,7 @@
                   type="button"
                   class="btn btn-ghost btn-xs btn-square shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
                   @click="removeSubtask(st)"
-                  aria-label="Remove item"
+                  aria-label="{% translate "Remove item" %}"
                 >
                   <i data-lucide="x" class="w-3.5 h-3.5"></i>
                 </button>
@@ -481,7 +490,7 @@
               type="text"
               maxlength="255"
               class="input input-sm flex-1"
-              placeholder="Add an item..."
+              placeholder="{% translate "Add an item..." %}"
               x-model="newSubtask"
               @keydown.enter.prevent="addSubtask()"
             />
@@ -490,7 +499,7 @@
               class="btn btn-sm btn-square"
               @click="addSubtask()"
               :disabled="!newSubtask.trim() || savingSubtask"
-              aria-label="Add item"
+              aria-label="{% translate "Add item" %}"
             >
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
@@ -501,7 +510,7 @@
             x-show="!subtasks.length"
             x-cloak
           >
-            No checklist.
+            {% translate "No checklist." %}
           </p>
         {% endif %}
       </div>
@@ -519,7 +528,7 @@
             :data-lucide="sectionsOpen.links ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Linked tasks</span>
+          <span>{% translate "Linked tasks" %}</span>
           <span
             class="font-mono normal-case"
             x-show="links.length"
@@ -558,8 +567,8 @@
                 class="btn btn-ghost btn-xs btn-square ml-auto self-center shrink-0"
                 x-show="can('link')"
                 @click="removeLink(link.uuid)"
-                aria-label="Remove link"
-                title="Remove link"
+                aria-label="{% translate "Remove link" %}"
+                title="{% translate "Remove link" %}"
               >
                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
               </button>
@@ -571,7 +580,7 @@
           x-show="!links.length"
           x-cloak
         >
-          No linked tasks.
+          {% translate "No linked tasks." %}
         </p>
         {% if "link" in panel_action_ids %}
           {# Stacked full-width rows: side by side the panel leaves the search #}
@@ -580,13 +589,13 @@
             <select
               class="select select-sm w-full"
               x-model="linkRel"
-              aria-label="Link type"
+              aria-label="{% translate "Link type" %}"
             >
-              <option value="blocks">blocks</option>
-              <option value="blocked_by">is blocked by</option>
-              <option value="duplicates">duplicates</option>
-              <option value="duplicated_by">is duplicated by</option>
-              <option value="relates_to">relates to</option>
+              <option value="blocks">{% translate "blocks" context "task link type" %}</option>
+              <option value="blocked_by">{% translate "is blocked by" context "task link type" %}</option>
+              <option value="duplicates">{% translate "duplicates" context "task link type" %}</option>
+              <option value="duplicated_by">{% translate "is duplicated by" context "task link type" %}</option>
+              <option value="relates_to">{% translate "relates to" context "task link type" %}</option>
             </select>
             <div class="relative min-w-0" @click.outside="linkDropdown = false">
               <label class="input input-sm flex items-center gap-2 w-full">
@@ -595,7 +604,7 @@
                 <input
                   type="text"
                   class="grow min-w-0"
-                  placeholder="Reference or title..."
+                  placeholder="{% translate "Reference or title..." %}"
                   x-model="linkQuery"
                   maxlength="255"
                   autocomplete="off"
@@ -640,7 +649,7 @@
                   x-cloak
                   class="p-3 text-sm text-base-content/60 text-center"
                 >
-                  No matching tasks
+                  {% translate "No matching tasks" %}
                 </p>
               </div>
             </div>
@@ -661,7 +670,7 @@
             :data-lucide="sectionsOpen.fileLinks ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Linked files</span>
+          <span>{% translate "Linked files" %}</span>
           <span
             class="font-mono normal-case"
             x-show="fileLinks.length"
@@ -706,14 +715,14 @@
                 x-cloak
                 data-lucide="trash-2"
                 class="w-3.5 h-3.5 shrink-0 text-warning"
-                title="In trash"
+                title="{% translate "In trash" %}"
               ></i>
               <i
                 x-show="!link.in_trash && link.permission === 'rw'"
                 x-cloak
                 data-lucide="pencil"
                 class="w-3.5 h-3.5 shrink-0 text-base-content/40"
-                title="Members can edit"
+                title="{% translate "Members can edit" %}"
               ></i>
               <span
                 class="text-xs text-base-content/50 shrink-0"
@@ -724,7 +733,7 @@
                 :href="link.download_url"
                 download
                 class="btn btn-ghost btn-xs btn-square"
-                title="Download"
+                title="{% translate "Download" %}"
               >
                 <i data-lucide="download" class="w-3.5 h-3.5"></i>
               </a>
@@ -732,7 +741,7 @@
                 <button
                   type="button"
                   class="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
-                  title="Unlink file"
+                  title="{% translate "Unlink file" %}"
                   @click="unlinkFile(link)"
                 >
                   <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -746,7 +755,7 @@
           x-show="!fileLinks.length"
           x-cloak
         >
-          No linked files.
+          {% translate "No linked files." %}
         </p>
         {% if "link_file" in panel_action_ids %}
           <button
@@ -756,13 +765,13 @@
             @click="linkWorkspaceFiles()"
           >
             <i data-lucide="file-symlink" class="w-3.5 h-3.5"></i>
-            <span>Link file</span>
+            <span>{% translate "Link file" %}</span>
           </button>
           {# Second step after the workspace picker: linking shares the files #}
           {# with the project, so the member picks the share permission here. #}
           <dialog x-ref="linkFileDialog" class="modal" @close="cancelLinkFiles()">
             <div class="modal-box max-w-sm">
-              {% include "ui/partials/dialog_header.html" with icon="file-symlink" title="Link to the task" subtitle="Linking shares the files with every member of the project. The share shows up on each file and can be revoked there." only %}
+              {% include "ui/partials/dialog_header.html" with icon="file-symlink" title=_("Link to the task") subtitle=_("Linking shares the files with every member of the project. The share shows up on each file and can be revoked there.") only %}
               <ul class="flex flex-col gap-1 mb-4 max-h-40 overflow-y-auto text-sm">
                 <template x-for="f in pendingFileLinks" :key="f.uuid">
                   <li class="flex items-center gap-2 min-w-0">
@@ -779,7 +788,7 @@
                     value="ro"
                     x-model="fileLinkPermission"
                   />
-                  <span class="text-sm">Members can view</span>
+                  <span class="text-sm">{% translate "Members can view" %}</span>
                 </label>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
@@ -788,7 +797,7 @@
                     value="rw"
                     x-model="fileLinkPermission"
                   />
-                  <span class="text-sm">Members can edit</span>
+                  <span class="text-sm">{% translate "Members can edit" %}</span>
                 </label>
               </fieldset>
               <template x-if="fileLinkError">
@@ -802,7 +811,7 @@
                   class="btn btn-sm btn-ghost"
                   @click="$refs.linkFileDialog.close()"
                 >
-                  Cancel
+                  {% translate "Cancel" %}
                 </button>
                 <button
                   type="button"
@@ -815,12 +824,12 @@
                     x-cloak
                     class="loading loading-spinner loading-xs"
                   ></span>
-                  Link
+                  {% translate "Link" context "link files to a task" %}
                 </button>
               </div>
             </div>
             <form method="dialog" class="modal-backdrop">
-              <button type="submit">close</button>
+              <button type="submit">{% translate "close" %}</button>
             </form>
           </dialog>
         {% endif %}
@@ -839,7 +848,7 @@
             :data-lucide="sectionsOpen.attachments ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Attachments</span>
+          <span>{% translate "Attachments" %}</span>
           <span
             class="font-mono normal-case"
             x-show="attachments.length"
@@ -870,7 +879,7 @@
                 :href="att.download_url"
                 download
                 class="btn btn-ghost btn-xs btn-square"
-                title="Download"
+                title="{% translate "Download" %}"
               >
                 <i data-lucide="download" class="w-3.5 h-3.5"></i>
               </a>
@@ -878,7 +887,7 @@
                 <button
                   type="button"
                   class="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
-                  title="Remove attachment"
+                  title="{% translate "Remove attachment" %}"
                   @click="unlinkAttachment(att)"
                 >
                   <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -892,11 +901,11 @@
           x-show="!attachments.length && !hasPendingAttachments()"
           x-cloak
         >
-          No attachments.
+          {% translate "No attachments." %}
         </p>
         {% if "attach" in panel_action_ids %}
           {% include "ui/partials/attachment_chips.html" with chips_class="flex flex-wrap gap-2 mb-2" %}
-          {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-bottom" button_class="btn btn-outline btn-xs gap-1.5" icon_class="w-3.5 h-3.5" label="Attach" %}
+          {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-bottom" button_class="btn btn-outline btn-xs gap-1.5" icon_class="w-3.5 h-3.5" label=_("Attach") %}
         {% endif %}
       </div>
     </section>
@@ -913,7 +922,7 @@
             :data-lucide="sectionsOpen.comments ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Comments</span>
+          <span>{% translate "Comments" %}</span>
         </button>
       </h3>
       <div x-show="sectionsOpen.comments">
@@ -934,7 +943,7 @@
             :data-lucide="sectionsOpen.activity ? 'chevron-down' : 'chevron-right'"
             class="w-3.5 h-3.5 shrink-0"
           ></i>
-          <span>Activity</span>
+          <span>{% translate "Activity" %}</span>
           {% if panel_events %}<span class="font-mono normal-case">{{ panel_events|length }}</span>{% endif %}
         </button>
       </h3>
@@ -942,7 +951,7 @@
         {% for event in panel_events %}
           {% include "core/partials/activity_item.html" with activity_hide_view=True %}
         {% empty %}
-          <li class="py-2 text-sm text-base-content/50 italic">No activity yet.</li>
+          <li class="py-2 text-sm text-base-content/50 italic">{% translate "No activity yet." %}</li>
         {% endfor %}
       </ul>
     </section>
@@ -950,9 +959,31 @@
     <section
       class="text-xs text-base-content/50 flex flex-col gap-0.5 border-t border-base-200 pt-3"
     >
-      <span>Created {{ panel_task.created_at|date:"DATE_FORMAT" }}{% if panel_task.created_by %} by {{ panel_task.created_by.username }}{% endif %}</span>
-      <span>Updated {{ panel_task.updated_at|date:"DATE_FORMAT" }}</span>
-      {% if panel_task.completed_at %}<span>Completed {{ panel_task.completed_at|date:"DATE_FORMAT" }}</span>{% endif %}
+      {% if panel_task.created_by %}
+        <span>
+          {% blocktranslate trimmed context "task metadata" with date=panel_task.created_at|date:"DATE_FORMAT" user=panel_task.created_by.username %}
+            Created {{ date }} by {{ user }}
+          {% endblocktranslate %}
+        </span>
+      {% else %}
+        <span>
+          {% blocktranslate trimmed context "task metadata" with date=panel_task.created_at|date:"DATE_FORMAT" %}
+            Created {{ date }}
+          {% endblocktranslate %}
+        </span>
+      {% endif %}
+      <span>
+        {% blocktranslate trimmed context "task metadata" with date=panel_task.updated_at|date:"DATE_FORMAT" %}
+          Updated {{ date }}
+        {% endblocktranslate %}
+      </span>
+      {% if panel_task.completed_at %}
+        <span>
+          {% blocktranslate trimmed context "task metadata" with date=panel_task.completed_at|date:"DATE_FORMAT" %}
+            Completed {{ date }}
+          {% endblocktranslate %}
+        </span>
+      {% endif %}
     </section>
 
   </div>

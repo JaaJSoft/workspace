@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from ..models import Sprint, Task, TaskEvent, TaskStatus
 from .events import record_task_event
@@ -52,9 +53,9 @@ def start_sprint(sprint, *, actor=None):
         sprints = list(project.sprints.select_for_update())
         current = next((s for s in sprints if s.pk == sprint.pk), sprint)
         if current.state != Sprint.State.PLANNED:
-            raise SprintStateError("Only a planned sprint can be started.")
+            raise SprintStateError(_("Only a planned sprint can be started."))
         if any(s.state == Sprint.State.ACTIVE for s in sprints):
-            raise ActiveSprintError("Another sprint is already active.")
+            raise ActiveSprintError(_("Another sprint is already active."))
         current.state = Sprint.State.ACTIVE
         if current.start_date is None:
             current.start_date = timezone.localdate()
@@ -90,7 +91,7 @@ def complete_sprint(sprint, *, move_to=None, actor=None):
         sprints = list(project.sprints.select_for_update())
         current = next((s for s in sprints if s.pk == sprint.pk), sprint)
         if current.state != Sprint.State.ACTIVE:
-            raise SprintStateError("Only the active sprint can be completed.")
+            raise SprintStateError(_("Only the active sprint can be completed."))
         if move_to is not None:
             target = next((s for s in sprints if s.pk == move_to.pk), None)
             if (
@@ -99,7 +100,7 @@ def complete_sprint(sprint, *, move_to=None, actor=None):
                 or target.state == Sprint.State.CLOSED
             ):
                 raise SprintTargetError(
-                    "Target sprint must be another open sprint of this project."
+                    _("Target sprint must be another open sprint of this project.")
                 )
             move_to = target
         backlog_status = None
@@ -185,9 +186,11 @@ def assign_tasks_to_sprint(project, sprint, task_uuids, *, actor=None):
         if sprint is not None:
             sprint = _locked_sprint(project, sprint)
             if sprint is None:
-                raise SprintTargetError("Unknown sprint for this project.")
+                raise SprintTargetError(_("Unknown sprint for this project."))
             if sprint.state == Sprint.State.CLOSED:
-                raise SprintTargetError("Tasks cannot be assigned to a closed sprint.")
+                raise SprintTargetError(
+                    _("Tasks cannot be assigned to a closed sprint.")
+                )
         board_status = None
         if sprint is not None and sprint.state == Sprint.State.ACTIVE:
             board_status = (
@@ -255,7 +258,9 @@ def delete_sprint(sprint):
         if current is None:
             return
         if current.state == Sprint.State.ACTIVE:
-            raise SprintStateError("The active sprint must be completed, not deleted.")
+            raise SprintStateError(
+                _("The active sprint must be completed, not deleted.")
+            )
         current.delete()
 
 

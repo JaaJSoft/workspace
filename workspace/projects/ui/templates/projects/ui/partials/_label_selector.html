@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Label/epic combobox: search-as-you-type over a project-scoped tag list,
 with an admin-only "Create ..." row when the query matches no existing
@@ -10,10 +11,10 @@ Params:
                      { detail: { label } } when an entry is picked (required)
   - all_source:      Alpine expression returning every pickable entry (required)
   - selected_source: Alpine expression returning the selected uuid list (required)
-  - placeholder:     Django string (default "Add label...")
+  - placeholder:     Django string, translated by the caller (default "Add label...")
   - no_create:       Django flag - hide the admin "Create ..." row (pure picker,
                      e.g. the filter bar, where creating an entry makes no sense)
-  - entity:          singular noun for the copy (default "label")
+  - entity:          "label" (default) or "epic", picks the empty and error copy
   - icon:            lucide icon on the input (default "tag")
 
 Reads `role`, `writable` and `project` from the Django context: admins on a
@@ -22,6 +23,7 @@ create URL is cosmetic gating only - the API enforces admin itself. On
 creation the component dispatches "project-label-created" with the new
 label (handled once on the board root), then the selection event.
 {% endcomment %}
+{% translate "Add label..." as default_placeholder %}
 {% with entity=entity|default:"label" %}
   <div
     x-data="labelSelector('{{ on_select_event|escapejs }}', () => {{ all_source }}, () => {{ selected_source }}, '{% if "admin" == role and writable and not no_create %}/api/v1/projects/{{ project.uuid|escapejs }}/labels{% endif %}')"
@@ -37,7 +39,7 @@ label (handled once on the board root), then the selection event.
       <input
         type="text"
         class="grow min-w-0"
-        placeholder="{{ placeholder|default:'Add label...' }}"
+        placeholder="{{ placeholder|default:default_placeholder }}"
         x-model="query"
         maxlength="100"
         autocomplete="off"
@@ -85,7 +87,11 @@ label (handled once on the board root), then the selection event.
             @mouseenter="highlight = results.length"
           >
             <i data-lucide="plus" class="w-4 h-4"></i>
-            <span class="text-sm">Create "<span x-text="trimmedQuery()"></span>"</span>
+            <span class="text-sm">
+              {% blocktranslate trimmed with query='<span x-text="trimmedQuery()"></span>' %}
+                Create "{{ query }}"
+              {% endblocktranslate %}
+            </span>
           </button>
         </li>
       </ul>
@@ -94,9 +100,19 @@ label (handled once on the board root), then the selection event.
         x-cloak
         class="p-3 text-sm text-base-content/60 text-center"
       >
-        No matching {{ entity }}s
+        {% if entity == "epic" %}
+          {% translate "No matching epics" %}
+        {% else %}
+          {% translate "No matching labels" %}
+        {% endif %}
       </p>
-      <p x-show="createError" x-cloak class="px-3 py-2 text-xs text-error">Could not create the {{ entity }}.</p>
+      <p x-show="createError" x-cloak class="px-3 py-2 text-xs text-error">
+        {% if entity == "epic" %}
+          {% translate "Could not create the epic." %}
+        {% else %}
+          {% translate "Could not create the label." %}
+        {% endif %}
+      </p>
     </div>
   </div>
 {% endwith %}

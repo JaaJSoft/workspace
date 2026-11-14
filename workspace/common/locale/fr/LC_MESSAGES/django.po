@@ -3,13 +3,31 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:46+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
+
+#. Translators: a PHP-style date format (Django's date filter) for a day on a chart's date axis, e.g. "Sep 07".
+#: charts.py
+msgctxt "chart axis day"
+msgid "M d"
+msgstr "j N"
+
+#. Translators: a PHP-style date format (Django's date filter) for a month on a chart's date axis, e.g. "Sep 2026".
+#: charts.py
+msgctxt "chart axis month"
+msgid "M Y"
+msgstr "N Y"
+
+#: charts.py
+#, python-format
+msgctxt "chart axis quarter"
+msgid "Q%(quarter)s %(year)s"
+msgstr "T%(quarter)s %(year)s"
 
 #: dates.py
 msgid "just now"
@@ -342,12 +360,20 @@ msgid "Continue"
 msgstr "Continuer"
 
 #: vocabulary.py
+msgid "Copied"
+msgstr "Copié"
+
+#: vocabulary.py
 msgid "Copied!"
 msgstr "Copié !"
 
 #: vocabulary.py
 msgid "Copy link"
 msgstr "Copier le lien"
+
+#: vocabulary.py
+msgid "Could not save."
+msgstr "Impossible d’enregistrer."
 
 #: vocabulary.py
 msgid "Couldn't load activity."
@@ -500,6 +526,10 @@ msgstr "Image trop volumineuse. La taille maximale est de 10 Mo."
 #: vocabulary.py
 msgid "Imports"
 msgstr "Importations"
+
+#: vocabulary.py
+msgid "In trash"
+msgstr "Dans la corbeille"
 
 #: vocabulary.py
 msgid "Inline code"

@@ -1,3 +1,4 @@
+{% load i18n %}
 {{ project_data|json_script:"project-settings-data" }}
 {{ columns_data|json_script:"columns-settings-data" }}
 <div
@@ -7,9 +8,9 @@
   <div>
     <h2 class="text-lg font-semibold flex items-center gap-2">
       <i data-lucide="settings" class="w-5 h-5 text-module"></i>
-      Settings
+      {% translate "Settings" %}
     </h2>
-    <p class="text-sm text-base-content/60 mt-0.5">Project details, board setup and access.</p>
+    <p class="text-sm text-base-content/60 mt-0.5">{% translate "Project details, board setup and access." %}</p>
   </div>
 
   {# Default stretch alignment on purpose: side-by-side cards share their row's height, so a tall neighbor never leaves a floating short card. #}
@@ -24,16 +25,16 @@
     >
       <h3 class="font-semibold flex items-center gap-2">
         <i data-lucide="sliders-horizontal" class="w-4 h-4 text-module"></i>
-        General
+        {% translate "General" context "settings section" %}
       </h3>
       <template x-if="error">
         <inline-alert type="error"><span x-text="error"></span></inline-alert>
       </template>
       <template x-if="saved">
-        <inline-alert type="success" message="Saved."></inline-alert>
+        <inline-alert type="success" message="{% translate "Saved" %}"></inline-alert>
       </template>
       <label class="fieldset w-full">
-        <div class="fieldset-legend"><span>Name</span></div>
+        <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
         <input
           type="text"
           class="input w-full"
@@ -43,7 +44,7 @@
         />
       </label>
       <label class="fieldset w-full">
-        <div class="fieldset-legend"><span>Description</span></div>
+        <div class="fieldset-legend"><span>{% translate "Description" context "project field" %}</span></div>
         <textarea
           class="textarea w-full"
           rows="3"
@@ -52,7 +53,7 @@
         ></textarea>
       </label>
       <label class="fieldset w-full">
-        <div class="fieldset-legend"><span>Key</span></div>
+        <div class="fieldset-legend"><span>{% translate "Key" context "project key" %}</span></div>
         <input
           type="text"
           class="input w-full font-mono uppercase"
@@ -61,12 +62,16 @@
           {% if not writable %}disabled{% endif %}
         />
         <div class="label whitespace-normal">
-          <span>Used in task references ({{ project.key }}-42). Changing it changes every reference shown.</span>
+          <span>
+            {% blocktranslate trimmed with key=project.key %}
+              Used in task references ({{ key }}-42). Changing it changes every reference shown.
+            {% endblocktranslate %}
+          </span>
         </div>
       </label>
       <div class="fieldset w-full">
         <div class="fieldset-legend w-full">
-          <span>Completed tasks visibility</span>
+          <span>{% translate "Completed tasks visibility" %}</span>
           <span class="font-medium text-module" x-text="retentionSliderLabel()"></span>
         </div>
         <input
@@ -75,37 +80,38 @@
           max="5"
           step="1"
           class="range range-sm range-module w-full"
-          aria-label="Completed tasks visibility"
+          aria-label="{% translate "Completed tasks visibility" %}"
           :aria-valuetext="retentionSliderLabel()"
           :value="retentionIndex()"
           @input="setRetentionIndex($event.target.value)"
           {% if not writable %}disabled{% endif %}
         />
         <div class="flex justify-between px-1.5 mt-1 text-xs text-base-content/50">
-          <span>1d</span>
-          <span>7d</span>
-          <span>14d</span>
-          <span>30d</span>
-          <span>90d</span>
+          {% comment %}Translators: tick labels of the completed tasks visibility slider, a number of days in very few characters.{% endcomment %}
+          <span>{% blocktranslate with days=1 %}{{ days }}d{% endblocktranslate %}</span>
+          <span>{% blocktranslate with days=7 %}{{ days }}d{% endblocktranslate %}</span>
+          <span>{% blocktranslate with days=14 %}{{ days }}d{% endblocktranslate %}</span>
+          <span>{% blocktranslate with days=30 %}{{ days }}d{% endblocktranslate %}</span>
+          <span>{% blocktranslate with days=90 %}{{ days }}d{% endblocktranslate %}</span>
           <span>&infin;</span>
         </div>
         <div class="label whitespace-normal">
-          <span>Tasks completed longer ago than this are hidden from the board's Done columns. They are not deleted and still count everywhere else.</span>
+          <span>{% translate "Tasks completed longer ago than this are hidden from the board's Done columns. They are not deleted and still count everywhere else." %}</span>
         </div>
       </div>
       <label class="fieldset w-full">
-        <div class="fieldset-legend"><span>Task estimation</span></div>
+        <div class="fieldset-legend"><span>{% translate "Task estimation" %}</span></div>
         <select
           class="select select-sm w-full"
           x-model="estimateUnit"
           {% if not writable %}disabled{% endif %}
         >
-          <option value="">Disabled</option>
-          <option value="points">Story points</option>
-          <option value="hours">Hours</option>
+          <option value="">{% translate "Disabled" context "task estimation" %}</option>
+          <option value="points">{% translate "Story points" %}</option>
+          <option value="hours">{% translate "Hours" context "estimate unit" %}</option>
         </select>
         <div class="label whitespace-normal">
-          <span>Adds an estimate field to tasks, with totals per board column. Switching the unit keeps the stored numbers and only relabels them.</span>
+          <span>{% translate "Adds an estimate field to tasks, with totals per board column. Switching the unit keeps the stored numbers and only relabels them." %}</span>
         </div>
       </label>
       <div class="flex justify-end">
@@ -115,7 +121,7 @@
           @click="save()"
           :disabled="saving || !name.trim() || !key.trim() || !writable"
         >
-          Save
+          {% translate "Save" %}
         </button>
       </div>
     </section>
@@ -130,9 +136,11 @@
         <div>
           <h3 class="font-semibold flex items-center gap-2">
             <i data-lucide="users" class="w-4 h-4 text-module"></i>
-            Access
+            {% translate "Access" context "settings section" %}
           </h3>
-          <p class="text-sm text-base-content/60 mt-0.5">Share this project with a group or add people directly.</p>
+          <p
+            class="text-sm text-base-content/60 mt-0.5"
+          >{% translate "Share this project with a group or add people directly." %}</p>
         </div>
         <template x-if="error">
           <inline-alert type="error"><span x-text="error"></span></inline-alert>
@@ -148,17 +156,18 @@
             <inline-alert type="error" class="mb-2"><span x-text="error"></span></inline-alert>
           </template>
           <div class="flex items-center justify-between">
-            <h4 class="text-sm font-medium text-base-content/70">Groups</h4>
+            <h4 class="text-sm font-medium text-base-content/70">{% translate "Groups" %}</h4>
             <span
               class="text-xs text-success flex items-center gap-1"
               x-show="saved"
               x-transition
             >
-              <i data-lucide="check" class="w-3 h-3"></i> Saved
+              <i data-lucide="check" class="w-3 h-3"></i> {% translate "Saved" %}
             </span>
           </div>
           {% if writable %}
-            {% include "ui/partials/group_selector.html" with on_select_event="project-group-selected" local_source="selectableGroups()" placeholder="Attach one of your groups" %}
+            {% translate "Attach one of your groups" as group_placeholder %}
+            {% include "ui/partials/group_selector.html" with on_select_event="project-group-selected" local_source="selectableGroups()" placeholder=group_placeholder %}
           {% endif %}
           <div class="flex flex-wrap gap-2" x-show="items.length">
             <template x-for="group in items" :key="group.id">
@@ -169,7 +178,7 @@
                   <button
                     type="button"
                     class="btn btn-ghost btn-xs btn-square text-error"
-                    aria-label="Detach group"
+                    aria-label="{% translate "Detach group" %}"
                     :disabled="busy"
                     @click="removeGroup(group)"
                   >
@@ -179,15 +188,16 @@
               </span>
             </template>
           </div>
-          <p class="text-sm text-base-content/60" x-show="!items.length">No groups attached.</p>
+          <p class="text-sm text-base-content/60" x-show="!items.length">{% translate "No groups attached." %}</p>
           <p class="text-xs text-base-content/60">
-            Members of attached groups get member access implicitly; they are not listed below.
+            {% translate "Members of attached groups get member access implicitly; they are not listed below." %}
           </p>
         </div>
 
-        <h4 class="text-sm font-medium text-base-content/70">People</h4>
+        <h4 class="text-sm font-medium text-base-content/70">{% translate "People" %}</h4>
         {% if writable %}
-          {% include "users/ui/partials/user_selector.html" with on_select_event="project-member-selected" placeholder="Add a member by username or name" %}
+          {% translate "Add a member by username or name" as member_placeholder %}
+          {% include "users/ui/partials/user_selector.html" with on_select_event="project-member-selected" placeholder=member_placeholder %}
         {% endif %}
         <ul class="flex flex-col gap-1.5">
           <template x-for="member in items" :key="member.uuid">
@@ -219,20 +229,20 @@
                   :disabled="busy"
                   @change="changeRole(member, $event.target.value)"
                 >
-                  <option value="admin">Admin</option>
-                  <option value="member">Member</option>
+                  <option value="admin">{% translate "Admin" context "project role" %}</option>
+                  <option value="member">{% translate "Member" context "project role" %}</option>
                 </select>
                 <button
                   type="button"
                   class="btn btn-ghost btn-xs btn-square text-error"
-                  aria-label="Remove member"
+                  aria-label="{% translate "Remove member" %}"
                   :disabled="busy"
                   @click="removeMember(member)"
                 >
                   <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
               {% else %}
-                <span class="badge badge-ghost capitalize" x-text="member.role"></span>
+                <span class="badge badge-ghost" x-text="roleLabel(member.role)"></span>
               {% endif %}
             </li>
           </template>
@@ -253,10 +263,10 @@
         <div>
           <h3 class="font-semibold flex items-center gap-2">
             <i data-lucide="layout-dashboard" class="w-4 h-4 text-module"></i>
-            Board model
+            {% translate "Board model" %}
           </h3>
           <p class="text-sm text-base-content/60 mt-0.5">
-            Tasks, columns, comments and history are kept either way. Converting takes effect immediately.
+            {% translate "Tasks, columns, comments and history are kept either way. Converting takes effect immediately." %}
           </p>
         </div>
         <template x-if="error">
@@ -282,14 +292,20 @@
                     class="badge badge-module badge-sm"
                     x-show="type === '{{ option.value|escapejs }}'"
                     x-cloak
-                  >Current</span>
+                  >{% translate "Current" context "board model" %}</span>
                 </span>
                 <span class="text-sm text-base-content/60">{{ option.description }}</span>
                 <span
                   class="text-sm text-module font-medium"
                   x-show="type !== '{{ option.value|escapejs }}' && writable"
                   x-cloak
-                >Convert to {{ option.label|lower }}</span>
+                >
+                  {% if option.value == "scrum" %}
+                    {% translate "Convert to scrum" %}
+                  {% else %}
+                    {% translate "Convert to kanban" %}
+                  {% endif %}
+                </span>
               </span>
             </button>
           {% endfor %}
@@ -305,15 +321,15 @@
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
           <i data-lucide="columns-3" class="w-4 h-4 text-module"></i>
-          Columns
+          {% translate "Columns" %}
         </h3>
         {% if writable %}
           <button
             type="button"
             class="btn btn-ghost btn-sm btn-square"
             @click="adding = !adding"
-            aria-label="Add column"
-            title="Add column"
+            aria-label="{% translate "Add column" %}"
+            title="{% translate "Add column" %}"
           >
             <i data-lucide="plus" class="w-4 h-4"></i>
           </button>
@@ -330,7 +346,7 @@
           @keydown.escape="adding = false"
         >
           <label class="fieldset">
-            <div class="fieldset-legend"><span>Name</span></div>
+            <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
             <input
               type="text"
               class="input input-sm w-full"
@@ -340,15 +356,15 @@
             />
           </label>
           <label class="fieldset">
-            <div class="fieldset-legend"><span>Category</span></div>
+            <div class="fieldset-legend"><span>{% translate "Category" context "status category" %}</span></div>
             <select class="select select-sm w-full" x-model="addForm.category">
-              <option value="backlog">Backlog</option>
-              <option value="active">Active</option>
-              <option value="done">Done</option>
+              <option value="backlog">{% translate "Backlog" context "status category" %}</option>
+              <option value="active">{% translate "Active" context "status category" %}</option>
+              <option value="done">{% translate "Done" context "status category" %}</option>
             </select>
           </label>
           <div class="fieldset">
-            <div class="fieldset-legend"><span>Color</span></div>
+            <div class="fieldset-legend"><span>{% translate "Color" %}</span></div>
             <div class="flex items-center gap-1.5 h-8">
               <template x-for="c in colors" :key="c">
                 <button
@@ -356,7 +372,7 @@
                   class="w-6 h-6 rounded-full border border-base-300 shrink-0"
                   :class="addForm.color === c ? 'ring-2 ring-module ring-offset-2 ring-offset-base-100' : ''"
                   :style="c ? 'background:' + c : ''"
-                  :aria-label="c ? 'Color ' + c : 'No color'"
+                  :aria-label="colorAriaLabel(c)"
                   :aria-pressed="addForm.color === c"
                   @click="addForm.color = c"
                 ></button>
@@ -364,13 +380,13 @@
             </div>
           </div>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">{% translate "Cancel" %}</button>
             <button
               type="submit"
               class="btn btn-module btn-sm"
               :disabled="busy || !addForm.name.trim()"
             >
-              Add
+              {% translate "Add" context "settings form" %}
             </button>
           </div>
         </form>
@@ -409,12 +425,12 @@
               />
             </template>
             <span
-              class="badge badge-ghost badge-sm capitalize"
-              x-text="column.category"
+              class="badge badge-ghost badge-sm"
+              x-text="categoryLabel(column.category)"
             ></span>
             <span
               class="badge badge-ghost badge-sm"
-              x-text="column.task_count + ' task' + (column.task_count === 1 ? '' : 's')"
+              x-text="taskCountLabel(column.task_count)"
             ></span>
             {% if writable %}
               <div class="dropdown dropdown-end">
@@ -422,7 +438,7 @@
                   type="button"
                   tabindex="0"
                   class="btn btn-ghost btn-xs btn-square"
-                  aria-label="Column color"
+                  aria-label="{% translate "Column color" %}"
                 >
                   <i data-lucide="palette" class="w-4 h-4"></i>
                 </button>
@@ -437,7 +453,7 @@
                         class="w-5 h-5 rounded-full border border-base-300 shrink-0"
                         :class="column.color === c ? 'ring-2 ring-module ring-offset-1 ring-offset-base-100' : ''"
                         :style="c ? 'background:' + c : ''"
-                        :aria-label="c ? 'Color ' + c : 'No color'"
+                        :aria-label="colorAriaLabel(c)"
                         @click="setColor(column, c); document.activeElement.blur()"
                       ></button>
                     </li>
@@ -447,7 +463,7 @@
               <button
                 type="button"
                 class="btn btn-ghost btn-xs btn-square text-error"
-                aria-label="Delete column"
+                aria-label="{% translate "Delete column" %}"
                 @click="deleteColumn(column)"
               >
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -463,10 +479,13 @@
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
       x-data="projectEpics({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
     >
+      {% translate "Reopen epic" as reopen_epic %}
+      {% translate "Close epic" as close_epic %}
+      {% translate "No description." as no_description %}
       <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h3 class="font-semibold flex items-center gap-2 shrink-0">
           <i data-lucide="layers" class="w-4 h-4 text-module"></i>
-          Epics
+          {% translate "Epics" %}
         </h3>
         <div class="flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-3" x-show="items.length" x-cloak>
@@ -475,7 +494,7 @@
               <input
                 type="search"
                 class="grow min-w-0"
-                placeholder="Search epics"
+                placeholder="{% translate "Search epics" %}"
                 x-model="query"
               />
             </label>
@@ -485,7 +504,7 @@
                 class="toggle toggle-sm toggle-module"
                 x-model="openOnly"
               />
-              <span class="text-sm">Open only</span>
+              <span class="text-sm">{% translate "Open only" context "epics" %}</span>
             </label>
           </div>
           {% if writable %}
@@ -493,8 +512,8 @@
               type="button"
               class="btn btn-ghost btn-sm btn-square shrink-0"
               @click="adding = !adding"
-              aria-label="Add epic"
-              title="Add epic"
+              aria-label="{% translate "Add epic" %}"
+              title="{% translate "Add epic" %}"
             >
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
@@ -512,7 +531,7 @@
         >
           <div class="flex flex-wrap items-end gap-3">
             <label class="fieldset">
-              <div class="fieldset-legend"><span>Name</span></div>
+              <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
               <input
                 type="text"
                 class="input input-sm w-full"
@@ -522,7 +541,7 @@
               />
             </label>
             <div class="fieldset">
-              <div class="fieldset-legend"><span>Color</span></div>
+              <div class="fieldset-legend"><span>{% translate "Color" %}</span></div>
               <div class="flex items-center gap-1.5 h-8">
                 <template x-for="c in colors" :key="c">
                   <button
@@ -530,7 +549,7 @@
                     class="w-6 h-6 rounded-full border border-base-300 shrink-0"
                     :class="addForm.color === c ? 'ring-2 ring-module ring-offset-2 ring-offset-base-100' : ''"
                     :style="c ? 'background:' + c : ''"
-                    :aria-label="c ? 'Color ' + c : 'No color'"
+                    :aria-label="colorAriaLabel(c)"
                     :aria-pressed="addForm.color === c"
                     @click="addForm.color = c"
                   ></button>
@@ -538,7 +557,7 @@
               </div>
             </div>
             <label class="fieldset">
-              <div class="fieldset-legend"><span>Target date (optional)</span></div>
+              <div class="fieldset-legend"><span>{% translate "Target date (optional)" %}</span></div>
               <input
                 type="date"
                 class="input input-sm w-full"
@@ -547,7 +566,7 @@
             </label>
           </div>
           <label class="fieldset">
-            <div class="fieldset-legend"><span>Description (optional)</span></div>
+            <div class="fieldset-legend"><span>{% translate "Description (optional)" %}</span></div>
             <textarea
               class="textarea textarea-sm w-full"
               rows="2"
@@ -555,13 +574,13 @@
             ></textarea>
           </label>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">{% translate "Cancel" %}</button>
             <button
               type="submit"
               class="btn btn-module btn-sm"
               :disabled="busy || !addForm.name.trim()"
             >
-              Add
+              {% translate "Add" context "settings form" %}
             </button>
           </div>
         </form>
@@ -583,7 +602,7 @@
                     tabindex="0"
                     class="w-4 h-4 rounded-full border border-base-300 shrink-0"
                     :style="epic.color ? 'background:' + epic.color : ''"
-                    aria-label="Epic color"
+                    aria-label="{% translate "Epic color" %}"
                   ></button>
                   <ul
                     tabindex="0"
@@ -596,7 +615,7 @@
                           class="w-5 h-5 rounded-full border border-base-300 shrink-0"
                           :class="epic.color === c ? 'ring-2 ring-module ring-offset-1 ring-offset-base-100' : ''"
                           :style="c ? 'background:' + c : ''"
-                          :aria-label="c ? 'Color ' + c : 'No color'"
+                          :aria-label="colorAriaLabel(c)"
                           @click="setColor(epic, c); document.activeElement.blur()"
                         ></button>
                       </li>
@@ -637,7 +656,7 @@
                   :class="isOverdue(epic) ? 'text-error' : ''"
                   :value="epic.target_date"
                   @change="setTargetDate(epic, $event.target.value)"
-                  aria-label="Target date"
+                  aria-label="{% translate "Target date" %}"
                 />
               {% else %}
                 <span
@@ -646,17 +665,20 @@
                   x-text="epic.display_date"
                 ></span>
               {% endif %}
-              <span class="badge badge-ghost badge-sm shrink-0" x-show="epic.closed">Closed</span>
+              <span
+                class="badge badge-ghost badge-sm shrink-0"
+                x-show="epic.closed"
+              >{% translate "Closed" context "epic state" %}</span>
               <span
                 class="ml-auto text-xs text-base-content/60 font-mono shrink-0"
-                x-text="epic.done_task_count + '/' + epic.task_count + ' done'"
+                x-text="doneCountLabel(epic)"
               ></span>
               {% if writable %}
                 <button
                   type="button"
                   class="btn btn-ghost btn-circle btn-xs shrink-0"
-                  :aria-label="epic.closed ? 'Reopen epic' : 'Close epic'"
-                  :title="epic.closed ? 'Reopen epic' : 'Close epic'"
+                  :aria-label="epic.closed ? '{{ reopen_epic|escapejs }}' : '{{ close_epic|escapejs }}'"
+                  :title="epic.closed ? '{{ reopen_epic|escapejs }}' : '{{ close_epic|escapejs }}'"
                   @click="toggleClosed(epic)"
                 >
                   <template x-if="!epic.closed">
@@ -693,7 +715,7 @@
                 <button
                   type="button"
                   class="btn btn-ghost btn-circle btn-xs text-error shrink-0"
-                  aria-label="Delete epic"
+                  aria-label="{% translate "Delete epic" %}"
                   @click="removeEpic(epic)"
                 >
                   <svg
@@ -721,7 +743,7 @@
               <p
                 class="text-xs text-base-content/60 whitespace-pre-line wrap-break-word"
                 :class="epic.description ? '' : 'italic'"
-                x-text="epic.description || 'No description.'"
+                x-text="epic.description || '{{ no_description|escapejs }}'"
                 {% if writable %}@click="startDescEdit(epic)"{% endif %}
               ></p>
             </template>
@@ -742,14 +764,14 @@
         class="text-sm text-base-content/60"
         x-show="!items.length && !adding"
       >
-        No epics yet.
+        {% translate "No epics yet." %}
       </p>
       <p
         class="text-sm text-base-content/60"
         x-show="items.length && !visibleEpics().length"
         x-cloak
       >
-        No epics match.
+        {% translate "No epics match." %}
       </p>
     </section>
 
@@ -761,15 +783,15 @@
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
           <i data-lucide="tags" class="w-4 h-4 text-module"></i>
-          Labels
+          {% translate "Labels" %}
         </h3>
         {% if writable %}
           <button
             type="button"
             class="btn btn-ghost btn-sm btn-square"
             @click="adding = !adding"
-            aria-label="Add label"
-            title="Add label"
+            aria-label="{% translate "Add label" %}"
+            title="{% translate "Add label" %}"
           >
             <i data-lucide="plus" class="w-4 h-4"></i>
           </button>
@@ -785,7 +807,7 @@
           @keydown.escape="adding = false"
         >
           <label class="fieldset">
-            <div class="fieldset-legend"><span>Name</span></div>
+            <div class="fieldset-legend"><span>{% translate "Name" %}</span></div>
             <input
               type="text"
               class="input input-sm w-full"
@@ -795,7 +817,7 @@
             />
           </label>
           <div class="fieldset">
-            <div class="fieldset-legend"><span>Color</span></div>
+            <div class="fieldset-legend"><span>{% translate "Color" %}</span></div>
             <div class="flex items-center gap-1.5 h-8">
               <template x-for="c in colors" :key="c">
                 <button
@@ -803,7 +825,7 @@
                   class="w-6 h-6 rounded-full border border-base-300 shrink-0"
                   :class="addForm.color === c ? 'ring-2 ring-module ring-offset-2 ring-offset-base-100' : ''"
                   :style="c ? 'background:' + c : ''"
-                  :aria-label="c ? 'Color ' + c : 'No color'"
+                  :aria-label="colorAriaLabel(c)"
                   :aria-pressed="addForm.color === c"
                   @click="addForm.color = c"
                 ></button>
@@ -811,13 +833,13 @@
             </div>
           </div>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">{% translate "Cancel" %}</button>
             <button
               type="submit"
               class="btn btn-module btn-sm"
               :disabled="busy || !addForm.name.trim()"
             >
-              Add
+              {% translate "Add" context "settings form" %}
             </button>
           </div>
         </form>
@@ -859,7 +881,7 @@
                 type="button"
                 tabindex="0"
                 class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
-                aria-label="Label color"
+                aria-label="{% translate "Label color" %}"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -886,7 +908,7 @@
                       class="w-5 h-5 rounded-full border border-base-300 shrink-0"
                       :class="label.color === c ? 'ring-2 ring-module ring-offset-1 ring-offset-base-100' : ''"
                       :style="c ? 'background:' + c : ''"
-                      :aria-label="c ? 'Color ' + c : 'No color'"
+                      :aria-label="colorAriaLabel(c)"
                       @click="setColor(label, c); document.activeElement.blur()"
                     ></button>
                   </li>
@@ -896,7 +918,7 @@
             <button
               type="button"
               class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0 text-error"
-              aria-label="Delete label"
+              aria-label="{% translate "Delete label" %}"
               @click="removeLabel(label)"
             >
               <svg
@@ -920,7 +942,7 @@
         class="text-sm text-base-content/60"
         x-show="!items.length && !adding"
       >
-        No labels yet.
+        {% translate "No labels yet." %}
       </p>
     </section>
 
@@ -932,7 +954,7 @@
       >
         <h3 class="font-semibold flex items-center gap-2 text-error">
           <i data-lucide="triangle-alert" class="w-4 h-4"></i>
-          Danger zone
+          {% translate "Danger zone" %}
         </h3>
         <template x-if="error">
           <inline-alert type="error"><span x-text="error"></span></inline-alert>
@@ -944,13 +966,17 @@
             <div>
               <p class="font-medium">
                 {% if project.archived_at %}
-                  Unarchive project
+                  {% translate "Unarchive project" %}
                 {% else %}
-                  Archive project
+                  {% translate "Archive project" %}
                 {% endif %}
               </p>
               <p class="text-sm text-base-content/60">
-                {% if project.archived_at %}Make the project editable again.{% else %}Read-only for everyone until unarchived.{% endif %}
+                {% if project.archived_at %}
+                  {% translate "Make the project editable again." %}
+                {% else %}
+                  {% translate "Read-only for everyone until unarchived." %}
+                {% endif %}
               </p>
             </div>
             {% if project.archived_at %}
@@ -960,7 +986,7 @@
                 :disabled="busy"
                 @click="archive('unarchive')"
               >
-                Unarchive
+                {% translate "Unarchive" %}
               </button>
             {% else %}
               <button
@@ -969,7 +995,7 @@
                 :disabled="busy"
                 @click="archive('archive')"
               >
-                Archive
+                {% translate "Archive" context "verb" %}
               </button>
             {% endif %}
           </div>
@@ -977,8 +1003,12 @@
             class="rounded-box bg-base-100 p-3 flex items-center justify-between gap-3 flex-wrap"
           >
             <div>
-              <p class="font-medium">Delete project</p>
-              <p class="text-sm text-base-content/60">Permanently deletes {{ project.name }} and all its tasks.</p>
+              <p class="font-medium">{% translate "Delete project" %}</p>
+              <p class="text-sm text-base-content/60">
+                {% blocktranslate trimmed with name=project.name %}
+                  Permanently deletes {{ name }} and all its tasks.
+                {% endblocktranslate %}
+              </p>
             </div>
             <button
               type="button"
@@ -986,7 +1016,7 @@
               :disabled="busy"
               @click="deleteProject()"
             >
-              Delete
+              {% translate "Delete" %}
             </button>
           </div>
         </div>

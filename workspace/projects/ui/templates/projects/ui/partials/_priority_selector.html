@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Priority dropdown: styled replacement for the native <select>, visually in
 line with the user/label pickers. The trigger shows the current priority with
@@ -45,7 +46,7 @@ createIcons time.
         class="flex items-center gap-2 min-w-0"
       >
         <i data-lucide="flag" class="w-4 h-4 opacity-60 shrink-0"></i>
-        <span class="truncate">All priorities</span>
+        <span class="truncate">{% translate "All priorities" %}</span>
       </span>
     {% endif %}
     <span
@@ -54,7 +55,7 @@ createIcons time.
       class="flex items-center gap-2 min-w-0"
     >
       <i data-lucide="flame" class="w-4 h-4 text-error shrink-0"></i>
-      <span class="truncate">Urgent</span>
+      <span class="truncate">{% translate "Urgent" context "task priority" %}</span>
     </span>
     <span
       x-show="{{ model_expr }} === 'high'"
@@ -62,7 +63,7 @@ createIcons time.
       class="flex items-center gap-2 min-w-0"
     >
       <i data-lucide="arrow-up" class="w-4 h-4 text-warning shrink-0"></i>
-      <span class="truncate">High</span>
+      <span class="truncate">{% translate "High" context "task priority" %}</span>
     </span>
     <span
       x-show="{{ model_expr }} === 'medium'"
@@ -70,7 +71,7 @@ createIcons time.
       class="flex items-center gap-2 min-w-0"
     >
       <i data-lucide="equal" class="w-4 h-4 text-info shrink-0"></i>
-      <span class="truncate">Medium</span>
+      <span class="truncate">{% translate "Medium" context "task priority" %}</span>
     </span>
     <span
       x-show="{{ model_expr }} === 'low'"
@@ -78,7 +79,7 @@ createIcons time.
       class="flex items-center gap-2 min-w-0"
     >
       <i data-lucide="arrow-down" class="w-4 h-4 opacity-60 shrink-0"></i>
-      <span class="truncate">Low</span>
+      <span class="truncate">{% translate "Low" context "task priority" %}</span>
     </span>
     <i
       data-lucide="chevron-down"
@@ -102,7 +103,7 @@ createIcons time.
             @click="{{ model_expr }} = ''; open = false; {{ on_change|default:'' }}"
           >
             <i data-lucide="flag" class="w-4 h-4 opacity-60"></i>
-            <span class="text-sm">All priorities</span>
+            <span class="text-sm">{% translate "All priorities" %}</span>
           </button>
         </li>
       {% endif %}
@@ -116,7 +117,7 @@ createIcons time.
           @click="{{ model_expr }} = 'urgent'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="flame" class="w-4 h-4 text-error"></i>
-          <span class="text-sm">Urgent</span>
+          <span class="text-sm">{% translate "Urgent" context "task priority" %}</span>
         </button>
       </li>
       <li role="none">
@@ -129,7 +130,7 @@ createIcons time.
           @click="{{ model_expr }} = 'high'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="arrow-up" class="w-4 h-4 text-warning"></i>
-          <span class="text-sm">High</span>
+          <span class="text-sm">{% translate "High" context "task priority" %}</span>
         </button>
       </li>
       <li role="none">
@@ -142,7 +143,7 @@ createIcons time.
           @click="{{ model_expr }} = 'medium'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="equal" class="w-4 h-4 text-info"></i>
-          <span class="text-sm">Medium</span>
+          <span class="text-sm">{% translate "Medium" context "task priority" %}</span>
         </button>
       </li>
       <li role="none">
@@ -155,7 +156,7 @@ createIcons time.
           @click="{{ model_expr }} = 'low'; open = false; {{ on_change|default:'' }}"
         >
           <i data-lucide="arrow-down" class="w-4 h-4 opacity-60"></i>
-          <span class="text-sm">Low</span>
+          <span class="text-sm">{% translate "Low" context "task priority" %}</span>
         </button>
       </li>
     </ul>

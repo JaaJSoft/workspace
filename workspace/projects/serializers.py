@@ -3,6 +3,7 @@ import re
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -55,7 +56,7 @@ def _validate_hex_color(value):
     the picker never offers.
     """
     if value and not _HEX_COLOR.match(value):
-        raise serializers.ValidationError("Color must be a #rrggbb value.")
+        raise serializers.ValidationError(_("Color must be a #rrggbb value."))
     return value
 
 
@@ -103,11 +104,11 @@ class ProjectSerializer(serializers.ModelSerializer):
         # through the convert endpoint rather than a field write.
         if self.instance is not None and value != self.instance.type:
             raise serializers.ValidationError(
-                "Use the convert endpoint to change the project type."
+                _("Use the convert endpoint to change the project type.")
             )
         if self.instance is None and value == Project.Type.PERSONAL:
             raise serializers.ValidationError(
-                "Personal projects are created automatically."
+                _("Personal projects are created automatically.")
             )
         return value
 
@@ -115,13 +116,15 @@ class ProjectSerializer(serializers.ModelSerializer):
         value = value.strip().upper()
         if not KEY_RE.fullmatch(value):
             raise serializers.ValidationError(
-                "Use 2-10 letters and digits, starting with a letter."
+                _("Use 2-10 letters and digits, starting with a letter.")
             )
         existing = Project.objects.filter(key=value)
         if self.instance is not None:
             existing = existing.exclude(pk=self.instance.pk)
         if existing.exists():
-            raise serializers.ValidationError("Another project already uses this key.")
+            raise serializers.ValidationError(
+                _("Another project already uses this key.")
+            )
         return value
 
     def validate_groups(self, groups):
@@ -142,7 +145,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             )
             if added - mine:
                 raise serializers.ValidationError(
-                    "You can only attach groups you belong to."
+                    _("You can only attach groups you belong to.")
                 )
         return groups
 
@@ -153,7 +156,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             and attrs.get("groups")
         ):
             raise serializers.ValidationError(
-                {"groups": "Personal projects cannot be attached to groups."}
+                {"groups": _("Personal projects cannot be attached to groups.")}
             )
         return attrs
 
@@ -198,7 +201,7 @@ class LabelSerializer(serializers.ModelSerializer):
             existing = existing.exclude(pk=self.instance.pk)
         if existing.exists():
             raise serializers.ValidationError(
-                "A label with this name already exists in this project."
+                _("A label with this name already exists in this project.")
             )
         return value
 
@@ -233,7 +236,7 @@ class EpicSerializer(serializers.ModelSerializer):
             existing = existing.exclude(pk=self.instance.pk)
         if existing.exists():
             raise serializers.ValidationError(
-                "An epic with this name already exists in this project."
+                _("An epic with this name already exists in this project.")
             )
         return value
 
@@ -270,7 +273,7 @@ class SprintSerializer(serializers.ModelSerializer):
             existing = existing.exclude(pk=self.instance.pk)
         if existing.exists():
             raise serializers.ValidationError(
-                "A sprint with this name already exists in this project."
+                _("A sprint with this name already exists in this project.")
             )
         return value
 
@@ -281,7 +284,7 @@ class SprintSerializer(serializers.ModelSerializer):
         end = attrs.get("end_date", self.instance.end_date if self.instance else None)
         if start is not None and end is not None and end < start:
             raise serializers.ValidationError(
-                {"end_date": "End date cannot be before the start date."}
+                {"end_date": _("End date cannot be before the start date.")}
             )
         return attrs
 
@@ -302,13 +305,13 @@ class TaskStatusSerializer(serializers.ModelSerializer):
             existing = existing.exclude(pk=self.instance.pk)
         if existing.exists():
             raise serializers.ValidationError(
-                "A column with this name already exists in this project."
+                _("A column with this name already exists in this project.")
             )
         return value
 
     def validate_category(self, value):
         if self.instance is not None and value != self.instance.category:
-            raise serializers.ValidationError("Category cannot be changed.")
+            raise serializers.ValidationError(_("Category cannot be changed."))
         return value
 
     def validate_color(self, value):
@@ -392,7 +395,8 @@ class TaskSerializer(serializers.ModelSerializer):
         for user in users:
             if get_project_role(user, project) is None:
                 raise serializers.ValidationError(
-                    f"{user.username} is not a member of this project."
+                    _("%(username)s is not a member of this project.")
+                    % {"username": user.username}
                 )
         return users
 
@@ -403,7 +407,7 @@ class TaskSerializer(serializers.ModelSerializer):
         due = attrs.get("due_date", self.instance.due_date if self.instance else None)
         if start is not None and due is not None and start > due:
             raise serializers.ValidationError(
-                {"start_date": "Start date cannot be after the due date."}
+                {"start_date": _("Start date cannot be after the due date.")}
             )
         return attrs
 
@@ -562,13 +566,14 @@ class TaskBulkEditSerializer(serializers.Serializer):
         for user in users:
             if get_project_role(user, project) is None:
                 raise serializers.ValidationError(
-                    f"{user.username} is not a member of this project."
+                    _("%(username)s is not a member of this project.")
+                    % {"username": user.username}
                 )
         return users
 
     def validate(self, attrs):
         if not any(field in attrs for field in self.OPERATIONS):
-            raise serializers.ValidationError("No change requested.")
+            raise serializers.ValidationError(_("No change requested."))
         # A repeated id would insert the same relation row twice and trip
         # the through table's unique constraint into a 500.
         for field in ("assign", "unassign", "add_labels", "remove_labels"):
@@ -579,13 +584,13 @@ class TaskBulkEditSerializer(serializers.Serializer):
             u.pk for u in attrs.get("unassign", ())
         }:
             raise serializers.ValidationError(
-                {"unassign": "A user cannot be both assigned and unassigned."}
+                {"unassign": _("A user cannot be both assigned and unassigned.")}
             )
         if {lbl.pk for lbl in attrs.get("add_labels", ())} & {
             lbl.pk for lbl in attrs.get("remove_labels", ())
         }:
             raise serializers.ValidationError(
-                {"remove_labels": "A label cannot be both added and removed."}
+                {"remove_labels": _("A label cannot be both added and removed.")}
             )
         return attrs
 
@@ -630,7 +635,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
     def validate_title(self, value):
         value = value.strip()
         if not value:
-            raise serializers.ValidationError("Title cannot be blank.")
+            raise serializers.ValidationError(_("Title cannot be blank."))
         return value
 
 

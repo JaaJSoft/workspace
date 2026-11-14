@@ -32,7 +32,7 @@ window.projectsPreferences = function projectsPreferences() {
       }).catch(() => {
         if (gen !== this._gen[key]) return;
         this.prefs[key] = previous;
-        if (window.AppAlert) window.AppAlert.error('Failed to save preference');
+        if (window.AppAlert) window.AppAlert.error(gettext('Failed to save preference'));
       });
     },
   };
@@ -41,7 +41,7 @@ window.projectsPreferences = function projectsPreferences() {
 // --- Per-project notification level (the bell in the project header) ---
 
 window.projectNotificationLevel = function projectNotificationLevel(opts) {
-  const LABELS = { all: 'All notifications', in_app: 'In-app only', none: 'Nothing' };
+  const LABELS = { all: gettext('All notifications'), in_app: gettext('In-app only'), none: gettext('Nothing') };
   return {
     override: opts.override || '',
     moduleLevel: opts.moduleLevel || 'all',
@@ -72,7 +72,7 @@ window.projectNotificationLevel = function projectNotificationLevel(opts) {
       }).catch(() => {
         if (gen !== this._gen) return;
         this.override = previous;
-        if (window.AppAlert) window.AppAlert.error('Failed to save notification level');
+        if (window.AppAlert) window.AppAlert.error(gettext('Failed to save notification level'));
       });
     },
   };

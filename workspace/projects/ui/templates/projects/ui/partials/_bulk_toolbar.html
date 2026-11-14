@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Selection toolbar shared by the backlog and the all-tasks list: the bulk
 edits on the checked tasks. The including view wraps it in a `relative`
@@ -17,17 +18,19 @@ selection's tasks carry different values and "put Alice on these" must
 not strip whoever else was on them.
 {% endcomment %}
 <span class="text-sm text-base-content/70 shrink-0 px-1">
-  <span x-text="selected.length"></span> selected
+  {% blocktranslate trimmed %}
+    <span x-text="selected.length"></span> selected
+  {% endblocktranslate %}
 </span>
 <button
   type="button"
   class="btn btn-ghost btn-sm px-2 sm:px-3"
-  title="Clear selection"
-  aria-label="Clear selection"
+  title="{% translate "Clear selection" %}"
+  aria-label="{% translate "Clear selection" %}"
   @click="clearSelection()"
 >
   <i data-lucide="x" class="w-4 h-4 sm:hidden"></i>
-  <span class="hidden sm:inline">Clear</span>
+  <span class="hidden sm:inline">{% translate "Clear" %}</span>
 </button>
 <span class="w-px h-5 bg-base-300 mx-1 hidden sm:block" aria-hidden="true"></span>
 
@@ -41,14 +44,14 @@ not strip whoever else was on them.
   <button
     type="button"
     class="btn btn-ghost btn-sm px-2 sm:px-3"
-    title="Assign or unassign"
+    title="{% translate "Assign or unassign" %}"
     aria-haspopup="true"
     :aria-expanded="open"
     :disabled="!bulkCan('assign')"
     @click="open = !open"
   >
     <i data-lucide="user-plus" class="w-4 h-4"></i>
-    <span class="hidden sm:inline">Assign</span>
+    <span class="hidden sm:inline">{% translate "Assign" %}</span>
   </button>
   <div
     x-show="open"
@@ -62,7 +65,7 @@ not strip whoever else was on them.
         :class="mode === 'add' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'add'"
       >
-        Assign
+        {% translate "Assign" %}
       </button>
       <button
         type="button"
@@ -70,10 +73,11 @@ not strip whoever else was on them.
         :class="mode === 'remove' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'remove'"
       >
-        Unassign
+        {% translate "Unassign" %}
       </button>
     </div>
-    {% include "users/ui/partials/user_selector.html" with on_select_event="bulk-assignee-selected" placeholder="Search members" local_source="members" icon="users" %}
+    {% translate "Search members" as search_members_placeholder %}
+    {% include "users/ui/partials/user_selector.html" with on_select_event="bulk-assignee-selected" placeholder=search_members_placeholder local_source="members" icon="users" %}
   </div>
 </div>
 
@@ -87,14 +91,14 @@ not strip whoever else was on them.
   <button
     type="button"
     class="btn btn-ghost btn-sm px-2 sm:px-3"
-    title="Add or remove a label"
+    title="{% translate "Add or remove a label" %}"
     aria-haspopup="true"
     :aria-expanded="open"
     :disabled="!bulkCan('set_labels')"
     @click="open = !open"
   >
     <i data-lucide="tag" class="w-4 h-4"></i>
-    <span class="hidden sm:inline">Label</span>
+    <span class="hidden sm:inline">{% translate "Label" %}</span>
   </button>
   <div
     x-show="open"
@@ -108,7 +112,7 @@ not strip whoever else was on them.
         :class="mode === 'add' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'add'"
       >
-        Add label
+        {% translate "Add label" %}
       </button>
       <button
         type="button"
@@ -116,10 +120,11 @@ not strip whoever else was on them.
         :class="mode === 'remove' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'remove'"
       >
-        Remove label
+        {% translate "Remove label" %}
       </button>
     </div>
-    {% include "projects/ui/partials/_label_selector.html" with on_select_event="bulk-label-selected" all_source="labels" selected_source="[]" placeholder="Search labels" %}
+    {% translate "Search labels" as search_labels_placeholder %}
+    {% include "projects/ui/partials/_label_selector.html" with on_select_event="bulk-label-selected" all_source="labels" selected_source="[]" placeholder=search_labels_placeholder %}
   </div>
 </div>
 
@@ -129,11 +134,11 @@ not strip whoever else was on them.
     type="button"
     tabindex="0"
     class="btn btn-ghost btn-sm px-2 sm:px-3"
-    title="Set priority"
+    title="{% translate "Set priority" %}"
     :disabled="!bulkCan('set_priority')"
   >
     <i data-lucide="flag" class="w-4 h-4"></i>
-    <span class="hidden sm:inline">Priority</span>
+    <span class="hidden sm:inline">{% translate "Priority" %}</span>
     <i data-lucide="chevron-down" class="w-4 h-4"></i>
   </button>
   <ul
@@ -146,7 +151,7 @@ not strip whoever else was on them.
         @click="bulkPriority('urgent'); document.activeElement.blur()"
       >
         <i data-lucide="flame" class="w-4 h-4 text-error"></i>
-        Urgent
+        {% translate "Urgent" context "task priority" %}
       </button>
     </li>
     <li>
@@ -155,7 +160,7 @@ not strip whoever else was on them.
         @click="bulkPriority('high'); document.activeElement.blur()"
       >
         <i data-lucide="arrow-up" class="w-4 h-4 text-warning"></i>
-        High
+        {% translate "High" context "task priority" %}
       </button>
     </li>
     <li>
@@ -164,7 +169,7 @@ not strip whoever else was on them.
         @click="bulkPriority('medium'); document.activeElement.blur()"
       >
         <i data-lucide="equal" class="w-4 h-4 text-info"></i>
-        Medium
+        {% translate "Medium" context "task priority" %}
       </button>
     </li>
     <li>
@@ -173,7 +178,7 @@ not strip whoever else was on them.
         @click="bulkPriority('low'); document.activeElement.blur()"
       >
         <i data-lucide="arrow-down" class="w-4 h-4 opacity-60"></i>
-        Low
+        {% translate "Low" context "task priority" %}
       </button>
     </li>
   </ul>
@@ -188,14 +193,14 @@ not strip whoever else was on them.
   <button
     type="button"
     class="btn btn-ghost btn-sm px-2 sm:px-3"
-    title="Set due date"
+    title="{% translate "Set due date" %}"
     aria-haspopup="true"
     :aria-expanded="open"
     :disabled="!bulkCan('set_due')"
     @click="open = !open"
   >
     <i data-lucide="calendar" class="w-4 h-4"></i>
-    <span class="hidden sm:inline">Due date</span>
+    <span class="hidden sm:inline">{% translate "Due date" %}</span>
   </button>
   <div
     x-show="open"
@@ -205,7 +210,7 @@ not strip whoever else was on them.
     <input
       type="date"
       class="input input-sm w-full"
-      aria-label="Due date"
+      aria-label="{% translate "Due date" %}"
       x-model="date"
       @keydown.enter.prevent="if (date) { bulkDueDate(date); open = false }"
     />
@@ -216,14 +221,14 @@ not strip whoever else was on them.
         :disabled="!date"
         @click="bulkDueDate(date); open = false"
       >
-        Apply
+        {% translate "Apply" %}
       </button>
       <button
         type="button"
         class="btn btn-ghost btn-sm"
         @click="bulkDueDate(null); date = ''; open = false"
       >
-        Clear due date
+        {% translate "Clear due date" %}
       </button>
     </div>
   </div>
@@ -233,10 +238,10 @@ not strip whoever else was on them.
 <button
   type="button"
   class="btn btn-ghost btn-sm px-2 sm:px-3 text-error"
-  title="Delete the selected tasks"
+  title="{% translate "Delete the selected tasks" %}"
   :disabled="!bulkCan('delete')"
   @click="bulkDeleteSelected()"
 >
   <i data-lucide="trash-2" class="w-4 h-4"></i>
-  <span class="hidden sm:inline">Delete</span>
+  <span class="hidden sm:inline">{% translate "Delete" %}</span>
 </button>

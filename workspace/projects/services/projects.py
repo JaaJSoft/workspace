@@ -1,15 +1,21 @@
 from django.db import IntegrityError, transaction
+from django.utils import translation
+from django.utils.translation import gettext, gettext_noop, pgettext
+
+from workspace.users.services.settings import get_user_language
 
 from ..models import Project, ProjectMember, TaskStatus
 from .references import generate_base_key, personal_key_base, unique_project_key
 
 # Colors come from the shared tag-chip palette (TAG_CHIP_COLORS) so the
-# column settings picker highlights them as the selected swatch.
+# column settings picker highlights them as the selected swatch. The names
+# are written in the creator's language when the project is created, and are
+# plain data from then on: a column is never renamed when someone reads it.
 DEFAULT_STATUSES = [
-    ("Backlog", TaskStatus.Category.BACKLOG, "#a855f7"),
-    ("To do", TaskStatus.Category.ACTIVE, "#3b82f6"),
-    ("In progress", TaskStatus.Category.ACTIVE, "#eab308"),
-    ("Done", TaskStatus.Category.DONE, "#22c55e"),
+    (gettext_noop("Backlog"), TaskStatus.Category.BACKLOG, "#a855f7"),
+    (gettext_noop("To do"), TaskStatus.Category.ACTIVE, "#3b82f6"),
+    (gettext_noop("In progress"), TaskStatus.Category.ACTIVE, "#eab308"),
+    (gettext_noop("Done"), TaskStatus.Category.DONE, "#22c55e"),
 ]
 
 
@@ -37,10 +43,19 @@ def create_project(
         )
         if groups:
             project.groups.set(groups)
-        TaskStatus.objects.bulk_create(
-            TaskStatus(project=project, name=n, category=c, color=color, position=i)
-            for i, (n, c, color) in enumerate(DEFAULT_STATUSES)
-        )
+        # A worker (an AI tool) creates projects too, where no language is
+        # active: the creator's setting decides, not the request's.
+        with translation.override(get_user_language(user)):
+            TaskStatus.objects.bulk_create(
+                TaskStatus(
+                    project=project,
+                    name=gettext(status_name),
+                    category=category,
+                    color=color,
+                    position=i,
+                )
+                for i, (status_name, category, color) in enumerate(DEFAULT_STATUSES)
+            )
         ProjectMember.objects.create(
             project=project, user=user, role=ProjectMember.Role.ADMIN
         )
@@ -92,10 +107,12 @@ def get_or_create_personal_project(user):
     ).first()
     if project is not None:
         return project
+    with translation.override(get_user_language(user)):
+        name = pgettext("personal project name", "Personal")
     try:
         return create_project(
             user,
-            name="Personal",
+            name=name,
             project_type=Project.Type.PERSONAL,
             key_base=personal_key_base(user.username),
         )

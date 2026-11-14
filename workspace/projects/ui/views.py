@@ -7,6 +7,9 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateformat import format as format_date
+from django.utils.html import escape
+from django.utils.translation import gettext, gettext_lazy, pgettext, pgettext_lazy
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.charts import column_chart, gantt_chart, line_chart
@@ -84,13 +87,17 @@ BOARD_MODELS = [
         "value": Project.Type.KANBAN,
         "label": "Kanban",
         "icon": "square-kanban",
-        "description": "A continuous board where every column is always visible.",
+        "description": gettext_lazy(
+            "A continuous board where every column is always visible."
+        ),
     },
     {
         "value": Project.Type.SCRUM,
         "label": "Scrum",
         "icon": "timer",
-        "description": "Timeboxed sprints; the board shows one sprint at a time.",
+        "description": gettext_lazy(
+            "Timeboxed sprints; the board shows one sprint at a time."
+        ),
     },
 ]
 
@@ -270,12 +277,18 @@ def _epics_data(project):
             "color": epic.color,
             "closed": epic.is_closed,
             "target_date": epic.target_date.isoformat() if epic.target_date else "",
-            "display_date": epic.target_date.strftime("%b %d")
+            "display_date": _epic_target_label(epic.target_date)
             if epic.target_date
             else "",
         }
         for epic in project.epics.all()
     ]
+
+
+def _epic_target_label(day):
+    # Translators: a PHP-style date format (Django's date filter) for an
+    # epic's target date in a picker, e.g. "Oct 03".
+    return format_date(day, pgettext("epic target date", "M d"))
 
 
 def _filtered_tasks(request, qs):
@@ -659,7 +672,11 @@ def all_tasks(request, project_uuid):
     return _render_project_view(request, context)
 
 
-SCALE_OPTIONS = [("week", "Week"), ("month", "Month"), ("quarter", "Quarter")]
+SCALE_OPTIONS = [
+    ("week", pgettext_lazy("timeline scale", "Week")),
+    ("month", pgettext_lazy("timeline scale", "Month")),
+    ("quarter", pgettext_lazy("timeline scale", "Quarter")),
+]
 
 
 @login_required
@@ -736,18 +753,16 @@ def analytics(request, project_uuid):
     context.update(
         {
             "flow_summary": summary,
-            # "%b %d" rather than "%b %-d": the padding-strip flag is not
-            # portable to Windows.
             "flow_chart": column_chart(
-                [row["week_start"].strftime("%b %d") for row in flow],
+                [_day_label(row["week_start"]) for row in flow],
                 [
                     {
-                        "name": "Created",
+                        "name": pgettext("tasks chart series", "Created"),
                         "css_class": "fill-info",
                         "values": [row["created"] for row in flow],
                     },
                     {
-                        "name": "Completed",
+                        "name": pgettext("tasks chart series", "Completed"),
                         "css_class": "fill-success",
                         "values": [row["completed"] for row in flow],
                     },
@@ -786,12 +801,12 @@ def _flow_reports_context(project, log):
             buckets["labels"],
             [
                 {
-                    "name": "Lead time",
+                    "name": pgettext("chart series", "Lead time"),
                     "css_class": "fill-info",
                     "values": buckets["lead"],
                 },
                 {
-                    "name": "Cycle time",
+                    "name": pgettext("chart series", "Cycle time"),
                     "css_class": "fill-success",
                     "values": buckets["cycle"],
                 },
@@ -803,19 +818,19 @@ def _flow_reports_context(project, log):
             [_day_label(row["date"]) for row in flow],
             [
                 {
-                    "name": "Done",
+                    "name": pgettext("status category", "Done"),
                     "css_class": "stroke-success",
                     "fill_class": "fill-success",
                     "values": [row["done"] for row in flow],
                 },
                 {
-                    "name": "Active",
+                    "name": pgettext("status category", "Active"),
                     "css_class": "stroke-info",
                     "fill_class": "fill-info",
                     "values": [row["active"] for row in flow],
                 },
                 {
-                    "name": "Backlog",
+                    "name": pgettext("status category", "Backlog"),
                     "css_class": "stroke-neutral",
                     "fill_class": "fill-neutral",
                     "values": [row["backlog"] for row in flow],
@@ -842,13 +857,13 @@ def _sprint_reports_context(request, project, log):
             [_day_label(day["date"]) for day in burndown["days"]],
             [
                 {
-                    "name": "Ideal",
+                    "name": pgettext("burndown series", "Ideal"),
                     "css_class": "stroke-base-content",
                     "dashed": True,
                     "values": [_plain_number(day["ideal"]) for day in burndown["days"]],
                 },
                 {
-                    "name": "Remaining",
+                    "name": pgettext("burndown series", "Remaining"),
                     "css_class": "stroke-module",
                     "fill_class": "fill-module",
                     "values": [
@@ -867,12 +882,12 @@ def _sprint_reports_context(request, project, log):
                 [row["sprint"].name for row in velocity],
                 [
                     {
-                        "name": "Completed",
+                        "name": pgettext("velocity chart series", "Completed"),
                         "css_class": "fill-module",
                         "values": [_plain_number(row["completed"]) for row in velocity],
                     },
                     {
-                        "name": "3-sprint average",
+                        "name": pgettext("velocity chart series", "3-sprint average"),
                         "css_class": "fill-neutral",
                         "values": [_plain_number(row["average"]) for row in velocity],
                     },
@@ -884,9 +899,9 @@ def _sprint_reports_context(request, project, log):
 
 
 def _day_label(date):
-    # "%b %d" rather than "%b %-d": the padding-strip flag is not portable
-    # to Windows.
-    return date.strftime("%b %d")
+    # Translators: a PHP-style date format (Django's date filter) for a day
+    # on a chart axis, e.g. "Oct 05".
+    return format_date(date, pgettext("chart day label format", "M d"))
 
 
 def _plain_number(value):
@@ -989,7 +1004,11 @@ def view_attachment(request, attachment_uuid):
         return HttpResponse(
             render_viewer_panel(
                 '<div class="p-8 text-center text-error">'
-                f"No viewer available for {attachment.type}</div>",
+                + escape(
+                    gettext("No viewer available for %(type)s")
+                    % {"type": attachment.type}
+                )
+                + "</div>",
                 request,
             ),
             status=400,

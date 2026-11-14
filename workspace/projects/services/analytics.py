@@ -3,6 +3,7 @@ from datetime import datetime, time, timedelta
 from django.db.models import Count
 from django.db.models.functions import TruncWeek
 from django.utils import timezone
+from django.utils.translation import gettext
 
 from ..models import Task, TaskEvent, TaskStatus
 
@@ -138,7 +139,7 @@ def _by_assignee(open_tasks):
     if unassigned:
         entries.append(
             {
-                "label": "Unassigned",
+                "label": gettext("Unassigned"),
                 "count": unassigned,
                 "color": "",
                 "css_class": "bg-base-content/30",

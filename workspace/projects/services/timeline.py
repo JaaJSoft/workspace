@@ -1,6 +1,9 @@
 from collections import defaultdict
 from datetime import timedelta
 
+from django.utils import dateformat
+from django.utils.translation import gettext, pgettext
+
 from ..models import TaskStatus
 
 SCALES = ("week", "month", "quarter")
@@ -102,11 +105,11 @@ def _row(task, today):
     overdue = not done and task.due_date is not None and task.due_date < today
     parts = [task.reference]
     if task.start_date is not None:
-        parts.append(f"from {task.start_date.strftime('%b %d')}")
+        parts.append(gettext("from %(date)s") % {"date": _short_date(task.start_date)})
     if task.due_date is not None:
-        parts.append(f"due {task.due_date.strftime('%b %d')}")
+        parts.append(gettext("due %(date)s") % {"date": _short_date(task.due_date)})
     if overdue:
-        parts.append("overdue")
+        parts.append(pgettext("timeline tooltip", "overdue"))
     return {
         "id": str(task.uuid),
         "label": f"{task.reference} {task.title}",
@@ -116,6 +119,11 @@ def _row(task, today):
         "css_class": _OVERDUE_CSS if overdue else _CATEGORY_CSS[task.status.category],
         "tooltip": f"{task.title} · " + ", ".join(parts) + f" · {task.status.name}",
     }
+
+
+def _short_date(day):
+    # Translators: a PHP-style date format (Django's date filter) for a date on the timeline, e.g. "Oct 05".
+    return dateformat.format(day, pgettext("timeline date", "M d"))
 
 
 def _overlaps(row, start, end):
@@ -148,7 +156,7 @@ def _epic_groups(visible, epics):
     groups = [
         {
             "label": epic.name,
-            "sublabel": epic.target_date.strftime("%b %d") if epic.target_date else "",
+            "sublabel": _short_date(epic.target_date) if epic.target_date else "",
             "progress": f"{epic.done_task_count}/{epic.task_count}",
             "rows": by_epic.get(epic.pk, []),
         }
@@ -157,7 +165,7 @@ def _epic_groups(visible, epics):
     if by_epic.get(None):
         groups.append(
             {
-                "label": "No epic",
+                "label": gettext("No epic"),
                 "sublabel": "",
                 "progress": "",
                 "rows": by_epic[None],

@@ -6,6 +6,8 @@ a menu never offers what the endpoint refuses. An album the caller cannot
 open is a 404, never a 403: the two cases must read the same.
 """
 
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -88,7 +90,7 @@ def _parse_files(data, *, required=True):
     try:
         return parse_uuid_batch(data, key="files", max_items=MAX_FILES)
     except BatchTooLarge:
-        return _refused(f"Too many files (max {MAX_FILES}).")
+        return _refused(_("Too many files (max %(max)s).") % {"max": MAX_FILES})
     except MalformedUuid:
         return _refused("Malformed UUID in files.")
     except UuidBatchError:
@@ -143,7 +145,7 @@ class AlbumListView(APIView):
             return uuids
         files = _library_files(request.user, uuids)
         if files is None:
-            return _refused("One or more files are not photos you can open.")
+            return _refused(_("One or more files are not photos you can open."))
         album = create_album(request.user, files=files, **serializer.validated_data)
         return Response(
             AlbumSerializer(_card(request.user, album)).data,
@@ -198,7 +200,7 @@ class AlbumDetailView(APIView):
                         album_files(request.user, album).filter(uuid=cover_uuid).first()
                     )
                 if cover is None:
-                    return _refused("The cover must be a photo of the album.")
+                    return _refused(_("The cover must be a photo of the album."))
                 album.cover = cover
             fields.append("cover")
 
@@ -243,7 +245,7 @@ class AlbumItemsView(APIView):
             return uuids
         files = _library_files(request.user, uuids, role=role)
         if files is None:
-            return _refused("One or more files are not photos you can open.")
+            return _refused(_("One or more files are not photos you can open."))
         added = add_items(album, files, added_by=request.user)
         return Response({"added": added})
 
@@ -276,7 +278,7 @@ class AlbumItemsRemoveView(APIView):
         return Response({"removed": remove_items(album, present)})
 
 
-NOT_MOVABLE = "Only photos of the album can be moved, next to another."
+NOT_MOVABLE = gettext_lazy("Only photos of the album can be moved, next to another.")
 
 
 @extend_schema(tags=["Photos - Albums"])

@@ -1,6 +1,14 @@
 {% extends "photos/ui/base.html" %}
+{% load i18n %}
 
 {% block photos_content %}
+  {% translate "%(count)s more waiting" as more_waiting_label %}
+  {% translate "That’s all for now" as all_done_label %}
+  {% translate "They come once these are settled. Look again to bring in the faces read since this page opened." as more_waiting_hint %}
+  {% translate "Faces read since this page opened show up when you look again." as all_done_hint %}
+  {% translate "Looking…" as looking_label %}
+  {% translate "Look for new faces" as look_label %}
+  {% translate "Look for new faces to check" as refresh_title %}
   {{ review|json_script:"photos-review-data" }}
   <div x-data="facesReview()" class="min-h-full flex flex-col">
     <header
@@ -12,13 +20,13 @@
           href="{{ people_url }}"
           x-target.push="photos-nav photos-content"
           class="btn btn-ghost btn-sm btn-square"
-          title="Back to People"
-          aria-label="Back to People"
+          title="{% translate 'Back to People' %}"
+          aria-label="{% translate 'Back to People' %}"
         >
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </a>
         <div class="min-w-0">
-          <h1 class="text-lg font-semibold truncate">Review people</h1>
+          <h1 class="text-lg font-semibold truncate">{% translate "Review people" %}</h1>
           <p
             class="sm:hidden text-xs text-base-content/60 tabular-nums truncate"
             x-text="leftLabel()"
@@ -29,7 +37,7 @@
         <div class="ml-auto flex items-center gap-2">
           <span
             class="max-sm:hidden text-sm text-base-content/60 tabular-nums whitespace-nowrap"
-            title="People to name: groups of faces nobody is named for yet. Faces to check: faces under a named person, or in no group, that may be someone else."
+            title="{% translate 'People to name: groups of faces nobody is named for yet. Faces to check: faces under a named person, or in no group, that may be someone else.' %}"
             x-text="leftLabel()"
           >{{ review_left_label }}</span>
           <span
@@ -37,7 +45,7 @@
             @ajax:send="refreshing = true"
             @ajax:after="refreshing = false"
           >
-            {% include "ui/partials/refresh_button.html" with url_expr="'"|add:review_url|add:"'" target="photos-nav photos-content" loading_expr="refreshing" title="Look for new faces to check" %}
+            {% include "ui/partials/refresh_button.html" with url_expr="'"|add:review_url|add:"'" target="photos-nav photos-content" loading_expr="refreshing" title=refresh_title %}
           </span>
         </div>
       </div>
@@ -47,7 +55,8 @@
       <template x-if="cards.length">
         <p class="flex items-center gap-2 text-sm text-base-content/60">
           <i data-lucide="mouse-pointer-click" class="w-4 h-4 shrink-0"></i>
-          <span>Say who each group is. <span class="sm:hidden">Tap</span><span class="max-sm:hidden">Click</span> a face that isn't them to leave it out: it comes back in a group of its own.</span>
+          <span class="sm:hidden">{% translate "Say who each group is. Tap a face that isn't them to leave it out: it comes back in a group of its own." %}</span>
+          <span class="max-sm:hidden">{% translate "Say who each group is. Click a face that isn't them to leave it out: it comes back in a group of its own." %}</span>
         </p>
       </template>
       <template x-for="card in cards" :key="card.key">
@@ -63,11 +72,11 @@
           <div class="space-y-1">
             <h2
               class="font-semibold"
-              x-text="toName + toCheck > cards.length ? (toName + toCheck - cards.length) + ' more waiting' : 'That’s all for now'"
+              x-text="toName + toCheck > cards.length ? interpolate('{{ more_waiting_label|escapejs }}', { count: toName + toCheck - cards.length }, true) : '{{ all_done_label|escapejs }}'"
             ></h2>
             <p
               class="text-sm text-base-content/60 max-w-sm"
-              x-text="toName + toCheck > cards.length ? 'They come once these are settled. Look again to bring in the faces read since this page opened.' : 'Faces read since this page opened show up when you look again.'"
+              x-text="toName + toCheck > cards.length ? '{{ more_waiting_hint|escapejs }}' : '{{ all_done_hint|escapejs }}'"
             ></p>
           </div>
           <button
@@ -80,7 +89,9 @@
             <span class="inline-flex" :class="refreshing && 'animate-spin'">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i>
             </span>
-            <span x-text="refreshing ? 'Looking…' : 'Look for new faces'"></span>
+            <span
+              x-text="refreshing ? '{{ looking_label|escapejs }}' : '{{ look_label|escapejs }}'"
+            ></span>
           </button>
         </footer>
       </template>
@@ -92,9 +103,9 @@
           <div class="rounded-full bg-module/10 p-5">
             <i data-lucide="user-check" class="w-10 h-10 text-module"></i>
           </div>
-          <h2 class="text-lg font-semibold">Everyone is sorted out</h2>
+          <h2 class="text-lg font-semibold">{% translate "Everyone is sorted out" %}</h2>
           <p class="text-sm text-base-content/60 max-w-sm">
-            New people and faces to check show up here as more photos are read for faces.
+            {% translate "New people and faces to check show up here as more photos are read for faces." %}
           </p>
           <div
             class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto"
@@ -109,13 +120,13 @@
               <span class="inline-flex" :class="refreshing && 'animate-spin'">
                 <i data-lucide="refresh-cw" class="w-4 h-4"></i>
               </span>
-              Look again
+              {% translate "Look again" %}
             </button>
             <a
               href="{{ people_url }}"
               x-target.push="photos-nav photos-content"
               class="btn btn-module btn-sm"
-            >Back to People</a>
+            >{% translate "Back to People" %}</a>
           </div>
         </div>
       </template>

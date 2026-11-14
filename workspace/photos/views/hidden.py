@@ -4,6 +4,7 @@ Hiding is the caller's own business: it never touches the file, nor what
 anyone else's library shows. A folder hides everything under it.
 """
 
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -41,11 +42,11 @@ def _parse_files(data):
     try:
         return parse_uuid_batch(data, key="files", max_items=MAX_FILES)
     except BatchTooLarge:
-        return _refused(f"Too many files (max {MAX_FILES}).")
+        return _refused(_("Too many files (max %(max)s).") % {"max": MAX_FILES})
     except MalformedUuid:
-        return _refused("Malformed UUID in files.")
+        return _refused(_("Malformed UUID in files."))
     except UuidBatchError:
-        return _refused("files must be a non-empty list.")
+        return _refused(_("files must be a non-empty list."))
 
 
 @extend_schema(tags=["Photos - Hidden"])
@@ -67,7 +68,9 @@ class HiddenFilesView(APIView):
             return uuids
         found = hideable_files(request.user).in_bulk(uuids)
         if len(found) != len(set(uuids)):
-            return _refused("One or more files are not photos or folders you can hide.")
+            return _refused(
+                _("One or more files are not photos or folders you can hide.")
+            )
         return Response({"hidden": hide_files(request.user, found.values())})
 
 

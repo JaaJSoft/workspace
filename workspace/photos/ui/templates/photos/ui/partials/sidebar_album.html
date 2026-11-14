@@ -4,6 +4,12 @@
   _sidebar_albums; shared, for an album someone else shared, names its
   owner in the tooltip.
 {% endcomment %}
+{% load i18n %}
+{% if shared %}
+  {% blocktranslate trimmed with name=item.card.album.owner.username asvar shared_title %}
+    Shared by {{ name }}
+  {% endblocktranslate %}
+{% endif %}
 <li class="list-none">
   <a
     href="{{ item.url }}"
@@ -11,7 +17,7 @@
     @click="closeDrawer()"
     class="flex items-center gap-3 px-2 py-1.5 rounded-lg text-base transition-colors {% if item.active %}bg-module/15 text-module hover:bg-module/25{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-module{% endif %}"
     {% if item.active %}aria-current="page"{% endif %}
-    {% if shared %}title="Shared by {{ item.card.album.owner.username }}"{% endif %}
+    {% if shared %}title="{{ shared_title }}"{% endif %}
     data-album="{{ item.card.album.uuid }}"
   >
     {% if item.card.cover_url %}

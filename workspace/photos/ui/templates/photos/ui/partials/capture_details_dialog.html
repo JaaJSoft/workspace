@@ -4,20 +4,22 @@
   scanned print), place them somewhere, or hand either back to the file.
   State and requests live in photosCaptureDetailsMixin() (capture_details.js).
 {% endcomment %}
+{% load i18n %}
+{% translate "Edit date & location" as edit_details_title %}
 <dialog id="capture-details-dialog" class="modal">
   <div class="modal-box max-w-lg">
-    {% include "ui/partials/dialog_header.html" with icon="calendar-clock" title="Edit date &amp; location" subtitle_expr="captureCountLabel()" class="mb-5" only %}
+    {% include "ui/partials/dialog_header.html" with icon="calendar-clock" title=edit_details_title subtitle_expr="captureCountLabel()" class="mb-5" only %}
 
     <form @submit.prevent="saveCaptureDetails()" class="space-y-6">
       <fieldset class="space-y-3" :disabled="captureDialog.saving">
         <legend class="flex items-center gap-2 text-sm font-semibold mb-2">
           <i data-lucide="calendar" class="w-4 h-4 text-base-content/60"></i>
-          Date &amp; time
+          {% translate "Date & time" %}
         </legend>
         <div
           class="tabs tabs-box tabs-sm bg-base-200 p-0.5 w-full"
           role="radiogroup"
-          aria-label="Date and time"
+          aria-label="{% translate 'Date and time' %}"
         >
           <button
             type="button"
@@ -27,7 +29,7 @@
             :aria-checked="captureDialog.dateMode === 'keep'"
             @click="captureDialog.dateMode = 'keep'"
           >
-            Keep
+            {% translate "Keep" context "capture details mode" %}
           </button>
           <button
             type="button"
@@ -37,7 +39,7 @@
             :aria-checked="captureDialog.dateMode === 'shift'"
             @click="captureDialog.dateMode = 'shift'"
           >
-            Shift
+            {% translate "Shift" context "capture details mode" %}
           </button>
           <button
             type="button"
@@ -47,7 +49,7 @@
             :aria-checked="captureDialog.dateMode === 'set'"
             @click="captureDialog.dateMode = 'set'"
           >
-            Set
+            {% translate "Set" context "capture details mode" %}
           </button>
           <button
             type="button"
@@ -57,7 +59,7 @@
             :aria-checked="captureDialog.dateMode === 'restore'"
             @click="captureDialog.dateMode = 'restore'"
           >
-            From file
+            {% translate "From file" context "capture details mode" %}
           </button>
         </div>
 
@@ -65,11 +67,11 @@
           <div class="flex flex-wrap items-end gap-2">
             <select
               class="select select-sm w-28"
-              aria-label="Direction"
+              aria-label="{% translate 'Direction' context 'time shift' %}"
               x-model.number="captureDialog.shiftSign"
             >
-              <option value="1">Later</option>
-              <option value="-1">Earlier</option>
+              <option value="1">{% translate "Later" %}</option>
+              <option value="-1">{% translate "Earlier" %}</option>
             </select>
             <label class="input input-sm flex items-center gap-1 w-24">
               <input
@@ -77,30 +79,30 @@
                 min="0"
                 max="36525"
                 class="grow w-0 tabular-nums"
-                aria-label="Days"
+                aria-label="{% translate 'Days' %}"
                 x-model.number="captureDialog.shiftDays"
               />
-              <span class="text-base-content/50">d</span>
+              <span class="text-base-content/50">{% translate "d" context "days unit" %}</span>
             </label>
             <label class="input input-sm flex items-center gap-1 w-24">
               <input
                 type="number"
                 min="0"
                 class="grow w-0 tabular-nums"
-                aria-label="Hours"
+                aria-label="{% translate 'Hours' %}"
                 x-model.number="captureDialog.shiftHours"
               />
-              <span class="text-base-content/50">h</span>
+              <span class="text-base-content/50">{% translate "h" context "hours unit" %}</span>
             </label>
             <label class="input input-sm flex items-center gap-1 w-24">
               <input
                 type="number"
                 min="0"
                 class="grow w-0 tabular-nums"
-                aria-label="Minutes"
+                aria-label="{% translate 'Minutes' %}"
                 x-model.number="captureDialog.shiftMinutes"
               />
-              <span class="text-base-content/50">min</span>
+              <span class="text-base-content/50">{% translate "min" context "minutes unit" %}</span>
             </label>
           </div>
           <p
@@ -110,7 +112,7 @@
             <i data-lucide="arrow-right-left" class="w-3.5 h-3.5 shrink-0"></i>
             <span x-text="captureShiftPreview()"></span>
           </p>
-          <p class="text-xs text-base-content/50">Photos without a date are left as they are.</p>
+          <p class="text-xs text-base-content/50">{% translate "Photos without a date are left as they are." %}</p>
         </div>
 
         <div x-show="captureDialog.dateMode === 'set'" x-cloak class="space-y-2">
@@ -118,18 +120,18 @@
             <input
               type="date"
               class="input input-sm w-44"
-              aria-label="Date"
+              aria-label="{% translate 'Date' context 'capture date' %}"
               x-model="captureDialog.date"
             />
             <input
               type="time"
               class="input input-sm w-32"
-              aria-label="Time"
+              aria-label="{% translate 'Time' context 'capture time' %}"
               x-model="captureDialog.time"
             />
           </div>
           <p class="text-xs text-base-content/50">
-            Leave the time empty to keep each photo's own time (noon for photos without a date).
+            {% translate "Leave the time empty to keep each photo's own time (noon for photos without a date)." %}
           </p>
         </div>
 
@@ -138,19 +140,19 @@
           x-cloak
           class="text-xs text-base-content/60"
         >
-          Use the date the camera wrote in the file, or the one in its name, again.
+          {% translate "Use the date the camera wrote in the file, or the one in its name, again." %}
         </p>
       </fieldset>
 
       <fieldset class="space-y-3" :disabled="captureDialog.saving">
         <legend class="flex items-center gap-2 text-sm font-semibold mb-2">
           <i data-lucide="map-pin" class="w-4 h-4 text-base-content/60"></i>
-          Location
+          {% translate "Location" context "photo place" %}
         </legend>
         <div
           class="tabs tabs-box tabs-sm bg-base-200 p-0.5 w-full"
           role="radiogroup"
-          aria-label="Location"
+          aria-label="{% translate 'Location' context 'photo place' %}"
         >
           <button
             type="button"
@@ -160,7 +162,7 @@
             :aria-checked="captureDialog.locationMode === 'keep'"
             @click="captureDialog.locationMode = 'keep'"
           >
-            Keep
+            {% translate "Keep" context "capture details mode" %}
           </button>
           <button
             type="button"
@@ -170,7 +172,7 @@
             :aria-checked="captureDialog.locationMode === 'set'"
             @click="captureDialog.locationMode = 'set'"
           >
-            Set
+            {% translate "Set" context "capture details mode" %}
           </button>
           <button
             type="button"
@@ -180,7 +182,7 @@
             :aria-checked="captureDialog.locationMode === 'clear'"
             @click="captureDialog.locationMode = 'clear'"
           >
-            Remove
+            {% translate "Remove" context "capture details mode" %}
           </button>
           <button
             type="button"
@@ -190,7 +192,7 @@
             :aria-checked="captureDialog.locationMode === 'restore'"
             @click="captureDialog.locationMode = 'restore'"
           >
-            From file
+            {% translate "From file" context "capture details mode" %}
           </button>
         </div>
 
@@ -206,7 +208,7 @@
               class="grow font-mono"
               placeholder="48.85837, 2.29448"
               autocomplete="off"
-              aria-label="Coordinates"
+              aria-label="{% translate 'Coordinates' %}"
               x-model="captureDialog.coordinates"
             />
           </label>
@@ -214,10 +216,10 @@
             class="text-xs text-error"
             x-show="captureDialog.coordinates.trim() && !captureCoordinates()"
           >
-            Not a position: paste coordinates or a map link.
+            {% translate "Not a position: paste coordinates or a map link." %}
           </p>
           <p class="text-xs text-base-content/50" x-show="!captureCoordinates()">
-            Coordinates, or a link copied from OpenStreetMap or Google Maps.
+            {% translate "Coordinates, or a link copied from OpenStreetMap or Google Maps." %}
           </p>
           <a
             x-show="captureCoordinates()"
@@ -227,7 +229,7 @@
             rel="noopener noreferrer"
             class="link link-hover text-xs inline-flex items-center gap-1 hover:text-module"
           >
-            Check on OpenStreetMap
+            {% translate "Check on OpenStreetMap" %}
             <i data-lucide="external-link" class="w-3 h-3"></i>
           </a>
         </div>
@@ -237,14 +239,14 @@
           x-cloak
           class="text-xs text-base-content/60"
         >
-          The photos will show no location, whatever their file says.
+          {% translate "The photos will show no location, whatever their file says." %}
         </p>
         <p
           x-show="captureDialog.locationMode === 'restore'"
           x-cloak
           class="text-xs text-base-content/60"
         >
-          Use the position the camera wrote in the file again.
+          {% translate "Use the position the camera wrote in the file again." %}
         </p>
       </fieldset>
 
@@ -259,7 +261,7 @@
           class="btn btn-ghost btn-sm"
           @click="closeCaptureDialog()"
         >
-          Cancel
+          {% translate "Cancel" %}
         </button>
         <button
           type="submit"
@@ -267,12 +269,12 @@
           :disabled="!captureCanSave()"
           data-testid="capture-details-save"
         >
-          Save
+          {% translate "Save" %}
         </button>
       </div>
     </form>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

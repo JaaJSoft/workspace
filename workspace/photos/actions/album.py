@@ -1,3 +1,5 @@
+from django.utils.translation import gettext_lazy as _
+
 from workspace.photos.models import Album
 from workspace.photos.queries import CONTRIBUTOR, MANAGER, OWNER, VIEWER
 
@@ -8,7 +10,7 @@ from .base import ActionCategory, BaseAlbumAction
 @AlbumActionRegistry.register
 class RenameAlbumAction(BaseAlbumAction):
     id = "rename"
-    label = "Rename"
+    label = _("Rename")
     icon = "pencil"
     category = ActionCategory.EDIT
 
@@ -16,7 +18,7 @@ class RenameAlbumAction(BaseAlbumAction):
 @AlbumActionRegistry.register
 class EditDescriptionAction(BaseAlbumAction):
     id = "edit_description"
-    label = "Edit description"
+    label = _("Edit description")
     icon = "align-left"
     category = ActionCategory.EDIT
 
@@ -29,8 +31,8 @@ class ChangeSortAction(BaseAlbumAction):
 
     def get_label(self, obj):
         if obj.sort_mode == Album.SortMode.MANUAL:
-            return "Sort by capture date"
-        return "Sort manually"
+            return _("Sort by capture date")
+        return _("Sort manually")
 
     def get_icon(self, obj):
         if obj.sort_mode == Album.SortMode.MANUAL:
@@ -41,7 +43,7 @@ class ChangeSortAction(BaseAlbumAction):
 @AlbumActionRegistry.register
 class AddItemsAction(BaseAlbumAction):
     id = "add_items"
-    label = "Add photos"
+    label = _("Add photos")
     icon = "image-plus"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -54,7 +56,7 @@ class RemoveItemsAction(BaseAlbumAction):
     endpoint holds them to it item by item (``services.albums.removable``)."""
 
     id = "remove_items"
-    label = "Remove from album"
+    label = _("Remove from album")
     icon = "image-minus"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -64,7 +66,7 @@ class RemoveItemsAction(BaseAlbumAction):
 @AlbumActionRegistry.register
 class ReorderAction(BaseAlbumAction):
     id = "reorder"
-    label = "Reorder"
+    label = _("Reorder")
     icon = "move"
     category = ActionCategory.ORGANIZE
     supports_bulk = True
@@ -80,7 +82,7 @@ class ReorderAction(BaseAlbumAction):
 @AlbumActionRegistry.register
 class SetCoverAction(BaseAlbumAction):
     id = "set_cover"
-    label = "Set as cover"
+    label = _("Set as cover")
     icon = "image-up"
     category = ActionCategory.ORGANIZE
 
@@ -90,7 +92,7 @@ class ShareAlbumAction(BaseAlbumAction):
     """Manage the album's members and its public links."""
 
     id = "share"
-    label = "Share"
+    label = _("Share")
     icon = "share-2"
     category = ActionCategory.SHARE
 
@@ -101,7 +103,7 @@ class DownloadAlbumAction(BaseAlbumAction):
     the album allows it."""
 
     id = "download"
-    label = "Download album"
+    label = _("Download album")
     icon = "download"
     category = ActionCategory.SHARE
     roles = (OWNER, MANAGER, CONTRIBUTOR, VIEWER)
@@ -119,7 +121,7 @@ class LeaveAlbumAction(BaseAlbumAction):
     share to leave."""
 
     id = "leave"
-    label = "Leave album"
+    label = _("Leave album")
     icon = "log-out"
     category = ActionCategory.DANGER
     css_class = "text-error"
@@ -132,7 +134,7 @@ class LeaveAlbumAction(BaseAlbumAction):
 @AlbumActionRegistry.register
 class DeleteAlbumAction(BaseAlbumAction):
     id = "delete"
-    label = "Delete album"
+    label = _("Delete album")
     icon = "trash-2"
     category = ActionCategory.DANGER
     css_class = "text-error"

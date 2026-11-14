@@ -1,5 +1,7 @@
 {% extends "photos/ui/base.html" %}
 
+{% load i18n %}
+
 {% block photos_content %}
   {{ cluster|json_script:"photos-cluster-data" }}
   {% if is_hidden_view %}
@@ -24,8 +26,8 @@
           href="{{ people_url }}"
           x-target.push="photos-nav photos-content"
           class="btn btn-ghost btn-sm btn-square shrink-0"
-          title="All people"
-          aria-label="All people"
+          title="{% translate 'All people' %}"
+          aria-label="{% translate 'All people' %}"
         >
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </a>
@@ -51,8 +53,8 @@
             data-nav-back
             class="btn btn-ghost btn-sm btn-square shrink-0"
             :class="{ 'max-sm:hidden': searchOpen }"
-            title="Back"
-            aria-label="Back"
+            title="{% translate 'Back' %}"
+            aria-label="{% translate 'Back' %}"
             data-testid="photos-ranking-back"
           >
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
@@ -89,8 +91,8 @@
             class="btn btn-ghost btn-sm btn-square sm:hidden"
             :class="{ hidden: searchOpen }"
             @click="searchOpen = true; $nextTick(() => $refs.searchInput.focus())"
-            title="Describe a photo"
-            aria-label="Search photos by description"
+            title="{% translate 'Describe a photo' %}"
+            aria-label="{% translate 'Search photos by description' %}"
             data-testid="photos-search-open"
           >
             <i data-lucide="search" class="w-4 h-4"></i>
@@ -106,16 +108,16 @@
               name="q"
               value="{{ search_query }}"
               maxlength="{{ search_max_length }}"
-              placeholder="Describe a photo…"
+              placeholder="{% translate 'Describe a photo…' %}"
               class="grow min-w-0"
-              aria-label="Search photos by description"
+              aria-label="{% translate 'Search photos by description' %}"
               data-testid="photos-search"
             />
             <button
               type="button"
               class="sm:hidden opacity-60"
               @click="searchOpen = false"
-              aria-label="Close the search"
+              aria-label="{% translate 'Close the search' %}"
             >
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
@@ -125,11 +127,15 @@
       {% if pending %}
         <span
           class="badge badge-ghost gap-1.5 max-sm:hidden"
-          title="New photos and videos show up here once their capture date has been read."
+          title="{% translate 'New photos and videos show up here once their capture date has been read.' %}"
           data-photos-pending
         >
           <span class="loading loading-spinner loading-xs"></span>
-          {{ pending }} being analyzed
+          {% blocktranslate trimmed count counter=pending %}
+            {{ counter }} being analyzed
+          {% plural %}
+            {{ counter }} being analyzed
+          {% endblocktranslate %}
         </span>
       {% endif %}
       <div class="max-sm:hidden self-center">
@@ -140,12 +146,12 @@
           type="button"
           class="btn btn-module btn-sm gap-1 self-center"
           :class="{ 'max-sm:hidden': searchOpen }"
-          title="Import photos and videos"
+          title="{% translate 'Import photos and videos' %}"
           @click="pickImportFiles()"
           data-testid="photos-import"
         >
           <i data-lucide="image-up" class="w-4 h-4"></i>
-          <span class="max-sm:hidden">Import</span>
+          <span class="max-sm:hidden">{% translate "Import" context "photos import button" %}</span>
         </button>
       {% endif %}
       {% if date_param %}
@@ -155,7 +161,7 @@
           class="btn btn-ghost btn-sm gap-1"
         >
           <i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>
-          <span class="max-sm:hidden">Back to latest</span>
+          <span class="max-sm:hidden">{% translate "Back to latest" %}</span>
         </a>
       {% endif %}
       {% if cluster %}
@@ -163,10 +169,10 @@
           <a
             href="{{ cluster.person.url }}"
             class="btn btn-ghost btn-sm gap-1 self-center"
-            title="Open {{ cluster.person.name }} in People"
+            title="{% blocktranslate trimmed with name=cluster.person.name %}Open {{ name }} in People{% endblocktranslate %}"
           >
             <i data-lucide="contact" class="w-4 h-4"></i>
-            <span class="max-sm:hidden">Open in People</span>
+            <span class="max-sm:hidden">{% translate "Open in People" %}</span>
           </a>
         {% endif %}
         <div class="dropdown dropdown-end self-center">
@@ -174,7 +180,7 @@
             type="button"
             tabindex="0"
             class="btn btn-ghost btn-sm btn-square"
-            aria-label="Person options"
+            aria-label="{% translate 'Person options' %}"
           >
             <i data-lucide="more-vertical" class="w-4 h-4"></i>
           </button>
@@ -216,27 +222,33 @@
           href="{{ timeline_url }}"
           x-target.push="photos-nav photos-content"
           class="btn btn-ghost btn-sm"
-        >Back to the timeline</a>
+        >{% translate "Back to the timeline" %}</a>
       {% elif album %}
-        <h2 class="text-lg font-semibold">This album is empty</h2>
+        <h2 class="text-lg font-semibold">{% translate "This album is empty" %}</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
-          An album gathers photos from anywhere in your library without moving them in Files.
-          Select photos in the timeline, then choose Add to album.
+          {% blocktranslate trimmed %}
+            An album gathers photos from anywhere in your library without moving them in Files.
+            Select photos in the timeline, then choose Add to album.
+          {% endblocktranslate %}
         </p>
         <a
           href="{{ timeline_url }}"
           x-target.push="photos-nav photos-content"
           class="btn btn-module btn-sm"
-        >Go to the timeline</a>
+        >{% translate "Go to the timeline" %}</a>
       {% elif is_hidden_view and not date_param and view_empty %}
-        <h2 class="text-lg font-semibold">Nothing hidden</h2>
+        <h2 class="text-lg font-semibold">{% translate "Nothing hidden" %}</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
-          Hide photos from their menu, or whole folders from Preferences. Hidden photos stay out of the timeline, albums, people and search, and stay where they are in Files.
+          {% blocktranslate trimmed %}
+            Hide photos from their menu, or whole folders from Preferences. Hidden photos stay out of the timeline, albums, people and search, and stay where they are in Files.
+          {% endblocktranslate %}
         </p>
       {% elif is_timeline_view and not date_param and view_empty %}
-        <h2 class="text-lg font-semibold">No photos yet</h2>
+        <h2 class="text-lg font-semibold">{% translate "No photos yet" %}</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
-          Import photos and videos, or drop them here. Everything you keep in Files shows up too, by the day it was taken.
+          {% blocktranslate trimmed %}
+            Import photos and videos, or drop them here. Everything you keep in Files shows up too, by the day it was taken.
+          {% endblocktranslate %}
         </p>
         <div class="flex flex-wrap justify-center gap-2">
           <button
@@ -245,14 +257,20 @@
             @click="pickImportFiles()"
           >
             <i data-lucide="image-up" class="w-4 h-4"></i>
-            Import photos
+            {% translate "Import photos" %}
           </button>
-          <a href="{% url 'files_ui:index' %}" class="btn btn-ghost btn-sm">Go to Files</a>
+          <a href="{% url 'files_ui:index' %}" class="btn btn-ghost btn-sm">{% translate "Go to Files" %}</a>
         </div>
       {% else %}
-        <h2 class="text-lg font-semibold">Nothing here</h2>
+        <h2 class="text-lg font-semibold">{% translate "Nothing here" %}</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
-          {% if media_type == "video" %}No video matches this view.{% elif media_type == "photo" %}No photo matches this view.{% else %}Nothing in your library matches this view.{% endif %}
+          {% if media_type == "video" %}
+            {% translate "No video matches this view." %}
+          {% elif media_type == "photo" %}
+            {% translate "No photo matches this view." %}
+          {% else %}
+            {% translate "Nothing in your library matches this view." %}
+          {% endif %}
         </p>
       {% endif %}
     </div>

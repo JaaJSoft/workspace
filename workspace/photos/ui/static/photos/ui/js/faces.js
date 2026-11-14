@@ -42,7 +42,9 @@ async function facesRequest(url, { method = 'GET', body } = {}) {
     } catch (_) {
       // Not JSON: the status says enough.
     }
-    const error = new Error(detail || `Request failed (${response.status})`);
+    const error = new Error(
+      detail || interpolate(gettext('Request failed (%(status)s)'), { status: response.status }, true),
+    );
     error.data = data;
     error.status = response.status;
     throw error;
@@ -132,10 +134,6 @@ function filterMergeCandidates(clusters, query, selected) {
   return clusters.filter((c) => selected.includes(c.uuid) || foldName(c.person_name).includes(q));
 }
 
-function photoCount(count) {
-  return `${count} photo${count === 1 ? '' : 's'}`;
-}
-
 window.photosFacesMixin = function photosFacesMixin() {
   return {
     facesSaving: false,
@@ -166,7 +164,7 @@ window.photosFacesMixin = function photosFacesMixin() {
     },
 
     notPersonLabel(name) {
-      return name ? `Not ${name}` : 'Not this person';
+      return name ? interpolate(gettext('Not %(name)s'), { name }, true) : gettext('Not this person');
     },
 
     // Rejected when no answer came: the content-loading veil must drop even
@@ -198,7 +196,7 @@ window.photosFacesMixin = function photosFacesMixin() {
         });
         await this._reloadView(this._peopleUrl());
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not change face grouping');
+        window.AppAlert.error(err.message || gettext('Could not change face grouping'));
       } finally {
         this.facesSaving = false;
       }
@@ -206,9 +204,9 @@ window.photosFacesMixin = function photosFacesMixin() {
 
     async turnFacesOff() {
       const ok = await AppDialog.confirm({
-        title: 'Turn off face grouping',
-        message: 'Every face, every group of people and every face picture is deleted right away. Your photos and your contacts are not touched. Turning it back on reads your photos again from the start.',
-        okLabel: 'Turn off and delete',
+        title: gettext('Turn off face grouping'),
+        message: gettext('Every face, every group of people and every face picture is deleted right away. Your photos and your contacts are not touched. Turning it back on reads your photos again from the start.'),
+        okLabel: gettext('Turn off and delete'),
         okClass: 'btn-error',
         icon: 'power-off',
         iconClass: 'bg-error/10 text-error',
@@ -275,13 +273,20 @@ window.photosFacesMixin = function photosFacesMixin() {
             // The first cluster of a person is the one whose cover stands
             // for them.
             await facesRequest(`${FACES_API}/clusters/${card.clusters[0]}/avatar`, { method: 'POST' });
-            window.AppAlert.success(`Contact photo of ${card.person.name} updated`, { duration: 2500 });
+            window.AppAlert.success(
+              interpolate(gettext('Contact photo of %(name)s updated'), { name: card.person.name }, true),
+              { duration: 2500 },
+            );
             break;
           case 'unname': {
             const ok = await AppDialog.confirm({
-              title: 'Remove name',
-              message: `These faces are no longer ${card.person.name}. The contact itself stays in People.`,
-              okLabel: 'Remove name',
+              title: gettext('Remove name'),
+              message: interpolate(
+                gettext('These faces are no longer %(name)s. The contact itself stays in People.'),
+                { name: card.person.name },
+                true,
+              ),
+              okLabel: gettext('Remove name'),
               okClass: 'btn-error',
               icon: 'user-minus',
               iconClass: 'bg-error/10 text-error',
@@ -296,9 +301,9 @@ window.photosFacesMixin = function photosFacesMixin() {
             break;
           case 'ungroup': {
             const ok = await AppDialog.confirm({
-              title: 'Ungroup',
-              message: 'This person leaves the list, and their faces stay out of automatic grouping. They wait in Review, under Unassigned, until you say who they are.',
-              okLabel: 'Ungroup',
+              title: gettext('Ungroup'),
+              message: gettext('This person leaves the list, and their faces stay out of automatic grouping. They wait in Review, under Unassigned, until you say who they are.'),
+              okLabel: gettext('Ungroup'),
               okClass: 'btn-error',
               icon: 'ungroup',
               iconClass: 'bg-error/10 text-error',
@@ -310,7 +315,7 @@ window.photosFacesMixin = function photosFacesMixin() {
           }
         }
       } catch (err) {
-        window.AppAlert.error(err.message || 'Something went wrong');
+        window.AppAlert.error(err.message || gettext('Something went wrong'));
       }
     },
 
@@ -381,7 +386,7 @@ window.photosFacesMixin = function photosFacesMixin() {
           this._isOnPageOf(target) ? `/photos?person=${encodeURIComponent(personUuid)}` : window.location.href,
         );
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not name this person');
+        window.AppAlert.error(err.message || gettext('Could not name this person'));
       } finally {
         this.nameDialog.saving = false;
       }
@@ -408,7 +413,7 @@ window.photosFacesMixin = function photosFacesMixin() {
           .filter(Boolean)
           .map((c) => c.uuid);
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not load people');
+        window.AppAlert.error(err.message || gettext('Could not load people'));
       } finally {
         this.mergeDialog.loading = false;
       }
@@ -459,7 +464,7 @@ window.photosFacesMixin = function photosFacesMixin() {
           this.mergeDialog.choices = persons;
           this.mergeDialog.person = (persons.find((p) => p.uuid === target.person) || persons[0]).uuid;
         } else {
-          window.AppAlert.error(err.message || 'Could not merge');
+          window.AppAlert.error(err.message || gettext('Could not merge'));
         }
       } finally {
         this.mergeDialog.saving = false;
@@ -520,7 +525,7 @@ window.photosFacesMixin = function photosFacesMixin() {
       try {
         await this._loadFacesDialog();
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not load the faces');
+        window.AppAlert.error(err.message || gettext('Could not load the faces'));
       } finally {
         this.facesDialog.loading = false;
       }
@@ -560,14 +565,20 @@ window.photosFacesMixin = function photosFacesMixin() {
     faceLabel(face) {
       const cluster = this.clusterOf(face);
       if (cluster && cluster.person_name) return cluster.person_name;
-      if (cluster) return `Unnamed, ${photoCount(cluster.photo_count)}`;
-      if (face.cluster) return 'Hidden person';
-      if (face.assignment === 'rejected') return 'Left out of grouping';
-      if (face.assignment === 'hidden') return 'Hidden face';
-      if (face.assignment === 'duplicate') {
-        return this.facesDialogIsVideo() ? 'Already named in this video' : 'Already named in this photo';
+      if (cluster) {
+        return interpolate(
+          ngettext('Unnamed, %(count)s photo', 'Unnamed, %(count)s photos', cluster.photo_count),
+          { count: cluster.photo_count },
+          true,
+        );
       }
-      return 'Not grouped yet';
+      if (face.cluster) return gettext('Hidden person');
+      if (face.assignment === 'rejected') return gettext('Left out of grouping');
+      if (face.assignment === 'hidden') return gettext('Hidden face');
+      if (face.assignment === 'duplicate') {
+        return this.facesDialogIsVideo() ? gettext('Already named in this video') : gettext('Already named in this photo');
+      }
+      return gettext('Not grouped yet');
     },
 
     // The other face of this photo that already is `person`, or null: picking
@@ -636,7 +647,7 @@ window.photosFacesMixin = function photosFacesMixin() {
         this.facesDialog.results = null;
         this.facesDialog.changed = true;
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not correct the face');
+        window.AppAlert.error(err.message || gettext('Could not correct the face'));
       } finally {
         this.facesDialog.busy = false;
       }
@@ -709,7 +720,7 @@ window.photosFacesMixin = function photosFacesMixin() {
         await this._offerCoverToContact(this.currentCluster().person, face.cluster);
         await this._reloadView();
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not change the cover');
+        window.AppAlert.error(err.message || gettext('Could not change the cover'));
       }
     },
 
@@ -720,15 +731,22 @@ window.photosFacesMixin = function photosFacesMixin() {
       if (!person) return;
       if (person.has_avatar) {
         const ok = await AppDialog.confirm({
-          title: 'Update the contact photo too?',
-          message: `${person.name} already has a photo in People. Replace it with this face?`,
-          okLabel: 'Replace',
+          title: gettext('Update the contact photo too?'),
+          message: interpolate(
+            gettext('%(name)s already has a photo in People. Replace it with this face?'),
+            { name: person.name },
+            true,
+          ),
+          okLabel: gettext('Replace'),
           icon: 'circle-user-round',
         });
         if (!ok) return;
       }
       await facesRequest(`${FACES_API}/clusters/${clusterUuid}/avatar`, { method: 'POST' });
-      window.AppAlert.success(`Also the contact photo of ${person.name} in People`, { duration: 2500 });
+      window.AppAlert.success(
+        interpolate(gettext('Also the contact photo of %(name)s in People'), { name: person.name }, true),
+        { duration: 2500 },
+      );
     },
 
     async _rejectFace(photo) {
@@ -743,7 +761,7 @@ window.photosFacesMixin = function photosFacesMixin() {
         await this._rejectFace(photo);
         await this._reloadView();
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not remove the photo');
+        window.AppAlert.error(err.message || gettext('Could not remove the photo'));
       }
     },
 
@@ -763,9 +781,13 @@ window.photosFacesMixin = function photosFacesMixin() {
         }
       }
       this.selectionBusy = false;
-      if (failed) window.AppAlert.error(`Could not remove ${failed === 1 ? '1 photo' : `${failed} photos`}`);
+      if (failed) {
+        window.AppAlert.error(
+          interpolate(ngettext('Could not remove %(count)s photo', 'Could not remove %(count)s photos', failed), { count: failed }, true),
+        );
+      }
       await this._reloadView().catch((err) => {
-        window.AppAlert.error(err.message || 'Could not refresh the page');
+        window.AppAlert.error(err.message || gettext('Could not refresh the page'));
       });
     },
   };
@@ -813,16 +835,30 @@ window.facesProgress = function facesProgress(analyzed, total) {
 
 const FACE_ACTIONS_BATCH = 500;
 
-const FACE_DONE = {
-  confirm: 'confirmed',
-  reject: 'taken out',
-  hide: 'hidden',
-  unhide: 'unhidden',
-  assign: 'moved',
-};
-
-function faceCount(count) {
-  return `${count} face${count === 1 ? '' : 's'}`;
+// "2 faces confirmed": one whole sentence per action, so a translation can
+// put the count where its language wants it.
+function faceDoneMessage(action, count) {
+  let text;
+  switch (action) {
+    case 'confirm':
+      text = ngettext('%(count)s face confirmed', '%(count)s faces confirmed', count);
+      break;
+    case 'reject':
+      text = ngettext('%(count)s face taken out', '%(count)s faces taken out', count);
+      break;
+    case 'hide':
+      text = ngettext('%(count)s face hidden', '%(count)s faces hidden', count);
+      break;
+    case 'unhide':
+      text = ngettext('%(count)s face unhidden', '%(count)s faces unhidden', count);
+      break;
+    case 'assign':
+      text = ngettext('%(count)s face moved', '%(count)s faces moved', count);
+      break;
+    default:
+      text = ngettext('%(count)s face corrected', '%(count)s faces corrected', count);
+  }
+  return interpolate(text, { count }, true);
 }
 
 // The bulk actions every face of the selection offers, in the registry's
@@ -840,13 +876,26 @@ function faceBatchMessage(action, result, target) {
   let message = '';
   if (done) {
     message = action === 'assign' && target
-      ? `${faceCount(done)} moved to ${target}`
-      : `${faceCount(done)} ${FACE_DONE[action] || 'corrected'}`;
+      ? interpolate(
+        ngettext('%(count)s face moved to %(name)s', '%(count)s faces moved to %(name)s', done),
+        { count: done, name: target },
+        true,
+      )
+      : faceDoneMessage(action, done);
   }
   if (skipped) {
     const inPhoto = result.skipped.every((s) => s.reason === 'already_in_photo');
-    const why = inPhoto ? ': another face of their photo is already in that group' : '';
-    const left = `${faceCount(skipped)} left as ${skipped === 1 ? 'it was' : 'they were'}${why}`;
+    const left = interpolate(
+      inPhoto
+        ? ngettext(
+          '%(count)s face left as it was: another face of their photo is already in that group',
+          '%(count)s faces left as they were: another face of their photo is already in that group',
+          skipped,
+        )
+        : ngettext('%(count)s face left as it was', '%(count)s faces left as they were', skipped),
+      { count: skipped },
+      true,
+    );
     message = message ? `${message}. ${left}` : left;
   }
   return message;
@@ -863,7 +912,7 @@ function faceRange(uuids, from, to) {
 
 // The toast buttons of a batch's answer: Undo when something changed.
 function faceBatchActions(undoTokens) {
-  return undoTokens.length ? [{ label: 'Undo', onClick: () => undoFaceBatch(undoTokens) }] : [];
+  return undoTokens.length ? [{ label: gettext('Undo'), onClick: () => undoFaceBatch(undoTokens) }] : [];
 }
 
 // The photosApp() root reloads the page once it hears the event: an undo can
@@ -877,9 +926,12 @@ async function undoFaceBatch(tokens) {
       const result = await facesRequest(`${FACES_API}/faces/undo`, { method: 'POST', body: { token } });
       restored += result.restored;
     }
-    window.AppAlert.success(`${faceCount(restored)} put back`, { duration: 2500 });
+    window.AppAlert.success(
+      interpolate(ngettext('%(count)s face put back', '%(count)s faces put back', restored), { count: restored }, true),
+      { duration: 2500 },
+    );
   } catch (err) {
-    window.AppAlert.error(err.message || 'Could not undo');
+    window.AppAlert.error(err.message || gettext('Could not undo'));
   }
   window.dispatchEvent(new CustomEvent('photos-faces-changed'));
 }
@@ -894,7 +946,7 @@ async function undoClusterAnswer(cluster, answer, tokens) {
       body: answer.hide ? { hidden: false } : { person: null },
     });
   } catch (err) {
-    window.AppAlert.error(err.message || 'Could not undo');
+    window.AppAlert.error(err.message || gettext('Could not undo'));
     window.dispatchEvent(new CustomEvent('photos-faces-changed'));
     return;
   }
@@ -902,7 +954,7 @@ async function undoClusterAnswer(cluster, answer, tokens) {
     await undoFaceBatch(tokens);
     return;
   }
-  window.AppAlert.success('Put back', { duration: 2500 });
+  window.AppAlert.success(gettext('Put back'), { duration: 2500 });
   window.dispatchEvent(new CustomEvent('photos-faces-changed'));
 }
 
@@ -1020,7 +1072,7 @@ window.faceSelectionMixin = function faceSelectionMixin() {
           body: { ...body, faces: uuids },
         });
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not correct the faces');
+        window.AppAlert.error(err.message || gettext('Could not correct the faces'));
         return null;
       } finally {
         this.faceBusy = false;
@@ -1052,7 +1104,7 @@ window.faceSelectionMixin = function faceSelectionMixin() {
         this.assignDialog.results = results;
         this.assignDialog.clusters = clusters.filter((c) => !c.person);
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not load people');
+        window.AppAlert.error(err.message || gettext('Could not load people'));
       } finally {
         this.assignDialog.loading = false;
       }
@@ -1092,11 +1144,11 @@ window.faceSelectionMixin = function faceSelectionMixin() {
     },
 
     assignToCluster(cluster) {
-      return this._assign({ cluster: cluster.uuid }, 'an unnamed person');
+      return this._assign({ cluster: cluster.uuid }, gettext('an unnamed person'));
     },
 
     assignToSomeoneNew() {
-      return this._assign({ new_cluster: true }, 'someone new');
+      return this._assign({ new_cluster: true }, gettext('someone new'));
     },
   };
 };
@@ -1219,7 +1271,7 @@ window.silhouetteBoard = function silhouetteBoard(dataId, person) {
           body: { ...body, appearances: uuids },
         });
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not save');
+        window.AppAlert.error(err.message || gettext('Could not save'));
         return null;
       } finally {
         this.faceBusy = false;
@@ -1230,7 +1282,7 @@ window.silhouetteBoard = function silhouetteBoard(dataId, person) {
       this.faces = settled.faces;
       this.total = settled.total;
       const message = outfitMessage(body.action, result, target);
-      const actions = result.undo ? [{ label: 'Undo', onClick: () => undoOutfitAnswer([result.undo]) }] : [];
+      const actions = result.undo ? [{ label: gettext('Undo'), onClick: () => undoOutfitAnswer([result.undo]) }] : [];
       if (!result.done.length) window.AppAlert.warning(message, { duration: 8000, actions });
       else window.AppAlert.success(message, { duration: 8000, actions });
       if (!this.faces.length && this.total > 0) {
@@ -1319,20 +1371,24 @@ function silhouetteSteps(card, kept, left, answer) {
   return steps;
 }
 
-// Where the people of a silhouette card were found.
-function folderLabel(folder) {
-  return folder ? `in ${folder}` : 'at the top of your files';
+// "2 people confirmed": one whole sentence per action, as faceDoneMessage().
+function outfitDoneMessage(action, count) {
+  let text;
+  switch (action) {
+    case 'confirm':
+      text = ngettext('%(count)s person confirmed', '%(count)s people confirmed', count);
+      break;
+    case 'reject':
+      text = ngettext('%(count)s person set apart', '%(count)s people set apart', count);
+      break;
+    case 'hide':
+      text = ngettext('%(count)s person hidden', '%(count)s people hidden', count);
+      break;
+    default:
+      text = ngettext('%(count)s person answered', '%(count)s people answered', count);
+  }
+  return interpolate(text, { count }, true);
 }
-
-function peopleCount(count) {
-  return `${count} ${count === 1 ? 'person' : 'people'}`;
-}
-
-const OUTFIT_DONE = {
-  confirm: 'confirmed',
-  reject: 'set apart',
-  hide: 'hidden',
-};
 
 // What the toast says once an outfit card's answer is back.
 function outfitMessage(action, result, target) {
@@ -1341,34 +1397,97 @@ function outfitMessage(action, result, target) {
   let message = '';
   if (done) {
     message = action === 'assign' && target
-      ? `${peopleCount(done)} put with ${target}`
-      : `${peopleCount(done)} ${OUTFIT_DONE[action] || 'answered'}`;
+      ? interpolate(
+        ngettext('%(count)s person put with %(name)s', '%(count)s people put with %(name)s', done),
+        { count: done, name: target },
+        true,
+      )
+      : outfitDoneMessage(action, done);
   }
   // Named as someone the photo already shows: set apart from the card's guess.
   const isSetApart = (s) => s.reason === 'already_in_photo';
   const setApart = result.skipped.filter(isSetApart).length;
   const unchanged = result.skipped.filter((s) => !isSetApart(s));
   const parts = message ? [message] : [];
-  if (setApart) parts.push(`${peopleCount(setApart)} set apart: they are already in that photo`);
+  if (setApart) {
+    parts.push(interpolate(
+      ngettext(
+        '%(count)s person set apart: they are already in that photo',
+        '%(count)s people set apart: they are already in that photo',
+        setApart,
+      ),
+      { count: setApart },
+      true,
+    ));
+  }
   if (unchanged.length) {
     const reasons = new Set(unchanged.map((s) => s.reason));
-    const why = reasons.size === 1 && reasons.has('no_face') ? ': no photo shows their face yet' : '';
-    parts.push(`${peopleCount(unchanged.length)} left as they were${why}`);
+    const noFace = reasons.size === 1 && reasons.has('no_face');
+    parts.push(interpolate(
+      noFace
+        ? ngettext(
+          '%(count)s person left as they were: no photo shows their face yet',
+          '%(count)s people left as they were: no photo shows their face yet',
+          unchanged.length,
+        )
+        : ngettext('%(count)s person left as they were', '%(count)s people left as they were', unchanged.length),
+      { count: unchanged.length },
+      true,
+    ));
   }
   return parts.join('. ');
 }
 
 // What a silhouette card says of its people: where they were found, and why
 // they are asked about together.
+// Each case comes twice, in a folder and at the top of the files, so a
+// translation never has to glue a place onto a sentence.
 function silhouetteSubtitle(card) {
-  const where = folderLabel(card.folder);
-  if (card.guess) return `${peopleCount(card.total)} alone in their photo ${where}, dressed like ${card.guess.name} there`;
-  if (card.alone) {
-    return card.total === 1
-      ? `1 person alone in their photo ${where}, without their face`
-      : `${peopleCount(card.total)} alone in their photo ${where}, dressed alike`;
+  const count = card.total;
+  const values = { count, folder: card.folder, name: card.guess ? card.guess.name : '' };
+  let text;
+  if (card.guess) {
+    text = card.folder
+      ? ngettext(
+        '%(count)s person alone in their photo in %(folder)s, dressed like %(name)s there',
+        '%(count)s people alone in their photo in %(folder)s, dressed like %(name)s there',
+        count,
+      )
+      : ngettext(
+        '%(count)s person alone in their photo at the top of your files, dressed like %(name)s there',
+        '%(count)s people alone in their photo at the top of your files, dressed like %(name)s there',
+        count,
+      );
+  } else if (card.alone && count === 1) {
+    text = card.folder
+      ? gettext('1 person alone in their photo in %(folder)s, without their face')
+      : gettext('1 person alone in their photo at the top of your files, without their face');
+  } else if (card.alone) {
+    text = card.folder
+      ? ngettext(
+        '%(count)s person alone in their photo in %(folder)s, dressed alike',
+        '%(count)s people alone in their photo in %(folder)s, dressed alike',
+        count,
+      )
+      : ngettext(
+        '%(count)s person alone in their photo at the top of your files, dressed alike',
+        '%(count)s people alone in their photo at the top of your files, dressed alike',
+        count,
+      );
+  } else {
+    text = card.folder
+      ? ngettext(
+        '%(count)s person dressed alike in %(folder)s, without their face',
+        '%(count)s people dressed alike in %(folder)s, without their face',
+        count,
+      )
+      : ngettext(
+        '%(count)s person dressed alike at the top of your files, without their face',
+        '%(count)s people dressed alike at the top of your files, without their face',
+        count,
+      );
   }
-  return `${peopleCount(card.total)} dressed alike ${where}, without their face`;
+  return interpolate(text, values, true);
 }
 
 // Puts an outfit card's answer back; the photosApp() root reloads the page
@@ -1380,9 +1499,12 @@ async function undoOutfitAnswer(tokens) {
       const result = await facesRequest(`${FACES_API}/appearances/undo`, { method: 'POST', body: { token } });
       restored += result.restored;
     }
-    window.AppAlert.success(`${peopleCount(restored)} put back`, { duration: 2500 });
+    window.AppAlert.success(
+      interpolate(ngettext('%(count)s person put back', '%(count)s people put back', restored), { count: restored }, true),
+      { duration: 2500 },
+    );
   } catch (err) {
-    window.AppAlert.error(err.message || 'Could not undo');
+    window.AppAlert.error(err.message || gettext('Could not undo'));
   }
   window.dispatchEvent(new CustomEvent('photos-faces-changed'));
 }
@@ -1435,14 +1557,26 @@ window.facesReview = function facesReview() {
     },
 
     photoLabel(count) {
-      return photoCount(count);
+      return interpolate(ngettext('%(count)s photo', '%(count)s photos', count), { count }, true);
     },
 
     // Mirrors _review_left_label() in photos/ui/views.py.
     leftLabel() {
       const parts = [];
-      if (this.toName) parts.push(`${this.toName} ${this.toName === 1 ? 'person' : 'people'} to name`);
-      if (this.toCheck) parts.push(`${this.toCheck} to check`);
+      if (this.toName) {
+        parts.push(interpolate(
+          ngettext('%(count)s person to name', '%(count)s people to name', this.toName),
+          { count: this.toName },
+          true,
+        ));
+      }
+      if (this.toCheck) {
+        parts.push(interpolate(
+          ngettext('%(count)s to check', '%(count)s to check', this.toCheck),
+          { count: this.toCheck },
+          true,
+        ));
+      }
       return parts.join(' · ');
     },
 
@@ -1481,38 +1615,90 @@ window.facesReview = function facesReview() {
     },
 
     question(card) {
-      return this.asksAboutGuess(card) ? `Is this ${card.guess.name}?` : 'Who is this?';
+      return this.asksAboutGuess(card)
+        ? interpolate(gettext('Is this %(name)s?'), { name: card.guess.name }, true)
+        : gettext('Who is this?');
     },
 
     subtitle(card) {
-      if (card.kind === 'cluster') return `${photoCount(card.photo_count)}, grouped by likeness`;
-      if (card.kind === 'check') return `${faceCount(card.total)} put with them without being sure`;
-      if (card.kind === 'outfit') return `${peopleCount(card.total)} wearing their clothes on photos taken the same day`;
-      if (card.kind === 'silhouette') return silhouetteSubtitle(card);
-      return card.total === 1 ? '1 face in no group' : `${card.total} look-alike faces in no group`;
+      let text;
+      let count = card.total;
+      if (card.kind === 'cluster') {
+        count = card.photo_count;
+        text = ngettext('%(count)s photo, grouped by likeness', '%(count)s photos, grouped by likeness', count);
+      } else if (card.kind === 'check') {
+        text = ngettext(
+          '%(count)s face put with them without being sure',
+          '%(count)s faces put with them without being sure',
+          count,
+        );
+      } else if (card.kind === 'outfit') {
+        text = ngettext(
+          '%(count)s person wearing their clothes on photos taken the same day',
+          '%(count)s people wearing their clothes on photos taken the same day',
+          count,
+        );
+      } else if (card.kind === 'silhouette') {
+        return silhouetteSubtitle(card);
+      } else {
+        text = ngettext('%(count)s face in no group', '%(count)s look-alike faces in no group', count);
+      }
+      return interpolate(text, { count }, true);
     },
 
     guessLabel(card) {
       if (!card.guess) return '';
       const name = card.guess.name;
-      if (!this.asksAboutGuess(card)) return `It's ${name}`;
-      return this.keptCount(card) ? `Yes, it's ${name}` : `None of them is ${name}`;
+      if (!this.asksAboutGuess(card)) return interpolate(gettext("It's %(name)s"), { name }, true);
+      return this.keptCount(card)
+        ? interpolate(gettext("Yes, it's %(name)s"), { name }, true)
+        : interpolate(gettext('None of them is %(name)s'), { name }, true);
     },
 
     guessHint(card) {
-      if (!this.asksAboutGuess(card)) return 'Looks like them';
+      if (!this.asksAboutGuess(card)) return gettext('Looks like them');
       const kept = this.keptCount(card);
       const left = card.excluded.length;
       if (card.kind === 'outfit') {
-        if (!kept) return 'Never suggests them again';
-        return left ? `Confirms ${peopleCount(kept)}, not the ${left} left out` : `Confirms ${peopleCount(kept)}`;
+        if (!kept) return gettext('Never suggests them again');
+        return left
+          ? interpolate(
+            ngettext(
+              'Confirms %(count)s person, not the %(left)s left out',
+              'Confirms %(count)s people, not the %(left)s left out',
+              kept,
+            ),
+            { count: kept, left },
+            true,
+          )
+          : interpolate(ngettext('Confirms %(count)s person', 'Confirms %(count)s people', kept), { count: kept }, true);
       }
       if (card.kind === 'silhouette') {
-        if (!kept) return 'Never asks about them again';
-        return left ? `Puts ${peopleCount(kept)} with them, not the ${left} left out` : `Puts ${peopleCount(kept)} with them`;
+        if (!kept) return gettext('Never asks about them again');
+        return left
+          ? interpolate(
+            ngettext(
+              'Puts %(count)s person with them, not the %(left)s left out',
+              'Puts %(count)s people with them, not the %(left)s left out',
+              kept,
+            ),
+            { count: kept, left },
+            true,
+          )
+          : interpolate(
+            ngettext('Puts %(count)s person with them', 'Puts %(count)s people with them', kept),
+            { count: kept },
+            true,
+          );
       }
-      if (!kept) return 'Takes them out of the group';
-      return left ? `Confirms ${faceCount(kept)}, takes ${left} out` : `Confirms ${faceCount(kept)}`;
+      if (!kept) return gettext('Takes them out of the group');
+      return left
+        ? interpolate(
+          ngettext('Confirms %(count)s face, takes %(left)s out', 'Confirms %(count)s faces, takes %(left)s out', kept),
+          { count: kept, left },
+          true,
+        )
+        : interpolate(ngettext('Confirms %(count)s face', 'Confirms %(count)s faces', kept), { count: kept }, true);
     },
 
     // ── The answer ──────────────────────────────────────
@@ -1533,8 +1719,8 @@ window.facesReview = function facesReview() {
 
     noOptionsLabel(card) {
       return this.asksAboutBodies(card)
-        ? 'Nobody with a face in your photos has this name.'
-        : 'No contact yet: type a name to add one to People.';
+        ? gettext('Nobody with a face in your photos has this name.')
+        : gettext('No contact yet: type a name to add one to People.');
     },
 
     // The contacts the picker lists: the guess has its own button.
@@ -1740,7 +1926,7 @@ window.facesReview = function facesReview() {
           sent += 1;
         }
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not save');
+        window.AppAlert.error(err.message || gettext('Could not save'));
         // What went through changed the card: start again from the server.
         if (sent) this._reloadQueue();
         return false;
@@ -1769,9 +1955,12 @@ window.facesReview = function facesReview() {
 
     _announce(card, answer, main, undo) {
       if (card.kind === 'cluster') {
-        window.AppAlert.success(answer.hide ? 'Hidden' : `Named ${answer.name}`, {
+        const named = answer.hide
+          ? gettext('Hidden')
+          : interpolate(gettext('Named %(name)s'), { name: answer.name }, true);
+        window.AppAlert.success(named, {
           duration: 8000,
-          actions: [{ label: 'Undo', onClick: () => undoClusterAnswer(card.cluster, answer, undo) }],
+          actions: [{ label: gettext('Undo'), onClick: () => undoClusterAnswer(card.cluster, answer, undo) }],
         });
         return;
       }
@@ -1781,7 +1970,7 @@ window.facesReview = function facesReview() {
         ? outfitMessage(main.action, main.result, answer.name)
         : faceBatchMessage(main.action, main.result, answer.name);
       const actions = outfit
-        ? (undo.length ? [{ label: 'Undo', onClick: () => undoOutfitAnswer(undo) }] : [])
+        ? (undo.length ? [{ label: gettext('Undo'), onClick: () => undoOutfitAnswer(undo) }] : [])
         : faceBatchActions(undo);
       if (!main.result.done.length) {
         window.AppAlert.warning(message, { duration: 8000, actions });
@@ -1797,7 +1986,7 @@ window.facesReview = function facesReview() {
       try {
         await this._reloadQueue();
       } catch (_) {
-        window.AppAlert.error('Could not look for new faces');
+        window.AppAlert.error(gettext('Could not look for new faces'));
       } finally {
         this.refreshing = false;
       }

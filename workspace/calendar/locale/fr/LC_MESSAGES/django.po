@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 16:46+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -344,10 +344,6 @@ msgid ""
 msgstr ""
 "Toute personne disposant du lien peut consulter ce calendrier depuis une "
 "autre application d’agenda, en lecture seule."
-
-#: ui/templates/calendar/ui/partials/_calendar_modals.html
-msgid "Create link"
-msgstr "Créer le lien"
 
 #: ui/templates/calendar/ui/partials/_calendar_modals.html
 msgid "New link"

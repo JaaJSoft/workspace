@@ -1,4 +1,4 @@
-{% load l10n %}
+{% load i18n l10n %}
 {% comment %}
 The Photo section of the Files properties panel (registered in
 PhotosConfig.ready(), rendered by files.properties_sections).
@@ -6,6 +6,8 @@ PhotosConfig.ready(), rendered by files.properties_sections).
 Context: photo, a photos.services.details.PhotoDetails; map, a
 photos.services.location_map.LocationMap or None.
 {% endcomment %}
+{# Translators: Django date format of when a photo was taken, in its properties, e.g. "Nov. 13, 2026, 4:30 p.m.". #}
+{% translate "N j, Y, P" context "photo taken date format" as taken_format %}
 <div class="space-y-2 text-sm">
   {% if photo.taken_at %}
     <div
@@ -13,7 +15,11 @@ photos.services.location_map.LocationMap or None.
       data-photo-detail="taken"
     >
       <i data-lucide="camera" class="w-3.5 h-3.5 shrink-0"></i>
-      <span>Taken {{ photo.taken_at|date:"N j, Y, P" }}</span>
+      <span>
+        {% blocktranslate trimmed with date=photo.taken_at|date:taken_format %}
+          Taken {{ date }}
+        {% endblocktranslate %}
+      </span>
     </div>
   {% endif %}
   {% if photo.dimensions %}
@@ -78,7 +84,7 @@ photos.services.location_map.LocationMap or None.
           rel="noopener noreferrer"
           class="link link-hover text-xs inline-flex items-center gap-1 hover:text-module"
         >
-          Open in OpenStreetMap
+          {% translate "Open in OpenStreetMap" %}
           <i data-lucide="external-link" class="w-3 h-3"></i>
         </a>
       </div>
@@ -101,7 +107,7 @@ photos.services.location_map.LocationMap or None.
               data-testid="photo-map-library-link"
             >
               <i data-lucide="map" class="w-3 h-3"></i>
-              See nearby photos
+              {% translate "See nearby photos" %}
             </a>
             <button
               type="button"
@@ -109,7 +115,7 @@ photos.services.location_map.LocationMap or None.
               :disabled="savingMapPreference"
               @click="setShowMap(false)"
             >
-              Hide the map
+              {% translate "Hide the map" %}
             </button>
           </div>
         </div>
@@ -127,10 +133,12 @@ photos.services.location_map.LocationMap or None.
           @click="setShowMap(true)"
         >
           <i data-lucide="map" class="w-3.5 h-3.5"></i>
-          Show on a map
+          {% translate "Show on a map" %}
         </button>
         <p class="text-xs text-base-content/50">
-          The map is loaded from {{ map.server }}, which then receives the location of each photo you open.
+          {% blocktranslate trimmed with server=map.server %}
+            The map is loaded from {{ server }}, which then receives the location of each photo you open.
+          {% endblocktranslate %}
         </p>
       </div>
     {% endif %}

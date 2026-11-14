@@ -9,6 +9,8 @@ open themselves.
 from django.db.models import Count, Max, Q
 from django.db.models.functions import TruncDate
 from django.urls import reverse
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
@@ -20,8 +22,10 @@ def _actor(user):
     return {"id": user.pk, "username": user.username, "full_name": user.get_full_name()}
 
 
-def _count_label(count):
-    return "1 photo" if count == 1 else f"{count} photos"
+def _additions_description(count, title):
+    return ngettext(
+        "%(count)s photo to %(title)s", "%(count)s photos to %(title)s", count
+    ) % {"count": count, "title": title}
 
 
 class PhotosActivityProvider(ActivityProvider):
@@ -136,7 +140,7 @@ class PhotosActivityProvider(ActivityProvider):
         events = [
             {
                 "icon": "share-2",
-                "label": "Album shared",
+                "label": _("Album shared"),
                 "description": share.album.title,
                 "timestamp": share.created_at,
                 "url": reverse("photos_ui:album", args=[share.album_id]),
@@ -147,9 +151,9 @@ class PhotosActivityProvider(ActivityProvider):
         events += [
             {
                 "icon": "image-plus",
-                "label": "Photos added",
-                "description": (
-                    f"{_count_label(row['count'])} to {albums[row['album_id']].title}"
+                "label": _("Photos added"),
+                "description": _additions_description(
+                    row["count"], albums[row["album_id"]].title
                 ),
                 "timestamp": row["at"],
                 "url": reverse("photos_ui:album", args=[row["album_id"]]),

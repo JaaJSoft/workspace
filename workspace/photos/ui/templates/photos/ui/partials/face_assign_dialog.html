@@ -3,9 +3,21 @@
   a new name, an unnamed person, or someone new with no name yet. State in
   faceSelectionMixin() (faces.js).
 {% endcomment %}
+{% load i18n %}
+{% translate "Who is this?" as who_one %}
+{% translate "Who are these %(count)s faces?" as who_many %}
+{% translate "Pick a contact, or type a new name to add one to People." as assign_subtitle %}
+{% translate "%(count)s photo" as photo_count_one %}
+{% translate "%(count)s photos" as photo_count_other %}
+{% translate "Unnamed person with %(count)s photos" as unnamed_person_label %}
+{% translate "Add “%(name)s” to People" as add_to_people_label %}
 <dialog id="face-assign-dialog" class="modal">
   <div class="modal-box max-w-md">
-    {% include "ui/partials/dialog_header.html" with icon="user-round-pen" title_expr="selectedFaces.length === 1 ? 'Who is this?' : 'Who are these ' + selectedFaces.length + ' faces?'" subtitle="Pick a contact, or type a new name to add one to People." only %}
+    {% with one_js=who_one|escapejs many_js=who_many|escapejs %}
+      {% with title_js="selectedFaces.length === 1 ? '"|add:one_js|add:"' : interpolate('"|add:many_js|add:"', { count: selectedFaces.length }, true)" %}
+        {% include "ui/partials/dialog_header.html" with icon="user-round-pen" title_expr=title_js subtitle=assign_subtitle only %}
+      {% endwith %}
+    {% endwith %}
 
     <form @submit.prevent="canCreateAssign() && assignToNewPerson()">
       <label class="input input-sm flex items-center gap-2 w-full">
@@ -13,7 +25,7 @@
         <input
           type="text"
           class="grow"
-          placeholder="Name"
+          placeholder="{% translate 'Name' %}"
           autocomplete="off"
           x-model="assignDialog.query"
           @input.debounce.250ms="searchAssign()"
@@ -54,7 +66,7 @@
             <span
               class="text-xs text-base-content/60 tabular-nums"
               x-show="person.photo_count"
-              x-text="person.photo_count + (person.photo_count === 1 ? ' photo' : ' photos')"
+              x-text="interpolate(person.photo_count === 1 ? '{{ photo_count_one|escapejs }}' : '{{ photo_count_other|escapejs }}', { count: person.photo_count }, true)"
             ></span>
           </button>
         </li>
@@ -70,9 +82,10 @@
           >
             <i data-lucide="user-plus" class="w-4 h-4"></i>
           </span>
-          <span class="flex-1 truncate">
-            Add “<span x-text="assignDialog.query.trim()"></span>” to People
-          </span>
+          <span
+            class="flex-1 truncate"
+            x-text="interpolate('{{ add_to_people_label|escapejs }}', { name: assignDialog.query.trim() }, true)"
+          ></span>
         </button>
       </li>
     </ul>
@@ -84,14 +97,14 @@
       <p
         class="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-base-content/60"
       >
-        Not named yet
+        {% translate "Not named yet" %}
       </p>
       <div class="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
         <button
           type="button"
           class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
-          title="Someone new, no name yet"
-          aria-label="Someone new, no name yet"
+          title="{% translate 'Someone new, no name yet' %}"
+          aria-label="{% translate 'Someone new, no name yet' %}"
           @click="assignToSomeoneNew()"
         >
           <i data-lucide="user-plus" class="w-5 h-5"></i>
@@ -100,8 +113,8 @@
           <button
             type="button"
             class="aspect-square overflow-hidden rounded-full ring-offset-2 ring-offset-base-100 hover:ring-2 hover:ring-module focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-module"
-            :title="cluster.photo_count + (cluster.photo_count === 1 ? ' photo' : ' photos')"
-            :aria-label="'Unnamed person with ' + cluster.photo_count + ' photos'"
+            :title="interpolate(cluster.photo_count === 1 ? '{{ photo_count_one|escapejs }}' : '{{ photo_count_other|escapejs }}', { count: cluster.photo_count }, true)"
+            :aria-label="interpolate('{{ unnamed_person_label|escapejs }}', { count: cluster.photo_count }, true)"
             @click="assignToCluster(cluster)"
           >
             <img :src="cluster.cover_url" alt="" class="w-full h-full object-cover" />
@@ -116,11 +129,11 @@
         class="btn btn-ghost btn-sm"
         @click="closeAssignDialog()"
       >
-        Cancel
+        {% translate "Cancel" %}
       </button>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

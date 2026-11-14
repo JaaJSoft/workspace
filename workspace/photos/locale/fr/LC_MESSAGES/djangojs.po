@@ -1,0 +1,958 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-13 17:02+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/photos/ui/js/album_share.js
+msgctxt "album role"
+msgid "Viewer"
+msgstr "Lecteur"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "Browses the album"
+msgstr "Parcourt l’album"
+
+#: ui/static/photos/ui/js/album_share.js
+msgctxt "album role"
+msgid "Contributor"
+msgstr "Contributeur"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "Also adds their own photos, and removes them"
+msgstr "Ajoute aussi ses propres photos, et les retire"
+
+#: ui/static/photos/ui/js/album_share.js
+msgctxt "album role"
+msgid "Manager"
+msgstr "Gestionnaire"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "Also edits the album, its members and its links"
+msgstr "Modifie aussi l’album, ses membres et ses liens"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "Some changes failed (%(count)s error)"
+msgid_plural "Some changes failed (%(count)s errors)"
+msgstr[0] "Certaines modifications ont échoué (%(count)s erreur)"
+msgstr[1] "Certaines modifications ont échoué (%(count)s d’erreurs)"
+msgstr[2] "Certaines modifications ont échoué (%(count)s erreurs)"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "Failed to create the link"
+msgstr "Impossible de créer le lien"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "Failed to revoke the link"
+msgstr "Impossible de révoquer le lien"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "Until %(date)s"
+msgstr "Jusqu’au %(date)s"
+
+#: ui/static/photos/ui/js/album_share.js
+msgid "%(count)s view"
+msgid_plural "%(count)s views"
+msgstr[0] "%(count)s vue"
+msgstr[1] "%(count)s de vues"
+msgstr[2] "%(count)s vues"
+
+#: ui/static/photos/ui/js/capture_details.js ui/static/photos/ui/js/photos.js
+msgid "Failed to update the photos"
+msgstr "Impossible de mettre à jour les photos"
+
+#: ui/static/photos/ui/js/capture_details.js
+msgid "Moved %(count)s photo"
+msgid_plural "Moved %(count)s photos"
+msgstr[0] "%(count)s photo déplacée"
+msgstr[1] "%(count)s de photos déplacées"
+msgstr[2] "%(count)s photos déplacées"
+
+#: ui/static/photos/ui/js/capture_details.js
+msgid "%(moved)s, %(count)s without a date left as is"
+msgid_plural "%(moved)s, %(count)s without a date left as is"
+msgstr[0] "%(moved)s, %(count)s sans date laissée telle quelle"
+msgstr[1] "%(moved)s, %(count)s sans date laissées telles quelles"
+msgstr[2] "%(moved)s, %(count)s sans date laissées telles quelles"
+
+#: ui/static/photos/ui/js/capture_details.js
+msgid "Reading %(count)s photo again from the file"
+msgid_plural "Reading %(count)s photos again from the file"
+msgstr[0] "Relecture de %(count)s photo depuis le fichier"
+msgstr[1] "Relecture de %(count)s de photos depuis les fichiers"
+msgstr[2] "Relecture de %(count)s photos depuis les fichiers"
+
+#: ui/static/photos/ui/js/capture_details.js
+msgid "Updated %(count)s photo"
+msgid_plural "Updated %(count)s photos"
+msgstr[0] "%(count)s photo mise à jour"
+msgstr[1] "%(count)s de photos mises à jour"
+msgstr[2] "%(count)s photos mises à jour"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Request failed (%(status)s)"
+msgstr "La requête a échoué (%(status)s)"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Not %(name)s"
+msgstr "Pas %(name)s"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Not this person"
+msgstr "Pas cette personne"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not change face grouping"
+msgstr "Impossible de modifier le regroupement des visages"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Turn off face grouping"
+msgstr "Désactiver le regroupement des visages"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"Every face, every group of people and every face picture is deleted right "
+"away. Your photos and your contacts are not touched. Turning it back on "
+"reads your photos again from the start."
+msgstr ""
+"Tous les visages, tous les groupes de personnes et toutes les photos de "
+"visage sont supprimés immédiatement. Vos photos et vos contacts ne sont pas "
+"modifiés. Le réactiver relit toutes vos photos depuis le début."
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Turn off and delete"
+msgstr "Désactiver et supprimer"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Contact photo of %(name)s updated"
+msgstr "Photo de contact de %(name)s mise à jour"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Remove name"
+msgstr "Retirer le nom"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "These faces are no longer %(name)s. The contact itself stays in People."
+msgstr "Ces visages ne sont plus %(name)s. La personne reste dans Personnes."
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Ungroup"
+msgstr "Dégrouper"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"This person leaves the list, and their faces stay out of automatic grouping. "
+"They wait in Review, under Unassigned, until you say who they are."
+msgstr ""
+"Cette personne quitte la liste et ses visages restent hors du regroupement "
+"automatique. Ils attendent dans À vérifier, sous Non attribués, jusqu’à ce "
+"que vous disiez qui c’est."
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not name this person"
+msgstr "Impossible de nommer cette personne"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not load people"
+msgstr "Impossible de charger les personnes"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not merge"
+msgstr "Impossible de fusionner"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not load the faces"
+msgstr "Impossible de charger les visages"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Unnamed, %(count)s photo"
+msgid_plural "Unnamed, %(count)s photos"
+msgstr[0] "Sans nom, %(count)s photo"
+msgstr[1] "Sans nom, %(count)s de photos"
+msgstr[2] "Sans nom, %(count)s photos"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Hidden person"
+msgstr "Personne masquée"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Left out of grouping"
+msgstr "Exclu du regroupement"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Hidden face"
+msgstr "Visage masqué"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Already named in this video"
+msgstr "Déjà nommé dans cette vidéo"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Already named in this photo"
+msgstr "Déjà nommé dans cette photo"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Not grouped yet"
+msgstr "Pas encore regroupé"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not correct the face"
+msgstr "Impossible de corriger le visage"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not change the cover"
+msgstr "Impossible de changer la couverture"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Update the contact photo too?"
+msgstr "Mettre aussi à jour la photo de contact ?"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(name)s already has a photo in People. Replace it with this face?"
+msgstr "%(name)s a déjà une photo dans Personnes. La remplacer par ce visage ?"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Also the contact photo of %(name)s in People"
+msgstr "C’est aussi la photo de contact de %(name)s dans Personnes"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not remove the photo"
+msgstr "Impossible de retirer la photo"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not remove %(count)s photo"
+msgid_plural "Could not remove %(count)s photos"
+msgstr[0] "Impossible de retirer %(count)s photo"
+msgstr[1] "Impossible de retirer %(count)s de photos"
+msgstr[2] "Impossible de retirer %(count)s photos"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not refresh the page"
+msgstr "Impossible d’actualiser la page"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face confirmed"
+msgid_plural "%(count)s faces confirmed"
+msgstr[0] "%(count)s visage confirmé"
+msgstr[1] "%(count)s de visages confirmés"
+msgstr[2] "%(count)s visages confirmés"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face taken out"
+msgid_plural "%(count)s faces taken out"
+msgstr[0] "%(count)s visage retiré"
+msgstr[1] "%(count)s de visages retirés"
+msgstr[2] "%(count)s visages retirés"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face hidden"
+msgid_plural "%(count)s faces hidden"
+msgstr[0] "%(count)s visage masqué"
+msgstr[1] "%(count)s de visages masqués"
+msgstr[2] "%(count)s visages masqués"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face unhidden"
+msgid_plural "%(count)s faces unhidden"
+msgstr[0] "%(count)s visage réaffiché"
+msgstr[1] "%(count)s de visages réaffichés"
+msgstr[2] "%(count)s visages réaffichés"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face moved"
+msgid_plural "%(count)s faces moved"
+msgstr[0] "%(count)s visage déplacé"
+msgstr[1] "%(count)s de visages déplacés"
+msgstr[2] "%(count)s visages déplacés"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face corrected"
+msgid_plural "%(count)s faces corrected"
+msgstr[0] "%(count)s visage corrigé"
+msgstr[1] "%(count)s de visages corrigés"
+msgstr[2] "%(count)s visages corrigés"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face moved to %(name)s"
+msgid_plural "%(count)s faces moved to %(name)s"
+msgstr[0] "%(count)s visage déplacé vers %(name)s"
+msgstr[1] "%(count)s de visages déplacés vers %(name)s"
+msgstr[2] "%(count)s visages déplacés vers %(name)s"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"%(count)s face left as it was: another face of their photo is already in "
+"that group"
+msgid_plural ""
+"%(count)s faces left as they were: another face of their photo is already in "
+"that group"
+msgstr[0] ""
+"%(count)s visage laissé tel quel : un autre visage de sa photo est déjà dans "
+"ce groupe"
+msgstr[1] ""
+"%(count)s de visages laissés tels quels : un autre visage de leur photo est "
+"déjà dans ce groupe"
+msgstr[2] ""
+"%(count)s visages laissés tels quels : un autre visage de leur photo est "
+"déjà dans ce groupe"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face left as it was"
+msgid_plural "%(count)s faces left as they were"
+msgstr[0] "%(count)s visage laissé tel quel"
+msgstr[1] "%(count)s de visages laissés tels quels"
+msgstr[2] "%(count)s visages laissés tels quels"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face put back"
+msgid_plural "%(count)s faces put back"
+msgstr[0] "%(count)s visage remis en place"
+msgstr[1] "%(count)s de visages remis en place"
+msgstr[2] "%(count)s visages remis en place"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not undo"
+msgstr "Impossible d’annuler"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Put back"
+msgstr "Remis en place"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not correct the faces"
+msgstr "Impossible de corriger les visages"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "an unnamed person"
+msgstr "une personne sans nom"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "someone new"
+msgstr "une nouvelle personne"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not save"
+msgstr "Impossible d’enregistrer"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person confirmed"
+msgid_plural "%(count)s people confirmed"
+msgstr[0] "%(count)s personne confirmée"
+msgstr[1] "%(count)s de personnes confirmées"
+msgstr[2] "%(count)s personnes confirmées"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person set apart"
+msgid_plural "%(count)s people set apart"
+msgstr[0] "%(count)s personne mise à l’écart"
+msgstr[1] "%(count)s de personnes mises à l’écart"
+msgstr[2] "%(count)s personnes mises à l’écart"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person hidden"
+msgid_plural "%(count)s people hidden"
+msgstr[0] "%(count)s personne masquée"
+msgstr[1] "%(count)s de personnes masquées"
+msgstr[2] "%(count)s personnes masquées"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person answered"
+msgid_plural "%(count)s people answered"
+msgstr[0] "%(count)s personne traitée"
+msgstr[1] "%(count)s de personnes traitées"
+msgstr[2] "%(count)s personnes traitées"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person put with %(name)s"
+msgid_plural "%(count)s people put with %(name)s"
+msgstr[0] "%(count)s personne associée à %(name)s"
+msgstr[1] "%(count)s de personnes associées à %(name)s"
+msgstr[2] "%(count)s personnes associées à %(name)s"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person set apart: they are already in that photo"
+msgid_plural "%(count)s people set apart: they are already in that photo"
+msgstr[0] "%(count)s personne mise à l’écart : elle est déjà sur cette photo"
+msgstr[1] ""
+"%(count)s de personnes mises à l’écart : elles sont déjà sur cette photo"
+msgstr[2] ""
+"%(count)s personnes mises à l’écart : elles sont déjà sur cette photo"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person left as they were: no photo shows their face yet"
+msgid_plural ""
+"%(count)s people left as they were: no photo shows their face yet"
+msgstr[0] ""
+"%(count)s personne laissée telle quelle : aucune photo ne montre encore son "
+"visage"
+msgstr[1] ""
+"%(count)s de personnes laissées telles quelles : aucune photo ne montre "
+"encore leur visage"
+msgstr[2] ""
+"%(count)s personnes laissées telles quelles : aucune photo ne montre encore "
+"leur visage"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person left as they were"
+msgid_plural "%(count)s people left as they were"
+msgstr[0] "%(count)s personne laissée telle quelle"
+msgstr[1] "%(count)s de personnes laissées telles quelles"
+msgstr[2] "%(count)s personnes laissées telles quelles"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"%(count)s person alone in their photo in %(folder)s, dressed like %(name)s "
+"there"
+msgid_plural ""
+"%(count)s people alone in their photo in %(folder)s, dressed like %(name)s "
+"there"
+msgstr[0] ""
+"%(count)s personne seule sur sa photo dans %(folder)s, habillée comme "
+"%(name)s à cet endroit"
+msgstr[1] ""
+"%(count)s de personnes seules sur leur photo dans %(folder)s, habillées "
+"comme %(name)s à cet endroit"
+msgstr[2] ""
+"%(count)s personnes seules sur leur photo dans %(folder)s, habillées comme "
+"%(name)s à cet endroit"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"%(count)s person alone in their photo at the top of your files, dressed like "
+"%(name)s there"
+msgid_plural ""
+"%(count)s people alone in their photo at the top of your files, dressed like "
+"%(name)s there"
+msgstr[0] ""
+"%(count)s personne seule sur sa photo à la racine de vos fichiers, habillée "
+"comme %(name)s à cet endroit"
+msgstr[1] ""
+"%(count)s de personnes seules sur leur photo à la racine de vos fichiers, "
+"habillées comme %(name)s à cet endroit"
+msgstr[2] ""
+"%(count)s personnes seules sur leur photo à la racine de vos fichiers, "
+"habillées comme %(name)s à cet endroit"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "1 person alone in their photo in %(folder)s, without their face"
+msgstr "1 personne seule sur sa photo dans %(folder)s, sans son visage"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"1 person alone in their photo at the top of your files, without their face"
+msgstr ""
+"1 personne seule sur sa photo à la racine de vos fichiers, sans son visage"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person alone in their photo in %(folder)s, dressed alike"
+msgid_plural ""
+"%(count)s people alone in their photo in %(folder)s, dressed alike"
+msgstr[0] ""
+"%(count)s personne seule sur sa photo dans %(folder)s, habillée pareil"
+msgstr[1] ""
+"%(count)s de personnes seules sur leur photo dans %(folder)s, habillées "
+"pareil"
+msgstr[2] ""
+"%(count)s personnes seules sur leur photo dans %(folder)s, habillées pareil"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"%(count)s person alone in their photo at the top of your files, dressed alike"
+msgid_plural ""
+"%(count)s people alone in their photo at the top of your files, dressed alike"
+msgstr[0] ""
+"%(count)s personne seule sur sa photo à la racine de vos fichiers, habillée "
+"pareil"
+msgstr[1] ""
+"%(count)s de personnes seules sur leur photo à la racine de vos fichiers, "
+"habillées pareil"
+msgstr[2] ""
+"%(count)s personnes seules sur leur photo à la racine de vos fichiers, "
+"habillées pareil"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person dressed alike in %(folder)s, without their face"
+msgid_plural "%(count)s people dressed alike in %(folder)s, without their face"
+msgstr[0] "%(count)s personne habillée pareil dans %(folder)s, sans son visage"
+msgstr[1] ""
+"%(count)s de personnes habillées pareil dans %(folder)s, sans leur visage"
+msgstr[2] ""
+"%(count)s personnes habillées pareil dans %(folder)s, sans leur visage"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"%(count)s person dressed alike at the top of your files, without their face"
+msgid_plural ""
+"%(count)s people dressed alike at the top of your files, without their face"
+msgstr[0] ""
+"%(count)s personne habillée pareil à la racine de vos fichiers, sans son "
+"visage"
+msgstr[1] ""
+"%(count)s de personnes habillées pareil à la racine de vos fichiers, sans "
+"leur visage"
+msgstr[2] ""
+"%(count)s personnes habillées pareil à la racine de vos fichiers, sans leur "
+"visage"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person put back"
+msgid_plural "%(count)s people put back"
+msgstr[0] "%(count)s personne remise en place"
+msgstr[1] "%(count)s de personnes remises en place"
+msgstr[2] "%(count)s personnes remises en place"
+
+#: ui/static/photos/ui/js/faces.js ui/static/photos/ui/js/library_map.js
+#: ui/static/photos/ui/js/photos.js
+msgid "%(count)s photo"
+msgid_plural "%(count)s photos"
+msgstr[0] "%(count)s photo"
+msgstr[1] "%(count)s de photos"
+msgstr[2] "%(count)s photos"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person to name"
+msgid_plural "%(count)s people to name"
+msgstr[0] "%(count)s personne à nommer"
+msgstr[1] "%(count)s de personnes à nommer"
+msgstr[2] "%(count)s personnes à nommer"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s to check"
+msgid_plural "%(count)s to check"
+msgstr[0] "%(count)s à vérifier"
+msgstr[1] "%(count)s à vérifier"
+msgstr[2] "%(count)s à vérifier"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Is this %(name)s?"
+msgstr "Est-ce %(name)s ?"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Who is this?"
+msgstr "Qui est-ce ?"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s photo, grouped by likeness"
+msgid_plural "%(count)s photos, grouped by likeness"
+msgstr[0] "%(count)s photo, regroupée par ressemblance"
+msgstr[1] "%(count)s de photos, regroupées par ressemblance"
+msgstr[2] "%(count)s photos, regroupées par ressemblance"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face put with them without being sure"
+msgid_plural "%(count)s faces put with them without being sure"
+msgstr[0] "%(count)s visage associé sans certitude"
+msgstr[1] "%(count)s de visages associés sans certitude"
+msgstr[2] "%(count)s visages associés sans certitude"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s person wearing their clothes on photos taken the same day"
+msgid_plural ""
+"%(count)s people wearing their clothes on photos taken the same day"
+msgstr[0] ""
+"%(count)s personne portant ses vêtements sur des photos prises le même jour"
+msgstr[1] ""
+"%(count)s de personnes portant ses vêtements sur des photos prises le même "
+"jour"
+msgstr[2] ""
+"%(count)s personnes portant ses vêtements sur des photos prises le même jour"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face in no group"
+msgid_plural "%(count)s look-alike faces in no group"
+msgstr[0] "%(count)s visage dans aucun groupe"
+msgstr[1] "%(count)s de visages ressemblants dans aucun groupe"
+msgstr[2] "%(count)s visages ressemblants dans aucun groupe"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "It's %(name)s"
+msgstr "C’est %(name)s"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Yes, it's %(name)s"
+msgstr "Oui, c’est %(name)s"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "None of them is %(name)s"
+msgstr "Aucun n’est %(name)s"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Looks like them"
+msgstr "Ressemble à cette personne"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Never suggests them again"
+msgstr "Ne les suggère plus jamais"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Confirms %(count)s person, not the %(left)s left out"
+msgid_plural "Confirms %(count)s people, not the %(left)s left out"
+msgstr[0] "Confirme %(count)s personne, pas les %(left)s écartées"
+msgstr[1] "Confirme %(count)s de personnes, pas les %(left)s écartées"
+msgstr[2] "Confirme %(count)s personnes, pas les %(left)s écartées"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Confirms %(count)s person"
+msgid_plural "Confirms %(count)s people"
+msgstr[0] "Confirme %(count)s personne"
+msgstr[1] "Confirme %(count)s de personnes"
+msgstr[2] "Confirme %(count)s personnes"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Never asks about them again"
+msgstr "Ne pose plus jamais la question"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Puts %(count)s person with them, not the %(left)s left out"
+msgid_plural "Puts %(count)s people with them, not the %(left)s left out"
+msgstr[0] "Associe %(count)s personne, pas les %(left)s écartées"
+msgstr[1] "Associe %(count)s de personnes, pas les %(left)s écartées"
+msgstr[2] "Associe %(count)s personnes, pas les %(left)s écartées"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Puts %(count)s person with them"
+msgid_plural "Puts %(count)s people with them"
+msgstr[0] "Associe %(count)s personne"
+msgstr[1] "Associe %(count)s de personnes"
+msgstr[2] "Associe %(count)s personnes"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Takes them out of the group"
+msgstr "Les retire du groupe"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Confirms %(count)s face, takes %(left)s out"
+msgid_plural "Confirms %(count)s faces, takes %(left)s out"
+msgstr[0] "Confirme %(count)s visage, retire les %(left)s autres"
+msgstr[1] "Confirme %(count)s de visages, retire les %(left)s autres"
+msgstr[2] "Confirme %(count)s visages, retire les %(left)s autres"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Confirms %(count)s face"
+msgid_plural "Confirms %(count)s faces"
+msgstr[0] "Confirme %(count)s visage"
+msgstr[1] "Confirme %(count)s de visages"
+msgstr[2] "Confirme %(count)s visages"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Nobody with a face in your photos has this name."
+msgstr "Personne ayant un visage dans vos photos ne porte ce nom."
+
+#: ui/static/photos/ui/js/faces.js
+msgid "No contact yet: type a name to add one to People."
+msgstr ""
+"Aucune personne pour l’instant : saisissez un nom pour l’ajouter à Personnes."
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Hidden"
+msgstr "Masqué"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Named %(name)s"
+msgstr "Nommé %(name)s"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Could not look for new faces"
+msgstr "Impossible de rechercher de nouveaux visages"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "Failed to hide"
+msgstr "Impossible de masquer"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "Failed to unhide"
+msgstr "Impossible de réafficher"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "Hid %(count)s photo from your library"
+msgid_plural "Hid %(count)s photos from your library"
+msgstr[0] "%(count)s photo masquée de votre bibliothèque"
+msgstr[1] "%(count)s de photos masquées de votre bibliothèque"
+msgstr[2] "%(count)s photos masquées de votre bibliothèque"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "%(count)s photo back in your library"
+msgid_plural "%(count)s photos back in your library"
+msgstr[0] "%(count)s photo de retour dans votre bibliothèque"
+msgstr[1] "%(count)s de photos de retour dans votre bibliothèque"
+msgstr[2] "%(count)s photos de retour dans votre bibliothèque"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid ""
+"%(count)s photo still hidden by its folder: unhide the folder in Preferences"
+msgid_plural ""
+"%(count)s photos still hidden by their folder: unhide the folder in "
+"Preferences"
+msgstr[0] ""
+"%(count)s photo toujours masquée par son dossier : réaffichez le dossier "
+"dans les Préférences"
+msgstr[1] ""
+"%(count)s de photos toujours masquées par leur dossier : réaffichez le "
+"dossier dans les Préférences"
+msgstr[2] ""
+"%(count)s photos toujours masquées par leur dossier : réaffichez le dossier "
+"dans les Préférences"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "Hide a folder"
+msgstr "Masquer un dossier"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid ""
+"Its photos and videos, subfolders included, leave your library. They stay in "
+"Files."
+msgstr ""
+"Ses photos et vidéos, sous-dossiers compris, quittent votre bibliothèque. "
+"Elles restent dans Fichiers."
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "Choose a folder inside My Files, not My Files itself"
+msgstr "Choisissez un dossier dans Mes fichiers, pas Mes fichiers lui-même"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "Could not hide the folder"
+msgstr "Impossible de masquer le dossier"
+
+#: ui/static/photos/ui/js/hidden.js
+msgid "Could not show the folder again"
+msgstr "Impossible de réafficher le dossier"
+
+#: ui/static/photos/ui/js/import.js
+msgid "%(count)s file skipped: only photos and videos can be imported here"
+msgid_plural ""
+"%(count)s files skipped: only photos and videos can be imported here"
+msgstr[0] ""
+"%(count)s fichier ignoré : seules les photos et vidéos peuvent être "
+"importées ici"
+msgstr[1] ""
+"%(count)s de fichiers ignorés : seules les photos et vidéos peuvent être "
+"importées ici"
+msgstr[2] ""
+"%(count)s fichiers ignorés : seules les photos et vidéos peuvent être "
+"importées ici"
+
+#: ui/static/photos/ui/js/import.js
+msgid "Could not open the import folder"
+msgstr "Impossible d’ouvrir le dossier d’import"
+
+#: ui/static/photos/ui/js/import.js
+msgid "Import folder"
+msgstr "Dossier d’import"
+
+#: ui/static/photos/ui/js/import.js
+msgid "Choose where photos and videos imported from Photos are saved."
+msgstr ""
+"Choisissez où enregistrer les photos et vidéos importées depuis Photos."
+
+#: ui/static/photos/ui/js/import.js
+msgid "Choose a folder inside the space, not the space itself"
+msgstr "Choisissez un dossier dans l’espace, pas l’espace lui-même"
+
+#: ui/static/photos/ui/js/import.js
+msgid "Could not save the import folder"
+msgstr "Impossible d’enregistrer le dossier d’import"
+
+#: ui/static/photos/ui/js/library_map.js
+msgid "Video"
+msgstr "Vidéo"
+
+#: ui/static/photos/ui/js/library_map.js
+msgid "Photo"
+msgstr "Photo"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "More actions for %(name)s"
+msgstr "Plus d’actions pour %(name)s"
+
+#: ui/static/photos/ui/js/photos.js
+msgid ""
+"Move \"%(name)s\" to the trash? It can be restored from the Files trash."
+msgstr ""
+"Mettre « %(name)s » à la corbeille ? Vous pourrez la restaurer depuis la "
+"corbeille de Fichiers."
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to move the photo to the trash"
+msgstr "Impossible de mettre la photo à la corbeille"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "%(done)s, %(count)s failed"
+msgid_plural "%(done)s, %(count)s failed"
+msgstr[0] "%(done)s, %(count)s en échec"
+msgstr[1] "%(done)s, %(count)s d’échecs"
+msgstr[2] "%(done)s, %(count)s en échec"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Added %(count)s photo to favorites"
+msgid_plural "Added %(count)s photos to favorites"
+msgstr[0] "%(count)s photo ajoutée aux favoris"
+msgstr[1] "%(count)s de photos ajoutées aux favoris"
+msgstr[2] "%(count)s photos ajoutées aux favoris"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Removed %(count)s photo from favorites"
+msgid_plural "Removed %(count)s photos from favorites"
+msgstr[0] "%(count)s photo retirée des favoris"
+msgstr[1] "%(count)s de photos retirées des favoris"
+msgstr[2] "%(count)s photos retirées des favoris"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Marked %(count)s photo as sensitive"
+msgid_plural "Marked %(count)s photos as sensitive"
+msgstr[0] "%(count)s photo marquée comme sensible"
+msgstr[1] "%(count)s de photos marquées comme sensibles"
+msgstr[2] "%(count)s photos marquées comme sensibles"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Unmarked %(count)s photo as sensitive"
+msgid_plural "Unmarked %(count)s photos as sensitive"
+msgstr[0] "%(count)s photo n’est plus marquée comme sensible"
+msgstr[1] "%(count)s de photos ne sont plus marquées comme sensibles"
+msgstr[2] "%(count)s photos ne sont plus marquées comme sensibles"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to download the photos"
+msgstr "Impossible de télécharger les photos"
+
+#: ui/static/photos/ui/js/photos.js
+msgid ""
+"Move %(count)s photo to the trash? It can be restored from the Files trash."
+msgid_plural ""
+"Move %(count)s photos to the trash? They can be restored from the Files "
+"trash."
+msgstr[0] ""
+"Mettre %(count)s photo à la corbeille ? Vous pourrez la restaurer depuis la "
+"corbeille de Fichiers."
+msgstr[1] ""
+"Mettre %(count)s de photos à la corbeille ? Vous pourrez les restaurer "
+"depuis la corbeille de Fichiers."
+msgstr[2] ""
+"Mettre %(count)s photos à la corbeille ? Vous pourrez les restaurer depuis "
+"la corbeille de Fichiers."
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Moved %(count)s photo to the trash"
+msgid_plural "Moved %(count)s photos to the trash"
+msgstr[0] "%(count)s photo mise à la corbeille"
+msgstr[1] "%(count)s de photos mises à la corbeille"
+msgstr[2] "%(count)s photos mises à la corbeille"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to move the photos to the trash"
+msgstr "Impossible de mettre les photos à la corbeille"
+
+#: ui/static/photos/ui/js/photos.js
+msgctxt "selected photos"
+msgid "%(count)s selected"
+msgid_plural "%(count)s selected"
+msgstr[0] "%(count)s sélectionnée"
+msgstr[1] "%(count)s de photos sélectionnées"
+msgstr[2] "%(count)s sélectionnées"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "%(count)s photo selected"
+msgid_plural "%(count)s photos selected"
+msgstr[0] "%(count)s photo sélectionnée"
+msgstr[1] "%(count)s de photos sélectionnées"
+msgstr[2] "%(count)s photos sélectionnées"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to create the album"
+msgstr "Impossible de créer l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Rename album"
+msgstr "Renommer l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "New album"
+msgstr "Nouvel album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Albums gather photos without moving them in Files."
+msgstr "Les albums rassemblent des photos sans les déplacer dans Fichiers."
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Summer 2024"
+msgstr "Été 2024"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to load your albums"
+msgstr "Impossible de charger vos albums"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Added %(count)s photo to \"%(album)s\""
+msgid_plural "Added %(count)s photos to \"%(album)s\""
+msgstr[0] "%(count)s photo ajoutée à « %(album)s »"
+msgstr[1] "%(count)s de photos ajoutées à « %(album)s »"
+msgstr[2] "%(count)s photos ajoutées à « %(album)s »"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Already in \"%(album)s\""
+msgstr "Déjà dans « %(album)s »"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to add to the album"
+msgstr "Impossible d’ajouter à l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Created \"%(album)s\" with %(count)s photo"
+msgid_plural "Created \"%(album)s\" with %(count)s photos"
+msgstr[0] "« %(album)s » créé avec %(count)s photo"
+msgstr[1] "« %(album)s » créé avec %(count)s de photos"
+msgstr[2] "« %(album)s » créé avec %(count)s photos"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to remove from the album"
+msgstr "Impossible de retirer de l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Removed %(count)s photo from the album"
+msgid_plural "Removed %(count)s photos from the album"
+msgstr[0] "%(count)s photo retirée de l’album"
+msgstr[1] "%(count)s de photos retirées de l’album"
+msgstr[2] "%(count)s photos retirées de l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to set the cover"
+msgstr "Impossible de définir la couverture"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Album description"
+msgstr "Description de l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "What these photos are about"
+msgstr "Le sujet de ces photos"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Leave album"
+msgstr "Quitter l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Leave \"%(album)s\"? The photos you added stay in it."
+msgstr "Quitter « %(album)s » ? Les photos que vous avez ajoutées y restent."
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Delete album"
+msgstr "Supprimer l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Delete \"%(album)s\"? Its photos stay where they are in Files."
+msgstr ""
+"Supprimer « %(album)s » ? Ses photos restent où elles sont dans Fichiers."
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to update the album"
+msgstr "Impossible de mettre à jour l’album"
+
+#: ui/static/photos/ui/js/photos.js
+msgid "Failed to reorder the album"
+msgstr "Impossible de réorganiser l’album"

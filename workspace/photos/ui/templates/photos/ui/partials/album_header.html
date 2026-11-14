@@ -15,6 +15,7 @@
   row around it) would float halfway down the block. The title line is as
   tall as the drawer button so the two stay level.
 {% endcomment %}
+{% load i18n %}
 <div class="flex items-start gap-3 min-w-0 flex-1" data-album-header>
   {% if album.card.cover_url %}
     <span
@@ -43,8 +44,8 @@
         <button
           type="button"
           class="btn btn-ghost btn-xs btn-square shrink-0"
-          title="Slideshow"
-          aria-label="Slideshow"
+          title="{% translate 'Slideshow' %}"
+          aria-label="{% translate 'Slideshow' %}"
           @click="playSlideshow()"
           data-album-slideshow
         >
@@ -54,8 +55,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square shrink-0"
-        title="Share album"
-        aria-label="Share album"
+        title="{% translate 'Share album' %}"
+        aria-label="{% translate 'Share album' %}"
         x-show="albumAllows('share')"
         x-cloak
         @click="openAlbumShare()"
@@ -66,8 +67,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square shrink-0"
-        title="Album actions"
-        aria-label="Album actions"
+        title="{% translate 'Album actions' %}"
+        aria-label="{% translate 'Album actions' %}"
         aria-haspopup="menu"
         @click.stop="openAlbumMenu($el)"
       >
@@ -82,10 +83,10 @@
       <span class="inline-flex items-center gap-1 whitespace-nowrap">
         {% if album.manual %}
           <i data-lucide="grip" class="w-3.5 h-3.5"></i>
-          Manual order
+          {% translate "Manual order" %}
         {% else %}
           <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i>
-          By capture date
+          {% translate "By capture date" %}
         {% endif %}
       </span>
     </div>
@@ -100,11 +101,28 @@
           {% endfor %}
         </span>
         <span class="whitespace-nowrap">
-          {{ album.sharing.count }} member{{ album.sharing.count|pluralize }}
-          {% if album.sharing.shared_by %}· Shared by {{ album.sharing.shared_by.username }}{% endif %}
+          {% blocktranslate trimmed count counter=album.sharing.count %}
+            {{ counter }} member
+          {% plural %}
+            {{ counter }} members
+          {% endblocktranslate %}
+          {% if album.sharing.shared_by %}
+            ·
+            {% blocktranslate trimmed with name=album.sharing.shared_by.username %}
+              Shared by {{ name }}
+            {% endblocktranslate %}
+          {% endif %}
         </span>
         {% if album.sharing.role != "owner" %}
-          <span class="badge badge-sm badge-ghost capitalize" data-album-role>{{ album.sharing.role }}</span>
+          <span class="badge badge-sm badge-ghost" data-album-role>
+            {% if album.sharing.role == "manager" %}
+              {% translate "Manager" context "album role" %}
+            {% elif album.sharing.role == "contributor" %}
+              {% translate "Contributor" context "album role" %}
+            {% else %}
+              {% translate "Viewer" context "album role" %}
+            {% endif %}
+          </span>
         {% endif %}
       </div>
     {% endif %}

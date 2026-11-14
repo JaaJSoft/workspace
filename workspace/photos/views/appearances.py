@@ -2,6 +2,7 @@
 
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
@@ -127,6 +128,6 @@ class AppearanceUndoView(APIView):
             )
         except appearance_review.UndoExpired:
             return Response(
-                {"detail": "Too late to undo."}, status=status.HTTP_410_GONE
+                {"detail": _("Too late to undo.")}, status=status.HTTP_410_GONE
             )
         return Response({"restored": restored})

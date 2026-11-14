@@ -3,9 +3,11 @@
   the album registry), and a New album row that creates one around the
   photos. State lives in photosApp() (picker.*); openAlbumPicker() fills it.
 {% endcomment %}
+{% load i18n %}
 <dialog id="album-picker" class="modal" @close="picker.open = false">
   <div class="modal-box max-w-md p-0 flex flex-col max-h-[80vh]">
-    {% include "ui/partials/dialog_header.html" with icon="book-image" title="Add to album" subtitle_expr="countLabel(picker.files.length)" class="px-5 pt-5 pb-3 border-b border-base-300" only %}
+    {% translate "Add to album" as picker_title %}
+    {% include "ui/partials/dialog_header.html" with icon="book-image" title=picker_title subtitle_expr="countLabel(picker.files.length)" class="px-5 pt-5 pb-3 border-b border-base-300" only %}
     <ul class="menu w-full p-2 overflow-y-auto flex-1 flex-nowrap">
       <li>
         <button
@@ -20,13 +22,13 @@
           >
             <i data-lucide="plus" class="w-5 h-5"></i>
           </span>
-          <span class="flex-1 text-left font-medium">New album</span>
+          <span class="flex-1 text-left font-medium">{% translate "New album" %}</span>
         </button>
       </li>
       <li x-show="picker.loading" class="menu-disabled">
         <span class="gap-3">
           <span class="loading loading-spinner loading-sm"></span>
-          Loading albums…
+          {% translate "Loading albums…" %}
         </span>
       </li>
       <template x-for="album in picker.albums" :key="album.uuid">
@@ -62,7 +64,7 @@
               <span class="block truncate font-medium" x-text="album.title"></span>
               <span
                 class="block text-xs text-base-content/60"
-                x-text="album.count === 1 ? '1 item' : album.count + ' items'"
+                x-text="interpolate(ngettext('%(count)s item', '%(count)s items', album.count), { count: album.count }, true)"
               ></span>
             </span>
           </button>
@@ -71,11 +73,11 @@
     </ul>
     <div class="modal-action m-0 px-5 py-3 border-t border-base-300">
       <form method="dialog">
-        <button type="submit" class="btn btn-sm">Cancel</button>
+        <button type="submit" class="btn btn-sm">{% translate "Cancel" %}</button>
       </form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="submit">close</button>
+    <button type="submit">{% translate "close" %}</button>
   </form>
 </dialog>

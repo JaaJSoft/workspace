@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:16+0000\n"
+"POT-Creation-Date: 2026-11-14 13:10+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1273,10 +1273,6 @@ msgstr "afficher les contacts"
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "See the photos in a new tab"
 msgstr "Voir les photos dans un nouvel onglet"
-
-#: ui/templates/photos/ui/partials/review_card.html
-msgid "Contacts"
-msgstr "Contacts"
 
 #: ui/templates/photos/ui/partials/review_card.html
 msgctxt "keyboard hint"

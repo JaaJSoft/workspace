@@ -772,6 +772,21 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         # the position and completed_at, in change_task_status's locked write.
         new_status = serializer.validated_data.pop("status", None)
         task = serializer.save()
+        # Recorded before the status move: a task entering a board column
+        # joins the running sprint there, and change_task_status records that
+        # join, which must come after the change the request asked for.
+        saved_sprint = task.sprint
+        if saved_sprint != old_sprint:
+            # Sprint names snapshotted, same rationale as the epic names.
+            record_task_event(
+                task,
+                type=TaskEvent.Type.SPRINT,
+                actor=self.request.user,
+                from_value=old_sprint.name if old_sprint else "",
+                to_value=saved_sprint.name if saved_sprint else "",
+                from_ref=old_sprint.pk if old_sprint else None,
+                to_ref=saved_sprint.pk if saved_sprint else None,
+            )
         if new_status is not None:
             # Even when it names the status loaded above: another writer may
             # have moved the task since, and the client asked for this one.
@@ -808,17 +823,6 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 actor=self.request.user,
                 from_value=old_epic.name if old_epic else "",
                 to_value=task.epic.name if task.epic else "",
-            )
-        if task.sprint_id != (old_sprint.pk if old_sprint else None):
-            # Sprint names snapshotted, same rationale as the epic names.
-            record_task_event(
-                task,
-                type=TaskEvent.Type.SPRINT,
-                actor=self.request.user,
-                from_value=old_sprint.name if old_sprint else "",
-                to_value=task.sprint.name if task.sprint else "",
-                from_ref=old_sprint.pk if old_sprint else None,
-                to_ref=task.sprint_id,
             )
         if task.due_date != old_due_date and due_move_settles(task.due_date):
             settle_task_notifications([task])

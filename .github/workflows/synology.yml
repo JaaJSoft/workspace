@@ -1,0 +1,125 @@
+name: Synology package
+
+# Builds the Synology package (packaging/synology), a Container Manager
+# project that pulls the image the Docker workflow publishes. A release tag
+# attaches it to the GitHub release of that tag; a change to the package
+# sources builds it as a workflow artifact, to install on a test NAS.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'packaging/synology/**'
+      - 'workspace/core/static/icons/icon-512.png'
+      - '.github/workflows/synology.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the .spk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      # A tag packages the image of that version. Anything else packages the
+      # image of main under the version in pyproject.toml: good for a test
+      # install, never for a release, since the package would not change
+      # when the image does.
+      - name: Compute the version and the image
+        id: version
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            tag="$version"
+          else
+            version=$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -1)
+            tag=main
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=$image:$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Lint the package scripts
+        run: |
+          shellcheck -s sh packaging/synology/scripts/* \
+            packaging/synology/target/app/synology.sh
+
+      # The test workflow skips packaging/, its lint job with it. ruff-action
+      # takes the version pinned in pyproject.toml, as that job does.
+      - name: Ruff check
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          src: packaging/synology
+          args: check --output-format=github
+
+      - name: Ruff format check
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          src: packaging/synology
+          args: format --check
+
+      - name: Build the package
+        run: |
+          uv run --no-project --python 3.14 --with pillow \
+            python packaging/synology/build.py \
+              --version "${{ steps.version.outputs.version }}" \
+              --image "${{ steps.version.outputs.image }}" \
+              --mtime "$(git log -1 --format=%ct)" \
+              --output-dir dist
+
+      # Container Manager runs the compose file as is: check that what the
+      # package ships parses, with every placeholder filled in.
+      - name: Check the packaged compose file
+        run: |
+          mkdir -p /tmp/spk/target
+          tar -xf dist/*.spk -C /tmp/spk
+          tar -xJf /tmp/spk/package.tgz -C /tmp/spk/target
+          cat /tmp/spk/INFO
+          docker compose -f /tmp/spk/target/app/compose.yaml config --quiet
+          for f in /tmp/spk/conf/* /tmp/spk/WIZARD_UIFILES/* /tmp/spk/target/ui/config; do
+            jq -e . "$f" > /dev/null || { echo "$f is not valid JSON" >&2; exit 1; }
+          done
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: synology-spk
+          path: dist/*.spk
+          if-no-files-found: error
+
+  release:
+    name: Attach to the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@v8
+        with:
+          name: synology-spk
+          path: dist
+
+      - name: Attach the package to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+                 --notes "See [CHANGELOG.md](https://github.com/$GH_REPO/blob/$GITHUB_REF_NAME/CHANGELOG.md)."
+          gh release upload "$GITHUB_REF_NAME" dist/*.spk --clobber

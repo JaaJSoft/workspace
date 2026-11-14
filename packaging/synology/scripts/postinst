@@ -1,0 +1,17 @@
+#!/bin/sh
+# Hands the administrator account typed in the install wizard to the prepare
+# container (target/app/synology.sh), which creates it on the first start and
+# deletes the file straight after.
+SHARE="/var/packages/${SYNOPKG_PKGNAME}/shares/workspace"
+
+if [ -n "${wizard_admin_username:-}" ] && [ -n "${wizard_admin_password:-}" ]; then
+    if [ ! -d "$SHARE" ]; then
+        echo "The workspace shared folder could not be found." > "$SYNOPKG_TEMP_LOGFILE"
+        exit 1
+    fi
+    umask 077
+    printf '%s\n%s\n%s\n' \
+        "$wizard_admin_username" "${wizard_admin_email:-}" "$wizard_admin_password" \
+        > "$SHARE/.admin-bootstrap"
+fi
+exit 0

@@ -1,7 +1,11 @@
+import json
 import re
 
 from django import template
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+
+from workspace.common.prefetch import speculation_rules as site_speculation_rules
 
 register = template.Library()
 
@@ -77,3 +81,18 @@ def do_help_items(parser, token):
     nodelist = parser.parse(("endhelp_items",))
     parser.delete_first_token()
     return HelpItemsNode(nodelist, var_name)
+
+
+_JSON_SCRIPT_ESCAPES = {ord("<"): "\\u003C", ord(">"): "\\u003E", ord("&"): "\\u0026"}
+
+
+@register.simple_tag
+def speculation_rules():
+    """The ``<script type="speculationrules">`` of the views marked ``@prefetchable``."""
+    rules = site_speculation_rules()
+    if rules is None:
+        return ""
+    return format_html(
+        '<script type="speculationrules">{}</script>',
+        mark_safe(json.dumps(rules).translate(_JSON_SCRIPT_ESCAPES)),
+    )

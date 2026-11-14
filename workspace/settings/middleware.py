@@ -16,6 +16,9 @@ MIDDLEWARE = [
     # is computed (the 304 copies Cache-Control from the full response)
     "workspace.common.middleware.HtmlCacheControlMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # Ahead of every other view hook: a refused prefetch must not reach the
+    # view, nor anything that runs on its behalf.
+    "workspace.common.middleware.PrefetchGateMiddleware",
     # A preview module refuses users outside its audience, as an absent URL
     # would: ahead of the CSRF check, which an absent URL never reaches. The
     # session user it reads is set by AuthenticationMiddleware below, whose

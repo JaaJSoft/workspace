@@ -19,6 +19,7 @@ from workspace.calendar.queries import (
     visible_events_q,
 )
 from workspace.calendar.serializers import CalendarSerializer
+from workspace.common.prefetch import prefetchable
 from workspace.users.services.settings import get_setting
 
 
@@ -32,6 +33,7 @@ def _ensure_default_calendar(user):
         )
 
 
+@prefetchable
 @login_required
 @ensure_csrf_cookie
 def index(request):

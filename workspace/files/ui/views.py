@@ -16,6 +16,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET
 
 from workspace.common.charts import donut_chart
+from workspace.common.prefetch import prefetchable
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.properties_sections import render_properties_sections
 from workspace.files.queries import (
@@ -531,6 +532,7 @@ def _build_context(request, folder=None, is_trash_view=False):
     }
 
 
+@prefetchable
 @login_required
 @ensure_csrf_cookie
 def index(request, folder=None):

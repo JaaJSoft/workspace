@@ -5,6 +5,7 @@ from django.db.models.functions import Lower
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.common.prefetch import prefetchable
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs, user_group_files_qs
@@ -153,6 +154,7 @@ def _uuid_param(request, name):
     return str(value) if value else ""
 
 
+@prefetchable
 @login_required
 @ensure_csrf_cookie
 def index(request):

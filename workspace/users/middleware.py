@@ -2,6 +2,7 @@ from django.conf import settings
 from django.http import HttpResponse
 from django.utils import timezone, translation
 
+from workspace.common.prefetch import is_speculative
 from workspace.users.services import presence as presence_service
 from workspace.users.services.settings import get_user_language, get_user_timezone
 
@@ -97,7 +98,8 @@ class PresenceMiddleware:
     Skipped for SSE streams and for requests the page flags as sent while
     nobody was in front of it (``page_attention.js``): a tab left open keeps
     refreshing on its own, and counting that as activity would hold back web
-    push on the user's other devices.
+    push on the user's other devices. Skipped for a prefetch too: the browser
+    may send one for a page nobody opens.
     """
 
     def __init__(self, get_response):
@@ -110,6 +112,7 @@ class PresenceMiddleware:
             and request.user.is_authenticated
             and not getattr(request, "_is_sse_stream", False)
             and not request.headers.get("X-Page-Unattended")
+            and not is_speculative(request)
         ):
             presence_service.touch(request.user.id)
         return response

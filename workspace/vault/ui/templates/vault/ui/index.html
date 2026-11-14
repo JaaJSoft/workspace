@@ -10,6 +10,9 @@
   screen rather than a warning.
 {% endcomment %}
 
+{# The module CSP refuses an inline rule set, and no vault page is prefetchable. #}
+{% block speculation_rules %}{% endblock %}
+
 {% block navbar %}
   {% include "core/partials/navbar.html" with navbar_full_width=True %}
 {% endblock %}

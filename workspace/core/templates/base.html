@@ -20,20 +20,36 @@
       is actually served: only views marked @prefetchable answer a prefetch
       (workspace/common/prefetch.py), every other one is refused before it runs.
       Links alpine-ajax intercepts never navigate, so they are left out.
+      A page under a script-src policy without 'inline-speculation-rules' empties
+      the block: the browser refuses an inline rule set there.
     {% endcomment %}
-    <script type="speculationrules">
-      {
-        "prefetch": [{
-          "source": "document",
-          "where": {"and": [
-            {"href_matches": {"pathname": "/*"}},
-            {"not": {"href_matches": {"pathname": "/api/*"}}},
-            {"not": {"selector_matches": "[x-target], [x-target\\.push], [x-target\\.replace], [download], [target=_blank]"}}
-          ]},
-          "eagerness": "moderate"
-        }]
-      }
-    </script>
+    {% block speculation_rules %}
+      <script type="speculationrules">
+        {
+          "prefetch": [{
+            "source": "document",
+            "where": {
+              "and": [{
+                "href_matches": {
+                  "pathname": "/*"
+                }
+              }, {
+                "not": {
+                  "href_matches": {
+                    "pathname": "/api/*"
+                  }
+                }
+              }, {
+                "not": {
+                  "selector_matches": "[x-target], [x-target\\.push], [x-target\\.replace], [download], [target=_blank]"
+                }
+              }]
+            },
+            "eagerness": "moderate"
+          }]
+        }
+      </script>
+    {% endblock %}
 
     <!-- Tailwind + DaisyUI + Typography - locally built (see scripts/frontend/:
        input.css, module-hues.js). Replaces the Tailwind Play

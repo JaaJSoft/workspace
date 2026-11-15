@@ -1660,7 +1660,7 @@ msgstr "Tout"
 #: ui/views.py
 msgctxt "photos library"
 msgid "Mine"
-msgstr "Les miennes"
+msgstr "Mes photos"
 
 #: ui/views.py
 msgctxt "photos library"

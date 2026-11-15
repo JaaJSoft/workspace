@@ -585,7 +585,7 @@ msgstr "Aucun n’est %(name)s"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Looks like them"
-msgstr "Ressemble à cette personne"
+msgstr "Suggéré par ressemblance"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Never suggests them again"

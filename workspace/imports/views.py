@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -174,7 +175,8 @@ class JobListView(APIView):
         )
         if connection is None:
             return Response(
-                {"connection": ["Not found."]}, status=status.HTTP_400_BAD_REQUEST
+                {"connection": [str(NotFound.default_detail)]},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             job = jobs_service.create_job(

@@ -5,6 +5,7 @@ import logging
 from urllib.parse import quote, urlparse
 
 import httpx2
+from django.utils.translation import gettext as _
 
 from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
@@ -174,8 +175,16 @@ class NextcloudMetadataSource:
         _raise_for_status(response, url)
         if response.status_code != 207:
             raise ProviderError(
-                f"'{self._host}' answered HTTP {response.status_code} to "
-                f"{method} {url} instead of a multistatus."
+                _(
+                    "'%(host)s' answered HTTP %(code)s to %(method)s %(url)s "
+                    "instead of a multistatus."
+                )
+                % {
+                    "host": self._host,
+                    "code": response.status_code,
+                    "method": method,
+                    "url": url,
+                }
             )
         return response
 

@@ -8,12 +8,14 @@ from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.utils import timezone
+from django.utils import timezone, translation
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from workspace.common.logging import scrub
 from workspace.common.task_locks import task_lock
 from workspace.notifications.services.notifications import notify
+from workspace.users.services.settings import get_user_language
 
 from ..errors import ImportsError
 from ..importers.base import ImportContext, JobFailed, Outcome, importer_registry
@@ -31,7 +33,7 @@ class InvalidJob(ImportsError):
 
 class InvalidJobOptions(ImportsError):
     def __init__(self, errors):
-        super().__init__("Invalid import options.")
+        super().__init__(_("Invalid import options."))
         self.errors = errors
 
 
@@ -52,15 +54,19 @@ def create_job(owner, connection, kinds, options=None):
     provider = get_available_provider(connection.provider)
     kinds = list(dict.fromkeys(kinds or []))
     if not kinds:
-        raise InvalidJob("Pick at least one thing to import.")
+        raise InvalidJob(_("Pick at least one thing to import."))
     ordered = [k for k in importer_registry.kinds() if k in kinds]
     unknown = set(kinds) - set(ordered)
     if unknown:
-        raise InvalidJob(f"Nothing knows how to import {', '.join(sorted(unknown))}.")
+        raise InvalidJob(
+            _("Nothing knows how to import %(kinds)s.")
+            % {"kinds": ", ".join(sorted(unknown))}
+        )
     unsupported = set(kinds) - provider.kinds
     if unsupported:
         raise InvalidJob(
-            f"{provider.name} cannot provide {', '.join(sorted(unsupported))}."
+            _("%(provider)s cannot provide %(kinds)s.")
+            % {"provider": provider.name, "kinds": ", ".join(sorted(unsupported))}
         )
 
     validated, errors = {}, {}
@@ -89,13 +95,13 @@ def create_job(owner, connection, kinds, options=None):
                 .filter(pk=connection.pk)
                 .exists()
             ):
-                raise InvalidJob("This connection no longer exists.")
+                raise InvalidJob(_("This connection no longer exists."))
             job = ImportJob.objects.create(
                 connection=connection, kinds=ordered, options=validated
             )
     except IntegrityError as exc:
         raise JobAlreadyRunning(
-            "An import is already running for this connection."
+            _("An import is already running for this connection.")
         ) from exc
     transaction.on_commit(lambda: _enqueue(job))
     return job
@@ -109,7 +115,7 @@ def _enqueue(job):
 
 def cancel_job(job):
     if job.is_terminal:
-        raise InvalidJob("This import is already finished.")
+        raise InvalidJob(_("This import is already finished."))
     now = timezone.now()
     # A pending job, or a running one whose worker stopped reporting, has
     # nobody to notice the flag: end it right here. The CAS on status keeps a
@@ -135,7 +141,7 @@ def retry_job(job):
     """A fresh job with the same settings; entries already done are skipped
     by the importer, so only the failed and unprocessed ones run again."""
     if job.status not in (ImportJob.Status.FAILED, ImportJob.Status.CANCELLED):
-        raise InvalidJob("Only a failed or cancelled import can be retried.")
+        raise InvalidJob(_("Only a failed or cancelled import can be retried."))
     return create_job(job.connection.owner, job.connection, job.kinds, job.options)
 
 
@@ -209,6 +215,13 @@ def run_job(job_uuid) -> Outcome:
     )
     if job is None:
         return Outcome.SKIPPED
+    # A worker has no active language: what the job stores (its error, the
+    # per-entry reports, the root folder's name) is written in the owner's.
+    with translation.override(get_user_language(job.connection.owner)):
+        return _run_claimed(job)
+
+
+def _run_claimed(job) -> Outcome:
     if job.status == ImportJob.Status.PENDING:
         now = timezone.now()
         claimed = ImportJob.objects.filter(
@@ -239,7 +252,7 @@ def run_job(job_uuid) -> Outcome:
             _finish(
                 job,
                 ImportJob.Status.FAILED,
-                error="Unexpected error, see the server logs.",
+                error=_("Unexpected error, see the server logs."),
             )
             return Outcome.FAILED
 
@@ -265,7 +278,9 @@ def _run_slice(job, deadline):
             continue
         importer = importer_registry.get(kind)
         if importer is None:
-            raise JobFailed(f"Nothing knows how to import {kind}.")
+            raise JobFailed(
+                _("Nothing knows how to import %(kinds)s.") % {"kinds": kind}
+            )
         ctx = ImportContext(job, provider, importer, deadline=deadline)
         outcome = importer.run(ctx)
         if outcome is not Outcome.DONE:
@@ -290,19 +305,21 @@ def _finish(job, status, *, error=""):
 
 
 def _notify_owner(job):
-    label = job.connection.label
-    if job.status == ImportJob.Status.COMPLETED:
-        title = f"Import from {label} finished"
-        body = summarize(job)
-    elif job.status == ImportJob.Status.FAILED:
-        title = f"Import from {label} failed"
-        body = job.error
-    else:
-        title = f"Import from {label} cancelled"
-        body = summarize(job)
+    owner = job.connection.owner
+    name = {"name": job.connection.label}
+    with translation.override(get_user_language(owner)):
+        if job.status == ImportJob.Status.COMPLETED:
+            title = _("Import from %(name)s finished") % name
+            body = summarize(job)
+        elif job.status == ImportJob.Status.FAILED:
+            title = _("Import from %(name)s failed") % name
+            body = job.error
+        else:
+            title = _("Import from %(name)s cancelled") % name
+            body = summarize(job)
     try:
         notify(
-            recipient=job.connection.owner,
+            recipient=owner,
             origin="imports",
             title=title,
             body=body,
@@ -320,8 +337,13 @@ def summarize(job):
             continue
         line = importer.summarize(job.stats.get(kind) or {})
         if line:
-            lines.append(line if len(job.kinds) == 1 else f"{kind}: {line}")
-    return " - ".join(lines) or "Nothing to import."
+            lines.append(
+                line
+                if len(job.kinds) == 1
+                else _("%(kind)s: %(summary)s")
+                % {"kind": importer.label, "summary": line}
+            )
+    return " - ".join(lines) or _("Nothing to import.")
 
 
 def failed_job_count(since):

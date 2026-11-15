@@ -13,6 +13,7 @@ from urllib.parse import quote, unquote, urlparse
 from xml.etree import ElementTree
 
 import httpx2
+from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 
@@ -203,7 +204,15 @@ class CardDavSource:
         _raise_for_status(response, url)
         if response.status_code != 207:
             raise ProviderError(
-                f"'{self._host}' answered HTTP {response.status_code} to "
-                f"{method} {url} instead of a multistatus."
+                _(
+                    "'%(host)s' answered HTTP %(code)s to %(method)s %(url)s "
+                    "instead of a multistatus."
+                )
+                % {
+                    "host": self._host,
+                    "code": response.status_code,
+                    "method": method,
+                    "url": url,
+                }
             )
         return response

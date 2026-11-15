@@ -1,7 +1,7 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load static i18n %}
 
-{% block title %}Imports · Workspace{% endblock %}
+{% block title %}{% translate "Imports" %} · Workspace{% endblock %}
 
 {% block body_class %}bg-base-100 min-h-screen{% endblock %}
 {% block drawer_wrapper_class %}{% endblock %}
@@ -10,6 +10,13 @@
 {% block main_class %}container mx-auto p-4 max-w-5xl{% endblock %}
 
 {% block content %}
+  {% translate "Nothing is saved until the server has answered with these credentials." as connection_subtitle %}
+  {% translate "New import" as new_import %}
+  {% translate "Entries that could not be imported" as errors_title %}
+  {% translate "Source" context "import wizard step" as step_source %}
+  {% translate "What" context "import wizard step" as step_what %}
+  {% translate "Where" context "import wizard step" as step_where %}
+  {% translate "Go" context "import wizard step" as step_go %}
   {{ providers|json_script:"providers-data" }}
   {{ connections|json_script:"connections-data" }}
   {{ jobs|json_script:"jobs-data" }}
@@ -26,10 +33,10 @@
           >
             <i data-lucide="download-cloud" class="w-5 h-5"></i>
           </div>
-          <h1 class="text-2xl font-bold">Imports</h1>
+          <h1 class="text-2xl font-bold">{% translate "Imports" %}</h1>
         </div>
         <p class="text-base-content/60 text-sm mt-1">
-          Bring your files and contacts over from another cloud - Nextcloud, any WebDAV host, and more to come.
+          {% translate "Bring your files and contacts over from another cloud - Nextcloud, any WebDAV host, and more to come." %}
         </p>
       </div>
       <div class="flex gap-2">
@@ -38,7 +45,7 @@
           class="btn btn-sm btn-ghost gap-1"
           @click="openConnectionDialog()"
         >
-          <i data-lucide="plug" class="w-4 h-4"></i> Add connection
+          <i data-lucide="plug" class="w-4 h-4"></i> {% translate "Add connection" %}
         </button>
         <button
           type="button"
@@ -46,28 +53,28 @@
           @click="openWizard()"
           :disabled="connections.length === 0"
         >
-          <i data-lucide="download-cloud" class="w-4 h-4"></i> New import
+          <i data-lucide="download-cloud" class="w-4 h-4"></i> {% translate "New import" %}
         </button>
       </div>
     </div>
 
     <!-- Connections -->
     <section class="mb-8">
-      <h2 class="text-lg font-semibold mb-3">Connections</h2>
+      <h2 class="text-lg font-semibold mb-3">{% translate "Connections" %}</h2>
       <template x-if="connections.length === 0">
         <div
           class="border border-dashed border-base-300 rounded-lg p-8 text-center"
         >
           <i data-lucide="plug" class="w-8 h-8 mx-auto text-base-content/40 mb-2"></i>
           <p class="text-sm text-base-content/60 mb-3">
-            Connect the cloud you are leaving - a Nextcloud account or any WebDAV folder.
+            {% translate "Connect the cloud you are leaving - a Nextcloud account or any WebDAV folder." %}
           </p>
           <button
             type="button"
             class="btn btn-sm btn-module"
             @click="openConnectionDialog()"
           >
-            Add a connection
+            {% translate "Add a connection" %}
           </button>
         </div>
       </template>
@@ -91,13 +98,15 @@
               <span x-show="conn.capabilities && conn.capabilities.server_version">
                 Nextcloud <span x-text="conn.capabilities.server_version"></span>
               </span>
-              <span x-show="conn.last_checked_at">Checked <span x-text="formatDate(conn.last_checked_at)"></span></span>
+              <span x-show="conn.last_checked_at" x-text="checkedLabel(conn)"></span>
             </div>
             <template x-if="conn.last_error">
               <inline-alert type="error" class="text-xs"><span x-text="conn.last_error"></span></inline-alert>
             </template>
             <div class="flex flex-wrap gap-1 mt-auto pt-1">
-              <button type="button" class="btn btn-xs btn-module" @click="openWizard(conn)">Import from here</button>
+              <button type="button" class="btn btn-xs btn-module" @click="openWizard(conn)">
+                {% translate "Import from here" %}
+              </button>
               <button
                 type="button"
                 class="btn btn-xs btn-ghost"
@@ -107,21 +116,21 @@
                 <span
                   x-show="connBusy[conn.uuid]"
                   class="loading loading-spinner loading-xs"
-                ></span> Test
+                ></span> {% translate "Test" context "verb, test the connection" %}
               </button>
               <button
                 type="button"
                 class="btn btn-xs btn-ghost"
                 @click="openConnectionDialog(conn)"
               >
-                Edit
+                {% translate "Edit" %}
               </button>
               <button
                 type="button"
                 class="btn btn-xs btn-ghost text-error ml-auto"
                 @click="deleteConnection(conn)"
               >
-                Remove
+                {% translate "Remove" context "import connection" %}
               </button>
             </div>
           </li>
@@ -131,12 +140,12 @@
 
     <!-- Jobs -->
     <section>
-      <h2 class="text-lg font-semibold mb-3">Imports</h2>
+      <h2 class="text-lg font-semibold mb-3">{% translate "Imports" %}</h2>
       <template x-if="jobs.length === 0">
         <div
           class="border border-dashed border-base-300 rounded-lg p-8 text-center"
         >
-          <p class="text-sm text-base-content/60">No import yet.</p>
+          <p class="text-sm text-base-content/60">{% translate "No import yet." %}</p>
         </div>
       </template>
       <ul class="space-y-3" x-show="jobs.length > 0">
@@ -153,7 +162,7 @@
                   <span
                     class="badge badge-sm"
                     :class="statusClass(job.status)"
-                    x-text="job.status"
+                    x-text="statusLabel(job.status)"
                   ></span>
                   <span
                     class="text-xs text-base-content/50"
@@ -162,10 +171,14 @@
                 </div>
                 <div class="text-xs text-base-content/60 mt-0.5">
                   <span x-show="job.options?.files?.source_path">
-                    From <code x-text="job.options?.files?.source_path"></code>
+                    {% translate "From" context "remote folder" %} <code
+   x-text="job.options?.files?.source_path"
+ ></code>
                   </span>
                   <span x-show="job.options?.files?.on_conflict">
-                    · same-name files: <span x-text="job.options?.files?.on_conflict"></span>
+                    · {% translate "Same-name files:" %} <span
+   x-text="conflictLabel(job.options?.files?.on_conflict)"
+ ></span>
                   </span>
                   <span x-show="job.options?.contacts">
                     <span x-show="job.options?.files">·</span>
@@ -182,7 +195,7 @@
                   @click="cancelJob(job)"
                 >
                   <span x-show="isStopping(job)" class="loading loading-spinner loading-xs"></span>
-                  <span x-text="isStopping(job) ? 'Stopping' : 'Stop'"></span>
+                  <span x-text="stopLabel(job)"></span>
                 </button>
                 <button
                   type="button"
@@ -190,14 +203,14 @@
                   x-show="job.status === 'failed' || job.status === 'cancelled'"
                   @click="retryJob(job)"
                 >
-                  Retry
+                  {% translate "Retry" %}
                 </button>
                 <button
                   type="button"
                   class="btn btn-xs btn-ghost"
                   x-show="failedCount(job)"
                   @click="showErrors(job)"
-                  x-text="'Errors (' + failedCount(job) + ')'"
+                  x-text="errorsLabel(job)"
                 ></button>
               </div>
             </div>
@@ -231,10 +244,10 @@
     <!-- Connection dialog -->
     <dialog x-ref="connectionDialog" class="modal">
       <div class="modal-box max-w-lg">
-        {% include "ui/partials/dialog_header.html" with icon="plug" title_expr="connEditing ? 'Edit connection' : 'Add a connection'" subtitle="Nothing is saved until the server has answered with these credentials." only %}
+        {% include "ui/partials/dialog_header.html" with icon="plug" title_expr="connectionDialogTitle()" subtitle=connection_subtitle only %}
         <form class="space-y-3" @submit.prevent="saveConnection()">
           <div class="fieldset" x-show="!connEditing">
-            <label class="fieldset-legend"><span class="font-medium">Provider</span></label>
+            <label class="fieldset-legend"><span class="font-medium">{% translate "Provider" %}</span></label>
             <select x-model="connForm.provider" class="select select-sm w-full">
               <template x-for="p in credentialProviders()" :key="p.slug">
                 <option :value="p.slug" x-text="p.name"></option>
@@ -242,17 +255,17 @@
             </select>
           </div>
           <div class="fieldset">
-            <label class="fieldset-legend"><span class="font-medium">Name</span></label>
+            <label class="fieldset-legend"><span class="font-medium">{% translate "Name" %}</span></label>
             <input
               type="text"
               x-model="connForm.label"
               class="input input-sm w-full"
-              placeholder="e.g. My old Nextcloud"
+              placeholder="{% translate "e.g. My old Nextcloud" %}"
               required
             />
           </div>
           <div class="fieldset">
-            <label class="fieldset-legend"><span class="font-medium">URL</span></label>
+            <label class="fieldset-legend"><span class="font-medium">{% translate "URL" %}</span></label>
             <input
               type="url"
               x-model="connForm.base_url"
@@ -264,7 +277,11 @@
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div class="fieldset min-w-0">
-              <label class="fieldset-legend"><span class="font-medium">Username</span></label>
+              <label
+                class="fieldset-legend"
+              ><span
+  class="font-medium"
+>{% translate "Username" context "remote account" %}</span></label>
               <input
                 type="text"
                 x-model="connForm.username"
@@ -275,10 +292,7 @@
             </div>
             <div class="fieldset min-w-0">
               <label class="fieldset-legend">
-                <span
-                  class="font-medium"
-                  x-text="connEditing ? 'New password (optional)' : 'Password'"
-                ></span>
+                <span class="font-medium" x-text="passwordLabel()"></span>
               </label>
               <input
                 type="password"
@@ -299,36 +313,34 @@
               class="btn btn-ghost btn-sm"
               @click="closeConnectionDialog()"
             >
-              Cancel
+              {% translate "Cancel" %}
             </button>
             <button type="submit" class="btn btn-module btn-sm" :disabled="connSaving">
               <span x-show="connSaving" class="loading loading-spinner loading-xs"></span>
-              <span
-                x-text="connSaving ? 'Checking…' : (connEditing ? 'Save' : 'Connect')"
-              ></span>
+              <span x-text="connectionSubmitLabel()"></span>
             </button>
           </div>
         </form>
       </div>
       <form method="dialog" class="modal-backdrop">
-        <button type="submit">close</button>
+        <button type="submit">{% translate "close" %}</button>
       </form>
     </dialog>
 
     <!-- Wizard dialog -->
     <dialog x-ref="wizardDialog" class="modal">
       <div class="modal-box max-w-2xl">
-        {% include "ui/partials/dialog_header.html" with icon="download-cloud" title="New import" only %}
+        {% include "ui/partials/dialog_header.html" with icon="download-cloud" title=new_import only %}
         <ul class="steps steps-horizontal w-full text-xs mb-4">
-          <li class="step" :class="wizard.step >= 1 && 'step-module'">Source</li>
-          <li class="step" :class="wizard.step >= 2 && 'step-module'">What</li>
-          <li class="step" :class="wizard.step >= 3 && 'step-module'">Where</li>
-          <li class="step" :class="wizard.step >= 4 && 'step-module'">Go</li>
+          <li class="step" :class="wizard.step >= 1 && 'step-module'">{{ step_source }}</li>
+          <li class="step" :class="wizard.step >= 2 && 'step-module'">{{ step_what }}</li>
+          <li class="step" :class="wizard.step >= 3 && 'step-module'">{{ step_where }}</li>
+          <li class="step" :class="wizard.step >= 4 && 'step-module'">{{ step_go }}</li>
         </ul>
 
         <!-- Step 1: connection -->
         <div x-show="wizard.step === 1" class="space-y-2">
-          <p class="text-sm text-base-content/60">Which connection do you want to import from?</p>
+          <p class="text-sm text-base-content/60">{% translate "Which connection do you want to import from?" %}</p>
           <template x-for="conn in connections" :key="conn.uuid">
             <label
               class="flex items-center gap-3 border rounded-lg p-3 cursor-pointer"
@@ -354,13 +366,13 @@
             class="btn btn-xs btn-ghost gap-1"
             @click="openConnectionDialog()"
           >
-            <i data-lucide="plus" class="w-3 h-3"></i> Add another connection
+            <i data-lucide="plus" class="w-3 h-3"></i> {% translate "Add another connection" %}
           </button>
         </div>
 
         <!-- Step 2: kinds -->
         <div x-show="wizard.step === 2" class="space-y-2">
-          <p class="text-sm text-base-content/60">What should be brought over?</p>
+          <p class="text-sm text-base-content/60">{% translate "What should be brought over?" %}</p>
           <template x-for="item in wizardKinds()" :key="item.kind">
             <label
               class="flex items-center gap-3 border rounded-lg p-3 cursor-pointer"
@@ -379,7 +391,7 @@
             </label>
           </template>
           <p class="text-xs text-base-content/50">
-            Other kinds of data (calendars, boards…) will appear here as providers gain them.
+            {% translate "Other kinds of data (calendars, boards…) will appear here as providers gain them." %}
           </p>
         </div>
 
@@ -389,11 +401,11 @@
             <div
               class="text-xs font-semibold uppercase tracking-wide text-base-content/50"
             >
-              Files
+              {% translate "Files" %}
             </div>
             <div>
               <div class="flex items-center justify-between mb-1">
-                <span class="text-sm font-medium">Remote folder to import</span>
+                <span class="text-sm font-medium">{% translate "Remote folder to import" %}</span>
                 <code class="text-xs" x-text="wizard.options.files.source_path"></code>
               </div>
               <div class="border border-base-300 rounded-lg">
@@ -419,7 +431,7 @@
                       @click="useCurrentFolderAsSource()"
                       :disabled="wizard.options.files.source_path === browse.path"
                     >
-                      Use this folder
+                      {% translate "Use this folder" %}
                     </button>
                   </span>
                 </div>
@@ -459,7 +471,7 @@
                     class="px-3 py-2 text-xs text-base-content/50"
                     x-show="!browse.loading && !browse.error && browse.entries.length === 0"
                   >
-                    Empty folder.
+                    {% translate "Empty folder." %}
                   </p>
                 </div>
               </div>
@@ -467,7 +479,7 @@
 
             <div class="grid sm:grid-cols-2 gap-3">
               <div class="fieldset min-w-0">
-                <label class="fieldset-legend"><span class="font-medium">Import into</span></label>
+                <label class="fieldset-legend"><span class="font-medium">{% translate "Import into" %}</span></label>
                 <button
                   type="button"
                   class="btn btn-sm btn-outline justify-start gap-2 font-normal"
@@ -479,15 +491,15 @@
               </div>
               <div class="fieldset min-w-0">
                 <label class="fieldset-legend">
-                  <span class="font-medium">When a file with the same name exists</span>
+                  <span class="font-medium">{% translate "When a file with the same name exists" %}</span>
                 </label>
                 <select
                   x-model="wizard.options.files.on_conflict"
                   class="select select-sm w-full min-w-0"
                 >
-                  <option value="rename">Keep both (rename the imported one)</option>
-                  <option value="skip">Keep mine (skip the imported one)</option>
-                  <option value="replace">Replace mine with the imported one</option>
+                  <option value="rename">{% translate "Keep both (rename the imported one)" %}</option>
+                  <option value="skip">{% translate "Keep mine (skip the imported one)" %}</option>
+                  <option value="replace">{% translate "Replace mine with the imported one" %}</option>
                 </select>
               </div>
             </div>
@@ -497,11 +509,14 @@
                 class="checkbox checkbox-sm mt-0.5"
                 x-model="wizard.options.files.create_root_folder"
               />
-              <span class="text-sm">Put everything in a folder named <code x-text="rootFolderName()"></code>
+              <span
+                class="text-sm"
+              >{% translate "Put everything in a folder named" %} <code
+   x-text="rootFolderName()"
+ ></code>
                 <br />
                 <span class="text-xs text-base-content/60">
-                  Untick to merge the remote tree
-                  directly into the destination.
+                  {% translate "Untick to merge the remote tree directly into the destination." %}
                 </span>
               </span>
             </label>
@@ -511,15 +526,15 @@
             <div
               class="text-xs font-semibold uppercase tracking-wide text-base-content/50"
             >
-              Contacts
+              {% translate "Contacts" %}
             </div>
-            <div class="text-sm font-medium">Address books to import</div>
+            <div class="text-sm font-medium">{% translate "Address books to import" %}</div>
             <div class="border border-base-300 rounded-lg divide-y divide-base-300">
               <div
                 x-show="addressBooks.loading"
                 class="px-3 py-2 text-xs text-base-content/60 flex items-center gap-2"
               >
-                <span class="loading loading-spinner loading-xs"></span> Listing the address books…
+                <span class="loading loading-spinner loading-xs"></span> {% translate "Listing the address books…" %}
               </div>
               <template x-if="addressBooks.error">
                 <inline-alert type="error" class="m-2 text-xs"><span x-text="addressBooks.error"></span></inline-alert>
@@ -530,7 +545,7 @@
                     type="checkbox"
                     class="checkbox checkbox-sm checkbox-module"
                     x-model="book.selected"
-                    :aria-label="'Import ' + book.name"
+                    :aria-label="importBookLabel(book)"
                   />
                   <div class="min-w-0 flex-1">
                     <div class="text-sm truncate" x-text="book.name"></div>
@@ -544,9 +559,9 @@
                     class="select select-sm w-36 sm:w-44 shrink-0"
                     x-model="book.target"
                     :disabled="!book.selected"
-                    aria-label="Import into"
+                    aria-label="{% translate "Import into" %}"
                   >
-                    <option value="mine">My contacts</option>
+                    <option value="mine">{% translate "My contacts" %}</option>
                     <template x-for="group in groups" :key="group.id">
                       <option :value="'group:' + group.id" x-text="group.name"></option>
                     </template>
@@ -557,11 +572,11 @@
                 class="px-3 py-2 text-xs text-base-content/50"
                 x-show="!addressBooks.loading && !addressBooks.error && wizard.options.contacts.books.length === 0"
               >
-                No address book on this account.
+                {% translate "No address book on this account." %}
               </p>
             </div>
             <p class="text-xs text-base-content/60">
-              Contact groups become lists. A contact already in the chosen address book (same card, or same email) is updated rather than duplicated.
+              {% translate "Contact groups become lists. A contact already in the chosen address book (same card, or same email) is updated rather than duplicated." %}
             </p>
           </div>
         </div>
@@ -569,7 +584,7 @@
         <!-- Step 4: recap -->
         <div x-show="wizard.step === 4" class="space-y-4">
           <p class="text-sm">
-            From <span
+            {% translate "From" context "remote connection" %} <span
    class="font-medium"
    x-text="wizard.connection && wizard.connection.label"
  ></span>
@@ -578,19 +593,19 @@
             <div
               class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1"
             >
-              Files
+              {% translate "Files" %}
             </div>
             <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              <dt class="text-base-content/60">Folder</dt>
+              <dt class="text-base-content/60">{% translate "Folder" %}</dt>
               <dd>
                 <code x-text="wizard.options.files.source_path"></code>
               </dd>
-              <dt class="text-base-content/60">Into</dt>
+              <dt class="text-base-content/60">{% translate "Into" context "import destination" %}</dt>
               <dd>
                 <span x-text="wizard.options.files.destination_name"></span><span x-show="wizard.options.files.create_root_folder"> / <code x-text="rootFolderName()"></code></span>
               </dd>
-              <dt class="text-base-content/60">Same name</dt>
-              <dd x-text="wizard.options.files.on_conflict">
+              <dt class="text-base-content/60">{% translate "Same name" context "import conflict policy" %}</dt>
+              <dd x-text="conflictLabel(wizard.options.files.on_conflict)">
               </dd>
             </dl>
           </div>
@@ -598,20 +613,29 @@
             <div
               class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1"
             >
-              Contacts
+              {% translate "Contacts" %}
             </div>
             <ul class="text-sm space-y-0.5">
               <template x-for="book in selectedBooks()" :key="book.id">
                 <li>
                   <span class="font-medium" x-text="book.name"></span>
-                  <span class="text-base-content/60">into</span>
+                  <span class="text-base-content/60">{% translate "into" context "address book import target" %}</span>
                   <span x-text="targetLabel(book.target)"></span>
                 </li>
               </template>
             </ul>
           </div>
-          <p class="text-xs text-base-content/60">
-            The import runs in the background<span x-show="wizard.kinds.includes('files')">: it first lists the remote folders and checks your storage quota, then copies</span>. You can leave this page and you will be notified when it ends.
+          <p
+            class="text-xs text-base-content/60"
+            x-show="wizard.kinds.includes('files')"
+          >
+            {% translate "The import runs in the background: it first lists the remote folders and checks your storage quota, then copies. You can leave this page and you will be notified when it ends." %}
+          </p>
+          <p
+            class="text-xs text-base-content/60"
+            x-show="!wizard.kinds.includes('files')"
+          >
+            {% translate "The import runs in the background. You can leave this page and you will be notified when it ends." %}
           </p>
           <template x-if="wizard.error">
             <inline-alert type="error"><span x-text="wizard.error"></span></inline-alert>
@@ -624,7 +648,7 @@
             class="btn btn-ghost btn-sm mr-auto"
             @click="closeWizard()"
           >
-            Cancel
+            {% translate "Cancel" %}
           </button>
           <button
             type="button"
@@ -632,7 +656,7 @@
             x-show="wizard.step > 1"
             @click="prevStep()"
           >
-            Back
+            {% translate "Back" %}
           </button>
           <button
             type="button"
@@ -641,7 +665,7 @@
             @click="nextStep()"
             :disabled="!canContinue()"
           >
-            Continue
+            {% translate "Continue" %}
           </button>
           <button
             type="button"
@@ -651,19 +675,19 @@
             :disabled="wizard.launching"
           >
             <span x-show="wizard.launching" class="loading loading-spinner loading-xs"></span>
-            Start the import
+            {% translate "Start the import" %}
           </button>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop">
-        <button type="submit">close</button>
+        <button type="submit">{% translate "close" %}</button>
       </form>
     </dialog>
 
     <!-- Errors dialog -->
     <dialog x-ref="errorsDialog" class="modal">
       <div class="modal-box max-w-2xl">
-        {% include "ui/partials/dialog_header.html" with icon="circle-alert" icon_class="bg-error/10 text-error" title="Entries that could not be imported" subtitle_expr="errorsDialog.count + ' failed. Retry the import to try them again.'" only %}
+        {% include "ui/partials/dialog_header.html" with icon="circle-alert" icon_class="bg-error/10 text-error" title=errors_title subtitle_expr="errorsSubtitle()" only %}
         <div x-show="errorsDialog.loading" class="py-6 text-center">
           <span class="loading loading-spinner"></span>
         </div>
@@ -683,12 +707,12 @@
         </ul>
         <div class="modal-action">
           <form method="dialog">
-            <button type="submit" class="btn btn-sm">Close</button>
+            <button type="submit" class="btn btn-sm">{% translate "Close" %}</button>
           </form>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop">
-        <button type="submit">close</button>
+        <button type="submit">{% translate "close" %}</button>
       </form>
     </dialog>
   </div>

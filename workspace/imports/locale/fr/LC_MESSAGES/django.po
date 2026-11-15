@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:45+0000\n"
+"POT-Creation-Date: 2026-11-15 11:06+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -22,3 +22,575 @@ msgstr "Importer depuis un autre cloud"
 #: apps.py
 msgid "My imports"
 msgstr "Mes importations"
+
+#: importers/base.py
+#, python-format
+msgid ""
+"Stopped after %(count)s consecutive error - the remote server looks "
+"unavailable."
+msgid_plural ""
+"Stopped after %(count)s consecutive errors - the remote server looks "
+"unavailable."
+msgstr[0] ""
+"Arrêt après %(count)s erreur consécutive : le serveur distant semble "
+"indisponible."
+msgstr[1] ""
+"Arrêt après %(count)s erreurs consécutives : le serveur distant semble "
+"indisponible."
+msgstr[2] ""
+"Arrêt après %(count)s erreurs consécutives : le serveur distant semble "
+"indisponible."
+
+#: importers/contacts.py
+msgid "Pick an address book."
+msgstr "Choisissez un carnet d’adresses."
+
+#: importers/contacts.py
+msgid "An address book is picked twice."
+msgstr "Un carnet d’adresses est choisi deux fois."
+
+#: importers/contacts.py
+#, python-format
+msgid "%(count)s contact added"
+msgid_plural "%(count)s contacts added"
+msgstr[0] "%(count)s contact ajouté"
+msgstr[1] "%(count)s contacts ajoutés"
+msgstr[2] "%(count)s contacts ajoutés"
+
+#: importers/contacts.py
+#, python-format
+msgid "%(count)s updated"
+msgid_plural "%(count)s updated"
+msgstr[0] "%(count)s mis à jour"
+msgstr[1] "%(count)s mis à jour"
+msgstr[2] "%(count)s mis à jour"
+
+#: importers/contacts.py importers/files.py
+#, python-format
+msgid "%(count)s unchanged"
+msgid_plural "%(count)s unchanged"
+msgstr[0] "%(count)s inchangé"
+msgstr[1] "%(count)s inchangés"
+msgstr[2] "%(count)s inchangés"
+
+#: importers/contacts.py
+#, python-format
+msgid "%(count)s list"
+msgid_plural "%(count)s lists"
+msgstr[0] "%(count)s liste"
+msgstr[1] "%(count)s listes"
+msgstr[2] "%(count)s listes"
+
+#: importers/contacts.py importers/files.py
+#, python-format
+msgid "%(count)s failed"
+msgid_plural "%(count)s failed"
+msgstr[0] "%(count)s en échec"
+msgstr[1] "%(count)s en échec"
+msgstr[2] "%(count)s en échec"
+
+#: importers/contacts.py importers/files.py services/jobs.py
+msgid "Nothing to import."
+msgstr "Rien à importer."
+
+#: importers/contacts.py
+msgid ""
+"An address book was to be imported into a group you are no longer a member "
+"of."
+msgstr ""
+"Un carnet d’adresses devait être importé dans un groupe dont vous ne faites "
+"plus partie."
+
+#: importers/contacts.py
+#, python-format
+msgid "Could not list the address book '%(book)s': %(error)s"
+msgstr "Impossible de lire le carnet d’adresses « %(book)s » : %(error)s"
+
+#: importers/contacts.py
+msgid "The contact disappeared from the server during the import."
+msgstr "Le contact a disparu du serveur pendant l’importation."
+
+#: importers/contacts.py
+msgid "This contact is not a valid vCard."
+msgstr "Ce contact n’est pas une vCard valide."
+
+#: importers/contacts.py
+msgid "Could not store the contact."
+msgstr "Impossible d’enregistrer le contact."
+
+#: importers/files.py
+msgid "Destination folder not found."
+msgstr "Dossier de destination introuvable."
+
+#: importers/files.py
+#, python-format
+msgid "%(count)s file"
+msgid_plural "%(count)s files"
+msgstr[0] "%(count)s fichier"
+msgstr[1] "%(count)s fichiers"
+msgstr[2] "%(count)s fichiers"
+
+#: importers/files.py
+#, python-format
+msgid "%(count)s skipped"
+msgid_plural "%(count)s skipped"
+msgstr[0] "%(count)s ignoré"
+msgstr[1] "%(count)s ignorés"
+msgstr[2] "%(count)s ignorés"
+
+#: importers/files.py
+#, python-format
+msgid "%(count)s favorite"
+msgid_plural "%(count)s favorites"
+msgstr[0] "%(count)s favori"
+msgstr[1] "%(count)s favoris"
+msgstr[2] "%(count)s favoris"
+
+#: importers/files.py
+#, python-format
+msgid "%(count)s tag"
+msgid_plural "%(count)s tags"
+msgstr[0] "%(count)s étiquette"
+msgstr[1] "%(count)s étiquettes"
+msgstr[2] "%(count)s étiquettes"
+
+#: importers/files.py
+#, python-format
+msgid "Could not list '%(path)s': %(error)s"
+msgstr "Impossible de lire « %(path)s » : %(error)s"
+
+#: importers/files.py
+#, python-format
+msgid ""
+"Not enough space: the import needs %(needed)s but only %(left)s are left."
+msgstr ""
+"Espace insuffisant : l’importation a besoin de %(needed)s mais il ne reste "
+"que %(left)s."
+
+#: importers/files.py
+msgid "Could not store the file: it is open in an editor."
+msgstr "Impossible d’enregistrer le fichier : il est ouvert dans un éditeur."
+
+#: importers/files.py
+#, python-format
+msgid ""
+"Gave up after %(count)s attempt: the transfer never finished within one time "
+"slice."
+msgid_plural ""
+"Gave up after %(count)s attempts: the transfer never finished within one "
+"time slice."
+msgstr[0] ""
+"Abandon après %(count)s tentative : le transfert ne s’est jamais terminé "
+"dans le temps imparti."
+msgstr[1] ""
+"Abandon après %(count)s tentatives : le transfert ne s’est jamais terminé "
+"dans le temps imparti."
+msgstr[2] ""
+"Abandon après %(count)s tentatives : le transfert ne s’est jamais terminé "
+"dans le temps imparti."
+
+#: importers/files.py
+msgid "A destination folder disappeared while importing."
+msgstr "Un dossier de destination a disparu pendant l’importation."
+
+#: importers/files.py
+msgid "The destination folder no longer exists."
+msgstr "Le dossier de destination n’existe plus."
+
+#: importers/files.py
+msgid "Could not store the file: it was imported concurrently."
+msgstr "Impossible d’enregistrer le fichier : il a été importé en parallèle."
+
+#: importers/files.py
+msgid "Could not store the file: the name or type is not accepted."
+msgstr ""
+"Impossible d’enregistrer le fichier : son nom ou son type n’est pas accepté."
+
+#: importers/files.py
+msgid "Could not store the file."
+msgstr "Impossible d’enregistrer le fichier."
+
+#: providers/carddav.py providers/nextcloud.py
+#, python-format
+msgid ""
+"'%(host)s' answered HTTP %(code)s to %(method)s %(url)s instead of a "
+"multistatus."
+msgstr ""
+"« %(host)s » a répondu HTTP %(code)s à %(method)s %(url)s au lieu d’un "
+"multistatus."
+
+#: providers/webdav.py
+msgid "The server rejected the username or password."
+msgstr "Le serveur a refusé le nom d’utilisateur ou le mot de passe."
+
+#: providers/webdav.py
+#, python-format
+msgid "'%(path)s' does not exist on the server."
+msgstr "« %(path)s » n’existe pas sur le serveur."
+
+#: providers/webdav.py
+#, python-format
+msgid "The server answered with HTTP %(code)s."
+msgstr "Le serveur a répondu HTTP %(code)s."
+
+#: providers/webdav.py
+#, python-format
+msgid "'%(host)s' is not a WebDAV server (HTTP %(code)s to PROPFIND)."
+msgstr "« %(host)s » n’est pas un serveur WebDAV (HTTP %(code)s à PROPFIND)."
+
+#: providers/webdav.py
+#, python-format
+msgid "%(host)s did not answer in time."
+msgstr "%(host)s n’a pas répondu à temps."
+
+#: providers/webdav.py
+#, python-format
+msgid "Could not reach %(host)s."
+msgstr "Impossible de joindre %(host)s."
+
+#: providers/webdav.py
+#, python-format
+msgid "The server answered HTTP %(code)s instead of the file."
+msgstr "Le serveur a répondu HTTP %(code)s au lieu d’envoyer le fichier."
+
+#: providers/webdav.py
+msgid "The URL does not point to a WebDAV folder."
+msgstr "L’URL ne pointe pas vers un dossier WebDAV."
+
+#: providers/webdav.py
+msgid "The server sent an unreadable WebDAV response."
+msgstr "Le serveur a envoyé une réponse WebDAV illisible."
+
+#: serializers.py
+msgid "Unknown provider."
+msgstr "Fournisseur inconnu."
+
+#: serializers.py
+msgid "This provider is connected through its sign-in flow, not a password."
+msgstr ""
+"Ce fournisseur se connecte par sa propre page de connexion, pas par un mot "
+"de passe."
+
+#: serializers.py
+msgid "The path must not contain '.' or '..' segments."
+msgstr "Le chemin ne doit pas contenir de segments « . » ou « .. »."
+
+#: services/connections.py
+#, python-format
+msgid "Unknown provider '%(slug)s'."
+msgstr "Fournisseur inconnu : « %(slug)s »."
+
+#: services/jobs.py
+msgid "Invalid import options."
+msgstr "Options d’importation non valides."
+
+#: services/jobs.py
+msgid "Pick at least one thing to import."
+msgstr "Choisissez au moins un type de données à importer."
+
+#: services/jobs.py
+#, python-format
+msgid "Nothing knows how to import %(kinds)s."
+msgstr "Aucun importateur ne sait importer %(kinds)s."
+
+#: services/jobs.py
+#, python-format
+msgid "%(provider)s cannot provide %(kinds)s."
+msgstr "%(provider)s ne peut pas fournir %(kinds)s."
+
+#: services/jobs.py
+msgid "This connection no longer exists."
+msgstr "Cette connexion n’existe plus."
+
+#: services/jobs.py
+msgid "An import is already running for this connection."
+msgstr "Une importation est déjà en cours pour cette connexion."
+
+#: services/jobs.py
+msgid "This import is already finished."
+msgstr "Cette importation est déjà terminée."
+
+#: services/jobs.py
+msgid "Only a failed or cancelled import can be retried."
+msgstr "Seule une importation échouée ou annulée peut être relancée."
+
+#: services/jobs.py
+msgid "Unexpected error, see the server logs."
+msgstr "Erreur inattendue, consultez les journaux du serveur."
+
+#: services/jobs.py
+#, python-format
+msgid "Import from %(name)s finished"
+msgstr "Importation depuis %(name)s terminée"
+
+#: services/jobs.py
+#, python-format
+msgid "Import from %(name)s failed"
+msgstr "Échec de l’importation depuis %(name)s"
+
+#: services/jobs.py
+#, python-format
+msgid "Import from %(name)s cancelled"
+msgstr "Importation depuis %(name)s annulée"
+
+#: services/jobs.py
+#, python-format
+msgid "%(kind)s: %(summary)s"
+msgstr "%(kind)s : %(summary)s"
+
+#: services/url_guard.py
+msgid "Only http:// and https:// URLs are supported."
+msgstr "Seules les URL http:// et https:// sont prises en charge."
+
+#: services/url_guard.py
+msgid "The URL has no host."
+msgstr "L’URL n’a pas d’hôte."
+
+#: services/url_guard.py
+#, python-format
+msgid "'%(host)s' could not be resolved."
+msgstr "« %(host)s » n’a pas pu être résolu."
+
+#: services/url_guard.py
+#, python-format
+msgid "'%(host)s' points to an address this server will not contact."
+msgstr "« %(host)s » pointe vers une adresse que ce serveur ne contactera pas."
+
+#: services/url_guard.py
+#, python-format
+msgid ""
+"'%(host)s' is on a private network. Ask the administrator to allow private "
+"networks for imports if your previous cloud lives there."
+msgstr ""
+"« %(host)s » est sur un réseau privé. Demandez à l’administrateur "
+"d’autoriser les réseaux privés pour les importations si votre ancien cloud "
+"s’y trouve."
+
+#: ui/templates/imports/ui/index.html
+msgid "Nothing is saved until the server has answered with these credentials."
+msgstr ""
+"Rien n’est enregistré tant que le serveur n’a pas accepté ces identifiants."
+
+#: ui/templates/imports/ui/index.html
+msgid "New import"
+msgstr "Nouvelle importation"
+
+#: ui/templates/imports/ui/index.html
+msgid "Entries that could not be imported"
+msgstr "Éléments qui n’ont pas pu être importés"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "import wizard step"
+msgid "Source"
+msgstr "Source"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "import wizard step"
+msgid "What"
+msgstr "Quoi"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "import wizard step"
+msgid "Where"
+msgstr "Où"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "import wizard step"
+msgid "Go"
+msgstr "Lancer"
+
+#: ui/templates/imports/ui/index.html
+msgid ""
+"Bring your files and contacts over from another cloud - Nextcloud, any "
+"WebDAV host, and more to come."
+msgstr ""
+"Rapatriez vos fichiers et vos contacts depuis un autre cloud : Nextcloud, "
+"n’importe quel hôte WebDAV, et d’autres à venir."
+
+#: ui/templates/imports/ui/index.html
+msgid "Add connection"
+msgstr "Ajouter une connexion"
+
+#: ui/templates/imports/ui/index.html
+msgid "Connections"
+msgstr "Connexions"
+
+#: ui/templates/imports/ui/index.html
+msgid ""
+"Connect the cloud you are leaving - a Nextcloud account or any WebDAV folder."
+msgstr ""
+"Connectez le cloud que vous quittez : un compte Nextcloud ou n’importe quel "
+"dossier WebDAV."
+
+#: ui/templates/imports/ui/index.html
+msgid "Add a connection"
+msgstr "Ajouter une connexion"
+
+#: ui/templates/imports/ui/index.html
+msgid "Import from here"
+msgstr "Importer d’ici"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "verb, test the connection"
+msgid "Test"
+msgstr "Tester"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "import connection"
+msgid "Remove"
+msgstr "Supprimer"
+
+#: ui/templates/imports/ui/index.html
+msgid "No import yet."
+msgstr "Aucune importation pour l’instant."
+
+#: ui/templates/imports/ui/index.html
+msgctxt "remote folder"
+msgid "From"
+msgstr "Depuis"
+
+#: ui/templates/imports/ui/index.html
+msgid "Same-name files:"
+msgstr "Fichiers homonymes :"
+
+#: ui/templates/imports/ui/index.html
+msgid "Provider"
+msgstr "Fournisseur"
+
+#: ui/templates/imports/ui/index.html
+msgid "e.g. My old Nextcloud"
+msgstr "ex. Mon ancien Nextcloud"
+
+#: ui/templates/imports/ui/index.html
+msgid "URL"
+msgstr "URL"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "remote account"
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: ui/templates/imports/ui/index.html
+msgid "Which connection do you want to import from?"
+msgstr "Depuis quelle connexion voulez-vous importer ?"
+
+#: ui/templates/imports/ui/index.html
+msgid "Add another connection"
+msgstr "Ajouter une autre connexion"
+
+#: ui/templates/imports/ui/index.html
+msgid "What should be brought over?"
+msgstr "Que faut-il rapatrier ?"
+
+#: ui/templates/imports/ui/index.html
+msgid ""
+"Other kinds of data (calendars, boards…) will appear here as providers gain "
+"them."
+msgstr ""
+"D’autres types de données (agendas, tableaux…) apparaîtront ici à mesure que "
+"les fournisseurs les prendront en charge."
+
+#: ui/templates/imports/ui/index.html
+msgid "Remote folder to import"
+msgstr "Dossier distant à importer"
+
+#: ui/templates/imports/ui/index.html
+msgid "Use this folder"
+msgstr "Utiliser ce dossier"
+
+#: ui/templates/imports/ui/index.html
+msgid "Empty folder."
+msgstr "Dossier vide."
+
+#: ui/templates/imports/ui/index.html
+msgid "Import into"
+msgstr "Importer dans"
+
+#: ui/templates/imports/ui/index.html
+msgid "When a file with the same name exists"
+msgstr "Si un fichier du même nom existe"
+
+#: ui/templates/imports/ui/index.html
+msgid "Keep both (rename the imported one)"
+msgstr "Garder les deux (renommer celui importé)"
+
+#: ui/templates/imports/ui/index.html
+msgid "Keep mine (skip the imported one)"
+msgstr "Garder le mien (ignorer celui importé)"
+
+#: ui/templates/imports/ui/index.html
+msgid "Replace mine with the imported one"
+msgstr "Remplacer le mien par celui importé"
+
+#: ui/templates/imports/ui/index.html
+msgid "Put everything in a folder named"
+msgstr "Tout placer dans un dossier nommé"
+
+#: ui/templates/imports/ui/index.html
+msgid "Untick to merge the remote tree directly into the destination."
+msgstr ""
+"Décochez pour fusionner l’arborescence distante directement dans la "
+"destination."
+
+#: ui/templates/imports/ui/index.html
+msgid "Address books to import"
+msgstr "Carnets d’adresses à importer"
+
+#: ui/templates/imports/ui/index.html
+msgid "Listing the address books…"
+msgstr "Lecture des carnets d’adresses…"
+
+#: ui/templates/imports/ui/index.html
+msgid "No address book on this account."
+msgstr "Aucun carnet d’adresses sur ce compte."
+
+#: ui/templates/imports/ui/index.html
+msgid ""
+"Contact groups become lists. A contact already in the chosen address book "
+"(same card, or same email) is updated rather than duplicated."
+msgstr ""
+"Les groupes de contacts deviennent des listes. Un contact déjà présent dans "
+"le carnet choisi (même fiche ou même adresse e-mail) est mis à jour plutôt "
+"que dupliqué."
+
+#: ui/templates/imports/ui/index.html
+msgctxt "remote connection"
+msgid "From"
+msgstr "Depuis"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "import destination"
+msgid "Into"
+msgstr "Dans"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "import conflict policy"
+msgid "Same name"
+msgstr "Même nom"
+
+#: ui/templates/imports/ui/index.html
+msgctxt "address book import target"
+msgid "into"
+msgstr "dans"
+
+#: ui/templates/imports/ui/index.html
+msgid ""
+"The import runs in the background: it first lists the remote folders and "
+"checks your storage quota, then copies. You can leave this page and you will "
+"be notified when it ends."
+msgstr ""
+"L’importation s’exécute en arrière-plan : elle lit d’abord les dossiers "
+"distants et vérifie votre quota de stockage, puis copie. Vous pouvez quitter "
+"cette page, vous recevrez une notification à la fin."
+
+#: ui/templates/imports/ui/index.html
+msgid ""
+"The import runs in the background. You can leave this page and you will be "
+"notified when it ends."
+msgstr ""
+"L’importation s’exécute en arrière-plan. Vous pouvez quitter cette page, "
+"vous recevrez une notification à la fin."
+
+#: ui/templates/imports/ui/index.html
+msgid "Start the import"
+msgstr "Lancer l’importation"

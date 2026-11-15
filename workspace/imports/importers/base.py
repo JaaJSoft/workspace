@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 
 from django.utils import timezone
+from django.utils.translation import ngettext
 
 from ..errors import ImportsError
 from ..models import ImportJob, ImportJobItem
@@ -25,6 +26,19 @@ _PUSH_MIN_INTERVAL_SECONDS = 1.5
 
 class JobFailed(ImportsError):
     """The importer cannot continue; the job ends as FAILED with this message."""
+
+
+def consecutive_errors_failure(count):
+    return JobFailed(
+        ngettext(
+            "Stopped after %(count)s consecutive error - the remote server looks "
+            "unavailable.",
+            "Stopped after %(count)s consecutive errors - the remote server looks "
+            "unavailable.",
+            count,
+        )
+        % {"count": count}
+    )
 
 
 class Outcome(Enum):
@@ -179,6 +193,8 @@ class ImportContext:
 
 class Importer(ABC):
     kind: str
+    #: What the user calls the kind ("Files"), lazily translated.
+    label: str
     #: Serializer validating ``options[kind]``; instantiated with
     #: ``context={"owner": user}``.
     option_serializer: type

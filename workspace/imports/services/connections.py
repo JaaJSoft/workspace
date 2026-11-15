@@ -8,6 +8,7 @@ import logging
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 
@@ -35,7 +36,7 @@ class UnsupportedKind(ImportsError):
 def get_available_provider(slug: str):
     provider = provider_registry.get(slug)
     if provider is None or not provider.is_available():
-        raise UnknownProvider(f"Unknown provider '{slug}'.")
+        raise UnknownProvider(_("Unknown provider '%(slug)s'.") % {"slug": slug})
     return provider
 
 

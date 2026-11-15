@@ -14,6 +14,8 @@ from django.core.exceptions import SuspiciousFileOperation, ValidationError
 from django.core.files.base import File as DjangoFile
 from django.db import DataError, IntegrityError, transaction
 from django.template.defaultfilters import filesizeformat
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy, ngettext
 from rest_framework import serializers
 
 from workspace.common.logging import scrub
@@ -30,7 +32,7 @@ from ..models import ImportJobItem
 from ..providers.base import KIND_FILES, ProviderError
 from ..serializers import RemotePathField
 from ..services import file_metadata
-from .base import Importer, JobFailed, Outcome
+from .base import Importer, JobFailed, Outcome, consecutive_errors_failure
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +77,7 @@ class FilesImportOptionsSerializer(serializers.Serializer):
             .exists()
         )
         if not exists:
-            raise serializers.ValidationError("Destination folder not found.")
+            raise serializers.ValidationError(_("Destination folder not found."))
         return str(value)
 
 
@@ -89,6 +91,7 @@ def safe_local_name(name: str) -> str:
 
 class FilesImporter(Importer):
     kind = KIND_FILES
+    label = gettext_lazy("Files")
     option_serializer = FilesImportOptionsSerializer
 
     def run(self, ctx):
@@ -124,18 +127,24 @@ class FilesImporter(Importer):
         )
 
     def summarize(self, stats):
-        parts = []
-        for key, label in (
-            ("files", "files"),
-            ("unchanged", "unchanged"),
-            ("skipped", "skipped"),
-            ("failed", "failed"),
-            ("favorites", "favorites"),
-            ("tags", "tags"),
-        ):
-            if stats.get(key):
-                parts.append(f"{stats[key]} {label}")
-        return ", ".join(parts) or "Nothing to import."
+        counters = {
+            "files": lambda n: ngettext("%(count)s file", "%(count)s files", n),
+            "unchanged": lambda n: ngettext(
+                "%(count)s unchanged", "%(count)s unchanged", n
+            ),
+            "skipped": lambda n: ngettext("%(count)s skipped", "%(count)s skipped", n),
+            "failed": lambda n: ngettext("%(count)s failed", "%(count)s failed", n),
+            "favorites": lambda n: ngettext(
+                "%(count)s favorite", "%(count)s favorites", n
+            ),
+            "tags": lambda n: ngettext("%(count)s tag", "%(count)s tags", n),
+        }
+        parts = [
+            phrase(stats[key]) % {"count": stats[key]}
+            for key, phrase in counters.items()
+            if stats.get(key)
+        ]
+        return ", ".join(parts) or _("Nothing to import.")
 
     # -- listing phase -------------------------------------------------
 
@@ -172,7 +181,8 @@ class FilesImporter(Importer):
                             total_bytes += entry.size or 0
             except ProviderError as exc:
                 raise JobFailed(
-                    f"Could not list '{remote_dir}': {exc.user_message}"
+                    _("Could not list '%(path)s': %(error)s")
+                    % {"path": remote_dir, "error": exc.user_message}
                 ) from exc
             ctx.stat("total_files", files)
             ctx.stat("unchanged", unchanged)
@@ -196,8 +206,14 @@ class FilesImporter(Importer):
         remaining = quota.remaining_bytes(owner=ctx.owner, group=None)
         if remaining is not None and incoming_bytes > remaining:
             raise JobFailed(
-                f"Not enough space: the import needs {filesizeformat(incoming_bytes)} "
-                f"but only {filesizeformat(max(remaining, 0))} are left."
+                _(
+                    "Not enough space: the import needs %(needed)s but only "
+                    "%(left)s are left."
+                )
+                % {
+                    "needed": filesizeformat(incoming_bytes),
+                    "left": filesizeformat(max(remaining, 0)),
+                }
             )
 
     # -- copying phase -------------------------------------------------
@@ -269,7 +285,7 @@ class FilesImporter(Importer):
                     ctx.report_item(
                         entry.id,
                         ImportJobItem.Status.FAILED,
-                        error="Could not store the file: it is open in an editor.",
+                        error=_("Could not store the file: it is open in an editor."),
                         fingerprint=entry.fingerprint,
                     )
                     ctx.stat("failed")
@@ -330,8 +346,14 @@ class FilesImporter(Importer):
             ctx.report_item(
                 entry.id,
                 ImportJobItem.Status.FAILED,
-                error=f"Gave up after {attempts - 1} attempts: the transfer never "
-                "finished within one time slice.",
+                error=ngettext(
+                    "Gave up after %(count)s attempt: the transfer never finished "
+                    "within one time slice.",
+                    "Gave up after %(count)s attempts: the transfer never finished "
+                    "within one time slice.",
+                    attempts - 1,
+                )
+                % {"count": attempts - 1},
                 fingerprint=entry.fingerprint,
             )
             ctx.stat("failed")
@@ -348,10 +370,7 @@ class FilesImporter(Importer):
     def _bump_errors(self, ctx, consecutive_errors):
         consecutive_errors += 1
         if consecutive_errors >= settings.IMPORTS_MAX_CONSECUTIVE_ERRORS:
-            raise JobFailed(
-                f"Stopped after {consecutive_errors} consecutive errors - "
-                "the remote server looks unavailable."
-            )
+            raise consecutive_errors_failure(consecutive_errors)
         return consecutive_errors
 
     def _folder(self, ctx, folder_id):
@@ -363,7 +382,7 @@ class FilesImporter(Importer):
             .first()
         )
         if folder is None:
-            raise JobFailed("A destination folder disappeared while importing.")
+            raise JobFailed(_("A destination folder disappeared while importing."))
         return folder
 
     def _resolve_root(self, ctx):
@@ -377,7 +396,7 @@ class FilesImporter(Importer):
                 .first()
             )
             if destination is None:
-                raise JobFailed("The destination folder no longer exists.")
+                raise JobFailed(_("The destination folder no longer exists."))
         if not ctx.options.get("create_root_folder", True):
             return destination
         if ctx.stats.get("root_folder"):
@@ -388,6 +407,8 @@ class FilesImporter(Importer):
             )
             if existing is not None:
                 return existing
+        # Not translated: later runs on the connection find the folder by this
+        # name, and the owner may have switched language in between.
         root = self._ensure_folder(
             ctx, destination, safe_local_name(f"{ctx.connection.label} import")
         )
@@ -562,7 +583,7 @@ class FilesImporter(Importer):
 
 def _storage_message(exc):
     if isinstance(exc, IntegrityError):
-        return "Could not store the file: it was imported concurrently."
+        return _("Could not store the file: it was imported concurrently.")
     if isinstance(exc, DataError | ValidationError | ValueError):
-        return "Could not store the file: the name or type is not accepted."
-    return "Could not store the file."
+        return _("Could not store the file: the name or type is not accepted.")
+    return _("Could not store the file.")

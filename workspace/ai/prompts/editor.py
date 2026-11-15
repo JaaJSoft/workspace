@@ -50,7 +50,9 @@ def _with_reply_language(system: str, user) -> str:
         return system
     return (
         f"{system} Write any prose in {reply_language(user)}, unless the "
-        "instructions ask for another language. Code stays as it is."
+        "instructions ask for another language. This is about language only: "
+        "never translate code identifiers or syntax, and still make any code "
+        "change the instructions ask for."
     )
 
 

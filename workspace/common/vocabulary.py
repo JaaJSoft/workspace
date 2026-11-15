@@ -241,7 +241,9 @@ VOCABULARY = [
     # Keyboard keys as printed on French keyboards ("Entrée", "Échap", "Maj").
     # The literals compared against event.key in scripts are not interface text.
     pgettext_lazy("keyboard key", "Arrow Up"),
+    pgettext_lazy("keyboard key", "Del"),
     pgettext_lazy("keyboard key", "Enter"),
     pgettext_lazy("keyboard key", "Esc"),
     pgettext_lazy("keyboard key", "Shift"),
+    pgettext_lazy("keyboard key", "Space"),
 ]

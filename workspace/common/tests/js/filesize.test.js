@@ -7,8 +7,8 @@ const { loadScript } = require('./loader');
 const ctx = loadScript('workspace/common/static/ui/js/filesize.js');
 const { formatFileSize } = ctx;
 
-// formatFileSize mirrors Django's filesizeformat (en-us): same units,
-// same precision, and the same non-breaking space between number and unit.
+// formatFileSize mirrors Django's filesizeformat: same units, same precision,
+// and the same non-breaking space between number and unit.
 const NBSP = '\u00a0';
 
 test('formats bytes below 1 KB with byte/bytes wording', () => {
@@ -53,6 +53,24 @@ test('truncates fractional input like Django int()', () => {
   assert.equal(formatFileSize(117.7), `117${NBSP}bytes`);
   assert.equal(formatFileSize(1023.9), `1023${NBSP}bytes`);
   assert.equal(formatFileSize(1.9), `1${NBSP}byte`);
+});
+
+test('reads like Django filesizeformat in French', () => {
+  const french = {
+    '%s KB': '%s Kio', '%s MB': '%s Mio', '%s GB': '%s Gio', '%s TB': '%s Tio', '%s PB': '%s Pio',
+  };
+  const fr = loadScript('workspace/common/static/ui/js/filesize.js', {
+    gettext: (msgid) => french[msgid] || msgid,
+    // French plural rule: 0 and 1 are singular.
+    ngettext: (singular, plural, count) => (count <= 1 ? '%(size)s octet' : '%(size)s octets'),
+    getUserLocale: () => 'fr',
+  });
+  assert.equal(fr.formatFileSize(0), `0${NBSP}octet`);
+  assert.equal(fr.formatFileSize(117), `117${NBSP}octets`);
+  assert.equal(fr.formatFileSize(1536), `1,5${NBSP}Kio`);
+  assert.equal(fr.formatFileSize(2.5 * 1024 ** 2), `2,5${NBSP}Mio`);
+  assert.equal(fr.formatFileSize(1024 ** 3), `1,0${NBSP}Gio`);
+  assert.equal(fr.formatFileSize(2048 * 1024 ** 5), `2048,0${NBSP}Pio`);
 });
 
 test('separates number and unit with a non-breaking space', () => {

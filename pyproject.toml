@@ -160,7 +160,7 @@ dev = [
     # An in-process S3 for the object storage backend's tests
     # (common/tests/test_storage.py); the live S3 CI job runs the same cases
     # against a real server.
-    "moto[s3]>=5.2.0",
+    "moto[s3]>=5.2.5",
 ]
 
 [tool.djlint]

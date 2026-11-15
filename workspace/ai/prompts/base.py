@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.utils.translation import get_language_info
 
 
 def truncate_text(text: str, max_chars: int = 8000) -> str:
@@ -17,6 +18,17 @@ def sanitize_prompt_line(value: str, max_len: int) -> str:
     instruction.
     """
     return "".join(c for c in (value or "") if c.isprintable()).strip()[:max_len]
+
+
+def reply_language(user) -> str:
+    """English name of *user*'s interface language, for a prompt to answer in.
+
+    Named in English whatever the language: the prompts are English, and a
+    model reads "French" more reliably than "fr" or "Français".
+    """
+    from workspace.users.services.settings import get_user_language
+
+    return get_language_info(get_user_language(user))["name"]
 
 
 def build_context_block(user=None) -> str:

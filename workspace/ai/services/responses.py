@@ -1,6 +1,9 @@
 import logging
 
+from django.conf import settings
 from django.db import transaction
+from django.utils import translation
+from django.utils.translation import gettext
 
 from workspace.ai.harness.model import RunUsage
 from workspace.ai.models import AITask
@@ -8,6 +11,7 @@ from workspace.ai.services.ai_task import close_task
 from workspace.ai.services.llm import clean_llm_content
 from workspace.ai.services.speech import audio_duration_seconds
 from workspace.common.logging import scrub
+from workspace.users.services.settings import get_user_language
 
 logger = logging.getLogger(__name__)
 
@@ -210,11 +214,12 @@ def post_bot_message(
 
 
 @transaction.atomic
-def handle_generation_error(conversation, bot_user, ai_task, error):
+def handle_generation_error(conversation, bot_user, ai_task, error, *, human_user=None):
     """Handle a failed bot response: post error message, update counts, notify.
 
     Posts nothing when the task was already closed: a user who cancelled the
     reply asked for silence, and keeps the cancel as the recorded reason.
+    The message is in *human_user*'s language, like the reply it stands in for.
     """
     from workspace.chat.services.posting import post_message
     from workspace.chat.services.rendering import render_message_body
@@ -227,8 +232,10 @@ def handle_generation_error(conversation, bot_user, ai_task, error):
     if not close_task(ai_task, AITask.Status.FAILED, error=str(error)):
         return
 
-    error_body = (
-        "⚠️ Sorry, I encountered an error generating a response. Please try again."
-    )
+    language = get_user_language(human_user) if human_user else settings.LANGUAGE_CODE
+    with translation.override(language):
+        error_body = "⚠️ " + gettext(
+            "Sorry, I encountered an error generating a response. Please try again."
+        )
     error_html = render_message_body(error_body)
     post_message(conversation, bot_user, error_body, body_html=error_html)

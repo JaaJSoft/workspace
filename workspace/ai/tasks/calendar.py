@@ -21,6 +21,7 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone as dj_tz
+from django.utils.translation import gettext, ngettext
 from pydantic import BaseModel
 
 from workspace.ai.models import AITask
@@ -75,7 +76,7 @@ def extract_from_mail_messages(self, task_id: str):
             )
 
             if not msgs:
-                ai_task.result = "No messages to extract from"
+                ai_task.result = gettext("No messages to extract from")
                 return {"status": "ok", "task_id": task_id}
 
             total_prompt = 0
@@ -97,8 +98,20 @@ def extract_from_mail_messages(self, task_id: str):
                         "Extract: failed for message %s", scrub(str(msg.pk))
                     )
 
-            ai_task.result = (
-                f"Created {extractions_created} extractions from {len(msgs)} messages"
+            # Two sentences: each count takes its own plural.
+            ai_task.result = " ".join(
+                [
+                    ngettext(
+                        "Read %(count)s message.", "Read %(count)s messages.", len(msgs)
+                    )
+                    % {"count": len(msgs)},
+                    ngettext(
+                        "Created %(count)s extraction.",
+                        "Created %(count)s extractions.",
+                        extractions_created,
+                    )
+                    % {"count": extractions_created},
+                ]
             )
             ai_task.model_used = model_used
             ai_task.prompt_tokens = total_prompt

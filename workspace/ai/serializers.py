@@ -1,4 +1,5 @@
 import mistune
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from .models import AITask, BotProfile, UserMemory
@@ -125,7 +126,7 @@ class EditorActionRequestSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs["action"] == "custom" and not attrs.get("instructions"):
             raise serializers.ValidationError(
-                {"instructions": "Instructions are required for custom actions."}
+                {"instructions": _("Instructions are required for custom actions.")}
             )
         return attrs
 

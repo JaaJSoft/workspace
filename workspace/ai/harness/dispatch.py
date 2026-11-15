@@ -7,12 +7,15 @@ order the model asked for them whatever order they landed in.
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass
 
 from django.db import connections
+from django.utils import translation
 
 from workspace.ai.services.call_order import set_call_position
 from workspace.common.logging import scrub
+from workspace.users.services.settings import get_user_language
 
 from .model import ToolCall
 from .observers import notify
@@ -93,6 +96,10 @@ class Dispatcher:
     leaves media for the caller to attach stamps it with the rank the
     model asked for it in, and a later round's media go after an earlier
     one's.
+
+    Each call runs in *user*'s language, on whichever thread it lands: a
+    refusal another module translates reaches the chat's tool step in the
+    words of whoever asked, and a worker has no language of its own.
     """
 
     def __init__(
@@ -112,6 +119,7 @@ class Dispatcher:
         self._concurrency = concurrency
         self._concurrent_names = toolset.concurrent_names()
         self._user = user
+        self._language = get_user_language(user) if user is not None else None
         self._bot = bot
         self._conversation_id = conversation_id
         self._context = context if context is not None else {}
@@ -170,14 +178,18 @@ class Dispatcher:
         # appended in completion order, they would reach the reply in a
         # different order than the model asked for them in.
         set_call_position(outcome.position)
+        language = (
+            translation.override(self._language) if self._language else nullcontext()
+        )
         try:
-            return self._toolset.execute(
-                outcome.call,
-                user=self._user,
-                bot=self._bot,
-                conversation_id=self._conversation_id,
-                context=self._context,
-            )
+            with language:
+                return self._toolset.execute(
+                    outcome.call,
+                    user=self._user,
+                    bot=self._bot,
+                    conversation_id=self._conversation_id,
+                    context=self._context,
+                )
         finally:
             notify(self._observers, "on_call_return", outcome.call)
 

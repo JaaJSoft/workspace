@@ -196,7 +196,9 @@ def generate_chat_response(self, ai_task_id: str):
 
     except Exception as e:
         logger.exception("Bot response failed: conversation=%s", scrub(conversation_id))
-        handle_generation_error(conversation, bot_user, ai_task, e)
+        handle_generation_error(
+            conversation, bot_user, ai_task, e, human_user=human_user
+        )
         return {"status": "error", "error": str(e)}
 
 

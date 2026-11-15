@@ -17,10 +17,11 @@ through post_bot_message.
 import logging
 from contextlib import contextmanager
 
-from django.utils import timezone
+from django.utils import timezone, translation
 
 from workspace.ai.models import AITask
 from workspace.common.logging import scrub
+from workspace.users.services.settings import get_user_language
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,9 @@ def ai_task_lifecycle(task_id, *, log_label):
     ``error`` set to ``str(e)``, the exception is logged, then re-raised so
     the caller can convert it to its own response shape.
 
+    The body runs in the owner's language: ``result`` and ``error`` are shown
+    to them later, and a worker has no language of its own.
+
     Caller is responsible for catching ``AITask.DoesNotExist`` and
     ``TaskNotPending`` outside the with-block (the helper has no opinion on
     the response format used to signal them).
@@ -121,7 +125,8 @@ def ai_task_lifecycle(task_id, *, log_label):
         raise TaskNotPending(task_id)
 
     try:
-        yield ai_task
+        with translation.override(get_user_language(ai_task.owner)):
+            yield ai_task
     except Exception as e:
         logger.exception("%s failed: task=%s", log_label, scrub(task_id))
         # What the body recorded before failing stays: the raw reply of a

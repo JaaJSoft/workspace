@@ -85,7 +85,7 @@ test('_fmtDate builds one day-key formatter per zone, not one per value', () => 
 test('_fmtDate follows the interface language and translates the day prefix', () => {
   const { app } = makeApp('Europe/Paris', {
     getUserLocale: () => 'fr-FR',
-    gettext: (msgid) => ({ 'Today — %(date)s': 'Aujourd’hui, %(date)s' }[msgid] || msgid),
+    gettext: (msgid) => ({ 'Today, %(date)s': 'Aujourd’hui, %(date)s' }[msgid] || msgid),
   });
   assert.match(app._fmtDate('2098-08-01'), /1 août 2098/);
   const today = new Date().toISOString();

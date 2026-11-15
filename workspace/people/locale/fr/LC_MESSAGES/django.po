@@ -29,8 +29,8 @@ msgid "Show QR code"
 msgstr "Afficher le QR code"
 
 #: apps.py
-msgid "Keep the people around your data in one address book."
-msgstr "Rassemblez dans un seul carnet d’adresses les personnes liées à vos données."
+msgid "Keep your contacts in one address book."
+msgstr "Rassemblez vos contacts dans un seul carnet d’adresses."
 
 #: apps.py ui/templates/people/ui/index.html
 #: ui/templates/people/ui/partials/dialogs.html

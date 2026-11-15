@@ -454,3 +454,8 @@ msgstr "JSON non valide"
 #: ui/static/mail/ui/js/mail_rules_form.js
 msgid "Network error - please retry."
 msgstr "Erreur réseau - veuillez réessayer."
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgctxt "mail account"
+msgid "Remove"
+msgstr "Supprimer"

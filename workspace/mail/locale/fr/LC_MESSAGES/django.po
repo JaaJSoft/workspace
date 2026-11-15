@@ -55,8 +55,9 @@ msgid "Archive"
 msgstr "Archives"
 
 #: models.py
+msgctxt "mail folder type"
 msgid "Other"
-msgstr "Autres"
+msgstr "Autre"
 
 #: serializers.py
 msgid ""
@@ -528,19 +529,13 @@ msgid "Mail Features"
 msgstr "Fonctionnalités de la messagerie"
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid ""
-"<strong>Multiple accounts</strong> &mdash; Add and manage several mail "
-"accounts from one place."
+msgid "<strong>Multiple accounts</strong>: Add and manage several mail accounts from one place."
 msgstr ""
 "<strong>Plusieurs comptes</strong> : ajoutez et gérez plusieurs "
 "comptes de messagerie au même endroit."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid ""
-"<strong>Compose</strong> &mdash; Write new messages with To, Cc, and Bcc "
-"fields. Recipient suggestions list your contacts first, then workspace "
-"accounts, then addresses from your history; the person icon beside one adds "
-"it to your contacts."
+msgid "<strong>Compose</strong>: Write new messages with To, Cc, and Bcc fields. Recipient suggestions list your contacts first, then workspace accounts, then addresses from your history; the person icon beside one adds it to your contacts."
 msgstr ""
 "<strong>Rédaction</strong> : écrivez de nouveaux messages avec les "
 "champs À, Cc et Cci. Les suggestions de destinataires listent d’abord vos "
@@ -549,43 +544,33 @@ msgstr ""
 "contacts."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid ""
-"<strong>Drafts</strong> &mdash; Drafts are saved automatically and can be "
-"restored when reopening compose."
+msgid "<strong>Drafts</strong>: Drafts are saved automatically and can be restored when reopening compose."
 msgstr ""
 "<strong>Brouillons</strong> : les brouillons sont enregistrés "
 "automatiquement et peuvent être restaurés en rouvrant la rédaction."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid ""
-"<strong>Attachments</strong> &mdash; Attach files when composing and "
-"download attachments from received messages."
+msgid "<strong>Attachments</strong>: Attach files when composing and download attachments from received messages."
 msgstr ""
 "<strong>Pièces jointes</strong> : joignez des fichiers en rédigeant et "
 "téléchargez les pièces jointes des messages reçus."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid ""
-"<strong>Search &amp; filters</strong> &mdash; Search messages by subject, "
-"snippet or sender. Filter by unread, starred, or with attachments."
+msgid "<strong>Search &amp; filters</strong>: Search messages by subject, snippet or sender. Filter by unread, starred, or with attachments."
 msgstr ""
 "<strong>Recherche et filtres</strong> : recherchez des messages par "
 "objet, extrait ou expéditeur. Filtrez par non lus, suivis ou avec pièces "
 "jointes."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid ""
-"<strong>Batch actions</strong> &mdash; Select multiple messages to mark read/"
-"unread, star, or delete in bulk."
+msgid "<strong>Batch actions</strong>: Select multiple messages to mark read/unread, star, or delete in bulk."
 msgstr ""
 "<strong>Actions groupées</strong> : sélectionnez plusieurs messages "
 "pour les marquer comme lus ou non lus, les suivre ou les supprimer en une "
 "fois."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid ""
-"<strong>Folders</strong> &mdash; Right-click a folder for options: refresh, "
-"mark all read, change icon, or sync."
+msgid "<strong>Folders</strong>: Right-click a folder for options: refresh, mark all read, change icon, or sync."
 msgstr ""
 "<strong>Dossiers</strong> : faites un clic droit sur un dossier pour "
 "ses options : actualiser, tout marquer comme lu, changer l’icône ou "
@@ -1068,3 +1053,13 @@ msgstr "Impossible d’obtenir l’adresse e-mail auprès du fournisseur."
 #: views/rules.py
 msgid "Invalid conditions payload."
 msgstr "Conditions non valides."
+
+#: ui/templates/mail/ui/partials/account_context_menu.html
+msgctxt "mail account"
+msgid "Remove"
+msgstr "Supprimer"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgctxt "mail extraction"
+msgid "Remove"
+msgstr "Retirer"

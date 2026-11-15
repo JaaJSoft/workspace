@@ -17,11 +17,11 @@ msgid "Agenda"
 msgstr "Agenda"
 
 #: ui/static/calendar/ui/js/calendar.js
-msgid "Today — %(date)s"
+msgid "Today, %(date)s"
 msgstr "Aujourd’hui, %(date)s"
 
 #: ui/static/calendar/ui/js/calendar.js
-msgid "Tomorrow — %(date)s"
+msgid "Tomorrow, %(date)s"
 msgstr "Demain, %(date)s"
 
 #: ui/static/calendar/ui/js/calendar_calendars.js

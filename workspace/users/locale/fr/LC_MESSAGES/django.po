@@ -367,9 +367,9 @@ msgid "New Token"
 msgstr "Nouveau jeton"
 
 #: ui/templates/users/ui/partials/settings_tokens.html
-msgid "Create tokens to authenticate API requests. Use the header"
-msgstr ""
-"Créez des jetons pour authentifier les requêtes à l’API. Utilisez l’en-tête"
+#, python-format
+msgid "Create tokens to authenticate API requests. Send them in the %(header)s header."
+msgstr "Créez des jetons pour authentifier les requêtes à l’API. Envoyez-les dans l’en-tête %(header)s."
 
 #: ui/templates/users/ui/partials/settings_tokens.html
 msgid "Search tokens..."

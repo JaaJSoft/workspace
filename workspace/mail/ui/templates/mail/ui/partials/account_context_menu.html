@@ -6,6 +6,7 @@ Rows of the account context menu. The panel around them is
 {% translate "Syncing..." as syncing_label %}
 {% translate "Sync" context "verb" as sync_label %}
 {% translate "Test" context "verb, test the account connection" as test_label %}
+{% translate "Remove" context "mail account" as remove_label %}
 <ul class="menu menu-sm p-0 w-full">
   {% with syncing_js=syncing_label|escapejs sync_js=sync_label|escapejs %}
     {% with sync_expr="syncingAccounts[accountCtx.account?.uuid] ? '"|add:syncing_js|add:"' : '"|add:sync_js|add:"'" %}
@@ -20,5 +21,5 @@ Rows of the account context menu. The panel around them is
   {% include "ui/partials/context_menu_item.html" with icon="filter" label=_("Filters & Rules") click="accountCtxAction('filters_rules')" only %}
 
   <hr class="my-1 border-base-300" />
-  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label=_("Remove") tone="error" click="accountCtxAction('remove')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label=remove_label tone="error" click="accountCtxAction('remove')" only %}
 </ul>

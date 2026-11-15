@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -112,7 +113,7 @@ class MailFolder(models.Model):
         TRASH = "trash", _("Trash")
         SPAM = "spam", _("Spam")
         ARCHIVE = "archive", _("Archive")
-        OTHER = "other", _("Other")
+        OTHER = "other", pgettext_lazy("mail folder type", "Other")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     account = models.ForeignKey(

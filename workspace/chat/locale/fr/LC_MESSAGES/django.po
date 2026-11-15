@@ -280,8 +280,8 @@ msgid "Code"
 msgstr "Code"
 
 #: ui/templates/chat/ui/partials/_composer.html
-msgid "Edit last msg"
-msgstr "Modifier le dernier"
+msgid "Edit last message"
+msgstr "Modifier le dernier message"
 
 #: ui/templates/chat/ui/partials/_composer.html
 msgid "Cancel edit"
@@ -601,7 +601,7 @@ msgid "No bots match your filter."
 msgstr "Aucun bot ne correspond à votre filtre."
 
 #: ui/templates/chat/ui/partials/conversation_pane.html
-msgid "Agent mode — give a long-term goal"
+msgid "Agent mode: give a long-term goal"
 msgstr "Mode agent : fixez un objectif à long terme"
 
 #: ui/templates/chat/ui/partials/conversation_pane.html
@@ -693,41 +693,31 @@ msgid "Conversations"
 msgstr "Conversations"
 
 #: ui/templates/chat/ui/partials/help_dialog.html
-msgid ""
-"<strong>Direct messages</strong> &mdash; Start a private conversation with "
-"one person."
+msgid "<strong>Direct messages</strong>: Start a private conversation with one person."
 msgstr ""
 "<strong>Messages privés</strong> : démarrez une conversation privée "
 "avec une personne."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
-msgid ""
-"<strong>Group chats</strong> &mdash; Add two or more people and optionally "
-"name the group."
+msgid "<strong>Group chats</strong>: Add two or more people and optionally name the group."
 msgstr ""
 "<strong>Discussions de groupe</strong> : ajoutez deux personnes ou "
 "plus et nommez le groupe si vous le souhaitez."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
-msgid ""
-"<strong>Reactions</strong> &mdash; Hover over a message and click an emoji "
-"to react."
+msgid "<strong>Reactions</strong>: Hover over a message and click an emoji to react."
 msgstr ""
 "<strong>Réactions</strong> : survolez un message et cliquez sur un "
 "émoji pour réagir."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
-msgid ""
-"<strong>Edit &amp; delete</strong> &mdash; Hover over your own messages to "
-"edit or delete them."
+msgid "<strong>Edit &amp; delete</strong>: Hover over your own messages to edit or delete them."
 msgstr ""
 "<strong>Modifier et supprimer</strong> : survolez vos propres messages "
 "pour les modifier ou les supprimer."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
-msgid ""
-"<strong>Search</strong> &mdash; Use the command palette (<kbd class=\"kbd "
-"kbd-xs\">Ctrl+K</kbd>) to quickly find and switch conversations."
+msgid "<strong>Search</strong>: Use the command palette (<kbd class=\"kbd kbd-xs\">Ctrl+K</kbd>) to quickly find and switch conversations."
 msgstr ""
 "<strong>Recherche</strong> : utilisez la palette de commandes (<kbd "
 "class=\"kbd kbd-xs\">Ctrl+K</kbd>) pour trouver une conversation et y passer "
@@ -911,7 +901,7 @@ msgid "Done when:"
 msgstr "Terminé quand :"
 
 #: ui/templates/chat/ui/partials/info_panel.html
-msgid "Reports:"
+msgid "Contact me:"
 msgstr "Me contacter :"
 
 #: ui/templates/chat/ui/partials/info_panel.html

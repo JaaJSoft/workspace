@@ -167,7 +167,7 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       const ok = await AppDialog.confirm({
         title: gettext('Remove Account'),
         message: gettext('This will delete the account and all synced messages. Continue?'),
-        okLabel: gettext('Remove'),
+        okLabel: pgettext('mail account', 'Remove'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

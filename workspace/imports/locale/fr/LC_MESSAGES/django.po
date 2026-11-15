@@ -290,8 +290,8 @@ msgstr "Choisissez au moins un type de données à importer."
 
 #: services/jobs.py
 #, python-format
-msgid "Nothing knows how to import %(kinds)s."
-msgstr "Aucun importateur ne sait importer %(kinds)s."
+msgid "This server cannot import %(kinds)s."
+msgstr "Ce serveur ne sait pas importer %(kinds)s."
 
 #: services/jobs.py
 #, python-format

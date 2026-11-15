@@ -14,9 +14,7 @@ class PeopleConfig(AppConfig):
             ModuleInfo(
                 name=gettext_lazy("People"),
                 slug="people",
-                description=gettext_lazy(
-                    "Keep the people around your data in one address book."
-                ),
+                description=gettext_lazy("Keep your contacts in one address book."),
                 icon="contact",
                 color="rose",
                 url="/people",

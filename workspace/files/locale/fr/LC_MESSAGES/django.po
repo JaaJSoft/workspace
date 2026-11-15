@@ -222,7 +222,7 @@ msgid "A shortcut cannot replace a file."
 msgstr "Un raccourci ne peut pas remplacer un fichier."
 
 #: serializers.py
-msgid "A shortcut goes in a folder of the group."
+msgid "A shortcut must go in a folder of the group."
 msgstr "Un raccourci doit être placé dans un dossier du groupe."
 
 #: serializers.py
@@ -290,7 +290,7 @@ msgid "This kind of operation has no destination."
 msgstr "Ce type d’opération n’a pas de destination."
 
 #: serializers.py
-msgid "Emptying the trash takes no items."
+msgid "Emptying the trash does not take a list of items."
 msgstr "Vider la corbeille n’accepte aucun élément."
 
 #: serializers.py
@@ -986,42 +986,32 @@ msgid "File Management"
 msgstr "Gestion des fichiers"
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"<strong>Drag and drop</strong> &mdash; Drop files anywhere on the page to "
-"upload them to the current folder."
+msgid "<strong>Drag and drop</strong>: Drop files anywhere on the page to upload them to the current folder."
 msgstr ""
 "<strong>Glisser-déposer</strong> : déposez des fichiers n’importe où "
 "sur la page pour les téléverser dans le dossier actuel."
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"<strong>Pinned folders</strong> &mdash; Drag a folder onto the sidebar "
-"\"Pinned\" area to pin it for quick access."
+msgid "<strong>Pinned folders</strong>: Drag a folder onto the sidebar \"Pinned\" area to pin it for quick access."
 msgstr ""
 "<strong>Dossiers épinglés</strong> : faites glisser un dossier vers la "
 "zone « Épinglés » de la barre latérale pour l’épingler et y accéder "
 "rapidement."
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"<strong>Favorites</strong> &mdash; Right-click a file or folder and select "
-"<em>Add to favorites</em> to bookmark it."
+msgid "<strong>Favorites</strong>: Right-click a file or folder and select <em>Add to favorites</em> to bookmark it."
 msgstr ""
 "<strong>Favoris</strong> : faites un clic droit sur un fichier ou un "
 "dossier et sélectionnez <em>Ajouter aux favoris</em> pour le marquer."
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"<strong>Trash</strong> &mdash; Deleted items are moved to the Trash and can "
-"be restored or permanently removed."
+msgid "<strong>Trash</strong>: Deleted items are moved to the Trash and can be restored or permanently removed."
 msgstr ""
 "<strong>Corbeille</strong> : les éléments supprimés sont placés dans "
 "la corbeille, d’où ils peuvent être restaurés ou supprimés définitivement."
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"<strong>Right-click menu</strong> &mdash; Right-click any item for options "
-"like rename, move, download, and more."
+msgid "<strong>Right-click menu</strong>: Right-click any item for options like rename, move, download, and more."
 msgstr ""
 "<strong>Menu contextuel</strong> : faites un clic droit sur un élément "
 "pour accéder à des options comme renommer, déplacer, télécharger, etc."
@@ -1041,16 +1031,13 @@ msgid "PDF, Markdown (rendered)"
 msgstr "PDF, Markdown (rendu)"
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"<strong>Text &amp; Code</strong> &mdash; Plain text, JSON, XML, YAML, HTML, "
-"CSS, JavaScript, Python, and many more (with syntax highlighting)"
+msgid "<strong>Text &amp; Code</strong>: Plain text, JSON, XML, YAML, HTML, CSS, JavaScript, Python, and many more (with syntax highlighting)"
 msgstr ""
 "<strong>Texte et code</strong> : texte brut, JSON, XML, YAML, HTML, "
 "CSS, JavaScript, Python et bien d’autres (avec coloration syntaxique)"
 
 #: ui/templates/files/ui/partials/dialogs.html
-msgid ""
-"<strong>Media</strong> &mdash; Audio (MP3, WAV, OGG) and Video (MP4, WebM)"
+msgid "<strong>Media</strong>: Audio (MP3, WAV, OGG) and Video (MP4, WebM)"
 msgstr ""
 "<strong>Médias</strong> : audio (MP3, WAV, OGG) et vidéo (MP4, WebM)"
 
@@ -2157,7 +2144,7 @@ msgid "Failed to load editor"
 msgstr "Échec du chargement de l’éditeur"
 
 #: ui/templates/files/ui/viewers/markdown_viewer.html
-msgid "Unsaved changes could not be saved — another user locked the file."
+msgid "Your changes could not be saved: another user locked the file."
 msgstr "Impossible d’enregistrer vos modifications : un autre utilisateur a verrouillé le fichier."
 
 #: ui/templates/files/ui/viewers/media_viewer.html

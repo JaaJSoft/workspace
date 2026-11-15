@@ -7,6 +7,7 @@ from itertools import batched
 from celery import shared_task
 from django.conf import settings
 from django.db import transaction
+from django.utils.translation import gettext, ngettext
 from pydantic import BaseModel
 
 from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
@@ -57,7 +58,7 @@ def summarize(self, task_id: str):
                 )
             except MailMessage.DoesNotExist:
                 ai_task.status = AITask.Status.FAILED
-                ai_task.error = "Mail message not found"
+                ai_task.error = gettext("Mail message not found.")
                 return {"status": "error", "error": "Mail message not found"}
 
             body = message.body_text or message.body_html or ""
@@ -293,7 +294,7 @@ def classify_mail_messages(self, task_id: str):
             msgs = [by_uuid[u] for u in message_uuids if u in by_uuid]
 
             if not msgs:
-                ai_task.result = "No messages to classify"
+                ai_task.result = gettext("No messages to classify")
                 return {"status": "ok", "task_id": task_id}
 
             msgs_by_account = defaultdict(list)
@@ -381,7 +382,11 @@ def classify_mail_messages(self, task_id: str):
                     MailMessageLabel.objects.bulk_create(
                         all_links, ignore_conflicts=True
                     )
-                ai_task.result = f"Classified {len(msgs)} messages"
+                ai_task.result = ngettext(
+                    "Classified %(count)s message",
+                    "Classified %(count)s messages",
+                    len(msgs),
+                ) % {"count": len(msgs)}
                 ai_task.model_used = model_used
                 ai_task.prompt_tokens = total_prompt
                 ai_task.completion_tokens = total_completion

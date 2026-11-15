@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 from workspace.common.uuids import uuid_v7_or_v4
@@ -34,8 +35,11 @@ def validate_voice_reference_size(value):
         return
     if size > VOICE_REF_MAX_BYTES:
         raise ValidationError(
-            f"The recording is {size} bytes; at most {VOICE_REF_MAX_BYTES} "
-            "reaches the speech backend. A few seconds of speech is enough."
+            _(
+                "The recording is %(size)s bytes; at most %(limit)s reaches the "
+                "speech backend. A few seconds of speech is enough."
+            )
+            % {"size": size, "limit": VOICE_REF_MAX_BYTES}
         )
 
 
@@ -112,7 +116,7 @@ class BotProfile(models.Model):
         if self.voice_ref and not self.voice_ref_text.strip():
             raise ValidationError(
                 {
-                    "voice_ref_text": (
+                    "voice_ref_text": _(
                         "Transcribe the recording word for word - the speech "
                         "model aligns the clone on it."
                     )
@@ -120,7 +124,7 @@ class BotProfile(models.Model):
             )
         if self.voice_ref_text.strip() and not self.voice_ref:
             raise ValidationError(
-                {"voice_ref": "A transcript on its own clones no voice."}
+                {"voice_ref": _("A transcript on its own clones no voice.")}
             )
 
     def voice_reference(self):

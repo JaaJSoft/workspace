@@ -3,6 +3,7 @@
 import logging
 
 from celery import shared_task
+from django.utils.translation import gettext
 
 from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
 from workspace.ai.services.llm import (
@@ -42,22 +43,27 @@ def editor_action(self, task_id: str):
 
             builders = {
                 "improve": lambda: build_improve_messages(content, language, filename),
-                "explain": lambda: build_explain_messages(content, language, filename),
+                "explain": lambda: build_explain_messages(
+                    content, language, filename, user=ai_task.owner
+                ),
                 "summarize": lambda: build_summarize_messages(
-                    content, language, filename
+                    content, language, filename, user=ai_task.owner
                 ),
                 "custom": lambda: build_custom_messages(
                     content,
                     ai_task.input_data.get("instructions", ""),
                     language,
                     filename,
+                    user=ai_task.owner,
                 ),
             }
 
             builder = builders.get(action)
             if not builder:
                 ai_task.status = AITask.Status.FAILED
-                ai_task.error = f"Unknown action: {action}"
+                ai_task.error = gettext("Unknown action: %(action)s") % {
+                    "action": action
+                }
                 return {"status": "error", "error": f"Unknown action: {action}"}
 
             messages = builder()

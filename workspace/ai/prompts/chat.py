@@ -1,6 +1,6 @@
 from django.conf import settings
 
-from .base import build_context_block, sanitize_prompt_line
+from .base import build_context_block, reply_language, sanitize_prompt_line
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a friendly, engaging companion in a chat application. "
@@ -123,6 +123,14 @@ def build_chat_messages(
         "Always respond in the same language as the user's last message. "
         "If the user switches language mid-conversation, follow their switch immediately."
     )
+    if user:
+        language = reply_language(user)
+        language_instructions += (
+            f"\nThe user's interface language is {language}. When no message of "
+            "theirs settles the language (a message you send on your own "
+            f"initiative, a message too short to tell), write in {language}, "
+            "unless they asked for another one."
+        )
 
     tone_instructions = (
         "\n\n## Tone and length\n"

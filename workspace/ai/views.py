@@ -1,7 +1,9 @@
 import logging
 
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -48,7 +50,7 @@ class SummarizeView(APIView):
 
         if not is_ai_enabled():
             return Response(
-                {"detail": "AI is not configured."},
+                {"detail": _("AI is not configured.")},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -56,7 +58,7 @@ class SummarizeView(APIView):
 
         if not is_mail_ai_feature_enabled(request.user, "manual"):
             return Response(
-                {"detail": "Mail AI features are disabled in your settings."},
+                {"detail": _("Mail AI features are disabled in your settings.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -70,7 +72,7 @@ class SummarizeView(APIView):
             pk=message_id, account__owner=request.user
         ).exists():
             return Response(
-                {"detail": "Mail message not found."},
+                {"detail": _("Mail message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -103,7 +105,7 @@ class ComposeView(APIView):
 
         if not is_ai_enabled():
             return Response(
-                {"detail": "AI is not configured."},
+                {"detail": _("AI is not configured.")},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -111,7 +113,7 @@ class ComposeView(APIView):
 
         if not is_mail_ai_feature_enabled(request.user, "manual"):
             return Response(
-                {"detail": "Mail AI features are disabled in your settings."},
+                {"detail": _("Mail AI features are disabled in your settings.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -154,7 +156,7 @@ class ReplyView(APIView):
 
         if not is_ai_enabled():
             return Response(
-                {"detail": "AI is not configured."},
+                {"detail": _("AI is not configured.")},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -162,7 +164,7 @@ class ReplyView(APIView):
 
         if not is_mail_ai_feature_enabled(request.user, "manual"):
             return Response(
-                {"detail": "Mail AI features are disabled in your settings."},
+                {"detail": _("Mail AI features are disabled in your settings.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -176,7 +178,7 @@ class ReplyView(APIView):
             pk=message_id, account__owner=request.user
         ).exists():
             return Response(
-                {"detail": "Mail message not found."},
+                {"detail": _("Mail message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -212,7 +214,7 @@ class EditorActionView(APIView):
 
         if not is_ai_enabled():
             return Response(
-                {"detail": "AI is not configured."},
+                {"detail": _("AI is not configured.")},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -262,7 +264,7 @@ class ClassifyView(APIView):
 
         if not is_ai_enabled():
             return Response(
-                {"detail": "AI is not configured."},
+                {"detail": _("AI is not configured.")},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -270,7 +272,7 @@ class ClassifyView(APIView):
 
         if not is_mail_ai_feature_enabled(request.user, "classify"):
             return Response(
-                {"detail": "Mail AI features are disabled in your settings."},
+                {"detail": _("Mail AI features are disabled in your settings.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -313,7 +315,9 @@ class ClassifyView(APIView):
         ).exists():
             return Response(
                 {
-                    "detail": "A classification task is already in progress. Try again later."
+                    "detail": _(
+                        "A classification task is already in progress. Try again later."
+                    )
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
@@ -362,7 +366,7 @@ class TaskDetailView(APIView):
             ai_task = AITask.objects.get(pk=task_id, owner=request.user)
         except AITask.DoesNotExist:
             return Response(
-                {"detail": "Task not found."},
+                {"detail": _("Task not found.")},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(AITaskSerializer(ai_task).data)
@@ -400,7 +404,7 @@ class MemoryDetailView(APIView):
     def patch(self, request, pk):
         memory = self._get_memory(request, pk)
         if not memory:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            raise NotFound
         serializer = UserMemorySerializer(memory, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -410,6 +414,6 @@ class MemoryDetailView(APIView):
     def delete(self, request, pk):
         memory = self._get_memory(request, pk)
         if not memory:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            raise NotFound
         memory.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

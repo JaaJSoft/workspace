@@ -1,0 +1,100 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-15 10:48+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: models.py
+#, python-format
+msgid ""
+"The recording is %(size)s bytes; at most %(limit)s reaches the speech "
+"backend. A few seconds of speech is enough."
+msgstr ""
+"L’enregistrement fait %(size)s octets ; le moteur vocal n’en reçoit que "
+"%(limit)s au maximum. Quelques secondes de parole suffisent."
+
+#: models.py
+msgid ""
+"Transcribe the recording word for word - the speech model aligns the clone "
+"on it."
+msgstr ""
+"Transcrivez l’enregistrement mot pour mot : le modèle vocal s’en sert pour "
+"aligner la voix clonée."
+
+#: models.py
+msgid "A transcript on its own clones no voice."
+msgstr "Une transcription seule ne permet de cloner aucune voix."
+
+#: serializers.py
+msgid "Instructions are required for custom actions."
+msgstr "Les actions personnalisées demandent des instructions."
+
+#: services/responses.py
+msgid "Sorry, I encountered an error generating a response. Please try again."
+msgstr ""
+"Désolé, une erreur s’est produite pendant la génération de la réponse. "
+"Veuillez réessayer."
+
+#: tasks/calendar.py
+msgid "No messages to extract from"
+msgstr "Aucun message à analyser"
+
+#: tasks/calendar.py
+#, python-format
+msgid "Read %(count)s message."
+msgid_plural "Read %(count)s messages."
+msgstr[0] "%(count)s message lu."
+msgstr[1] "%(count)s de messages lus."
+msgstr[2] "%(count)s messages lus."
+
+#: tasks/calendar.py
+#, python-format
+msgid "Created %(count)s extraction."
+msgid_plural "Created %(count)s extractions."
+msgstr[0] "%(count)s événement extrait."
+msgstr[1] "%(count)s d’événements extraits."
+msgstr[2] "%(count)s événements extraits."
+
+#: tasks/editor.py
+#, python-format
+msgid "Unknown action: %(action)s"
+msgstr "Action inconnue : %(action)s"
+
+#: tasks/mail.py views.py
+msgid "Mail message not found."
+msgstr "E-mail introuvable."
+
+#: tasks/mail.py
+msgid "No messages to classify"
+msgstr "Aucun e-mail à classer"
+
+#: tasks/mail.py
+#, python-format
+msgid "Classified %(count)s message"
+msgid_plural "Classified %(count)s messages"
+msgstr[0] "%(count)s e-mail classé"
+msgstr[1] "%(count)s d’e-mails classés"
+msgstr[2] "%(count)s e-mails classés"
+
+#: views.py
+msgid "AI is not configured."
+msgstr "L’IA n’est pas configurée."
+
+#: views.py
+msgid "Mail AI features are disabled in your settings."
+msgstr "Les fonctions d’IA de la messagerie sont désactivées dans vos paramètres."
+
+#: views.py
+msgid "A classification task is already in progress. Try again later."
+msgstr "Un classement est déjà en cours. Réessayez plus tard."
+
+#: views.py
+msgid "Task not found."
+msgstr "Tâche introuvable."

@@ -267,5 +267,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
 
     except Exception as e:
         logger.exception("Scheduled response failed: schedule=%s", scrub(schedule_id))
-        handle_generation_error(conversation, bot_user, ai_task, e)
+        handle_generation_error(
+            conversation, bot_user, ai_task, e, human_user=human_user
+        )
         return {"status": "error", "error": str(e)}

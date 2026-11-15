@@ -186,7 +186,7 @@ msgstr "Choisissez un dégradé pour la bannière de votre profil."
 
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "Reset to default"
-msgstr "Rétablir par défaut"
+msgstr "Réinitialiser"
 
 #: ui/templates/users/ui/partials/settings_profile.html
 msgctxt "gradient start color"
@@ -233,7 +233,7 @@ msgstr "Impossible d’enregistrer."
 
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "Banner reset to default."
-msgstr "Bannière rétablie par défaut."
+msgstr "Bannière réinitialisée."
 
 #: ui/templates/users/ui/partials/settings_profile.html
 msgid "Banner palette saved."
@@ -506,7 +506,7 @@ msgstr "À venir"
 #: ui/templates/users/ui/partials/user_card.html
 #, python-format
 msgid "Joined %(date)s"
-msgstr "Inscrit le %(date)s"
+msgstr "Membre depuis le %(date)s"
 
 #: ui/templates/users/ui/partials/user_card.html
 #: ui/templates/users/ui/profile.html

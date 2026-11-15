@@ -50,7 +50,7 @@ msgstr "Nouveau sondage"
 #: apps.py
 msgctxt "activity source"
 msgid "Calendar"
-msgstr "Agenda"
+msgstr "Calendrier"
 
 #: services/event_scope.py
 msgid "Only the owner can edit this event."
@@ -58,8 +58,7 @@ msgstr "Seul le propriétaire peut modifier cet événement."
 
 #: services/event_scope.py
 msgid "This event comes from an external calendar and cannot be edited."
-msgstr ""
-"Cet événement provient d'un calendrier externe et ne peut pas être modifié."
+msgstr "Cet événement provient d’un calendrier externe et ne peut pas être modifié."
 
 #: services/event_scope.py views/calendars.py views/external.py views/feeds.py
 msgid "Calendar not found."
@@ -218,9 +217,9 @@ msgstr ", jusqu’au %(date)s"
 #, python-format
 msgid ", for %(count)s occurrence"
 msgid_plural ", for %(count)s occurrences"
-msgstr[0] ", pour %(count)s occurrence"
-msgstr[1] ", pour %(count)s d’occurrences"
-msgstr[2] ", pour %(count)s occurrences"
+msgstr[0] ", %(count)s fois"
+msgstr[1] ", %(count)s de fois"
+msgstr[2] ", %(count)s fois"
 
 #: services/recurrence_rule.py
 #, python-format
@@ -415,7 +414,7 @@ msgstr "Refuser"
 
 #: ui/templates/calendar/ui/partials/_event_detail_panel.html
 msgid "External calendar — read only"
-msgstr "Calendrier externe — lecture seule"
+msgstr "Calendrier externe (lecture seule)"
 
 #: ui/templates/calendar/ui/partials/_event_modal.html
 msgid "Edit event"
@@ -497,6 +496,11 @@ msgid "This repeat rule was set in another app and cannot be edited here."
 msgstr ""
 "Cette règle de récurrence a été définie dans une autre application et ne "
 "peut pas être modifiée ici."
+
+#: ui/templates/calendar/ui/partials/_event_modal.html
+msgctxt "event place"
+msgid "Location"
+msgstr "Lieu"
 
 #: ui/templates/calendar/ui/partials/_event_modal.html
 msgid "Add a location"
@@ -938,33 +942,25 @@ msgstr "Gestion des calendriers"
 msgid ""
 "<strong>Multiple calendars</strong> &mdash; Create separate calendars for "
 "work, personal, etc."
-msgstr ""
-"<strong>Plusieurs calendriers</strong> &mdash; Créez des calendriers "
-"distincts pour le travail, la vie personnelle, etc."
+msgstr "<strong>Plusieurs calendriers</strong> : créez des calendriers distincts pour le travail, la vie personnelle, etc."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Color coding</strong> &mdash; Assign colors to calendars to "
 "distinguish events at a glance."
-msgstr ""
-"<strong>Codes couleur</strong> &mdash; Attribuez une couleur à chaque "
-"calendrier pour distinguer les événements d’un coup d’œil."
+msgstr "<strong>Codes couleur</strong> : attribuez une couleur à chaque calendrier pour distinguer les événements d’un coup d’œil."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Visibility</strong> &mdash; Toggle calendar checkboxes in the "
 "sidebar to show/hide their events."
-msgstr ""
-"<strong>Visibilité</strong> &mdash; Cochez ou décochez les calendriers dans "
-"la barre latérale pour afficher ou masquer leurs événements."
+msgstr "<strong>Visibilité</strong> : cochez ou décochez les calendriers dans la barre latérale pour afficher ou masquer leurs événements."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Subscribed calendars</strong> &mdash; Calendars shared with you "
 "appear under \"Other calendars\"."
-msgstr ""
-"<strong>Calendriers abonnés</strong> &mdash; Les calendriers partagés avec "
-"vous apparaissent sous « Autres calendriers »."
+msgstr "<strong>Abonnements</strong> : les calendriers partagés avec vous apparaissent sous « Autres calendriers »."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "Sync with Your Devices"
@@ -983,25 +979,19 @@ msgstr ""
 msgid ""
 "<strong>iPhone, iPad, Mac</strong> &mdash; Add a CalDAV account and enter "
 "the server address."
-msgstr ""
-"<strong>iPhone, iPad, Mac</strong> &mdash; Ajoutez un compte CalDAV et "
-"saisissez l’adresse du serveur."
+msgstr "<strong>iPhone, iPad, Mac</strong> : ajoutez un compte CalDAV et saisissez l’adresse du serveur."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Android</strong> &mdash; Use <strong>DAVx⁵</strong> with the server "
 "address."
-msgstr ""
-"<strong>Android</strong> &mdash; Utilisez <strong>DAVx⁵</strong> avec "
-"l’adresse du serveur."
+msgstr "<strong>Android</strong> : utilisez <strong>DAVx⁵</strong> avec l’adresse du serveur."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Thunderbird</strong> &mdash; New calendar &gt; On the network, then "
 "the server address."
-msgstr ""
-"<strong>Thunderbird</strong> &mdash; Nouvel agenda &gt; Sur le réseau, puis "
-"l’adresse du serveur."
+msgstr "<strong>Thunderbird</strong> : Nouvel agenda &gt; Sur le réseau, puis l’adresse du serveur."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
@@ -1016,42 +1006,31 @@ msgstr ""
 msgid ""
 "<strong>Create</strong> &mdash; Click a date or drag a time range on the "
 "calendar, or press <kbd class=\"kbd kbd-xs\">N</kbd>."
-msgstr ""
-"<strong>Créer</strong> &mdash; Cliquez sur une date ou faites glisser une "
-"plage horaire dans le calendrier, ou appuyez sur <kbd class=\"kbd kbd-"
-"xs\">N</kbd>."
+msgstr "<strong>Créer</strong> : cliquez sur une date ou faites glisser une plage horaire dans le calendrier, ou appuyez sur <kbd class=\"kbd kbd-xs\">N</kbd>."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Quick duration</strong> &mdash; Use duration chips (30m, 1h, 2h...) "
 "when creating an event."
-msgstr ""
-"<strong>Durée rapide</strong> &mdash; Utilisez les pastilles de durée (30 "
-"min, 1 h, 2 h...) lors de la création d’un événement."
+msgstr "<strong>Durée rapide</strong> : utilisez les pastilles de durée (30 min, 1 h, 2 h...) lors de la création d’un événement."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Invite guests</strong> &mdash; Search and add users as guests to "
 "your events."
-msgstr ""
-"<strong>Inviter des participants</strong> &mdash; Recherchez des "
-"utilisateurs et ajoutez-les comme invités à vos événements."
+msgstr "<strong>Inviter des participants</strong> : recherchez des utilisateurs et ajoutez-les comme participants à vos événements."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Respond</strong> &mdash; Accept or decline event invitations from "
 "the detail panel."
-msgstr ""
-"<strong>Répondre</strong> &mdash; Acceptez ou refusez les invitations depuis "
-"le panneau de détails."
+msgstr "<strong>Répondre</strong> : acceptez ou refusez les invitations depuis le panneau de détails."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid ""
 "<strong>Detail panel</strong> &mdash; Click an event to open its details in "
 "the right panel."
-msgstr ""
-"<strong>Panneau de détails</strong> &mdash; Cliquez sur un événement pour "
-"afficher ses détails dans le panneau de droite."
+msgstr "<strong>Panneau de détails</strong> : cliquez sur un événement pour afficher ses détails dans le panneau de droite."
 
 #: ui/templates/calendar/ui/partials/help_dialog.html
 msgid "Endpoints:"
@@ -1124,7 +1103,7 @@ msgstr "Personnel"
 
 #: views/events.py
 msgid "Calendar not found or not owned by you."
-msgstr "Calendrier introuvable ou qui ne vous appartient pas."
+msgstr "Ce calendrier est introuvable ou ne vous appartient pas."
 
 #: views/events.py
 msgid "Cannot create events in an external calendar."
@@ -1136,23 +1115,23 @@ msgstr "Événement introuvable."
 
 #: views/events.py
 msgid "Only the owner can edit."
-msgstr "Seul le propriétaire peut modifier."
+msgstr "Seul le propriétaire peut le modifier."
 
 #: views/events.py
 msgid "Cannot edit events from an external calendar."
-msgstr "Impossible de modifier les événements d'un calendrier externe."
+msgstr "Impossible de modifier les événements d’un calendrier externe."
 
 #: views/events.py
 msgid "Only the owner can delete."
-msgstr "Seul le propriétaire peut supprimer."
+msgstr "Seul le propriétaire peut le supprimer."
 
 #: views/events.py
 msgid "Cannot delete events from an external calendar."
-msgstr "Impossible de supprimer les événements d'un calendrier externe."
+msgstr "Impossible de supprimer les événements d’un calendrier externe."
 
 #: views/events.py
 msgid "Not invited."
-msgstr "Vous n'êtes pas invité."
+msgstr "Vous n’êtes pas invité."
 
 #: views/external.py
 msgid "Sync started."

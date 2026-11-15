@@ -137,13 +137,13 @@ msgstr "Ouvrir le salon vocal"
 #, python-format
 msgid "Reasoned - used %(counter)s tool"
 msgid_plural "Reasoned - used %(counter)s tools"
-msgstr[0] "A raisonné - %(counter)s outil utilisé"
-msgstr[1] "A raisonné - %(counter)s d’outils utilisés"
-msgstr[2] "A raisonné - %(counter)s outils utilisés"
+msgstr[0] "Raisonnement - %(counter)s outil utilisé"
+msgstr[1] "Raisonnement - %(counter)s d’outils utilisés"
+msgstr[2] "Raisonnement - %(counter)s outils utilisés"
 
 #: ui/templates/chat/ui/partials/_ai_steps.html
 msgid "Reasoned"
-msgstr "A raisonné"
+msgstr "Raisonnement"
 
 #: ui/templates/chat/ui/partials/_ai_steps.html
 #, python-format
@@ -201,7 +201,7 @@ msgstr "Lire"
 #: ui/templates/chat/ui/partials/_audio_player.html
 #: ui/templates/chat/ui/partials/_composer.html
 msgid "Seek"
-msgstr "Avancer ou reculer"
+msgstr "Position de lecture"
 
 #: ui/templates/chat/ui/partials/_audio_player.html
 msgid "Playback speed"
@@ -326,7 +326,7 @@ msgstr "Plus d’options"
 #: ui/templates/chat/ui/partials/_message_interaction.html
 #, python-format
 msgid "Answered by %(name)s"
-msgstr "Répondu par %(name)s"
+msgstr "Réponse de %(name)s"
 
 #: ui/templates/chat/ui/partials/_preferences_content.html
 msgid "Compact conversation list"
@@ -383,7 +383,7 @@ msgstr "Ajouter"
 #: ui/templates/chat/ui/partials/agent_goal_dialog.html
 #, python-format
 msgid "last one %%(date)s"
-msgstr "dernier %%(date)s"
+msgstr "dernier le %%(date)s"
 
 #: ui/templates/chat/ui/partials/agent_goal_dialog.html
 #: ui/templates/chat/ui/partials/info_panel.html
@@ -602,7 +602,7 @@ msgstr "Aucun bot ne correspond à votre filtre."
 
 #: ui/templates/chat/ui/partials/conversation_pane.html
 msgid "Agent mode — give a long-term goal"
-msgstr "Mode agent — fixez un objectif à long terme"
+msgstr "Mode agent : fixez un objectif à long terme"
 
 #: ui/templates/chat/ui/partials/conversation_pane.html
 msgid ""
@@ -697,7 +697,7 @@ msgid ""
 "<strong>Direct messages</strong> &mdash; Start a private conversation with "
 "one person."
 msgstr ""
-"<strong>Messages privés</strong> &mdash; Démarrez une conversation privée "
+"<strong>Messages privés</strong> : démarrez une conversation privée "
 "avec une personne."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
@@ -705,7 +705,7 @@ msgid ""
 "<strong>Group chats</strong> &mdash; Add two or more people and optionally "
 "name the group."
 msgstr ""
-"<strong>Discussions de groupe</strong> &mdash; Ajoutez deux personnes ou "
+"<strong>Discussions de groupe</strong> : ajoutez deux personnes ou "
 "plus et nommez le groupe si vous le souhaitez."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
@@ -713,7 +713,7 @@ msgid ""
 "<strong>Reactions</strong> &mdash; Hover over a message and click an emoji "
 "to react."
 msgstr ""
-"<strong>Réactions</strong> &mdash; Survolez un message et cliquez sur un "
+"<strong>Réactions</strong> : survolez un message et cliquez sur un "
 "émoji pour réagir."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
@@ -721,7 +721,7 @@ msgid ""
 "<strong>Edit &amp; delete</strong> &mdash; Hover over your own messages to "
 "edit or delete them."
 msgstr ""
-"<strong>Modifier et supprimer</strong> &mdash; Survolez vos propres messages "
+"<strong>Modifier et supprimer</strong> : survolez vos propres messages "
 "pour les modifier ou les supprimer."
 
 #: ui/templates/chat/ui/partials/help_dialog.html
@@ -729,7 +729,7 @@ msgid ""
 "<strong>Search</strong> &mdash; Use the command palette (<kbd class=\"kbd "
 "kbd-xs\">Ctrl+K</kbd>) to quickly find and switch conversations."
 msgstr ""
-"<strong>Recherche</strong> &mdash; Utilisez la palette de commandes (<kbd "
+"<strong>Recherche</strong> : utilisez la palette de commandes (<kbd "
 "class=\"kbd kbd-xs\">Ctrl+K</kbd>) pour trouver une conversation et y passer "
 "rapidement."
 
@@ -912,7 +912,7 @@ msgstr "Terminé quand :"
 
 #: ui/templates/chat/ui/partials/info_panel.html
 msgid "Reports:"
-msgstr "Rapports :"
+msgstr "Me contacter :"
 
 #: ui/templates/chat/ui/partials/info_panel.html
 msgid "Constraints:"
@@ -1026,7 +1026,7 @@ msgstr "Tout le monde"
 
 #: ui/templates/chat/ui/partials/search_panel.html
 msgid "Any time"
-msgstr "N’importe quand"
+msgstr "Toutes les dates"
 
 #: ui/templates/chat/ui/partials/search_panel.html
 msgid "Last 7 days"
@@ -1292,7 +1292,7 @@ msgstr "Aucun champ à mettre à jour. Indiquez un titre ou une description."
 
 #: views/conversations.py
 msgid "Membership of a group-linked conversation follows its groups."
-msgstr "Les membres d’une conversation liée à des groupes suivent ces groupes."
+msgstr "Les membres d’une conversation liée à des groupes sont ceux de ces groupes."
 
 #: views/conversations.py
 msgid "Can only add members to group conversations."

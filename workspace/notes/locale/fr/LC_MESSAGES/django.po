@@ -131,7 +131,7 @@ msgstr "Masquer de la barre latérale"
 #: ui/templates/notes/ui/partials/graph.html
 msgctxt "graph scope"
 msgid "My notes"
-msgstr "Miennes"
+msgstr "Mes notes"
 
 #: ui/templates/notes/ui/partials/graph.html
 msgctxt "all notes"
@@ -225,7 +225,7 @@ msgid ""
 "<strong>Create</strong> &mdash; Click the <kbd class=\"kbd kbd-xs\">+</kbd> "
 "button in the note list panel to create a new note."
 msgstr ""
-"<strong>Créer</strong> &mdash; Cliquez sur le bouton <kbd class=\"kbd kbd-"
+"<strong>Créer</strong> : cliquez sur le bouton <kbd class=\"kbd kbd-"
 "xs\">+</kbd> de la liste des notes pour créer une note."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -233,7 +233,7 @@ msgid ""
 "<strong>Edit</strong> &mdash; Select a note to open the Markdown editor with "
 "live preview."
 msgstr ""
-"<strong>Modifier</strong> &mdash; Sélectionnez une note pour l’ouvrir dans "
+"<strong>Modifier</strong> : sélectionnez une note pour l’ouvrir dans "
 "l’éditeur Markdown avec aperçu en direct."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -241,7 +241,7 @@ msgid ""
 "<strong>Rename</strong> &mdash; Click the note title in the editor toolbar "
 "to rename it."
 msgstr ""
-"<strong>Renommer</strong> &mdash; Cliquez sur le titre de la note dans la "
+"<strong>Renommer</strong> : cliquez sur le titre de la note dans la "
 "barre d’outils de l’éditeur pour la renommer."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -249,7 +249,7 @@ msgid ""
 "<strong>Favorite</strong> &mdash; Click the star icon to mark a note as "
 "favorite."
 msgstr ""
-"<strong>Favori</strong> &mdash; Cliquez sur l’étoile pour ajouter une note "
+"<strong>Favori</strong> : cliquez sur l’étoile pour ajouter une note "
 "aux favoris."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -257,7 +257,7 @@ msgid ""
 "<strong>Tags</strong> &mdash; Use the tag manager to organize notes with "
 "labels."
 msgstr ""
-"<strong>Étiquettes</strong> &mdash; Utilisez le gestionnaire d’étiquettes "
+"<strong>Étiquettes</strong> : utilisez le gestionnaire d’étiquettes "
 "pour classer vos notes."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -265,7 +265,7 @@ msgid ""
 "<strong>Delete</strong> &mdash; Click the trash icon in the toolbar "
 "(confirmation can be toggled in preferences)."
 msgstr ""
-"<strong>Supprimer</strong> &mdash; Cliquez sur la corbeille de la barre "
+"<strong>Supprimer</strong> : cliquez sur la corbeille de la barre "
 "d’outils (la confirmation se règle dans les préférences)."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -277,7 +277,7 @@ msgid ""
 "<strong>Folders</strong> &mdash; Organize notes in a nested folder tree (up "
 "to 4 levels deep)."
 msgstr ""
-"<strong>Dossiers</strong> &mdash; Rangez vos notes dans une arborescence de "
+"<strong>Dossiers</strong> : rangez vos notes dans une arborescence de "
 "dossiers (jusqu’à 4 niveaux)."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -285,7 +285,7 @@ msgid ""
 "<strong>Group folders</strong> &mdash; Create shared folders linked to your "
 "groups."
 msgstr ""
-"<strong>Dossiers de groupe</strong> &mdash; Créez des dossiers partagés liés "
+"<strong>Dossiers de groupe</strong> : créez des dossiers partagés liés "
 "à vos groupes."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -293,14 +293,14 @@ msgid ""
 "<strong>Quick access</strong> &mdash; Use My Notes, Favorites, Recent, and "
 "Journal views in the sidebar."
 msgstr ""
-"<strong>Accès rapide</strong> &mdash; Passez d’une vue à l’autre depuis la "
+"<strong>Accès rapide</strong> : passez d’une vue à l’autre depuis la "
 "barre latérale : Mes notes, Favoris, Récentes et Journal."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
 msgid ""
 "<strong>Context menu</strong> &mdash; Right-click folders for quick actions."
 msgstr ""
-"<strong>Menu contextuel</strong> &mdash; Faites un clic droit sur un dossier "
+"<strong>Menu contextuel</strong> : faites un clic droit sur un dossier "
 "pour ses actions rapides."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -308,7 +308,7 @@ msgid ""
 "<strong>Tags</strong> &mdash; Star a tag in the tag manager to keep it in "
 "the sidebar; click a chip on a note to see everything with that tag."
 msgstr ""
-"<strong>Étiquettes</strong> &mdash; Marquez une étiquette d’une étoile dans "
+"<strong>Étiquettes</strong> : marquez une étiquette d’une étoile dans "
 "le gestionnaire pour la garder dans la barre latérale ; cliquez sur une "
 "étiquette d’une note pour voir tout ce qui la porte."
 
@@ -317,7 +317,7 @@ msgid ""
 "<strong>Daily notes</strong> &mdash; The journal automatically creates a "
 "note for today's date."
 msgstr ""
-"<strong>Notes quotidiennes</strong> &mdash; Le journal crée automatiquement "
+"<strong>Notes quotidiennes</strong> : le journal crée automatiquement "
 "une note à la date du jour."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -325,7 +325,7 @@ msgid ""
 "<strong>Auto-folder</strong> &mdash; A dedicated \"Journal\" folder is "
 "created the first time you use it."
 msgstr ""
-"<strong>Dossier automatique</strong> &mdash; Un dossier « Journal » dédié "
+"<strong>Dossier automatique</strong> : un dossier « Journal » dédié "
 "est créé à la première utilisation."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
@@ -333,7 +333,7 @@ msgid ""
 "<strong>Toggle</strong> &mdash; Show or hide the Journal entry in "
 "preferences."
 msgstr ""
-"<strong>Affichage</strong> &mdash; Affichez ou masquez l’entrée Journal dans "
+"<strong>Affichage</strong> : affichez ou masquez l’entrée Journal dans "
 "les préférences."
 
 #: ui/templates/notes/ui/partials/help_dialog.html

@@ -190,7 +190,7 @@ msgstr "Demande d’accès au micro..."
 
 #: ui/static/chat/ui/js/call_diagnostic.js
 msgid "Microphone captured."
-msgstr "Micro capté."
+msgstr "Micro accessible."
 
 #: ui/static/chat/ui/js/call_diagnostic.js
 msgid "Microphone unavailable or permission denied."
@@ -238,7 +238,7 @@ msgstr "Connecté de bout en bout via le serveur."
 
 #: ui/static/chat/ui/js/call_diagnostic.js
 msgid "Server relay OK. Establishing media..."
-msgstr "Relais serveur OK. Établissement du média..."
+msgstr "Relais serveur OK. Établissement de la connexion média..."
 
 #: ui/static/chat/ui/js/call_diagnostic.js
 msgid "Failed to create the loopback offer."

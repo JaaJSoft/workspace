@@ -36,7 +36,7 @@ msgstr "Nouvel e-mail"
 
 #: models.py
 msgid "Inbox"
-msgstr "Reçus"
+msgstr "Boîte de réception"
 
 #: models.py
 msgid "Sent"
@@ -48,7 +48,7 @@ msgstr "Brouillons"
 
 #: models.py
 msgid "Spam"
-msgstr "Spam"
+msgstr "Indésirables"
 
 #: models.py
 msgid "Archive"
@@ -145,7 +145,7 @@ msgstr "Nom de l’étiquette"
 
 #: ui/templates/mail/ui/index.html
 msgid "What belongs here"
-msgstr "Ce qui va ici"
+msgstr "Ce qu’elle doit contenir"
 
 #: ui/templates/mail/ui/index.html
 msgid "Optional"
@@ -157,9 +157,7 @@ msgstr "ex. Relances clients qui attendent ma réponse"
 
 #: ui/templates/mail/ui/index.html
 msgid "The AI classifier reads this to decide what lands in this label."
-msgstr ""
-"Le classement par IA lit ce texte pour décider quels e-mails reçoivent cette "
-"étiquette."
+msgstr "Le classement par IA s’appuie sur ce texte pour choisir les e-mails qui reçoivent cette étiquette."
 
 #: ui/templates/mail/ui/index.html
 msgid "Notify me about these emails"
@@ -167,7 +165,7 @@ msgstr "M’avertir pour ces e-mails"
 
 #: ui/templates/mail/ui/index.html
 msgid "A new email getting this label sends a notification."
-msgstr "Un nouvel e-mail qui reçoit cette étiquette envoie une notification."
+msgstr "Vous êtes averti à chaque nouvel e-mail qui reçoit cette étiquette."
 
 #: ui/templates/mail/ui/index.html
 msgid "Change folder icon"
@@ -236,7 +234,7 @@ msgstr "Modifier le compte"
 
 #: ui/templates/mail/ui/index.html
 msgid "Leave empty to keep current"
-msgstr "Laisser vide pour conserver l’actuel"
+msgstr "Laisser vide pour ne pas le changer"
 
 #: ui/templates/mail/ui/index.html
 #: ui/templates/mail/ui/partials/account_context_menu.html
@@ -534,7 +532,7 @@ msgid ""
 "<strong>Multiple accounts</strong> &mdash; Add and manage several mail "
 "accounts from one place."
 msgstr ""
-"<strong>Plusieurs comptes</strong> &mdash; Ajoutez et gérez plusieurs "
+"<strong>Plusieurs comptes</strong> : ajoutez et gérez plusieurs "
 "comptes de messagerie au même endroit."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
@@ -544,7 +542,7 @@ msgid ""
 "accounts, then addresses from your history; the person icon beside one adds "
 "it to your contacts."
 msgstr ""
-"<strong>Rédaction</strong> &mdash; Écrivez de nouveaux messages avec les "
+"<strong>Rédaction</strong> : écrivez de nouveaux messages avec les "
 "champs À, Cc et Cci. Les suggestions de destinataires listent d’abord vos "
 "contacts, puis les comptes Workspace, puis les adresses de votre "
 "historique ; l’icône de personne à côté d’une adresse l’ajoute à vos "
@@ -555,7 +553,7 @@ msgid ""
 "<strong>Drafts</strong> &mdash; Drafts are saved automatically and can be "
 "restored when reopening compose."
 msgstr ""
-"<strong>Brouillons</strong> &mdash; Les brouillons sont enregistrés "
+"<strong>Brouillons</strong> : les brouillons sont enregistrés "
 "automatiquement et peuvent être restaurés en rouvrant la rédaction."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
@@ -563,7 +561,7 @@ msgid ""
 "<strong>Attachments</strong> &mdash; Attach files when composing and "
 "download attachments from received messages."
 msgstr ""
-"<strong>Pièces jointes</strong> &mdash; Joignez des fichiers en rédigeant et "
+"<strong>Pièces jointes</strong> : joignez des fichiers en rédigeant et "
 "téléchargez les pièces jointes des messages reçus."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
@@ -571,7 +569,7 @@ msgid ""
 "<strong>Search &amp; filters</strong> &mdash; Search messages by subject, "
 "snippet or sender. Filter by unread, starred, or with attachments."
 msgstr ""
-"<strong>Recherche et filtres</strong> &mdash; Recherchez des messages par "
+"<strong>Recherche et filtres</strong> : recherchez des messages par "
 "objet, extrait ou expéditeur. Filtrez par non lus, suivis ou avec pièces "
 "jointes."
 
@@ -580,7 +578,7 @@ msgid ""
 "<strong>Batch actions</strong> &mdash; Select multiple messages to mark read/"
 "unread, star, or delete in bulk."
 msgstr ""
-"<strong>Actions groupées</strong> &mdash; Sélectionnez plusieurs messages "
+"<strong>Actions groupées</strong> : sélectionnez plusieurs messages "
 "pour les marquer comme lus ou non lus, les suivre ou les supprimer en une "
 "fois."
 
@@ -589,7 +587,7 @@ msgid ""
 "<strong>Folders</strong> &mdash; Right-click a folder for options: refresh, "
 "mark all read, change icon, or sync."
 msgstr ""
-"<strong>Dossiers</strong> &mdash; Faites un clic droit sur un dossier pour "
+"<strong>Dossiers</strong> : faites un clic droit sur un dossier pour "
 "ses options : actualiser, tout marquer comme lu, changer l’icône ou "
 "synchroniser."
 

@@ -641,7 +641,7 @@ msgstr "Raccourcis clavier"
 
 #: vocabulary.py
 msgid "Leave empty for no password"
-msgstr "Laisser vide pour aucun mot de passe"
+msgstr "Laisser vide pour ne pas en définir"
 
 #: vocabulary.py
 msgid "Link copied to clipboard"

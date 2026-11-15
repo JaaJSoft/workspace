@@ -205,7 +205,7 @@ class RecurrenceSummaryLanguageTests(TestCase):
             ),
             "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR": "Toutes les semaines le lun, mer et ven",
             "RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=5": (
-                "Le deuxième mardi de chaque mois, pour 5 occurrences"
+                "Le deuxième mardi de chaque mois, 5 fois"
             ),
         }
         for rule, expected in cases.items():
@@ -293,5 +293,5 @@ class ErrorMessageLanguageTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
-            response.json()["detail"], "Seul le propriétaire peut modifier."
+            response.json()["detail"], "Seul le propriétaire peut le modifier."
         )

@@ -224,9 +224,7 @@ msgstr "Délier le fichier"
 msgid ""
 "Remove \"%(name)s\" from this task? If no other task links it, the project "
 "stops seeing it."
-msgstr ""
-"Retirer « %(name)s » de cette tâche ? Si aucune autre tâche ne le lie, le "
-"projet ne le voit plus."
+msgstr "Retirer « %(name)s » de cette tâche ? Si aucune autre tâche ne le lie, le projet n’y a plus accès."
 
 #: ui/static/projects/ui/js/board.js
 msgid "Unlink"
@@ -319,10 +317,7 @@ msgid ""
 "The running sprint is closed and planned sprints are deleted, returning "
 "their tasks to the backlog pool. Tasks keep their columns and closed sprints "
 "stay as history."
-msgstr ""
-"Le sprint en cours est clôturé et les sprints planifiés sont supprimés, "
-"leurs tâches retournant dans le backlog. Les tâches gardent leur colonne et "
-"les sprints clôturés restent dans l’historique."
+msgstr "Le sprint en cours est clôturé et les sprints planifiés sont supprimés : leurs tâches retournent dans le backlog. Les tâches gardent leur colonne et les sprints clôturés restent dans l’historique."
 
 #: ui/static/projects/ui/js/settings.js
 msgid "Could not convert."

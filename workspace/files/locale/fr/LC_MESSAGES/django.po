@@ -223,7 +223,7 @@ msgstr "Un raccourci ne peut pas remplacer un fichier."
 
 #: serializers.py
 msgid "A shortcut goes in a folder of the group."
-msgstr "Un raccourci se place dans un dossier du groupe."
+msgstr "Un raccourci doit être placé dans un dossier du groupe."
 
 #: serializers.py
 msgid "This item no longer exists."
@@ -271,7 +271,7 @@ msgstr "Il ne reste pas assez d’espace de stockage."
 
 #: serializers.py
 msgid "The root folder of a group stays where it is."
-msgstr "Le dossier racine d’un groupe reste où il est."
+msgstr "Le dossier racine d’un groupe ne peut pas être déplacé."
 
 #: serializers.py
 msgid "The archive is too large to extract."
@@ -291,7 +291,7 @@ msgstr "Ce type d’opération n’a pas de destination."
 
 #: serializers.py
 msgid "Emptying the trash takes no items."
-msgstr "Vider la corbeille ne prend aucun élément."
+msgstr "Vider la corbeille n’accepte aucun élément."
 
 #: serializers.py
 msgid "Pick at least one item."
@@ -845,7 +845,7 @@ msgstr "Revenir en arrière"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Go forward"
-msgstr "Aller en avant"
+msgstr "Avancer"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Go to parent folder"
@@ -867,15 +867,15 @@ msgstr "Ouvrir le dossier / Afficher le fichier"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "single"
-msgstr "unique"
+msgstr "un élément"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "single / multi"
-msgstr "unique / multiple"
+msgstr "un ou plusieurs"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Toggle favorite"
-msgstr "Basculer le favori"
+msgstr "Ajouter ou retirer des favoris"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "Pin / unpin from sidebar"
@@ -883,7 +883,7 @@ msgstr "Épingler / désépingler de la barre latérale"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "single folder"
-msgstr "dossier unique"
+msgstr "un dossier"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "no selection needed"
@@ -990,7 +990,7 @@ msgid ""
 "<strong>Drag and drop</strong> &mdash; Drop files anywhere on the page to "
 "upload them to the current folder."
 msgstr ""
-"<strong>Glisser-déposer</strong> &mdash; Déposez des fichiers n’importe où "
+"<strong>Glisser-déposer</strong> : déposez des fichiers n’importe où "
 "sur la page pour les téléverser dans le dossier actuel."
 
 #: ui/templates/files/ui/partials/dialogs.html
@@ -998,7 +998,7 @@ msgid ""
 "<strong>Pinned folders</strong> &mdash; Drag a folder onto the sidebar "
 "\"Pinned\" area to pin it for quick access."
 msgstr ""
-"<strong>Dossiers épinglés</strong> &mdash; Faites glisser un dossier vers la "
+"<strong>Dossiers épinglés</strong> : faites glisser un dossier vers la "
 "zone « Épinglés » de la barre latérale pour l’épingler et y accéder "
 "rapidement."
 
@@ -1007,7 +1007,7 @@ msgid ""
 "<strong>Favorites</strong> &mdash; Right-click a file or folder and select "
 "<em>Add to favorites</em> to bookmark it."
 msgstr ""
-"<strong>Favoris</strong> &mdash; Faites un clic droit sur un fichier ou un "
+"<strong>Favoris</strong> : faites un clic droit sur un fichier ou un "
 "dossier et sélectionnez <em>Ajouter aux favoris</em> pour le marquer."
 
 #: ui/templates/files/ui/partials/dialogs.html
@@ -1015,7 +1015,7 @@ msgid ""
 "<strong>Trash</strong> &mdash; Deleted items are moved to the Trash and can "
 "be restored or permanently removed."
 msgstr ""
-"<strong>Corbeille</strong> &mdash; Les éléments supprimés sont placés dans "
+"<strong>Corbeille</strong> : les éléments supprimés sont placés dans "
 "la corbeille, d’où ils peuvent être restaurés ou supprimés définitivement."
 
 #: ui/templates/files/ui/partials/dialogs.html
@@ -1023,7 +1023,7 @@ msgid ""
 "<strong>Right-click menu</strong> &mdash; Right-click any item for options "
 "like rename, move, download, and more."
 msgstr ""
-"<strong>Menu contextuel</strong> &mdash; Faites un clic droit sur un élément "
+"<strong>Menu contextuel</strong> : faites un clic droit sur un élément "
 "pour accéder à des options comme renommer, déplacer, télécharger, etc."
 
 #: ui/templates/files/ui/partials/dialogs.html
@@ -1045,14 +1045,14 @@ msgid ""
 "<strong>Text &amp; Code</strong> &mdash; Plain text, JSON, XML, YAML, HTML, "
 "CSS, JavaScript, Python, and many more (with syntax highlighting)"
 msgstr ""
-"<strong>Texte et code</strong> &mdash; Texte brut, JSON, XML, YAML, HTML, "
+"<strong>Texte et code</strong> : texte brut, JSON, XML, YAML, HTML, "
 "CSS, JavaScript, Python et bien d’autres (avec coloration syntaxique)"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid ""
 "<strong>Media</strong> &mdash; Audio (MP3, WAV, OGG) and Video (MP4, WebM)"
 msgstr ""
-"<strong>Médias</strong> &mdash; Audio (MP3, WAV, OGG) et vidéo (MP4, WebM)"
+"<strong>Médias</strong> : audio (MP3, WAV, OGG) et vidéo (MP4, WebM)"
 
 #: ui/templates/files/ui/partials/dialogs.html
 msgid "All other file types can be downloaded."
@@ -1094,7 +1094,7 @@ msgstr "Choisir un dossier"
 
 #: ui/templates/files/ui/partials/file_picker.html
 msgid "Select a file from your workspace."
-msgstr "Sélectionnez un fichier de votre espace de travail."
+msgstr "Sélectionnez un fichier dans Workspace."
 
 #: ui/templates/files/ui/partials/file_picker.html
 msgid "Select a destination folder."
@@ -1169,7 +1169,7 @@ msgstr "Propriétés (Ctrl+I)"
 #: ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
 msgid "Close (ESC)"
-msgstr "Fermer (ESC)"
+msgstr "Fermer (Échap)"
 
 #: ui/templates/files/ui/partials/file_viewer_inline.html
 #: ui/templates/files/ui/partials/file_viewer_modal.html
@@ -1528,7 +1528,7 @@ msgstr "Personnaliser l’icône"
 
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Not shared with anyone"
-msgstr "Partagé avec personne"
+msgstr "Non partagé"
 
 #: ui/templates/files/ui/partials/properties_content.html
 msgid "Manage sharing"
@@ -1628,7 +1628,7 @@ msgstr "Générer un mot de passe"
 #: ui/templates/files/ui/partials/shared_dropzone.html
 #, python-format
 msgid "Sending %%(current)s of %%(total)s"
-msgstr "Envoi %%(current)s sur %%(total)s"
+msgstr "Envoi de %%(current)s sur %%(total)s"
 
 #: ui/templates/files/ui/partials/shared_dropzone.html
 #, python-format
@@ -1794,9 +1794,7 @@ msgstr "Aucun fichier."
 msgid ""
 "Files with identical content, largest waste first. Keep one copy and trash "
 "the others to reclaim the space."
-msgstr ""
-"Fichiers au contenu identique, du plus gros gaspillage au plus petit. Gardez "
-"une copie et mettez les autres à la corbeille pour récupérer l’espace."
+msgstr "Fichiers au contenu identique, les plus gros gaspillages d’abord. Gardez une copie et mettez les autres à la corbeille pour récupérer l’espace."
 
 #: ui/templates/files/ui/partials/storage_analysis.html
 #, python-format
@@ -1818,7 +1816,7 @@ msgstr[2] "%(counter)s copies"
 #: ui/templates/files/ui/partials/storage_analysis.html
 #, python-format
 msgid "%(size)s each"
-msgstr "%(size)s chacun"
+msgstr "%(size)s par copie"
 
 #: ui/templates/files/ui/partials/storage_analysis.html
 #, python-format
@@ -1836,7 +1834,7 @@ msgstr[2] "et %(counter)s copies supplémentaires"
 #: ui/templates/files/ui/partials/storage_analysis.html
 #, python-format
 msgid "No identical files found matching “%(query)s”."
-msgstr "Aucun fichier identique trouvé correspondant à « %(query)s »."
+msgstr "Aucun fichier identique ne correspond à « %(query)s »."
 
 #: ui/templates/files/ui/partials/storage_analysis.html
 msgid "No identical files found."
@@ -2152,10 +2150,7 @@ msgstr "Forcer le déverrouillage"
 msgid ""
 "Someone else saved this note while you were away, so your changes were not "
 "saved. Copy anything you need, then reload."
-msgstr ""
-"Quelqu’un d’autre a enregistré cette note pendant votre absence, vos "
-"modifications n’ont donc pas été enregistrées. Copiez ce dont vous avez "
-"besoin, puis rechargez."
+msgstr "Quelqu’un d’autre a enregistré cette note entre-temps : vos modifications n’ont pas été enregistrées. Copiez ce dont vous avez besoin, puis rechargez."
 
 #: ui/templates/files/ui/viewers/markdown_viewer.html
 msgid "Failed to load editor"
@@ -2163,9 +2158,7 @@ msgstr "Échec du chargement de l’éditeur"
 
 #: ui/templates/files/ui/viewers/markdown_viewer.html
 msgid "Unsaved changes could not be saved — another user locked the file."
-msgstr ""
-"Les modifications non enregistrées n’ont pas pu être enregistrées — un autre "
-"utilisateur a verrouillé le fichier."
+msgstr "Impossible d’enregistrer vos modifications : un autre utilisateur a verrouillé le fichier."
 
 #: ui/templates/files/ui/viewers/media_viewer.html
 msgid "Your browser does not support the video element."
@@ -2272,10 +2265,7 @@ msgstr "Prompt personnalisé..."
 msgid ""
 "Someone else saved this file while you were away, so your changes were not "
 "saved. Copy anything you need, then reload."
-msgstr ""
-"Quelqu’un d’autre a enregistré ce fichier pendant votre absence, vos "
-"modifications n’ont donc pas été enregistrées. Copiez ce dont vous avez "
-"besoin, puis rechargez."
+msgstr "Quelqu’un d’autre a enregistré ce fichier entre-temps : vos modifications n’ont pas été enregistrées. Copiez ce dont vous avez besoin, puis rechargez."
 
 #: ui/templates/files/ui/viewers/text_viewer.html
 msgid "Failed to save"
@@ -2542,7 +2532,7 @@ msgstr "Doit être un nombre entier."
 
 #: viewsets/storage.py
 msgid "Storage analysis applies to folders."
-msgstr "L'analyse du stockage ne s'applique qu'aux dossiers."
+msgstr "L’analyse du stockage ne s’applique qu’aux dossiers."
 
 #: viewsets/sync.py
 msgid "Only folders can be synced."

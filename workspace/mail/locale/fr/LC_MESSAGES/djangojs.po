@@ -136,7 +136,7 @@ msgstr "Restaurer le brouillon"
 
 #: ui/static/mail/ui/js/mail_compose.js
 msgid "You have an unsaved draft. Would you like to restore it?"
-msgstr "Vous avez un brouillon non envoyé. Voulez-vous le restaurer ?"
+msgstr "Vous avez un brouillon non enregistré. Voulez-vous le restaurer ?"
 
 #: ui/static/mail/ui/js/mail_compose.js
 msgid "On %(date)s, %(sender)s wrote:"

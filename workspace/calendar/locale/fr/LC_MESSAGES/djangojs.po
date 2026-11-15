@@ -18,11 +18,11 @@ msgstr "Agenda"
 
 #: ui/static/calendar/ui/js/calendar.js
 msgid "Today — %(date)s"
-msgstr "Aujourd’hui — %(date)s"
+msgstr "Aujourd’hui, %(date)s"
 
 #: ui/static/calendar/ui/js/calendar.js
 msgid "Tomorrow — %(date)s"
-msgstr "Demain — %(date)s"
+msgstr "Demain, %(date)s"
 
 #: ui/static/calendar/ui/js/calendar_calendars.js
 msgid "Replace the link"

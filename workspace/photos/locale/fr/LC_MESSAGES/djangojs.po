@@ -124,7 +124,7 @@ msgid ""
 msgstr ""
 "Tous les visages, tous les groupes de personnes et toutes les photos de "
 "visage sont supprimés immédiatement. Vos photos et vos contacts ne sont pas "
-"modifiés. Le réactiver relit toutes vos photos depuis le début."
+"modifiés. Si vous le réactivez, toutes vos photos seront analysées à nouveau."
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Turn off and delete"
@@ -140,7 +140,9 @@ msgstr "Retirer le nom"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "These faces are no longer %(name)s. The contact itself stays in People."
-msgstr "Ces visages ne sont plus %(name)s. La personne reste dans Personnes."
+msgstr ""
+"Ces visages ne sont plus associés à %(name)s. Le contact reste dans "
+"Personnes."
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Ungroup"
@@ -151,9 +153,9 @@ msgid ""
 "This person leaves the list, and their faces stay out of automatic grouping. "
 "They wait in Review, under Unassigned, until you say who they are."
 msgstr ""
-"Cette personne quitte la liste et ses visages restent hors du regroupement "
-"automatique. Ils attendent dans À vérifier, sous Non attribués, jusqu’à ce "
-"que vous disiez qui c’est."
+"Cette personne quitte la liste et ses visages ne sont plus regroupés "
+"automatiquement. Ils vous attendent dans Identifier jusqu’à ce que vous "
+"indiquiez de qui il s’agit."
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Could not name this person"
@@ -415,13 +417,13 @@ msgid_plural ""
 "there"
 msgstr[0] ""
 "%(count)s personne seule sur sa photo dans %(folder)s, habillée comme "
-"%(name)s à cet endroit"
+"%(name)s dans ce dossier"
 msgstr[1] ""
 "%(count)s de personnes seules sur leur photo dans %(folder)s, habillées "
-"comme %(name)s à cet endroit"
+"comme %(name)s dans ce dossier"
 msgstr[2] ""
 "%(count)s personnes seules sur leur photo dans %(folder)s, habillées comme "
-"%(name)s à cet endroit"
+"%(name)s dans ce dossier"
 
 #: ui/static/photos/ui/js/faces.js
 msgid ""
@@ -526,9 +528,9 @@ msgstr[2] "%(count)s personnes à nommer"
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s to check"
 msgid_plural "%(count)s to check"
-msgstr[0] "%(count)s à vérifier"
-msgstr[1] "%(count)s à vérifier"
-msgstr[2] "%(count)s à vérifier"
+msgstr[0] "%(count)s à confirmer"
+msgstr[1] "%(count)s à confirmer"
+msgstr[2] "%(count)s à confirmer"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Is this %(name)s?"
@@ -556,20 +558,18 @@ msgstr[2] "%(count)s visages associés sans certitude"
 msgid "%(count)s person wearing their clothes on photos taken the same day"
 msgid_plural ""
 "%(count)s people wearing their clothes on photos taken the same day"
-msgstr[0] ""
-"%(count)s personne portant ses vêtements sur des photos prises le même jour"
+msgstr[0] "%(count)s personne habillée comme elle sur des photos du même jour"
 msgstr[1] ""
-"%(count)s de personnes portant ses vêtements sur des photos prises le même "
-"jour"
+"%(count)s de personnes habillées comme elle sur des photos du même jour"
 msgstr[2] ""
-"%(count)s personnes portant ses vêtements sur des photos prises le même jour"
+"%(count)s personnes habillées comme elle sur des photos du même jour"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s face in no group"
 msgid_plural "%(count)s look-alike faces in no group"
-msgstr[0] "%(count)s visage dans aucun groupe"
-msgstr[1] "%(count)s de visages ressemblants dans aucun groupe"
-msgstr[2] "%(count)s visages ressemblants dans aucun groupe"
+msgstr[0] "%(count)s visage hors groupe"
+msgstr[1] "%(count)s de visages ressemblants hors groupe"
+msgstr[2] "%(count)s visages ressemblants hors groupe"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "It's %(name)s"
@@ -643,12 +643,12 @@ msgstr[2] "Confirme %(count)s visages"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Nobody with a face in your photos has this name."
-msgstr "Personne ayant un visage dans vos photos ne porte ce nom."
+msgstr "Personne dans vos photos ne porte ce nom."
 
 #: ui/static/photos/ui/js/faces.js
 msgid "No contact yet: type a name to add one to People."
 msgstr ""
-"Aucune personne pour l’instant : saisissez un nom pour l’ajouter à Personnes."
+"Aucun contact pour l’instant : saisissez un nom pour l’ajouter à Personnes."
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Hidden"

@@ -102,6 +102,22 @@
   }
 }
 
+/* Menus keep daisyUI 4's metrics. daisyUI 5 dropped the menu's own
+   line-height, so a menu inherits whatever its wrapper sets (a dropdown
+   carrying `leading-0` collapsed every row onto its icon), and shrank
+   `menu-sm` rows to 0.75rem text. Zero specificity, so a utility on a
+   menu row still wins. */
+@layer utilities {
+  :where(.menu) {
+    line-height: 1.25rem;
+  }
+  :where(.menu-sm) :where(li:not(.menu-title) > :not(ul, menu, details, .menu-title)),
+  :where(.menu-sm) :where(li:not(.menu-title) > details > summary:not(.menu-title)) {
+    padding-inline: 0.75rem;
+    font-size: 0.875rem;
+  }
+}
+
 @layer components {
   /* Scrollable control rows (filter pills, chip rows): hide the scrollbar
      entirely - the row still scrolls by touch/wheel. Sub-pixel rounding can

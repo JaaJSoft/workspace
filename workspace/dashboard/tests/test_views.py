@@ -1293,7 +1293,7 @@ class DashboardFrenchTests(TestCase):
     def test_index_renders_in_french(self):
         resp = self.client.get("/")
         self.assertContains(resp, "Tableau de bord - Workspace")
-        self.assertContains(resp, "Bon retour, Élodie.")
+        self.assertContains(resp, "Bienvenue, Élodie.")
         self.assertContains(resp, "Activité récente")
         self.assertNotContains(resp, "Recent Activity")
 

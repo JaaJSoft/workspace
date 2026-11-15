@@ -14,7 +14,7 @@ const AppDialog = {
     }
   },
 
-  confirm({ title = gettext('Confirm'), message = gettext('Are you sure?'), okLabel = gettext('OK'), cancelLabel = gettext('Cancel'), okClass = 'btn-primary', icon = '', iconClass = '' } = {}) {
+  confirm({ title = gettext('Confirm'), message = pgettext('confirm dialog', 'Are you sure?'), okLabel = gettext('OK'), cancelLabel = gettext('Cancel'), okClass = 'btn-primary', icon = '', iconClass = '' } = {}) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('app-dialog-confirm');
       const iconEl = document.getElementById('app-dialog-confirm-icon');

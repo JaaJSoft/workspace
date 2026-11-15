@@ -151,5 +151,5 @@ class ErrorMessageLanguageTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json()["detail"],
-            "L'analyse du stockage ne s'applique qu'aux dossiers.",
+            "L’analyse du stockage ne s’applique qu’aux dossiers.",
         )

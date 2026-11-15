@@ -458,8 +458,8 @@ window.calendarApp = function calendarApp() {
       const opts = { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' };
       if (this._dayKeyIn(d, tz).slice(0, 4) !== this._dayKey(today).slice(0, 4)) opts.year = 'numeric';
       const datePart = d.toLocaleDateString(this._locale(), opts);
-      if (isToday) return interpolate(gettext('Today — %(date)s'), { date: datePart }, true);
-      if (isTomorrow) return interpolate(gettext('Tomorrow — %(date)s'), { date: datePart }, true);
+      if (isToday) return interpolate(gettext('Today, %(date)s'), { date: datePart }, true);
+      if (isTomorrow) return interpolate(gettext('Tomorrow, %(date)s'), { date: datePart }, true);
       return datePart;
     },
 

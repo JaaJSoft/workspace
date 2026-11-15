@@ -59,7 +59,7 @@ def create_job(owner, connection, kinds, options=None):
     unknown = set(kinds) - set(ordered)
     if unknown:
         raise InvalidJob(
-            _("Nothing knows how to import %(kinds)s.")
+            _("This server cannot import %(kinds)s.")
             % {"kinds": ", ".join(sorted(unknown))}
         )
     unsupported = set(kinds) - provider.kinds
@@ -278,9 +278,7 @@ def _run_slice(job, deadline):
             continue
         importer = importer_registry.get(kind)
         if importer is None:
-            raise JobFailed(
-                _("Nothing knows how to import %(kinds)s.") % {"kinds": kind}
-            )
+            raise JobFailed(_("This server cannot import %(kinds)s.") % {"kinds": kind})
         ctx = ImportContext(job, provider, importer, deadline=deadline)
         outcome = importer.run(ctx)
         if outcome is not Outcome.DONE:

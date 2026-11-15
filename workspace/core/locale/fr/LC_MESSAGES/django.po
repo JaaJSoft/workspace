@@ -119,7 +119,7 @@ msgstr "Déjà lu"
 
 #: templates/core/partials/changelog.html
 msgid "New to you"
-msgstr "Nouveau pour vous"
+msgstr "Pas encore lu"
 
 #: templates/core/partials/changelog.html
 msgctxt "changelog version"
@@ -226,12 +226,12 @@ msgstr "Aucune notification"
 #: templates/core/partials/notifications.html
 msgctxt "notification priority"
 msgid "Urgent"
-msgstr "urgente"
+msgstr "Urgent"
 
 #: templates/core/partials/notifications.html
 msgctxt "notification priority"
 msgid "High"
-msgstr "haute"
+msgstr "Important"
 
 #: templates/core/partials/notifications.html
 msgid "Mark all read"
@@ -386,9 +386,7 @@ msgstr "Actions rapides"
 
 #: templates/core/partials/search/scope_toggle.html
 msgid "Hide what you reach through groups, shares and other people's projects"
-msgstr ""
-"Masquer ce qui vous parvient par les groupes, les partages et les projets "
-"des autres"
+msgstr "Masquer ce à quoi vous accédez via les groupes, les partages et les projets des autres"
 
 #: templates/core/partials/search/scope_toggle.html
 msgid "Mine only"

@@ -720,7 +720,7 @@ class FileSerializer(serializers.ModelSerializer):
         if attrs.get("parent") is None and attrs.get("group") is not None:
             # At the root, a group node is the group's own root folder.
             raise serializers.ValidationError(
-                {"group": [gettext("A shortcut goes in a folder of the group.")]}
+                {"group": [gettext("A shortcut must go in a folder of the group.")]}
             )
 
     def _create_shortcut(self, owner, validated_data):
@@ -1164,7 +1164,9 @@ class FileOperationCreateSerializer(serializers.Serializer):
             errors["target"] = [gettext("This kind of operation has no destination.")]
         if kind == FileOperation.Kind.EMPTY_TRASH:
             if items:
-                errors["items"] = [gettext("Emptying the trash takes no items.")]
+                errors["items"] = [
+                    gettext("Emptying the trash does not take a list of items.")
+                ]
         elif not items:
             errors["items"] = [gettext("Pick at least one item.")]
         else:

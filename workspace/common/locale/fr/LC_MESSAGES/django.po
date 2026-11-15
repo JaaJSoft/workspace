@@ -118,8 +118,9 @@ msgid "Confirm"
 msgstr "Confirmer"
 
 #: templates/ui/partials/dialogs.html
+msgctxt "confirm dialog"
 msgid "Are you sure?"
-msgstr "Êtes-vous sûr ?"
+msgstr "Voulez-vous continuer ?"
 
 #: templates/ui/partials/dialogs.html
 msgid "OK"
@@ -641,7 +642,7 @@ msgstr "Raccourcis clavier"
 
 #: vocabulary.py
 msgid "Leave empty for no password"
-msgstr "Laisser vide pour aucun mot de passe"
+msgstr "Laisser vide pour ne pas en définir"
 
 #: vocabulary.py
 msgid "Link copied to clipboard"
@@ -965,7 +966,7 @@ msgstr "Partager"
 
 #: vocabulary.py
 msgid "Shared with me"
-msgstr "Partagés avec moi"
+msgstr "Partagé avec moi"
 
 #: vocabulary.py
 msgid "Sharing updated"

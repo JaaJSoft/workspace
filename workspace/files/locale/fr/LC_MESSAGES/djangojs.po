@@ -43,7 +43,7 @@ msgstr "Impossible de créer le fichier"
 
 #: ui/static/files/ui/js/browser.js
 msgid "The shared files could not be received. Share them again."
-msgstr "Les fichiers partagés n'ont pas pu être reçus. Partagez-les à nouveau."
+msgstr "Les fichiers partagés n’ont pas pu être reçus. Partagez-les à nouveau."
 
 #: ui/static/files/ui/js/browser.js
 msgid "Save shared files"
@@ -549,7 +549,7 @@ msgstr "Lecture seule"
 
 #: ui/static/files/ui/js/share_modal.js
 msgid "Upload only"
-msgstr "Téléversement seul"
+msgstr "Téléversement uniquement"
 
 #: ui/static/files/ui/js/share_modal.js
 msgid "Read and upload"
@@ -688,9 +688,9 @@ msgstr "Pause après le fichier en cours"
 #: ui/static/files/ui/js/upload_queue.js
 msgid "Paused - %(count)s file left"
 msgid_plural "Paused - %(count)s files left"
-msgstr[0] "En pause – %(count)s fichier restant"
-msgstr[1] "En pause – %(count)s de fichiers restants"
-msgstr[2] "En pause – %(count)s fichiers restants"
+msgstr[0] "En pause - %(count)s fichier restant"
+msgstr[1] "En pause - %(count)s de fichiers restants"
+msgstr[2] "En pause - %(count)s fichiers restants"
 
 #: ui/static/files/ui/js/upload_queue.js
 msgid "Uploading %(count)s file"
@@ -719,7 +719,7 @@ msgstr "Un fichier portant ce nom existe déjà"
 
 #: ui/static/files/ui/js/upload_queue.js
 msgid "Connection lost, retrying - %(loaded)s of %(total)s"
-msgstr "Connexion perdue, nouvelle tentative – %(loaded)s sur %(total)s"
+msgstr "Connexion perdue, nouvelle tentative - %(loaded)s sur %(total)s"
 
 #: ui/static/files/ui/js/upload_queue.js
 msgid "Finishing up"
@@ -791,7 +791,7 @@ msgstr "Impossible d’abandonner %(name)s"
 msgid "Failed to discard %(count)s file"
 msgid_plural "Failed to discard %(count)s files"
 msgstr[0] "Impossible d’abandonner %(count)s fichier"
-msgstr[1] "Impossible d’abandonner %(count)s fichiers"
+msgstr[1] "Impossible d’abandonner %(count)s de fichiers"
 msgstr[2] "Impossible d’abandonner %(count)s fichiers"
 
 #: ui/static/files/ui/js/upload_queue.js
@@ -805,15 +805,9 @@ msgid ""
 "%(count)s file was moved to trash but could not be permanently discarded"
 msgid_plural ""
 "%(count)s files were moved to trash but could not be permanently discarded"
-msgstr[0] ""
-"%(count)s fichier a été mis à la corbeille mais n’a pas pu être supprimé "
-"définitivement"
-msgstr[1] ""
-"%(count)s fichiers ont été mis à la corbeille mais n’ont pas pu être "
-"supprimés définitivement"
-msgstr[2] ""
-"%(count)s fichiers ont été mis à la corbeille mais n’ont pas pu être "
-"supprimés définitivement"
+msgstr[0] "%(count)s fichier a été mis à la corbeille mais n’a pas pu être supprimé définitivement"
+msgstr[1] "%(count)s de fichiers ont été mis à la corbeille mais n’ont pas pu être supprimés définitivement"
+msgstr[2] "%(count)s fichiers ont été mis à la corbeille mais n’ont pas pu être supprimés définitivement"
 
 #: ui/static/files/ui/js/viewer_panel.js
 msgid "Failed to load viewer"

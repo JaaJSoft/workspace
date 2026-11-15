@@ -63,14 +63,12 @@ class CreateJobTests(JobsTestCase):
     def test_rejects_empty_unknown_and_unsupported_kinds(self):
         with self.assertRaises(svc.InvalidJob):
             svc.create_job(self.user, self.conn, [])
-        with self.assertRaisesRegex(
-            svc.InvalidJob, "Nothing knows how to import photos"
-        ):
+        with self.assertRaisesRegex(svc.InvalidJob, "This server cannot import photos"):
             svc.create_job(self.user, self.conn, ["photos"])
         self.provider.kinds = frozenset({"files", "calendar"})
         try:
             with self.assertRaisesRegex(
-                svc.InvalidJob, "Nothing knows how to import calendar"
+                svc.InvalidJob, "This server cannot import calendar"
             ):
                 svc.create_job(self.user, self.conn, ["calendar"])
         finally:

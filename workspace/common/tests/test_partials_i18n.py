@@ -11,7 +11,7 @@ def render_in_french(template, context=None):
 class UiKitFrenchTests(SimpleTestCase):
     def test_dialogs_render_in_the_active_language(self):
         html = render_in_french("ui/partials/dialogs.html")
-        self.assertIn("Êtes-vous sûr", html)
+        self.assertIn("Voulez-vous continuer", html)
         self.assertIn("Annuler", html)
         self.assertNotIn("Are you sure?", html)
 

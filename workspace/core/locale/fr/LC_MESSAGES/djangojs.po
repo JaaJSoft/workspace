@@ -36,9 +36,7 @@ msgstr "Étape %(step)s sur %(total)s"
 
 #: static/core/js/timezone_suggest.js
 msgid "Your browser looks like it is in %(zone)s. Update your timezone?"
-msgstr ""
-"Votre navigateur semble être dans le fuseau %(zone)s. Mettre à jour votre "
-"fuseau horaire ?"
+msgstr "Votre navigateur semble réglé sur le fuseau %(zone)s. Mettre à jour votre fuseau horaire ?"
 
 #: static/core/js/timezone_suggest.js
 msgid "Update"

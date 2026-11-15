@@ -27,7 +27,7 @@ msgstr "Contributeur"
 
 #: ui/static/photos/ui/js/album_share.js
 msgid "Also adds their own photos, and removes them"
-msgstr "Ajoute aussi ses propres photos, et les retire"
+msgstr "Peut aussi ajouter ses propres photos et les retirer"
 
 #: ui/static/photos/ui/js/album_share.js
 msgctxt "album role"
@@ -36,7 +36,7 @@ msgstr "Gestionnaire"
 
 #: ui/static/photos/ui/js/album_share.js
 msgid "Also edits the album, its members and its links"
-msgstr "Modifie aussi l’album, ses membres et ses liens"
+msgstr "Peut aussi modifier l’album, ses membres et ses liens"
 
 #: ui/static/photos/ui/js/album_share.js
 msgid "Some changes failed (%(count)s error)"
@@ -152,10 +152,7 @@ msgstr "Dégrouper"
 msgid ""
 "This person leaves the list, and their faces stay out of automatic grouping. "
 "They wait in Review, under Unassigned, until you say who they are."
-msgstr ""
-"Cette personne quitte la liste et ses visages ne sont plus regroupés "
-"automatiquement. Ils vous attendent dans Identifier jusqu’à ce que vous "
-"indiquiez de qui il s’agit."
+msgstr "Cette personne quitte la liste et ses visages ne sont plus regroupés automatiquement. Ils restent en attente dans Identifier jusqu’à ce que vous indiquiez de qui il s’agit."
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Could not name this person"
@@ -198,7 +195,7 @@ msgstr "Déjà nommé dans cette vidéo"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Already named in this photo"
-msgstr "Déjà nommé dans cette photo"
+msgstr "Déjà nommé sur cette photo"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Not grouped yet"
@@ -222,7 +219,7 @@ msgstr "%(name)s a déjà une photo dans Personnes. La remplacer par ce visage 
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Also the contact photo of %(name)s in People"
-msgstr "C’est aussi la photo de contact de %(name)s dans Personnes"
+msgstr "Utilisé aussi comme photo de contact de %(name)s"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Could not remove the photo"
@@ -444,64 +441,45 @@ msgstr[2] ""
 
 #: ui/static/photos/ui/js/faces.js
 msgid "1 person alone in their photo in %(folder)s, without their face"
-msgstr "1 personne seule sur sa photo dans %(folder)s, sans son visage"
+msgstr "1 personne seule sur sa photo dans %(folder)s, visage non visible"
 
 #: ui/static/photos/ui/js/faces.js
 msgid ""
 "1 person alone in their photo at the top of your files, without their face"
-msgstr ""
-"1 personne seule sur sa photo à la racine de vos fichiers, sans son visage"
+msgstr "1 personne seule sur sa photo à la racine de vos fichiers, visage non visible"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s person alone in their photo in %(folder)s, dressed alike"
 msgid_plural ""
 "%(count)s people alone in their photo in %(folder)s, dressed alike"
-msgstr[0] ""
-"%(count)s personne seule sur sa photo dans %(folder)s, habillée pareil"
-msgstr[1] ""
-"%(count)s de personnes seules sur leur photo dans %(folder)s, habillées "
-"pareil"
-msgstr[2] ""
-"%(count)s personnes seules sur leur photo dans %(folder)s, habillées pareil"
+msgstr[0] "%(count)s personne seule sur sa photo dans %(folder)s, même tenue"
+msgstr[1] "%(count)s de personnes seules sur leur photo dans %(folder)s, même tenue"
+msgstr[2] "%(count)s personnes seules sur leur photo dans %(folder)s, même tenue"
 
 #: ui/static/photos/ui/js/faces.js
 msgid ""
 "%(count)s person alone in their photo at the top of your files, dressed alike"
 msgid_plural ""
 "%(count)s people alone in their photo at the top of your files, dressed alike"
-msgstr[0] ""
-"%(count)s personne seule sur sa photo à la racine de vos fichiers, habillée "
-"pareil"
-msgstr[1] ""
-"%(count)s de personnes seules sur leur photo à la racine de vos fichiers, "
-"habillées pareil"
-msgstr[2] ""
-"%(count)s personnes seules sur leur photo à la racine de vos fichiers, "
-"habillées pareil"
+msgstr[0] "%(count)s personne seule sur sa photo à la racine de vos fichiers, même tenue"
+msgstr[1] "%(count)s de personnes seules sur leur photo à la racine de vos fichiers, même tenue"
+msgstr[2] "%(count)s personnes seules sur leur photo à la racine de vos fichiers, même tenue"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s person dressed alike in %(folder)s, without their face"
 msgid_plural "%(count)s people dressed alike in %(folder)s, without their face"
-msgstr[0] "%(count)s personne habillée pareil dans %(folder)s, sans son visage"
-msgstr[1] ""
-"%(count)s de personnes habillées pareil dans %(folder)s, sans leur visage"
-msgstr[2] ""
-"%(count)s personnes habillées pareil dans %(folder)s, sans leur visage"
+msgstr[0] "%(count)s personne dans %(folder)s, même tenue, visage non visible"
+msgstr[1] "%(count)s de personnes dans %(folder)s, même tenue, visage non visible"
+msgstr[2] "%(count)s personnes dans %(folder)s, même tenue, visage non visible"
 
 #: ui/static/photos/ui/js/faces.js
 msgid ""
 "%(count)s person dressed alike at the top of your files, without their face"
 msgid_plural ""
 "%(count)s people dressed alike at the top of your files, without their face"
-msgstr[0] ""
-"%(count)s personne habillée pareil à la racine de vos fichiers, sans son "
-"visage"
-msgstr[1] ""
-"%(count)s de personnes habillées pareil à la racine de vos fichiers, sans "
-"leur visage"
-msgstr[2] ""
-"%(count)s personnes habillées pareil à la racine de vos fichiers, sans leur "
-"visage"
+msgstr[0] "%(count)s personne à la racine de vos fichiers, même tenue, visage non visible"
+msgstr[1] "%(count)s de personnes à la racine de vos fichiers, même tenue, visage non visible"
+msgstr[2] "%(count)s personnes à la racine de vos fichiers, même tenue, visage non visible"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s person put back"
@@ -543,9 +521,9 @@ msgstr "Qui est-ce ?"
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s photo, grouped by likeness"
 msgid_plural "%(count)s photos, grouped by likeness"
-msgstr[0] "%(count)s photo, regroupée par ressemblance"
-msgstr[1] "%(count)s de photos, regroupées par ressemblance"
-msgstr[2] "%(count)s photos, regroupées par ressemblance"
+msgstr[0] "%(count)s photo regroupée par ressemblance"
+msgstr[1] "%(count)s de photos regroupées par ressemblance"
+msgstr[2] "%(count)s photos regroupées par ressemblance"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s face put with them without being sure"
@@ -581,15 +559,15 @@ msgstr "Oui, c’est %(name)s"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "None of them is %(name)s"
-msgstr "Aucun n’est %(name)s"
+msgstr "Ce n’est pas %(name)s"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Looks like them"
-msgstr "Ressemble à cette personne"
+msgstr "Suggéré par ressemblance"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Never suggests them again"
-msgstr "Ne les suggère plus jamais"
+msgstr "Ne les proposera plus"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Confirms %(count)s person, not the %(left)s left out"
@@ -607,7 +585,7 @@ msgstr[2] "Confirme %(count)s personnes"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Never asks about them again"
-msgstr "Ne pose plus jamais la question"
+msgstr "Ne posera plus la question"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "Puts %(count)s person with them, not the %(left)s left out"
@@ -813,9 +791,9 @@ msgstr[2] "%(count)s photos marquées comme sensibles"
 #: ui/static/photos/ui/js/photos.js
 msgid "Unmarked %(count)s photo as sensitive"
 msgid_plural "Unmarked %(count)s photos as sensitive"
-msgstr[0] "%(count)s photo n’est plus marquée comme sensible"
-msgstr[1] "%(count)s de photos ne sont plus marquées comme sensibles"
-msgstr[2] "%(count)s photos ne sont plus marquées comme sensibles"
+msgstr[0] "%(count)s photo n’est plus marquée sensible"
+msgstr[1] "%(count)s de photos ne sont plus marquées sensibles"
+msgstr[2] "%(count)s photos ne sont plus marquées sensibles"
 
 #: ui/static/photos/ui/js/photos.js
 msgid "Failed to download the photos"

@@ -290,8 +290,8 @@ msgstr "Choisissez au moins un type de données à importer."
 
 #: services/jobs.py
 #, python-format
-msgid "Nothing knows how to import %(kinds)s."
-msgstr "Aucun importateur ne sait importer %(kinds)s."
+msgid "This server cannot import %(kinds)s."
+msgstr "Ce serveur ne sait pas importer %(kinds)s."
 
 #: services/jobs.py
 #, python-format
@@ -387,12 +387,12 @@ msgstr "Source"
 #: ui/templates/imports/ui/index.html
 msgctxt "import wizard step"
 msgid "What"
-msgstr "Quoi"
+msgstr "Contenu"
 
 #: ui/templates/imports/ui/index.html
 msgctxt "import wizard step"
 msgid "Where"
-msgstr "Où"
+msgstr "Destination"
 
 #: ui/templates/imports/ui/index.html
 msgctxt "import wizard step"
@@ -428,7 +428,7 @@ msgstr "Ajouter une connexion"
 
 #: ui/templates/imports/ui/index.html
 msgid "Import from here"
-msgstr "Importer d’ici"
+msgstr "Importer"
 
 #: ui/templates/imports/ui/index.html
 msgctxt "verb, test the connection"
@@ -512,15 +512,15 @@ msgstr "Si un fichier du même nom existe"
 
 #: ui/templates/imports/ui/index.html
 msgid "Keep both (rename the imported one)"
-msgstr "Garder les deux (renommer celui importé)"
+msgstr "Garder les deux (renommer le fichier importé)"
 
 #: ui/templates/imports/ui/index.html
 msgid "Keep mine (skip the imported one)"
-msgstr "Garder le mien (ignorer celui importé)"
+msgstr "Garder le mien (ignorer le fichier importé)"
 
 #: ui/templates/imports/ui/index.html
 msgid "Replace mine with the imported one"
-msgstr "Remplacer le mien par celui importé"
+msgstr "Remplacer le mien par le fichier importé"
 
 #: ui/templates/imports/ui/index.html
 msgid "Put everything in a folder named"

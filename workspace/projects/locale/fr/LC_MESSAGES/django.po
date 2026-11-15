@@ -442,7 +442,7 @@ msgstr "Le titre ne peut pas être vide."
 
 #: services/analytics.py ui/templates/projects/ui/partials/_task_filters.html
 msgid "Unassigned"
-msgstr "Non assignée"
+msgstr "Sans responsable"
 
 #: services/assignments.py
 #, python-format
@@ -973,7 +973,7 @@ msgstr "Effacer tous les filtres"
 
 #: ui/templates/projects/ui/partials/_task_filters.html
 msgid "Remove the unassigned filter"
-msgstr "Retirer le filtre « non assignée »"
+msgstr "Retirer le filtre « sans responsable »"
 
 #: ui/templates/projects/ui/partials/_task_filters.html
 msgid "Remove the priority filter"
@@ -1116,16 +1116,13 @@ msgstr "Tâches créées et terminées par semaine sur les 12 dernières semaine
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "Cycle and lead time"
-msgstr "Temps de cycle et délai"
+msgstr "Temps de cycle et délai total"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid ""
 "Tasks finished in the last 12 weeks. Lead time runs from creation to "
 "completion, cycle time from the first move onto the board."
-msgstr ""
-"Tâches terminées au cours des 12 dernières semaines. Le délai court de la "
-"création à la fin, le temps de cycle du premier passage sur le tableau à la "
-"fin."
+msgstr "Tâches terminées au cours des 12 dernières semaines. Le délai total court de la création à la fin, le temps de cycle du premier passage sur le tableau à la fin."
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "Cycle time"
@@ -1148,7 +1145,7 @@ msgstr "médiane · 85 %% en moins de %(days)s j"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "Lead time"
-msgstr "Délai"
+msgstr "Délai total"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgctxt "task count"
@@ -1164,7 +1161,7 @@ msgstr[2] "tâches mesurées"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "Number of tasks per lead and cycle time bracket"
-msgstr "Nombre de tâches par tranche de délai et de temps de cycle"
+msgstr "Nombre de tâches par tranche de délai total et de temps de cycle"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "No task finished in the last 12 weeks yet."
@@ -1228,11 +1225,11 @@ msgstr "Restant"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "points still open"
-msgstr "points encore ouverts"
+msgstr "points restant à faire"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "hours still open"
-msgstr "heures encore ouvertes"
+msgstr "heures restant à faire"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "tasks still open"
@@ -1245,24 +1242,24 @@ msgstr "Périmètre"
 #: ui/templates/projects/ui/partials/analytics.html
 #, python-format
 msgid "grew from %(initial)s at the start"
-msgstr "en hausse depuis %(initial)s au départ"
+msgstr "en hausse, contre %(initial)s au départ"
 
 #: ui/templates/projects/ui/partials/analytics.html
 #, python-format
 msgid "down from %(initial)s at the start"
-msgstr "en baisse depuis %(initial)s au départ"
+msgstr "en baisse, contre %(initial)s au départ"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "points planned, unchanged"
-msgstr "points prévus, inchangé"
+msgstr "points prévus, sans changement"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "hours planned, unchanged"
-msgstr "heures prévues, inchangé"
+msgstr "heures prévues, sans changement"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "tasks planned, unchanged"
-msgstr "tâches prévues, inchangé"
+msgstr "tâches prévues, sans changement"
 
 #: ui/templates/projects/ui/partials/analytics.html
 msgid "Sprint"
@@ -1455,14 +1452,9 @@ msgid ""
 msgid_plural ""
 "Only the first %(limit)s tasks are shown - narrow the filters to see the "
 "rest."
-msgstr[0] ""
-"Seule %(limit)s tâche est affichée - affinez les filtres pour voir le reste."
-msgstr[1] ""
-"Seules les %(limit)s premières tâches sont affichées - affinez les filtres "
-"pour voir le reste."
-msgstr[2] ""
-"Seules les %(limit)s premières tâches sont affichées - affinez les filtres "
-"pour voir le reste."
+msgstr[0] "Seule %(limit)s tâche est affichée : affinez les filtres pour voir les autres."
+msgstr[1] "Seules les %(limit)s premières tâches sont affichées : affinez les filtres pour voir les autres."
+msgstr[2] "Seules les %(limit)s premières tâches sont affichées : affinez les filtres pour voir les autres."
 
 #: ui/templates/projects/ui/partials/board.html
 #, python-format
@@ -1478,45 +1470,34 @@ msgid "Close dialog"
 msgstr "Fermer la fenêtre"
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Overview</strong> &mdash; Task counts and recent activity at a "
-"glance."
+msgid "<strong>Overview</strong>: Task counts and recent activity at a glance."
 msgstr ""
-"<strong>Vue d’ensemble</strong> &mdash; Nombre de tâches et activité récente "
+"<strong>Vue d’ensemble</strong> : nombre de tâches et activité récente "
 "en un coup d’œil."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Board</strong> &mdash; Kanban columns for active work. Drag cards "
-"between columns or reorder them within one."
+msgid "<strong>Board</strong>: Kanban columns for active work. Drag cards between columns or reorder them within one."
 msgstr ""
-"<strong>Tableau</strong> &mdash; Colonnes kanban pour le travail en cours. "
+"<strong>Tableau</strong> : colonnes kanban pour le travail en cours. "
 "Faites glisser les cartes d’une colonne à l’autre ou réordonnez-les dans une "
 "colonne."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Backlog</strong> &mdash; Tasks waiting to be planned, kept off the "
-"board until you move them."
+msgid "<strong>Backlog</strong>: Tasks waiting to be planned, kept off the board until you move them."
 msgstr ""
-"<strong>Backlog</strong> &mdash; Les tâches en attente de planification, "
+"<strong>Backlog</strong> : les tâches en attente de planification, "
 "gardées hors du tableau jusqu’à ce que vous les y déplaciez."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>All tasks</strong> &mdash; A flat list of every task in the project, "
-"grouped by column."
+msgid "<strong>All tasks</strong>: A flat list of every task in the project, grouped by column."
 msgstr ""
-"<strong>Toutes les tâches</strong> &mdash; La liste à plat de toutes les "
+"<strong>Toutes les tâches</strong> : la liste à plat de toutes les "
 "tâches du projet, regroupées par colonne."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Timeline</strong> &mdash; Tasks and dated epics on a date axis. Give "
-"a task a start date to draw it as a bar; zoom between week, month and "
-"quarter."
+msgid "<strong>Timeline</strong>: Tasks and dated epics on a date axis. Give a task a start date to draw it as a bar; zoom between week, month and quarter."
 msgstr ""
-"<strong>Chronologie</strong> &mdash; Les tâches et les epics datés sur un "
+"<strong>Chronologie</strong> : les tâches et les epics datés sur un "
 "axe temporel. Donnez une date de début à une tâche pour l’afficher sous "
 "forme de barre ; zoomez par semaine, mois ou trimestre."
 
@@ -1525,49 +1506,37 @@ msgid "Tasks"
 msgstr "Tâches"
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Create</strong> &mdash; Use the New task button on the board or "
-"backlog."
+msgid "<strong>Create</strong>: Use the New task button on the board or backlog."
 msgstr ""
-"<strong>Créer</strong> &mdash; Utilisez le bouton Nouvelle tâche du tableau "
+"<strong>Créer</strong> : utilisez le bouton Nouvelle tâche du tableau "
 "ou du backlog."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Details</strong> &mdash; Click a card to open the task panel: "
-"description, status, priority, due date, assignees, labels, comments, and "
-"activity."
+msgid "<strong>Details</strong>: Click a card to open the task panel: description, status, priority, due date, assignees, labels, comments, and activity."
 msgstr ""
-"<strong>Détails</strong> &mdash; Cliquez sur une carte pour ouvrir le "
+"<strong>Détails</strong> : cliquez sur une carte pour ouvrir le "
 "panneau de la tâche : description, statut, priorité, échéance, responsables, "
 "étiquettes, commentaires et activité."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Priorities</strong> &mdash; Rank tasks Low, Medium, High, or Urgent."
+msgid "<strong>Priorities</strong>: Rank tasks Low, Medium, High, or Urgent."
 msgstr ""
-"<strong>Priorités</strong> &mdash; Classez les tâches en Basse, Moyenne, "
+"<strong>Priorités</strong> : classez les tâches en Basse, Moyenne, "
 "Haute ou Urgente."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
 #, python-format
-msgid ""
-"<strong>References</strong> &mdash; Every task gets a reference like "
-"<code>%(key)s-42</code>. Mention it in a description or comment to link to "
-"that task, or share a URL ending in <code>?task=%(key)s-42</code> to deep-"
-"link it."
+msgid "<strong>References</strong>: Every task gets a reference like <code>%(key)s-42</code>. Mention it in a description or comment to link to that task, or share a URL ending in <code>?task=%(key)s-42</code> to deep-link it."
 msgstr ""
-"<strong>Références</strong> &mdash; Chaque tâche reçoit une référence comme "
+"<strong>Références</strong> : chaque tâche reçoit une référence comme "
 "<code>%(key)s-42</code>. Mentionnez-la dans une description ou un "
 "commentaire pour créer un lien vers cette tâche, ou partagez une URL se "
 "terminant par <code>?task=%(key)s-42</code> pour y renvoyer directement."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Filters</strong> &mdash; Narrow the board or lists by text, "
-"assignee, priority, or label."
+msgid "<strong>Filters</strong>: Narrow the board or lists by text, assignee, priority, or label."
 msgstr ""
-"<strong>Filtres</strong> &mdash; Affinez le tableau ou les listes par texte, "
+"<strong>Filtres</strong> : affinez le tableau ou les listes par texte, "
 "responsable, priorité ou étiquette."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
@@ -1575,27 +1544,21 @@ msgid "Members & Sharing"
 msgstr "Membres et partage"
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Personal project</strong> &mdash; A private project is created for "
-"you automatically."
+msgid "<strong>Personal project</strong>: A private project is created for you automatically."
 msgstr ""
-"<strong>Projet personnel</strong> &mdash; Un projet privé est créé "
+"<strong>Projet personnel</strong> : un projet privé est créé "
 "automatiquement pour vous."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Shared projects</strong> &mdash; Create more projects and invite "
-"members as Admin or Member."
+msgid "<strong>Shared projects</strong>: Create more projects and invite members as Admin or Member."
 msgstr ""
-"<strong>Projets partagés</strong> &mdash; Créez d’autres projets et invitez "
+"<strong>Projets partagés</strong> : créez d’autres projets et invitez "
 "des membres en tant qu’Administrateur ou Membre."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Groups</strong> &mdash; Link a project to groups to give every group "
-"member access."
+msgid "<strong>Groups</strong>: Link a project to groups to give every group member access."
 msgstr ""
-"<strong>Groupes</strong> &mdash; Associez un projet à des groupes pour "
+"<strong>Groupes</strong> : associez un projet à des groupes pour "
 "donner accès à tous leurs membres."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
@@ -1603,43 +1566,34 @@ msgid "Project Settings"
 msgstr "Paramètres du projet"
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>General</strong> &mdash; Admins can rename the project, edit its "
-"description and key, and choose how long done tasks stay on the board."
+msgid "<strong>General</strong>: Admins can rename the project, edit its description and key, and choose how long done tasks stay on the board."
 msgstr ""
-"<strong>Général</strong> &mdash; Les administrateurs peuvent renommer le "
+"<strong>Général</strong> : les administrateurs peuvent renommer le "
 "projet, modifier sa description et sa clé, et choisir combien de temps les "
 "tâches terminées restent sur le tableau."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Columns</strong> &mdash; Add, rename, recolor, and reorder board "
-"columns."
+msgid "<strong>Columns</strong>: Add, rename, recolor, and reorder board columns."
 msgstr ""
-"<strong>Colonnes</strong> &mdash; Ajoutez, renommez, recolorez et réordonnez "
+"<strong>Colonnes</strong> : ajoutez, renommez, recolorez et réordonnez "
 "les colonnes du tableau."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Labels</strong> &mdash; Manage the project's shared label palette."
+msgid "<strong>Labels</strong>: Manage the project's shared label palette."
 msgstr ""
-"<strong>Étiquettes</strong> &mdash; Gérez la palette d’étiquettes partagée "
+"<strong>Étiquettes</strong> : gérez la palette d’étiquettes partagée "
 "du projet."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Epics</strong> &mdash; Epics can carry a target date; dated epics "
-"appear as markers on the timeline."
+msgid "<strong>Epics</strong>: Epics can carry a target date; dated epics appear as markers on the timeline."
 msgstr ""
-"<strong>Epics</strong> &mdash; Un epic peut avoir une date cible ; les epics "
+"<strong>Epics</strong> : un epic peut avoir une date cible ; les epics "
 "datés apparaissent comme des repères sur la chronologie."
 
 #: ui/templates/projects/ui/partials/help_dialog.html
-msgid ""
-"<strong>Danger zone</strong> &mdash; Archive a project to make it read-only, "
-"or delete it for good."
+msgid "<strong>Danger zone</strong>: Archive a project to make it read-only, or delete it for good."
 msgstr ""
-"<strong>Zone de danger</strong> &mdash; Archivez un projet pour le passer en "
+"<strong>Zone de danger</strong> : archivez un projet pour le passer en "
 "lecture seule, ou supprimez-le définitivement."
 
 #: ui/templates/projects/ui/partials/overview.html
@@ -2290,7 +2244,7 @@ msgstr "En retard"
 
 #: ui/templates/projects/ui/partials/timeline.html
 msgid "Epic target"
-msgstr "Cible d’epic"
+msgstr "Date cible d’epic"
 
 #: ui/templates/projects/ui/partials/timeline.html
 msgid "Sprint band"

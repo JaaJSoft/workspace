@@ -13,7 +13,7 @@ msgstr ""
 
 #: apps.py
 msgid "Overview of your workspace."
-msgstr "Vue d'ensemble de votre Workspace."
+msgstr "Vue d’ensemble de votre Workspace."
 
 #: apps.py
 msgid "My profile"
@@ -22,7 +22,7 @@ msgstr "Mon profil"
 #: templates/dashboard/index.html
 #, python-format
 msgid "Welcome back, %(name)s."
-msgstr "Bon retour, %(name)s."
+msgstr "Bienvenue, %(name)s."
 
 #: templates/dashboard/index.html
 #: templates/dashboard/partials/usage_widget.html
@@ -44,7 +44,7 @@ msgstr "Ce qui se passe dans votre Workspace."
 #: templates/dashboard/index.html
 #, python-format
 msgid "Good night, %%(name)s."
-msgstr "Bonne nuit, %%(name)s."
+msgstr "Bonsoir, %%(name)s."
 
 #: templates/dashboard/index.html
 #, python-format
@@ -54,7 +54,7 @@ msgstr "Bonjour, %%(name)s."
 #: templates/dashboard/index.html
 #, python-format
 msgid "Good afternoon, %%(name)s."
-msgstr "Bon après-midi, %%(name)s."
+msgstr "Bonjour, %%(name)s."
 
 #: templates/dashboard/index.html
 #, python-format

@@ -63,7 +63,7 @@ Params:
     </label>
     <div
       tabindex="0"
-      class="dropdown-content mt-2 z-100 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-66"
+      class="dropdown-content mt-2 z-100 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-67.5"
     >
       <div
         class="pb-1 mb-1 border-b border-base-300 flex items-center justify-between"
@@ -96,7 +96,7 @@ Params:
       >
         <a
           href="/"
-          class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-base-200 transition-colors"
+          class="flex flex-col items-center gap-1 px-2 py-3 rounded-lg hover:bg-base-200 transition-colors"
         >
           <span
             class="module-slate w-9 h-9 rounded-lg bg-module/15 text-module flex items-center justify-center"
@@ -108,7 +108,7 @@ Params:
         {% for m in workspace_switcher_modules %}
           <a
             href="{{ m.url }}"
-            class="flex flex-col items-center gap-1 p-2 rounded-lg transition-colors {% if m.slug == module.slug %}bg-base-200{% else %}hover:bg-base-200{% endif %}"
+            class="flex flex-col items-center gap-1 px-2 py-3 rounded-lg transition-colors {% if m.slug == module.slug %}bg-base-200{% else %}hover:bg-base-200{% endif %}"
             {% if m.slug == module.slug %}aria-current="page"{% endif %}
           >
             <span

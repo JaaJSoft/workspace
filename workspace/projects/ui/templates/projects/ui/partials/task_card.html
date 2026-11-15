@@ -4,7 +4,7 @@
 {# concentric radius: board column is rounded-box with p-3, so inner radius = rounded-box - 0.75rem #}
 <li
   class="card rounded-[max(0px,calc(var(--radius-box)-0.75rem))] bg-base-100 border border-base-300 shadow-xs hover:shadow-md transition-shadow select-none {% if writable and not card_readonly %}cursor-grab{% endif %}"
-  :class="dragging === '{{ task.uuid|escapejs }}' && 'opacity-50'"
+  :class="{ 'border-dashed! border-module/60! bg-module/5! shadow-none! [&>*]:invisible': dropSlot === '{{ task.uuid|escapejs }}' }"
   {% if writable and not card_readonly %}draggable="true"{% endif %}
   data-task-uuid="{{ task.uuid }}"
   @dragstart="onDragStart($event, '{{ task.uuid|escapejs }}')"

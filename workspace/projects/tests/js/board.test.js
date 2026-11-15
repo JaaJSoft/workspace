@@ -19,6 +19,7 @@ const ctx = loadScripts(
     ...CUSTOM_ELEMENT_STUBS,
     URL,
     URLSearchParams,
+    setTimeout,
     sidebarPreference: { initial: () => false, save: () => {} },
   }
 );
@@ -299,6 +300,117 @@ test('onDragStart is cancelled while filters are active', () => {
   board.onDragStart({ preventDefault: () => (prevented = true) }, 'u1');
   assert.equal(prevented, true);
   assert.equal(board.dragging, null);
+});
+
+// Columns of 40px-high tasks stacked from y=0, enough DOM for the drag code:
+// it reads positions and moves cards, nothing else.
+function fakeColumns(spec) {
+  ctx.getComputedStyle = () => ({ transform: 'none' });
+  ctx.DOMMatrixReadOnly = function () {
+    this.m42 = 0;
+  };
+  ctx.matchMedia = () => ({ matches: true });
+  const cards = {};
+  const zones = {};
+  for (const [status, uuids] of Object.entries(spec)) {
+    const list = {
+      items: [],
+      isConnected: true,
+      querySelectorAll() {
+        return this.items.slice();
+      },
+      insertBefore(card, ref) {
+        const from = card.parent.items;
+        from.splice(from.indexOf(card), 1);
+        card.parent = this;
+        const at = ref ? this.items.indexOf(ref) : this.items.length;
+        this.items.splice(at, 0, card);
+      },
+    };
+    for (const uuid of uuids) {
+      const card = {
+        dataset: { taskUuid: uuid },
+        parent: list,
+        get parentElement() {
+          return this.parent;
+        },
+        get nextElementSibling() {
+          return this.parent.items[this.parent.items.indexOf(this) + 1] || null;
+        },
+        getBoundingClientRect() {
+          return { top: this.parent.items.indexOf(this) * 40, height: 40 };
+        },
+      };
+      list.items.push(card);
+      cards[uuid] = card;
+    }
+    zones[status] = {
+      dataset: { statusUuid: status },
+      querySelector: () => list,
+      contains: (el) => el === list,
+    };
+  }
+  const order = (status) =>
+    zones[status].querySelector().items.map((c) => c.dataset.taskUuid);
+  return { cards, zones, order };
+}
+
+function dragEvent(currentTarget, clientY) {
+  return {
+    currentTarget,
+    clientY,
+    preventDefault: () => {},
+    dataTransfer: { setData: () => {} },
+  };
+}
+
+test('dropAnchor lands before the first task whose middle is below the pointer', () => {
+  const { cards, zones } = fakeColumns({ s1: ['a', 'b', 'c'] });
+  const list = zones.s1.querySelector();
+  const anchor = (y) => ctx.projectBoardHelpers.dropAnchor(list, y, cards.a);
+  assert.equal(anchor(50), cards.b);
+  assert.equal(anchor(90), cards.c);
+  assert.equal(anchor(110), null);
+});
+
+test('dragging over a column moves the card there before the drop', async () => {
+  const { cards, zones, order } = fakeColumns({
+    s1: ['a', 'b'],
+    s2: ['c', 'd'],
+  });
+  const board = panelBoard();
+  const saved = [];
+  board.saveOrder = async (status, ids) => saved.push([status, Array.from(ids)]);
+  board.onDragStart(dragEvent(cards.a, 0), 'a');
+  board.onDragOver(dragEvent(zones.s2, 50));
+  assert.deepStrictEqual(order('s2'), ['c', 'a', 'd']);
+  assert.deepStrictEqual(order('s1'), ['b']);
+  assert.equal(board.dropStatus, 's2');
+  await board.onDrop(dragEvent(zones.s2, 50), 's2');
+  assert.deepStrictEqual(saved, [['s2', ['c', 'a', 'd']]]);
+  assert.equal(board.dropStatus, null);
+  assert.equal(board.dragging, null);
+});
+
+test('a cancelled drag puts the card back where it started', () => {
+  const { cards, zones, order } = fakeColumns({ s1: ['a', 'b'], s2: ['c'] });
+  const board = panelBoard();
+  board.onDragStart(dragEvent(cards.b, 0), 'b');
+  board.onDragOver(dragEvent(zones.s2, 0));
+  assert.deepStrictEqual(order('s2'), ['b', 'c']);
+  board.onDragEnd();
+  assert.deepStrictEqual(order('s1'), ['a', 'b']);
+  assert.deepStrictEqual(order('s2'), ['c']);
+});
+
+test('dropping a card back on its own slot saves nothing', async () => {
+  const { cards, zones } = fakeColumns({ s1: ['a', 'b'] });
+  const board = panelBoard();
+  let saves = 0;
+  board.saveOrder = async () => saves++;
+  board.onDragStart(dragEvent(cards.a, 0), 'a');
+  await board.onDrop(dragEvent(zones.s1, 10), 's1');
+  assert.equal(saves, 0);
 });
 
 test('toggleSelect adds then removes a uuid', () => {

@@ -1113,6 +1113,11 @@ msgstr "Flèche haut"
 
 #: vocabulary.py
 msgctxt "keyboard key"
+msgid "Del"
+msgstr "Suppr"
+
+#: vocabulary.py
+msgctxt "keyboard key"
 msgid "Enter"
 msgstr "Entrée"
 
@@ -1125,3 +1130,8 @@ msgstr "Échap"
 msgctxt "keyboard key"
 msgid "Shift"
 msgstr "Maj"
+
+#: vocabulary.py
+msgctxt "keyboard key"
+msgid "Space"
+msgstr "Espace"

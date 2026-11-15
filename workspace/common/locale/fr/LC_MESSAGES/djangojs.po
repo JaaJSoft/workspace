@@ -47,6 +47,38 @@ msgstr "Une erreur s’est produite."
 msgid "This file was deleted, or you don't have access to it."
 msgstr "Ce fichier a été supprimé, ou vous n’y avez pas accès."
 
+#: static/ui/js/filesize.js
+msgid "%(size)s byte"
+msgid_plural "%(size)s bytes"
+msgstr[0] "%(size)s octet"
+msgstr[1] "%(size)s octets"
+msgstr[2] "%(size)s octets"
+
+#: static/ui/js/filesize.js
+#, javascript-format
+msgid "%s KB"
+msgstr "%s Kio"
+
+#: static/ui/js/filesize.js
+#, javascript-format
+msgid "%s MB"
+msgstr "%s Mio"
+
+#: static/ui/js/filesize.js
+#, javascript-format
+msgid "%s GB"
+msgstr "%s Gio"
+
+#: static/ui/js/filesize.js
+#, javascript-format
+msgid "%s TB"
+msgstr "%s Tio"
+
+#: static/ui/js/filesize.js
+#, javascript-format
+msgid "%s PB"
+msgstr "%s Pio"
+
 #: static/ui/js/icon_picker.js static/ui/js/tag_chip.js
 msgid "Yellow"
 msgstr "Jaune"

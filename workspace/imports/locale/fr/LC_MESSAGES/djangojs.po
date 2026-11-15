@@ -1,0 +1,315 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-15 11:15+0000\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Folders and files, with their dates."
+msgstr "Dossiers et fichiers, avec leurs dates."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Address books, with their contact groups as lists."
+msgstr ""
+"Carnets d’adresses, avec leurs groupes de contacts sous forme de listes."
+
+#: ui/static/imports/ui/js/imports.js
+msgctxt "import status"
+msgid "pending"
+msgstr "en attente"
+
+#: ui/static/imports/ui/js/imports.js
+msgctxt "import status"
+msgid "running"
+msgstr "en cours"
+
+#: ui/static/imports/ui/js/imports.js
+msgctxt "import status"
+msgid "completed"
+msgstr "terminé"
+
+#: ui/static/imports/ui/js/imports.js
+msgctxt "import status"
+msgid "failed"
+msgstr "échoué"
+
+#: ui/static/imports/ui/js/imports.js
+msgctxt "import status"
+msgid "cancelled"
+msgstr "annulé"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "keep both"
+msgstr "garder les deux"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "keep mine"
+msgstr "garder le mien"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "replace mine"
+msgstr "remplacer le mien"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s imported"
+msgid_plural "%(count)s imported"
+msgstr[0] "%(count)s importé"
+msgstr[1] "%(count)s importés"
+msgstr[2] "%(count)s importés"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s unchanged"
+msgid_plural "%(count)s unchanged"
+msgstr[0] "%(count)s inchangé"
+msgstr[1] "%(count)s inchangés"
+msgstr[2] "%(count)s inchangés"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s skipped"
+msgid_plural "%(count)s skipped"
+msgstr[0] "%(count)s ignoré"
+msgstr[1] "%(count)s ignorés"
+msgstr[2] "%(count)s ignorés"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s failed"
+msgid_plural "%(count)s failed"
+msgstr[0] "%(count)s en échec"
+msgstr[1] "%(count)s en échec"
+msgstr[2] "%(count)s en échec"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s added"
+msgid_plural "%(count)s added"
+msgstr[0] "%(count)s ajouté"
+msgstr[1] "%(count)s ajoutés"
+msgstr[2] "%(count)s ajoutés"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s updated"
+msgid_plural "%(count)s updated"
+msgstr[0] "%(count)s mis à jour"
+msgstr[1] "%(count)s mis à jour"
+msgstr[2] "%(count)s mis à jour"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s list"
+msgid_plural "%(count)s lists"
+msgstr[0] "%(count)s liste"
+msgstr[1] "%(count)s listes"
+msgstr[2] "%(count)s listes"
+
+#: ui/static/imports/ui/js/imports.js
+msgid ""
+"Instance URL, as in your browser (https://cloud.example.org). The WebDAV "
+"path is derived from it."
+msgstr ""
+"URL de l’instance, comme dans votre navigateur (https://cloud.example.org). "
+"Le chemin WebDAV en est déduit."
+
+#: ui/static/imports/ui/js/imports.js
+msgid ""
+"Use an app password (Settings → Security → Devices & sessions), not your "
+"login password."
+msgstr ""
+"Utilisez un mot de passe d’application (Paramètres → Sécurité → Appareils et "
+"sessions), pas votre mot de passe de connexion."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Full WebDAV URL of the folder to import from."
+msgstr "URL WebDAV complète du dossier à importer."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Password or app token for that account."
+msgstr "Mot de passe ou jeton d’application de ce compte."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Root of my files"
+msgstr "Racine de mes fichiers"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(used)s used · %(free)s free"
+msgstr "%(used)s utilisés · %(free)s libres"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Checked %(date)s"
+msgstr "Vérifiée le %(date)s"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Stopping"
+msgstr "Arrêt…"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Errors (%(count)s)"
+msgstr "Erreurs (%(count)s)"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s failed. Retry the import to try it again."
+msgid_plural "%(count)s failed. Retry the import to try them again."
+msgstr[0] "%(count)s en échec. Relancez l’import pour le réessayer."
+msgstr[1] "%(count)s en échec. Relancez l’import pour les réessayer."
+msgstr[2] "%(count)s en échec. Relancez l’import pour les réessayer."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Edit connection"
+msgstr "Modifier la connexion"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Add a connection"
+msgstr "Ajouter une connexion"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "New password (optional)"
+msgstr "Nouveau mot de passe (facultatif)"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Connect"
+msgstr "Connecter"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Import %(name)s"
+msgstr "Importer %(name)s"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Stopping… what is already imported stays."
+msgstr "Arrêt en cours… ce qui est déjà importé est conservé."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Waiting to start…"
+msgstr "En attente de démarrage…"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Listing the address books… %(count)s contact found"
+msgid_plural "Listing the address books… %(count)s contacts found"
+msgstr[0] "Lecture des carnets d’adresses… %(count)s contact trouvé"
+msgstr[1] "Lecture des carnets d’adresses… %(count)s contacts trouvés"
+msgstr[2] "Lecture des carnets d’adresses… %(count)s contacts trouvés"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Importing contacts… %(done)s / %(total)s"
+msgstr "Import des contacts… %(done)s / %(total)s"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Listing the remote folders… %(count)s file found"
+msgid_plural "Listing the remote folders… %(count)s files found"
+msgstr[0] "Lecture des dossiers distants… %(count)s fichier trouvé"
+msgstr[1] "Lecture des dossiers distants… %(count)s fichiers trouvés"
+msgstr[2] "Lecture des dossiers distants… %(count)s fichiers trouvés"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Copying… %(done)s / %(total)s"
+msgstr "Copie… %(done)s / %(total)s"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(kind)s: %(summary)s"
+msgstr "%(kind)s : %(summary)s"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(count)s address book"
+msgid_plural "%(count)s address books"
+msgstr[0] "%(count)s carnet d’adresses"
+msgstr[1] "%(count)s carnets d’adresses"
+msgstr[2] "%(count)s carnets d’adresses"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Stop this import?"
+msgstr "Arrêter cet import ?"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "What has already been imported stays."
+msgstr "Ce qui a déjà été importé est conservé."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Could not stop the import."
+msgstr "Impossible d’arrêter l’import."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Could not retry the import."
+msgstr "Impossible de relancer l’import."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Import restarted - only what failed or was never reached runs again."
+msgstr ""
+"Import relancé : seul ce qui a échoué ou n’a jamais été atteint est repris."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Could not load the report."
+msgstr "Impossible de charger le rapport."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "The connection could not be verified."
+msgstr "La connexion n’a pas pu être vérifiée."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Connection updated."
+msgstr "Connexion mise à jour."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Connected - the server answered with your credentials."
+msgstr "Connecté : le serveur a accepté vos identifiants."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "%(name)s is reachable."
+msgstr "%(name)s est joignable."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "The connection failed."
+msgstr "La connexion a échoué."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Remove %(name)s?"
+msgstr "Supprimer %(name)s ?"
+
+#: ui/static/imports/ui/js/imports.js
+msgid ""
+"The import history of this connection goes with it. What was imported stays."
+msgstr ""
+"L’historique d’import de cette connexion est supprimé avec elle. Ce qui a "
+"été importé est conservé."
+
+#: ui/static/imports/ui/js/imports.js
+msgctxt "import connection"
+msgid "Remove"
+msgstr "Supprimer"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Could not remove the connection."
+msgstr "Impossible de supprimer la connexion."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Could not list the address books."
+msgstr "Impossible de lire les carnets d’adresses."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Could not list this folder."
+msgstr "Impossible de lire ce dossier."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Import into"
+msgstr "Importer dans"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "The imported folders and files land here."
+msgstr "Les dossiers et fichiers importés arrivent ici."
+
+#: ui/static/imports/ui/js/imports.js
+msgid "Choose"
+msgstr "Choisir"
+
+#: ui/static/imports/ui/js/imports.js
+msgid "The import could not be started."
+msgstr "L’import n’a pas pu être lancé."
+
+#: ui/static/imports/ui/js/imports.js
+msgid ""
+"Import started. You can leave this page - you will be notified when it ends."
+msgstr ""
+"Import lancé. Vous pouvez quitter cette page, vous recevrez une notification "
+"à la fin."

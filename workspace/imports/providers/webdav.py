@@ -15,6 +15,7 @@ from xml.etree import ElementTree
 
 import httpx2
 from django.conf import settings
+from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 
@@ -71,10 +72,19 @@ def _raise_for_status(response, remote_path=""):
     if code < 400:
         return
     if code in (401, 403):
-        raise AuthenticationFailed("The server rejected the username or password.")
+        raise AuthenticationFailed(_("The server rejected the username or password."))
     if code == 404:
-        raise RemoteNotFound(f"'{remote_path or '/'}' does not exist on the server.")
-    raise ProviderError(f"The server answered with HTTP {code}.")
+        raise RemoteNotFound(
+            _("'%(path)s' does not exist on the server.") % {"path": remote_path or "/"}
+        )
+    raise ProviderError(_("The server answered with HTTP %(code)s.") % {"code": code})
+
+
+def _not_webdav(host, code):
+    return ProviderError(
+        _("'%(host)s' is not a WebDAV server (HTTP %(code)s to PROPFIND).")
+        % {"host": host, "code": code}
+    )
 
 
 @contextmanager
@@ -82,9 +92,11 @@ def _translate_transport_errors(host):
     try:
         yield
     except httpx2.TimeoutException as exc:
-        raise ConnectionFailed(f"{host} did not answer in time.") from exc
+        raise ConnectionFailed(
+            _("%(host)s did not answer in time.") % {"host": host}
+        ) from exc
     except httpx2.TransportError as exc:
-        raise ConnectionFailed(f"Could not reach {host}.") from exc
+        raise ConnectionFailed(_("Could not reach %(host)s.") % {"host": host}) from exc
 
 
 class _ResponseStream(io.RawIOBase):
@@ -158,9 +170,7 @@ class WebDavFileSource:
             )
         _raise_for_status(response, entry_id)
         if response.status_code != 207:
-            raise ProviderError(
-                f"'{self._host}' is not a WebDAV server (HTTP {response.status_code} to PROPFIND)."
-            )
+            raise _not_webdav(self._host, response.status_code)
         requested = "/" + entry_id.strip("/")
         for entry in _parse_multistatus(response.content, self._entry_id_from_href):
             if entry.id == requested:
@@ -177,7 +187,8 @@ class WebDavFileSource:
                     # Redirects are not followed on purpose; a 3xx body is
                     # not the file.
                     raise ProviderError(
-                        f"The server answered HTTP {response.status_code} instead of the file."
+                        _("The server answered HTTP %(code)s instead of the file.")
+                        % {"code": response.status_code}
                     )
                 yield io.BufferedReader(_ResponseStream(response.iter_raw()))
 
@@ -195,12 +206,10 @@ class WebDavFileSource:
             )
         _raise_for_status(response, "/")
         if response.status_code != 207:
-            raise ProviderError(
-                f"'{self._host}' is not a WebDAV server (HTTP {response.status_code} to PROPFIND)."
-            )
+            raise _not_webdav(self._host, response.status_code)
         props = _first_ok_props(parse_dav_xml(response.content))
         if props is None or props.find(f"{DAV}resourcetype/{DAV}collection") is None:
-            raise ProviderError("The URL does not point to a WebDAV folder.")
+            raise ProviderError(_("The URL does not point to a WebDAV folder."))
         return {
             "quota_used": _int_or_none(props.findtext(f"{DAV}quota-used-bytes")),
             "quota_available": _quota_available(
@@ -213,7 +222,9 @@ def parse_dav_xml(content: bytes):
     try:
         return ElementTree.fromstring(content)
     except ElementTree.ParseError as exc:
-        raise ProviderError("The server sent an unreadable WebDAV response.") from exc
+        raise ProviderError(
+            _("The server sent an unreadable WebDAV response.")
+        ) from exc
 
 
 def ok_props(response):

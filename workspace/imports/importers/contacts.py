@@ -13,6 +13,8 @@ from itertools import batched
 
 from django.conf import settings
 from django.db import DataError, IntegrityError, transaction
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy, ngettext
 from rest_framework import serializers
 from vobject.vcard import stringToTextValues
 
@@ -27,7 +29,7 @@ from workspace.people.services.vcard_import import import_vcards
 from ..models import ImportJobItem
 from ..providers.base import KIND_CONTACTS, ProviderError
 from ..serializers import RemotePathField
-from .base import Importer, JobFailed, Outcome
+from .base import Importer, JobFailed, Outcome, consecutive_errors_failure
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +115,7 @@ class AddressBookChoiceSerializer(serializers.Serializer):
 
     def validate_id(self, value):
         if value == "/":
-            raise serializers.ValidationError("Pick an address book.")
+            raise serializers.ValidationError(_("Pick an address book."))
         return value
 
     def validate_target(self, value):
@@ -131,7 +133,7 @@ class ContactsImportOptionsSerializer(serializers.Serializer):
     def validate_books(self, value):
         ids = [book["id"] for book in value]
         if len(set(ids)) != len(ids):
-            raise serializers.ValidationError("An address book is picked twice.")
+            raise serializers.ValidationError(_("An address book is picked twice."))
         return [dict(book) for book in value]
 
 
@@ -144,10 +146,7 @@ class _ErrorStreak:
     def bump(self):
         self.count += 1
         if self.count >= settings.IMPORTS_MAX_CONSECUTIVE_ERRORS:
-            raise JobFailed(
-                f"Stopped after {self.count} consecutive errors - "
-                "the remote server looks unavailable."
-            )
+            raise consecutive_errors_failure(self.count)
 
     def reset(self):
         self.count = 0
@@ -155,6 +154,7 @@ class _ErrorStreak:
 
 class ContactsImporter(Importer):
     kind = KIND_CONTACTS
+    label = gettext_lazy("Contacts")
     option_serializer = ContactsImportOptionsSerializer
 
     def run(self, ctx):
@@ -187,25 +187,33 @@ class ContactsImporter(Importer):
         )
 
     def summarize(self, stats):
-        parts = []
-        for key, label in (
-            ("created", "contacts added"),
-            ("updated", "updated"),
-            ("unchanged", "unchanged"),
-            ("lists", "lists"),
-            ("failed", "failed"),
-        ):
-            if stats.get(key):
-                parts.append(f"{stats[key]} {label}")
-        return ", ".join(parts) or "Nothing to import."
+        counters = {
+            "created": lambda n: ngettext(
+                "%(count)s contact added", "%(count)s contacts added", n
+            ),
+            "updated": lambda n: ngettext("%(count)s updated", "%(count)s updated", n),
+            "unchanged": lambda n: ngettext(
+                "%(count)s unchanged", "%(count)s unchanged", n
+            ),
+            "lists": lambda n: ngettext("%(count)s list", "%(count)s lists", n),
+            "failed": lambda n: ngettext("%(count)s failed", "%(count)s failed", n),
+        }
+        parts = [
+            phrase(stats[key]) % {"count": stats[key]}
+            for key, phrase in counters.items()
+            if stats.get(key)
+        ]
+        return ", ".join(parts) or _("Nothing to import.")
 
     def _scope(self, ctx, target):
         try:
             return parse_scope(ctx.owner, target)
         except serializers.ValidationError as exc:
             raise JobFailed(
-                "An address book was to be imported into a group you are no "
-                "longer a member of."
+                _(
+                    "An address book was to be imported into a group you are no "
+                    "longer a member of."
+                )
             ) from exc
 
     def _book_ids(self, ctx):
@@ -234,7 +242,8 @@ class ContactsImporter(Importer):
                         unchanged += 1
             except ProviderError as exc:
                 raise JobFailed(
-                    f"Could not list the address book '{book_id}': {exc.user_message}"
+                    _("Could not list the address book '%(book)s': %(error)s")
+                    % {"book": book_id, "error": exc.user_message}
                 ) from exc
             ctx.stat("total_cards", cards)
             ctx.stat("unchanged", unchanged)
@@ -316,7 +325,7 @@ class ContactsImporter(Importer):
                     self._fail(
                         ctx,
                         card_id,
-                        "The contact disappeared from the server during the import.",
+                        _("The contact disappeared from the server during the import."),
                         etags[card_id],
                     )
         for card in groups:
@@ -375,5 +384,5 @@ class ContactsImporter(Importer):
 
 def _card_message(exc):
     if isinstance(exc, VCardError):
-        return "This contact is not a valid vCard."
-    return "Could not store the contact."
+        return _("This contact is not a valid vCard.")
+    return _("Could not store the contact.")

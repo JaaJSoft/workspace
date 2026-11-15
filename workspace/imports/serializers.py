@@ -1,3 +1,5 @@
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from .models import ImportConnection, ImportJob, ImportJobItem
@@ -44,10 +46,12 @@ class ConnectionCreateSerializer(serializers.Serializer):
     def validate_provider(self, value):
         provider = provider_registry.get(value)
         if provider is None or not provider.is_available():
-            raise serializers.ValidationError("Unknown provider.")
+            raise serializers.ValidationError(_("Unknown provider."))
         if provider.auth != "credentials":
             raise serializers.ValidationError(
-                "This provider is connected through its sign-in flow, not a password."
+                _(
+                    "This provider is connected through its sign-in flow, not a password."
+                )
             )
         return value
 
@@ -67,7 +71,7 @@ class RemotePathField(serializers.CharField):
     the request could leave the DAV root the connection was vetted for."""
 
     default_error_messages = {
-        "dot_segments": "The path must not contain '.' or '..' segments."
+        "dot_segments": gettext_lazy("The path must not contain '.' or '..' segments.")
     }
 
     def __init__(self, **kwargs):

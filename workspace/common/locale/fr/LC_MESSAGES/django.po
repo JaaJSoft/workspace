@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 20:09+0000\n"
+"POT-Creation-Date: 2026-11-15 11:15+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -604,8 +604,12 @@ msgid "Image too large. Maximum size is 10 MB."
 msgstr "Image trop volumineuse. La taille maximale est de 10 Mo."
 
 #: vocabulary.py
+msgid "Import"
+msgstr "Importer"
+
+#: vocabulary.py
 msgid "Imports"
-msgstr "Importations"
+msgstr "Imports"
 
 #: vocabulary.py
 msgid "In trash"
@@ -690,6 +694,10 @@ msgstr "Messages"
 #: vocabulary.py
 msgid "More actions"
 msgstr "Plus d’actions"
+
+#: vocabulary.py
+msgid "My contacts"
+msgstr "Mes contacts"
 
 #: vocabulary.py
 msgid "Move"

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:00+0000\n"
+"POT-Creation-Date: 2026-11-15 10:50+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -76,12 +76,6 @@ msgstr "Tous"
 
 #: ui/templates/people/ui/index.html
 #: ui/templates/people/ui/partials/dialogs.html
-#: ui/templates/people/ui/partials/person_panel.html
-msgid "My contacts"
-msgstr "Mes contacts"
-
-#: ui/templates/people/ui/index.html
-#: ui/templates/people/ui/partials/dialogs.html
 #: ui/templates/people/ui/partials/help_dialog.html
 #: ui/templates/people/ui/partials/person_panel.html
 msgid "Lists"
@@ -101,11 +95,6 @@ msgstr "Actions pour %%(name)s"
 msgctxt "new contact"
 msgid "New"
 msgstr "Nouveau"
-
-#: ui/templates/people/ui/index.html
-#: ui/templates/people/ui/partials/dialogs.html
-msgid "Import"
-msgstr "Importer"
 
 #: ui/templates/people/ui/index.html
 msgid "Export"

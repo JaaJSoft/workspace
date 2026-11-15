@@ -10,9 +10,27 @@ const JOBS_POLL_MS = 10000;
 
 // What each data kind means to the user; providers declare which ones they serve.
 const KIND_LABELS = {
-  files: { name: 'Files', description: 'Folders and files, with their dates.' },
-  contacts: { name: 'Contacts', description: 'Address books, with their contact groups as lists.' },
+  files: { name: gettext('Files'), description: gettext('Folders and files, with their dates.') },
+  contacts: { name: gettext('Contacts'), description: gettext('Address books, with their contact groups as lists.') },
 };
+
+const STATUS_LABELS = {
+  pending: pgettext('import status', 'pending'),
+  running: pgettext('import status', 'running'),
+  completed: pgettext('import status', 'completed'),
+  failed: pgettext('import status', 'failed'),
+  cancelled: pgettext('import status', 'cancelled'),
+};
+
+const CONFLICT_LABELS = {
+  rename: gettext('keep both'),
+  skip: gettext('keep mine'),
+  replace: gettext('replace mine'),
+};
+
+function countLabel(translated, n) {
+  return interpolate(translated, { count: n }, true);
+}
 
 // What a kind has finished, out of what total.
 const KIND_PROGRESS = {
@@ -30,20 +48,20 @@ const KIND_PROGRESS = {
 const KIND_SUMMARY = {
   files: (s, formatSize) => {
     const parts = [];
-    if (s.files) parts.push(`${s.files} imported`);
-    if (s.unchanged) parts.push(`${s.unchanged} unchanged`);
-    if (s.skipped) parts.push(`${s.skipped} skipped`);
-    if (s.failed) parts.push(`${s.failed} failed`);
+    if (s.files) parts.push(countLabel(ngettext('%(count)s imported', '%(count)s imported', s.files), s.files));
+    if (s.unchanged) parts.push(countLabel(ngettext('%(count)s unchanged', '%(count)s unchanged', s.unchanged), s.unchanged));
+    if (s.skipped) parts.push(countLabel(ngettext('%(count)s skipped', '%(count)s skipped', s.skipped), s.skipped));
+    if (s.failed) parts.push(countLabel(ngettext('%(count)s failed', '%(count)s failed', s.failed), s.failed));
     if (s.bytes) parts.push(formatSize(s.bytes));
     return parts;
   },
   contacts: (s) => {
     const parts = [];
-    if (s.created) parts.push(`${s.created} added`);
-    if (s.updated) parts.push(`${s.updated} updated`);
-    if (s.unchanged) parts.push(`${s.unchanged} unchanged`);
-    if (s.lists) parts.push(`${s.lists} lists`);
-    if (s.failed) parts.push(`${s.failed} failed`);
+    if (s.created) parts.push(countLabel(ngettext('%(count)s added', '%(count)s added', s.created), s.created));
+    if (s.updated) parts.push(countLabel(ngettext('%(count)s updated', '%(count)s updated', s.updated), s.updated));
+    if (s.unchanged) parts.push(countLabel(ngettext('%(count)s unchanged', '%(count)s unchanged', s.unchanged), s.unchanged));
+    if (s.lists) parts.push(countLabel(ngettext('%(count)s list', '%(count)s lists', s.lists), s.lists));
+    if (s.failed) parts.push(countLabel(ngettext('%(count)s failed', '%(count)s failed', s.failed), s.failed));
     return parts;
   },
 };
@@ -56,12 +74,12 @@ function jobKinds(job) {
 // Copy shown next to the connection form, per provider.
 const PROVIDER_HINTS = {
   nextcloud: {
-    url: 'Instance URL, as in your browser (https://cloud.example.org). The WebDAV path is derived from it.',
-    secret: 'Use an app password (Settings → Security → Devices & sessions), not your login password.',
+    url: gettext('Instance URL, as in your browser (https://cloud.example.org). The WebDAV path is derived from it.'),
+    secret: gettext('Use an app password (Settings → Security → Devices & sessions), not your login password.'),
   },
   webdav: {
-    url: 'Full WebDAV URL of the folder to import from.',
-    secret: 'Password or app token for that account.',
+    url: gettext('Full WebDAV URL of the folder to import from.'),
+    secret: gettext('Password or app token for that account.'),
   },
 };
 
@@ -129,7 +147,7 @@ function emptyWizard() {
       files: {
         source_path: '/',
         destination: null,
-        destination_name: 'Root of my files',
+        destination_name: gettext('Root of my files'),
         on_conflict: 'rename',
         create_root_folder: true,
       },
@@ -217,7 +235,7 @@ window.importsApp = function importsApp() {
 
     formatDate(value) {
       if (!value) return '';
-      return new Date(value).toLocaleString();
+      return new Date(value).toLocaleString(window.getUserLocale ? window.getUserLocale() : undefined);
     },
 
     hasActiveJobs() {
@@ -233,8 +251,54 @@ window.importsApp = function importsApp() {
       if (c.quota_used == null) return '';
       const used = this.formatSize(c.quota_used);
       return c.quota_available != null
-        ? `${used} used · ${this.formatSize(c.quota_available)} free`
-        : `${used} used`;
+        ? interpolate(gettext('%(used)s used · %(free)s free'), { used, free: this.formatSize(c.quota_available) }, true)
+        : interpolate(gettext('%(size)s used'), { size: used }, true);
+    },
+
+    checkedLabel(conn) {
+      return interpolate(gettext('Checked %(date)s'), { date: this.formatDate(conn.last_checked_at) }, true);
+    },
+
+    statusLabel(status) {
+      return STATUS_LABELS[status] || status;
+    },
+
+    conflictLabel(policy) {
+      return CONFLICT_LABELS[policy] || policy || '';
+    },
+
+    stopLabel(job) {
+      return this.isStopping(job) ? gettext('Stopping') : gettext('Stop');
+    },
+
+    errorsLabel(job) {
+      return interpolate(gettext('Errors (%(count)s)'), { count: this.failedCount(job) }, true);
+    },
+
+    errorsSubtitle() {
+      const n = this.errorsDialog.count;
+      return countLabel(ngettext(
+        '%(count)s failed. Retry the import to try it again.',
+        '%(count)s failed. Retry the import to try them again.',
+        n,
+      ), n);
+    },
+
+    connectionDialogTitle() {
+      return this.connEditing ? gettext('Edit connection') : gettext('Add a connection');
+    },
+
+    passwordLabel() {
+      return this.connEditing ? gettext('New password (optional)') : gettext('Password');
+    },
+
+    connectionSubmitLabel() {
+      if (this.connSaving) return gettext('Checking…');
+      return this.connEditing ? gettext('Save') : gettext('Connect');
+    },
+
+    importBookLabel(book) {
+      return interpolate(gettext('Import %(name)s'), { name: book.name }, true);
     },
 
     // The kind the job is working on: the first not done yet, else the last.
@@ -265,16 +329,18 @@ window.importsApp = function importsApp() {
 
     phaseLabel(job) {
       const p = this.progress(job);
-      if (this.isStopping(job)) return 'Stopping… what is already imported stays.';
-      if (job.status === 'pending') return 'Waiting to start…';
+      if (this.isStopping(job)) return gettext('Stopping… what is already imported stays.');
+      if (job.status === 'pending') return gettext('Waiting to start…');
       if (job.status !== 'running') return '';
       if (p.kind === 'contacts') {
         return p.phase === 'listing'
-          ? `Listing the address books… ${p.total} contacts found`
-          : `Importing contacts… ${p.done} / ${p.total}`;
+          ? countLabel(ngettext('Listing the address books… %(count)s contact found', 'Listing the address books… %(count)s contacts found', p.total), p.total)
+          : interpolate(gettext('Importing contacts… %(done)s / %(total)s'), { done: p.done, total: p.total }, true);
       }
-      if (p.phase === 'listing') return `Listing the remote folders… ${p.total} files found`;
-      return `Copying… ${p.done} / ${p.total}`;
+      if (p.phase === 'listing') {
+        return countLabel(ngettext('Listing the remote folders… %(count)s file found', 'Listing the remote folders… %(count)s files found', p.total), p.total);
+      }
+      return interpolate(gettext('Copying… %(done)s / %(total)s'), { done: p.done, total: p.total }, true);
     },
 
     summary(job) {
@@ -286,7 +352,9 @@ window.importsApp = function importsApp() {
           const parts = (KIND_SUMMARY[kind] || (() => []))(stats[kind], (bytes) => this.formatSize(bytes));
           if (!parts.length) return '';
           const text = parts.join(' · ');
-          return labelled ? `${(KIND_LABELS[kind] || { name: kind }).name}: ${text}` : text;
+          if (!labelled) return text;
+          const name = (KIND_LABELS[kind] || { name: kind }).name;
+          return interpolate(gettext('%(kind)s: %(summary)s'), { kind: name, summary: text }, true);
         })
         .filter(Boolean)
         .join(' / ');
@@ -297,12 +365,12 @@ window.importsApp = function importsApp() {
     },
 
     bookSummary(job) {
-      const count = ((job.options && job.options.contacts && job.options.contacts.books) || []).length;
-      return count === 1 ? '1 address book' : `${count} address books`;
+      const books = ((job.options && job.options.contacts && job.options.contacts.books) || []).length;
+      return countLabel(ngettext('%(count)s address book', '%(count)s address books', books), books);
     },
 
     targetLabel(target) {
-      if (target === 'mine') return 'My contacts';
+      if (target === 'mine') return gettext('My contacts');
       const group = this.groups.find((g) => `group:${g.id}` === target);
       return group ? group.name : target;
     },
@@ -354,24 +422,24 @@ window.importsApp = function importsApp() {
 
     async cancelJob(job) {
       const ok = await AppDialog.confirm({
-        title: 'Stop this import?',
-        message: 'What has already been imported stays.',
-        okLabel: 'Stop',
+        title: gettext('Stop this import?'),
+        message: gettext('What has already been imported stays.'),
+        okLabel: gettext('Stop'),
         okClass: 'btn-warning',
         icon: 'octagon-x',
         iconClass: 'bg-warning/10 text-warning',
       });
       if (!ok) return;
       const res = await api(`/jobs/${job.uuid}/cancel`, { method: 'POST' });
-      if (!res.ok) return AppAlert.error(errorMessage(res.data, 'Could not stop the import.'));
+      if (!res.ok) return AppAlert.error(errorMessage(res.data, gettext('Could not stop the import.')));
       await this.refreshJob(job.uuid);
     },
 
     async retryJob(job) {
       const res = await api(`/jobs/${job.uuid}/retry`, { method: 'POST' });
-      if (!res.ok) return AppAlert.error(errorMessage(res.data, 'Could not retry the import.'));
+      if (!res.ok) return AppAlert.error(errorMessage(res.data, gettext('Could not retry the import.')));
       this.upsertJob(res.data);
-      AppAlert.success('Import restarted - only what failed or was never reached runs again.');
+      AppAlert.success(gettext('Import restarted - only what failed or was never reached runs again.'));
       // In eager mode (development) the retry call returns once the import
       // is over, with the job as it was created; refetch its real state.
       await this.refreshJob(res.data.uuid);
@@ -386,7 +454,7 @@ window.importsApp = function importsApp() {
         this.errorsDialog.items = res.data.results;
         this.errorsDialog.count = res.data.count;
       } else {
-        this.errorsDialog.error = errorMessage(res.data, 'Could not load the report.');
+        this.errorsDialog.error = errorMessage(res.data, gettext('Could not load the report.'));
       }
     },
 
@@ -423,14 +491,16 @@ window.importsApp = function importsApp() {
           res = await api('/connections', { method: 'POST', body: this.connForm });
         }
         if (!res.ok) {
-          this.connError = errorMessage(res.data, 'The connection could not be verified.');
+          this.connError = errorMessage(res.data, gettext('The connection could not be verified.'));
           return;
         }
         const idx = this.connections.findIndex((c) => c.uuid === res.data.uuid);
         if (idx === -1) this.connections.unshift(res.data);
         else this.connections.splice(idx, 1, res.data);
         this.closeConnectionDialog();
-        AppAlert.success(this.connEditing ? 'Connection updated.' : 'Connected - the server answered with your credentials.');
+        AppAlert.success(this.connEditing
+          ? gettext('Connection updated.')
+          : gettext('Connected - the server answered with your credentials.'));
         if (!this.connEditing && this.wizard.step === 1 && this.$refs.wizardDialog.open) {
           this.wizard.connection = res.data;
         }
@@ -445,12 +515,12 @@ window.importsApp = function importsApp() {
         const res = await api(`/connections/${conn.uuid}/test`, { method: 'POST' });
         if (res.ok) {
           this._replaceConnection(res.data);
-          AppAlert.success(`${conn.label} is reachable.`);
+          AppAlert.success(interpolate(gettext('%(name)s is reachable.'), { name: conn.label }, true));
         } else {
           // The row keeps last_error: refetch to show it.
           const fresh = await api(`/connections/${conn.uuid}`);
           if (fresh.ok) this._replaceConnection(fresh.data);
-          AppAlert.error(errorMessage(res.data, 'The connection failed.'));
+          AppAlert.error(errorMessage(res.data, gettext('The connection failed.')));
         }
       } finally {
         this.connBusy[conn.uuid] = false;
@@ -459,16 +529,16 @@ window.importsApp = function importsApp() {
 
     async deleteConnection(conn) {
       const ok = await AppDialog.confirm({
-        title: `Remove ${conn.label}?`,
-        message: 'The import history of this connection goes with it. What was imported stays.',
-        okLabel: 'Remove',
+        title: interpolate(gettext('Remove %(name)s?'), { name: conn.label }, true),
+        message: gettext('The import history of this connection goes with it. What was imported stays.'),
+        okLabel: pgettext('import connection', 'Remove'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
       const res = await api(`/connections/${conn.uuid}`, { method: 'DELETE' });
-      if (!res.ok) return AppAlert.error(errorMessage(res.data, 'Could not remove the connection.'));
+      if (!res.ok) return AppAlert.error(errorMessage(res.data, gettext('Could not remove the connection.')));
       this.connections = this.connections.filter((c) => c.uuid !== conn.uuid);
       this.jobs = this.jobs.filter((j) => j.connection !== conn.uuid);
     },
@@ -546,7 +616,7 @@ window.importsApp = function importsApp() {
       const res = await api(`/connections/${conn.uuid}/browse?kind=contacts`);
       this.addressBooks.loading = false;
       if (!res.ok) {
-        this.addressBooks.error = errorMessage(res.data, 'Could not list the address books.');
+        this.addressBooks.error = errorMessage(res.data, gettext('Could not list the address books.'));
         return;
       }
       this.addressBooks.loadedFor = conn.uuid;
@@ -590,7 +660,7 @@ window.importsApp = function importsApp() {
       const res = await api(`/connections/${conn.uuid}/browse?path=${encodeURIComponent(path)}`);
       this.browse.loading = false;
       if (!res.ok) {
-        this.browse.error = errorMessage(res.data, 'Could not list this folder.');
+        this.browse.error = errorMessage(res.data, gettext('Could not list this folder.'));
         return;
       }
       this.browse.path = res.data.path;
@@ -609,7 +679,7 @@ window.importsApp = function importsApp() {
 
     browseCrumbs() {
       const parts = this.browse.path.split('/').filter(Boolean);
-      const crumbs = [{ label: 'Root', path: '/' }];
+      const crumbs = [{ label: gettext('Root'), path: '/' }];
       let acc = '';
       for (const part of parts) {
         acc += '/' + part;
@@ -624,19 +694,20 @@ window.importsApp = function importsApp() {
 
     async pickDestination() {
       const picked = await AppDialog.folderPicker({
-        title: 'Import into',
-        message: 'The imported folders and files land here.',
-        okLabel: 'Choose',
+        title: gettext('Import into'),
+        message: gettext('The imported folders and files land here.'),
+        okLabel: gettext('Choose'),
         icon: 'folder-input',
         iconClass: 'bg-module/15 text-module',
       });
       if (!picked) return;
       this.wizard.options.files.destination = picked.uuid;
-      this.wizard.options.files.destination_name = picked.uuid ? picked.name : 'Root of my files';
+      this.wizard.options.files.destination_name = picked.uuid ? picked.name : gettext('Root of my files');
     },
 
     rootFolderName() {
       const conn = this.wizard.connection;
+      // The name the server gives the folder, which stays the same in every language.
       return conn ? `${conn.label} import` : '';
     },
 
@@ -647,12 +718,12 @@ window.importsApp = function importsApp() {
       try {
         const res = await api('/jobs', { method: 'POST', body: this.launchBody() });
         if (!res.ok) {
-          w.error = errorMessage(res.data, 'The import could not be started.');
+          w.error = errorMessage(res.data, gettext('The import could not be started.'));
           return;
         }
         this.upsertJob(res.data);
         this.closeWizard();
-        AppAlert.success('Import started. You can leave this page - you will be notified when it ends.');
+        AppAlert.success(gettext('Import started. You can leave this page - you will be notified when it ends.'));
         // In eager mode (development) the create call returns once the import
         // is over; refetch so the card does not show "pending" forever.
         this.refreshJob(res.data.uuid);

@@ -7,6 +7,71 @@ function listOrder(listEl) {
   );
 }
 
+const TASK_ANIMATION = 'task-drag';
+
+function prefersReducedMotion() {
+  return Boolean(
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+// Where a dragged task lands in a list: before the first other task whose
+// middle is below the pointer, or at the end (null). Middles come from
+// layout, not from the screen: a task still sliding from the previous move
+// would otherwise flip the answer back and forth.
+function dropAnchor(listEl, clientY, draggedEl) {
+  for (const item of listEl.querySelectorAll('[data-task-uuid]')) {
+    if (item === draggedEl) continue;
+    const rect = item.getBoundingClientRect();
+    const slide = new DOMMatrixReadOnly(getComputedStyle(item).transform).m42;
+    if (clientY < rect.top - slide + rect.height / 2) return item;
+  }
+  return null;
+}
+
+// Runs `mutate` (a DOM move) and slides every task of `lists` from where it
+// was on screen to its new place (FLIP). A slide still running is picked up
+// from its current position, so quick successive moves stay fluid.
+function animateReorder(lists, mutate) {
+  if (prefersReducedMotion()) {
+    mutate();
+    return;
+  }
+  const items = lists.flatMap((list) =>
+    Array.from(list.querySelectorAll('[data-task-uuid]'))
+  );
+  const before = new Map(items.map((el) => [el, el.getBoundingClientRect()]));
+  for (const el of items) {
+    for (const running of el.getAnimations()) {
+      if (running.id === TASK_ANIMATION) running.cancel();
+    }
+  }
+  mutate();
+  for (const [el, first] of before) {
+    const last = el.getBoundingClientRect();
+    const dx = first.left - last.left;
+    const dy = first.top - last.top;
+    if (!dx && !dy) continue;
+    el.animate(
+      [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+      { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)', id: TASK_ANIMATION }
+    );
+  }
+}
+
+// The dropped task pops back to its size as it lands. Resolves once done, so
+// the refresh that re-renders the board does not cut it short.
+function landAnimation(card) {
+  if (prefersReducedMotion()) return Promise.resolve();
+  return card
+    .animate([{ transform: 'scale(1.04)' }, { transform: 'none' }], {
+      duration: 200,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      id: TASK_ANIMATION,
+    })
+    .finished.catch(() => {});
+}
+
 // Upper bound of POST /api/v1/projects/actions, mirrored from the endpoint.
 const ACTIONS_BATCH_SIZE = 200;
 
@@ -295,10 +360,17 @@ function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
 }
 
 function projectBoard(config) {
+  // The dragged card and the slot it left, to put it back when the drag is
+  // cancelled. Kept out of the component: Alpine has nothing to track here.
+  let dragOrigin = null;
   return {
     currentView: config.view || 'board',
     collapsed: window.sidebarPreference.initial(),
     dragging: null,
+    // The dragged card, restyled as the slot it will drop into.
+    dropSlot: null,
+    // The column the dragged card currently sits in, highlighted.
+    dropStatus: null,
     // Save is guarded per opening of the new-task dialog: a create still
     // pending from an earlier opening neither blocks the new one nor gets
     // to close or reset it when it answers.
@@ -457,40 +529,105 @@ function projectBoard(config) {
         return;
       }
       this.dragging = uuid;
+      const card = event.currentTarget;
+      dragOrigin = card?.parentElement
+        ? { card, list: card.parentElement, next: card.nextElementSibling }
+        : null;
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', uuid);
+      // The browser snapshots the drag image once this handler returns: the
+      // card turns into its slot only after that, or the image is the slot.
+      setTimeout(() => {
+        if (this.dragging === uuid) this.dropSlot = uuid;
+      });
     },
 
     onDragEnd() {
+      // A drop already placed the card; any other end (Escape, released
+      // outside every column) puts it back where it started.
+      const origin = dragOrigin;
+      this._endDrag();
+      if (origin) this._restoreDragged(origin);
+    },
+
+    _restoreDragged({ card, list, next }) {
+      if (card.parentElement === list && card.nextElementSibling === next) {
+        return;
+      }
+      // A refresh landed mid-drag: the slot it left no longer exists.
+      if (!list.isConnected || (next && next.parentElement !== list)) return;
+      animateReorder([...new Set([card.parentElement, list])], () =>
+        list.insertBefore(card, next)
+      );
+    },
+
+    _endDrag() {
       this.dragging = null;
+      this.dropSlot = null;
+      this.dropStatus = null;
+      dragOrigin = null;
     },
 
     onDragOver(event) {
       if (!this.dragging) return;
       event.dataTransfer.dropEffect = 'move';
+      this.dropStatus = event.currentTarget.dataset.statusUuid;
+      this._placeDragged(event.currentTarget, event.clientY);
+    },
+
+    onDragLeave(event) {
+      // dragleave also fires when the pointer crosses into a child of the
+      // zone: only a pointer outside the zone's box has left it.
+      const zone = event.currentTarget;
+      const r = zone.getBoundingClientRect();
+      const inside =
+        event.clientX >= r.left &&
+        event.clientX < r.right &&
+        event.clientY >= r.top &&
+        event.clientY < r.bottom;
+      if (!inside && this.dropStatus === zone.dataset.statusUuid) {
+        this.dropStatus = null;
+      }
+    },
+
+    // Moves the dragged card to where a drop at clientY would put it, so the
+    // board shows the result before the button is released.
+    _placeDragged(zone, clientY) {
+      const card = dragOrigin?.card;
+      const list = zone.querySelector('[data-column-list], [data-backlog-list]');
+      if (!card || !list) return;
+      const anchor = dropAnchor(list, clientY, card);
+      if (card.parentElement === list && card.nextElementSibling === anchor) {
+        return;
+      }
+      animateReorder([...new Set([card.parentElement, list])], () =>
+        list.insertBefore(card, anchor)
+      );
     },
 
     async onDrop(event, statusUuid) {
-      const uuid = this.dragging;
-      this.dragging = null;
-      if (!uuid || !config.writable) return;
-      const list = event.currentTarget.querySelector(
-        '[data-column-list], [data-backlog-list]'
-      );
-      const card = document.querySelector('[data-task-uuid="' + uuid + '"]');
-      if (!list || !card) return;
+      const origin = dragOrigin;
+      if (!this.dragging || !origin || !config.writable) {
+        this._endDrag();
+        return;
+      }
       // Optimistic DOM move (pinned.js precedent); the reorder endpoint is
       // idempotent, and any failure refreshes back to server truth.
-      const targetCard = event.target.closest('[data-task-uuid]');
-      if (targetCard && targetCard.dataset.taskUuid !== uuid) {
-        list.insertBefore(card, targetCard);
-      } else if (!targetCard) {
-        list.appendChild(card);
+      this._placeDragged(event.currentTarget, event.clientY);
+      this._endDrag();
+      const { card } = origin;
+      const list = card.parentElement;
+      if (!event.currentTarget.contains(list)) {
+        this._restoreDragged(origin);
+        return;
       }
-      await this.saveOrder(statusUuid, listOrder(list));
+      if (list === origin.list && card.nextElementSibling === origin.next) {
+        return;
+      }
+      await this.saveOrder(statusUuid, listOrder(list), landAnimation(card));
     },
 
-    async saveOrder(statusUuid, order) {
+    async saveOrder(statusUuid, order, landed = null) {
       const reorder = this._reorders.start();
       try {
         const resp = await fetch(config.apiBase + '/tasks/reorder', {
@@ -502,6 +639,8 @@ function projectBoard(config) {
       } catch (e) {
         // On failure, refresh in finally restores server truth
       } finally {
+        // The refresh replaces the cards: it would cut a landing short.
+        if (landed) await landed;
         if (reorder.isCurrent()) this.refresh();
       }
     },
@@ -1972,6 +2111,7 @@ window.labelSelector = labelSelector;
 window.selectDropdown = selectDropdown;
 window.projectBoardHelpers = {
   listOrder: listOrder,
+  dropAnchor: dropAnchor,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,
   emptyTaskForm: emptyTaskForm,

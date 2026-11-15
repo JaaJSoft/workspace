@@ -105,9 +105,10 @@
         <div class="flex gap-3 overflow-x-auto items-start pb-4">
           {% for column in columns %}
             <section
-              class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
+              class="flex-1 min-w-72 rounded-box bg-base-200 p-3 transition-shadow"
               data-status-uuid="{{ column.status.uuid }}"
-              {% if not sprint_read_only %} @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ column.status.uuid|escapejs }}')" {% endif %}
+              :class="{ 'ring-2 ring-module/50': dropStatus === '{{ column.status.uuid|escapejs }}' }"
+              {% if not sprint_read_only %} @dragenter.prevent @dragover.prevent="onDragOver($event)" @dragleave="onDragLeave($event)" @drop.prevent="onDrop($event, '{{ column.status.uuid|escapejs }}')" {% endif %}
             >
               <header class="flex items-center justify-between mb-2">
                 <h3 class="text-sm font-medium flex items-center gap-2">

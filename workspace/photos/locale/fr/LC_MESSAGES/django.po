@@ -66,9 +66,9 @@ msgstr "Pas cette personne"
 #, python-format
 msgid "%(count)s photo to %(title)s"
 msgid_plural "%(count)s photos to %(title)s"
-msgstr[0] "%(count)s photo dans %(title)s"
-msgstr[1] "%(count)s de photos dans %(title)s"
-msgstr[2] "%(count)s photos dans %(title)s"
+msgstr[0] "%(count)s photo ajoutée à %(title)s"
+msgstr[1] "%(count)s de photos ajoutées à %(title)s"
+msgstr[2] "%(count)s photos ajoutées à %(title)s"
 
 #: activity.py
 msgid "Album shared"
@@ -420,7 +420,7 @@ msgstr "Aucune photo de cette bibliothèque n’est encore géolocalisée."
 #: ui/templates/photos/ui/map.html
 #, python-format
 msgid "This library holds %(count_label)s with a location."
-msgstr "Cette bibliothèque contient %(count_label)s avec un lieu."
+msgstr "Cette bibliothèque contient %(count_label)s géolocalisées."
 
 #: ui/templates/photos/ui/map.html
 #, python-format
@@ -661,7 +661,7 @@ msgstr "Voir sur OpenStreetMap"
 
 #: ui/templates/photos/ui/partials/capture_details_dialog.html
 msgid "The photos will show no location, whatever their file says."
-msgstr "Les photos n’afficheront aucun lieu, quoi qu’indique leur fichier."
+msgstr "Les photos n’afficheront aucun lieu, quoi qu’en dise leur fichier."
 
 #: ui/templates/photos/ui/partials/capture_details_dialog.html
 msgid "Use the position the camera wrote in the file again."
@@ -717,7 +717,7 @@ msgstr "Photos similaires"
 #: ui/templates/photos/ui/partials/selection_bar.html
 #: ui/templates/photos/ui/partials/selection_menu.html
 msgid "Hide from library"
-msgstr "Masquer dans la bibliothèque"
+msgstr "Masquer de la bibliothèque"
 
 #: ui/templates/photos/ui/partials/face_assign_dialog.html
 #: ui/templates/photos/ui/partials/name_dialog.html
@@ -848,17 +848,13 @@ msgstr "à %%(time)s"
 
 #: ui/templates/photos/ui/partials/faces_dialog.html
 msgid "Already another face here: both are kept as one person"
-msgstr ""
-"Déjà sur cette photo avec un autre visage : les deux seront réunis en une "
-"seule personne"
+msgstr "Déjà présente sur cette photo : les deux visages compteront pour une seule personne"
 
 #: ui/templates/photos/ui/partials/faces_dialog.html
 #, python-format
 msgid ""
 "Unnamed person with %%(count)s photos, the same person as another face here"
-msgstr ""
-"Personne sans nom, %%(count)s photos, déjà sur cette photo avec un autre "
-"visage"
+msgstr "Personne sans nom, %%(count)s photos, déjà présente sur cette photo"
 
 #: ui/templates/photos/ui/partials/faces_dialog.html
 msgid "Change person"
@@ -920,9 +916,7 @@ msgstr "Fusionner des personnes"
 msgid ""
 "Pick the people who are the same person as this one. Their photos move here, "
 "and the people you pick disappear from the list."
-msgstr ""
-"Choisissez les personnes qui sont en réalité celle-ci. Leurs photos sont "
-"regroupées ici, et les personnes choisies disparaissent de la liste."
+msgstr "Choisissez les personnes qui sont en fait la même que celle-ci. Leurs photos sont regroupées ici et elles disparaissent de la liste."
 
 #: ui/templates/photos/ui/partials/merge_dialog.html
 msgid "This person"
@@ -1087,7 +1081,7 @@ msgstr "Lire les vidéos au survol"
 
 #: ui/templates/photos/ui/partials/preferences_content.html
 msgid "Open Photos on"
-msgstr "Ouvrir Photos sur"
+msgstr "À l’ouverture de Photos"
 
 #: ui/templates/photos/ui/partials/preferences_content.html
 msgid "Library the timeline opens on"
@@ -1241,9 +1235,7 @@ msgstr "Visage, écarter"
 #, python-format
 msgid ""
 "%%(count)s more faces of this group, closer to the rest, go with the answer."
-msgstr ""
-"%%(count)s autres visages de ce groupe, plus ressemblants, suivront votre "
-"réponse."
+msgstr "Votre réponse s’appliquera aussi aux %%(count)s autres visages de ce groupe, plus ressemblants."
 
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "Someone else? Type a name"
@@ -1255,7 +1247,7 @@ msgstr "Qui est-ce ? Saisissez un nom"
 
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "Nobody to name: leave this person out of People"
-msgstr "Un inconnu : retirer ce groupe de Personnes"
+msgstr "Inconnu : retirer ce groupe de Personnes"
 
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "Nobody to name: hide these people"
@@ -1770,7 +1762,7 @@ msgstr "Quasi-doublons"
 
 #: ui/views.py
 msgid "Almost the same shot."
-msgstr "Presque la même prise de vue."
+msgstr "Presque la même photo."
 
 #: ui/views.py
 msgctxt "photos ranking heading"

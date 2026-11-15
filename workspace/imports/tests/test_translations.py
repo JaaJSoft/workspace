@@ -31,14 +31,14 @@ class ImportsPageLanguageTests(TestCase):
         set_setting(self.user, "core", "language", "fr")
         response = self.client.get("/imports")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Nouvelle importation")
+        self.assertContains(response, "Nouvel import")
         self.assertContains(response, "Connexions")
         self.assertNotContains(response, "New import")
 
     def test_page_stays_english_by_default(self):
         response = self.client.get("/imports")
         self.assertContains(response, "New import")
-        self.assertNotContains(response, "Nouvelle importation")
+        self.assertNotContains(response, "Nouvel import")
 
 
 @override_settings(IMPORTS_ALLOWED_HOSTS=["x"])
@@ -70,7 +70,7 @@ class JobLanguageTests(TestCase):
         set_setting(self.user, "core", "language", "fr")
         self.assertEqual(self._run().status, ImportJob.Status.COMPLETED)
         notification = Notification.objects.get(recipient=self.user)
-        self.assertEqual(notification.title, "Importation depuis Cloud terminée")
+        self.assertEqual(notification.title, "Import depuis Cloud terminé")
         self.assertIn("3 fichiers", notification.body)
 
     def test_the_notification_stays_english_by_default(self):
@@ -94,7 +94,7 @@ class JobLanguageTests(TestCase):
             job.error, "Erreur inattendue, consultez les journaux du serveur."
         )
         title = Notification.objects.get(recipient=self.user).title
-        self.assertEqual(title, "Échec de l’importation depuis Cloud")
+        self.assertEqual(title, "Échec de l’import depuis Cloud")
 
     def test_an_entry_report_is_stored_in_the_owners_language(self):
         set_setting(self.user, "core", "language", "fr")
@@ -132,5 +132,5 @@ class ApiMessageLanguageTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json()["detail"],
-            "Seule une importation échouée ou annulée peut être relancée.",
+            "Seul un import échoué ou annulé peut être relancé.",
         )

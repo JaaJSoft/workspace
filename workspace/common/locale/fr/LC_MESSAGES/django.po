@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 10:49+0000\n"
+"POT-Creation-Date: 2026-11-15 11:15+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -609,7 +609,7 @@ msgstr "Importer"
 
 #: vocabulary.py
 msgid "Imports"
-msgstr "Importations"
+msgstr "Imports"
 
 #: vocabulary.py
 msgid "In trash"

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 11:06+0000\n"
+"POT-Creation-Date: 2026-11-15 11:15+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -21,7 +21,7 @@ msgstr "Importer depuis un autre cloud"
 
 #: apps.py
 msgid "My imports"
-msgstr "Mes importations"
+msgstr "Mes imports"
 
 #: importers/base.py
 #, python-format
@@ -108,7 +108,7 @@ msgstr "Impossible de lire le carnet d’adresses « %(book)s » : %(error)s"
 
 #: importers/contacts.py
 msgid "The contact disappeared from the server during the import."
-msgstr "Le contact a disparu du serveur pendant l’importation."
+msgstr "Le contact a disparu du serveur pendant l’import."
 
 #: importers/contacts.py
 msgid "This contact is not a valid vCard."
@@ -164,8 +164,8 @@ msgstr "Impossible de lire « %(path)s » : %(error)s"
 msgid ""
 "Not enough space: the import needs %(needed)s but only %(left)s are left."
 msgstr ""
-"Espace insuffisant : l’importation a besoin de %(needed)s mais il ne reste "
-"que %(left)s."
+"Espace insuffisant : l’import a besoin de %(needed)s mais il ne reste que "
+"%(left)s."
 
 #: importers/files.py
 msgid "Could not store the file: it is open in an editor."
@@ -191,7 +191,7 @@ msgstr[2] ""
 
 #: importers/files.py
 msgid "A destination folder disappeared while importing."
-msgstr "Un dossier de destination a disparu pendant l’importation."
+msgstr "Un dossier de destination a disparu pendant l’import."
 
 #: importers/files.py
 msgid "The destination folder no longer exists."
@@ -282,7 +282,7 @@ msgstr "Fournisseur inconnu : « %(slug)s »."
 
 #: services/jobs.py
 msgid "Invalid import options."
-msgstr "Options d’importation non valides."
+msgstr "Options d’import non valides."
 
 #: services/jobs.py
 msgid "Pick at least one thing to import."
@@ -304,15 +304,15 @@ msgstr "Cette connexion n’existe plus."
 
 #: services/jobs.py
 msgid "An import is already running for this connection."
-msgstr "Une importation est déjà en cours pour cette connexion."
+msgstr "Un import est déjà en cours pour cette connexion."
 
 #: services/jobs.py
 msgid "This import is already finished."
-msgstr "Cette importation est déjà terminée."
+msgstr "Cet import est déjà terminé."
 
 #: services/jobs.py
 msgid "Only a failed or cancelled import can be retried."
-msgstr "Seule une importation échouée ou annulée peut être relancée."
+msgstr "Seul un import échoué ou annulé peut être relancé."
 
 #: services/jobs.py
 msgid "Unexpected error, see the server logs."
@@ -321,17 +321,17 @@ msgstr "Erreur inattendue, consultez les journaux du serveur."
 #: services/jobs.py
 #, python-format
 msgid "Import from %(name)s finished"
-msgstr "Importation depuis %(name)s terminée"
+msgstr "Import depuis %(name)s terminé"
 
 #: services/jobs.py
 #, python-format
 msgid "Import from %(name)s failed"
-msgstr "Échec de l’importation depuis %(name)s"
+msgstr "Échec de l’import depuis %(name)s"
 
 #: services/jobs.py
 #, python-format
 msgid "Import from %(name)s cancelled"
-msgstr "Importation depuis %(name)s annulée"
+msgstr "Import depuis %(name)s annulé"
 
 #: services/jobs.py
 #, python-format
@@ -363,8 +363,8 @@ msgid ""
 "networks for imports if your previous cloud lives there."
 msgstr ""
 "« %(host)s » est sur un réseau privé. Demandez à l’administrateur "
-"d’autoriser les réseaux privés pour les importations si votre ancien cloud "
-"s’y trouve."
+"d’autoriser les réseaux privés pour les imports si votre ancien cloud s’y "
+"trouve."
 
 #: ui/templates/imports/ui/index.html
 msgid "Nothing is saved until the server has answered with these credentials."
@@ -373,7 +373,7 @@ msgstr ""
 
 #: ui/templates/imports/ui/index.html
 msgid "New import"
-msgstr "Nouvelle importation"
+msgstr "Nouvel import"
 
 #: ui/templates/imports/ui/index.html
 msgid "Entries that could not be imported"
@@ -442,7 +442,7 @@ msgstr "Supprimer"
 
 #: ui/templates/imports/ui/index.html
 msgid "No import yet."
-msgstr "Aucune importation pour l’instant."
+msgstr "Aucun import pour l’instant."
 
 #: ui/templates/imports/ui/index.html
 msgctxt "remote folder"
@@ -579,18 +579,18 @@ msgid ""
 "checks your storage quota, then copies. You can leave this page and you will "
 "be notified when it ends."
 msgstr ""
-"L’importation s’exécute en arrière-plan : elle lit d’abord les dossiers "
-"distants et vérifie votre quota de stockage, puis copie. Vous pouvez quitter "
-"cette page, vous recevrez une notification à la fin."
+"L’import s’exécute en arrière-plan : il lit d’abord les dossiers distants et "
+"vérifie votre quota de stockage, puis copie. Vous pouvez quitter cette page, "
+"vous recevrez une notification à la fin."
 
 #: ui/templates/imports/ui/index.html
 msgid ""
 "The import runs in the background. You can leave this page and you will be "
 "notified when it ends."
 msgstr ""
-"L’importation s’exécute en arrière-plan. Vous pouvez quitter cette page, "
-"vous recevrez une notification à la fin."
+"L’import s’exécute en arrière-plan. Vous pouvez quitter cette page, vous "
+"recevrez une notification à la fin."
 
 #: ui/templates/imports/ui/index.html
 msgid "Start the import"
-msgstr "Lancer l’importation"
+msgstr "Lancer l’import"

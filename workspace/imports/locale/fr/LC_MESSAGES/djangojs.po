@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 10:57+0000\n"
+"POT-Creation-Date: 2026-11-15 11:15+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -33,17 +33,17 @@ msgstr "en cours"
 #: ui/static/imports/ui/js/imports.js
 msgctxt "import status"
 msgid "completed"
-msgstr "terminée"
+msgstr "terminé"
 
 #: ui/static/imports/ui/js/imports.js
 msgctxt "import status"
 msgid "failed"
-msgstr "échouée"
+msgstr "échoué"
 
 #: ui/static/imports/ui/js/imports.js
 msgctxt "import status"
 msgid "cancelled"
-msgstr "annulée"
+msgstr "annulé"
 
 #: ui/static/imports/ui/js/imports.js
 msgid "keep both"
@@ -153,9 +153,9 @@ msgstr "Erreurs (%(count)s)"
 #: ui/static/imports/ui/js/imports.js
 msgid "%(count)s failed. Retry the import to try it again."
 msgid_plural "%(count)s failed. Retry the import to try them again."
-msgstr[0] "%(count)s en échec. Relancez l’importation pour le réessayer."
-msgstr[1] "%(count)s en échec. Relancez l’importation pour les réessayer."
-msgstr[2] "%(count)s en échec. Relancez l’importation pour les réessayer."
+msgstr[0] "%(count)s en échec. Relancez l’import pour le réessayer."
+msgstr[1] "%(count)s en échec. Relancez l’import pour les réessayer."
+msgstr[2] "%(count)s en échec. Relancez l’import pour les réessayer."
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Edit connection"
@@ -194,7 +194,7 @@ msgstr[2] "Lecture des carnets d’adresses… %(count)s contacts trouvés"
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Importing contacts… %(done)s / %(total)s"
-msgstr "Importation des contacts… %(done)s / %(total)s"
+msgstr "Import des contacts… %(done)s / %(total)s"
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Listing the remote folders… %(count)s file found"
@@ -220,7 +220,7 @@ msgstr[2] "%(count)s carnets d’adresses"
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Stop this import?"
-msgstr "Arrêter cette importation ?"
+msgstr "Arrêter cet import ?"
 
 #: ui/static/imports/ui/js/imports.js
 msgid "What has already been imported stays."
@@ -228,17 +228,16 @@ msgstr "Ce qui a déjà été importé est conservé."
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Could not stop the import."
-msgstr "Impossible d’arrêter l’importation."
+msgstr "Impossible d’arrêter l’import."
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Could not retry the import."
-msgstr "Impossible de relancer l’importation."
+msgstr "Impossible de relancer l’import."
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Import restarted - only what failed or was never reached runs again."
 msgstr ""
-"Importation relancée : seul ce qui a échoué ou n’a jamais été atteint est "
-"repris."
+"Import relancé : seul ce qui a échoué ou n’a jamais été atteint est repris."
 
 #: ui/static/imports/ui/js/imports.js
 msgid "Could not load the report."
@@ -272,8 +271,8 @@ msgstr "Supprimer %(name)s ?"
 msgid ""
 "The import history of this connection goes with it. What was imported stays."
 msgstr ""
-"L’historique d’importation de cette connexion est supprimé avec elle. Ce qui "
-"a été importé est conservé."
+"L’historique d’import de cette connexion est supprimé avec elle. Ce qui a "
+"été importé est conservé."
 
 #: ui/static/imports/ui/js/imports.js
 msgctxt "import connection"
@@ -306,11 +305,11 @@ msgstr "Choisir"
 
 #: ui/static/imports/ui/js/imports.js
 msgid "The import could not be started."
-msgstr "L’importation n’a pas pu être lancée."
+msgstr "L’import n’a pas pu être lancé."
 
 #: ui/static/imports/ui/js/imports.js
 msgid ""
 "Import started. You can leave this page - you will be notified when it ends."
 msgstr ""
-"Importation lancée. Vous pouvez quitter cette page, vous recevrez une "
-"notification à la fin."
+"Import lancé. Vous pouvez quitter cette page, vous recevrez une notification "
+"à la fin."

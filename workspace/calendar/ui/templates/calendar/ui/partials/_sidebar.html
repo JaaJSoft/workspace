@@ -31,10 +31,12 @@
         >
           <button
             type="button"
-            class="btn btn-ghost btn-sm hover:text-module"
+            class="btn btn-ghost btn-sm btn-square hover:text-module"
             @click="calendarToday()"
+            title="{% translate "Today" %}"
+            aria-label="{% translate "Today" %}"
           >
-            {% translate "Today" %}
+            <i data-lucide="calendar-check" class="w-4 h-4"></i>
           </button>
           {% include "ui/partials/preferences_popover.html" with content="calendar/ui/partials/_preferences_content.html" accent="text-module" button_class="hover:text-module" %}
         </div>

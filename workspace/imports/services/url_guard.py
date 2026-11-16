@@ -70,17 +70,20 @@ class _GuardedBackend(httpcore2.SyncBackend):
             return super().connect_tcp(
                 host, port, timeout, local_address, socket_options
             )
-        error = None
         # Every answer is vetted before the first is dialed, then they are
-        # tried in the resolver's order, as socket.create_connection would.
-        for address in _vetted_addresses(host):
+        # tried in the resolver's order, as socket.create_connection would;
+        # the last one's failure is the one raised.
+        *others, last = _vetted_addresses(host)
+        for address in others:
             try:
                 return super().connect_tcp(
                     str(address), port, timeout, local_address, socket_options
                 )
-            except (httpcore2.ConnectError, httpcore2.ConnectTimeout) as exc:
-                error = exc
-        raise error
+            except httpcore2.ConnectError, httpcore2.ConnectTimeout:
+                continue
+        return super().connect_tcp(
+            str(last), port, timeout, local_address, socket_options
+        )
 
 
 def _is_allowed_host(host):

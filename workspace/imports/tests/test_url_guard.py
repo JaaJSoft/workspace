@@ -104,10 +104,11 @@ class GuardedTransportTests(SimpleTestCase):
         self.assertEqual(net.dialed, [(PUBLIC_V6, 80), (PUBLIC, 80)])
 
     def test_no_reachable_answer_is_a_connect_error(self):
-        answers = {"cloud.example.org": [[PUBLIC]]}
-        with FakeNetwork(answers, unreachable=[PUBLIC]):
-            with self.assertRaises(httpx2.ConnectError):
+        answers = {"cloud.example.org": [[PUBLIC_V6, PUBLIC]]}
+        with FakeNetwork(answers, unreachable=[PUBLIC_V6, PUBLIC]) as net:
+            with self.assertRaisesRegex(httpx2.ConnectError, PUBLIC):
                 self._get("http://cloud.example.org/")
+        self.assertEqual(net.dialed, [(PUBLIC_V6, 80), (PUBLIC, 80)])
 
     def test_an_unresolvable_host_is_refused(self):
         with FakeNetwork({}) as net:

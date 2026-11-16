@@ -19,6 +19,7 @@ from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 
+from ..services.url_guard import guarded_transport
 from .base import (
     KIND_FILES,
     AuthenticationFailed,
@@ -50,12 +51,14 @@ _QUOTA_BODY = (
 _USER_AGENT = "Workspace-Imports/1.0"
 
 
-def build_client(connection, *, base_url=None, **kwargs) -> httpx2.Client:
+def build_client(
+    connection, *, base_url=None, transport=None, **kwargs
+) -> httpx2.Client:
     """HTTP client bound to the connection's credentials and, by default, its
-    base URL.
+    base URL, connecting only to addresses the URL guard accepts.
 
-    Redirects are not followed: a redirect could point anywhere, including
-    inside the network the URL guard just vetted the original host against.
+    Redirects are not followed: a redirect could point anywhere, and the
+    credentials would follow it.
     """
     return httpx2.Client(
         base_url=base_url or connection.base_url,
@@ -63,6 +66,7 @@ def build_client(connection, *, base_url=None, **kwargs) -> httpx2.Client:
         timeout=settings.IMPORTS_HTTP_TIMEOUT,
         follow_redirects=False,
         headers={"User-Agent": _USER_AGENT, "Accept-Encoding": "identity"},
+        transport=transport or guarded_transport(),
         **kwargs,
     )
 

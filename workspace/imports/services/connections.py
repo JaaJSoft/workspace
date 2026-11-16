@@ -96,7 +96,6 @@ def test_connection(connection):
     any, is both recorded on the row and re-raised."""
     prov = get_available_provider(connection.provider)
     try:
-        check_remote_url(connection.base_url)
         connection.capabilities = prov.test_connection(connection)
     except ImportsError as exc:
         connection.last_error = exc.user_message
@@ -119,7 +118,6 @@ def test_connection(connection):
 def browse_files(connection, entry_id):
     """List one level of the connection's file tree, folders first."""
     prov = get_available_provider(connection.provider)
-    check_remote_url(connection.base_url)
     source = prov.file_source(connection)
     try:
         entries = list(source.list_dir(entry_id or source.ROOT_ID))
@@ -134,7 +132,6 @@ def browse_address_books(connection):
     prov = get_available_provider(connection.provider)
     if KIND_CONTACTS not in prov.kinds:
         raise UnsupportedKind(f"{prov.name} does not provide contacts.")
-    check_remote_url(connection.base_url)
     source = prov.contact_source(connection)
     try:
         books = list(source.address_books())

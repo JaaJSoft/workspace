@@ -1,12 +1,11 @@
-from functools import partial
 from unittest import mock
 
 import httpx2
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from rest_framework.test import APITestCase
 
-from workspace.imports.services import url_guard
+from workspace.imports.tests.network import FakeNetwork, http_response
 from workspace.mail.services import autodiscover
 from workspace.mail.services.autodiscover import MailServer, MailServers, discover
 
@@ -63,19 +62,18 @@ class FakeWeb:
         return httpx2.Response(200, content=answer)
 
     def __enter__(self):
-        client = partial(httpx2.Client, transport=httpx2.MockTransport(self._handle))
-        self._patches = [
-            mock.patch.object(autodiscover.httpx2, "Client", client),
-            # Resolving names is the guard's business, tested on its own below.
-            mock.patch.object(autodiscover, "check_remote_url"),
-        ]
-        for patch in self._patches:
-            patch.start()
+        # Which addresses may be contacted is the guard's business, tested on
+        # its own below.
+        self._patch = mock.patch.object(
+            autodiscover,
+            "guarded_transport",
+            lambda: httpx2.MockTransport(self._handle),
+        )
+        self._patch.start()
         return self
 
     def __exit__(self, *exc):
-        for patch in self._patches:
-            patch.stop()
+        self._patch.stop()
 
 
 class DiscoverTests(SimpleTestCase):
@@ -303,33 +301,37 @@ class ServerSelectionTests(SimpleTestCase):
         self.assertEqual(servers.imap.host, "imap.ok.example")
 
 
+@override_settings(IMPORTS_ALLOW_PRIVATE_NETWORKS=False, IMPORTS_ALLOWED_HOSTS=[])
 class PrivateNetworkGuardTests(SimpleTestCase):
-    """The real guard, with only name resolution replaced."""
+    """The real client and guard, with only DNS and TCP replaced."""
 
-    def _discover_resolving_to(self, address):
-        answer = [(2, 1, 6, "", (address, 0))]
-        web = FakeWeb({AUTOCONFIG_URL: PROVIDER_FILE, WELL_KNOWN_URL: PROVIDER_FILE})
-        with (
-            mock.patch.object(url_guard.socket, "getaddrinfo", return_value=answer),
-            mock.patch.object(
-                autodiscover.httpx2,
-                "Client",
-                partial(httpx2.Client, transport=httpx2.MockTransport(web._handle)),
-            ),
-        ):
-            return discover("example.com"), web
+    def _discover(self, *answers):
+        hosts = ("autoconfig.example.com", "example.com", "autoconfig.thunderbird.net")
+        network = FakeNetwork(
+            {host: [list(answer) for answer in answers] for host in hosts},
+            response=http_response(200, PROVIDER_FILE),
+        )
+        with network:
+            return discover("example.com"), network
 
     def test_domain_resolving_to_a_private_network_is_never_contacted(self):
         for address in ("127.0.0.1", "10.0.0.5", "192.168.1.10", "169.254.169.254"):
             with self.subTest(address=address):
-                servers, web = self._discover_resolving_to(address)
+                servers, network = self._discover([address])
                 self.assertIsNone(servers)
-                self.assertEqual(web.requested, [])
+                self.assertEqual(network.dialed, [])
 
     def test_public_address_is_contacted(self):
-        servers, web = self._discover_resolving_to("93.184.216.34")
+        servers, network = self._discover(["93.184.216.34"])
         self.assertEqual(servers, EXAMPLE_SERVERS)
-        self.assertEqual(web.requested, [AUTOCONFIG_URL])
+        self.assertEqual(network.dialed, [("93.184.216.34", 443)])
+        self.assertEqual(network.server_names, ["autoconfig.example.com"])
+
+    def test_a_name_rebinding_to_a_private_address_is_not_followed(self):
+        servers, network = self._discover(["93.184.216.34"], ["127.0.0.1"])
+        self.assertEqual(servers, EXAMPLE_SERVERS)
+        self.assertEqual(network.lookups, ["autoconfig.example.com"])
+        self.assertEqual(network.dialed, [("93.184.216.34", 443)])
 
 
 class AutodiscoverViewTests(APITestCase):

@@ -18,7 +18,6 @@ from django.utils.translation import gettext as _
 from workspace.common.logging import scrub
 
 from ..errors import ImportsError
-from ..services.url_guard import check_remote_url
 from .base import ProviderError, RemoteAddressBook, RemoteCard
 from .webdav import (
     DAV,
@@ -145,7 +144,6 @@ class CardDavSource:
         try:
             if _origin(url) != self._origin:
                 return None
-            check_remote_url(url)
             with (
                 _translate_transport_errors(self._host),
                 self._client.stream("GET", url) as response,

@@ -12,12 +12,13 @@ from workspace.imports.importers.base import Outcome
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
 from workspace.imports.providers.base import RemoteCard
 from workspace.imports.services import jobs as svc
+from workspace.imports.services.url_guard import UnsafeUrl
 from workspace.imports.sse_provider import ImportsSSEProvider
 from workspace.imports.tasks import purge_old_jobs, recover_stale_jobs, run_import_job
 from workspace.notifications.models import Notification
 from workspace.people.models import Person
 
-from .fakes import fake_provider
+from .fakes import FakeFileSource, fake_provider
 
 User = get_user_model()
 
@@ -252,16 +253,14 @@ class RunJobTests(JobsTestCase):
             ImportJobItem.Status.FAILED,
         )
 
-    @override_settings(IMPORTS_ALLOWED_HOSTS=[])
-    def test_every_slice_vets_the_remote_url_again(self):
-        """The URL was vetted when the connection was saved, but the worker
-        contacts it hours later: a host that now resolves to a forbidden
-        address fails the job instead of being fetched."""
-        ImportConnection.objects.filter(pk=self.conn.pk).update(
-            base_url="http://127.0.0.1/dav"
-        )
+    def test_a_host_the_guard_refuses_at_run_time_fails_the_job(self):
+        """The worker contacts the remote hours after the connection was saved:
+        the transport refuses a host that now resolves to a forbidden address,
+        and the whole job fails rather than each entry in turn."""
         job = self._pending()
-        self.assertIs(svc.run_job(job.pk), Outcome.FAILED)
+        refused = UnsafeUrl("'x' points to an address this server will not contact.")
+        with patch.object(FakeFileSource, "list_dir", side_effect=refused):
+            self.assertIs(svc.run_job(job.pk), Outcome.FAILED)
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.FAILED)
         self.assertIn("will not contact", job.error)

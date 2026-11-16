@@ -55,3 +55,58 @@ class BatchActionLargeSelectionTests(TestCase):
         self.assertEqual(resp.data["processed"], len(self.messages))
         unread = MailMessage.objects.filter(folder=self.inbox, is_read=False)
         self.assertFalse(unread.exists())
+
+
+class BatchActionSyncOutcomeTests(TestCase):
+    """A flag the server refused is still applied locally, and the answer says so."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="syncuser", password="pass")
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
+        )
+        self.inbox = MailFolder.objects.create(
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+        )
+        self.messages = [
+            MailMessage.objects.create(
+                account=self.account, folder=self.inbox, imap_uid=uid
+            )
+            for uid in (1, 2)
+        ]
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _post(self, action):
+        return self.client.post(
+            "/api/v1/mail/messages/batch-action",
+            {"message_ids": [str(m.uuid) for m in self.messages], "action": action},
+            format="json",
+        )
+
+    @patch("workspace.mail.services.imap_messages.star_message")
+    def test_reports_synced_when_the_server_took_every_flag(self, _star):
+        resp = self._post("star")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.data["synced"], True)
+
+    @patch("workspace.mail.services.imap_messages.mark_read")
+    def test_one_refusal_reports_unsynced_and_keeps_the_local_flag(self, mark_read):
+        mark_read.side_effect = [None, OSError("connection reset")]
+
+        resp = self._post("mark_read")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["processed"], 2)
+        self.assertIs(resp.data["synced"], False)
+        self.assertFalse(
+            MailMessage.objects.filter(folder=self.inbox, is_read=False).exists()
+        )

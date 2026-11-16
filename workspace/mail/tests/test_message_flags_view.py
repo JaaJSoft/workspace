@@ -107,6 +107,32 @@ class MessageFlagsViewTests(TestCase):
         self.message.refresh_from_db()
         self.assertTrue(self.message.is_starred)
 
+    def test_reports_whether_the_server_took_the_flag(self):
+        with patch("workspace.mail.services.imap_messages.mark_read"):
+            resp = self.client.patch(self._url(), {"is_read": True}, format="json")
+        self.assertIs(resp.data["synced"], True)
+
+        with patch(
+            "workspace.mail.services.imap_messages.mark_unread",
+            side_effect=OSError("connection reset"),
+        ):
+            resp = self.client.patch(self._url(), {"is_read": False}, format="json")
+        self.assertIs(resp.data["synced"], False)
+
+    def test_one_refused_flag_of_two_reports_unsynced(self):
+        with (
+            patch("workspace.mail.services.imap_messages.mark_read"),
+            patch(
+                "workspace.mail.services.imap_messages.star_message",
+                side_effect=OSError("connection reset"),
+            ),
+        ):
+            resp = self.client.patch(
+                self._url(), {"is_read": True, "is_starred": True}, format="json"
+            )
+
+        self.assertIs(resp.data["synced"], False)
+
     def test_marking_read_recomputes_the_label_counters(self):
         label = MailLabel.objects.get(account=self.account, name="Urgent")
         MailMessageLabel.objects.create(message=self.message, label=label)

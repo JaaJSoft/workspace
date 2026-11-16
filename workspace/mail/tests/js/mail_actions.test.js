@@ -27,6 +27,7 @@ function makeApp() {
   const fetches = [];
   const actions = [];
   const intervals = [];
+  const warnings = [];
   const ctx = loadScripts(
     [
       'workspace/common/static/ui/js/uuid.js',
@@ -54,6 +55,14 @@ function makeApp() {
       _mailPrefsCache: {},
       getCSRFToken: () => 'token',
       AppDialog: { confirm: async () => true, error() {} },
+      AppAlert: {
+        warning(message) {
+          const toast = { message, isConnected: true };
+          warnings.push(toast);
+          return toast;
+        },
+      },
+      gettext: (text) => text,
       fetch: (url, opts) => pending(fetches, url, opts),
       setInterval: (fn) => { intervals.push(fn); return intervals.length; },
       clearInterval: () => {},
@@ -70,7 +79,7 @@ function makeApp() {
       return pending(actions, url, opts);
     },
   });
-  return { app, fetches, actions };
+  return { app, fetches, actions, warnings };
 }
 
 const message = (uuid) => ({ uuid, is_read: false, is_starred: false, labels: [] });
@@ -104,6 +113,46 @@ test('a failed action still releases its share of the busy state', async () => {
   actions[1].answer({}, false);
   await starring;
   assert.equal(app.actionInProgress, false);
+});
+
+test('a flag change the server refused warns that the next sync undoes it', async () => {
+  const { app, actions, warnings } = makeApp();
+  const msg = message(MSG_A);
+  app.messages = [msg];
+
+  const starring = app.toggleStar(msg);
+  actions[0].answer({ synced: true });
+  await starring;
+  assert.equal(warnings.length, 0);
+
+  const reading = app.toggleRead(msg, true);
+  actions[1].answer({ synced: false });
+  await reading;
+  assert.equal(warnings.length, 1);
+  assert.equal(msg.is_read, true, 'the change stays applied until the sync');
+});
+
+test('refusals while the warning is on screen do not stack another one', async () => {
+  const { app, actions, warnings } = makeApp();
+  const msg = message(MSG_A);
+  app.messages = [msg];
+  app.selectedMessages = [MSG_A];
+
+  const starring = app.toggleStar(msg);
+  actions[0].answer({ synced: false });
+  await starring;
+  const batch = app.batchAction('mark_read');
+  actions[1].answer({ processed: 1, synced: false });
+  await batch;
+  assert.equal(warnings.length, 1);
+
+  warnings[0].isConnected = false;
+  const folder = { uuid: MSG_B, account_id: TASK, unread_count: 1 };
+  app.fetchLabels = async () => {};
+  const marking = app._markFolderAllRead(folder);
+  actions[2].answer({ updated: 1, synced: false });
+  await marking;
+  assert.equal(warnings.length, 2);
 });
 
 test('a summary still polling is not written onto the next message opened', async () => {

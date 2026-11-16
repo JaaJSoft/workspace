@@ -220,6 +220,7 @@ class MailMessageDetailView(APIView):
 
         from ..services.triage import set_flag
 
+        synced = True
         for field, flags in (
             ("is_read", ("unread", "read")),
             ("is_starred", ("unstarred", "starred")),
@@ -227,13 +228,16 @@ class MailMessageDetailView(APIView):
             if field not in ser.validated_data:
                 continue
             if not set_flag(msg, flags[bool(ser.validated_data[field])]):
+                synced = False
                 logger.warning("Failed to sync %s to IMAP for %s", field, msg.uuid)
 
         if "ai_summary" in ser.validated_data:
             msg.ai_summary = ser.validated_data["ai_summary"]
             msg.save(update_fields=["ai_summary", "updated_at"])
 
-        return Response(MailMessageDetailSerializer(msg).data)
+        # synced: False when the server refused a flag the row now carries;
+        # the next sync puts the server's value back.
+        return Response({**MailMessageDetailSerializer(msg).data, "synced": synced})
 
     @extend_schema(summary="Soft-delete a message")
     def delete(self, request, uuid):
@@ -317,6 +321,7 @@ class MailBatchActionView(APIView):
         }
 
         processed = 0
+        synced = True
         affected_folders = set()
         to_bulk_update = []
         bulk_update_fields = set()
@@ -362,6 +367,7 @@ class MailBatchActionView(APIView):
                     try:
                         imap_fn(msg.account, msg)
                     except Exception as e:
+                        synced = False
                         logger.warning(
                             "IMAP %s failed for message %s: %s",
                             scrub(action),
@@ -398,4 +404,8 @@ class MailBatchActionView(APIView):
             # mark_sources_read to catch it - settle it here instead.
             settle_message_notifications(request.user, deleted_pks)
 
+        # Only a flag is applied locally whatever the server answers; a move
+        # the server refused is not counted in processed instead.
+        if action in action_map:
+            return Response({"processed": processed, "synced": synced})
         return Response({"processed": processed})

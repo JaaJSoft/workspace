@@ -313,6 +313,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         method: 'POST',
       });
       if (res.ok) {
+        this._warnIfUnsynced(await res.json().catch(() => null));
         // Update local state
         folder.unread_count = 0;
         this.messages.forEach(m => { m.is_read = true; });

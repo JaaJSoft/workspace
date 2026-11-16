@@ -1,8 +1,23 @@
 // Mail messages: list, pagination, selection, flags (read/star), delete,
 // batch actions, filters, search, message context menu, attachment save,
 // move messages, move dialog, message navigation.
+
+// Kept outside the component so Alpine never wraps the DOM node in a proxy.
+let mailUnsyncedAlert = null;
+
 window.mailMessagesMixin = function mailMessagesMixin() {
   return {
+    // A flag change answered `synced: false` stays applied here, but the
+    // server refused it and the next sync puts its value back. One warning
+    // at a time: opening messages on an unreachable server would stack them.
+    _warnIfUnsynced(data) {
+      if (!data || data.synced !== false) return;
+      if (mailUnsyncedAlert && mailUnsyncedAlert.isConnected) return;
+      mailUnsyncedAlert = window.AppAlert.warning(
+        gettext('The mail server refused this change. It will be undone at the next sync.'),
+      );
+    },
+
     // ----- Messages -----
     _getAccountEmail(accountId) {
       const acc = this.accounts.find(a => a.uuid === accountId);
@@ -266,6 +281,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
           body: { is_read: newVal },
         });
         if (!res.ok) throw new Error('PATCH failed');
+        this._warnIfUnsynced(await res.json().catch(() => null));
       } catch (e) {
         // Rollback the optimistic mutation so the UI doesn't lie.
         if (changed) {
@@ -291,6 +307,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
           body: { is_starred: newVal },
         });
         if (!res.ok) throw new Error('PATCH failed');
+        this._warnIfUnsynced(await res.json().catch(() => null));
       } catch (e) {
         msg.is_starred = !newVal;
         if (listMsg && listMsg !== msg) listMsg.is_starred = !newVal;
@@ -392,6 +409,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
           body,
         });
         if (!res.ok) throw new Error('Batch action failed');
+        this._warnIfUnsynced(await res.json().catch(() => null));
       } catch (e) {
         // Rolling back optimistic flag/remove changes for an arbitrary batch
         // is fragile; reload from the server to reconcile.

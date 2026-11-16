@@ -283,6 +283,13 @@ msgstr ""
 "Supprimer l’étiquette « %(name)s » ? Les messages ne seront pas supprimés."
 
 #: ui/static/mail/ui/js/mail_messages.js
+msgid ""
+"The mail server refused this change. It will be undone at the next sync."
+msgstr ""
+"Le serveur de messagerie a refusé ce changement. Il sera annulé à la "
+"prochaine synchronisation."
+
+#: ui/static/mail/ui/js/mail_messages.js
 msgid "Move this message to trash?"
 msgstr "Placer ce message dans la corbeille ?"
 

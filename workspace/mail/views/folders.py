@@ -336,5 +336,5 @@ class MailFolderMarkReadView(APIView):
 
         from ..services.triage import mark_folder_read
 
-        updated, _count = mark_folder_read(folder)
-        return Response({"updated": updated})
+        updated, synced = mark_folder_read(folder)
+        return Response({"updated": updated, "synced": synced})

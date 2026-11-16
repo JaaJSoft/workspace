@@ -827,8 +827,19 @@ class MailFolderMarkReadTests(MailTestMixin, APITestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["updated"], 1)
+        self.assertIs(resp.data["synced"], False)
         msg.refresh_from_db()
         self.assertTrue(msg.is_read)
+
+    def test_reports_synced_when_the_server_took_the_flags(self):
+        MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=100
+        )
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(self._url(self.inbox))
+
+        self.assertIs(resp.data["synced"], True)
 
     def test_no_server_round_trip_when_nothing_is_unread(self):
         self.client.force_authenticate(self.user)

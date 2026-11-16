@@ -9,13 +9,23 @@ IMAP_TIMEOUT = 30
 
 
 def connect_imap(account):
-    """Open and authenticate an IMAP connection for the given account."""
+    """Open and authenticate an IMAP connection for the given account.
+
+    ``imap_use_ssl`` picks implicit TLS (on) or STARTTLS (off). There is no
+    connection in clear: ``starttls()`` raises when the server does not offer
+    it, before any credential is sent.
+    """
     if account.imap_use_ssl:
         conn = imaplib.IMAP4_SSL(
             account.imap_host, account.imap_port, timeout=IMAP_TIMEOUT
         )
     else:
         conn = imaplib.IMAP4(account.imap_host, account.imap_port, timeout=IMAP_TIMEOUT)
+        try:
+            conn.starttls()
+        except BaseException:
+            conn.shutdown()
+            raise
 
     if account.auth_method == "oauth2":
         from workspace.mail.services.oauth2 import get_valid_access_token

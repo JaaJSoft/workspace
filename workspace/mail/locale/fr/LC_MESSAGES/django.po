@@ -209,16 +209,13 @@ msgid "Port"
 msgstr "Port"
 
 #: ui/templates/mail/ui/index.html
-msgid "Use SSL"
-msgstr "Utiliser SSL"
+msgctxt "mail server connection"
+msgid "Security"
+msgstr "Sécurité"
 
 #: ui/templates/mail/ui/index.html
 msgid "SMTP (Outgoing)"
 msgstr "SMTP (sortant)"
-
-#: ui/templates/mail/ui/index.html
-msgid "Use STARTTLS"
-msgstr "Utiliser STARTTLS"
 
 #: ui/templates/mail/ui/index.html
 msgid "Authentication"

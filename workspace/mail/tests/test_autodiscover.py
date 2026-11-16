@@ -232,22 +232,11 @@ class ServerSelectionTests(SimpleTestCase):
         self.assertEqual(servers.imap, MailServer("imap.one.example", 993, "ssl"))
         self.assertEqual(servers.smtp, MailServer("smtp.one.example", 465, "ssl"))
 
-    def test_imap_starttls_is_skipped_for_imap_over_tls(self):
-        # The IMAP connector has no STARTTLS mode: a STARTTLS server would be
-        # reached in clear, and the password sent with it.
+    def test_imap_starttls_is_kept(self):
         servers = self._discover(
-            self._imap("imap.plain.example", "143", "STARTTLS")
-            + self._imap("imap.tls.example"),
-            self._smtp(),
+            self._imap("imap.example.com", "143", "STARTTLS"), self._smtp()
         )
-        self.assertEqual(servers.imap, MailServer("imap.tls.example", 993, "ssl"))
-
-    def test_imap_starttls_alone_means_nothing_found(self):
-        self.assertIsNone(
-            self._discover(
-                self._imap("imap.example.com", "143", "STARTTLS"), self._smtp()
-            )
-        )
+        self.assertEqual(servers.imap, MailServer("imap.example.com", 143, "starttls"))
 
     def test_smtp_starttls_is_kept(self):
         servers = self._discover(self._imap(), self._smtp())
@@ -373,6 +362,19 @@ class AutodiscoverViewTests(APITestCase):
             ).json()
         self.assertEqual(data["smtp_port"], 465)
         self.assertFalse(data["smtp_use_tls"])
+
+    def test_starttls_imap_is_not_flagged_as_implicit_tls(self):
+        starttls = PROVIDER_FILE.replace(
+            b"<port>993</port>\n      <socketType>SSL</socketType>",
+            b"<port>143</port>\n      <socketType>STARTTLS</socketType>",
+        )
+        self.assertNotEqual(starttls, PROVIDER_FILE)
+        with FakeWeb({AUTOCONFIG_URL: starttls}):
+            data = self.client.post(
+                self.url, {"email": "me@example.com"}, format="json"
+            ).json()
+        self.assertEqual(data["imap_port"], 143)
+        self.assertFalse(data["imap_use_ssl"])
 
     def test_unknown_domain_is_a_404(self):
         with FakeWeb({}):

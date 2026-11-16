@@ -466,13 +466,15 @@
               />
             </label>
           </div>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              x-model="newAccount.imap_use_ssl"
-              class="toggle toggle-sm toggle-module"
-            />
-            <span class="text-sm">{% translate "Use SSL" %}</span>
+          <label class="fieldset w-full min-w-0">
+            <div class="fieldset-legend"><span>{% translate "Security" context "mail server connection" %}</span></div>
+            <select
+              x-model.boolean="newAccount.imap_use_ssl"
+              class="select select-sm w-full min-w-0"
+            >
+              <option value="true">SSL/TLS</option>
+              <option value="false">STARTTLS</option>
+            </select>
           </label>
           <div class="divider text-xs my-1">{% translate "SMTP (Outgoing)" %}</div>
           <div class="grid grid-cols-3 gap-2">
@@ -494,13 +496,15 @@
               />
             </label>
           </div>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              x-model="newAccount.smtp_use_tls"
-              class="toggle toggle-sm toggle-module"
-            />
-            <span class="text-sm">{% translate "Use STARTTLS" %}</span>
+          <label class="fieldset w-full min-w-0">
+            <div class="fieldset-legend"><span>{% translate "Security" context "mail server connection" %}</span></div>
+            <select
+              x-model.boolean="newAccount.smtp_use_tls"
+              class="select select-sm w-full min-w-0"
+            >
+              <option value="false">SSL/TLS</option>
+              <option value="true">STARTTLS</option>
+            </select>
           </label>
           <div class="divider text-xs my-1">{% translate "Authentication" %}</div>
           <label class="fieldset w-full min-w-0">
@@ -577,13 +581,17 @@
                 />
               </label>
             </div>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                x-model="editAccount.imap_use_ssl"
-                class="toggle toggle-sm toggle-module"
-              />
-              <span class="text-sm">{% translate "Use SSL" %}</span>
+            <label class="fieldset w-full min-w-0">
+              <div
+                class="fieldset-legend"
+              ><span>{% translate "Security" context "mail server connection" %}</span></div>
+              <select
+                x-model.boolean="editAccount.imap_use_ssl"
+                class="select select-sm w-full min-w-0"
+              >
+                <option value="true">SSL/TLS</option>
+                <option value="false">STARTTLS</option>
+              </select>
             </label>
             <div class="divider text-xs my-1">{% translate "SMTP (Outgoing)" %}</div>
             <div class="grid grid-cols-3 gap-2">
@@ -605,13 +613,17 @@
                 />
               </label>
             </div>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                x-model="editAccount.smtp_use_tls"
-                class="toggle toggle-sm toggle-module"
-              />
-              <span class="text-sm">{% translate "Use STARTTLS" %}</span>
+            <label class="fieldset w-full min-w-0">
+              <div
+                class="fieldset-legend"
+              ><span>{% translate "Security" context "mail server connection" %}</span></div>
+              <select
+                x-model.boolean="editAccount.smtp_use_tls"
+                class="select select-sm w-full min-w-0"
+              >
+                <option value="false">SSL/TLS</option>
+                <option value="true">STARTTLS</option>
+              </select>
             </label>
             <div class="divider text-xs my-1">{% translate "Authentication" %}</div>
             <label class="fieldset w-full min-w-0">

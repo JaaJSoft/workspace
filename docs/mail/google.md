@@ -46,8 +46,8 @@ Open **Mail > Add account** and fill in the manual form (ignore the Google butto
 | Field           | Value                                    |
 |-----------------|------------------------------------------|
 | Email address   | `you@gmail.com`                          |
-| IMAP host, port | `imap.gmail.com`, `993`, **Use SSL** on  |
-| SMTP host, port | `smtp.gmail.com`, `587`, **Use STARTTLS** on |
+| IMAP host, port | `imap.gmail.com`, `993`, Security **SSL/TLS** |
+| SMTP host, port | `smtp.gmail.com`, `587`, Security **STARTTLS** |
 | Username        | Your full address, `you@gmail.com`       |
 | Password        | The 16-character app password            |
 

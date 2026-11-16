@@ -13,6 +13,7 @@ from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
 
 from workspace.common.logging import scrub
+from workspace.mail.services import tls
 
 logger = logging.getLogger(__name__)
 
@@ -24,17 +25,26 @@ SMTP_TIMEOUT = 30
 
 
 def connect_smtp(account):
-    """Open and authenticate an SMTP connection for the given account."""
+    """Open and authenticate an SMTP connection for the given account.
+
+    ``smtp_use_tls`` picks STARTTLS (on) or implicit TLS (off), and both verify
+    the server's certificate before any credential is sent.
+    """
+    context = tls.client_context()
     if account.smtp_use_tls:
         server = smtplib.SMTP(
             account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT
         )
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
+        try:
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
+        except BaseException:
+            server.close()
+            raise
     else:
         server = smtplib.SMTP_SSL(
-            account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT
+            account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT, context=context
         )
         server.ehlo()
 

@@ -1,7 +1,8 @@
 import io
 import smtplib
+import ssl
 from email import message_from_bytes, message_from_string
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from django.test import TestCase
 
@@ -166,6 +167,10 @@ class BuildDraftMessageTests(TestCase):
 
 
 class ConnectSmtpTests(TestCase):
+    def assertVerifies(self, context):
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
     @patch("workspace.mail.services.smtp.smtplib.SMTP")
     def test_tls_connection(self, mock_smtp_cls):
         mock_server = MagicMock()
@@ -184,6 +189,7 @@ class ConnectSmtpTests(TestCase):
         # happens inline in the AI tool loop.
         mock_smtp_cls.assert_called_with("smtp.example.com", 587, timeout=SMTP_TIMEOUT)
         mock_server.starttls.assert_called_once()
+        self.assertVerifies(mock_server.starttls.call_args.kwargs["context"])
         mock_server.login.assert_called_with("alice", "secret")
         self.assertEqual(server, mock_server)
 
@@ -202,8 +208,9 @@ class ConnectSmtpTests(TestCase):
         connect_smtp(acct)
 
         mock_smtp_ssl_cls.assert_called_with(
-            "smtp.example.com", 465, timeout=SMTP_TIMEOUT
+            "smtp.example.com", 465, timeout=SMTP_TIMEOUT, context=ANY
         )
+        self.assertVerifies(mock_smtp_ssl_cls.call_args.kwargs["context"])
         mock_server.login.assert_called_with("alice", "secret")
 
 

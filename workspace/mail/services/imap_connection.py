@@ -1,6 +1,9 @@
 """IMAP connection helpers."""
 
+import contextlib
 import imaplib
+
+from workspace.mail.services import tls
 
 # Default network timeout in seconds. Without it imaplib uses the system
 # default, which can hang sync workers indefinitely when a server stops
@@ -13,18 +16,24 @@ def connect_imap(account):
 
     ``imap_use_ssl`` picks implicit TLS (on) or STARTTLS (off). There is no
     connection in clear: ``starttls()`` raises when the server does not offer
-    it, before any credential is sent.
+    it, before any credential is sent. Both verify the server's certificate.
     """
+    context = tls.client_context()
     if account.imap_use_ssl:
         conn = imaplib.IMAP4_SSL(
-            account.imap_host, account.imap_port, timeout=IMAP_TIMEOUT
+            account.imap_host,
+            account.imap_port,
+            ssl_context=context,
+            timeout=IMAP_TIMEOUT,
         )
     else:
         conn = imaplib.IMAP4(account.imap_host, account.imap_port, timeout=IMAP_TIMEOUT)
         try:
-            conn.starttls()
+            conn.starttls(ssl_context=context)
         except BaseException:
-            conn.shutdown()
+            # A failed handshake has already detached the socket under imaplib.
+            with contextlib.suppress(OSError):
+                conn.shutdown()
             raise
 
     if account.auth_method == "oauth2":

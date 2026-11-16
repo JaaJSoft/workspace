@@ -187,6 +187,7 @@ def save_image_edit(file_obj, edit, *, acting_user):
     endpoint's ETag (and so every cached copy of the original) is built on.
     """
     from django.db import transaction
+    from django.db.models import F
 
     from workspace.files.models import File
 
@@ -200,7 +201,11 @@ def save_image_edit(file_obj, edit, *, acting_user):
             content_hash=file_obj.content_hash,
         )
         .filter(unlocked_for_q(acting_user))
-        .update(image_edit=edit, has_thumbnail=False)
+        .update(
+            image_edit=edit,
+            has_thumbnail=False,
+            thumbnail_revision=F("thumbnail_revision") + 1,
+        )
     )
     if not claimed:
         current = (

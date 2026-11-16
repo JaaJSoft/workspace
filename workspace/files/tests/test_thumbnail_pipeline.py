@@ -10,6 +10,7 @@ from PIL import Image
 from workspace.files.models import File
 from workspace.files.services import trash, tree
 from workspace.files.services.content_writes import update_content
+from workspace.files.services.image_edits import normalize_edit, save_image_edit
 from workspace.files.services.processors import run_pipeline
 from workspace.files.services.thumbnails.generation import (
     get_thumbnail_path,
@@ -180,3 +181,26 @@ class ThumbnailFlagWriteTests(TestCase):
 
         self.assertFalse(stored)
         self.assertFalse(File.objects.get(pk=self.file.pk).has_thumbnail)
+
+    def test_a_thumbnail_drawn_before_an_edit_does_not_flag_the_edited_image(self):
+        """A rotate leaves the bytes and their hash alone: the late draw of
+        the unrotated image must still leave the flag cleared, so the edit's
+        redraw is not skipped as already done."""
+        stored = self._refresh_while(
+            lambda current: save_image_edit(
+                current, normalize_edit(rotation=90), acting_user=self.user
+            )
+        )
+
+        self.assertFalse(stored)
+        row = File.objects.get(pk=self.file.pk)
+        self.assertEqual(row.image_edit, {"rotation": 90})
+        self.assertFalse(row.has_thumbnail)
+
+    def test_a_draw_of_the_current_edit_flags_the_row(self):
+        save_image_edit(self.file, normalize_edit(rotation=90), acting_user=self.user)
+
+        stored = self._refresh_while(lambda current: None)
+
+        self.assertTrue(stored)
+        self.assertTrue(File.objects.get(pk=self.file.pk).has_thumbnail)

@@ -17,7 +17,6 @@ from workspace.imports.services.url_guard import UnsafeUrl
 
 ROOT = "https://cloud.example.org/remote.php/dav/addressbooks/users/alice/"
 HOME = "/remote.php/dav/addressbooks/users/alice"
-GUARD = "workspace.imports.providers.carddav.check_remote_url"
 BOOK = "<d:resourcetype><d:collection/><card:addressbook/></d:resourcetype>"
 COLLECTION = "<d:resourcetype><d:collection/></d:resourcetype>"
 VCARD = "BEGIN:VCARD\nVERSION:3.0\nUID:a\nFN:Ann\nEND:VCARD\n"
@@ -230,11 +229,10 @@ class CardTests(SimpleTestCase):
             self.assertEqual(list(source.fetch_cards("/contacts", [])), [])
 
 
-@patch(GUARD)
 class PhotoTests(SimpleTestCase):
     PHOTO = f"https://cloud.example.org{HOME}/contacts/a.vcf?photo"
 
-    def test_a_photo_on_the_same_host_is_fetched_with_the_credentials(self, guard):
+    def test_a_photo_on_the_same_host_is_fetched_with_the_credentials(self):
         seen = {}
 
         def handler(request):
@@ -248,16 +246,15 @@ class PhotoTests(SimpleTestCase):
             self.assertEqual(source.fetch_photo(self.PHOTO), (b"img", "jpeg"))
         self.assertEqual(seen["url"], self.PHOTO)
         self.assertTrue(seen["auth"].startswith("Basic "))
-        guard.assert_called_once_with(self.PHOTO)
 
-    def test_the_default_port_spelled_out_is_the_same_host(self, guard):
+    def test_the_default_port_spelled_out_is_the_same_host(self):
         with _source(_image(b"img")) as source:
             self.assertEqual(
                 source.fetch_photo("https://cloud.example.org:443/p.png"),
                 (b"img", "png"),
             )
 
-    def test_a_photo_anywhere_else_is_never_requested(self, guard):
+    def test_a_photo_anywhere_else_is_never_requested(self):
         with _source(_never) as source:
             for url in (
                 "https://tracker.example.com/p.png",
@@ -267,39 +264,39 @@ class PhotoTests(SimpleTestCase):
             ):
                 with self.subTest(url=url):
                     self.assertIsNone(source.fetch_photo(url))
-        guard.assert_not_called()
 
-    def test_anything_but_an_image_is_refused(self, guard):
+    def test_anything_but_an_image_is_refused(self):
         with _source(_image(b"<html/>", "text/html")) as source:
             self.assertIsNone(source.fetch_photo("https://cloud.example.org/p"))
 
-    def test_an_error_status_is_no_photo(self, guard):
+    def test_an_error_status_is_no_photo(self):
         with _source(lambda request: httpx2.Response(404)) as source:
             self.assertIsNone(source.fetch_photo("https://cloud.example.org/p"))
 
-    def test_an_oversized_photo_is_dropped(self, guard):
+    def test_an_oversized_photo_is_dropped(self):
         with patch("workspace.imports.providers.carddav._MAX_PHOTO_BYTES", 4):
             with _source(_image(b"12345")) as source:
                 self.assertIsNone(source.fetch_photo("https://cloud.example.org/p.png"))
 
-    def test_a_host_the_guard_refuses_is_no_photo(self, guard):
-        guard.side_effect = UnsafeUrl("private")
-        with _source(_never) as source:
+    def test_a_host_the_guard_refuses_is_no_photo(self):
+        def handler(request):
+            raise UnsafeUrl("private")
+
+        with _source(handler) as source:
             self.assertIsNone(source.fetch_photo("https://cloud.example.org/p.png"))
 
-    def test_a_transport_failure_is_no_photo(self, guard):
+    def test_a_transport_failure_is_no_photo(self):
         def handler(request):
             raise httpx2.ConnectError("down")
 
         with _source(handler) as source:
             self.assertIsNone(source.fetch_photo("https://cloud.example.org/p.png"))
 
-    def test_a_malformed_url_is_no_photo(self, guard):
+    def test_a_malformed_url_is_no_photo(self):
         with _source(_never) as source:
             self.assertIsNone(source.fetch_photo("https://[cloud.example.org/p.png"))
-        guard.assert_not_called()
 
-    def test_a_corrupt_encoded_body_is_no_photo(self, guard):
+    def test_a_corrupt_encoded_body_is_no_photo(self):
         def handler(request):
             return httpx2.Response(
                 200,

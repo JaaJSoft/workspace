@@ -5,17 +5,12 @@ a provider publishes ``config-v1.1.xml`` on its own domain, and Mozilla's
 database covers the large providers that do not.
 
 The domain comes from what a user typed, so everything fetched is treated as
-hostile input: the domain must be a plain hostname, the host is checked
-against private networks before it is contacted, redirects are not followed,
-the body is capped, and the XML is parsed without entities or a DTD. A server
-that cannot be reached, answers anything but 200 or sends a malformed file is
-skipped, never an error - the caller only needs to know whether a setting was
-found.
-
-The host is resolved once by the guard and again by the HTTP client, so a name
-answering differently each time (DNS rebinding) can slip past the guard. What
-gets back to the caller is a few validated fields of a parsed file, never the
-response, which keeps the leak of such a request to its existence.
+hostile input: the domain must be a plain hostname, the request only connects
+to an address the imports URL guard accepts (no private network), redirects
+are not followed, the body is capped, and the XML is parsed without entities
+or a DTD. A server that cannot be reached, is refused by the guard, answers
+anything but 200 or sends a malformed file is skipped, never an error - the
+caller only needs to know whether a setting was found.
 """
 
 import logging
@@ -27,7 +22,7 @@ import httpx2
 from lxml import etree
 
 from workspace.common.logging import scrub
-from workspace.imports.services.url_guard import UnsafeUrl, check_remote_url
+from workspace.imports.services.url_guard import UnsafeUrl, guarded_transport
 
 logger = logging.getLogger(__name__)
 
@@ -107,15 +102,14 @@ def _is_hostname(value):
 
 
 def _fetch(url):
-    try:
-        check_remote_url(url)
-    except UnsafeUrl:
-        return None
     body = bytearray()
     deadline = time.monotonic() + _DEADLINE_SECONDS
     try:
         with httpx2.Client(
-            timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=False
+            transport=guarded_transport(),
+            timeout=_TIMEOUT,
+            headers=_HEADERS,
+            follow_redirects=False,
         ) as client:
             with client.stream("GET", url) as response:
                 if response.status_code != 200:
@@ -124,7 +118,7 @@ def _fetch(url):
                     body += chunk
                     if len(body) > _MAX_BYTES or time.monotonic() > deadline:
                         return None
-    except httpx2.HTTPError:
+    except httpx2.HTTPError, UnsafeUrl:
         return None
     return bytes(body)
 

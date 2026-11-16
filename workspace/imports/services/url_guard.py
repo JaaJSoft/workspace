@@ -2,20 +2,24 @@
 
 The worker fetches whatever URL a connection carries, so an unchecked URL is
 a server-side request forgery: loopback, link-local (cloud metadata) and, by
-default, private networks are refused after resolving the host. Self-hosters
-whose previous cloud lives on the LAN open it with IMPORTS_ALLOW_PRIVATE_NETWORKS
-or list the host in IMPORTS_ALLOWED_HOSTS.
+default, private networks are refused. Self-hosters whose previous cloud lives
+on the LAN open it with IMPORTS_ALLOW_PRIVATE_NETWORKS or list the host in
+IMPORTS_ALLOWED_HOSTS.
 
-The check resolves the host itself and the HTTP client resolves it again, so
-a name that flips between two answers (DNS rebinding) is not caught by it -
-callers re-run it before every batch of requests to keep that window short,
-but only pinning the resolved address at the transport level would close it.
+A hostname is vetted where the connection is opened, by ``guarded_transport()``:
+it resolves the name once, refuses it when any answer is off limits, and dials
+the addresses it checked. Resolving it a second time to connect is what would
+let a name answer the check with a public address and the connection with a
+private one (DNS rebinding). TLS still runs against the hostname, so SNI and
+the certificate check are those of the URL.
 """
 
 import socket
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
+import httpcore2
+import httpx2
 from django.conf import settings
 from django.utils.translation import gettext as _
 
@@ -27,16 +31,70 @@ class UnsafeUrl(ImportsError):
 
 
 def check_remote_url(url: str) -> None:
+    """Refuse a URL no guarded request could fetch, without resolving it: a
+    scheme other than http(s), no host, or an IP address that is off limits.
+    A hostname's addresses are checked when ``guarded_transport()`` connects."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise UnsafeUrl(_("Only http:// and https:// URLs are supported."))
     host = (parsed.hostname or "").lower()
     if not host:
         raise UnsafeUrl(_("The URL has no host."))
-    if host in {h.lower() for h in settings.IMPORTS_ALLOWED_HOSTS}:
+    if _is_allowed_host(host):
         return
-    for address in _resolve(host):
+    try:
+        address = ip_address(host)
+    except ValueError:
+        return
+    _check_address(address, host)
+
+
+def guarded_transport() -> httpx2.HTTPTransport:
+    """An HTTP transport that only connects to addresses the guard accepts.
+
+    A client given an explicit transport ignores the proxy environment
+    variables: a proxy would resolve the name itself, out of the guard's reach.
+    """
+    transport = httpx2.HTTPTransport()
+    # httpx2 has no parameter for it; the pool reads this attribute each time
+    # it opens a connection. test_url_guard fails if an upgrade moves it.
+    transport._pool._network_backend = _GuardedBackend()
+    return transport
+
+
+class _GuardedBackend(httpcore2.SyncBackend):
+    def connect_tcp(
+        self, host, port, timeout=None, local_address=None, socket_options=None
+    ):
+        if _is_allowed_host(host):
+            return super().connect_tcp(
+                host, port, timeout, local_address, socket_options
+            )
+        # Every answer is vetted before the first is dialed, then they are
+        # tried in the resolver's order, as socket.create_connection would;
+        # the last one's failure is the one raised.
+        *others, last = _vetted_addresses(host)
+        for address in others:
+            try:
+                return super().connect_tcp(
+                    str(address), port, timeout, local_address, socket_options
+                )
+            except httpcore2.ConnectError, httpcore2.ConnectTimeout:
+                continue
+        return super().connect_tcp(
+            str(last), port, timeout, local_address, socket_options
+        )
+
+
+def _is_allowed_host(host):
+    return host.lower() in {h.lower() for h in settings.IMPORTS_ALLOWED_HOSTS}
+
+
+def _vetted_addresses(host):
+    addresses = _resolve(host)
+    for address in addresses:
         _check_address(address, host)
+    return addresses
 
 
 def _resolve(host):
@@ -48,7 +106,7 @@ def _resolve(host):
         infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
         raise _unresolved(host) from exc
-    addresses = {ip_address(info[4][0]) for info in infos}
+    addresses = tuple(dict.fromkeys(ip_address(info[4][0]) for info in infos))
     if not addresses:
         raise _unresolved(host)
     return addresses

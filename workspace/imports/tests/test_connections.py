@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
@@ -127,15 +125,6 @@ class UpdateAndTestConnectionTests(TestCase):
         svc.browse_files(self.conn, "")
         self.assertTrue(self.provider.last_source.closed)
 
-    @override_settings(IMPORTS_ALLOWED_HOSTS=[])
-    def test_browse_re_checks_the_url(self):
-        with patch(
-            "workspace.imports.services.connections.check_remote_url",
-            side_effect=UnsafeUrl("no"),
-        ):
-            with self.assertRaises(UnsafeUrl):
-                svc.browse_files(self.conn, "")
-
     def test_address_books_are_listed_by_name(self):
         self.provider.books = [
             RemoteAddressBook(id="/work", name="work"),
@@ -155,15 +144,6 @@ class UpdateAndTestConnectionTests(TestCase):
         )
         with self.assertRaises(svc.UnsupportedKind):
             svc.browse_address_books(conn)
-
-    @override_settings(IMPORTS_ALLOWED_HOSTS=[])
-    def test_address_books_re_check_the_url(self):
-        with patch(
-            "workspace.imports.services.connections.check_remote_url",
-            side_effect=UnsafeUrl("no"),
-        ):
-            with self.assertRaises(UnsafeUrl):
-                svc.browse_address_books(self.conn)
 
     def test_delete_is_refused_while_a_job_is_live(self):
         from workspace.imports.models import ImportJob

@@ -26,6 +26,10 @@ from workspace.imports.providers.webdav import (
     _ResponseStream,
     build_client,
 )
+from workspace.imports.services.connections import create_connection
+from workspace.imports.services.url_guard import UnsafeUrl
+
+from .network import FakeNetwork, http_response
 
 User = get_user_model()
 
@@ -201,6 +205,42 @@ class ProbeQuotaTests(SimpleTestCase):
                     self._probe(65575770, sentinel),
                     {"quota_used": 65575770, "quota_available": None},
                 )
+
+
+@override_settings(IMPORTS_ALLOW_PRIVATE_NETWORKS=False, IMPORTS_ALLOWED_HOSTS=[])
+class RemoteAddressTests(TestCase):
+    """The real client and URL guard, with only DNS and TCP replaced."""
+
+    URL = "https://cloud.example.org/remote.php/dav/files/alice"
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="alice", password="pw")
+
+    def _create(self):
+        return create_connection(
+            self.owner,
+            provider="webdav",
+            label="t",
+            base_url=self.URL,
+            username="alice",
+            secret="pw",
+        )
+
+    def test_the_server_is_reached_at_the_address_the_guard_vetted(self):
+        # DNS rebinding: public for the first lookup, loopback afterwards.
+        answers = {"cloud.example.org": [["93.184.216.34"], ["127.0.0.1"]]}
+        response = http_response(207, _quota_multistatus(1, 2))
+        with FakeNetwork(answers, response=response) as net:
+            self._create()
+        self.assertEqual(net.dialed, [("93.184.216.34", 443)])
+        self.assertEqual(net.server_names, ["cloud.example.org"])
+
+    def test_a_host_on_a_private_network_is_never_contacted(self):
+        with FakeNetwork({"cloud.example.org": [["10.0.0.5"]]}) as net:
+            with self.assertRaisesRegex(UnsafeUrl, "private network"):
+                self._create()
+        self.assertEqual(net.dialed, [])
+        self.assertFalse(ImportConnection.objects.exists())
 
 
 class ErrorTranslationTests(SimpleTestCase):

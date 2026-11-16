@@ -14,7 +14,7 @@ IMPORTS_MAX_CONSECUTIVE_ERRORS = int(os.getenv("IMPORTS_MAX_CONSECUTIVE_ERRORS",
 # the job rows and their DONE items stay (they keep later runs incremental).
 IMPORTS_JOB_RETENTION_DAYS = int(os.getenv("IMPORTS_JOB_RETENTION_DAYS", "90"))
 IMPORTS_HTTP_TIMEOUT = int(os.getenv("IMPORTS_HTTP_TIMEOUT", "60"))
-# Remote URLs are vetted before the worker contacts them (SSRF guard): loopback
+# Remote addresses are vetted when the worker connects to them (SSRF guard): loopback
 # and link-local addresses are always refused; private networks only when this
 # is on; hosts listed in IMPORTS_ALLOWED_HOSTS skip the check entirely.
 IMPORTS_ALLOW_PRIVATE_NETWORKS = env_bool("IMPORTS_ALLOW_PRIVATE_NETWORKS", False)

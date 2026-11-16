@@ -213,6 +213,9 @@ class File(models.Model):
     # Rotation and crop shown in place of the raw image, the blob untouched
     # (services/image_edits.py). Null when unedited; a content write clears it.
     image_edit = models.JSONField(null=True, blank=True)
+    # Bumped by every write that changes what the thumbnail shows (the bytes,
+    # the edit): a thumbnail drawn from an older revision is never flagged.
+    thumbnail_revision = models.PositiveIntegerField(default=0)
 
     class ProcessingStatus(models.TextChoices):
         PENDING = "pending", "Pending"

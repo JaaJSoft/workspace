@@ -13,6 +13,7 @@ import uuid
 
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -224,7 +225,11 @@ def _write_content_row(file_obj, acting_user, expected_hash, fields):
         )
         if expected_hash is not None:
             claim = claim.filter(content_hash=expected_hash)
-        if claim.filter(locking.unlocked_for_q(acting_user)).update(**fields):
+        # The revision is bumped here rather than listed in *fields*: callers
+        # copy those onto their instance, and an F() there is not a value.
+        if claim.filter(locking.unlocked_for_q(acting_user)).update(
+            **fields, thumbnail_revision=F("thumbnail_revision") + 1
+        ):
             if "size" in fields and before["node_type"] == File.NodeType.FILE:
                 bucket_usage.charge_row(
                     before["owner_id"],

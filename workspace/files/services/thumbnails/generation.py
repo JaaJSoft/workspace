@@ -310,9 +310,9 @@ def is_thumbnail_candidate(file_obj):
 def refresh_thumbnail(file_obj):
     """Generate *file_obj*'s thumbnail and flag the row; True on success.
 
-    False, with the row left unflagged, when its content was replaced while
-    the thumbnail was drawn. Raises when the file cannot be decoded, like
-    generate_thumbnail.
+    False, with the row left unflagged, when its content was replaced or the
+    image rotated or cropped while the thumbnail was drawn. Raises when the
+    file cannot be decoded, like generate_thumbnail.
     """
     from workspace.files.models import File
 
@@ -320,11 +320,11 @@ def refresh_thumbnail(file_obj):
         return False
     # *file_obj* was loaded when the task started: saving it would write back
     # the name and parent it had then, through the path File.save() derives.
-    # The hash ties the flag to the bytes the thumbnail was drawn from: a
-    # content write landing meanwhile cleared it, and the pipeline it queued
-    # draws the new bytes.
+    # The revision ties the flag to the bytes and the edit the thumbnail was
+    # drawn from: a content write or an edit landing meanwhile cleared it,
+    # and queued the draw of what the file shows now.
     flagged = File.objects.filter(
-        pk=file_obj.pk, content_hash=file_obj.content_hash
+        pk=file_obj.pk, thumbnail_revision=file_obj.thumbnail_revision
     ).update(has_thumbnail=True)
     if not flagged:
         return False

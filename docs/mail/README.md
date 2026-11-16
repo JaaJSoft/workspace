@@ -27,6 +27,15 @@ IMAP/SMTP email client with OAuth2, AI-powered features, and full folder managem
 
 - [Connecting a Google account](google.md) - Gmail over IMAP/SMTP, choosing between an app password and OAuth2
 
+## Connection security
+
+Every IMAP and SMTP connection is encrypted before the password or the OAuth2 token is sent. The **Security** field of an account picks how:
+
+- **SSL/TLS** - the connection is encrypted from the first byte (IMAP usually on port 993, SMTP on 465).
+- **STARTTLS** - the connection starts in clear and is upgraded before logging in (IMAP usually on port 143, SMTP on 587). A server that does not offer STARTTLS is refused rather than logged into in clear.
+
+There is no unencrypted mode. The server's certificate is verified in both modes, against the system's trusted certificate authorities, and must match the host name of the account. A mail server using a self-signed certificate or one issued by a private authority is refused until that authority is trusted: add its certificate to the system store of the image or host running Workspace (and its Celery workers), or point the `SSL_CERT_FILE` environment variable at a PEM bundle that contains it.
+
 ## API
 
 All endpoints under `/api/v1/mail/` - see the [Swagger UI](/schema/swagger-ui/) for full documentation.

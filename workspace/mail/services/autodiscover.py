@@ -52,12 +52,9 @@ _HOSTNAME = re.compile(rf"(?=.{{1,253}}$)(?:{_LABEL}\.)+{_LABEL}")
 # A file with a DTD can only be trying to declare an entity.
 _DTD = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)", re.IGNORECASE)
 
-# What the socketType of the file means for us; "plain" is left out on purpose.
+# What the socketType of the file means for us; "plain" is left out on purpose:
+# the connectors never log in over a connection in clear.
 _SECURITY = {"SSL": "ssl", "STARTTLS": "starttls"}
-# The security each protocol can be set up with here. The IMAP connector has
-# no STARTTLS mode (imap_use_ssl off is a connection in clear), so an IMAP
-# server offered only through STARTTLS would be logged into in clear.
-_USABLE_SECURITY = {"imap": {"ssl"}, "smtp": {"ssl", "starttls"}}
 
 
 @dataclass(frozen=True)
@@ -169,7 +166,7 @@ def _first_server(root, element, protocol, domain):
             port = int((node.findtext("port") or "").strip())
         except ValueError:
             continue
-        if security not in _USABLE_SECURITY[protocol] or not 0 < port < 65536:
+        if security is None or not 0 < port < 65536:
             continue
         # A placeholder left in the host is one we cannot fill in.
         if not _is_hostname(host.lower()):

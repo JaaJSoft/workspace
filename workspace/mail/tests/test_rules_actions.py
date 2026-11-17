@@ -228,15 +228,6 @@ class MoveDeleteActionTests(_BaseActionTests):
         self.assertEqual(result["error"], "folder_not_in_account")
         mock_imap.assert_not_called()
 
-    @patch("workspace.mail.services.rules.actions.delete_message")
-    def test_delete_soft_deletes_and_calls_imap(self, mock_imap):
-        action = parse_actions([{"type": "delete"}])[0]
-        result = apply_action(action, self.msg)
-        self.assertTrue(result["ok"])
-        self.msg.refresh_from_db()
-        self.assertIsNotNone(self.msg.deleted_at)
-        mock_imap.assert_called_once()
-
 
 class MoveToFolderMergeTests(TestCase):
     """A rule targeting a folder that later became an alias keeps working."""

@@ -316,11 +316,27 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       }
     },
 
+    // The server moves a deleted message to the account's Trash, and only
+    // expunges it from Trash itself or on an account that has none. Hidden
+    // folders are not loaded, so a hidden Trash reads as "none": the dialog
+    // then warns of a permanent delete that is not one, never the reverse.
+    _deleteIsPermanent(msg) {
+      const accountId = msg.account_id || this.selectedFolder?.account_id;
+      const folders = this.folders[accountId];
+      if (!folders) return false;
+      const folder = this._resolveFolderUuid(accountId, msg.folder_id);
+      if (folder?.folder_type === 'trash') return true;
+      return !folders.some(f => f.folder_type === 'trash');
+    },
+
     async deleteMessage(msg) {
+      const permanent = this._deleteIsPermanent(msg);
       const ok = await AppDialog.confirm({
         title: gettext('Delete message'),
-        message: gettext('Move this message to trash?'),
-        okLabel: gettext('Delete'),
+        message: permanent
+          ? gettext('Permanently delete this message? It cannot be recovered.')
+          : gettext('Move this message to trash?'),
+        okLabel: permanent ? gettext('Delete permanently') : gettext('Move to trash'),
         okClass: 'btn-error',
         icon: 'trash-2',
         iconClass: 'bg-error/10 text-error',

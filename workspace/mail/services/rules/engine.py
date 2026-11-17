@@ -157,8 +157,9 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
 def _count_imap_failures(audit: list) -> int:
     """Number of action results that flagged an IMAP failure.
 
-    Move/delete/flag handlers record either ``error == 'imap_failed'`` (move)
-    or ``imap_warning == 'imap_failed'`` (flag/delete) in their audit dict.
+    Move/delete/flag handlers record either ``error == 'imap_failed'``
+    (move/delete) or ``imap_warning == 'imap_failed'`` (flag) in their audit
+    dict.
     """
     failures = 0
     for entry in audit:

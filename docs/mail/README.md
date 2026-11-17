@@ -40,7 +40,7 @@ sidebar lists each account's folders and labels.
   label, applies it.
 - In a message, hovering a sender or recipient shows a **contact card**: the
   whole contact when the address is in the user's People address book, an
-  *Add to contacts* button when it is not.
+  *Add to contacts* button when it is not, and *Send email* either way.
 - **Attachments** download, or go straight into Files with *Save to Files*.
 - **Delete** removes the message from the server; it is not moved to the
   Trash first.
@@ -144,9 +144,8 @@ from the same mail account.
 
 ## Elsewhere in Workspace
 
-The global search finds messages and the people the user has exchanged mail
-with, the dashboard tile counts unread mail, and a link from a contact card or
-a contact's page opens the composer addressed to them.
+The global search finds messages, and the people the user has exchanged mail
+with.
 
 ## Administration
 
@@ -165,9 +164,9 @@ sync. AI features run in the worker too.
 Each button appears once its client id and secret are set. Register the
 redirect URI `https://<your-domain>/mail/oauth2/callback` with the provider;
 the instance needs a public HTTPS address for it. [Connecting a Google
-account](google.md#option-b-oauth2) walks through the Google side. On
-Microsoft Entra, grant the delegated permissions `IMAP.AccessAsUser.All`,
-`SMTP.Send` and `offline_access`.
+account](google.md#option-b-oauth2) walks through the Google side. The
+Microsoft application is asked for `IMAP.AccessAsUser.All` and `SMTP.Send`
+(Office 365 Exchange Online), `offline_access`, `openid` and `email`.
 
 | Setting | Default | Meaning |
 |---|---|---|

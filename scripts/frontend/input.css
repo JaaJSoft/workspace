@@ -118,6 +118,17 @@
   }
 }
 
+/* A disabled button greys out whatever text color it was given. daisyUI 5
+   emits its rules in nested layers that every plain utility outranks, so a
+   disabled `btn text-error` stayed red and looked clickable. Specificity of
+   a single class, written after the generated utilities: it beats
+   `text-error`, and an explicit `disabled:text-*` still beats it. */
+@layer utilities {
+  :where(.btn):is(.btn-disabled, :disabled, [disabled], [aria-disabled="true"]) {
+    color: color-mix(in oklch, var(--color-base-content) 20%, #0000);
+  }
+}
+
 @layer components {
   /* Scrollable control rows (filter pills, chip rows): hide the scrollbar
      entirely - the row still scrolls by touch/wheel. Sub-pixel rounding can

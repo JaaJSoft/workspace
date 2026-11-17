@@ -197,7 +197,7 @@ it leaves 128 faces to take out and 32 mixed groups, at 0.62 181 and 42.
 someone they appear beside in at least one photo: brothers and sisters,
 couples, friends - people the embedding barely tells apart, and that a
 photo of the two of them proves are two. `split_look_alikes` uses that proof
-(see docs/photos/README.md, *How grouping works*): 22 of the 120 leave the
+(see [face-grouping.md](face-grouping.md), *How grouping works*): 22 of the 120 leave the
 wrong group and mixed groups go from 29 to 26, with as many groups to merge,
 precision and recall both up, for 5% more grouping time. With
 `scrfd_arcface` it takes 11 of the 42 faces out, for no extra time.

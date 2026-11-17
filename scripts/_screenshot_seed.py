@@ -86,6 +86,23 @@ def load_library():
     return json.loads(LIBRARY_MANIFEST.read_text(encoding="utf-8"))
 
 
+# The People shots need someone seen again and again: one Flickr member's
+# library from the face bench's dataset (scripts/photo_dataset.py), CC BY 2.0
+# like the rest, in a folder of its own. Its photos keep their real dates, so
+# they sit below the curated ones on the timeline.
+PEOPLE_LIBRARY = "86665756@N00"
+PEOPLE_FOLDER = "Friends"
+# The demo contacts the largest face groups are named after, largest first;
+# the next groups stay unnamed, as most of a real library's do.
+PEOPLE_NAMES = ("Nina Berg", "Elena Fischer", "Priya Nair")
+
+
+def load_people_library():
+    from scripts import photo_dataset
+
+    return photo_dataset.by_library(photo_dataset.load_manifest())[PEOPLE_LIBRARY]
+
+
 def _library_jpegs(library, now):
     """{name: JPEG bytes} of every photo of *library*, carrying its capture
     date in EXIF the way a camera would: the timeline orders by it.
@@ -93,7 +110,7 @@ def _library_jpegs(library, now):
     The originals are downloaded once into the dataset cache and checked
     against the manifest's sha256, so every run captures the same pixels.
     """
-    from PIL import ExifTags, Image, ImageOps
+    from PIL import Image, ImageOps
 
     from scripts import photo_dataset
 
@@ -110,15 +127,37 @@ def _library_jpegs(library, now):
         with Image.open(path) as original:
             img = ImageOps.exif_transpose(original).convert("RGB")
         img.thumbnail((LIBRARY_MAX_SIDE, LIBRARY_MAX_SIDE), Image.Resampling.LANCZOS)
-        exif = Image.Exif()
-        exif_ifd = exif.get_ifd(ExifTags.IFD.Exif)
-        exif_ifd[ExifTags.Base.DateTimeOriginal] = taken.strftime("%Y:%m:%d %H:%M:%S")
+        jpegs[photo["name"]] = _camera_jpeg(img, taken, photo["gps"])
+    return jpegs
+
+
+def _camera_jpeg(img, taken, gps=None):
+    """*img* as a JPEG carrying EXIF the way a camera writes it: the capture
+    date (with its UTC offset when *taken* is aware) and, given a
+    ``(latitude, longitude)``, the GPS position the Map page places it at."""
+    from fractions import Fraction
+
+    from PIL import ExifTags, Image
+
+    exif = Image.Exif()
+    exif_ifd = exif.get_ifd(ExifTags.IFD.Exif)
+    exif_ifd[ExifTags.Base.DateTimeOriginal] = taken.strftime("%Y:%m:%d %H:%M:%S")
+    if taken.tzinfo is not None:
         offset = taken.strftime("%z")  # +HHMM; EXIF writes it +HH:MM
         exif_ifd[ExifTags.Base.OffsetTimeOriginal] = f"{offset[:3]}:{offset[3:]}"
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=88, exif=exif)
-        jpegs[photo["name"]] = buf.getvalue()
-    return jpegs
+    if gps:
+        gps_ifd = exif.get_ifd(ExifTags.IFD.GPSInfo)
+        for value, tag, ref_tag, refs in (
+            (gps[0], ExifTags.GPS.GPSLatitude, ExifTags.GPS.GPSLatitudeRef, "NS"),
+            (gps[1], ExifTags.GPS.GPSLongitude, ExifTags.GPS.GPSLongitudeRef, "EW"),
+        ):
+            # Degrees as one rational, minutes and seconds at zero: a valid
+            # fix that keeps every decimal of the manifest's coordinate.
+            gps_ifd[tag] = (Fraction(abs(value)).limit_denominator(10**6), 0, 0)
+            gps_ifd[ref_tag] = refs[0] if value >= 0 else refs[1]
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=88, exif=exif)
+    return buf.getvalue()
 
 
 _MINIMAL_PDF = (
@@ -198,6 +237,7 @@ def seed(username, password):
         alex, sam, jordan, now
     )
     context["person_uuid"] = _seed_people(alex, sam, jordan, design_team)
+    _seed_photo_people(alex, context["photos_uuid"])
     _seed_notifications(alex, sam, jordan, now)
     return context
 
@@ -207,6 +247,9 @@ def _seed_files(alex, sam, group, now):
 
     from workspace.files.models import FileEvent, FileFavorite, FileTag, PinnedFolder
     from workspace.files.services import tree
+    from workspace.photos.services.face_preferences import FACES_ENABLED
+    from workspace.photos.services.preferences import MODULE as PHOTOS_MODULE
+    from workspace.photos.services.preferences import SHOW_MAP
     from workspace.users.services.settings import set_setting
 
     # Tile size 2 (140px) instead of the 3 (180px) default: the mosaic
@@ -238,6 +281,11 @@ def _seed_files(alex, sam, group, now):
     # tiles one step larger than the default so the shots show the photos.
     library = load_library()
     set_setting(alex, "photos", "tile_size", 4)
+    # Face grouping and the map are opt-in per user (the instance turns them
+    # on in screenshots.py): opted in before the uploads, every photo is read
+    # the way an upload is.
+    set_setting(alex, PHOTOS_MODULE, FACES_ENABLED, True)
+    set_setting(alex, PHOTOS_MODULE, SHOW_MAP, True)
     jpegs = _library_jpegs(library, now)
     files = [
         (documents, "Quarterly report.pdf", _MINIMAL_PDF, "application/pdf", 26),
@@ -315,6 +363,45 @@ def _seed_files(alex, sam, group, now):
     return str(photos.uuid), {
         photo["name"]: created[photo["name"]] for photo in library
     }
+
+
+def _seed_photo_people(alex, photos_uuid):
+    """Import the people library under Photos, find its faces and name the
+    largest groups after demo contacts."""
+    from datetime import datetime
+
+    from django.core.files.base import ContentFile
+    from PIL import Image, ImageOps
+
+    from scripts import photo_dataset
+    from workspace.files.models import File
+    from workspace.files.services import tree
+    from workspace.people.models import Person
+    from workspace.photos.queries import user_face_clusters
+    from workspace.photos.services.face_analysis import analyze_faces, pending_faces_qs
+    from workspace.photos.services.face_grouping import cluster_owner
+    from workspace.photos.services.face_people import link_cluster
+
+    library = load_people_library()
+    paths = photo_dataset.fetch_images(library)
+    folder = tree.create_folder(alex, PEOPLE_FOLDER, File.objects.get(pk=photos_uuid))
+    for n, photo in enumerate(library, 1):
+        with Image.open(paths[photo.photo_id]) as original:
+            img = ImageOps.exif_transpose(original).convert("RGB")
+        taken = datetime.fromisoformat(photo.taken)
+        name = f"IMG_{n:04d}.jpg"
+        data = _camera_jpeg(img, taken)
+        tree.create_file(alex, name, folder, content=ContentFile(data, name=name))
+
+    # Uploads queue their analysis; run whatever is still pending here, so
+    # the grouping below sees every face whichever way the tasks ran.
+    for file_obj in pending_faces_qs().filter(owner=alex):
+        analyze_faces(file_obj)
+    cluster_owner(alex.pk)
+
+    clusters = user_face_clusters(alex).order_by("-photo_count", "created_at")
+    for cluster, display_name in zip(clusters, PEOPLE_NAMES, strict=False):
+        link_cluster(cluster, Person.objects.get(owner=alex, display_name=display_name))
 
 
 def _seed_albums(alex, group, photos):
@@ -1162,17 +1249,52 @@ def _files_view(mode):
 def _photos_loaded(page):
     # Park the cursor first: a hovered tile starts its preview. Tiles are lazy
     # images, and those below the fold never load: wait for the ones on screen.
+    # A closed dialog's image (the People merge dialog's) is laid out, hidden
+    # and empty: it never loads either.
     page.mouse.move(5, 5)
     page.wait_for_function(
         """[...document.images]
                .filter(img => {
                    const r = img.getBoundingClientRect();
-                   return r.width && r.bottom > 0 && r.top < innerHeight;
+                   return r.width && r.bottom > 0 && r.top < innerHeight
+                       && img.getAttribute('src')
+                       && img.checkVisibility({ visibilityProperty: true, opacityProperty: true });
                })
                .every(img => img.complete && img.naturalWidth > 0)""",
         timeout=15000,
     )
     page.wait_for_timeout(500)
+
+
+def _map_loaded(page):
+    # The map fits the library once its positions arrive; wait for every
+    # tile and every group's thumbnail on screen, then for the grid beside it.
+    page.mouse.move(5, 5)
+    page.wait_for_function(
+        """document.querySelectorAll('.leaflet-marker-icon').length > 0
+               && [...document.querySelectorAll('.leaflet-tile')]
+                      .every(img => img.complete)""",
+        timeout=20000,
+    )
+    _photos_loaded(page)
+
+
+def _photo_properties(name):
+    # The viewer over the timeline, its properties panel open: the photo's
+    # details and its position on the small map.
+    def prep(page):
+        _photos_loaded(page)
+        page.click(f'button[title="{name}"]')
+        page.click('button[title^="Properties"]')
+        page.mouse.move(5, 5)
+        page.wait_for_function(
+            """[...document.querySelectorAll('.leaflet-tile')]
+                   .some(img => img.complete && img.naturalWidth > 0)""",
+            timeout=20000,
+        )
+        page.wait_for_timeout(1000)
+
+    return prep
 
 
 def _calendar_agenda(page):
@@ -1227,6 +1349,12 @@ SHOTS = [
     {"name": "files_2", "path": "/files", "prep": _files_view("List")},
     {"name": "photos_1", "path": "/photos", "prep": _photos_loaded},
     {"name": "photos_2", "path": "/photos/albums/{album_uuid}", "prep": _photos_loaded},
+    # Over Europe rather than the whole library: the world view is mostly
+    # sea, and a closer one shows the map the photos sit on.
+    {"name": "photos_3", "path": "/photos/map?lat=56&lng=-4&z=4", "prep": _map_loaded},
+    {"name": "photos_4", "path": "/photos/people", "prep": _photos_loaded},
+    {"name": "photos_5", "path": "/photos/people/review", "prep": _photos_loaded},
+    {"name": "photos_6", "path": "/photos", "prep": _photo_properties("quiraing.jpg")},
     {"name": "chat_1", "path": "/chat/{conversation_uuid}"},
     {"name": "calendar_1", "path": "/calendar", "settle_ms": 3000},
     {

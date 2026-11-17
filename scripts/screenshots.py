@@ -83,6 +83,8 @@ def demo_environment():
         "MEDIA_ROOT": str(tmp / "media"),
         "DEBUG": "True",
         "REDIS_URL": "",
+        # The vault is a preview, offered to staff only by default.
+        "PREVIEW_VISIBILITY": "all",
         # The People shots: faces are found while the seed uploads the photos,
         # with weights kept next to the photo datasets between runs.
         "PHOTOS_FACES_ENABLED": "1",
@@ -175,7 +177,8 @@ def capture(base_url, context, only=None):
             page.wait_for_timeout(shot.get("settle_ms", 2000))
             _dismiss_overlays(page)
             if "prep" in shot:
-                shot["prep"](page)
+                values = {key: context[key] for key in shot.get("prep_context", ())}
+                shot["prep"](page, **values)
             page.screenshot(path=OUTPUT_DIR / f"{shot['name']}.png")
         browser.close()
 

@@ -228,18 +228,31 @@ def seed(username, password):
     context = {}
     context["photos_uuid"], photos = _seed_files(alex, sam, design_team, now)
     context["album_uuid"] = _seed_albums(alex, design_team, photos)
-    _seed_notes(alex, now)
-    context["conversation_uuid"] = _seed_chat(alex, sam, jordan, now)
+    _seed_notes(alex, now, photos)
+    context["conversation_uuid"], context["thread_uuid"] = _seed_chat(
+        alex, sam, jordan, now
+    )
     context["bot_conversation_uuid"] = _seed_ai(alex, now)
-    _seed_calendar(alex, sam, jordan, now)
+    context["poll_uuid"] = _seed_calendar(alex, sam, jordan, now)
     _seed_mail(alex, now)
     context["project_uuid"], context["task_uuid"] = _seed_projects(
         alex, sam, jordan, now
     )
+    context["sprint_project_uuid"] = _seed_sprints(alex, sam, jordan, now)
+    _seed_imports(alex, now)
     context["person_uuid"] = _seed_people(alex, sam, jordan, design_team)
-    _seed_photo_people(alex, context["photos_uuid"])
+    context["photo_person_uuid"] = _seed_photo_people(alex, context["photos_uuid"])
     _seed_notifications(alex, sam, jordan, now)
+    context["vault_recovery_key"] = _seed_vault(alex)
     return context
+
+
+def _seed_vault(alex):
+    """Alex's two demo vaults, sealed and signed the way a browser does it.
+    Returns the recovery key the unlock form asks for with the password."""
+    from scripts.seed_vault import seed_vault_for
+
+    return seed_vault_for(alex)["recovery_key"]
 
 
 def _seed_files(alex, sam, group, now):
@@ -269,7 +282,7 @@ def _seed_files(alex, sam, group, now):
 
     documents = tree.create_folder(alex, "Documents")
     photos = tree.create_folder(alex, "Photos", icon="image", color="text-warning")
-    tree.create_folder(alex, "Archive", icon="archive", color="text-neutral")
+    archive = tree.create_folder(alex, "Archive", icon="archive", color="text-neutral")
 
     csv = "month,revenue,expenses\nJanuary,12400,8100\nFebruary,13950,8420\nMarch,15200,9010\n"
     svg = (
@@ -287,21 +300,35 @@ def _seed_files(alex, sam, group, now):
     set_setting(alex, PHOTOS_MODULE, FACES_ENABLED, True)
     set_setting(alex, PHOTOS_MODULE, SHOW_MAP, True)
     jpegs = _library_jpegs(library, now)
-    files = [
-        (documents, "Quarterly report.pdf", _MINIMAL_PDF, "application/pdf", 26),
-        (documents, "budget-2026.csv", csv.encode(), "text/csv", 20),
-        (
-            None,
-            "Roadmap.md",
-            b"# Roadmap\n\n- Q3: mobile apps\n- Q4: offline mode\n",
-            "text/markdown",
-            8,
-        ),
-        (None, "logo.svg", svg.encode(), "image/svg+xml", 5),
-    ] + [
-        (photos, photo["name"], jpegs[photo["name"]], "image/jpeg", photo["days_ago"])
-        for photo in library
-    ]
+    files = (
+        [
+            (documents, "Quarterly report.pdf", _MINIMAL_PDF, "application/pdf", 26),
+            (documents, "budget-2026.csv", csv.encode(), "text/csv", 20),
+            (
+                None,
+                "Roadmap.md",
+                b"# Roadmap\n\n- Q3: mobile apps\n- Q4: offline mode\n",
+                "text/markdown",
+                8,
+            ),
+            (None, "logo.svg", svg.encode(), "image/svg+xml", 5),
+        ]
+        + [
+            (
+                photos,
+                photo["name"],
+                jpegs[photo["name"]],
+                "image/jpeg",
+                photo["days_ago"],
+            )
+            for photo in library
+        ]
+        + [
+            # Copies kept "just in case": the Storage view ranks them as duplicates.
+            (archive, f"backup-{name}", jpegs[name], "image/jpeg", 40)
+            for name in ("glacier-lagoon.jpg", "forest-falls.jpg")
+        ]
+    )
     created = {}
     for parent, name, data, mime, days_ago in files:
         f = tree.create_file(
@@ -310,6 +337,10 @@ def _seed_files(alex, sam, group, now):
         backdate_file(f, now - timedelta(days=days_ago, hours=3))
         created[name] = f
     report = created["Quarterly report.pdf"]
+    # The backups in Archive would show twice on the Photos timeline.
+    from workspace.photos.services.hidden import hide_files
+
+    hide_files(alex, [archive])
 
     FileFavorite.objects.create(owner=alex, file=report)
     FileFavorite.objects.create(owner=alex, file=photos)
@@ -367,7 +398,7 @@ def _seed_files(alex, sam, group, now):
 
 def _seed_photo_people(alex, photos_uuid):
     """Import the people library under Photos, find its faces and name the
-    largest groups after demo contacts."""
+    largest groups after demo contacts. Returns the first one's contact."""
     from datetime import datetime
 
     from django.core.files.base import ContentFile
@@ -400,8 +431,12 @@ def _seed_photo_people(alex, photos_uuid):
     cluster_owner(alex.pk)
 
     clusters = user_face_clusters(alex).order_by("-photo_count", "created_at")
+    named = []
     for cluster, display_name in zip(clusters, PEOPLE_NAMES, strict=False):
-        link_cluster(cluster, Person.objects.get(owner=alex, display_name=display_name))
+        person = Person.objects.get(owner=alex, display_name=display_name)
+        link_cluster(cluster, person)
+        named.append(person)
+    return str(named[0].uuid)
 
 
 def _seed_albums(alex, group, photos):
@@ -436,11 +471,14 @@ def _seed_tags(owner, specs):
     }
 
 
-def _seed_notes(alex, now):
+def _seed_notes(alex, now, photos):
+    """A few notes linked to one another, and to a photo, so the graph view
+    has edges: each note only links to the ones written before it."""
     from django.core.files.base import ContentFile
 
     from workspace.files.models import File, FileTag
     from workspace.files.services import tree
+    from workspace.files.services.links import refresh_file_links
     from workspace.notes.ui.views import _ensure_default_folders
 
     meeting = _seed_tags(alex, [("meeting", "#a855f7", True)])["meeting"]
@@ -448,40 +486,76 @@ def _seed_notes(alex, now):
     prefs, _ = _ensure_default_folders(alex)
     notes_folder = File.objects.get(uuid=prefs["defaultFolderUuid"])
     journal_folder = File.objects.get(uuid=prefs["journalFolderUuid"])
+    created = {}
+
+    def link(name):
+        return f"[{name}](/notes?file={created[name].uuid})"
+
+    pier = photos["pier.jpg"]
     notes = [
         (
             notes_folder,
-            "Project kickoff.md",
-            "# Project kickoff\n\n## Goals\n\n- Ship the marketing site refresh\n"
-            "- Migrate the blog\n- Improve Core Web Vitals\n\n"
-            "## Open questions\n\n- Do we keep the old pricing page?\n",
+            "Project kickoff",
+            lambda: (
+                "# Project kickoff\n\n## Goals\n\n- Ship the marketing site refresh\n"
+                "- Migrate the blog\n- Improve Core Web Vitals\n\n"
+                "## Open questions\n\n- Do we keep the old pricing page?\n"
+            ),
             30,
         ),
         (
             notes_folder,
-            "Reading list.md",
-            "# Reading list\n\n- [ ] Shape Up\n- [x] The Design of Everyday Things\n"
-            "- [ ] Refactoring UI\n",
+            "Reading list",
+            lambda: (
+                "# Reading list\n\n- [ ] Shape Up\n- [x] The Design of Everyday Things\n"
+                "- [ ] Refactoring UI\n"
+            ),
             52,
         ),
         (
+            notes_folder,
+            "Launch plan",
+            lambda: (
+                f"# Launch plan\n\nFollows the {link('Project kickoff')}.\n\n"
+                "- Freeze copy on Thursday\n- Release on Friday morning\n\n"
+                f"![pier.jpg](/api/v1/files/{pier.uuid}/content)\n"
+            ),
+            26,
+        ),
+        (
+            notes_folder,
+            "Design review notes",
+            lambda: (
+                f"# Design review notes\n\nAgreed on the deeper indigo for the hero. "
+                f"Next steps are in the {link('Launch plan')}, goals in the "
+                f"{link('Project kickoff')}.\n"
+            ),
+            20,
+        ),
+        (
             journal_folder,
-            f"{now:%Y-%m-%d}.md",
-            f"# {now:%A, %B} {now.day}\n\nSketched the new hero section this morning, "
-            "then paired with Sam on the palette. Feeling good about the direction.\n",
+            f"{now:%Y-%m-%d}",
+            lambda: (
+                f"# {now:%A, %B} {now.day}\n\nSketched the new hero section this morning, "
+                f"then paired with Sam on the palette ({link('Design review notes')}). "
+                f"Started a book from the {link('Reading list')}.\n"
+            ),
             2,
         ),
     ]
-    for parent, name, body, hours_ago in notes:
+    for parent, title, body, hours_ago in notes:
+        name = f"{title}.md"
         f = tree.create_file(
             alex,
             name,
             parent,
-            content=ContentFile(body.encode(), name=name),
+            content=ContentFile(body().encode(), name=name),
             mime_type="text/markdown",
         )
+        created[title] = f
+        refresh_file_links(f)
         _backdate(f, now - timedelta(hours=hours_ago))
-        if name == "Project kickoff.md":
+        if title == "Project kickoff":
             FileTag.objects.create(file=f, tag=meeting)
 
 
@@ -489,16 +563,19 @@ def _seed_chat(alex, sam, jordan, now):
     from workspace.chat.models import Conversation, ConversationMember, Message
     from workspace.chat.services.conversations import get_or_create_dm
     from workspace.chat.services.rendering import render_message_body
+    from workspace.chat.services.threads import ensure_participants, recount_thread
 
-    def post(conversation, author, body, ts):
+    def post(conversation, author, body, ts, root=None):
         msg = Message.objects.create(
             conversation=conversation,
             author=author,
             body=body,
             body_html=render_message_body(body),
+            thread_root=root,
+            reply_to=root,
         )
         _backdate(msg, ts)
-        return ts
+        return msg
 
     dm = get_or_create_dm(alex, sam)
     post(dm, sam, "Did you see the new board? 👀", now - timedelta(hours=5))
@@ -508,7 +585,7 @@ def _seed_chat(alex, sam, jordan, now):
         "Yes! Moving the launch tasks over now.",
         now - timedelta(hours=5, minutes=-4),
     )
-    Conversation.objects.filter(pk=dm.pk).update(updated_at=last)
+    Conversation.objects.filter(pk=dm.pk).update(updated_at=last.created_at)
 
     group = Conversation.objects.create(
         kind=Conversation.Kind.GROUP,
@@ -533,10 +610,24 @@ def _seed_chat(alex, sam, jordan, now):
         (sam, "Sure, pushing it now — refresh in a minute.", 98),
         (jordan, "🚀", 95),
     ]
-    for author, body, minutes_ago in thread:
-        last = post(group, author, body, now - timedelta(minutes=minutes_ago))
-    Conversation.objects.filter(pk=group.pk).update(updated_at=last)
-    return str(group.uuid)
+    posted = [
+        post(group, author, body, now - timedelta(minutes=minutes_ago))
+        for author, body, minutes_ago in thread
+    ]
+    Conversation.objects.filter(pk=group.pk).update(updated_at=posted[-1].created_at)
+
+    # The buttons question grows a thread of its own, for the thread capture.
+    root = posted[2]
+    for author, body, minutes_ago in [
+        (sam, "Deeper indigo or the lighter one from the styleguide?", 102),
+        (alex, "The deeper one - it holds up better on the dark theme.", 101),
+        (jordan, "Checked both themes on staging, contrast passes AA.", 97),
+        (sam, "Done, it is live on the buttons too ✅", 96),
+    ]:
+        post(group, author, body, now - timedelta(minutes=minutes_ago), root=root)
+    ensure_participants(root, [alex.pk, sam.pk, jordan.pk])
+    recount_thread(root)
+    return str(group.uuid), str(root.uuid)
 
 
 def _seed_ai(alex, now):
@@ -598,7 +689,52 @@ def _seed_ai(alex, now):
         last = now - timedelta(minutes=minutes_ago)
         _backdate(msg, last)
     Conversation.objects.filter(pk=dm.pk).update(updated_at=last)
+    _seed_bot_panel(alex, nova, dm, now)
     return str(dm.uuid)
+
+
+def _seed_bot_panel(alex, nova, dm, now):
+    """What the bot conversation's info panel lists: a goal the bot works on
+    by itself, a weekly message it sends, and what it remembers of Alex."""
+    from datetime import time
+
+    from workspace.ai.models import AgentGoal, ScheduledMessage, UserMemory
+
+    AgentGoal.objects.create(
+        conversation=dm,
+        bot=nova,
+        created_by=alex,
+        title="Watch the launch metrics",
+        goal="Follow the new site's Core Web Vitals and sign-ups after the "
+        "launch, and tell me when something regresses.",
+        success_criteria="Two weeks of stable metrics after the release.",
+        reporting="Only when a metric drops by more than 10%.",
+        deadline=now + timedelta(days=21),
+        next_check_at=now + timedelta(hours=6),
+        check_count=3,
+        last_checked_at=now - timedelta(hours=18),
+    )
+    days_to_monday = (7 - now.weekday()) % 7 or 7
+    ScheduledMessage.objects.create(
+        conversation=dm,
+        bot=nova,
+        created_by=alex,
+        prompt="Send me a recap of last week's project activity.",
+        kind=ScheduledMessage.Kind.RECURRING,
+        recurrence_unit=ScheduledMessage.RecurrenceUnit.WEEKS,
+        recurrence_interval=1,
+        recurrence_time=time(9, 0),
+        recurrence_day=0,
+        next_run_at=(now + timedelta(days=days_to_monday)).replace(
+            hour=9, minute=0, second=0, microsecond=0
+        ),
+    )
+    for key, content in [
+        ("role", "Leads the website redesign with Sam and Jordan."),
+        ("style", "Prefers short answers with bullet points."),
+        ("timezone", "Works from Lyon, mornings are for deep work."),
+    ]:
+        UserMemory.objects.create(user=alex, bot=nova, key=key, content=content)
 
 
 def _seed_calendar(alex, sam, jordan, now):
@@ -672,6 +808,47 @@ def _seed_calendar(alex, sam, jordan, now):
         (review, jordan, EventMember.Status.PENDING),
     ]:
         EventMember.objects.create(event=ev, user=user, status=status)
+    return _seed_poll(alex, sam, jordan, monday)
+
+
+def _seed_poll(alex, sam, jordan, monday):
+    """An open scheduling poll over next week's slots, voted on by the team
+    and a guest who answered through the share link."""
+    from workspace.calendar.models import Poll, PollInvitee, PollSlot, PollVote
+
+    poll = Poll.objects.create(
+        title="Team offsite",
+        description="A day out of the office to plan the next quarter.",
+        created_by=alex,
+    )
+    next_week = monday + timedelta(days=7)
+    slots = [
+        PollSlot.objects.create(
+            poll=poll,
+            start=next_week + timedelta(days=day, hours=9),
+            end=next_week + timedelta(days=day, hours=17),
+            position=n,
+        )
+        for n, day in enumerate((1, 2, 3))
+    ]
+    for user in (sam, jordan):
+        PollInvitee.objects.create(poll=poll, user=user)
+    Y, M, N = PollVote.Choice.YES, PollVote.Choice.MAYBE, PollVote.Choice.NO
+    for voter, choices in [
+        (alex, (Y, Y, M)),
+        (sam, (Y, N, Y)),
+        (jordan, (M, Y, Y)),
+    ]:
+        for slot, choice in zip(slots, choices, strict=True):
+            PollVote.objects.create(slot=slot, user=voter, choice=choice)
+    for slot, choice in zip(slots, (N, Y, Y), strict=True):
+        PollVote.objects.create(
+            slot=slot,
+            guest_name="Morgan",
+            voter_token="screenshot-guest-morgan",
+            choice=choice,
+        )
+    return str(poll.uuid)
 
 
 def _seed_mail(alex, now):
@@ -1027,6 +1204,175 @@ def _seed_projects(alex, sam, jordan, now):
     return str(project.uuid), str(hero.uuid)
 
 
+def _seed_sprints(alex, sam, jordan, now):
+    """A second, scrum project: one closed sprint, the running one the sprint
+    board capture shows, and the next one planned from the backlog.
+
+    The sprints are written as rows rather than walked through start and
+    complete: the capture only needs their state, and the services would
+    stamp today's dates on what the seed backdates.
+    """
+    from workspace.projects.models import Project, ProjectMember, Sprint, Task
+    from workspace.projects.services.projects import create_project
+    from workspace.projects.services.tasks import create_task
+
+    project = create_project(
+        alex,
+        name="Mobile App",
+        description="iOS and Android companion app",
+        project_type=Project.Type.SCRUM,
+    )
+    project.estimate_unit = Project.EstimateUnit.POINTS
+    project.save(update_fields=["estimate_unit"])
+    for user in (sam, jordan):
+        ProjectMember.objects.create(project=project, user=user)
+    statuses = {s.name: s for s in project.statuses.all()}
+    today = now.date()
+
+    def sprint(name, state, start, end, goal=""):
+        return Sprint.objects.create(
+            project=project,
+            name=name,
+            goal=goal,
+            state=state,
+            start_date=today + timedelta(days=start),
+            end_date=today + timedelta(days=end),
+            closed_at=(now + timedelta(days=end))
+            if state == Sprint.State.CLOSED
+            else None,
+        )
+
+    closed = sprint("Sprint 1", Sprint.State.CLOSED, -21, -8)
+    active = sprint(
+        "Sprint 2", Sprint.State.ACTIVE, -7, 6, goal="Sign-in and offline sync"
+    )
+    planned = sprint("Sprint 3", Sprint.State.PLANNED, 7, 20)
+
+    # (title, sprint, status, priority, estimate, assignee)
+    for title, in_sprint, status, priority, estimate, assignee in [
+        ("Set up the app shell", closed, "Done", "high", 5, alex),
+        ("Design the onboarding screens", closed, "Done", "medium", 3, sam),
+        ("Sign in with the workspace account", active, "Done", "high", 5, jordan),
+        ("Offline cache for files", active, "In progress", "high", 8, alex),
+        ("Push notifications on Android", active, "In progress", "medium", 5, jordan),
+        ("Photo upload from the camera roll", active, "To do", "medium", 3, sam),
+        ("Dark theme", active, "To do", "low", 2, None),
+        ("Share sheet extension", planned, "Backlog", "medium", 5, None),
+        ("Biometric unlock", planned, "Backlog", "low", 3, None),
+    ]:
+        task = create_task(
+            project,
+            alex,
+            title=title,
+            status=statuses[status],
+            priority=priority,
+            estimate=estimate,
+            assignees=[assignee] if assignee else [],
+            sprint=in_sprint,
+        )
+        if status == "Done":
+            Task.objects.filter(pk=task.pk).update(
+                completed_at=now
+                + timedelta(days=-9 if in_sprint is closed else -2, hours=-3)
+            )
+    return str(project.uuid)
+
+
+def _seed_imports(alex, now):
+    """A Nextcloud connection with a finished import, and a WebDAV one still
+    copying. The page only reads these rows: no remote is ever contacted."""
+    from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
+
+    def job(connection, status, kinds, options, stats, started, finished=None):
+        row = ImportJob.objects.create(
+            connection=connection,
+            kinds=kinds,
+            options=options,
+            status=status,
+            stats=stats,
+            started_at=now - started,
+            finished_at=(now - finished) if finished else None,
+            heartbeat_at=now if status == ImportJob.Status.RUNNING else None,
+        )
+        _backdate(row, now - started)
+        return row
+
+    nextcloud = ImportConnection.objects.create(
+        owner=alex,
+        provider="nextcloud",
+        label="My old Nextcloud",
+        base_url="https://cloud.example.org",
+        username="alex",
+        capabilities={
+            "server_version": "30.0.4",
+            "quota_used": 18_400_000_000,
+            "quota_available": 81_600_000_000,
+        },
+        last_checked_at=now - timedelta(days=2),
+    )
+    done = job(
+        nextcloud,
+        ImportJob.Status.COMPLETED,
+        ["files", "contacts"],
+        {
+            "files": {"source_path": "/", "on_conflict": "rename"},
+            "contacts": {"books": [{"id": "contacts", "target": "mine"}]},
+        },
+        {
+            "files": {
+                "phase": "done",
+                "total_files": 2_412,
+                "files": 2_409,
+                "failed": 3,
+                "bytes": 17_900_000_000,
+            },
+            "contacts": {
+                "phase": "done",
+                "total_cards": 184,
+                "cards": 184,
+                "created": 176,
+                "updated": 8,
+                "lists": 4,
+            },
+        },
+        started=timedelta(days=2, hours=3),
+        finished=timedelta(days=2),
+    )
+    for name in ("Videos/2019-wedding.mov", "Photos/IMG_0044.HEIC", "Shared/.lock"):
+        ImportJobItem.objects.create(
+            job=done,
+            kind="files",
+            remote_id=f"/{name}",
+            status=ImportJobItem.Status.FAILED,
+            error="The server closed the connection.",
+        )
+
+    webdav = ImportConnection.objects.create(
+        owner=alex,
+        provider="webdav",
+        label="NAS at home",
+        base_url="https://nas.example.org/remote.php/dav/files/alex/Archive",
+        username="alex",
+        last_checked_at=now - timedelta(minutes=20),
+    )
+    job(
+        webdav,
+        ImportJob.Status.RUNNING,
+        ["files"],
+        {"files": {"source_path": "/", "on_conflict": "rename"}},
+        {
+            "files": {
+                "phase": "copying",
+                "total_files": 5_830,
+                "files": 3_214,
+                "unchanged": 120,
+                "bytes": 9_200_000_000,
+            }
+        },
+        started=timedelta(minutes=18),
+    )
+
+
 def _seed_people(alex, sam, jordan, group):
     from datetime import date
 
@@ -1297,6 +1643,67 @@ def _photo_properties(name):
     return prep
 
 
+def _storage_view(page):
+    # The dialog opens from ?storage=; its chart and lists load after it.
+    page.wait_for_selector("text=Largest files", timeout=15000)
+    page.mouse.move(5, 5)
+    page.wait_for_timeout(1500)
+
+
+def _notes_graph(page):
+    # The force layout keeps moving for a few seconds after the data lands.
+    canvas = page.wait_for_selector("canvas", timeout=15000)
+    page.wait_for_timeout(3000)
+    # A handful of notes settles small in the middle of the canvas: zoom in.
+    box = canvas.bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.mouse.wheel(0, -400)
+    page.mouse.move(5, 5)
+    page.wait_for_timeout(1500)
+
+
+def _contact_photos(page):
+    # The Photos section sits below the contact's cards: bring it in view.
+    _person_panel(page)
+    page.locator("text=See all").first.scroll_into_view_if_needed()
+    _photos_loaded(page)
+
+
+def _compose_suggestions(page):
+    page.click('button[title="Compose (C)"]')
+    to = page.locator('input[x-model="_tagInput.to"]')
+    to.wait_for(state="visible")
+    to.press_sequentially("am", delay=120)
+    page.wait_for_timeout(1500)
+
+
+def _bot_info_panel(page):
+    page.click('button[title^="Conversation info"]')
+    goal = page.locator("text=Watch the launch metrics").first
+    goal.wait_for(timeout=15000)
+    # The bot's own sections sit below the members and shared media.
+    goal.scroll_into_view_if_needed()
+    page.mouse.move(5, 5)
+    page.wait_for_timeout(1000)
+
+
+def _unlocked_vault(page, vault_recovery_key):
+    # The keys live in the page only: unlock and open the entry without
+    # navigating, or the vault locks again. Argon2id takes a few seconds.
+    from scripts.seed_vault import MASTER_PASSWORD
+
+    page.fill("input[autocomplete='current-password']", MASTER_PASSWORD)
+    page.fill("input[aria-label='Recovery key']", vault_recovery_key)
+    page.click("button:has-text('Unlock')")
+    page.wait_for_function(
+        "() => window.vaultSession && window.vaultSession.isUnlocked()",
+        timeout=60000,
+    )
+    page.click("tbody tr:has-text('GitHub')")
+    page.mouse.move(5, 5)
+    page.wait_for_timeout(1500)
+
+
 def _calendar_agenda(page):
     # Several responsive variants of the switcher exist; click the
     # visible one (offsetParent is null for hidden elements).
@@ -1350,6 +1757,7 @@ SHOTS = [
         "prep": _files_view("Mosaic"),
     },
     {"name": "files_2", "path": "/files", "prep": _files_view("List")},
+    {"name": "files_3", "path": "/files?storage=root", "prep": _storage_view},
     {"name": "photos_1", "path": "/photos", "prep": _photos_loaded},
     {"name": "photos_2", "path": "/photos/albums/{album_uuid}", "prep": _photos_loaded},
     # Over Europe rather than the whole library: the world view is mostly
@@ -1359,6 +1767,7 @@ SHOTS = [
     {"name": "photos_5", "path": "/photos/people/review", "prep": _photos_loaded},
     {"name": "photos_6", "path": "/photos", "prep": _photo_properties("quiraing.jpg")},
     {"name": "chat_1", "path": "/chat/{conversation_uuid}"},
+    {"name": "chat_2", "path": "/chat/{conversation_uuid}?thread={thread_uuid}"},
     {"name": "calendar_1", "path": "/calendar", "settle_ms": 3000},
     {
         "name": "calendar_2",
@@ -1366,8 +1775,11 @@ SHOTS = [
         "settle_ms": 3000,
         "prep": _calendar_agenda,
     },
+    {"name": "calendar_3", "path": "/calendar?poll={poll_uuid}", "settle_ms": 3000},
     {"name": "mail_1", "path": "/mail", "prep": _open_first_mail},
+    {"name": "mail_2", "path": "/mail", "prep": _compose_suggestions},
     {"name": "notes_1", "path": "/notes", "prep": _open_first_note},
+    {"name": "notes_2", "path": "/notes?view=graph", "prep": _notes_graph},
     {"name": "projects_1", "path": "/projects/{project_uuid}/board"},
     {
         "name": "projects_2",
@@ -1380,11 +1792,25 @@ SHOTS = [
         "settle_ms": 2500,
     },
     {"name": "projects_4", "path": "/projects/{project_uuid}/analytics"},
+    {"name": "projects_5", "path": "/projects/{sprint_project_uuid}/board"},
     {"name": "ai_1", "path": "/chat/{bot_conversation_uuid}"},
+    {"name": "ai_2", "path": "/chat/{bot_conversation_uuid}", "prep": _bot_info_panel},
     {
         "name": "people_1",
         "path": "/people?person={person_uuid}",
         "prep": _person_panel,
+    },
+    {
+        "name": "people_2",
+        "path": "/people?person={photo_person_uuid}",
+        "prep": _contact_photos,
+    },
+    {"name": "imports_1", "path": "/imports"},
+    {
+        "name": "vault_1",
+        "path": "/vault",
+        "prep": _unlocked_vault,
+        "prep_context": ["vault_recovery_key"],
     },
     {"name": "notifications_1", "path": "/", "prep": _open_notifications},
 ]

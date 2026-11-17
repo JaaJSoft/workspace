@@ -6,17 +6,19 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 
 | Module | Description |
 |---|---|
-| [Files](files/) | Upload, organize, preview, and share files; WebDAV, thumbnails, trash |
-| [Chat](chat/) | Direct and group messaging, real-time updates, AI bots, audio calls |
-| [Calendar](calendar/) | Multiple views, recurring events, RSVP, scheduling polls, iCalendar |
-| [Mail](mail/) | IMAP/SMTP client with OAuth2, AI summaries, folders and labels |
-| [Photos](photos/) | Timeline of your photos and videos; opt-in face detection and grouping |
-| [Notes](notes/) | Markdown notes with journal mode, folders, tags, full-text search |
-| [Projects](projects/) | Kanban boards with backlog, task references, labels, comments, activity |
-| [People](people/) | Address book with group books, lists, linked accounts, and vCard import/export |
-| [AI Assistants](ai/) | Configurable bots with tools, vision, memory, and scheduled messages |
-| [Notifications](notifications/) | In-app and Web Push notifications with priority and read tracking |
-| [Imports](imports/) | Bring files over from Nextcloud or any WebDAV host, in resumable background jobs |
+| [Files](files/) | Folders, uploads, viewers and editors, sharing, group folders, WebDAV |
+| [Chat](chat/) | Direct and group conversations, threads, voice messages, audio and video calls |
+| [Calendar](calendar/) | Recurring events, invitations, scheduling polls, CalDAV sync, ICS feeds |
+| [Mail](mail/) | IMAP/SMTP client with OAuth2, labels, filters and rules, AI features |
+| [Photos](photos/) | Timeline, albums, map, people, search by description |
+| [Notes](notes/) | Markdown notes with journal, links, embeds and a graph view |
+| [Projects](projects/) | Kanban or sprint boards, backlog, epics, timeline, reports |
+| [People](people/) | Address books, lists, CardDAV sync, vCard import/export |
+| [AI Assistants](ai/) | Bots with tools, memory, scheduled messages and long-running goals |
+| [Vault](vault/) | End-to-end encrypted password manager (preview) |
+| [Dashboard](dashboard/) | Home page: today's events, urgent tasks, app tiles, recent activity |
+| [Notifications](notifications/) | Notification center, per-module levels and Web Push |
+| [Imports](imports/) | Bring files and contacts over from Nextcloud or any WebDAV host |
 
 ## Deployment
 

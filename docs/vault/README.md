@@ -22,8 +22,6 @@ The first visit to the Vault walks through three steps:
    lock, not a way to reset the password: it is needed together with the master
    password on any new device.
 
-![Recovery key](../images/vault_2.png)
-
 *Remember my recovery key on this device* spares typing it again on that
 browser. Anything that can run code on the page can then read it, so leave it
 off on a shared computer. The setup ends by creating a first vault called

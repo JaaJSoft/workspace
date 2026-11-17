@@ -52,6 +52,8 @@ labels show in the list and whether deleting asks first.
 
 ## Writing
 
+![Composer](../images/mail_2.png)
+
 - **Recipient suggestions** in To, Cc and Bcc list the user's contacts first,
   each of their addresses on its own line, then workspace accounts, then
   addresses from their mail history. The person icon beside one adds it to

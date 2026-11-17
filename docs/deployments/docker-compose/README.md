@@ -72,6 +72,7 @@ All settings are configurable via environment variables or a `.env` file next to
 | `OAUTH_GENERIC_NAME` | *(empty)* | Display name for the custom provider (e.g. `Yahoo`) |
 | `OAUTH_GENERIC_AUTH_URL` | *(empty)* | Authorization endpoint URL |
 | `OAUTH_GENERIC_TOKEN_URL` | *(empty)* | Token endpoint URL |
+| `OAUTH_GENERIC_USERINFO_URL` | *(empty)* | Userinfo endpoint URL, where the account's email address is read. Optional for an OpenID Connect provider: the ID token is used instead |
 | `OAUTH_GENERIC_SCOPES` | *(empty)* | Space-separated OAuth2 scopes |
 | `OAUTH_GENERIC_IMAP_HOST` | *(empty)* | IMAP server hostname |
 | `OAUTH_GENERIC_SMTP_HOST` | *(empty)* | SMTP server hostname |

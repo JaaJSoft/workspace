@@ -26,6 +26,9 @@ OAUTH_GENERIC_CLIENT_SECRET = os.getenv("OAUTH_GENERIC_CLIENT_SECRET", "")
 OAUTH_GENERIC_NAME = os.getenv("OAUTH_GENERIC_NAME", "")
 OAUTH_GENERIC_AUTH_URL = os.getenv("OAUTH_GENERIC_AUTH_URL", "")
 OAUTH_GENERIC_TOKEN_URL = os.getenv("OAUTH_GENERIC_TOKEN_URL", "")
+# Where the account's email address is read from. Optional for an OpenID
+# Connect provider: without it the email comes from the ID token.
+OAUTH_GENERIC_USERINFO_URL = os.getenv("OAUTH_GENERIC_USERINFO_URL", "")
 OAUTH_GENERIC_SCOPES = os.getenv("OAUTH_GENERIC_SCOPES", "")
 OAUTH_GENERIC_IMAP_HOST = os.getenv("OAUTH_GENERIC_IMAP_HOST", "")
 OAUTH_GENERIC_SMTP_HOST = os.getenv("OAUTH_GENERIC_SMTP_HOST", "")

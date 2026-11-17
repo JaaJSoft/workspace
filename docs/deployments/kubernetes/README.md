@@ -90,6 +90,7 @@ kubectl apply -f ingress.yaml
 | `OAUTH_GENERIC_NAME` | Display name for the custom provider (e.g. `Yahoo`) |
 | `OAUTH_GENERIC_AUTH_URL` | Authorization endpoint URL |
 | `OAUTH_GENERIC_TOKEN_URL` | Token endpoint URL |
+| `OAUTH_GENERIC_USERINFO_URL` | Userinfo endpoint URL, where the account's email address is read. Optional for an OpenID Connect provider: the ID token is used instead |
 | `OAUTH_GENERIC_SCOPES` | Space-separated OAuth2 scopes |
 | `OAUTH_GENERIC_IMAP_HOST` | IMAP server hostname |
 | `OAUTH_GENERIC_SMTP_HOST` | SMTP server hostname |

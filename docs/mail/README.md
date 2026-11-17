@@ -36,6 +36,32 @@ Every IMAP and SMTP connection is encrypted before the password or the OAuth2 to
 
 There is no unencrypted mode. The server's certificate is verified in both modes, against the system's trusted certificate authorities, and must match the host name of the account. A mail server using a self-signed certificate or one issued by a private authority is refused until that authority is trusted: add its certificate to the system store of the image or host running Workspace (and its Celery workers), or point the `SSL_CERT_FILE` environment variable at a PEM bundle that contains it.
 
+## Administration
+
+### OAuth2 providers
+
+One-click sign-in is offered for each provider whose client ID is set. Register Workspace as a confidential client with the provider, using `<origin>/mail/oauth2/callback` as the redirect URI.
+
+| Variable | Purpose |
+|---|---|
+| `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | Gmail and Google Workspace - see [Connecting a Google account](google.md) |
+| `OAUTH_MICROSOFT_CLIENT_ID` / `OAUTH_MICROSOFT_CLIENT_SECRET` | Outlook, Hotmail and Microsoft 365 |
+| `OAUTH_GENERIC_CLIENT_ID` / `OAUTH_GENERIC_CLIENT_SECRET` | One more provider of your choice, configured with the variables below |
+
+The generic provider takes its endpoints and servers from:
+
+| Variable | Purpose |
+|---|---|
+| `OAUTH_GENERIC_NAME` | Name shown on the sign-in button (e.g. `Fastmail`) |
+| `OAUTH_GENERIC_AUTH_URL` | Authorization endpoint |
+| `OAUTH_GENERIC_TOKEN_URL` | Token endpoint |
+| `OAUTH_GENERIC_USERINFO_URL` | Userinfo endpoint, answering a JSON object with an `email` field for the access token |
+| `OAUTH_GENERIC_SCOPES` | Space-separated scopes: the ones the IMAP and SMTP servers require, plus `openid email` for an OpenID Connect provider |
+| `OAUTH_GENERIC_IMAP_HOST` | IMAP server (port 993, SSL/TLS) |
+| `OAUTH_GENERIC_SMTP_HOST` | SMTP server (port 587, STARTTLS) |
+
+The account's email address is read from the userinfo endpoint. With an OpenID Connect provider the userinfo URL can be left empty: the address is then taken from the `email` claim of the ID token returned with the tokens, which needs the `openid` and `email` scopes. When neither gives an address, the sign-in stops with "Could not determine email address from provider."
+
 ## API
 
 All endpoints under `/api/v1/mail/` - see the [Swagger UI](/schema/swagger-ui/) for full documentation.

@@ -681,6 +681,30 @@ class GenericProviderCallbackTests(TestCase):
             MailAccount.objects.get(owner=self.user).email, "dan@example.com"
         )
 
+    def test_id_token_used_when_userinfo_is_not_an_object(self):
+        tokens = self._tokens(
+            id_token=_id_token({"aud": "generic-client", "email": "fay@example.com"})
+        )
+
+        response, _, _ = self._callback(tokens, userinfo=["fay@example.com"])
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        self.assertEqual(
+            MailAccount.objects.get(owner=self.user).email, "fay@example.com"
+        )
+
+    def test_id_token_used_when_userinfo_email_is_not_a_string(self):
+        tokens = self._tokens(
+            id_token=_id_token({"aud": "generic-client", "email": "gus@example.com"})
+        )
+
+        response, _, _ = self._callback(tokens, userinfo={"email": {"primary": True}})
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        self.assertEqual(
+            MailAccount.objects.get(owner=self.user).email, "gus@example.com"
+        )
+
     @override_settings(OAUTH_GENERIC_USERINFO_URL="")
     def test_id_token_for_another_client_is_ignored(self):
         tokens = self._tokens(

@@ -177,6 +177,8 @@ def fetch_userinfo(provider, access_token):
     resp = session.get(url)
     resp.raise_for_status()
     data = resp.json()
+    if not isinstance(data, dict):
+        return {}
 
     # Microsoft Graph returns 'mail' instead of 'email'
     if provider == "microsoft" and "email" not in data:
@@ -232,7 +234,7 @@ def resolve_account_email(provider, tokens):
             scrub(provider),
             exc_info=True,
         )
-    if email:
+    if isinstance(email, str) and email:
         return email
     email = _id_token_claims(provider, tokens).get("email", "")
     return email if isinstance(email, str) else ""

@@ -1,5 +1,5 @@
 {% extends "base_with_navbar.html" %}
-{% load static %}
+{% load i18n static %}
 
 {% block title %}Set up your master password - Workspace{% endblock %}
 
@@ -128,8 +128,12 @@
           >
             <i data-lucide="lock" class="w-4 h-4 shrink-0 text-module"></i>
             <span>
-              Encrypted on this device. There is no password reset: lose both
-              your password and your recovery key and your vaults are gone.
+              {% blocktranslate trimmed %}
+                Encrypted on this device. There is no password reset, and
+                unlocking takes both your password and your recovery key. Lose
+                your password and your vaults are gone. Lose your recovery key
+                and only a device that still remembers it can open them.
+              {% endblocktranslate %}
             </span>
           </p>
         </aside>
@@ -159,7 +163,7 @@
             <span x-text="error"></span>
             </inline-alert>
 
-            {# Step 1 - one password for every vault, and no way back once both halves are lost #}
+            {# Step 1 - one password for every vault, and no way back once either half is lost #}
             <template x-if="step === 1">
               <section class="space-y-5">
                 <div>

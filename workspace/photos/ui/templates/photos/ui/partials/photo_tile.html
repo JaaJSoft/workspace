@@ -160,7 +160,7 @@
   >
     <input
       type="checkbox"
-      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-xs"
+      class="checkbox checkbox-sm checkbox-module not-checked:bg-base-100/80 backdrop-blur-xs"
       aria-label="{% blocktranslate trimmed with name=file.name %}Select {{ name }}{% endblocktranslate %}"
       data-select
       @click.stop="toggleTileSelection($el.closest('[data-uuid]'), $event)"

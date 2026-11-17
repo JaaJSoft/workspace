@@ -12,10 +12,12 @@ Run it before a release so the screenshots track the current UI:
 
 Requirements: the ``dev`` dependency group (Playwright) and a Chromium
 install (``uv run playwright install chromium``, or set
-``SCREENSHOTS_CHROMIUM`` to an existing Chromium binary). The demo photo
-library is downloaded from Open Images on the first run (about 15 MB, cached
-with the photo datasets), and its credits are rewritten to
-``docs/images/CREDITS.md``.
+``SCREENSHOTS_CHROMIUM`` to an existing Chromium binary). The first run
+downloads, into the photo datasets' cache: the demo photo library from Open
+Images (about 15 MB), the photos of the People shots from the face bench's
+dataset, and the face detection weights (about 40 MB). The Map shots fetch
+tiles from OpenStreetMap unless ``PHOTOS_MAP_TILE_URL`` names another server.
+The photos' credits are rewritten to ``docs/images/CREDITS.md``.
 """
 
 import argparse
@@ -38,6 +40,14 @@ CREDITS_PATH = OUTPUT_DIR / "CREDITS.md"
 VIEWPORT = {"width": 1280, "height": 900}
 USERNAME = "alex"
 PASSWORD = "screenshots-demo"
+
+# The OpenStreetMap tile server: its usage policy allows a few hundred tiles
+# fetched by a browser, which is what one capture of the Map page costs.
+MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+MAP_TILE_ATTRIBUTION = (
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> '
+    "contributors"
+)
 
 # Pinned, not inherited from the host: pages format dates client-side with
 # toLocaleDateString(undefined, ...), so an unpinned context captures the
@@ -64,6 +74,8 @@ def free_port():
 @contextlib.contextmanager
 def demo_environment():
     """Temp DB + media root, migrated and seeded, with a running server."""
+    from scripts import photo_dataset
+
     tmp = Path(tempfile.mkdtemp(prefix="workspace-screenshots-"))
     env = {
         **os.environ,
@@ -71,6 +83,15 @@ def demo_environment():
         "MEDIA_ROOT": str(tmp / "media"),
         "DEBUG": "True",
         "REDIS_URL": "",
+        # The People shots: faces are found while the seed uploads the photos,
+        # with weights kept next to the photo datasets between runs.
+        "PHOTOS_FACES_ENABLED": "1",
+        "PHOTOS_MODEL_DIR": os.environ.get("PHOTOS_MODEL_DIR")
+        or str(photo_dataset.default_cache_dir().parent / "models"),
+        # The Map shot, on the instance's own tile server when it names one.
+        "PHOTOS_MAP_TILE_URL": os.environ.get("PHOTOS_MAP_TILE_URL") or MAP_TILE_URL,
+        "PHOTOS_MAP_TILE_ATTRIBUTION": os.environ.get("PHOTOS_MAP_TILE_ATTRIBUTION")
+        or MAP_TILE_ATTRIBUTION,
     }
     os.environ.update(env)
 
@@ -166,6 +187,7 @@ def write_credits():
         LIBRARY_LICENSE,
         LIBRARY_LICENSE_URL,
         load_library,
+        load_people_library,
     )
 
     lines = [
@@ -173,8 +195,8 @@ def write_credits():
         "",
         "The photos in the screenshots come from the Open Images dataset and are",
         f"licensed [{LIBRARY_LICENSE}]({LIBRARY_LICENSE_URL}) by their authors.",
-        "They are shown downscaled, with capture dates set by the demo seed.",
-        "This file is written by `scripts/screenshots.py`.",
+        "They are shown downscaled, with capture dates and places set by the demo",
+        "seed. This file is written by `scripts/screenshots.py`.",
         "",
     ]
     for photo in sorted(load_library(), key=lambda p: p["name"]):
@@ -183,6 +205,24 @@ def write_credits():
             f"- `{photo['name']}`: [{title}]({photo['url']}) "
             f"by [{photo['author']}]({photo['author_url']})"
         )
+    people = load_people_library()
+    lines += [
+        "",
+        f"The photos of the People screenshots, in the `Friends` folder, are "
+        f"{people[0].author}'s, from the YFCC100M dataset, also licensed "
+        f"[{LIBRARY_LICENSE}]({LIBRARY_LICENSE_URL}). Their names are the "
+        "demo's, and so are the names given to the people in them:",
+        "",
+    ]
+    for n, photo in enumerate(people, 1):
+        lines.append(
+            f"- `IMG_{n:04d}.jpg`: [{photo.title or 'Untitled'}]({photo.page_url})"
+        )
+    lines += [
+        "",
+        "Map tiles &copy; [OpenStreetMap](https://www.openstreetmap.org/copyright) "
+        "contributors.",
+    ]
     CREDITS_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

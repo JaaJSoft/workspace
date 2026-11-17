@@ -2,8 +2,8 @@
 
 The photos in the screenshots come from the Open Images dataset and are
 licensed [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) by their authors.
-They are shown downscaled, with capture dates set by the demo seed.
-This file is written by `scripts/screenshots.py`.
+They are shown downscaled, with capture dates and places set by the demo
+seed. This file is written by `scripts/screenshots.py`.
 
 - `alpine-ridge.jpg`: [Alps with Matterhorn in the middle](https://www.flickr.com/photos/sbardella/1816420428) by [Luca Sbardella](https://www.flickr.com/people/sbardella/)
 - `aracari.jpg`: [Green Aracari - Adult Male (Pteroglossus viridis)](https://www.flickr.com/photos/jcapaldi/5780920465) by [Jim, the Photographer](https://www.flickr.com/people/jcapaldi/)
@@ -41,3 +41,57 @@ This file is written by `scripts/screenshots.py`.
 - `terraced-falls.jpg`: [white flow](https://www.flickr.com/photos/36938798@N00/473312418) by [ranjith k r](https://www.flickr.com/people/eenthappana/)
 - `white-beach.jpg`: [Calaguas](https://www.flickr.com/photos/allan_the_colorblind/8763464643) by [Allan Ascaño](https://www.flickr.com/people/allan_the_colorblind/)
 - `zinnia.jpg`: [Argynnis cybele (= Spyerera cybele) Great Spangled  Fritillary 6](https://www.flickr.com/photos/135089388@N08/19993678382) by [Mary Ellen St. John](https://www.flickr.com/people/135089388@N08/)
+
+The photos of the People screenshots, in the `Friends` folder, are Sarah_Ackerman's, from the YFCC100M dataset, also licensed [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Their names are the demo's, and so are the names given to the people in them:
+
+- `IMG_0001.jpg`: [The Crew](https://www.flickr.com/photos/86665756@N00/4171883263/)
+- `IMG_0002.jpg`: [New Years Hat](https://www.flickr.com/photos/86665756@N00/4272337066/)
+- `IMG_0003.jpg`: [New Years Hat](https://www.flickr.com/photos/86665756@N00/4271595117/)
+- `IMG_0004.jpg`: [Stockholm](https://www.flickr.com/photos/86665756@N00/4764100843/)
+- `IMG_0005.jpg`: [Radish, Soil and Herbs](https://www.flickr.com/photos/86665756@N00/4831821212/)
+- `IMG_0006.jpg`: [Zoey loves bone marrow, it's true](https://www.flickr.com/photos/86665756@N00/4831911066/)
+- `IMG_0007.jpg`: [Party Celebrating Arne Jacobsen](https://www.flickr.com/photos/86665756@N00/4860806188/)
+- `IMG_0008.jpg`: [Aquarium](https://www.flickr.com/photos/86665756@N00/5017810427/)
+- `IMG_0009.jpg`: [Arabian Gulf](https://www.flickr.com/photos/86665756@N00/5017826365/)
+- `IMG_0010.jpg`: [Dolphin Adventure](https://www.flickr.com/photos/86665756@N00/5017856705/)
+- `IMG_0011.jpg`: [Dolphin Adventure](https://www.flickr.com/photos/86665756@N00/5018469698/)
+- `IMG_0012.jpg`: [wedding](https://www.flickr.com/photos/86665756@N00/7183648290/)
+- `IMG_0013.jpg`: [wedding](https://www.flickr.com/photos/86665756@N00/7183692896/)
+- `IMG_0014.jpg`: [Wedding](https://www.flickr.com/photos/86665756@N00/7183951920/)
+- `IMG_0015.jpg`: [wedding](https://www.flickr.com/photos/86665756@N00/7183962906/)
+- `IMG_0016.jpg`: [Hello Again Soiree](https://www.flickr.com/photos/86665756@N00/5659021107/)
+- `IMG_0017.jpg`: [Jamaica](https://www.flickr.com/photos/86665756@N00/5765694408/)
+- `IMG_0018.jpg`: [In Jamaica](https://www.flickr.com/photos/86665756@N00/5768691658/)
+- `IMG_0019.jpg`: [En Route to New Haven](https://www.flickr.com/photos/86665756@N00/5820976407/)
+- `IMG_0020.jpg`: [En Route to New Haven](https://www.flickr.com/photos/86665756@N00/5821538644/)
+- `IMG_0021.jpg`: [Dark Hair](https://www.flickr.com/photos/86665756@N00/5805603680/)
+- `IMG_0022.jpg`: [1960's Party](https://www.flickr.com/photos/86665756@N00/6083439714/)
+- `IMG_0023.jpg`: [60s Music Contest (Big Girls Don't Cry) - was my pick](https://www.flickr.com/photos/86665756@N00/6083087495/)
+- `IMG_0024.jpg`: [Birthday Cake](https://www.flickr.com/photos/86665756@N00/6086091927/)
+- `IMG_0025.jpg`: [Me, Derek and Kristi](https://www.flickr.com/photos/86665756@N00/6086661466/)
+- `IMG_0026.jpg`: [Dancing](https://www.flickr.com/photos/86665756@N00/6089350885/)
+- `IMG_0027.jpg`: [Design Presentation](https://www.flickr.com/photos/86665756@N00/6204583473/)
+- `IMG_0028.jpg`: [Design Presentation](https://www.flickr.com/photos/86665756@N00/6205110136/)
+- `IMG_0029.jpg`: [Design Presentation](https://www.flickr.com/photos/86665756@N00/6204667125/)
+- `IMG_0030.jpg`: [Elton John @ Ceasar's Palace](https://www.flickr.com/photos/86665756@N00/6251106822/)
+- `IMG_0031.jpg`: [Elton John @ Ceasar's Palace](https://www.flickr.com/photos/86665756@N00/6266822021/)
+- `IMG_0032.jpg`: [Photo Booth](https://www.flickr.com/photos/86665756@N00/6817639891/)
+- `IMG_0033.jpg`: [Photo Booth](https://www.flickr.com/photos/86665756@N00/6817638747/)
+- `IMG_0034.jpg`: [April 2012](https://www.flickr.com/photos/86665756@N00/7153557859/)
+- `IMG_0035.jpg`: [April 2012](https://www.flickr.com/photos/86665756@N00/7153566637/)
+- `IMG_0036.jpg`: [Deborah & Mark's Wedding](https://www.flickr.com/photos/86665756@N00/7370356556/)
+- `IMG_0037.jpg`: [Silliness With Bruce](https://www.flickr.com/photos/86665756@N00/9320667907/)
+- `IMG_0038.jpg`: [Southbank Centre - Neighbourhood Festival](https://www.flickr.com/photos/86665756@N00/9392716315/)
+- `IMG_0039.jpg`: [London Wonderground](https://www.flickr.com/photos/86665756@N00/9392997453/)
+- `IMG_0040.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10911205154/)
+- `IMG_0041.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10891802003/)
+- `IMG_0042.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10891751514/)
+- `IMG_0043.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10891848045/)
+- `IMG_0044.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10892051544/)
+- `IMG_0045.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10910724385/)
+- `IMG_0046.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10911091673/)
+- `IMG_0047.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10911129404/)
+- `IMG_0048.jpg`: [Sydney&Daryl's Wedding](https://www.flickr.com/photos/86665756@N00/10911074986/)
+- `IMG_0049.jpg`: [Snuggle Time](https://www.flickr.com/photos/86665756@N00/11374989856/)
+
+Map tiles &copy; [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.

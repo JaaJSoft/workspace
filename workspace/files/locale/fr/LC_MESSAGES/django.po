@@ -2188,6 +2188,17 @@ msgstr ""
 "L’éditeur de documents est injoignable ou ne prend pas en charge ce format. "
 "Vous pouvez toujours télécharger le fichier."
 
+#: ui/templates/files/ui/viewers/pdf_viewer.html
+msgid "This browser can't display PDFs here"
+msgstr "Ce navigateur n’affiche pas les PDF ici"
+
+#: ui/templates/files/ui/viewers/pdf_viewer.html
+msgid ""
+"It opens them in its own reader instead. Open the file there, or download it."
+msgstr ""
+"Il les ouvre dans son propre lecteur. Ouvrez le fichier dans celui-ci, ou "
+"téléchargez-le."
+
 #: ui/templates/files/ui/viewers/text_viewer.html
 msgid "Undo (Ctrl+Z)"
 msgstr "Annuler (Ctrl+Z)"

@@ -1,28 +1,46 @@
-<!-- PDF Viewer (native browser) -->
-<div class="flex flex-col h-full" x-data="pdfViewerData()">
+{% load i18n %}
+{% comment %}
+  The browser's own PDF reader, framed. Mobile browsers (Chrome and Firefox on
+  Android) have none that works in a frame: they paint a grey placeholder with
+  a bare "Open" button instead, so those get the unavailable card, which opens
+  the file on a page of its own where their reader does run.
+{% endcomment %}
+<div class="flex flex-col h-full bg-base-200" x-data="pdfViewerData()">
   {% include "files/ui/viewers/new_tab_marker.html" %}
 
-  <!-- PDF iframe -->
-  <iframe
-    src="{{ content_url }}"
-    class="flex-1 w-full border-none bg-base-200"
-    title="{{ file.name }}"
-    @load="onLoad()"
-  ></iframe>
+  <template x-if="inline">
+    <div class="relative flex-1 flex flex-col min-h-0">
+      <iframe
+        src="{{ content_url }}"
+        class="flex-1 w-full border-none bg-base-200"
+        title="{{ file.name }}"
+        @load="onLoad()"
+      ></iframe>
 
-  <!-- Loading overlay (shown until iframe loads) -->
-  <div
-    x-show="loading"
-    class="absolute inset-0 flex items-center justify-center bg-base-200/80 z-10"
-    x-cloak
-  >
-    <span class="loading loading-spinner loading-lg"></span>
-  </div>
+      <div
+        x-show="loading"
+        class="absolute inset-0 flex items-center justify-center bg-base-200/80 z-10"
+      >
+        <span class="loading loading-spinner loading-lg"></span>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="!inline">
+    <div class="flex-1 flex flex-col min-h-0" data-pdf-unavailable>
+      {% translate "This browser can't display PDFs here" as title %}
+      {% translate "It opens them in its own reader instead. Open the file there, or download it." as message %}
+      {% include "files/ui/viewers/unavailable.html" with open_url=content_url download_url=content_url %}
+    </div>
+  </template>
 </div>
 
 <script>
   window.pdfViewerData = function pdfViewerData() {
     return {
+      // navigator.pdfViewerEnabled is false where the browser cannot show a
+      // PDF inline; older browsers without the property all can.
+      inline: navigator.pdfViewerEnabled !== false,
       loading: true,
 
       onLoad() {

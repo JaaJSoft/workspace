@@ -29,33 +29,21 @@
       <div
         x-show="unplayable"
         x-cloak
-        class="flex flex-col items-center gap-3 px-6 text-center"
+        class="self-stretch w-full flex flex-col"
         data-video-unplayable
       >
-        <div class="rounded-full bg-base-300 p-5">
-          <i data-lucide="video-off" class="w-10 h-10 text-base-content/50"></i>
-        </div>
-        <p class="font-medium">{% translate "This browser can't play this video" %}</p>
-        <p class="text-sm text-base-content/60 max-w-sm">
-          {% with codec=file.media_info.video_codec %}
-            {% if codec %}
-              {% blocktranslate trimmed with codec_label=codec|codec_name %}
-                It is encoded in {{ codec_label }}, which only some browsers can decode.
-              {% endblocktranslate %}
-            {% else %}
-              {% translate "It is probably recorded in a format only some browsers can decode." %}
-            {% endif %}
-          {% endwith %}
-          {% translate "Download it to watch it in a video player." %}
-        </p>
-        <a
-          href="{{ content_url }}"
-          download="{{ file.name }}"
-          class="btn btn-primary btn-sm gap-2"
-        >
-          <i data-lucide="download" class="w-4 h-4"></i>
-          {% translate "Download" %}
-        </a>
+        {% translate "This browser can't play this video" as title %}
+        {% with codec=file.media_info.video_codec %}
+          {% if codec %}
+            {% blocktranslate trimmed with codec_label=codec|codec_name asvar message %}
+              It is encoded in {{ codec_label }}, which only some browsers can decode.
+            {% endblocktranslate %}
+          {% else %}
+            {% translate "It is probably recorded in a format only some browsers can decode." as message %}
+          {% endif %}
+          {% translate "Download it to watch it in a video player." as hint %}
+          {% include "files/ui/viewers/unavailable.html" with icon="video-off" download_url=content_url %}
+        {% endwith %}
       </div>
     </div>
   {% endif %}

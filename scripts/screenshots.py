@@ -186,7 +186,7 @@ def capture(base_url, context, only=None):
             page.screenshot(path=OUTPUT_DIR / f"{shot['name']}.png")
         if theme != "light":
             _set_theme(page, "light")
-        compose_showcase(page)
+        compose_showcase(browser)
         browser.close()
 
 
@@ -205,15 +205,19 @@ def _set_theme(page, theme):
 
 
 # The README's banner: three captures as browser windows over the app's
-# gradient, the light dashboard in front of two dark pages. Rendered by the
+# gradient, the light dashboard in front of two dark pages, each showing the
+# side of its capture that stays in view. Rendered by the
 # same browser from a page next to the captures, so it follows them.
 SHOWCASE = {
     "name": "showcase",
     "size": {"width": 1600, "height": 820},
     "back_left": "photos_dark",
     "front": "home",
-    "back_right": "chat_dark",
+    "back_right": "projects_dark",
 }
+# The front window is 900 px wide: render at the scale that draws its
+# capture pixel for pixel.
+SHOWCASE_SCALE = VIEWPORT["width"] / 900
 
 SHOWCASE_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><style>
@@ -248,7 +252,7 @@ SHOWCASE_HTML = """<!doctype html>
 </body></html>"""
 
 
-def compose_showcase(page):
+def compose_showcase(browser):
     """Render docs/images/showcase.png from the captures it names."""
     names = (SHOWCASE["back_left"], SHOWCASE["front"], SHOWCASE["back_right"])
     if not all((OUTPUT_DIR / f"{name}.png").is_file() for name in names):
@@ -258,14 +262,17 @@ def compose_showcase(page):
     html.write_text(
         SHOWCASE_HTML.format(**SHOWCASE["size"], **SHOWCASE), encoding="utf-8"
     )
+    context = browser.new_context(
+        viewport=SHOWCASE["size"], device_scale_factor=SHOWCASE_SCALE
+    )
     try:
-        page.set_viewport_size(SHOWCASE["size"])
+        page = context.new_page()
         page.goto(html.as_uri())
         page.wait_for_load_state("load")
         page.screenshot(path=OUTPUT_DIR / f"{SHOWCASE['name']}.png")
     finally:
+        context.close()
         html.unlink()
-        page.set_viewport_size(VIEWPORT)
 
 
 def write_credits():

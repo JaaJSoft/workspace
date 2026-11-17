@@ -7,7 +7,7 @@ A self-hosted productivity suite built with Django. Files, chat, email, calendar
 From a Raspberry Pi to a Kubernetes cluster. One app, any scale.
 
 <p align="center">
-  <img src="docs/images/showcase.png" alt="Workspace: the dashboard, the photo timeline and a chat conversation">
+  <img src="docs/images/showcase.png" alt="Workspace: the dashboard, the photo timeline and a project board">
 </p>
 
 <p align="center">

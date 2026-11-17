@@ -1,4 +1,3 @@
-{% load i18n %}
 {% comment %}
   What the sidebar's Help row opens. It answers the questions this module
   cannot answer anywhere else: nothing here can recover a master password, and
@@ -21,14 +20,12 @@
       <div>
         <h4 class="font-semibold mb-1">Your master password cannot be reset</h4>
         <p class="text-base-content/70">
-          {% blocktranslate trimmed %}
-            It never leaves this page, so nobody - not an administrator, not the
-            server - can recover it or the vaults it opens. Your recovery key is
-            not a way around it but the other half of the lock: unlocking takes
-            both, so on a device that does not remember the key, losing either
-            one locks you out for good. Keep the key somewhere you would still
-            have if you lost this device.
-          {% endblocktranslate %}
+          It never leaves this page, so nobody - not an administrator, not the
+          server - can recover it or the vaults it opens. Your recovery key is
+          not a way around it but the other half of the lock: unlocking takes
+          both, so on a device that does not remember the key, losing either
+          one locks you out for good. Keep the key somewhere you would still
+          have if you lost this device.
         </p>
       </div>
 

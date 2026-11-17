@@ -1313,6 +1313,9 @@ def _calendar_agenda(page):
 def _open_first_mail(page):
     page.click("text=Palette variants for the hero")
     page.wait_for_timeout(1500)
+    # Opening marks the message read, which the demo account's mail server
+    # (there is none) refuses: drop the warning toast it raises.
+    page.evaluate("window.AppAlert?.clearAll()")
 
 
 def _open_first_note(page):

@@ -205,7 +205,7 @@
                 <a
                   href="{{ list_view_url }}"
                   x-target.push="shared-content"
-                  class="btn btn-ghost btn-sm btn-square {% if view_mode != 'grid' %}bg-module/15 text-module{% endif %}"
+                  class="btn btn-ghost btn-sm btn-square {% if view_mode != 'grid' %}bg-module/15 hover:bg-module/25 text-module{% endif %}"
                   title="{% translate 'List view' %}"
                   aria-label="{% translate 'List view' %}"
                 >
@@ -214,7 +214,7 @@
                 <a
                   href="{{ grid_view_url }}"
                   x-target.push="shared-content"
-                  class="btn btn-ghost btn-sm btn-square {% if view_mode == 'grid' %}bg-module/15 text-module{% endif %}"
+                  class="btn btn-ghost btn-sm btn-square {% if view_mode == 'grid' %}bg-module/15 hover:bg-module/25 text-module{% endif %}"
                   title="{% translate 'Grid view' %}"
                   aria-label="{% translate 'Grid view' %}"
                 >

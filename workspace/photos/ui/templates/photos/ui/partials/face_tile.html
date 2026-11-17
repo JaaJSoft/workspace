@@ -44,7 +44,7 @@
   <template x-if="face.timestamp == null">
     <button
       type="button"
-      class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 border-0 shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+      class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 hover:bg-base-300 border-0 shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       title="{% translate 'Open the photo' %}"
       aria-label="{% translate 'Open the photo' %}"
       @click="openFacePhoto(face)"
@@ -55,7 +55,7 @@
   <template x-if="face.timestamp != null">
     <button
       type="button"
-      class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 border-0 shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+      class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 hover:bg-base-300 border-0 shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       title="{% translate 'Open the video' %}"
       aria-label="{% translate 'Open the video' %}"
       @click="openFacePhoto(face)"

@@ -160,7 +160,7 @@
   >
     <input
       type="checkbox"
-      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-xs"
+      class="checkbox checkbox-sm checkbox-module not-checked:bg-base-100/80 backdrop-blur-xs"
       aria-label="{% blocktranslate trimmed with name=file.name %}Select {{ name }}{% endblocktranslate %}"
       data-select
       @click.stop="toggleTileSelection($el.closest('[data-uuid]'), $event)"
@@ -180,7 +180,7 @@
     <div class="absolute top-2 right-2 z-10">
       <button
         type="button"
-        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs hidden group-data-[favorite='1']:inline-flex [[data-tile-badges=hover]_.group:not(:hover):not(:focus-within)_&]:opacity-0"
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 hover:bg-base-300 backdrop-blur-xs hidden group-data-[favorite='1']:inline-flex [[data-tile-badges=hover]_.group:not(:hover):not(:focus-within)_&]:opacity-0"
         title="{% translate 'Remove from favorites' %}"
         aria-label="{% translate 'Remove from favorites' %}"
         @click.stop="toggleTileFavorite($el)"
@@ -189,7 +189,7 @@
       </button>
       <button
         type="button"
-        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 focus:opacity-100 group-data-[favorite='1']:hidden [@media(hover:none)]:hidden"
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 hover:bg-base-300 backdrop-blur-xs opacity-0 group-hover:opacity-100 focus:opacity-100 group-data-[favorite='1']:hidden [@media(hover:none)]:hidden"
         title="{% translate 'Add to favorites' %}"
         aria-label="{% translate 'Add to favorites' %}"
         @click.stop="toggleTileFavorite($el)"
@@ -200,7 +200,7 @@
   {% endif %}
   <button
     type="button"
-    class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:hidden [@media(hover:none)]:group-data-[selected='1']:inline-flex [@media(hover:none)]:group-data-[selected='1']:opacity-100"
+    class="btn btn-ghost btn-xs btn-square bg-base-100/80 hover:bg-base-300 backdrop-blur-xs absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:hidden [@media(hover:none)]:group-data-[selected='1']:inline-flex [@media(hover:none)]:group-data-[selected='1']:opacity-100"
     title="{% translate 'More actions' %}"
     aria-label="{% blocktranslate trimmed with name=file.name %}More actions for {{ name }}{% endblocktranslate %}"
     aria-haspopup="menu"

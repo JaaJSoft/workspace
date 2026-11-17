@@ -36,7 +36,7 @@
   <div class="absolute top-2 left-2 z-10" data-stop-row-click>
     <input
       type="checkbox"
-      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-selected:opacity-100 [@media(hover:none)]:opacity-100"
+      class="checkbox checkbox-sm checkbox-module not-checked:bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-selected:opacity-100 [@media(hover:none)]:opacity-100"
       data-select-item
     />
   </div>
@@ -52,7 +52,7 @@
       {% if node.is_favorite %}
         <button
           type="button"
-          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs group-data-busy:hidden"
+          class="btn btn-ghost btn-xs btn-square bg-base-100/80 hover:bg-base-300 backdrop-blur-xs group-data-busy:hidden"
           aria-label="{% translate 'Remove from favorites' %}"
           data-item-control="favorite"
         >
@@ -61,7 +61,7 @@
       {% else %}
         <button
           type="button"
-          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-busy:hidden [@media(hover:none)]:hidden"
+          class="btn btn-ghost btn-xs btn-square bg-base-100/80 hover:bg-base-300 backdrop-blur-xs opacity-0 group-hover:opacity-100 group-data-busy:hidden [@media(hover:none)]:hidden"
           aria-label="{% translate 'Add to favorites' %}"
           data-item-control="favorite"
         >

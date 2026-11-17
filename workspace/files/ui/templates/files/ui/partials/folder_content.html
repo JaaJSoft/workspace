@@ -65,7 +65,7 @@
             <button
               type="button"
               class="btn btn-sm btn-outline gap-1.5 px-2.5"
-              :class="{ 'border-module text-module bg-module/10': activeFilterCount() > 0 }"
+              :class="{ 'border-module text-module bg-module/10 hover:bg-module/20': activeFilterCount() > 0 }"
               @click="open = !open"
               :aria-expanded="open.toString()"
               aria-haspopup="dialog"
@@ -235,7 +235,7 @@
                 <button
                   type="button"
                   class="btn btn-sm btn-outline join-item gap-1 px-2 flex-nowrap font-normal"
-                  :class="{ 'bg-module/15 text-module': sortField !== 'default' && sortDir === 'asc' }"
+                  :class="{ 'bg-module/15 hover:bg-module/25 text-module': sortField !== 'default' && sortDir === 'asc' }"
                   :disabled="sortField === 'default'"
                   :aria-pressed="(sortDir === 'asc').toString()"
                   @click="sortDir = 'asc'"
@@ -246,7 +246,7 @@
                 <button
                   type="button"
                   class="btn btn-sm btn-outline join-item gap-1 px-2 flex-nowrap font-normal"
-                  :class="{ 'bg-module/15 text-module': sortField !== 'default' && sortDir === 'desc' }"
+                  :class="{ 'bg-module/15 hover:bg-module/25 text-module': sortField !== 'default' && sortDir === 'desc' }"
                   :disabled="sortField === 'default'"
                   :aria-pressed="(sortDir === 'desc').toString()"
                   @click="sortDir = 'desc'"
@@ -328,7 +328,7 @@
                     <button
                       type="button"
                       class="btn btn-sm btn-outline join-item gap-1.5"
-                      :class="{ 'bg-module/15 text-module': viewMode === 'list' }"
+                      :class="{ 'bg-module/15 hover:bg-module/25 text-module': viewMode === 'list' }"
                       @click="setViewMode('list')"
                     >
                       <i data-lucide="list" class="w-4 h-4"></i>
@@ -337,7 +337,7 @@
                     <button
                       type="button"
                       class="btn btn-sm btn-outline join-item gap-1.5"
-                      :class="{ 'bg-module/15 text-module': viewMode === 'mosaic' }"
+                      :class="{ 'bg-module/15 hover:bg-module/25 text-module': viewMode === 'mosaic' }"
                       @click="setViewMode('mosaic')"
                     >
                       <i data-lucide="grid-2x2" class="w-4 h-4"></i>
@@ -428,7 +428,7 @@
               <button
                 type="button"
                 class="btn btn-sm btn-outline join-item px-2.5"
-                :class="{ 'bg-module/15 text-module': viewMode === 'list' }"
+                :class="{ 'bg-module/15 hover:bg-module/25 text-module': viewMode === 'list' }"
                 @click="setViewMode('list')"
                 title="{% translate 'List view' %}"
                 aria-label="{% translate 'List view' %}"
@@ -438,7 +438,7 @@
               <button
                 type="button"
                 class="btn btn-sm btn-outline join-item px-2.5"
-                :class="{ 'bg-module/15 text-module': viewMode === 'mosaic' }"
+                :class="{ 'bg-module/15 hover:bg-module/25 text-module': viewMode === 'mosaic' }"
                 @click="setViewMode('mosaic')"
                 title="{% translate 'Mosaic view' %}"
                 aria-label="{% translate 'Mosaic view' %}"

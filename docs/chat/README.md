@@ -10,9 +10,10 @@ Conversations with an AI assistant take place here as well: see
 ## Conversations
 
 - **New conversation** (`Alt+N`): pick one person for a direct message, or
-  several people and a name for a group. A group can be linked to user
-  groups: people then join and leave the conversation as they join and leave
-  those groups.
+  several people and a name for a group. The *Groups* tab starts a
+  conversation with one or more user groups instead. Its members then follow
+  those groups, joining and leaving the conversation as people join and leave
+  the groups.
 - **The list** holds direct messages and groups together, most recent first,
   with unread badges and a filter box. Pinned conversations stay on top and
   can be dragged into any order.

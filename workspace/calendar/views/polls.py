@@ -64,6 +64,16 @@ def _lock_open_poll(poll):
     )
 
 
+def _live_slot_ids(poll, slot_ids):
+    """The ids among *slot_ids* that are slots of *poll*.
+
+    Read under the poll lock: the poll edit writes the poll row before it
+    deletes slots, so a slot it removed is already gone here and is skipped
+    like an unknown one instead of failing the vote on its foreign key.
+    """
+    return set(poll.slots.filter(uuid__in=slot_ids).values_list("uuid", flat=True))
+
+
 def _prefetch_poll_votes(poll):
     """Prefetch all votes for a poll and attach them to the poll object."""
     poll._prefetched_poll_votes = list(
@@ -268,12 +278,10 @@ class PollVoteView(APIView):
         ser.is_valid(raise_exception=True)
 
         slot_ids = {v["slot_id"] for v in ser.validated_data["votes"]}
-        valid_slots = set(
-            poll.slots.filter(uuid__in=slot_ids).values_list("uuid", flat=True)
-        )
 
         with transaction.atomic():
             _lock_open_poll(poll)
+            valid_slots = _live_slot_ids(poll, slot_ids)
             for vote_data in ser.validated_data["votes"]:
                 if vote_data["slot_id"] not in valid_slots:
                     continue
@@ -570,12 +578,10 @@ class SharedPollVoteView(APIView):
         voter_token = _guest_voter_token(request, poll) or str(uuid.uuid4())
 
         slot_ids = {v["slot_id"] for v in d["votes"]}
-        valid_slots = set(
-            poll.slots.filter(uuid__in=slot_ids).values_list("uuid", flat=True)
-        )
 
         with transaction.atomic():
             _lock_open_poll(poll)
+            valid_slots = _live_slot_ids(poll, slot_ids)
             for vote_data in d["votes"]:
                 if vote_data["slot_id"] not in valid_slots:
                     continue

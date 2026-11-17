@@ -24,15 +24,16 @@ there, and the day ahead.
 - **Recent Activity**: what other people did across the workspace, by app,
   with a search and a refresh button. It only lists apps the user has access
   to.
-- **Usage**: a popover with the user's storage against their quota and their
-  counts of files, messages, mail and events.
+- **Usage**: the chart button in the top right corner opens the user's storage
+  against their quota and their counts of files, messages, mail and events.
 
 ## Preferences
 
-The gear in the top right corner holds the dashboard's own settings:
+The *Dashboard preferences* button (sliders, top right) holds the page's own
+settings:
 
 - show or hide today's events, and the "No upcoming events today." line when
   there are none;
 - show or hide My Tasks;
-- which apps have a tile. A hidden app is only left off the dashboard: it
-  stays in the navigation bar, the search and its links.
+- which apps have a tile. A hidden app also leaves the app switcher (`Alt+K`),
+  but stays reachable from the search and its links.

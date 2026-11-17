@@ -34,8 +34,9 @@ view.
   that cannot go through is reported with its reason while the rest carries on.
 - **Trash**: deleted items stay restorable, and can still be opened to check
   them, until they are purged after 30 days (set by the administrator).
-- **Keyboard**: arrows, Enter to open, F2 to rename, Del to delete, Ctrl+X /
-  C / V, Ctrl+I for the properties. The *Help* entry lists them all.
+- **Keyboard**: Enter to open, F2 to rename, Del to delete, F to favorite, P
+  to pin, Ctrl+X / C / V, Ctrl+I for the properties, Alt+arrows to go back,
+  forward or up. The *Help* entry of the sidebar lists them.
 
 ![Mosaic view](../images/files_1.png)
 
@@ -52,8 +53,6 @@ can pause the queue, cancel or retry a file, and settle duplicates in bulk.
 - **From other apps**: on Android and Windows, the installed app appears in
   the system share menu. Files shared from another app land in a folder the
   user picks.
-- **Quota**: every upload, copy, note or WebDAV write is checked against the
-  user's or the group's storage quota.
 
 ## Viewing and editing
 
@@ -92,7 +91,7 @@ dimensions.
 - The global search finds files by name and, for text formats, PDFs and office
   documents, by what is written inside them and by the title and author they
   declare. A scanned PDF with no text stays findable by its title.
-- **Tags** are personal and coloured, shared with Notes and Projects. Favourite
+- **Tags** are personal and coloured, the same ones as in Notes. Favourite
   tags sit in the sidebar; the tag manager renames, recolours, merges and
   deletes them, and purges the unused ones.
 
@@ -122,9 +121,9 @@ shows the quota and what the trash holds.
 
 ## WebDAV
 
-Every file a user can open is reachable at `https://<your-domain>/dav/`, to
-mount as a network drive (Windows Explorer, macOS Finder, davfs2, GNOME Files)
-or sync from a mobile app. Sign in with the username and password; an account
+A user's files and group folders are reachable at `https://<your-domain>/dav/`,
+to mount as a network drive (Windows Explorer, macOS Finder, davfs2, GNOME
+Files) or sync from a mobile app. Sign in with the username and password; an account
 that uses single sign-on enters an API token (*Settings > API Tokens*) as the
 password. The *Help* entry of the sidebar has the steps per system.
 
@@ -174,10 +173,11 @@ sync, by the *Sync and refresh folder* button, or by
 
 Quotas are set per user and per group in the Django admin (**User storage
 quotas**, **Group storage quotas**; an empty value means unlimited). A group
-has no limit until one is set. Trashed files count. `python manage.py
-storage_quota_report --over` lists the buckets over their quota. An upload
-counts against the quota from the moment it starts, and an upload untouched
-for a day is deleted with the chunks it received.
+has no limit until one is set. Trashed files count, and every upload, copy,
+note or WebDAV write is checked. `python manage.py
+storage_quota_report --over` lists the users and groups over their quota.
+A resumable upload counts against the quota from the moment it starts; one left
+untouched for a day is deleted with the chunks it received.
 
 ### Opening files in a tab
 
@@ -197,8 +197,9 @@ deployment examples), Collabora Online, [OnlyOffice Docs](https://www.onlyoffice
 in WOPI mode (6.4 or later), or Office Online Server. Every format the editor
 advertises becomes viewable, and editable where it can save it. Permissions
 are checked on every round-trip, so a revoked share ends the editing session;
-a save is an ordinary write (thumbnail, search index, malware scan, file
-lock). If the editor is unreachable, the viewer offers the download.
+a save is an ordinary write (thumbnail, search index, malware scan), and an
+editing session locks the file. If the editor is unreachable, the viewer
+offers the download.
 
 | Setting | Default | Meaning |
 |---|---|---|

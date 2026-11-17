@@ -170,4 +170,6 @@ class EbookViewerTests(TestCase):
         self.assertNotIn("data-ebook-reader", html)
         self.assertIsNone(EbookViewer(self.file).new_tab_url("/content"))
         self.assertIn("Too large to read here", html)
-        self.assertIn(f'href="/api/v1/files/{self.file.uuid}/content" download', html)
+        self.assertRegex(
+            html, rf'href="/api/v1/files/{self.file.uuid}/content"\s+download='
+        )

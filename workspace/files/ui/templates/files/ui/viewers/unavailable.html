@@ -37,12 +37,12 @@
 
   <div class="max-w-sm space-y-1.5">
     <p class="font-semibold">{{ title }}</p>
-    <p class="text-sm text-base-content/60 leading-relaxed">
-      {{ message }}{% if hint %} {{ hint }}{% endif %}
-    </p>
+    <p class="text-sm text-base-content/60 leading-relaxed">{{ message }}{% if hint %} {{ hint }}{% endif %}</p>
   </div>
 
-  <div class="flex flex-col sm:flex-row gap-2 w-full max-w-xs sm:w-auto sm:max-w-none">
+  <div
+    class="flex flex-col sm:flex-row gap-2 w-full max-w-xs sm:w-auto sm:max-w-none"
+  >
     {% if open_url %}
       <a
         href="{{ open_url }}"
@@ -55,7 +55,8 @@
       </a>
     {% endif %}
     <a
-      href="{{ download_url }}" download="{{ file.name }}"
+      href="{{ download_url }}"
+      download="{{ file.name }}"
       class="btn gap-2 {% if open_url %}btn-ghost bg-base-100 border-base-content/10{% else %}btn-module{% endif %}"
     >
       <i data-lucide="download" class="w-4 h-4"></i>

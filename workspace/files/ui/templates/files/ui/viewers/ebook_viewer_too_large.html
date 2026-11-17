@@ -1,6 +1,8 @@
 {% load i18n %}
 <div class="flex flex-col h-full bg-base-200">
   {% translate "Too large to read here" as title %}
-  {% blocktranslate trimmed with name=file.name max_size=max_bytes|filesizeformat asvar message %}{{ name }} is larger than {{ max_size }}, the most the reader opens. Download it to read it in an e-book app.{% endblocktranslate %}
+  {% blocktranslate trimmed with name=file.name max_size=max_bytes|filesizeformat asvar message %}
+    {{ name }} is larger than {{ max_size }}, the most the reader opens. Download it to read it in an e-book app.
+  {% endblocktranslate %}
   {% include "files/ui/viewers/unavailable.html" with download_url=content_url %}
 </div>

@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.45.0 - Workspace in French
+
+### Highlights
+
+Workspace now speaks French: pick it under Settings, Language & region, and the whole interface follows, down to notifications and the AI assistants' replies. Dragging a task on a board also shows exactly where it will land.
+
+### French
+
+- The whole interface is now available in French: Files, Notes, Chat, Mail, Calendar, People, Projects, Photos, the dashboard and the settings. Choose your language under Settings, Language & region.
+- Notifications and emails are written in each recipient's own language, whoever triggered them, and a new project's default columns are named in its creator's language.
+- The AI assistants answer in your interface language by default, and their messages and errors are translated too.
+- Keyboard keys in the shortcut help dialogs read as printed on a French keyboard (Échap, Entrée, Suppr), and file sizes shown during uploads and selections follow your language.
+- Wordings that read as literal translations were rewritten throughout, so the French sounds natural.
+
+### Projects
+
+- Dragging a task on the board or in the backlog shows where it will land before you let go: the card moves into a placeholder, the target column is outlined and the other cards make room. A task dropped outside every column slides back to where it was.
+
+### Mail
+
+- Your mail password is never sent unencrypted anymore. An account with SSL turned off now encrypts its connection before signing in, and every connection checks the mail server's certificate. **An account whose server offers no encryption or presents an invalid certificate stops connecting** until the server is fixed: this protects your password from anyone listening on the network.
+- When the mail server refuses to mark a message read or starred, a warning tells you, instead of the change silently coming undone at the next sync.
+
+### Interface
+
+- Buttons, inputs and checkboxes look flat in every theme, without the gradient some themes added.
+- Windows and Linux users now see Ctrl K in the search bar instead of ⌘K, and keyboard shortcut chips are centered again.
+- Menus are back to their usual size: the user menu shows your name again and context menu rows are easier to read.
+- Module icons sit in an even frame in the navbar, on the dashboard and in the module switcher.
+
+### Fixes
+
+- Ticked checkboxes on mosaic tiles show as checked again, disabled buttons no longer look clickable, and colored buttons react to the pointer again.
+- Voting on a poll while its owner removes a time slot no longer fails: your votes on the other slots are kept.
+- A picture rotated or cropped right after upload no longer keeps the thumbnail of the unedited image.
+- The calendar preferences button no longer spills over the calendar in French.
+
 ## 0.44.0 - Photos & Sync
 
 ### Highlights

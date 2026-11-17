@@ -1,41 +1,84 @@
 # Imports
 
-Bring files over from another cloud - a Nextcloud account or any WebDAV folder - into the Files module. The module is in preview: files are the only kind of data it moves so far.
+The Imports page brings files and contacts over from the cloud a user is
+leaving - a Nextcloud account or any WebDAV folder - into Files and People. It
+is in preview. Being used once when arriving rather than lived in, it stays off
+the dashboard and opens from the user menu or the command palette (*Import
+from another cloud*).
 
-## Features
+![Imports](../images/imports_1.png)
 
-- **Connections** - A remote source (URL, username, app password) verified against the server before it is saved; secrets are stored encrypted
-- **Wizard** - Pick a connection, what to import, the remote folder to start from, the local destination and what to do with same-name files (keep both, keep mine, replace)
-- **Background jobs** - The import runs in the worker in time slices, so a multi-hour migration never meets the task time limits; progress is live on the Imports page and a notification arrives when it ends
-- **Resumable and incremental** - A job picks up where it stopped after a pause or a restart; running it again on the same connection only fetches what changed (new files, new versions), and a retry skips what already went through
-- **Error report** - Every entry that could not be imported is listed with its reason, and a retry only runs those and the ones never reached
-- **Quota aware** - The remote tree is listed and sized first; the import is refused up front when it would not fit
+## Connections
 
-## Providers
+A connection is a remote account: a provider, a URL, a username and an app
+password. It is only saved once the server has answered with those
+credentials, and its card then shows the remote's space used and free and,
+for Nextcloud, its version. *Test* checks it again, *Edit* changes it.
 
-| Provider | Notes |
-|---|---|
-| Nextcloud | Paste the instance URL; the per-user WebDAV root is derived from it. Use an app password (Settings → Security). Server version and apps are read from OCS for information |
-| WebDAV | Any server: give the full URL of the folder to import from |
+| Provider | Brings over | Notes |
+|---|---|---|
+| Nextcloud | Files, with their favorites and tags; contacts | Paste the address of the instance, the rest is derived. Use an app password (Nextcloud *Settings > Security*). |
+| WebDAV | Files | Any server: give the full URL of the folder to import from. |
 
-## Settings
+## Starting an import
+
+*New import* walks through four steps: the connection, what to bring over,
+where it goes, and a summary before starting.
+
+- **Files**: browse the remote and pick the folder to start from, then the
+  destination folder in Files. Everything lands in a folder named after the
+  connection unless that box is unticked. A file whose name is already taken
+  is kept both ways (renamed), skipped, or replaces the local one.
+- **Contacts**: pick the address books to import, and for each one whether it
+  goes into the user's own contacts or a group's. Contact groups and categories
+  become lists, and pictures come along. A contact already there (same card,
+  or same email) is updated rather than duplicated. Nextcloud's own generated
+  books (the instance's account directory, recently contacted) are left out.
+
+## Following an import
+
+The import runs in the background: the user can leave the page and gets a
+notification when it finishes, fails or is stopped. On the page:
+
+- Live progress, first while the remote is listed and the storage quota
+  checked (an import that would not fit is refused before anything is
+  copied), then while it copies.
+- *Stop* ends a running import; what is already imported stays.
+- Entries that could not be imported are listed with their reason, and
+  *Retry* runs only those and the ones never reached.
+- Running an import again on the same connection only fetches what changed:
+  new files, new versions, edited contacts. A connection runs one import at a
+  time.
+
+## Administration
+
+Imports run in the Celery worker, in slices so that a migration of several
+hours never meets the task time limits, and resume where they stopped after a
+restart. Celery beat restarts an import whose worker died (every 10 minutes)
+and purges old error reports (nightly).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `IMPORTS_BATCH_SECONDS` | `1200` | A running job yields and re-enqueues itself after this long, so the Celery time limits are never hit |
-| `IMPORTS_HTTP_TIMEOUT` | `60` | Per-request timeout (seconds) when talking to the remote |
-| `IMPORTS_MAX_CONSECUTIVE_ERRORS` | `20` | Consecutive remote failures after which a job gives up instead of burning through a dead connection one entry at a time |
-| `IMPORTS_JOB_RETENTION_DAYS` | `90` | Per-entry error reports of jobs finished longer ago than this are purged nightly. Successful entries are kept: they are what makes later runs incremental |
-| `IMPORTS_ALLOW_PRIVATE_NETWORKS` | `False` | Allow remote URLs on private networks (10/8, 172.16/12, 192.168/16, fc00::/7, carrier-grade NAT) |
-| `IMPORTS_ALLOWED_HOSTS` | empty | Comma-separated host names that are trusted as they are: the address checks below are skipped for them (including the loopback and link-local refusals), only the scheme and the presence of a host are still validated |
+| `IMPORTS_BATCH_SECONDS` | `1200` | Length of a slice: a running import yields and queues itself again after this long. |
+| `IMPORTS_HTTP_TIMEOUT` | `60` | Seconds per request to the remote. |
+| `IMPORTS_MAX_CONSECUTIVE_ERRORS` | `20` | Consecutive remote failures after which an import gives up rather than trying a dead connection entry by entry. |
+| `IMPORTS_JOB_RETENTION_DAYS` | `90` | Error reports of imports finished longer ago are purged. What was imported is remembered for good: it keeps later runs incremental. |
+| `IMPORTS_ALLOW_PRIVATE_NETWORKS` | off | Allow remotes on private networks (10/8, 172.16/12, 192.168/16, fc00::/7, carrier-grade NAT). |
+| `IMPORTS_ALLOWED_HOSTS` | empty | Comma-separated host names trusted as they are, skipping every address check below. |
 
-## Remote URL safety
+Connection passwords are stored encrypted with a key derived from
+`SECRET_KEY`: changing it makes saved connections unusable until their
+password is entered again.
 
-The worker fetches whatever URL a connection carries, which makes an unchecked URL a server-side request forgery. Every HTTP request to the remote goes through a guarded transport: each time it opens a connection it resolves the host once, refuses it when any of the addresses is off limits, and connects to the addresses it checked rather than resolving the name again. Loopback, link-local (cloud metadata), unspecified, multicast and reserved addresses are always refused, private networks unless `IMPORTS_ALLOW_PRIVATE_NETWORKS` is on. Because the address that is checked is the address that is dialed, a name answering a public address first and a private one next (DNS rebinding) never reaches the private one. TLS still verifies the certificate against the host name of the URL. A host listed in `IMPORTS_ALLOWED_HOSTS` is connected to by name and bypasses every address refusal - list only hosts you would connect to yourself. Redirects are never followed, the `HTTP_PROXY`/`HTTPS_PROXY` environment variables are ignored (a proxy would resolve the name out of the guard's reach), and remote paths may not contain `.` or `..` segments. The same transport serves the mail account autodiscovery.
+### Remote URL safety
 
-## How a job runs
+The worker connects to whatever URL a user typed, so every request checks the
+address it is about to dial: loopback, link-local (cloud metadata), multicast
+and reserved addresses are always refused, private networks unless
+`IMPORTS_ALLOW_PRIVATE_NETWORKS` is on. The address checked is the one
+connected to, which defeats DNS rebinding. Redirects are never followed and
+the `HTTP_PROXY`/`HTTPS_PROXY` variables are ignored. A host in
+`IMPORTS_ALLOWED_HOSTS` bypasses all of this: list only servers you would
+connect to yourself. Mail account autodiscovery goes through the same guard.
 
-1. **Listing** - the remote tree under the chosen folder is walked once to count files and bytes (entries already imported with the same options count as unchanged and are not fetched) and the storage quota is checked.
-2. **Copying** - folders are created (an existing same-name folder is reused), files are streamed into a spool and handed to the Files module; each entry is recorded as done, skipped or failed with its version marker (etag, else size and mtime).
-3. The job stops between entries when cancelled or when its slice is over; the next slice resumes from the persisted state. A transfer cut short by the slice limit is retried once, then the entry is reported failed rather than downloaded again forever.
-4. On completion, failure or cancellation the owner is notified with a one-line summary.
+The API is documented in the [Swagger UI](/schema/swagger-ui/).

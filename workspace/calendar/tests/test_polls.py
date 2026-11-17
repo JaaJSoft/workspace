@@ -39,6 +39,20 @@ def _closed_while_validating(serializer_class, poll):
     return patch.object(serializer_class, "is_valid", is_valid)
 
 
+def _slot_removed_before_lock(slot):
+    """Delete *slot* as the vote takes the poll lock - what the owner's edit
+    removing it looks like when it commits after the view read the request."""
+    from workspace.calendar.views import polls as poll_views
+
+    real_lock = poll_views._lock_open_poll
+
+    def lock(poll):
+        PollSlot.objects.filter(pk=slot.pk).delete()
+        return real_lock(poll)
+
+    return patch.object(poll_views, "_lock_open_poll", lock)
+
+
 class PollTestMixin:
     def setUp(self):
         self.owner = User.objects.create_user(
@@ -396,6 +410,31 @@ class PollVoteTests(PollTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertFalse(PollVote.objects.filter(user=self.voter).exists())
 
+    def test_a_slot_removed_during_the_vote_is_skipped_and_the_rest_lands(self):
+        self.client.force_authenticate(user=self.voter)
+        removed_uuid = self.slot2.uuid
+        with _slot_removed_before_lock(self.slot2):
+            resp = self.client.post(
+                f"/api/v1/polls/{self.poll.uuid}/vote",
+                {
+                    "votes": [
+                        {"slot_id": str(self.slot1.uuid), "choice": "yes"},
+                        {"slot_id": str(removed_uuid), "choice": "no"},
+                    ],
+                },
+                format="json",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            list(
+                PollVote.objects.filter(user=self.voter).values_list(
+                    "slot_id", "choice"
+                )
+            ),
+            [(self.slot1.uuid, "yes")],
+        )
+        self.assertFalse(PollVote.objects.filter(slot_id=removed_uuid).exists())
+
     def test_vote_requires_auth(self):
         resp = self.client.post(
             f"/api/v1/polls/{self.poll.uuid}/vote",
@@ -679,6 +718,31 @@ class GuestVoteTests(PollTestMixin, APITestCase):
             )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertFalse(PollVote.objects.filter(guest_name="Late").exists())
+
+    def test_a_slot_removed_during_a_guest_vote_is_skipped_and_the_rest_lands(self):
+        removed_uuid = self.slot2.uuid
+        with _slot_removed_before_lock(self.slot2):
+            resp = self.client.post(
+                f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+                {
+                    "guest_name": "Racer",
+                    "votes": [
+                        {"slot_id": str(self.slot1.uuid), "choice": "yes"},
+                        {"slot_id": str(removed_uuid), "choice": "no"},
+                    ],
+                },
+                format="json",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            list(
+                PollVote.objects.filter(guest_name="Racer").values_list(
+                    "slot_id", "choice"
+                )
+            ),
+            [(self.slot1.uuid, "yes")],
+        )
+        self.assertFalse(PollVote.objects.filter(slot_id=removed_uuid).exists())
 
     def test_guest_vote_rate_limit(self):
         cache.clear()

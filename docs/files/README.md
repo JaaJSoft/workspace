@@ -1,270 +1,258 @@
 # Files
 
-Upload, organize, and preview files with a full-featured file explorer.
-
-![Grid view](../images/files_1.png)
+The Files module is the file manager of Workspace: folders, uploads, viewers
+and editors for most file types, sharing with people and by link, group
+folders, and WebDAV access. Notes and Photos are built on it: a note or a
+photo is a file here.
 
 ![List view](../images/files_2.png)
 
-## Features
+## Browsing
 
-- **Folder hierarchy** - Nested folders with breadcrumb navigation and path tracking
-- **Multiple views** - Grid (mosaic) and list views with customizable columns
-- **Drag & drop** - Upload files and move items between folders
-- **Resumable uploads** - A large upload cut by the network picks up where it stopped
-- **Built-in viewers** - Preview PDF, Markdown, images, video, audio, and code files inline
-- **Office documents** - View and edit DOCX/XLSX/PPTX in the browser through a self-hosted WOPI editor (Collabora, OnlyOffice)
-- **Favorites & Recent** - Star files for quick access, track recently opened items
-- **Trash** - Soft delete with configurable retention period before permanent removal
-- **Thumbnails** - Auto-generated thumbnails for image files
-- **Search** - Full-text search over file names and, for text formats and
-  documents (PDF, office files), file contents and the title and author a
-  document declares; filter by type and sort
-- **Document properties** - Title, author, subject, keywords, page count and
-  authoring dates of PDFs and office files in the properties panel; length,
-  codecs and (for videos) dimensions of audio and video files
-- **Tags** - Create and assign tags to organize files across folders
-- **Sharing** - Share files with specific users or via public links with optional password protection and expiration
-- **Pinned folders** - Pin frequently used folders to the sidebar
-- **Group folders** - Shared folder spaces for team collaboration
-- **Folder download** - Download entire folders as ZIP archives
-- **WebDAV** - Access files from any WebDAV-compatible client
-- **File locking & comments** - Lock files to prevent concurrent edits, add comments
+The sidebar holds *My Files*, *Favorites*, *Recent*, *Trash* and *Shared with
+me*, then pinned folders, group folders, favourite tags and the *Storage*
+view.
 
-## Resumable uploads
+- **List and mosaic views**, the mosaic with an adjustable tile size, and a
+  compact list in the Preferences. The toolbar filters the open folder by
+  name, type, tag or favorites, and sorts it.
+- **Drag and drop**: drop files anywhere on the page to upload them, or drag
+  items onto a folder, a breadcrumb or a sidebar entry to move them. *Upload
+  Folder* in the *New* menu keeps the folder structure.
+- **Right-click menu** on any item or selection: open, download (a folder or
+  a selection downloads as a ZIP), rename, cut, copy, paste, share, create a
+  shortcut, tags, favorite, pin to the sidebar, extract a ZIP archive,
+  properties, delete. The menu only offers what the user is allowed to do.
+- **Name clashes** on an upload, a copy or a move ask *Replace*, *Keep both* or
+  *Skip*, once for all the remaining ones if wanted; the Preferences can make
+  the choice for good.
+- **Shortcuts** to a file or a folder can be filed anywhere, for example to
+  keep something shared with you in one of your folders. A shortcut follows its
+  target when it is renamed or moved.
+- **Long operations** - moving, copying, trashing or restoring many files -
+  run in the background, with their progress in the *Operations* panel. A file
+  that cannot go through is reported with its reason while the rest carries on.
+- **Trash**: deleted items stay restorable, and can still be opened to check
+  them, until they are purged after 30 days (set by the administrator).
+- **Keyboard**: Enter to open, F2 to rename, Del to delete, F to favorite, P
+  to pin, Ctrl+X / C / V, Ctrl+I for the properties, Alt+arrows to go back,
+  forward or up. The *Help* entry of the sidebar lists them.
 
-From 50 MB on, the browser sends a file in 16 MB chunks through an upload
-session instead of one request. A chunk lost to the network (a laptop going to
-sleep, a phone switching networks) is sent again after a wait, and the upload
-continues from the bytes the server already holds. When the waits run out
-(about two minutes), the row fails and its Retry button resumes the same
-upload; closing the upload panel drops it.
+![Mosaic view](../images/files_1.png)
 
-Each request carries one chunk, so uploads also go through a reverse proxy that
-caps the size of a request body, such as Cloudflare's 100 MB on its free plan.
-It is not faster on a healthy network: the same bytes travel, in more requests.
+## Uploads
 
-- The size of the file counts against the storage quota from the moment the
-  upload starts, so two large uploads cannot each pass the check and together
-  overflow it.
-- Chunks are written to `FILE_UPLOAD_TEMP_DIR` and hashed as they arrive. When
-  the last one is in, the file is stored as a regular upload is: renamed into
-  place on the disk, uploaded from the spool on object storage.
-  With several web replicas the directory has to be on a volume they share,
-  which it is by default (under `MEDIA_ROOT`).
-- An upload untouched for a day is deleted with what it received, by the
-  nightly cleanup of abandoned upload files.
+Several files upload at once, in a panel that shows each file's progress and
+can pause the queue, cancel or retry a file, and settle duplicates in bulk.
 
-The API is `POST /api/v1/files/uploads` (open), `PATCH .../uploads/<uuid>` with
-`Content-Range` (append), `GET` (offset to resume from), `POST .../finalize`
-and `DELETE` (abort); the OpenAPI schema documents each of them.
+- **Resumable**: a file of 50 MB or more is sent in 16 MB chunks. An upload
+  cut by the network, a laptop going to sleep or a phone locking its screen
+  picks up from where it stopped; its *Retry* button resumes it if the waits
+  run out. Chunks also get through a reverse proxy that caps request bodies
+  (Cloudflare's 100 MB on its free plan).
+- **From other apps**: on Android and Windows, the installed app appears in
+  the system share menu. Files shared from another app land in a folder the
+  user picks.
 
-## Opening a file in a tab
+## Viewing and editing
 
-A file's content is served from Workspace's own address, with the type the file
-was stored with. Opened directly (the viewer's *New tab* link, a URL someone
-pasted), a web page, an SVG drawing or an XML document would run its scripts as
-part of Workspace, with the session of whoever opened it. So:
+A file opens in place of the listing, with the folder path above it and
+arrows (or a swipe) to the previous and next file.
 
-- HTML, XHTML, SVG and every XML type download instead of opening. The viewer
-  still previews them: the image viewer draws an SVG, the code viewer shows
-  HTML and XML source.
-- Every other type opens in the tab inside a sandbox that runs no script and
-  loads nothing, except PDF, video and audio, which the browser shows in its
-  own viewer.
-
-The same holds for public links, chat and task attachments, album photos and
-WebDAV. A reverse proxy in front of Workspace must leave the
-`Content-Security-Policy` and `X-Frame-Options` of these responses as they are:
-replacing the first lifts the sandbox, and `DENY` in the second blanks the PDF
-viewer, which shows the file in a frame.
-
-## Content search
-
-Files are searchable by name and, for text formats and documents, by what is written
-inside them: Markdown, plain text, CSV, HTML, JSON, XML, source code, PDFs and office
-documents. A document is also found by the properties it declares about itself - its
-title, author, subject and keywords - so searching an author's name finds what they
-wrote, and a scanned PDF with no text layer stays findable by its title. Anything else -
-images, archives - stays searchable by name.
-
-The index holds only the extracted words, never a copy of the file: the stored blob
-remains the single copy of the content. Files are indexed as they are created, renamed or
-edited, and the hourly catch-up indexes whatever that missed: files already there when
-the feature was installed, an edit whose indexing was lost, and every file once more after
-a change to how text is extracted. To queue the whole backlog at once rather than 20,000
-files per pass:
-
-```bash
-python manage.py catch_up search_index
-```
-
-## Document properties
-
-The properties panel of a PDF or an office file shows what the document says about
-itself: title, author, subject, keywords, page count, and the dates it was written and
-last saved. They are read after the upload, off the request, and stored next to the file;
-a document that cannot be parsed is simply shown without them. Documents uploaded before
-the feature existed are read by the hourly catch-up, or all at once with:
-
-```bash
-python manage.py catch_up documents
-```
-
-## Office Documents
-
-Word, Excel and PowerPoint files (plus their OpenDocument equivalents: ODT, ODS, ODP) open directly in the file viewer when a WOPI editor is deployed next to the app — and users with write permission can edit and save them from the browser. Coverage follows the editor: every document-family format its discovery advertises becomes viewable (RTF, legacy binary suites, templates like DOTX, XLSB, ...), and formats the editor can only render open read-only. Without an editor, office files are download-only.
-
-The integration speaks the WOPI protocol, so the editor is the deployer's choice:
-
-| Editor | Notes |
+| Type | What the viewer does |
 |---|---|
-| [Collabora CODE](https://www.collaboraonline.com/code/) | Free, single container, the setup shipped in the deployment examples |
-| Collabora Online | Same protocol, commercial support |
-| [OnlyOffice Docs](https://www.onlyoffice.com/) | Community or Enterprise, in WOPI mode (>= 6.4) |
-| Office Online Server | Microsoft's on-premises WOPI client, for deployers licensing it |
+| Images | Zoom, slideshow. HEIC and camera RAW photos are decoded in the browser. **Crop & rotate** never rewrites the file and can be reverted at any time. **AI Edit** when the instance has an image model ([AI](../ai/README.md)). |
+| PDF | The browser's own PDF viewer. |
+| Markdown | Rendered and editable in a WYSIWYG editor. |
+| Text and code | Editable with syntax highlighting. Files over 5 MB open as raw text in a new tab. |
+| Video and audio | Streamed, with seeking. |
+| E-books | EPUB, MOBI, AZW3, FB2 and CBZ open in a reader with a table of contents and adjustable text size. |
+| Office documents | Word, Excel, PowerPoint and OpenDocument files open, and save, in an office editor when the instance has one (see [Office editor](#office-editor)). Otherwise they are download-only. |
 
-How it behaves:
+Anything else can be downloaded. An editor locks the file while it is open,
+so two people cannot overwrite each other, over WebDAV included.
 
-- **Permissions are live** - view-only shares open read-only, and revoking someone's access cuts their editing session at the next editor round-trip.
-- **Saves are ordinary writes** - a save from the editor goes through the same pipeline as an upload: content hash, thumbnail regeneration, file events.
-- **Locking is integrated** - an editing session locks the file for the rest of the app, and an in-app lock held by someone else blocks editing.
-- **Graceful degradation** - editor unreachable or format unsupported → the viewer offers the download instead. Nothing else depends on the editor.
+Image and video thumbnails are drawn right after the upload. A photo or video
+marked as sensitive (from its menu, or by
+[Photos' detection](../photos/README.md#sensitive-photos)) is blurred in the
+listing and opened behind a cover.
 
-Setup lives in the deployment examples: [Docker Compose](../deployments/docker-compose/README.md#office-documents-optional) and [Kubernetes](../deployments/kubernetes/README.md#office-documents-optional). The short version: run the editor container, point `WOPI_DISCOVERY_URL` at its `/hosting/discovery` endpoint, and give the browser a route to the editor (its iframe loads from the editor's own hostname).
+## Properties
 
-## API
+The properties panel (*Properties*, or Ctrl+I) shows a file's size, dates,
+location and tags, who it is shared with and its public links, a comment
+thread, and an activity timeline: who created, renamed, moved or shared it.
+PDFs and office documents add their title, author, subject, keywords, page
+count and authoring dates; audio and video files their length, codecs and
+dimensions.
 
-All endpoints under `/api/v1/files/` - see the [Swagger UI](/schema/swagger-ui/) for full documentation. The WOPI endpoints used by the editor live under `/api/wopi/files/` - their shape is fixed by the [WOPI protocol](https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/) and they authenticate with per-session access tokens, not user sessions.
+## Search and tags
 
-## Malware scanning
+- The global search finds files by name and, for text formats, PDFs and office
+  documents, by what is written inside them and by the title and author they
+  declare. A scanned PDF with no text stays findable by its title.
+- **Tags** are personal and coloured, the same ones as in Notes. Favourite
+  tags sit in the sidebar; the tag manager renames, recolours, merges and
+  deletes them, and purges the unused ones.
 
-Uploaded file content can be scanned by a [ClamAV](https://www.clamav.net/)
-daemon. The feature is **off by default**: a single-user instance does not need
-it, and the Raspberry Pi deployment target cannot run the daemon.
+## Sharing
 
-Scanning runs after the upload response, from the same Celery pipeline that
-builds thumbnails and the search index, so it never slows an upload down. Every
-write path is covered - the REST API, WebDAV, the office editor's save, archive
-extraction and imports all record the file event the scanner subscribes to.
+- **With people and groups**: a file can be shared read-only or read & write.
+  A group share follows the group's membership: someone who joins sees the
+  file, someone who leaves loses it. Shared files appear under *Shared with
+  me*.
+- **Public links** on a file or a folder, with an optional password (one is
+  generated and shown in clear) and expiry. A folder link is *Read only*,
+  *Upload only* (visitors drop files without an account and without seeing
+  what is there) or *Read and upload*, with a per-file size cap and a maximum
+  number of uploads. The owner is notified once per batch of uploads.
+- **Group folders** are shared spaces, one per group, created by any member
+  from the sidebar. Their files count against the group's quota, not the
+  members'.
 
-### Enabling it
+## Storage
 
-Point the application at a running `clamd`:
+*Storage* in the sidebar, or *Analyze storage* on a folder, breaks usage down
+by file type and by sub-folder, lists the largest files, and groups duplicates
+by content, ranked by the space they waste. At the top of the tree it also
+shows the quota and what the trash holds.
+
+![Storage](../images/files_3.png)
+
+## WebDAV
+
+A user's files and group folders are reachable at `https://<your-domain>/dav/`,
+to mount as a network drive (Windows Explorer, macOS Finder, davfs2, GNOME
+Files) or sync from a mobile app. Sign in with the username and password; an account
+that uses single sign-on enters an API token (*Settings > API Tokens*) as the
+password. The *Help* entry of the sidebar has the steps per system.
+
+## Administration
+
+Files needs the Celery worker and beat: thumbnails, text extraction, document
+and media properties, malware scans and batch operations run there, never in
+the web process. An hourly catch-up (`FILES_CATCH_UP_INTERVAL`) processes
+whatever the upload path missed, 20,000 files per pass; to queue a whole
+backlog at once:
 
 ```bash
-FILES_MALWARE_SCAN_ENABLED=1
-# Unix socket (takes precedence when set):
-FILES_CLAMAV_SOCKET=unix:///var/run/clamav/clamd.ctl
-# or TCP:
-FILES_CLAMAV_HOST=127.0.0.1
-FILES_CLAMAV_PORT=3310
+python manage.py catch_up search_index documents media_info thumbnails malware_scan
+python manage.py catch_up malware_scan --reanalyze   # everything again
+python manage.py catch_up malware_scan --dry-run     # count only
 ```
 
-### Policy
+Video thumbnails and audio and video properties need `ffmpeg` and `ffprobe`
+(the Docker image ships them). A file a processor fails on three times is
+parked: **Files > Processing failures** in the Django admin lists them, with
+a *Retry* action.
 
-| Setting | Values | Effect |
+| Setting | Default | Meaning |
 |---|---|---|
-| `FILES_MALWARE_ON_DETECTION` | `block` (default), `flag` | `block` quarantines an infected file: it cannot be downloaded, previewed or found in search, cannot be attached to a message, an email or a task, is not readable by the AI assistant, and its owner sees it marked as quarantined. `flag` records the verdict and leaves the file usable. |
-| `FILES_MALWARE_ON_ERROR` | `open` (default), `closed` | What happens to a file the scanner could not examine - a daemon that is down, a blob that vanished. `open` leaves it usable, `closed` quarantines it. |
-| `FILES_MALWARE_SCAN_MAX_BYTES` | bytes, default 25 MB | Files larger than this are recorded as `skipped` and stay downloadable. Matches clamd's own default; see below before raising it. |
+| `STORAGE_QUOTA_BYTES` | 1 GB | Personal quota of a user without a quota of their own. |
+| `TRASH_RETENTION_DAYS` | `30` | Days before trashed items are purged (nightly, or `purge_trash`). |
+| `RECENT_FILES_LIMIT`, `RECENT_FILES_MAX_LIMIT` | `25`, `200` | Items in the *Recent* view, by default and at most. |
+| `FILES_TEXT_VIEWER_MAX_BYTES` | 5 MB | Larger text files open raw in a new tab. |
+| `FILES_EBOOK_READER_MAX_BYTES` | 256 MB | Larger e-books are download-only. |
+| `FILES_EXTRACT_MAX_BYTES`, `FILES_EXTRACT_MAX_ENTRIES` | 2 GB, `10000` | Limits on what a ZIP extraction writes. |
+| `FILES_DROP_MAX_FILE_BYTES`, `FILES_DROP_MAX_FILE_COUNT` | 100 MB, `100` | Ceilings for upload links; a link can only lower them. |
+| `FILES_DROP_UPLOAD_RATE_TOKEN`, `FILES_DROP_UPLOAD_RATE_IP` | `20/min`, `60/min` | Anonymous uploads allowed per link and per client. |
+| `FILES_DROP_NOTIFY_WINDOW_SECONDS` | `60` | Uploads to a link within this window make one notification. |
+| `FILE_UPLOAD_TEMP_DIR` | `MEDIA_ROOT/tmp/uploads` | Where uploads and resumable chunks are spooled. Must be shared by every web replica. |
+| `FILES_SYNC_INTERVAL` | `1800` | Seconds between scans for files changed on the disk outside the app (local storage only). |
+| `FILES_CATCH_UP_INTERVAL` | `3600` | Seconds between catch-up passes. |
 
-A file whose scan has not run yet stays downloadable. The window is normally a
-few seconds; a persistent backlog shows up as a stalled queue on the admin
-dashboard.
+### Storage and quotas
 
-**The daemon has its own cap, and the two defaults match.** `clamd`'s
-`StreamMaxLength` also defaults to 25 MB, so out of the box the application and
-the daemon agree on where scanning stops.
+Blobs live under `MEDIA_ROOT` by default, laid out as the users see their
+tree, or in an S3-compatible bucket: see
+[Object storage](../deployments/README.md#object-storage-s3-compatible),
+which also covers `copy_blobs` and `verify_file_storage`. On local storage,
+files copied into a user's folder on the server are picked up by the periodic
+sync, by the *Sync and refresh folder* button, or by
+`python manage.py sync_files [--user alice] [--dry-run]`.
 
-The effective ceiling is always the lower of the two. Raising
-`FILES_MALWARE_SCAN_MAX_BYTES` alone changes nothing: the daemon still refuses at
-its own limit and the file is recorded as `skipped`, exactly as before. To
-actually scan larger files, raise `StreamMaxLength` in `clamd.conf` as well and
-restart the daemon.
+Quotas are set per user and per group in the Django admin (**User storage
+quotas**, **Group storage quotas**; an empty value means unlimited). A group
+has no limit until one is set. Trashed files count, and every upload, copy,
+note or WebDAV write is checked. `python manage.py
+storage_quota_report --over` lists the users and groups over their quota.
+A resumable upload counts against the quota from the moment it starts; one left
+untouched for a day is deleted with the chunks it received.
 
-**Relaxing the policy restores the search exclusion gradually.** Quarantining a
-file drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION`
-from `block` back to `flag` makes those files readable again, and the hourly
-catch-up puts their documents back. Run `python manage.py catch_up search_index`
-after relaxing the policy to do it at once.
+### Opening files in a tab
 
-### Monitoring
+A file is served from Workspace's own address. So that an uploaded page
+cannot run as part of the app, HTML, SVG and XML files download instead of
+opening in a tab (the viewers still preview them), and every other type opens
+in a sandbox that runs no script, except PDF, video and audio. A reverse proxy
+must leave the `Content-Security-Policy` and `X-Frame-Options` of these
+responses untouched: replacing the first lifts the sandbox, and `DENY` in the
+second blanks the PDF viewer.
 
-The admin dashboard carries three cards: quarantined files, scanner errors in
-the last 24 hours, and live daemon reachability. The full verdict history is at
-**Files > Malware scans** in the admin.
+### Office editor
 
-Verdicts cannot be deleted there. A file with no verdict reads as never
-scanned, and never scanned is readable, so deleting a row would quietly
-un-quarantine the file.
+Office documents open in any WOPI editor deployed next to the app:
+[Collabora CODE](https://www.collaboraonline.com/code/) (free, the one in the
+deployment examples), Collabora Online, [OnlyOffice Docs](https://www.onlyoffice.com/)
+in WOPI mode (6.4 or later), or Office Online Server. Every format the editor
+advertises becomes viewable, and editable where it can save it. Permissions
+are checked on every round-trip, so a revoked share ends the editing session;
+a save is an ordinary write (thumbnail, search index, malware scan), and an
+editing session locks the file. If the editor is unreachable, the viewer
+offers the download.
 
-### Getting a file out of quarantine
+| Setting | Default | Meaning |
+|---|---|---|
+| `WOPI_DISCOVERY_URL` | empty | The editor's `/hosting/discovery` URL. Empty: office files are download-only. |
+| `WOPI_HOST_URL` | from the request | Workspace's address as the editor reaches it (e.g. `http://web:8000`). |
+| `WOPI_TOKEN_TTL` | `36000` | Seconds an editing session's access token lasts. |
 
-Two actions on **Files > Malware scans**, for two different problems.
+The browser loads the editor from its own hostname, so it needs a public
+route too. Setup: [Docker Compose](../deployments/docker-compose/README.md#office-documents-optional),
+[Kubernetes](../deployments/kubernetes/README.md#office-documents-optional).
 
-**Re-scan the selected files** answers a verdict that has gone *stale* - the
-signature database has moved on, or the file was quarantined by a bug since
-fixed. It queues a fresh scan and leaves the row in place until the new verdict
-replaces it.
+### Malware scanning
 
-**Clear the quarantine (false positive)** answers a verdict that is simply
-*wrong*. Re-scanning cannot fix that one: the same bytes fed to the same
-signature database come back infected every time. The action records who
-cleared it, when, and the reason typed into the action bar, and leaves the
-verdict and its signature untouched - the decision is filed next to the
-detection, not in place of it. The file becomes readable again immediately,
-its search document and its thumbnail come back, and its owner sees an
-ordinary file.
+Uploads can be scanned by a [ClamAV](https://www.clamav.net/) daemon, after
+the upload response so it never slows one down. Every write path is covered:
+the web app, WebDAV, the office editor, archive extraction and imports. It is
+off by default.
 
-The clearance is pinned to the file's content hash, so it vouches for those
-exact bytes and nothing else. Replace the content and the file blocks again at
-once, before the new bytes have even been scanned - and the scan of those new
-bytes drops the clearance rather than inheriting it, so an infected upload
-never lands on a cleared row. A re-scan of the *same* bytes keeps it, which is
-what stops the next catch-up pass from undoing every clearance it walks
-over. For the same reason the action refuses a verdict
-that does not describe the file's current content, and says so: re-scan first,
-then clear the verdict that comes back.
+| Setting | Default | Meaning |
+|---|---|---|
+| `FILES_MALWARE_SCAN_ENABLED` | off | Scan uploaded content. |
+| `FILES_CLAMAV_SOCKET` | empty | `clamd` socket (`unix:///var/run/clamav/clamd.ctl`); wins over host and port. |
+| `FILES_CLAMAV_HOST`, `FILES_CLAMAV_PORT` | `127.0.0.1`, `3310` | `clamd` over TCP. |
+| `FILES_CLAMAV_TIMEOUT` | `60` | Seconds per scan. |
+| `FILES_MALWARE_ON_DETECTION` | `block` | `block` quarantines an infected file; `flag` records the verdict and leaves it usable. |
+| `FILES_MALWARE_ON_ERROR` | `open` | A file that could not be scanned stays usable (`open`) or is quarantined (`closed`). |
+| `FILES_MALWARE_SCAN_MAX_BYTES` | 25 MB | Larger files are recorded as skipped and stay usable. |
 
-Clearing a quarantine needs the dedicated **Can clear a malware quarantine**
-permission (`files.override_filescan`), which is separate from the permission
-to read the verdict list - handing out the audit surface does not hand out the
-ability to release flagged files.
+- **Quarantined** files cannot be downloaded, previewed, shared by link,
+  found in search, attached to a message, an email or a task, or read by the
+  assistant; their owner still sees them, marked. A file whose scan has not
+  run yet (normally a few seconds) stays usable.
+- **Size cap**: `clamd`'s own `StreamMaxLength` also defaults to 25 MB, and
+  the lower of the two wins. To scan larger files, raise both.
+- **Monitoring**: the admin dashboard shows the daemon's reachability,
+  quarantined files and scanner errors; **Files > Malware scans** in the Django
+  admin holds every verdict. Verdicts cannot be deleted, since a file without
+  one reads as never scanned, and so readable.
+- **Releasing a file**: *Re-scan* queues a fresh scan for a stale verdict (the
+  signatures have moved on). *Clear the quarantine* records a false positive,
+  with who cleared it and why; it vouches for those exact bytes only, so new
+  content is blocked again until scanned. It needs the **Can clear a malware
+  quarantine** permission, separate from reading the verdicts.
+- **Existing libraries** are scanned by the hourly catch-up, which also
+  re-scans a file whose content changed after its verdict.
+- **Checking a real engine**: upload the
+  [EICAR test file](https://www.eicar.org/download-anti-malware-testfile/) and
+  check it is quarantined within seconds.
 
-If `FILES_MALWARE_SCANNER` names a backend that does not exist, the application
-refuses to start rather than running unprotected. Should it reach a worker
-anyway, every scan is recorded as an error, so `FILES_MALWARE_ON_ERROR` decides
-what happens and the scanner card says what is wrong.
+### API
 
-### Catching up on an existing library
-
-Every hour, the catch-up queues a scan for each file that needs one, at a lower
-priority than everything else, so enabling scanning on an existing library
-works through it on its own, 20,000 files per pass. To queue the whole backlog
-at once, or to re-scan everything after a signature update:
-
-```bash
-python manage.py catch_up malware_scan              # queue every file that needs a scan now
-python manage.py catch_up malware_scan --reanalyze  # re-scan everything
-python manage.py catch_up malware_scan --dry-run    # count without queueing
-```
-
-"Needs a scan" is wider than "never scanned". Each verdict records the hash of
-the bytes it describes, so the catch-up also picks up a file whose content
-changed after its verdict was written. That normally cannot happen - saving new
-content queues a scan - but the queued scan can be lost if a worker is killed
-or the broker is flushed, and without this the file would keep a verdict about
-bytes it no longer holds.
-
-The **Up to date** column on **Files > Malware scans** shows the same
-comparison per row. A verdict written before the hash was recorded reads as out
-of date, so the catch-up re-scans such files once after upgrading.
-
-### Verifying a real engine
-
-The test suite drives a fake daemon, so it never needs ClamAV and there is no
-EICAR string in this repository. To check a real deployment, write the
-[EICAR test file](https://www.eicar.org/download-anti-malware-testfile/) into a
-scratch directory outside the checkout, upload it, and confirm it is
-quarantined within a few seconds.
+The REST API lives under `/api/v1/files` and is documented in the Swagger UI
+(`/schema/swagger-ui/`), resumable uploads (`/api/v1/files/uploads`)
+included. The WOPI endpoints under `/api/wopi/files/` follow the
+[WOPI protocol](https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/)
+and only accept the editor's access tokens.

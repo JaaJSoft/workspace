@@ -83,6 +83,8 @@ def demo_environment():
         "MEDIA_ROOT": str(tmp / "media"),
         "DEBUG": "True",
         "REDIS_URL": "",
+        # The vault is a preview, offered to staff only by default.
+        "PREVIEW_VISIBILITY": "all",
         # The People shots: faces are found while the seed uploads the photos,
         # with weights kept next to the photo datasets between runs.
         "PHOTOS_FACES_ENABLED": "1",
@@ -168,16 +170,109 @@ def capture(base_url, context, only=None):
         page.wait_for_timeout(1500)
         _dismiss_overlays(page)
 
+        theme = "light"
         for shot in shots:
             print(f"  {shot['name']}.png  <-  {shot['path']}")
+            if shot.get("theme", "light") != theme:
+                theme = shot.get("theme", "light")
+                _set_theme(page, theme)
             page.goto(base_url + shot["path"].format(**context))
             page.wait_for_load_state("load")
             page.wait_for_timeout(shot.get("settle_ms", 2000))
             _dismiss_overlays(page)
             if "prep" in shot:
-                shot["prep"](page)
+                values = {key: context[key] for key in shot.get("prep_context", ())}
+                shot["prep"](page, **values)
             page.screenshot(path=OUTPUT_DIR / f"{shot['name']}.png")
+        if theme != "light":
+            _set_theme(page, "light")
+        compose_showcase(browser)
         browser.close()
+
+
+def _set_theme(page, theme):
+    # Through the settings API, from the page: the server caches the setting,
+    # so writing it from this process would not reach the running server.
+    page.evaluate(
+        """theme => fetch('/api/v1/settings/core', {
+               method: 'PATCH',
+               headers: {'Content-Type': 'application/json',
+                         'X-CSRFToken': getCSRFToken()},
+               body: JSON.stringify({theme}),
+           })""",
+        theme,
+    )
+
+
+# The README's banner: three captures as browser windows over the app's
+# gradient, the light dashboard in front of two dark pages, each showing the
+# side of its capture that stays in view. Rendered by the
+# same browser from a page next to the captures, so it follows them.
+SHOWCASE = {
+    "name": "showcase",
+    "size": {"width": 1600, "height": 820},
+    "back_left": "photos_dark",
+    "front": "home",
+    "back_right": "projects_dark",
+}
+# The front window is 900 px wide: render at the scale that draws its
+# capture pixel for pixel.
+SHOWCASE_SCALE = VIEWPORT["width"] / 900
+
+SHOWCASE_HTML = """<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html, body {{ margin: 0; width: {width}px; height: {height}px; overflow: hidden; }}
+  body {{
+    background:
+      radial-gradient(circle at 15% 20%, rgba(255,255,255,.35), transparent 40%),
+      linear-gradient(135deg, #6366f1 0%, #8b5cf6 45%, #ec4899 100%);
+    perspective: 2200px;
+  }}
+  .window {{
+    position: absolute; width: 900px; border-radius: 14px; overflow: hidden;
+    background: #fff; box-shadow: 0 40px 80px -20px rgba(15, 23, 42, .55),
+    0 0 0 1px rgba(15, 23, 42, .08);
+  }}
+  .window.dark {{ background: #1d232a; }}
+  .bar {{ height: 28px; display: flex; align-items: center; gap: 7px;
+          padding: 0 12px; background: #f1f2f6; }}
+  .dark .bar {{ background: #2a303c; }}
+  .bar i {{ width: 11px; height: 11px; border-radius: 50%; display: block; }}
+  .bar i:nth-child(1) {{ background: #ff5f57; }}
+  .bar i:nth-child(2) {{ background: #febc2e; }}
+  .bar i:nth-child(3) {{ background: #28c840; }}
+  .window img {{ display: block; width: 100%; }}
+  .left  {{ left: 40px;  top: 150px; transform: rotateY(18deg) scale(.82); transform-origin: left center; }}
+  .right {{ right: 40px; top: 150px; transform: rotateY(-18deg) scale(.82); transform-origin: right center; }}
+  .front {{ left: 350px; top: 60px; width: 900px; z-index: 2; }}
+</style></head><body>
+  <div class="window dark left"><div class="bar"><i></i><i></i><i></i></div><img src="{back_left}.png"></div>
+  <div class="window dark right"><div class="bar"><i></i><i></i><i></i></div><img src="{back_right}.png"></div>
+  <div class="window front"><div class="bar"><i></i><i></i><i></i></div><img src="{front}.png"></div>
+</body></html>"""
+
+
+def compose_showcase(browser):
+    """Render docs/images/showcase.png from the captures it names."""
+    names = (SHOWCASE["back_left"], SHOWCASE["front"], SHOWCASE["back_right"])
+    if not all((OUTPUT_DIR / f"{name}.png").is_file() for name in names):
+        return
+    print(f"  {SHOWCASE['name']}.png  <-  {', '.join(names)}")
+    html = OUTPUT_DIR / ".showcase.html"
+    html.write_text(
+        SHOWCASE_HTML.format(**SHOWCASE["size"], **SHOWCASE), encoding="utf-8"
+    )
+    context = browser.new_context(
+        viewport=SHOWCASE["size"], device_scale_factor=SHOWCASE_SCALE
+    )
+    try:
+        page = context.new_page()
+        page.goto(html.as_uri())
+        page.wait_for_load_state("load")
+        page.screenshot(path=OUTPUT_DIR / f"{SHOWCASE['name']}.png")
+    finally:
+        context.close()
+        html.unlink()
 
 
 def write_credits():

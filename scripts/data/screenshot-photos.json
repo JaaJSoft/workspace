@@ -9,7 +9,11 @@
   "title": "Blue Bottle",
   "author": "Neil Conway",
   "author_url": "https://www.flickr.com/people/neilconway/",
-  "url": "https://www.flickr.com/photos/neilconway/5052854336"
+  "url": "https://www.flickr.com/photos/neilconway/5052854336",
+  "gps": [
+   37.7764,
+   -122.4233
+  ]
  },
  {
   "id": "8a117de5be15a0a6",
@@ -21,7 +25,8 @@
   "title": "IMG_8209",
   "author": "Leigh Ann Kopans",
   "author_url": "https://www.flickr.com/people/leighannkopans/",
-  "url": "https://www.flickr.com/photos/leighannkopans/5366307333"
+  "url": "https://www.flickr.com/photos/leighannkopans/5366307333",
+  "gps": null
  },
  {
   "id": "b1a30c5d499d3030",
@@ -33,7 +38,8 @@
   "title": "lueanglueang",
   "author": "Vee Satayamas",
   "author_url": "https://www.flickr.com/people/vscript/",
-  "url": "https://www.flickr.com/photos/vscript/11403844353"
+  "url": "https://www.flickr.com/photos/vscript/11403844353",
+  "gps": null
  },
  {
   "id": "06dcd2a9e28c3c11",
@@ -45,7 +51,11 @@
   "title": "Shark",
   "author": "john mcsporran",
   "author_url": "https://www.flickr.com/people/127130111@N06/",
-  "url": "https://www.flickr.com/photos/127130111@N06/16789909464"
+  "url": "https://www.flickr.com/photos/127130111@N06/16789909464",
+  "gps": [
+   57.6273,
+   -6.2906
+  ]
  },
  {
   "id": "44ea22dbe48d87e7",
@@ -57,7 +67,11 @@
   "title": "10062007 115658 MDP 0020",
   "author": "Turol Jones, un artista de cojones",
   "author_url": "https://www.flickr.com/people/10352740@N03/",
-  "url": "https://www.flickr.com/photos/10352740@N03/11015144294/"
+  "url": "https://www.flickr.com/photos/10352740@N03/11015144294/",
+  "gps": [
+   57.2496,
+   -6.2721
+  ]
  },
  {
   "id": "54f0a6fb34c1675a",
@@ -69,7 +83,11 @@
   "title": "white flow",
   "author": "ranjith k r",
   "author_url": "https://www.flickr.com/people/eenthappana/",
-  "url": "https://www.flickr.com/photos/36938798@N00/473312418"
+  "url": "https://www.flickr.com/photos/36938798@N00/473312418",
+  "gps": [
+   64.7026,
+   -20.9775
+  ]
  },
  {
   "id": "4ae9226135ddb56a",
@@ -81,7 +99,11 @@
   "title": "Iceland Winter photos, 2015",
   "author": "Jim",
   "author_url": "https://www.flickr.com/people/jamesseithphotography/",
-  "url": "https://www.flickr.com/photos/jamesseithphotography/16164700374"
+  "url": "https://www.flickr.com/photos/jamesseithphotography/16164700374",
+  "gps": [
+   64.0784,
+   -16.2306
+  ]
  },
  {
   "id": "bbd5ccb7da52f180",
@@ -93,7 +115,8 @@
   "title": "Odd up Close",
   "author": "Arden",
   "author_url": "https://www.flickr.com/people/ardyiii/",
-  "url": "https://www.flickr.com/photos/ardyiii/358649008"
+  "url": "https://www.flickr.com/photos/ardyiii/358649008",
+  "gps": null
  },
  {
   "id": "d0fe01a71f83d22d",
@@ -105,7 +128,8 @@
   "title": "d6Hmomoy",
   "author": "hmomoy",
   "author_url": "https://www.flickr.com/people/53807034@N05/",
-  "url": "https://www.flickr.com/photos/53807034@N05/5467599251"
+  "url": "https://www.flickr.com/photos/53807034@N05/5467599251",
+  "gps": null
  },
  {
   "id": "d6bdc197b5645e29",
@@ -117,7 +141,11 @@
   "title": "The teacup galaxy: N310-B",
   "author": "Peter Shanks",
   "author_url": "https://www.flickr.com/people/botheredbybees/",
-  "url": "https://www.flickr.com/photos/botheredbybees/239161832"
+  "url": "https://www.flickr.com/photos/botheredbybees/239161832",
+  "gps": [
+   45.764,
+   4.8357
+  ]
  },
  {
   "id": "1fd0ea22fe6fcfb6",
@@ -129,7 +157,8 @@
   "title": "Content",
   "author": "Johan Larsson",
   "author_url": "https://www.flickr.com/people/johanl/",
-  "url": "https://www.flickr.com/photos/johanl/245337186"
+  "url": "https://www.flickr.com/photos/johanl/245337186",
+  "gps": null
  },
  {
   "id": "359e1ca4bc9d1a48",
@@ -141,7 +170,11 @@
   "title": "Pancake Tower, Family Pancake House",
   "author": "Ray Bouknight",
   "author_url": "https://www.flickr.com/people/raybouk/",
-  "url": "https://www.flickr.com/photos/raybouk/14787564283"
+  "url": "https://www.flickr.com/photos/raybouk/14787564283",
+  "gps": [
+   45.7622,
+   4.827
+  ]
  },
  {
   "id": "12276881185e2251",
@@ -153,7 +186,8 @@
   "title": "CIMG0114",
   "author": "Jasen Miller",
   "author_url": "https://www.flickr.com/people/cptspock/",
-  "url": "https://www.flickr.com/photos/cptspock/136226185"
+  "url": "https://www.flickr.com/photos/cptspock/136226185",
+  "gps": null
  },
  {
   "id": "26062053361f57cb",
@@ -165,7 +199,11 @@
   "title": "Calaguas",
   "author": "Allan Ascaño",
   "author_url": "https://www.flickr.com/people/allan_the_colorblind/",
-  "url": "https://www.flickr.com/photos/allan_the_colorblind/8763464643"
+  "url": "https://www.flickr.com/photos/allan_the_colorblind/8763464643",
+  "gps": [
+   14.472,
+   123.2134
+  ]
  },
  {
   "id": "79e1b7232483bcab",
@@ -177,7 +215,11 @@
   "title": "Dive boat Club Med Bahamas",
   "author": "Jack Kennard",
   "author_url": "https://www.flickr.com/people/javajoba/",
-  "url": "https://www.flickr.com/photos/javajoba/493549230"
+  "url": "https://www.flickr.com/photos/javajoba/493549230",
+  "gps": [
+   25.0343,
+   -77.3963
+  ]
  },
  {
   "id": "bf002ecd75305f97",
@@ -189,7 +231,11 @@
   "title": "Fihalhohi malè sud",
   "author": "nadia &amp; massimo",
   "author_url": "https://www.flickr.com/people/24641143@N03/",
-  "url": "https://www.flickr.com/photos/24641143@N03/2343099654"
+  "url": "https://www.flickr.com/photos/24641143@N03/2343099654",
+  "gps": [
+   3.8406,
+   73.353
+  ]
  },
  {
   "id": "d72e41ea9e8dbcf2",
@@ -201,7 +247,11 @@
   "title": "omakase!",
   "author": "smalljude",
   "author_url": "https://www.flickr.com/people/judemasti/",
-  "url": "https://www.flickr.com/photos/judemasti/6618064887"
+  "url": "https://www.flickr.com/photos/judemasti/6618064887",
+  "gps": [
+   4.1755,
+   73.5093
+  ]
  },
  {
   "id": "971f24fe03662841",
@@ -213,7 +263,11 @@
   "title": "Canandaigua Lady at Steamboat Landing Resort",
   "author": "Visit Finger Lakes",
   "author_url": "https://www.flickr.com/people/visitfingerlakes/",
-  "url": "https://www.flickr.com/photos/visitfingerlakes/4773984755"
+  "url": "https://www.flickr.com/photos/visitfingerlakes/4773984755",
+  "gps": [
+   42.874,
+   -77.278
+  ]
  },
  {
   "id": "674280aa2442cdea",
@@ -225,7 +279,11 @@
   "title": "Snowy Egret in Flight",
   "author": "Tyler Karaszewski",
   "author_url": "https://www.flickr.com/people/tylerkaraszewski/",
-  "url": "https://www.flickr.com/photos/tylerkaraszewski/6518152427"
+  "url": "https://www.flickr.com/photos/tylerkaraszewski/6518152427",
+  "gps": [
+   25.129,
+   -80.94
+  ]
  },
  {
   "id": "ce851f2915e2bd39",
@@ -237,7 +295,11 @@
   "title": "Nymphaea",
   "author": "the paleobear",
   "author_url": "https://www.flickr.com/people/paleo_bear/",
-  "url": "https://www.flickr.com/photos/paleo_bear/8732866604/"
+  "url": "https://www.flickr.com/photos/paleo_bear/8732866604/",
+  "gps": [
+   45.7745,
+   4.855
+  ]
  },
  {
   "id": "4be239a8eba50edc",
@@ -249,7 +311,11 @@
   "title": "_MG_3734",
   "author": "David",
   "author_url": "https://www.flickr.com/people/bootbearwdc/",
-  "url": "https://www.flickr.com/photos/bootbearwdc/2284869200"
+  "url": "https://www.flickr.com/photos/bootbearwdc/2284869200",
+  "gps": [
+   45.7748,
+   4.8556
+  ]
  },
  {
   "id": "599e2879db558cfa",
@@ -261,7 +327,11 @@
   "title": "IMG_5914(1200x800)",
   "author": "photographyplayers",
   "author_url": "https://www.flickr.com/people/photographyplayers/",
-  "url": "https://www.flickr.com/photos/photographyplayers/18754860679"
+  "url": "https://www.flickr.com/photos/photographyplayers/18754860679",
+  "gps": [
+   45.7742,
+   4.8546
+  ]
  },
  {
   "id": "df801ae6abd09e66",
@@ -273,7 +343,11 @@
   "title": "Argynnis cybele (= Spyerera cybele) Great Spangled  Fritillary 6",
   "author": "Mary Ellen St. John",
   "author_url": "https://www.flickr.com/people/135089388@N08/",
-  "url": "https://www.flickr.com/photos/135089388@N08/19993678382"
+  "url": "https://www.flickr.com/photos/135089388@N08/19993678382",
+  "gps": [
+   45.7744,
+   4.8552
+  ]
  },
  {
   "id": "8621085de85e2f31",
@@ -285,7 +359,11 @@
   "title": "Cipsela de Diente de león",
   "author": "Jonathan Rubio H.",
   "author_url": "https://www.flickr.com/people/jonathanrh/",
-  "url": "https://www.flickr.com/photos/jonathanrh/5749815755"
+  "url": "https://www.flickr.com/photos/jonathanrh/5749815755",
+  "gps": [
+   45.7739,
+   4.8549
+  ]
  },
  {
   "id": "cdedfc8e6916b5f6",
@@ -297,7 +375,11 @@
   "title": "Flamingos -African Safari",
   "author": "Kushal Shah",
   "author_url": "https://www.flickr.com/people/kushalshah84/",
-  "url": "https://www.flickr.com/photos/kushalshah84/5247038676/"
+  "url": "https://www.flickr.com/photos/kushalshah84/5247038676/",
+  "gps": [
+   -0.3667,
+   36.0833
+  ]
  },
  {
   "id": "7cd421626837f03c",
@@ -309,7 +391,11 @@
   "title": "Iguazu Falls, Misiones, Argentina, 7th. Jan. 2011",
   "author": "Phillip Capper",
   "author_url": "https://www.flickr.com/people/flissphil/",
-  "url": "https://www.flickr.com/photos/flissphil/5334992589"
+  "url": "https://www.flickr.com/photos/flissphil/5334992589",
+  "gps": [
+   -25.6953,
+   -54.4367
+  ]
  },
  {
   "id": "78a1248d4383e287",
@@ -321,7 +407,11 @@
   "title": "Shoebill {balaeniceps rex)",
   "author": "Drew Avery",
   "author_url": "https://www.flickr.com/people/33590535@N06/",
-  "url": "https://www.flickr.com/photos/33590535@N06/3712985590"
+  "url": "https://www.flickr.com/photos/33590535@N06/3712985590",
+  "gps": [
+   0.0742,
+   32.3556
+  ]
  },
  {
   "id": "4617eeff92b08bac",
@@ -333,7 +423,11 @@
   "title": "Green Aracari - Adult Male (Pteroglossus viridis)",
   "author": "Jim, the Photographer",
   "author_url": "https://www.flickr.com/people/jcapaldi/",
-  "url": "https://www.flickr.com/photos/jcapaldi/5780920465"
+  "url": "https://www.flickr.com/photos/jcapaldi/5780920465",
+  "gps": [
+   10.3,
+   -84.8
+  ]
  },
  {
   "id": "1ed640a7fc509e10",
@@ -345,7 +439,11 @@
   "title": "Pingüinos emperadores",
   "author": "Manuel Martín",
   "author_url": "https://www.flickr.com/people/draxus/",
-  "url": "https://www.flickr.com/photos/draxus/6144987501"
+  "url": "https://www.flickr.com/photos/draxus/6144987501",
+  "gps": [
+   -64.825,
+   -62.858
+  ]
  },
  {
   "id": "2d4a4d6a1058d22f",
@@ -357,7 +455,11 @@
   "title": "Alps with Matterhorn in the middle",
   "author": "Luca Sbardella",
   "author_url": "https://www.flickr.com/people/sbardella/",
-  "url": "https://www.flickr.com/photos/sbardella/1816420428"
+  "url": "https://www.flickr.com/photos/sbardella/1816420428",
+  "gps": [
+   45.9763,
+   7.6586
+  ]
  },
  {
   "id": "e2c01a998745f704",
@@ -369,7 +471,11 @@
   "title": "Peak near Denali, in front of the Ruth Glacier",
   "author": "Pete Klosterman",
   "author_url": "https://www.flickr.com/people/pete_k_1948/",
-  "url": "https://www.flickr.com/photos/pete_k_1948/3804591717"
+  "url": "https://www.flickr.com/photos/pete_k_1948/3804591717",
+  "gps": [
+   62.97,
+   -150.75
+  ]
  },
  {
   "id": "ecd7a8493b6186d3",
@@ -381,7 +487,11 @@
   "title": "IMG_6902",
   "author": "The Greater Southwestern Exploration Company",
   "author_url": "https://www.flickr.com/people/gsec/",
-  "url": "https://www.flickr.com/photos/gsec/14295232638/"
+  "url": "https://www.flickr.com/photos/gsec/14295232638/",
+  "gps": [
+   46.5728,
+   8.415
+  ]
  },
  {
   "id": "3a6c0175e8ad0e61",
@@ -393,7 +503,8 @@
   "title": "IMG_5279.jpg",
   "author": "Sadie Swanson",
   "author_url": "https://www.flickr.com/people/aveldina/",
-  "url": "https://www.flickr.com/photos/aveldina/8505340708/in/set-72157632850432360"
+  "url": "https://www.flickr.com/photos/aveldina/8505340708/in/set-72157632850432360",
+  "gps": null
  },
  {
   "id": "06724e851b1064bb",
@@ -405,7 +516,11 @@
   "title": "2004-06-19 07-12 USA 265",
   "author": "Allie_Caulfield",
   "author_url": "https://www.flickr.com/people/wm_archiv/",
-  "url": "https://www.flickr.com/photos/wm_archiv/2754903322"
+  "url": "https://www.flickr.com/photos/wm_archiv/2754903322",
+  "gps": [
+   36.057,
+   -112.143
+  ]
  },
  {
   "id": "1fa0fd9c38d9317e",
@@ -417,7 +532,11 @@
   "title": "'Big Daddy'",
   "author": "Alex Smith",
   "author_url": "https://www.flickr.com/people/asx999888/",
-  "url": "https://www.flickr.com/photos/asx999888/3667981139"
+  "url": "https://www.flickr.com/photos/asx999888/3667981139",
+  "gps": [
+   -24.7581,
+   15.2948
+  ]
  },
  {
   "id": "9bd9bba308649b28",
@@ -429,6 +548,7 @@
   "title": "Waterfall",
   "author": "George Alexander Ishida Newman",
   "author_url": "https://www.flickr.com/people/takoyaki_king/",
-  "url": "https://www.flickr.com/photos/takoyaki_king/15383320203"
+  "url": "https://www.flickr.com/photos/takoyaki_king/15383320203",
+  "gps": null
  }
 ]

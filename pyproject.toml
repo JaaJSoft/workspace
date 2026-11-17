@@ -60,7 +60,7 @@ dependencies = [
     # webdav
     "wsgidav>=4.4.0",
     # server
-    "gunicorn>=26.2.0",
+    "gunicorn>=27.0.1",
     "django-http-compression[brotli]>=1.5.0",
     "gevent>=26.9.0",
     "django-prometheus>=2.6.0.dev26",
@@ -114,7 +114,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "coverage[toml]>=7.17.0",
+    "coverage[toml]>=7.17.3",
     "django-debug-toolbar==8.0.0",
     # Fake data generation for scripts/seed_demo.py (dev/demo seeding only).
     # End-to-end / UI tests. Playwright is only needed when E2E=1 is set;

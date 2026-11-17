@@ -1,72 +1,153 @@
 # Photos
 
-The Photos module shows the photos and videos stored in Files as a timeline, by
-the day they were taken.
+The Photos module shows the photos and videos stored in Files as a timeline,
+by the day they were taken: albums, a map, people, search by description. It
+reads what is already in Files - nothing is copied - and every model it runs
+is off until the instance turns it on.
 
 ![Timeline](../images/photos_1.png)
 
-![Album](../images/photos_2.png)
-
-The photos in these screenshots are licensed CC BY 2.0 by their authors: see
+The photos in these screenshots are licensed CC BY 2.0 by their authors, and
+the map tiles are &copy; OpenStreetMap contributors: see
 [the credits](../images/CREDITS.md).
 
-## Adding photos
+## Timeline
 
 Every photo and video a user keeps in Files is in their library, whatever
-folder it sits in. There are three ways to add more:
+folder it sits in. The tabs above the timeline switch between the user's own
+photos, those shared with them, a group's folder, or all of them.
 
-- **Import** in the Photos header (or on the empty timeline) opens the file
-  picker. **Dropping** photos and videos anywhere on the listing does the same.
-  Other kinds of files are skipped. A name already taken in the folder keeps
-  both files, so two cameras' `IMG_0001.JPG` never replace each other.
-- **The import folder** is where both land. It defaults to a root folder named
-  `Pictures`, created on the first import (an existing one is reused). The
-  Preferences panel of the Photos sidebar changes it to any personal or group
-  folder.
-- **Phone backup over WebDAV.** The same panel shows the WebDAV address of the
-  import folder (`https://<your-domain>/dav/Pictures/` by default). Point a sync
-  app at it - PhotoSync or FolderSync on Android, PhotoSync on iOS - with the
-  account's username and password (or an API token, from **Settings > API
-  Tokens**, when the account signs in through single sign-on). New photos then
-  reach the timeline on their own, once their capture date has been read.
+- **Adding photos**: *Import* in the header, or a drop anywhere on the
+  timeline, uploads to the import folder (`Pictures` by default, changed in
+  the Preferences). The same panel gives the folder's WebDAV address, for a
+  phone backup app such as PhotoSync or FolderSync.
+- **Capture dates** come from EXIF for a photo and from the container for a
+  video. Without them, a date in the file name stands in
+  (`IMG_20230415_143022.jpg`, `WhatsApp Image 2023-04-15 at 14.30.22.jpeg`).
+- **Edit date & location**, on one photo or a selection, shifts or sets the
+  dates of a batch (a camera on the wrong clock, a pile of scans) and sets or
+  removes a position. It never touches the file, and takes edit rights on it.
+- **Hide** takes a photo or a whole folder out of the library without moving
+  it in Files.
 
-## Capture dates
+The viewer's properties panel shows when and where a photo was taken:
 
-A photo is placed on the timeline by its EXIF capture date, a video by its
-container's recording date. When the file carries none - a screenshot, a
-picture sent through a messaging app, a scan - the date written in its name
-stands in: `IMG_20230415_143022.jpg`, `WhatsApp Image 2023-04-15 at 14.30.22.jpeg`,
-`Screenshot 2023-04-15 at 14.30.22.png`, `1998-07-12 Wedding.jpg`... The year
-must come first; a name giving only the day reads as noon on that day.
-Renaming such a file moves it on the timeline, so an undated scan can be filed
-by renaming it. A date read from the file itself always wins over the name.
+![Viewer](../images/photos_6.png)
 
-### Correcting dates and places
+## Albums
 
-**Edit date & location**, in a photo's menu or on a selection, corrects a whole
-batch at once:
+![Album](../images/photos_2.png)
 
-- **Shift** moves every date by the same amount, later or earlier: a camera on
-  the wrong clock, or left on the home timezone during a trip. Photos without a
-  date are left as they are.
-- **Set** dates them on one day, at one time or each keeping its own (noon for
-  photos without a date): a pile of scanned prints.
-- **Set** a location from coordinates, or from a link copied from OpenStreetMap
-  or Google Maps; **Remove** takes a wrong position off.
-- **From file** hands the date or the location back to what the file says.
+An album gathers photos from anywhere in the library, without moving them.
+It can be shared with users, groups and projects as viewer, contributor or
+manager, and published through a link, with a password and an expiry if
+needed. Whoever may not download gets the photos stripped of their metadata,
+GPS position included. Members are notified when photos are added, and albums
+play as a slideshow.
 
-A correction is what everyone who can open the photo sees, so it takes edit
-rights on it (the owner, or a member of the group whose folder holds it). It
-never touches the file itself, and it survives the file being read again or
-renamed. `POST /api/v1/photos/capture-details` does the same from the API.
+## Map
 
-## Location map
+![Map](../images/photos_3.png)
 
-A photo carrying a GPS position shows its coordinates in its properties panel,
-with a link to OpenStreetMap. The instance can also show a small map with a pin
-at the spot, drawn from raster tiles of a server it names. A muted basemap
-suits a single pin far better than a full-detail one; Esri's Light Gray and
-Dark Gray Canvas, for example, with the dark one drawn under a dark theme:
+The **Map** page places every located photo and video of the library on a
+map, grouped while they crowd; the grid beside it lists what the area on
+screen holds, and a slider narrows both to a period. **See nearby photos**,
+under a photo's own map in the viewer, opens the page around it.
+
+The map needs a tile server set by the administrator (see
+[Map tiles](#map-tiles)), and each user turns it on: the tile server learns
+which areas they look at.
+
+## People
+
+![People](../images/photos_4.png)
+
+Opt-in face detection groups the faces of a user's photos and videos by
+person. Each group is named after a contact from the People module, and a
+person's page is their own timeline.
+
+- **Review** asks about everything the grouping is unsure of, one card per
+  group of faces: *who is this?* The answer is a contact, a new name, or
+  *Hide*. It runs from the keyboard.
+
+  ![Review](../images/photos_5.png)
+
+- **Corrections** happen on a person's *Faces* tab: pick faces, then *Move
+  to...*, *Not this person* or *Hide*. Every correction can be undone from its
+  toast, and the grouping never moves a face the user placed.
+- **People without a usable face** - seen from behind, too far, too blurred -
+  are suggested by their clothes, as the person dressed alike on a photo of the
+  same day. Suggestions only ever show up in the review.
+- On the contact's page in People, a *Photos* section lists their photos, and
+  their name in the global search opens them.
+
+It only ever reads the user's own photos (never a group folder's nor a shared
+one), runs on the server, and turning it off deletes every face, group and
+vector. [Face grouping](face-grouping.md) explains how faces are grouped and
+corrected.
+
+## Search and similar photos
+
+- **Search by description** in the Photos header ranks the library against a
+  sentence: "dog on the beach", "birthday cake", in French too with the
+  default model. The global search offers it as well.
+- **Similar photos**, in a photo's menu, lists near-duplicates first (a burst,
+  a re-export), then the photos that merely look alike.
+- **Automatic tags** label photos with what they show (dog, beach, snow...)
+  as ordinary file tags the user can remove. Users can turn them off in the
+  Preferences.
+
+Videos take part through their key frames: a result opens the video at the
+moment that matched.
+
+## Sensitive photos
+
+A sensitive photo or video (nudity, a medical photo) is blurred wherever it
+shows as a thumbnail - timeline, albums, search, Files, public links - and
+opened behind a *Sensitive content* cover. Anyone with edit rights marks or
+unmarks it from its menu. Each user picks how much is blurred on their own
+screen (*Blur sensitive photos* in the Preferences, from Strict to Off),
+and may unblur on hover or skip the cover.
+
+With detection on, every photo gets a level from 0 to 4 automatically. A mark
+set by hand always wins.
+
+## Administration
+
+Every feature that runs a model is off by default. All of them run in the
+Celery worker, after an upload and in an hourly catch-up
+(`python manage.py catch_up <faces|embeddings|auto_tags|sensitive|appearances>`),
+and never in the web process.
+
+| Feature | Turned on by | Runs |
+|---|---|---|
+| [Map](#map-tiles) | `PHOTOS_MAP_TILE_URL` and `PHOTOS_MAP_TILE_ATTRIBUTION` | Nothing on the server: the browser fetches tiles |
+| [Search, similar photos, tags](#embeddings) | `PHOTOS_EMBEDDINGS_ENABLED=1` | An image embedding model |
+| [Face grouping](#face-detection) | `PHOTOS_FACES_ENABLED=1`, then each user | A face detector and a face embedding model |
+| [Sensitive photo detection](#sensitive-photo-detection) | `PHOTOS_SENSITIVE_DETECTION_ENABLED=1` | An image classifier |
+
+Videos are analyzed only where `ffmpeg` and `ffprobe` are installed (the
+Docker image ships them); elsewhere they are left out and never count as
+pending. By default a video longer than 20 minutes or larger than 2 GB is not
+read.
+
+Weights download on first use into `PHOTOS_MODEL_DIR` (default `models/`
+under `MEDIA_ROOT`) and are checked against pinned SHA-256 hashes. For a
+worker without internet access, fetch them ahead of time with
+`download_face_models`, `download_embedding_models` or
+`download_sensitive_models`, or bake the face models into the image with
+`docker build --build-arg FACE_MODELS=yunet_sface .`. The admin dashboard has
+a card per feature saying whether its backend is configured and its weights
+are present, and the Django admin lists what was analyzed, read-only
+(*Face analyses*, *Photo embeddings*).
+
+### Map tiles
+
+There is no default tile server: every map opened sends the position on
+screen to it, so pick one whose privacy and usage policy fit the instance - a
+self-hosted one, or a provider you have an agreement with. A muted basemap
+suits photos best, Esri's Light Gray and Dark Gray Canvas for instance (mind
+their `{y}/{x}` order):
 
 ```bash
 PHOTOS_MAP_TILE_URL='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'
@@ -74,176 +155,37 @@ PHOTOS_MAP_TILE_URL_DARK='https://server.arcgisonline.com/ArcGIS/rest/services/C
 PHOTOS_MAP_TILE_ATTRIBUTION='Tiles &copy; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 ```
 
-Mind the `{y}/{x}` order Esri uses. These two styles stop at zoom 16, the
-level the map opens at: zooming in further shows no more detail. Read the
-provider's terms before going live; most hosted basemaps want an account or an
-API key in the URL for production use.
-
-There is no default server. Every map opened sends the photo's position to the
-tile server, so pick one whose privacy and usage policy fit the instance: a
-self-hosted one, or a provider you have an agreement with. The OpenStreetMap
-tile server (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, no dark style)
-fits a small instance: its
-[tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
-allows people browsing a map, as both maps here do, but offers no guarantee and
-blocks heavy or anonymous traffic without notice. A tile request to another
-origin carries the instance's origin alone as its Referer, which that policy
-requires, never the page's path or query; a tile server on the instance's own
-origin (a self-hosted one behind the same host name) gets the full page URL,
-query and map view included. The attribution is shown on the map and is
-required by every provider; HTML is allowed. Without a tile URL and an
-attribution there is no map.
-
-Each user turns the map on, from **Show on a map** in the panel, from the
-**Map** page or from the Photos preferences, which name the servers the
-location goes to. The map only changes what the viewer's own browser fetches:
-a photo shared or published through a link still carries its GPS position in
-the original.
-
-The same tile server draws the **Map** page of the sidebar: every located photo
-and video of the library on screen (it follows the Mine / All / Shared / group
-tabs, and the media type), grouped while they crowd. Each group shows its most
-recent photo and how many it holds; clicking one zooms in until it splits, and
-the grid beside the map lists what the area on screen holds, newest first. A
-slider over the months the library spans narrows both to a period. The page
-keeps its view and period in the URL, and **See nearby photos** under a photo's
-own map opens it around that photo. The entry is only in the sidebar on an
-instance with a tile server.
-
-All the positions of the library come down in one request
-(`GET /api/v1/photos/map`), and the grouping happens in the browser
-([Supercluster](https://github.com/mapbox/supercluster)): zooming and panning
-cost no request but the grid's, once the map rests.
+The OpenStreetMap server (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`)
+fits a small instance under its
+[tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
+Most hosted basemaps want an account or a key for production use. Tile
+requests carry the instance's origin as their Referer, never the page's URL.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `PHOTOS_MAP_TILE_URL` | empty | The tile server's URL template (`{z}`, `{x}`, `{y}`, optionally `{s}` and `{r}`). |
-| `PHOTOS_MAP_TILE_URL_DARK` | empty | The same map in a dark style, drawn under a dark theme. Without it, every theme gets the one above. |
-| `PHOTOS_MAP_TILE_ATTRIBUTION` | empty | The attribution shown on the map, for both styles. |
+| `PHOTOS_MAP_TILE_URL` | empty | Tile URL template (`{z}`, `{x}`, `{y}`, optionally `{s}`, `{r}`). |
+| `PHOTOS_MAP_TILE_URL_DARK` | empty | The same map in a dark style, for dark themes. |
+| `PHOTOS_MAP_TILE_ATTRIBUTION` | empty | Attribution shown on the map (HTML allowed). Required. |
 
-## Similar photos and search by description
+### Embeddings
 
-One image embedding per photo, and one per key frame of a video - a vector
-saying what the picture shows, in a space a sentence can be embedded into too -
-gives three features:
-
-- **Similar photos**, from the menu of a photo or a video: the photos and
-  videos of the library on screen that look like it, the **near-duplicates**
-  first (the shots of one burst, a re-export), then up to 30 of the merely
-  similar ones.
-- **Search by description**, from the search field in the Photos header:
-  "dog on the beach", "snow", "birthday cake" ranked against the library,
-  with no tag and no name to match. The global search offers it too, as
-  *Photos showing "..."*.
-- A video ranks by its closest key frame and is listed once. Its tile says
-  the moment that matched ("0:42 / 1:30"), and opens the video there, in the
-  viewer and in the hover preview.
-- Both follow the library tab on screen (Mine, All, Shared with me, a group),
-  and never show a photo the user cannot open: trashed, quarantined, hidden
-  and unshared photos stay out.
-
-This is not a way to recognize people: a whole-photo vector describes the
-scene, not who is in it. Identity stays with face grouping above.
-
-### Enabling it
-
-```bash
-PHOTOS_EMBEDDINGS_ENABLED=1
-```
-
-It is an instance-level setting, with no per-user opt-in: every photo and
-video of the instance is embedded, group folders' included (videos only where
-ffmpeg is installed, see below). The embedding runs in the Celery worker, at
-low priority after an upload and at background priority for the hourly
-catch-up (`python manage.py catch_up embeddings`). A search embeds its text in the worker too, at interactive
-priority: the web process never loads a model. A search waits
-`PHOTOS_EMBEDDING_QUERY_TIMEOUT` seconds for the answer, then says it could
-not run.
-
-The admin dashboard shows a **Photo search** card: whether the backend is
-known and ready. Embedded photos and video frames are listed, read-only, in
-the admin under *Photo embeddings*.
-
-### Videos
-
-Videos are embedded where ffmpeg and ffprobe are installed (the Docker image
-ships them); without them, videos are left out and never count as pending,
-and their menu does not offer Similar photos. Each video runs in its own
-low-priority task (`photos.embed_video`), next to the face analysis of
-videos.
-
-- **Key frames**: ffmpeg reads the first frame, one at every scene change, and
-  one at a regular pace that spreads half of `PHOTOS_VIDEO_KEY_FRAMES_MAX` over
-  the video, never more often than every 2 seconds: a phone clip is usually
-  one long shot that no scene change would ever cut. The frames are decoded at
-  the size the backend reads a photo at. The sensitive-content check reads the
-  same frames (see *Sensitive photos* below).
-- **One vector per moment**: a frame within the near-duplicate distance of one
-  already kept shows nothing new and is dropped. A still shot is one vector,
-  a clip panning from the pool to the dog jumping in a few. Each one kept is
-  stored as a small WebP too (10 to 40 KB): the picture a result shows of the
-  moment that matched.
-- **Limits**: a video longer than `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` or
-  larger than `PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES` is not read, nor one
-  ffmpeg cannot decode; like a photo that cannot be, it is recorded as
-  analyzed so the catch-up does not try it again every hour. A voice
-  recording in a video container is not a video and stays out.
-
-The cost is the embedding of up to 12 frames (about 4 s of CPU with SigLIP 2,
-1 s with CLIP), plus the decoding: ffmpeg reads the whole video to find its
-scene changes, so a long 4K recording costs far more than a short phone clip.
-Lower `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` on a server that should not
-spend that.
-
-### Backends
-
-| `PHOTOS_EMBEDDING_BACKEND` | Model | Embedding | Weights licence |
+| `PHOTOS_EMBEDDING_BACKEND` | Model | Size | Weights licence |
 |---|---|---|---|
-| `siglip2_base` (default) | Google SigLIP 2 base, on the CPU, multilingual | 768-d | Apache-2.0 |
-| `clip_vit_b32` | OpenAI CLIP ViT-B/32, on the CPU | 512-d | MIT |
-| `jina_clip_v1` | Jina CLIP v1, on the CPU | 768-d | Apache-2.0 |
+| `siglip2_base` (default) | Google SigLIP 2 base, multilingual | 768-d | Apache-2.0 |
+| `clip_vit_b32` | OpenAI CLIP ViT-B/32 | 512-d | MIT |
+| `jina_clip_v1` | Jina CLIP v1 | 768-d | Apache-2.0 |
 | `remote` | Any multimodal model behind an OpenAI-compatible `/embeddings` endpoint | `PHOTOS_EMBEDDING_DIMS` | The model's |
 
-**The local backends** run on the CPU through
-[fastembed](https://github.com/qdrant/fastembed), which ships each model's
-preprocessing, tokenizer and ONNX runtime. The
-[embedding bench](embedding-bench.md) measures all three on the same photos:
-SigLIP 2, the default, finds the best photos for a description, and the
-only ones worth showing for a query typed in French (75% mAP, against 49% for
-CLIP). CLIP ViT-B/32 costs a quarter of its CPU per photo (88 ms against
-315 ms on one desktop core) and a third of its memory, for a host that cannot
-spare them. Jina CLIP v1 costs as much CPU as SigLIP 2 for less. The weights
-download from the Hugging Face Hub on first use into
-`PHOTOS_MODEL_DIR/fastembed`, or ahead of time, for a worker without internet
-access:
+The local backends run on the CPU. SigLIP 2 is the most accurate, and the only
+one usable for searches typed in French; CLIP costs a quarter of its CPU (about
+90 ms a photo against 315 ms) for a smaller host. Each worker process keeps the
+model in memory: raise `CELERY_WORKER_MAX_MEMORY_PER_CHILD` to 2.5 GB
+(`2621440`) for SigLIP 2, 1.5 GB for CLIP. The
+[embedding bench](embedding-bench.md) compares them.
 
-```bash
-python manage.py download_embedding_models
-```
-
-CLIP's 4.4 GFLOPs a photo get a Raspberry Pi 4 through a library of twenty
-thousand photos in a night; SigLIP 2 takes about 3.6 times as long. Each
-worker process holds the image encoder in memory (and the text encoder once it
-has served a search, 1.1 GB for SigLIP 2's multilingual vocabulary): raise
-`CELERY_WORKER_MAX_MEMORY_PER_CHILD` to at least 2.5 GB (2621440) for SigLIP 2,
-1.5 GB (1572864) for CLIP, or the default 512 MB recycles the worker after
-every photo.
-
-**`remote`** sends each photo and each frame read from a video, as a JPEG
-downscaled to `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` px (never the original), to
-another service: **every photo of the instance, and frames of every video,
-leave the server.** Only enable it for an endpoint the instance's users can
-trust with their photos. There is no standard for image input on
-`/embeddings`; the contract is the most common
-one:
-
-```json
-{"model": "<PHOTOS_EMBEDDING_MODEL>", "input": ["data:image/jpeg;base64,..."], "encoding_format": "float"}
-```
-
-for a photo, and the plain text in `input` for a search. The model must embed
-both into one space (a CLIP, SigLIP or Jina CLIP model), and answer with
-vectors of `PHOTOS_EMBEDDING_DIMS` components.
+**`remote` sends every photo and frames of every video to another service**,
+as a downscaled JPEG. Only point it at an endpoint the users can trust with
+their photos:
 
 ```bash
 PHOTOS_EMBEDDING_BACKEND=remote
@@ -253,497 +195,82 @@ PHOTOS_EMBEDDING_DIMS=1024
 PHOTOS_EMBEDDING_API_KEY=...   # falls back to AI_API_KEY
 ```
 
-**Switching backend or model** changes the embedding space, and often its
-size. Every embedding records the model that wrote it, so every photo counts
-as pending again; vectors of the old model are never compared with the new
-ones. After changing the setting:
+A photo goes out as `{"model": ..., "input": ["data:image/jpeg;base64,..."]}`,
+a search as plain text in `input`: the model must embed both into one space
+(a CLIP, SigLIP or Jina CLIP model). It places no automatic tags, and its
+distance thresholds are generic until measured with the bench
+(`--backend remote`).
 
-1. `python manage.py rebuild_vector_index` recreates the vector index at the
-   new size (only needed when the size changes).
-2. The hourly catch-up embeds the library again, or at once:
-   `python manage.py catch_up embeddings --reanalyze`.
+**Switching backend or model** makes every photo pending again: run
+`python manage.py rebuild_vector_index` when the vector size changes, then
+let the catch-up re-embed the library, or force it with
+`python manage.py catch_up embeddings --reanalyze`.
 
-### Automatic tags
-
-Each embedded photo and video is tagged with what it shows, from a vocabulary of 33
-classic tags (`workspace/photos/services/tag_vocabulary.py`: dog, beach,
-snow, cake, wedding, screenshot...). The tags are the owner's ordinary file
-tags: an existing tag of the same name is reused (case-insensitively), a
-missing one is created the first time a photo gets it. They show in Files,
-filter the Photos timeline and can be taken off like any other; the
-properties panel marks them with a sparkle.
-
-- Each backend places only the tags it tells apart well, each under its own
-  threshold (`tag_thresholds` in `workspace/photos/services/embedding/local.py`),
-  fitted by the [embedding bench](embedding-bench.md) for 90% precision on
-  photos it never saw. SigLIP 2 places 24 of the 33 tags and finds about a
-  third of the photos each one describes; CLIP places 13. The `remote`
-  backend has no table, so it places none until one is measured.
-- A video is tagged from its key frames, at a table of its own
-  (`video_tag_thresholds`), fitted on photos filmed and compressed as a
-  phone video: a tag lands when the closest of its key frames is under the
-  tag's threshold. Same 90% held out; a few points of recall less than a
-  photo. Only the tags the photo table places.
-- A photo or video is tagged once, after it is embedded: a tag its owner
-  takes off stays off. A new version of the file, or a new model, tags it
-  again.
-- Only personal files: a tag belongs to its owner, and a group folder's
-  photo or video is never tagged.
-- Users turn it off with *Tag photos automatically* in the Photos
-  preferences; the photos and videos embedded meanwhile are not tagged later.
-- The tagging runs in the worker right after the embedding, and the hourly
-  catch-up (`python manage.py catch_up auto_tags`) tags the photos embedded
-  before it existed. It embeds the vocabulary once per model, which loads the
-  text encoder in the worker.
-
-### Settings
-
-| Setting | Default | Effect |
+| Setting | Default | Meaning |
 |---|---|---|
-| `PHOTOS_EMBEDDINGS_ENABLED` | off | Embed the photos of this instance. |
-| `PHOTOS_EMBEDDING_BACKEND` | `siglip2_base` | The embedding model, see above. |
-| `PHOTOS_EMBEDDING_BASE_URL`, `PHOTOS_EMBEDDING_MODEL`, `PHOTOS_EMBEDDING_API_KEY` | empty | The remote endpoint, its model, its key. |
-| `PHOTOS_EMBEDDING_DIMS` | `512` | Size of the remote model's vectors. |
-| `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` | `512` | Longest side, in px, of the copy sent to the remote backend. |
+| `PHOTOS_EMBEDDINGS_ENABLED` | off | Embed the photos and videos of the instance. |
+| `PHOTOS_EMBEDDING_BACKEND` | `siglip2_base` | See above. |
+| `PHOTOS_EMBEDDING_BASE_URL`, `_MODEL`, `_API_KEY`, `_DIMS` | | The remote endpoint. |
+| `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` | `512` | Longest side of the copy sent to `remote`. |
 | `PHOTOS_EMBEDDING_TIMEOUT` | `30` | Seconds per remote request. |
-| `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
-| `PHOTOS_VIDEO_KEY_FRAMES_MAX` | `12` | The most frames read from one video. |
-| `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` | `1200` | Longer videos (seconds) are neither embedded nor checked for sensitive content. |
-| `PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES` | 2 GB | Larger videos are neither embedded nor checked for sensitive content. |
-| `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
-| `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP, 0.3 for Jina CLIP). |
-| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.07 for SigLIP 2, 0.075 for CLIP, 0.085 for Jina CLIP). |
-| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.92 for SigLIP 2, 0.765 for CLIP, 0.89 for Jina CLIP). |
+| `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker. |
+| `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger photos are not embedded. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX` | `12` | Most frames read from a video. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION`, `_MAX_FILE_BYTES` | 20 min, 2 GB | Larger videos are skipped. |
+| `PHOTOS_SIMILAR_MAX_DISTANCE`, `PHOTOS_DUPLICATE_MAX_DISTANCE`, `PHOTOS_DESCRIPTION_MAX_DISTANCE` | per backend | Distance thresholds, calibrated by the bench for each local model. |
 
-Each local model's defaults are calibrated by the
-[embedding bench](embedding-bench.md), on its own embedding space: the same
-distance means a different thing to CLIP and to SigLIP 2. A remote model starts
-from generic defaults (0.25, 0.06, 0.8); measure it with the bench
-(`--backend remote`) before relying on them.
+### Face detection
 
-## Sensitive photos
+A face embedding is biometric data. The instance allows the feature, each
+user then turns it on from the People tab, which explains what is computed;
+turning it off deletes everything.
 
-A sensitive photo (nudity, a medical photo) is **blurred wherever it shows as
-a thumbnail**: the timeline, albums and their covers, search and similar
-photos, a contact's photos in People, the Files mosaic and public share
-pages. Opening it shows a *Sensitive content* cover over the viewer, with a
-**Show** button; a covered video does not start playing behind it.
-
-- The photo carries a sensitivity level, from 0 (nothing to hide) to 4, not a
-  tag of its owner's: everyone who can open it gets the same level, in a share
-  or a shared album too.
-- Each user chooses how much of it is blurred on their own screen, with the
-  **Blur sensitive photos** slider of the Photos preferences, in five steps:
-
-  | Step | Blurs the photos of level | With the default detector, a score of |
-  |---|---|---|
-  | Strict | 1 and up | 0.25 or more |
-  | High | 2 and up | 0.35 or more |
-  | Standard (default) | 3 and up | 0.5 or more |
-  | Low | 4 | 0.9 or more |
-  | Off | none, photos marked by hand included | |
-
-  A visitor of a public link always gets Standard, whoever is signed in.
-- Anyone with edit rights on a photo or a video marks it, or unmarks it, from
-  its menu in Photos or in Files, or for a whole selection: a marked photo
-  goes to level 4, blurred under every step but Off, an unmarked one to 0.
-  That choice wins over detection, for good. The menu offers to unmark any
-  photo above level 0, blurred on the user's own screen or not.
-- Two options below the slider soften the blur without turning it off, both
-  off by default and for the user's own screen too. **Unblur on hover** shows a
-  thumbnail in clear while the pointer rests on it (a touch screen has no
-  hover, so the option is not offered there). **Show in the viewer without
-  asking** opens a sensitive photo or video straight away, with no cover. Both
-  apply in Files as well; a public link gets neither.
-
-### Detection
-
-```bash
-PHOTOS_SENSITIVE_DETECTION_ENABLED=1
-```
-
-Off by default, like the other models: without it, photos are only marked by
-hand. When on, every photo of the instance is checked in the Celery worker,
-at normal priority after an upload (the photo shows in clear until then) and
-at background priority for the hourly catch-up (`python manage.py catch_up
-sensitive`).
-
-Videos are checked too where ffmpeg is installed, on the frames read for
-their key frames (see *Videos* under similar photos, and its
-`PHOTOS_VIDEO_KEY_FRAMES_*` limits): a video's score is its highest frame's,
-so one explicit shot is enough to blur it. Each runs in its own low-priority
-task (`photos.check_sensitive_video`), so a video shows in clear a little
-longer than a photo after an upload, and costs a decoding of its own plus up
-to 12 frames through the detector (about 1.5 s of CPU).
-
-The default detector, `falconsai_vit`, is
-[Falconsai's NSFW classifier](https://huggingface.co/Falconsai/nsfw_image_detection)
-(a ViT-base, Apache-2.0) run from its int8 ONNX export: 87 MB of weights,
-about 120 ms a photo on one desktop core. It was trained on nudity: a medical
-or a gory photo is marked by hand. Its weights download on first use into
-`PHOTOS_MODEL_DIR`, or ahead of time:
-
-```bash
-python manage.py download_sensitive_models
-```
-
-The detector gives every photo a score from 0 to 1, and the photo's level is
-the number of steps whose threshold that score reaches. It is not a probability:
-the model card defines neither of its two classes, `normal` and `nsfw`, nor
-what a score of 0.2 or 0.8 means. Its one published figure is 98% accuracy on
-its own 80,000 images, which are not public, taken at the model's decision
-boundary of 0.5. That is Standard's threshold, the only one anyone measured.
-On 1,971 Open Images photos, none of them explicit, it blurs 9 (0.5%); a
-threshold of 0.2 would blur 11 (a bikini, a kiss, a mannequin...), with no
-measured gain on explicit photos. Strict's 0.25, High's 0.35 and Low's 0.9 sit
-between those figures and are not measured on their own. There
-is no explicit evaluation set in the repository: recall has not been measured
-on this instance's terms.
-
-The thresholds belong to the detector (`thresholds` in
-`photos/services/sensitivity/`). When they change, the photos already checked
-get their new level on the next catch-up, from the scores they were given: the
-model does not run again, and a photo marked or unmarked by hand keeps that
-choice.
-
-The admin dashboard shows a **Sensitive photos** card: whether the detector
-is known and ready.
-
-### Settings
-
-| Setting | Default | Effect |
-|---|---|---|
-| `PHOTOS_SENSITIVE_DETECTION_ENABLED` | off | Check the photos of this instance for sensitive content. |
-| `PHOTOS_SENSITIVE_BACKEND` | `falconsai_vit` | The detector. |
-| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger photos are not checked. |
-
-## Face detection and grouping
-
-The **People** tab finds the faces in a user's photos and videos and groups the
-ones that look like the same person, so every photo and video of someone is one
-click away. Faces
-are detected and compared on the server itself; no photo and no face is sent
-anywhere.
-
-A face embedding (the numeric description used to compare faces) is biometric
-data, and the feature is built around that:
-
-- **Opt-in twice.** The instance allows it (`PHOTOS_FACES_ENABLED=1`), and each
-  user turns it on from the People tab, which explains what is computed before
-  anything is.
-- **Only the user's own photos.** Photos in group folders and photos shared by
-  someone else are never read. A photo moved to a group folder loses its faces.
-- **Turning it off deletes everything:** faces, groups, their vectors and the
-  face pictures on storage. A nightly pass deletes whatever a lost purge left
-  behind.
-
-### Enabling it
-
-```bash
-PHOTOS_FACES_ENABLED=1
-```
-
-The analysis runs in the Celery worker, after the photo's or the video's capture
-date has been read. The model weights download on the first analysis into
-`PHOTOS_MODEL_DIR` (default: `models/` under `MEDIA_ROOT`) and are checked
-against pinned SHA-256 hashes; a file that does not match is never loaded. To
-ship them in the image instead, for a worker without internet access:
-
-```bash
-docker build --build-arg FACE_MODELS=yunet_sface .
-# or, on a running installation:
-python manage.py download_face_models
-```
-
-The admin dashboard shows a **Face detection** card: whether the backend is
-known, and whether its weights are there and intact. A misspelt
-`PHOTOS_FACE_BACKEND` shows there as an error; it never silently switches the
-feature off.
-
-### Backends
-
-| `PHOTOS_FACE_BACKEND` | Models | Embedding | Weights licence |
+| `PHOTOS_FACE_BACKEND` | Models | Size | Weights licence |
 |---|---|---|---|
 | `yunet_sface` (default) | YuNet + SFace (OpenCV Zoo) | 128-d | MIT / Apache-2.0 |
 | `yunet_adaface` | YuNet + AdaFace IR-50 | 512-d | MIT, **trained on a non-commercial dataset** |
 | `scrfd_arcface` | SCRFD + ArcFace (InsightFace `buffalo_l`) | 512-d | **Non-commercial research only** |
 
-`yunet_adaface` keeps the default's detector and groups faces about as well as
-`scrfd_arcface`, for a quarter of its CPU: about twice the default's. Its
-weights are published under MIT, but they were trained on WebFace4M, which is
-licensed for non-commercial research only, and whether that reaches the model
-is not settled: an instance run by or for a company should not enable it
-without checking. `scrfd_arcface` is the most accurate on hard faces
-(profiles, small faces in group photos), but InsightFace licenses its
-pretrained weights for non-commercial research only: an instance run by or for
-a company must not enable it. All three run on the CPU through onnxruntime.
-The [face bench](face-bench.md) measures them on real photo libraries; run it
-to judge any change to detection or grouping.
+`yunet_adaface` groups about as well as `scrfd_arcface` for twice the
+default's CPU, but whether WebFace4M's non-commercial licence reaches its
+weights is not settled. `scrfd_arcface` is the most accurate on hard faces,
+and must not be enabled on an instance run by or for a company. The
+[face bench](face-bench.md) measures all three.
 
-**Switching backend** changes the embedding space, and both 512-d backends
-change its size too. After changing the setting:
+People without a usable face are found by their body too where photos are
+embedded with a local model (a 3.8 MB person detector, about 25 ms a photo);
+`PHOTOS_APPEARANCES_ENABLED=0` leaves it out.
 
-1. `python manage.py rebuild_vector_index` recreates the face vector index at
-   the new size.
-2. Every photo counts as pending again (the analysis records which backend read
-   it) and is read again by the hourly catch-up, or at once with
-   `python manage.py catch_up faces --reanalyze`.
+**Switching backend**: `python manage.py rebuild_vector_index`, then
+`python manage.py catch_up faces --reanalyze`. User corrections survive the
+reanalysis.
 
-A reanalysis keeps what users corrected: a new face found at the place of an old
-one inherits its group and its confirmation.
-
-### Settings
-
-| Setting | Default | Effect |
+| Setting | Default | Meaning |
 |---|---|---|
-| `PHOTOS_FACES_ENABLED` | off | Offer face grouping on this instance. |
-| `PHOTOS_FACE_BACKEND` | `yunet_sface` | Detection and embedding models, see above. |
-| `PHOTOS_MODEL_DIR` | `MEDIA_ROOT/models` | Where the weights are downloaded. |
-| `PHOTOS_ONNX_THREADS` | `1` | Threads per model. Kept at 1 so several worker processes do not oversubscribe one host. |
-| `PHOTOS_FACES_DECODE_SIZE` | `1600` | Longest side, in px, of the copy detection runs on. |
-| `PHOTOS_FACES_MAX_FILE_BYTES` | 64 MB | Larger originals are not read for faces. |
-| `PHOTOS_FACES_MIN_SIZE` | `24` | Faces smaller than this (px, at the decode size) are dropped. |
-| `PHOTOS_FACES_MAX_PER_PHOTO` | `40` | The most confident faces kept per photo. |
-| `PHOTOS_FACES_MAX_DISTANCE` | backend's own | Cosine distance under which two faces count as one person (0.58 for SFace, 0.6 for AdaFace and ArcFace). |
+| `PHOTOS_FACES_ENABLED` | off | Offer face grouping on the instance. |
+| `PHOTOS_FACE_BACKEND` | `yunet_sface` | See above. |
+| `PHOTOS_APPEARANCES_ENABLED` | on | Also find people by their clothes. |
+| `PHOTOS_MODEL_DIR` | `MEDIA_ROOT/models` | Where weights are downloaded. |
+| `PHOTOS_ONNX_THREADS` | `1` | Threads per model; keep 1 with several worker processes. |
+| `PHOTOS_FACES_DECODE_SIZE` | `1600` | Longest side, in px, detection runs on. |
+| `PHOTOS_FACES_MAX_FILE_BYTES` | 64 MB | Larger photos are not read. |
+| `PHOTOS_FACES_MIN_SIZE` | `24` | Smaller faces (px, at the decode size) are dropped. |
+| `PHOTOS_FACES_MAX_PER_PHOTO` | `40` | Most faces kept per photo. |
+| `PHOTOS_FACES_MAX_DISTANCE` | per backend | Distance under which two faces are one person. |
 | `PHOTOS_FACES_CLUSTER_PENDING` | `50` | Ungrouped faces that trigger a grouping run before the nightly one. |
-| `PHOTOS_APPEARANCES_ENABLED` | `true` | Find people by their body too, where photos are embedded with a local model (*People without a usable face*). |
-| `PHOTOS_FACES_VIDEO_DECODE_SIZE` | `1280` | Longest side, in px, of the video frames detection runs on. |
-| `PHOTOS_FACES_VIDEO_INTERVAL` | `2` | Seconds between two sampled frames at least (more in a long video, so the frames cover all of it). |
-| `PHOTOS_FACES_VIDEO_MAX_FRAMES` | `60` | The most frames sampled from one video. |
-| `PHOTOS_FACES_VIDEO_MAX_DURATION` | `1200` | Longer videos (seconds) are not read for faces. |
-| `PHOTOS_FACES_VIDEO_MAX_FILE_BYTES` | 2 GB | Larger videos are not read for faces. |
+| `PHOTOS_FACES_VIDEO_*` | | Frame size, interval, count and video limits for faces in videos. |
 
-### Faces in videos
+### Sensitive photo detection
 
-Videos are read where ffmpeg and ffprobe are installed (the Docker image ships
-them); without them, videos are simply left out and never count as pending.
-Each video runs in its own low-priority task, so a long one never holds up the
-photos behind it.
+The detector is [Falconsai's NSFW classifier](https://huggingface.co/Falconsai/nsfw_image_detection)
+(ViT-base, Apache-2.0, 87 MB, about 120 ms a photo). It was trained on
+nudity only: a medical or gory photo is marked by hand. On 2,000 ordinary
+Open Images photos it blurs 0.5% at the default step; its recall on explicit
+photos has not been measured here. A video gets the score of its worst key
+frame.
 
-- **Frames**: ffmpeg samples a frame at every scene change and at least every
-  `PHOTOS_FACES_VIDEO_INTERVAL` seconds, up to `PHOTOS_FACES_VIDEO_MAX_FRAMES`.
-  The faces of each frame are found like a photo's.
-- **Tracking**: a face in one frame and a face in the next one are the same
-  person when their boxes overlap and they look much alike. Someone who leaves
-  and comes back is recognised by their face alone; two faces of one frame are
-  always two people.
-- **One face per person and video**: the grouping sees each person once per
-  video, as it sees them once per photo. Their face picture is the best one of
-  the video, and "People in this video" says when it was seen, with a link
-  playing the video from there.
-
-The cost is a few seconds of CPU per video on a small server for detection,
-plus the decoding: ffmpeg reads the whole video to find its scene changes, so
-a long 4K recording costs far more than a short phone clip. Lower
-`PHOTOS_FACES_VIDEO_MAX_DURATION` on a server that should not spend that.
-
-### How grouping works
-
-- Right after a photo is analyzed, each new face joins the group its nearest
-  neighbours vote for, if they are close enough - and if it is within the
-  threshold of the group's centroid too: a face like one wrong guess of a
-  group, but not like the group, would otherwise join it and bring its own
-  look-alikes after it. A face the user confirmed votes three times as hard
-  as a guessed one, and weighs three times as much in its group's centroid.
-  A face the model reads
-  poorly - blurred, tiny, turned away - joins only on firm evidence: one of
-  the group's good or confirmed faces very close to it, or three of its faces within the
-  threshold (the blurred photo of someone seen often sits among many of
-  their faces without being very close to any). How well the model reads a
-  face is, with `yunet_sface` and `yunet_adaface`, the length of its
-  embedding before normalization, which these models make shorter the less
-  sure they are; with `scrfd_arcface`, whose embedding length says no more
-  than its detector does, the detector's confidence discounted for a small
-  or blurred face.
-- Nightly (and once enough faces wait), the faces still ungrouped are
-  clustered. Two faces of one photo are never put in the same group; the
-  database refuses it too. Faces read poorly never start a group, and a
-  single clear face of someone is a group of its own.
-- That rule also tells look-alikes apart. When a group keeps turning away
-  faces as close to it as its own - two brothers photographed together, the
-  group holding one of them each time - it is regrouped without ever putting
-  two faces of one photo together, and the faces that side with the ones it
-  turned away leave with them, in a new group.
-- Corrections always win: a face the user placed is never moved, and a face
-  the user took out ("Not this person", "Ungroup") is never grouped again
-  automatically. A face the user hid (a stranger, a poster) is out of the
-  grouping too, until unhidden.
-- A correction carries the guesses it explains along. When the user takes a
-  face out of a group (not this person, someone else, hidden), the faces the
-  grouping put there on its own that sit nearer that face than the group's
-  centroid - or no longer within the threshold of it - leave too, in the
-  background. Each is offered to the grouping again, never to that group:
-  most follow the face to the person the user named, the others wait for the
-  review. A confirmed face never moves. Undoing the correction puts the
-  corrected faces back, not the ones that followed them.
-
-### Naming people
-
-A group is named after a contact from the **People** module: an existing one,
-from the user's own address book or a group's, or a new one created from the
-typed name. Naming never changes the contact itself, and deleting the contact
-only leaves its groups unnamed.
-
-- **One person, several groups.** The same person often spans several groups
-  (a child growing up, a beard, glasses); each stays compact, so the grouping
-  keeps matching new photos well, and they all show as one person. Saying a
-  face is someone ("Change person") puts it in that person's closest group,
-  or starts a new one of theirs when it looks like none of them.
-- **Two faces of one photo are two people** at the person level too: a photo
-  never shows one person twice, whichever of their groups the faces are in.
-- **Merging** two groups named after different people asks which name stays.
-- **On the contact's page** in People, a *Photos* section lists the photos
-  they are in, and *Use as contact photo* sets the contact's avatar from the
-  group's cover. Each user only ever sees their own photos: a contact shared
-  in a group address book shows every member their own.
-- **Search**: a person's name in the global search opens their photos.
-
-### Reviewing people
-
-*Review* on the People tab lists everything the grouping is waiting on, one
-card per group of faces, each asking the same question - *who is this?* - and
-answered the same way whatever it holds:
-
-- **An unnamed group**, its faces least like the rest first (the others go
-  with the answer unseen). A group whose centroid is within the grouping
-  threshold of a named person's suggests that person, unless they are
-  already in one of its photos.
-- **A named person's doubtful faces** (*Is this Léa?*): faces the grouping put
-  with them on its own that sit further than half the threshold from their
-  group's centroid, most doubtful first. A confirmed face never comes back.
-- **Look-alike faces in no group**, taken out of one by the user or never
-  grouped (clear ones only: the blurred crowd behind a subject would bury the
-  rest), with the named person they look like when there is one - never the
-  one they were taken out of.
-- **People wearing a named person's clothes** (*Is this Léa?*): people found
-  without a usable face whose clothes match Léa's on a photo taken the same
-  day, nearest first (see *People without a usable face* below). Saying yes
-  puts the photo under Léa; saying no never suggests her for them again.
-- **Silhouettes nobody named**: people found without a usable face whose
-  clothes suggest nobody, dated photos or not, one card per folder and
-  outfit. Those alone in their photo are asked about even on their own
-  (the subject of the photo); those who share it only when the folder shows
-  the same outfit twice, so the passer-by in the background stays out. A
-  card of people alone in their photo asks *Is this Léa?* when Léa is in
-  more than half of the folder's photos that show someone named (three at
-  least) and one of them is dressed like her in another photo of the
-  folder - the folder alone guesses wrong one time in two. Saying yes puts
-  the photos under Léa, those left out are never asked about as her again.
-
-A person is in a photo once: someone found by their body cannot be named Léa
-when Léa is already another person of that photo - her face is on another
-head, or the user said who that other person is. When their box overlaps
-hers, they are Léa boxed a second time: the answer goes through, and they
-are hidden, as nobody new to ask about. When Léa is elsewhere in the photo,
-they are set apart from Léa instead, and hidden: her face was given to the
-wrong person, or somebody else was taken for her, and the review never asks
-about them again. Léa's face on nobody's head does not count: someone
-crouching or bent over wears it lower than a head, and the person asked
-about may well be her.
-
-Clicking a face leaves it out of its card's answer; everything else on the
-card goes with it. The answer is the guess, a contact or a new name typed in
-the card's field, or *Hide* for nobody to name. Faces left out are taken out of the group the answer settles,
-or left where they were, and come back in a card of their own. A settled card
-leaves the list; the cards settling the most photos come first, 30 at a time.
-
-The review runs from the keyboard: the card at hand has the focus in its name
-field, from the first card on and after each answer (on a touch screen, only
-after a keyboard answer). Enter takes the guess, or the highlighted contact
-once the list is open; the arrows open and walk the contacts, Tab and
-Shift+Tab move between cards, Alt+H hides, Escape closes the contacts then
-clears the name. Clicking a face hands the keyboard back to its card.
-
-### People without a usable face
-
-Faces miss whoever is seen from behind, turned away, too far or too blurred.
-Where the instance also embeds photos (*Similar photos and search by
-description*), the face analysis is followed by a second pass that finds
-people by their body: a person detector (NanoDet-Plus, OpenCV Zoo,
-Apache-2.0, 3.8 MB, about 25 ms per photo) boxes everyone, and the torso of
-each person wide enough to show their clothes is embedded with the photo
-embedding model. No other model is involved: faces keep theirs, everything
-else uses the photo model.
-
-People keep their clothes for the day, and rarely longer: a person seen
-without a face, or with one too blurred to recognize anyone by, is suggested
-as the named person whose torso, on another photo taken the same day or
-within 6 hours (a night out goes past midnight), is the nearest - when it is
-close enough and clearly closer than anybody else's. Everybody whose face can tell who they are counts as somebody there,
-named or not: someone dressed like an unnamed group, or like a face the face
-review asks about, is suggested as nobody. Without that, in a library where
-few people are named, the stranger sitting by a named person would take
-their name. The same goes for a face the review asks to check (*Is this
-Léa?*): until the user says it is her, it names nobody by their clothes, or
-one wrong guess would name everybody dressed like that person that day. A
-person is suggested once per photo, and never when the photo already shows
-them, nor when the user said it is not them.
-
-A face is a person's when it sits on their head, or when it is the only
-face of the photo on nobody's head and they are its only person with no face
-on theirs: someone crouching, bent over or half out of the frame keeps their
-name. With as many such faces left as people or more, each of those people
-is somebody - never asked about, never suggested - but nobody's clothes.
-
-The detector often boxes someone sitting or half hidden twice: whole, and
-from the waist down or one side only. A box nobody named (no face on it, and
-the user did not say who it is) is a second box of the person another box of
-the photo shows when the two overlap by 0.25 or more (intersection over
-union), or by 0.1 with 60% of the smaller one inside the other - a part of
-them, their legs or an arm. A second box is never asked about, never
-suggested, nobody's clothes, and counted once when the faces left are given
-to the people left. Whatever names the first box - its face, the user -
-names the person. On the face bench's photos, this takes out three quarters
-of those second boxes, and never asks about 6% of the people really seen
-without a face (in someone's arms, half behind them); a lower overlap alone
-loses one of them for each second box it takes out.
-
-Every correction asks again in the background: around the photos of the
-faces corrected, or across the library, half a minute later, when a whole
-group is named, merged, hidden or ungrouped.
-
-The suggestions are asked about in the review, never applied on their own,
-and a photo is shown under the person once the user said yes.
-
-The thresholds are fitted per embedding model on the face bench's libraries,
-on torsos cut from the detector's boxes, for at least 90% precision on any
-part of them: there, a quarter to a third of the people with a named person
-nearby get a suggestion (36% with SigLIP 2), right 97 to 98% of the time.
-scripts/appearance_bench.py measures the method itself.
-The `remote` backend has none: with it nobody is found by their body, and no
-picture of a person leaves the server.
-
-It is part of face grouping: the same opt-in, the same personal photos (not
-videos), the same purge when the user turns it off. Each photo costs the
-detector and one embedding per person found: `PHOTOS_APPEARANCES_ENABLED=0`
-leaves it out on a host without the CPU to spare. Photos analyzed before it
-existed are read by the hourly catch-up (`manage.py catch_up appearances`).
-
-### A person's silhouettes
-
-Once someone found by their body was said to be Léa, her page grows a
-*Silhouettes* tab next to *Photos* and *Faces*: everyone the user said is
-her in photos where her face does not show. Pick the ones that are someone
-else, then *Move to...* another contact with a face in the library, *Not
-Léa* (never asked about as her again), or hide them. Each answer can be
-undone for a few minutes.
-
-### Correcting several faces at once
-
-The *Faces* tab of a person's page and the hidden faces on the *Hidden* page
-are boards of face tiles: click to pick (Shift picks a
-range), then act from the bar under them:
-
-- **Move to...** puts the faces with a contact (their closest group, or one
-  new group for all the faces that look like none of theirs), a new contact,
-  an unnamed person, or someone new with no name yet.
-- **That's right** confirms them where they are; **Not *name*** (**Not this
-  person** on an unnamed person) takes them out of their group; **Hide** takes them out of the grouping and puts
-  them on the *Hidden* page, where **Unhide** hands them back.
-
-A face the correction cannot apply to (its photo already holds that person)
-is left as it was, and the toast says so. Every correction can be undone from
-its toast for a few minutes, groups it emptied included.
-
-Photos analyzed by the pipeline are listed, read-only, in the admin under
-*Face analyses*; faces and groups themselves are not browsable there.
+| Setting | Default | Meaning |
+|---|---|---|
+| `PHOTOS_SENSITIVE_DETECTION_ENABLED` | off | Check every photo and video of the instance. |
+| `PHOTOS_SENSITIVE_BACKEND` | `falconsai_vit` | The detector. |
+| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger photos are not checked. |

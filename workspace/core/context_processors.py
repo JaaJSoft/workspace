@@ -24,6 +24,15 @@ from workspace.dashboard.services.modules import switcher_modules_for
 from workspace.files.sensitivity import DEFAULT_BLUR, blur_from, parse_blur_preference
 from workspace.users.services.settings import get_module_settings, get_setting
 
+# iPadOS asks for the desktop site with a Macintosh user agent.
+_APPLE_AGENTS = ("Macintosh", "iPhone", "iPad")
+
+
+def apple_keyboard(request):
+    """Whether the shortcut hints name ⌘ (Apple keyboards) rather than Ctrl."""
+    agent = request.headers.get("User-Agent", "")
+    return any(name in agent for name in _APPLE_AGENTS)
+
 
 def workspace_modules(request):
     onboarding_pending = False
@@ -77,6 +86,7 @@ def workspace_modules(request):
         "workspace_current_module": asdict(current) if current else None,
         "workspace_sidebar_collapsed": sidebar_collapsed,
         "workspace_search_scope": search_scope,
+        "workspace_apple_keyboard": apple_keyboard(request),
         "workspace_switcher_modules": switcher_modules,
         "workspace_commands": [
             registry.command_payload(c)

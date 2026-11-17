@@ -118,6 +118,28 @@
   }
 }
 
+/* Keyboard chips keep daisyUI 4's metrics too. daisyUI 5 gives them a fixed
+   height shorter than the line they inherit, so the text overflows the chip
+   and sits above its middle, and it shrinks their text (10px for kbd-xs). */
+@layer utilities {
+  :where(.kbd-xs) {
+    height: auto;
+    min-height: 1.2em;
+    min-width: 1.2em;
+    padding-inline: 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+  :where(.kbd-sm) {
+    height: auto;
+    min-height: 1.6em;
+    min-width: 1.6em;
+    padding-inline: 0.25rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+
 /* A disabled button greys out whatever text color it was given. daisyUI 5
    emits its rules in nested layers that every plain utility outranks, so a
    disabled `btn text-error` stayed red and looked clickable. Specificity of

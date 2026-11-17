@@ -41,12 +41,18 @@
         class="kbd {% if size == 'lg' %}kbd-sm{% else %}kbd-xs{% endif %} bg-base-300 border-base-400 text-base-content/60 hidden sm:inline-flex"
         x-show="!loading"
       >
-        {# The command glyph sits on the K's baseline, drawn to its cap height: fonts disagree on where ⌘ goes. #}
-        <span><i
-  data-lucide="command"
-  class="inline size-[0.85em] align-[-0.07em]"
-  aria-hidden="true"
-></i><span class="sr-only">⌘</span>K</span>
+        {% if workspace_apple_keyboard %}
+          {# The command glyph sits on the K's baseline, drawn to its cap height: fonts disagree on where ⌘ goes. #}
+          <span>
+            <i
+              data-lucide="command"
+              class="inline size-[0.85em] align-[-0.07em]"
+              aria-hidden="true"
+            ></i><span class="sr-only">⌘</span>K
+          </span>
+        {% else %}
+          Ctrl K
+        {% endif %}
       </kbd>
     {% endif %}
   </div>

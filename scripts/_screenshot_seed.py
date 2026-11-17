@@ -1813,4 +1813,15 @@ SHOTS = [
         "prep_context": ["vault_recovery_key"],
     },
     {"name": "notifications_1", "path": "/", "prep": _open_notifications},
+    # The same pages under the dark theme, for the README's banner and its
+    # light-and-dark pairs. Kept last: the theme is switched once for all.
+    {"name": "home_dark", "path": "/", "theme": "dark"},
+    {"name": "photos_dark", "path": "/photos", "prep": _photos_loaded, "theme": "dark"},
+    {"name": "chat_dark", "path": "/chat/{conversation_uuid}", "theme": "dark"},
+    {
+        "name": "projects_dark",
+        "path": "/projects/{project_uuid}/board",
+        "theme": "dark",
+    },
+    {"name": "mail_dark", "path": "/mail", "prep": _open_first_mail, "theme": "dark"},
 ]

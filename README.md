@@ -6,60 +6,119 @@ A self-hosted productivity suite built with Django. Files, chat, email, calendar
 
 From a Raspberry Pi to a Kubernetes cluster. One app, any scale.
 
-![Workspace Dashboard](docs/images/home.png)
+<p align="center">
+  <img src="docs/images/showcase.png" alt="Workspace: the dashboard, the photo timeline and a chat conversation">
+</p>
+
+<p align="center">
+  <a href="#files">Files</a> ·
+  <a href="#photos">Photos</a> ·
+  <a href="#chat">Chat</a> ·
+  <a href="#calendar">Calendar</a> ·
+  <a href="#mail">Mail</a> ·
+  <a href="#notes">Notes</a> ·
+  <a href="#projects">Projects</a> ·
+  <a href="#people">People</a> ·
+  <a href="#ai-assistants">AI Assistants</a> ·
+  <a href="#vault-preview">Vault</a>
+</p>
 
 ## Features
+
+Every module ships in light and dark, with 13 themes of each.
+
+<p align="center">
+  <img src="docs/images/home.png" width="49%" alt="Dashboard, light theme">
+  <img src="docs/images/home_dark.png" width="49%" alt="Dashboard, dark theme">
+</p>
 
 ### [Files](docs/files/)
 The file manager behind Notes and Photos: folders and resumable drag-and-drop uploads, viewers and editors for images, PDF, Markdown, code, video, e-books and (with a WOPI editor) office documents, and sharing with people, groups and public links that can also accept uploads. Group folders, tags, a storage analysis view, trash, WebDAV access and optional ClamAV malware scanning.
 
-![Files](docs/images/files_1.png)
-
-### [Chat](docs/chat/)
-Direct and group conversations with live delivery, threads, mentions, reactions, read receipts, attachments and voice messages. Built-in audio and video calls with screen sharing, per-conversation notification levels and group admins.
-
-![Chat](docs/images/chat_1.png)
-
-### [Calendar](docs/calendar/)
-Month, week, day and agenda views with recurring events, guests from your address book, RSVP and email invitations. Scheduling polls that guests can vote on without an account, two-way CalDAV sync with phones and desktop apps, read-only subscription links and external ICS feeds.
-
-![Calendar](docs/images/calendar_1.png)
-
-### [Mail](docs/mail/)
-An IMAP/SMTP client for Gmail, Microsoft 365 or any provider, with one inbox for every account, labels, filters and rules, recipient suggestions from People, and optional AI sorting, summaries, drafting and event extraction.
-
-![Mail](docs/images/mail_1.png)
-
-### [Notes](docs/notes/)
-A Markdown notebook stored in Files, with folders, group folders, tags, favorites and a daily journal. Link notes with `[[`, embed any file with `![[`, and see how everything connects in the graph view.
-
-![Notes](docs/images/notes_1.png)
-
-### [Projects](docs/projects/)
-Task boards for solo or team work, as a continuous kanban board or in sprints, with a backlog, epics, a timeline and flow reports. Tasks have checklists, dependencies, estimates, attachments, linked files and comments with mentions, and every user gets a personal project out of the box.
-
-![Projects](docs/images/projects_1.png)
-
-### [People](docs/people/)
-An address book for each user and each group, with lists, contact photos and links to workspace accounts. It syncs both ways with phones and computers over CardDAV, imports and exports vCard, and feeds Mail, Calendar and Photos.
-
-![People](docs/images/people_1.png)
+<p align="center">
+  <img src="docs/images/files_1.png" width="49%" alt="Mosaic view">
+  <img src="docs/images/files_3.png" width="49%" alt="Storage view">
+</p>
 
 ### [Photos](docs/photos/)
 A timeline of the photos and videos you already keep in Files, ordered by the day they were taken. Albums shared with your groups or through a link, a map of where each photo was taken, search by description and similar photos, slideshows, phone backup over WebDAV, and opt-in face detection and grouping.
 
-![Photos](docs/images/photos_1.png)
-<sub>Screenshot photos licensed CC BY 2.0 by their authors: see the [credits](docs/images/CREDITS.md).</sub>
+<p align="center">
+  <img src="docs/images/photos_1.png" width="49%" alt="Timeline">
+  <img src="docs/images/photos_3.png" width="49%" alt="Map">
+</p>
+<p align="center">
+  <img src="docs/images/photos_4.png" width="49%" alt="People">
+  <img src="docs/images/photos_5.png" width="49%" alt="Reviewing faces">
+</p>
+<p align="center"><sub>Screenshot photos licensed CC BY 2.0 by their authors: see the <a href="docs/images/CREDITS.md">credits</a>.</sub></p>
+
+### [Chat](docs/chat/)
+Direct and group conversations with live delivery, threads, mentions, reactions, read receipts, attachments and voice messages. Built-in audio and video calls with screen sharing, per-conversation notification levels and group admins.
+
+<p align="center">
+  <img src="docs/images/chat_2.png" width="49%" alt="A thread">
+  <img src="docs/images/chat_dark.png" width="49%" alt="Group conversation, dark theme">
+</p>
+
+### [Calendar](docs/calendar/)
+Month, week, day and agenda views with recurring events, guests from your address book, RSVP and email invitations. Scheduling polls that guests can vote on without an account, two-way CalDAV sync with phones and desktop apps, read-only subscription links and external ICS feeds.
+
+<p align="center">
+  <img src="docs/images/calendar_1.png" width="49%" alt="Month view">
+  <img src="docs/images/calendar_3.png" width="49%" alt="Scheduling poll">
+</p>
+
+### [Mail](docs/mail/)
+An IMAP/SMTP client for Gmail, Microsoft 365 or any provider, with one inbox for every account, labels, filters and rules, recipient suggestions from People, and optional AI sorting, summaries, drafting and event extraction.
+
+<p align="center">
+  <img src="docs/images/mail_dark.png" width="49%" alt="Inbox, dark theme">
+  <img src="docs/images/mail_2.png" width="49%" alt="Recipient suggestions">
+</p>
+
+### [Notes](docs/notes/)
+A Markdown notebook stored in Files, with folders, group folders, tags, favorites and a daily journal. Link notes with `[[`, embed any file with `![[`, and see how everything connects in the graph view.
+
+<p align="center">
+  <img src="docs/images/notes_1.png" width="49%" alt="Editor">
+  <img src="docs/images/notes_2.png" width="49%" alt="Graph view">
+</p>
+
+### [Projects](docs/projects/)
+Task boards for solo or team work, as a continuous kanban board or in sprints, with a backlog, epics, a timeline and flow reports. Tasks have checklists, dependencies, estimates, attachments, linked files and comments with mentions, and every user gets a personal project out of the box.
+
+<p align="center">
+  <img src="docs/images/projects_dark.png" width="49%" alt="Board, dark theme">
+  <img src="docs/images/projects_2.png" width="49%" alt="Task panel">
+</p>
+<p align="center">
+  <img src="docs/images/projects_3.png" width="49%" alt="Timeline">
+  <img src="docs/images/projects_4.png" width="49%" alt="Analytics">
+</p>
+
+### [People](docs/people/)
+An address book for each user and each group, with lists, contact photos and links to workspace accounts. It syncs both ways with phones and computers over CardDAV, imports and exports vCard, and feeds Mail, Calendar and Photos.
+
+<p align="center">
+  <img src="docs/images/people_1.png" width="49%" alt="Contact card">
+  <img src="docs/images/people_2.png" width="49%" alt="A contact's photos">
+</p>
 
 ### [AI Assistants](docs/ai/)
 Bots backed by any OpenAI-compatible provider that act with your own rights on mail, calendar, files and projects. They can search and read the web, generate images, speak, remember facts about you, send scheduled messages and pursue long-running goals on their own.
 
-![AI Assistants](docs/images/ai_1.png)
+<p align="center">
+  <img src="docs/images/ai_1.png" width="49%" alt="Conversation with a bot">
+  <img src="docs/images/ai_2.png" width="49%" alt="Memory, goals and scheduled messages">
+</p>
 
 ### [Vault](docs/vault/) (preview)
 An end-to-end encrypted password manager: logins, passwords, authenticator codes and notes are encrypted in the browser, and the server stores only what it cannot read. Organize entries in several vaults, folders and tags, generate strong passwords, copy them to a clipboard that clears itself, and export everything to an encrypted archive.
 
-![Vault](docs/images/vault_1.png)
+<p align="center">
+  <img src="docs/images/vault_1.png" width="80%" alt="Unlocked vault">
+</p>
 
 ### And more
 - **[Dashboard](docs/dashboard/)** - Today's events, your most urgent tasks, app tiles with unread badges and recent activity from the people you work with

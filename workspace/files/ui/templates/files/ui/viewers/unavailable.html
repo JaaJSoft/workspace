@@ -1,0 +1,66 @@
+{% load i18n file_filters %}
+{% comment %}
+  What a viewer shows in place of a file it cannot display here: the file's
+  type icon, its name and size, why it is not shown, and the way out.
+
+  Params: title, message, optional hint (a second sentence after message),
+  download_url, optional open_url (a primary "Open" button, for a file the
+  browser can still show on a page of its own), optional icon (defaults to the
+  file type's).
+{% endcomment %}
+<div
+  class="flex-1 flex flex-col items-center justify-center gap-5 px-6 py-10 text-center min-h-0 overflow-y-auto"
+  data-viewer-unavailable
+>
+  <div class="relative shrink-0">
+    <div
+      class="w-20 h-20 rounded-2xl bg-base-100 shadow-sm ring-1 ring-base-content/10 flex items-center justify-center"
+    >
+      <i
+        data-lucide="{% if icon %}{{ icon }}{% else %}{{ file.type|type_to_icon }}{% endif %}"
+        class="w-9 h-9 {{ file.type|type_to_color }}"
+      ></i>
+    </div>
+    <span
+      class="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-base-300 ring-4 ring-base-200 flex items-center justify-center"
+    >
+      <i data-lucide="eye-off" class="w-3.5 h-3.5 text-base-content/70"></i>
+    </span>
+  </div>
+
+  <div class="w-full max-w-xs min-w-0">
+    <p class="font-medium truncate" title="{{ file.name }}">{{ file.name }}</p>
+    {% if file.size %}
+      <p class="text-xs text-base-content/50 mt-0.5">{{ file.size|filesizeformat }}</p>
+    {% endif %}
+  </div>
+
+  <div class="max-w-sm space-y-1.5">
+    <p class="font-semibold">{{ title }}</p>
+    <p class="text-sm text-base-content/60 leading-relaxed">{{ message }}{% if hint %} {{ hint }}{% endif %}</p>
+  </div>
+
+  <div
+    class="flex flex-col sm:flex-row gap-2 w-full max-w-xs sm:w-auto sm:max-w-none"
+  >
+    {% if open_url %}
+      <a
+        href="{{ open_url }}"
+        target="_blank"
+        rel="noopener"
+        class="btn btn-module gap-2"
+      >
+        <i data-lucide="external-link" class="w-4 h-4"></i>
+        {% translate "Open" %}
+      </a>
+    {% endif %}
+    <a
+      href="{{ download_url }}"
+      download="{{ file.name }}"
+      class="btn gap-2 {% if open_url %}btn-ghost bg-base-100 border-base-content/10{% else %}btn-module{% endif %}"
+    >
+      <i data-lucide="download" class="w-4 h-4"></i>
+      {% translate "Download" %}
+    </a>
+  </div>
+</div>

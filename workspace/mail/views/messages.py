@@ -2,7 +2,6 @@ import logging
 
 from django.db import transaction
 from django.db.models import Count, Prefetch
-from django.utils import timezone
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
@@ -239,35 +238,24 @@ class MailMessageDetailView(APIView):
         # the next sync puts the server's value back.
         return Response({**MailMessageDetailSerializer(msg).data, "synced": synced})
 
-    @extend_schema(summary="Soft-delete a message")
+    @extend_schema(summary="Move a message to Trash, or delete it for good from Trash")
     def delete(self, request, uuid):
         msg = self._get_message(request, uuid)
         if not msg:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        from ..services.counts import (
-            refresh_folder_counts,
-            refresh_message_label_counts,
-        )
-        from ..services.imap_messages import delete_message
-        from ..services.notifications import settle_message_notifications
-
-        with transaction.atomic():
-            msg.deleted_at = timezone.now()
-            msg.save(update_fields=["deleted_at", "updated_at"])
-            refresh_folder_counts(msg.folder)
-            refresh_message_label_counts(msg)
-
-        # Soft delete never CASCADEs the row's Notification, and a deleted
-        # message can never again appear on a rendered page for
-        # mark_sources_read to catch it - settle it here instead.
-        settle_message_notifications(request.user, [msg.pk])
+        from ..services.triage import trash_message
 
         try:
-            delete_message(msg.account, msg)
-        except Exception:
-            logger.warning("Failed to delete message on IMAP for %s", msg.uuid)
-
+            trash_message(msg)
+        except Exception as e:
+            logger.warning(
+                "IMAP move to trash failed for message %s: %s", msg.uuid, scrub(e)
+            )
+            return Response(
+                {"detail": _("Failed to move the message to trash")},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -289,8 +277,12 @@ class MailBatchActionView(APIView):
             deleted_at__isnull=True,
         ).select_related("account", "folder")
 
-        from ..services.imap_messages import delete_message
-        from ..services.triage import flag_operations, move_to_folder
+        from ..services.triage import (
+            TRASHED,
+            flag_operations,
+            move_to_folder,
+            trash_message,
+        )
 
         # Resolve target folder for move action
         target_folder = None
@@ -325,20 +317,23 @@ class MailBatchActionView(APIView):
         affected_folders = set()
         to_bulk_update = []
         bulk_update_fields = set()
-        deleted_pks = []
         for msg in messages:
             affected_folders.add(msg.folder_id)
             try:
                 if action == "delete":
-                    msg.deleted_at = timezone.now()
-                    msg.save(update_fields=["deleted_at", "updated_at"])
-                    deleted_pks.append(msg.pk)
                     try:
-                        delete_message(msg.account, msg)
+                        # refresh=False: the counters are recomputed once for
+                        # the whole batch below.
+                        outcome = trash_message(msg, refresh=False)
                     except Exception as e:
                         logger.warning(
-                            "IMAP delete failed for message %s: %s", msg.uuid, scrub(e)
+                            "IMAP move to trash failed for message %s: %s",
+                            msg.uuid,
+                            scrub(e),
                         )
+                        continue
+                    if outcome == TRASHED:
+                        affected_folders.add(msg.folder_id)
                 elif action == "move" and target_folder:
                     if target_folder.account_id != msg.account_id:
                         continue
@@ -382,7 +377,6 @@ class MailBatchActionView(APIView):
 
         from ..services.counts import refresh_folders_counts_bulk
         from ..services.label_counts import refresh_labels_for_messages
-        from ..services.notifications import settle_message_notifications
 
         with transaction.atomic():
             if to_bulk_update:
@@ -397,12 +391,6 @@ class MailBatchActionView(APIView):
             # Refresh label counts for read/unread/delete actions
             if action in ("mark_read", "mark_unread", "delete"):
                 refresh_labels_for_messages([m.pk for m in messages])
-
-        if deleted_pks:
-            # Soft delete never CASCADEs the row's Notification, and a
-            # deleted message can never again appear on a rendered page for
-            # mark_sources_read to catch it - settle it here instead.
-            settle_message_notifications(request.user, deleted_pks)
 
         # Only a flag is applied locally whatever the server answers; a move
         # the server refused is not counted in processed instead.

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 14:02+0000\n"
+"POT-Creation-Date: 2026-11-17 19:54+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -93,6 +93,11 @@ msgstr "Supprimer le compte"
 msgid "This will delete the account and all synced messages. Continue?"
 msgstr ""
 "Le compte et tous ses messages synchronisés seront supprimés. Continuer ?"
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgctxt "mail account"
+msgid "Remove"
+msgstr "Supprimer"
 
 #: ui/static/mail/ui/js/mail_accounts.js
 msgid "Failed to remove account"
@@ -290,6 +295,10 @@ msgstr ""
 "prochaine synchronisation."
 
 #: ui/static/mail/ui/js/mail_messages.js
+msgid "Permanently delete this message? It cannot be recovered."
+msgstr "Supprimer définitivement ce message ? Il ne pourra pas être récupéré."
+
+#: ui/static/mail/ui/js/mail_messages.js
 msgid "Move this message to trash?"
 msgstr "Placer ce message dans la corbeille ?"
 
@@ -461,8 +470,3 @@ msgstr "JSON non valide"
 #: ui/static/mail/ui/js/mail_rules_form.js
 msgid "Network error - please retry."
 msgstr "Erreur réseau - veuillez réessayer."
-
-#: ui/static/mail/ui/js/mail_accounts.js
-msgctxt "mail account"
-msgid "Remove"
-msgstr "Supprimer"

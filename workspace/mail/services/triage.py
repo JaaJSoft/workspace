@@ -207,6 +207,58 @@ def move_to_folder(message, target, refresh=True):
     return source_id
 
 
+TRASHED = "trashed"
+EXPUNGED = "expunged"
+
+
+def trash_message(message, refresh=True, expunge=True):
+    """Delete `message` the way a mail client does: into the account's Trash.
+
+    Outside Trash the message is moved there with `move_to_folder`, so it
+    stays recoverable, on the server and from every other client. Only a
+    message already in Trash, or on an account that has none, is deleted for
+    good - and only when `expunge` allows it: an automated caller passes
+    False and gets None back, with nothing touched.
+
+    Returns TRASHED, EXPUNGED or None. A move to Trash raises whatever the
+    IMAP layer raises, having written nothing locally (the `move_to_folder`
+    invariant). An expunge retires the row first and asks the server after:
+    a server that refuses leaves the message where the next sync finds it
+    under a row already soft-deleted, so the failure is only logged.
+
+    The message's notification is settled either way: the user is done with
+    it, and a trashed message no longer shows up on the page that would
+    mark it read. `refresh=False` leaves the folder and label counters to a
+    caller batching several deletes.
+    """
+    from ..models import MailFolder
+    from ..queries import canonical_folder_id, special_folder
+    from .imap_messages import delete_message
+    from .notifications import settle_message_notifications
+
+    owner = message.account.owner
+    trash = special_folder(message.account, MailFolder.FolderType.TRASH)
+    if trash is not None and canonical_folder_id(message.folder) != trash.pk:
+        move_to_folder(message, trash, refresh=refresh)
+        settle_message_notifications(owner, [message.pk])
+        return TRASHED
+    if not expunge:
+        return None
+
+    with transaction.atomic():
+        message.deleted_at = timezone.now()
+        message.save(update_fields=["deleted_at", "updated_at"])
+        if refresh:
+            refresh_folder_counts(message.folder)
+            refresh_message_label_counts(message)
+    settle_message_notifications(owner, [message.pk])
+    try:
+        delete_message(message.account, message)
+    except Exception as e:
+        logger.warning("IMAP delete failed for message %s: %s", message.uuid, scrub(e))
+    return EXPUNGED
+
+
 def set_label(message, label, attached):
     """Attach `label` to `message` or take it off. True when it changed.
 

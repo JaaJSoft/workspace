@@ -149,7 +149,15 @@ class EngineTests(TestCase):
         self.assertEqual(summary[str(self.msg.uuid)], [str(first.uuid)])
 
     def test_delete_action_halts_chain_for_message(self):
-        with patch("workspace.mail.services.rules.actions.delete_message"):
+        MailFolder.objects.create(
+            account=self.account,
+            name="Trash",
+            display_name="Trash",
+            folder_type="trash",
+        )
+        with patch(
+            "workspace.mail.services.imap_messages.move_message", return_value=900
+        ):
             self._rule(name="delrule", position=0, actions=[{"type": "delete"}])
             self._rule(name="afterdel", position=1)
             summary = run_rules_for_messages(self.account, [str(self.msg.uuid)])
@@ -308,7 +316,8 @@ class ApplyRuleToFolderTests(TestCase):
         """apply_rule_to_folder runs against existing messages, unlike the
         sync path, so a message it deletes can already carry a notification
         (e.g. delivered earlier under notify mode "all"). Soft delete never
-        cascades that row - it must be marked read explicitly."""
+        cascades that row - it must be marked read explicitly; the same holds
+        for a message moved to Trash."""
         from workspace.notifications.models import Notification
 
         m = self._msg(imap_uid=1)
@@ -320,8 +329,16 @@ class ApplyRuleToFolderTests(TestCase):
             mail_message=m,
         )
         rule = self._rule(actions=[{"type": "delete"}])
+        MailFolder.objects.create(
+            account=self.account,
+            name="Trash",
+            display_name="Trash",
+            folder_type="trash",
+        )
 
-        with patch("workspace.mail.services.rules.actions.delete_message"):
+        with patch(
+            "workspace.mail.services.imap_messages.move_message", return_value=900
+        ):
             result = apply_rule_to_folder(rule, self.folder, dry_run=False)
 
         self.assertEqual(result["applied"], 1)

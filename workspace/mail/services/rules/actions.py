@@ -9,8 +9,6 @@ failure doesn't abort the rest of the rule.
 import logging
 from typing import Any
 
-from django.utils import timezone
-
 from workspace.common.logging import scrub
 
 from ...models import (
@@ -20,14 +18,13 @@ from ...models import (
     MailMessageLabel,
 )
 from ..imap_messages import (
-    delete_message,
     mark_read,
     mark_unread,
     star_message,
     unstar_message,
 )
 from ..notifications import settle_message_notifications
-from ..triage import move_to_folder
+from ..triage import move_to_folder, trash_message
 from .schema import (
     AddLabelAction,
     DeleteAction,
@@ -127,18 +124,26 @@ def _move_to_folder(action: MoveToFolderAction, message: MailMessage) -> dict:
 
 
 def _delete(action: DeleteAction, message: MailMessage) -> dict:
-    message.deleted_at = timezone.now()
-    message.save(update_fields=["deleted_at", "updated_at"])
-    # Not redundant on the sync path: apply_rule_to_folder runs this same
-    # handler against existing messages, which can already carry an unread
-    # notification the sync path never has. A no-op there (UPDATE matches
-    # zero rows) is cheaper than a second code path to distinguish the two.
-    settle_message_notifications(message.account.owner, [message.pk])
+    """Move the message to Trash. A rule never deletes anything for good.
+
+    It runs unattended, on every incoming message, from conditions that can
+    match more than their author meant: a message already in Trash stays
+    there, and an account without one keeps the message where it is.
+    """
+    from ...queries import special_folder
+
     try:
-        delete_message(message.account, message)
+        outcome = trash_message(message, expunge=False)
     except Exception as e:
-        logger.warning("IMAP delete failed for message %s: %s", message.uuid, scrub(e))
-        return _ok("delete", imap_warning="imap_failed")
+        logger.warning("IMAP move failed for message %s: %s", message.uuid, scrub(e))
+        return _err("delete", "imap_failed")
+    if outcome is None:
+        if special_folder(message.account, MailFolder.FolderType.TRASH) is None:
+            return _err("delete", "no_trash_folder")
+        # Not redundant: apply_rule_to_folder runs this handler against
+        # existing messages, which can carry an unread notification.
+        settle_message_notifications(message.account.owner, [message.pk])
+        return _ok("delete", noop=True)
     return _ok("delete")
 
 

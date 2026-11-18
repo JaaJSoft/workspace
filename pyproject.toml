@@ -74,7 +74,7 @@ dependencies = [
     # and the feature is off by default)
     "clamdpy>=0.2.0",
     # ai
-    "openai>=3.42.1",
+    "openai>=3.51.0",
     "ollama>=0.6.3",
     # web search & scraping
     "httpx2>=2.16.0",

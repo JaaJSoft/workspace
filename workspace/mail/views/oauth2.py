@@ -16,9 +16,9 @@ from workspace.mail.serializers import MailAccountSerializer
 from workspace.mail.services.oauth2 import (
     build_authorize_url,
     exchange_code,
-    fetch_userinfo,
     get_available_providers,
     get_provider_config,
+    resolve_account_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,9 +110,7 @@ def oauth2_callback(request):
             },
         )
 
-    # Fetch user email from provider
-    userinfo = fetch_userinfo(provider, tokens["access_token"])
-    email = userinfo.get("email", "") if userinfo else ""
+    email = resolve_account_email(provider, tokens)
 
     if not email:
         return _render_callback(

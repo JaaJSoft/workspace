@@ -209,6 +209,32 @@ Django admin's *Mail accounts* list filters accounts by sync health and has a
 AI features need an AI provider (`AI_API_KEY`); `AI_EXTRACT_MODEL` picks the
 model for event extraction. See [AI](../ai/README.md).
 
+## Administration
+
+### OAuth2 providers
+
+One-click sign-in is offered for each provider whose client ID is set. Register Workspace as a confidential client with the provider, using `<origin>/mail/oauth2/callback` as the redirect URI.
+
+| Variable | Purpose |
+|---|---|
+| `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | Gmail and Google Workspace - see [Connecting a Google account](google.md) |
+| `OAUTH_MICROSOFT_CLIENT_ID` / `OAUTH_MICROSOFT_CLIENT_SECRET` | Outlook, Hotmail and Microsoft 365 |
+| `OAUTH_GENERIC_CLIENT_ID` / `OAUTH_GENERIC_CLIENT_SECRET` | One more provider of your choice, configured with the variables below |
+
+The generic provider takes its endpoints and servers from:
+
+| Variable | Purpose |
+|---|---|
+| `OAUTH_GENERIC_NAME` | Name shown on the sign-in button (e.g. `Fastmail`) |
+| `OAUTH_GENERIC_AUTH_URL` | Authorization endpoint |
+| `OAUTH_GENERIC_TOKEN_URL` | Token endpoint |
+| `OAUTH_GENERIC_USERINFO_URL` | Userinfo endpoint, answering a JSON object with an `email` field for the access token |
+| `OAUTH_GENERIC_SCOPES` | Space-separated scopes: the ones the IMAP and SMTP servers require, plus `openid email` for an OpenID Connect provider |
+| `OAUTH_GENERIC_IMAP_HOST` | IMAP server (port 993, SSL/TLS) |
+| `OAUTH_GENERIC_SMTP_HOST` | SMTP server (port 587, STARTTLS) |
+
+The account's email address is read from the userinfo endpoint. With an OpenID Connect provider the userinfo URL can be left empty: the address is then taken from the `email` claim of the ID token returned with the tokens, which needs the `openid` and `email` scopes. When neither gives an address, the sign-in stops with "Could not determine email address from provider."
+
 ## API
 
 All endpoints are under `/api/v1/mail/` - see the [Swagger UI](/schema/swagger-ui/).

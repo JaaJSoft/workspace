@@ -523,7 +523,7 @@ class OAuthReconnectTest(TestCase):
             last_sync_error="Authorization expired or revoked.",
         )
 
-    @patch("workspace.mail.views.oauth2.fetch_userinfo")
+    @patch("workspace.mail.services.oauth2.fetch_userinfo")
     @patch("workspace.mail.views.oauth2.exchange_code")
     def test_callback_reactivates_existing_account(self, mock_exchange, mock_userinfo):
         mock_exchange.return_value = {
@@ -559,3 +559,178 @@ class OAuthReconnectTest(TestCase):
             email="reconnuser@gmail.com",
         ).count()
         self.assertEqual(count, 1)
+
+
+def _id_token(claims):
+    """A compact JWS carrying *claims*, with a signature nothing checks."""
+    from joserfc.util import json_b64encode
+
+    header = json_b64encode({"alg": "RS256", "typ": "JWT"}).decode()
+    payload = json_b64encode(claims).decode()
+    return f"{header}.{payload}.c2lnbmF0dXJl"
+
+
+@override_settings(
+    OAUTH_GENERIC_CLIENT_ID="generic-client",
+    OAUTH_GENERIC_CLIENT_SECRET="generic-secret",
+    OAUTH_GENERIC_NAME="Example Mail",
+    OAUTH_GENERIC_AUTH_URL="https://auth.example.com/authorize",
+    OAUTH_GENERIC_TOKEN_URL="https://auth.example.com/token",
+    OAUTH_GENERIC_USERINFO_URL="https://auth.example.com/userinfo",
+    OAUTH_GENERIC_SCOPES="openid email",
+    OAUTH_GENERIC_IMAP_HOST="imap.example.com",
+    OAUTH_GENERIC_SMTP_HOST="smtp.example.com",
+)
+class GenericProviderCallbackTests(TestCase):
+    """The callback completes a sign-in with the admin-configured provider."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="genericuser", password="pass")
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["oauth2_state"] = "state-generic"
+        session["oauth2_provider"] = "generic"
+        session.save()
+
+    def _callback(self, tokens, userinfo=None, userinfo_error=None):
+        userinfo_response = MagicMock()
+        userinfo_response.json.return_value = userinfo or {}
+        if userinfo_error:
+            userinfo_response.raise_for_status.side_effect = userinfo_error
+        with (
+            patch(
+                "workspace.mail.services.oauth2.OAuth2Session.fetch_token",
+                return_value=tokens,
+            ) as fetch_token,
+            patch(
+                "workspace.mail.services.oauth2.OAuth2Session.get",
+                return_value=userinfo_response,
+            ) as get,
+        ):
+            response = self.client.get(
+                "/mail/oauth2/callback",
+                {"code": "auth-code", "state": "state-generic"},
+            )
+        return response, fetch_token, get
+
+    def _tokens(self, **extra):
+        return {
+            "access_token": "generic-access",
+            "refresh_token": "generic-refresh",
+            "expires_at": time.time() + 3600,
+            "token_type": "Bearer",
+            **extra,
+        }
+
+    def test_email_from_userinfo_endpoint(self):
+        response, fetch_token, get = self._callback(
+            self._tokens(), userinfo={"email": "alice@example.com"}
+        )
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        self.assertEqual(fetch_token.call_args[0][0], "https://auth.example.com/token")
+        self.assertEqual(get.call_args[0][0], "https://auth.example.com/userinfo")
+        account = MailAccount.objects.get(owner=self.user)
+        self.assertEqual(account.email, "alice@example.com")
+        self.assertEqual(account.oauth2_provider, "generic")
+        self.assertEqual(account.imap_host, "imap.example.com")
+        self.assertEqual(account.smtp_host, "smtp.example.com")
+        self.assertEqual(account.get_oauth2_data()["access_token"], "generic-access")
+
+    @override_settings(OAUTH_GENERIC_USERINFO_URL="")
+    def test_email_from_id_token_without_userinfo_endpoint(self):
+        tokens = self._tokens(
+            id_token=_id_token({"aud": "generic-client", "email": "bob@example.com"})
+        )
+
+        response, _, get = self._callback(tokens)
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        get.assert_not_called()
+        self.assertEqual(
+            MailAccount.objects.get(owner=self.user).email, "bob@example.com"
+        )
+
+    def test_id_token_used_when_userinfo_has_no_email(self):
+        tokens = self._tokens(
+            id_token=_id_token(
+                {"aud": ["generic-client"], "email": "carol@example.com"}
+            )
+        )
+
+        response, _, _ = self._callback(tokens, userinfo={"sub": "123"})
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        self.assertEqual(
+            MailAccount.objects.get(owner=self.user).email, "carol@example.com"
+        )
+
+    def test_id_token_used_when_userinfo_request_fails(self):
+        import requests
+
+        tokens = self._tokens(
+            id_token=_id_token({"aud": "generic-client", "email": "dan@example.com"})
+        )
+
+        response, _, _ = self._callback(
+            tokens, userinfo_error=requests.HTTPError("503 Server Error")
+        )
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        self.assertEqual(
+            MailAccount.objects.get(owner=self.user).email, "dan@example.com"
+        )
+
+    def test_id_token_used_when_userinfo_is_not_an_object(self):
+        tokens = self._tokens(
+            id_token=_id_token({"aud": "generic-client", "email": "fay@example.com"})
+        )
+
+        response, _, _ = self._callback(tokens, userinfo=["fay@example.com"])
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        self.assertEqual(
+            MailAccount.objects.get(owner=self.user).email, "fay@example.com"
+        )
+
+    def test_id_token_used_when_userinfo_email_is_not_a_string(self):
+        tokens = self._tokens(
+            id_token=_id_token({"aud": "generic-client", "email": "gus@example.com"})
+        )
+
+        response, _, _ = self._callback(tokens, userinfo={"email": {"primary": True}})
+
+        self.assertEqual(response.context["result"]["type"], "oauth2-success")
+        self.assertEqual(
+            MailAccount.objects.get(owner=self.user).email, "gus@example.com"
+        )
+
+    @override_settings(OAUTH_GENERIC_USERINFO_URL="")
+    def test_id_token_for_another_client_is_ignored(self):
+        tokens = self._tokens(
+            id_token=_id_token({"aud": "someone-else", "email": "eve@example.com"})
+        )
+
+        response, _, _ = self._callback(tokens)
+
+        self.assertEqual(
+            response.context["result"],
+            {
+                "type": "oauth2-error",
+                "error": "Could not determine email address from provider.",
+            },
+        )
+        self.assertFalse(MailAccount.objects.filter(owner=self.user).exists())
+
+    @override_settings(OAUTH_GENERIC_USERINFO_URL="")
+    def test_malformed_id_token_is_ignored(self):
+        response, _, _ = self._callback(self._tokens(id_token="not-a-jwt"))
+
+        self.assertEqual(
+            response.context["result"],
+            {
+                "type": "oauth2-error",
+                "error": "Could not determine email address from provider.",
+            },
+        )
+        self.assertFalse(MailAccount.objects.filter(owner=self.user).exists())

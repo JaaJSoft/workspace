@@ -4,15 +4,20 @@ Supports Google, Microsoft, and a single generic (admin-configured) provider.
 Uses authlib for the OAuth2 handshake and token refresh.
 """
 
+import json
 import logging
 import time
 
+import requests
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.requests_client import OAuth2Session
 from django.conf import settings
 from django.utils import translation
 from django.utils.translation import gettext
+from joserfc import jws
+from joserfc.errors import JoseError
 
+from workspace.common.logging import scrub
 from workspace.users.services.settings import get_user_language
 
 logger = logging.getLogger(__name__)
@@ -61,7 +66,7 @@ def _get_generic_config():
         "name": name,
         "auth_url": getattr(settings, "OAUTH_GENERIC_AUTH_URL", ""),
         "token_url": getattr(settings, "OAUTH_GENERIC_TOKEN_URL", ""),
-        "userinfo_url": "",
+        "userinfo_url": getattr(settings, "OAUTH_GENERIC_USERINFO_URL", ""),
         "scopes": getattr(settings, "OAUTH_GENERIC_SCOPES", ""),
         "imap_host": getattr(settings, "OAUTH_GENERIC_IMAP_HOST", ""),
         "imap_port": 993,
@@ -172,12 +177,67 @@ def fetch_userinfo(provider, access_token):
     resp = session.get(url)
     resp.raise_for_status()
     data = resp.json()
+    if not isinstance(data, dict):
+        return {}
 
     # Microsoft Graph returns 'mail' instead of 'email'
     if provider == "microsoft" and "email" not in data:
         data["email"] = data.get("mail", data.get("userPrincipalName", ""))
 
     return data
+
+
+def _id_token_claims(provider, tokens):
+    """Return the claims of the ID token in *tokens*, or ``{}``.
+
+    The signature is not checked: the token came straight from the provider's
+    token endpoint over a verified TLS connection, which OpenID Connect Core
+    (3.1.3.7) accepts in its place. The audience still is, because an ID token
+    issued to another client says nothing about this sign-in.
+    """
+    id_token = tokens.get("id_token")
+    if not isinstance(id_token, str) or not id_token:
+        return {}
+    try:
+        claims = json.loads(jws.extract_compact(id_token.encode()).payload)
+    except JoseError, ValueError:
+        logger.warning("Unreadable ID token from OAuth2 provider '%s'", scrub(provider))
+        return {}
+    if not isinstance(claims, dict):
+        return {}
+
+    client_id, _ = _get_client_credentials(provider)
+    audience = claims.get("aud")
+    audiences = [audience] if isinstance(audience, str) else audience
+    if not isinstance(audiences, list) or client_id not in audiences:
+        logger.warning(
+            "ID token from OAuth2 provider '%s' was not issued to this client",
+            scrub(provider),
+        )
+        return {}
+    return claims
+
+
+def resolve_account_email(provider, tokens):
+    """Return the email address of the account *tokens* were issued for, or ``""``.
+
+    Asks the provider's userinfo endpoint first, then falls back to the
+    ``email`` claim of the ID token an OpenID Connect provider returns with
+    the tokens.
+    """
+    email = ""
+    try:
+        email = fetch_userinfo(provider, tokens["access_token"]).get("email", "")
+    except requests.RequestException, ValueError:
+        logger.warning(
+            "OAuth2 userinfo request failed for provider '%s'",
+            scrub(provider),
+            exc_info=True,
+        )
+    if isinstance(email, str) and email:
+        return email
+    email = _id_token_claims(provider, tokens).get("email", "")
+    return email if isinstance(email, str) else ""
 
 
 # ---------------------------------------------------------------------------

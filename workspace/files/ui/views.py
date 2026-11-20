@@ -233,9 +233,12 @@ def _listing_nodes(user, active_tag, active_special, current_folder):
             .folders_first()
         )
     if active_special == "recent":
+        # A folder is dated by its entries, so each upload would bring it up
+        # here next to the file just added.
         return (
             owned_files_qs(user)
             .filter(deleted_at__isnull=True)
+            .exclude(node_type=File.NodeType.FOLDER)
             .name_ordered("-updated_at")
         )
     if current_folder and current_folder.group_id:

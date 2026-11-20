@@ -25,6 +25,7 @@ from . import bucket_usage, detection, locking, storage_ops
 from .content_hash import upload_hash
 from .events import record_event
 from .filetype import pin_viewer_for_upload
+from .folder_dates import touch_folders
 from .hard_delete import hard_delete_tree
 from .processing_failures import clear_failures
 from .quota import check_write_allowed
@@ -343,6 +344,7 @@ def move_content_from(target, source, *, acting_user=None):
             moved = True
             # The blob has moved, so the row's storage cleanup finds nothing.
             hard_delete_tree(source)
+            touch_folders(source.parent_id)
     except BaseException:
         _put_back_blobs(
             storage, source_path, storage_path, backup_path, moved, backed_up

@@ -81,9 +81,7 @@
         <template x-if="pollFilter === 'mine'">
           <div>
             <p class="font-medium text-base-content/70">{% translate "No polls yet" %}</p>
-            <p
-              class="text-sm text-base-content/40 mt-1"
-            >{% translate "Create a poll to find the best time for your event" %}</p>
+            <p class="text-sm text-base-content/40 mt-1">{% translate "Create a poll to find the best time for your event" %}</p>
           </div>
         </template>
         <template x-if="pollFilter === 'shared'">
@@ -522,9 +520,9 @@
             <template x-if="pollChosenSlot()">
               <p class="text-sm opacity-60 mt-0.5">
                 {% translate "Chosen date:" %} <span
-   class="font-medium text-base-content"
-   x-text="formatPollSlotDate(pollChosenSlot()) + ' ' + formatPollSlotTime(pollChosenSlot())"
- ></span>
+                  class="font-medium text-base-content"
+                  x-text="formatPollSlotDate(pollChosenSlot()) + ' ' + formatPollSlotTime(pollChosenSlot())"
+                ></span>
               </p>
             </template>
           </div>

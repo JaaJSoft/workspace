@@ -171,14 +171,10 @@
                 </div>
                 <div class="text-xs text-base-content/60 mt-0.5">
                   <span x-show="job.options?.files?.source_path">
-                    {% translate "From" context "remote folder" %} <code
-   x-text="job.options?.files?.source_path"
- ></code>
+                    {% translate "From" context "remote folder" %} <code x-text="job.options?.files?.source_path"></code>
                   </span>
                   <span x-show="job.options?.files?.on_conflict">
-                    · {% translate "Same-name files:" %} <span
-   x-text="conflictLabel(job.options?.files?.on_conflict)"
- ></span>
+                    · {% translate "Same-name files:" %} <span x-text="conflictLabel(job.options?.files?.on_conflict)"></span>
                   </span>
                   <span x-show="job.options?.contacts">
                     <span x-show="job.options?.files">·</span>
@@ -277,11 +273,7 @@
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div class="fieldset min-w-0">
-              <label
-                class="fieldset-legend"
-              ><span
-  class="font-medium"
->{% translate "Username" context "remote account" %}</span></label>
+              <label class="fieldset-legend"><span class="font-medium">{% translate "Username" context "remote account" %}</span></label>
               <input
                 type="text"
                 x-model="connForm.username"
@@ -509,11 +501,7 @@
                 class="checkbox checkbox-sm mt-0.5"
                 x-model="wizard.options.files.create_root_folder"
               />
-              <span
-                class="text-sm"
-              >{% translate "Put everything in a folder named" %} <code
-   x-text="rootFolderName()"
- ></code>
+              <span class="text-sm">{% translate "Put everything in a folder named" %} <code x-text="rootFolderName()"></code>
                 <br />
                 <span class="text-xs text-base-content/60">
                   {% translate "Untick to merge the remote tree directly into the destination." %}
@@ -585,9 +573,9 @@
         <div x-show="wizard.step === 4" class="space-y-4">
           <p class="text-sm">
             {% translate "From" context "remote connection" %} <span
-   class="font-medium"
-   x-text="wizard.connection && wizard.connection.label"
- ></span>
+              class="font-medium"
+              x-text="wizard.connection && wizard.connection.label"
+            ></span>
           </p>
           <div x-show="wizard.kinds.includes('files')">
             <div

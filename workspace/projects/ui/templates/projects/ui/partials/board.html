@@ -48,9 +48,7 @@
           <i data-lucide="timer" class="w-10 h-10 text-base-content/30"></i>
           <p class="font-medium">{% translate "No active sprint" %}</p>
           {% if planned_sprints %}
-            <p
-              class="text-sm text-base-content/60"
-            >{% translate "Start a planned sprint to bring its tasks onto the board." %}</p>
+            <p class="text-sm text-base-content/60">{% translate "Start a planned sprint to bring its tasks onto the board." %}</p>
             <ul class="w-full max-w-md flex flex-col gap-2 mt-2">
               {% for s in planned_sprints %}
                 <li class="rounded-box bg-base-200 p-3 flex items-center gap-3 text-left">
@@ -76,9 +74,7 @@
               {% endfor %}
             </ul>
           {% elif role == "admin" %}
-            <p
-              class="text-sm text-base-content/60"
-            >{% translate "Create a sprint, then plan it from the backlog." %}</p>
+            <p class="text-sm text-base-content/60">{% translate "Create a sprint, then plan it from the backlog." %}</p>
             {% if writable %}
               <button
                 type="button"

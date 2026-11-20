@@ -377,9 +377,9 @@
         {# Error markup, copied into the feed target by the card's @ajax:error so the card is never left blank #}
         <div x-ref="feedFailed" hidden>
           <p class="py-3 text-sm text-base-content/60">{% translate "Couldn't load activity." %} <a
-   href="{% url 'users_ui:profile_by_username' username=profile_user.username %}"
-   class="link link-hover"
- >{% translate "Reload" %}</a></p>
+            href="{% url 'users_ui:profile_by_username' username=profile_user.username %}"
+            class="link link-hover"
+          >{% translate "Reload" %}</a></p>
         </div>
       </div>
     </div>

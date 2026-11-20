@@ -272,9 +272,7 @@
                     <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>
                     <span class="font-medium">{{ module.name }}</span>
                     {% if module.preview %}
-                      <span
-                        class="badge badge-xs badge-warning ml-auto"
-                      >{% translate "Preview" context "module stage" %}</span>
+                      <span class="badge badge-xs badge-warning ml-auto">{% translate "Preview" context "module stage" %}</span>
                     {% endif %}
                   </a>
                 </li>
@@ -337,9 +335,7 @@
 
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
-                <span
-                  class="text-xs text-base-content/40 uppercase tracking-wider"
-                >{% translate "Admin" context "user menu section" %}</span>
+                <span class="text-xs text-base-content/40 uppercase tracking-wider">{% translate "Admin" context "user menu section" %}</span>
               </div>
 
               <!-- Admin -->

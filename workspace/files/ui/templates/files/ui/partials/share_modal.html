@@ -120,7 +120,9 @@
         >
           {% translate "Public links" %}
         </div>
-        <label class="text-sm font-medium mb-2 block" x-show="!canShareWithPeople()">{% translate "Public links" %}</label>
+        <label class="text-sm font-medium mb-2 block" x-show="!canShareWithPeople()">
+          {% translate "Public links" %}
+        </label>
 
         <!-- Loading -->
         <div x-show="linksLoading" class="flex justify-center py-2">
@@ -279,7 +281,9 @@
               </div>
             </template>
             <div class="flex gap-2 justify-end">
-              <button type="button" class="btn btn-ghost btn-xs" @click="closeLinkForm()">{% translate "Cancel" %}</button>
+              <button type="button" class="btn btn-ghost btn-xs" @click="closeLinkForm()">
+                {% translate "Cancel" %}
+              </button>
               <button
                 type="button"
                 class="btn btn-module btn-xs"

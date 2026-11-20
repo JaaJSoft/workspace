@@ -46,22 +46,10 @@
             <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-xs bg-neutral"></span>{% translate "Backlog" context "status category" %}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-xs bg-success"></span>{% translate "Done" context "status category" %}</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-xs bg-error"></span>{% translate "Overdue" context "timeline legend" %}</span>
-            <span
-              class="flex items-center gap-1.5"
-            ><span
-  class="w-2 h-2 rotate-45 bg-warning"
-></span>{% translate "Epic target" %}</span>
-            <span
-              class="flex items-center gap-1.5"
-            ><span
-  class="w-0.5 h-3 bg-error"
-></span>{% translate "Today" %}</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rotate-45 bg-warning"></span>{% translate "Epic target" %}</span>
+            <span class="flex items-center gap-1.5"><span class="w-0.5 h-3 bg-error"></span>{% translate "Today" %}</span>
             {% if project.type == "scrum" %}
-              <span
-                class="flex items-center gap-1.5"
-              ><span
-  class="w-3 h-2 rounded-xs bg-info/20"
-></span>{% translate "Sprint band" %}</span>
+              <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-xs bg-info/20"></span>{% translate "Sprint band" %}</span>
             {% endif %}
           </div>
         </div>

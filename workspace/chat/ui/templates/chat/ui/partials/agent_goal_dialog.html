@@ -123,8 +123,8 @@
         <span x-text="goalEditorCheckCountLabel()"></span>
         <template x-if="goalEditor.last_checked_at">
           <span>· <span
-   x-text="interpolate('{{ goal_last_check_label|escapejs }}', { date: formatDateTime(goalEditor.last_checked_at) }, true)"
- ></span></span>
+            x-text="interpolate('{{ goal_last_check_label|escapejs }}', { date: formatDateTime(goalEditor.last_checked_at) }, true)"
+          ></span></span>
         </template>
       </p>
 

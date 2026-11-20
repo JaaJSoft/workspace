@@ -86,7 +86,9 @@ menus without a reload.
             <textarea class="textarea textarea-sm w-full" rows="2" x-model="addForm.goal"></textarea>
           </label>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">{% translate "Cancel" %}</button>
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">
+              {% translate "Cancel" %}
+            </button>
             <button
               type="submit"
               class="btn btn-module btn-sm"

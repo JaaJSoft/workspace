@@ -251,19 +251,11 @@
     class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/50 max-sm:hidden"
   >
     <span><kbd class="kbd kbd-xs">↵</kbd> <span
-   x-text="pickerOpen ? '{{ pick_contact_hint|escapejs }}' : (card.guess ? guessLabel(card) : '{{ show_contacts_hint|escapejs }}')"
- ></span></span>
-    <span><kbd
-  class="kbd kbd-xs"
->↑</kbd> <kbd
-   class="kbd kbd-xs"
- >↓</kbd> {% translate "contacts" context "keyboard hint" %}</span>
+      x-text="pickerOpen ? '{{ pick_contact_hint|escapejs }}' : (card.guess ? guessLabel(card) : '{{ show_contacts_hint|escapejs }}')"
+    ></span></span>
+    <span><kbd class="kbd kbd-xs">↑</kbd> <kbd class="kbd kbd-xs">↓</kbd> {% translate "contacts" context "keyboard hint" %}</span>
     <span><kbd class="kbd kbd-xs">Tab</kbd> {% translate "next group" context "keyboard hint" %}</span>
-    <span><kbd
-  class="kbd kbd-xs"
->Alt</kbd> <kbd
-   class="kbd kbd-xs"
- >H</kbd> {% translate "hide" context "keyboard hint" %}</span>
+    <span><kbd class="kbd kbd-xs">Alt</kbd> <kbd class="kbd kbd-xs">H</kbd> {% translate "hide" context "keyboard hint" %}</span>
     <span><kbd class="kbd kbd-xs">{% translate "Esc" context "keyboard key" %}</kbd> {% translate "close" %}</span>
   </p>
 </section>

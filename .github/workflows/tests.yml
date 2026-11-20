@@ -326,7 +326,7 @@ jobs:
     # only drives the browser build it was released with. core's
     # test_ci_workflow pins the two together, and the runner to the image.
     container:
-      image: mcr.microsoft.com/playwright/python:v1.64.1-noble
+      image: mcr.microsoft.com/playwright/python:v1.65.2-noble
     strategy:
       fail-fast: false
       matrix:

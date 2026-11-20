@@ -187,12 +187,10 @@
                     </span>
                   </template>
                   <template x-if="link.allow_download">
-                    <span
-                      class="flex items-center gap-0.5"
-                    ><i
-  data-lucide="download"
-  class="w-3 h-3"
-></i> {% translate "Download" %}</span>
+                    <span class="flex items-center gap-0.5"><i
+                      data-lucide="download"
+                      class="w-3 h-3"
+                    ></i> {% translate "Download" %}</span>
                   </template>
                   <span x-text="viewsLabel(link.view_count)"></span>
                 </div>
@@ -270,13 +268,13 @@
               />
               <span class="text-xs">
                 {% translate "Allow downloading the originals" %}
-                <span
-                  class="block text-base-content/50"
-                >{% translate "They keep their EXIF metadata, the place they were taken included." %}</span>
+                <span class="block text-base-content/50">{% translate "They keep their EXIF metadata, the place they were taken included." %}</span>
               </span>
             </label>
             <div class="flex gap-2 justify-end">
-              <button type="button" class="btn btn-ghost btn-xs" @click="closeLinkForm()">{% translate "Cancel" %}</button>
+              <button type="button" class="btn btn-ghost btn-xs" @click="closeLinkForm()">
+                {% translate "Cancel" %}
+              </button>
               <button
                 type="button"
                 class="btn btn-module btn-xs"

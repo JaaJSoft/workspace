@@ -125,9 +125,7 @@
         <div class="space-y-2">
           <div class="text-sm font-semibold">{% translate "Folder" %}</div>
           {% include "mail/ui/partials/_folder_list.html" with model="rulesApplyFolderId" on_change="rulesApplyResult = null" %}
-          <p
-            class="text-xs text-base-content/60"
-          >{% translate "Scans the 500 most recent messages of the folder." %}</p>
+          <p class="text-xs text-base-content/60">{% translate "Scans the 500 most recent messages of the folder." %}</p>
         </div>
 
         <template x-if="rulesApplyResult">
@@ -379,9 +377,7 @@
                   <span class="font-mono">move_to_folder</span> (needs <span class="font-mono">folder_id</span>).
                 {% endblocktranslate %}
               </p>
-              <p
-                class="text-base-content/70 mt-1"
-              >{% translate "Limits: max 5 nesting levels, max 20 leaf conditions per rule." %}</p>
+              <p class="text-base-content/70 mt-1">{% translate "Limits: max 5 nesting levels, max 20 leaf conditions per rule." %}</p>
             </div>
             <div>
               <div class="font-semibold mb-1">{% translate "Finding label/folder UUIDs" %}</div>

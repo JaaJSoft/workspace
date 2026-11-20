@@ -43,7 +43,9 @@
       class="relative group/avatar mb-2"
       :class="isGroupAdmin() ? 'cursor-pointer' : ''"
     >
-      <div class="scale-150">{% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}</div>
+      <div class="scale-150">
+        {% include "chat/ui/partials/_conversation_avatar.html" with conv="activeConversation" %}
+      </div>
       <!-- Camera overlay for group admins -->
       {# A touch screen cannot hover: the overlay shrinks to a corner badge that stays on, over an avatar left visible. #}
       <template x-if="isGroupAdmin()">
@@ -503,15 +505,11 @@
       <div class="space-y-1.5" x-show="conversationStats.first_message_at">
         <div class="flex items-center gap-2 text-base-content/60">
           <i data-lucide="message-square" class="w-3.5 h-3.5 shrink-0"></i>
-          <span>{% translate "First message:" %} <span
-   x-text="formatDateTime(conversationStats.first_message_at)"
- ></span></span>
+          <span>{% translate "First message:" %} <span x-text="formatDateTime(conversationStats.first_message_at)"></span></span>
         </div>
         <div class="flex items-center gap-2 text-base-content/60">
           <i data-lucide="clock" class="w-3.5 h-3.5 shrink-0"></i>
-          <span>{% translate "Last message:" %} <span
-   x-text="formatDateTime(conversationStats.last_message_at)"
- ></span></span>
+          <span>{% translate "Last message:" %} <span x-text="formatDateTime(conversationStats.last_message_at)"></span></span>
         </div>
       </div>
 

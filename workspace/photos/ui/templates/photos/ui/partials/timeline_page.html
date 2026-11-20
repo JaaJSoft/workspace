@@ -63,9 +63,7 @@
     {% elif entry.kind == "undated" %}
       <div class="basis-full px-1 pt-5 first:pt-0 pb-2" data-undated>
         <h2 class="text-xl font-bold">{% translate "Undated" %}</h2>
-        <p
-          class="text-sm text-base-content/60"
-        >{% translate "No capture date in these files. Most recent upload first." %}</p>
+        <p class="text-sm text-base-content/60">{% translate "No capture date in these files. Most recent upload first." %}</p>
       </div>
     {% else %}
       {% include tile_template|default:"photos/ui/partials/photo_tile.html" with file=entry.file %}

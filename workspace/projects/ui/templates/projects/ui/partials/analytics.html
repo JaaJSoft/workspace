@@ -242,9 +242,7 @@
           {% translate "Remaining effort per sprint day against the ideal pace" as burndown_aria_label %}
           {% include "ui/partials/line_chart.html" with chart=burndown_chart aria_label=burndown_aria_label %}
         {% else %}
-          <p
-            class="text-sm text-base-content/50 italic mt-2"
-          >{% translate "Start a sprint to see its burndown here." %}</p>
+          <p class="text-sm text-base-content/50 italic mt-2">{% translate "Start a sprint to see its burndown here." %}</p>
         {% endif %}
       </section>
 
@@ -298,9 +296,7 @@
           {% translate "Effort completed per closed sprint with the rolling three-sprint average" as velocity_aria_label %}
           {% include "ui/partials/column_chart.html" with chart=velocity_chart aria_label=velocity_aria_label %}
         {% else %}
-          <p
-            class="text-sm text-base-content/50 italic"
-          >{% translate "Velocity appears once a sprint has been completed." %}</p>
+          <p class="text-sm text-base-content/50 italic">{% translate "Velocity appears once a sprint has been completed." %}</p>
         {% endif %}
       </section>
     {% endif %}

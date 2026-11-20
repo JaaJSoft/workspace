@@ -203,9 +203,7 @@
             @keydown.escape="closeLabelModal()"
           ></textarea>
           <div class="label whitespace-normal">
-            <span
-              class="text-base-content/50"
-            >{% translate "The AI classifier reads this to decide what lands in this label." %}</span>
+            <span class="text-base-content/50">{% translate "The AI classifier reads this to decide what lands in this label." %}</span>
           </div>
         </label>
         <!-- Icon & color picker (shared component) -->
@@ -241,9 +239,7 @@
         <label class="flex items-center justify-between gap-2 cursor-pointer mb-3">
           <span class="text-sm">
             {% translate "Notify me about these emails" %}
-            <span
-              class="block text-xs text-base-content/50"
-            >{% translate "A new email getting this label sends a notification." %}</span>
+            <span class="block text-xs text-base-content/50">{% translate "A new email getting this label sends a notification." %}</span>
           </span>
           <input
             type="checkbox"
@@ -264,7 +260,9 @@
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             {% translate "Delete" %}
           </button>
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeLabelModal()">{% translate "Cancel" %}</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeLabelModal()">
+            {% translate "Cancel" %}
+          </button>
           <button
             type="submit"
             class="btn btn-module btn-sm"
@@ -533,7 +531,9 @@
           </div>
         </div>
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">{% translate "Cancel" %}</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">
+            {% translate "Cancel" %}
+          </button>
           <button type="submit" class="btn btn-module btn-sm" :disabled="addingAccount">
             <span x-show="!addingAccount">{% translate "Add Account" %}</span>
             <span x-show="addingAccount" class="loading loading-spinner loading-xs"></span>

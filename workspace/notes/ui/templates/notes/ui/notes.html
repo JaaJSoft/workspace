@@ -69,7 +69,9 @@
          The cloak wrapper stays outside the alpine-ajax swap target so refreshes
          never re-hide the sidebar; "invisible" keeps its space reserved while
          Alpine boots instead of collapsing the aside. -->
-      <div class="flex-1 min-h-0 flex flex-col" x-cloak="invisible">{% include "notes/ui/partials/sidebar.html" %}</div>
+      <div class="flex-1 min-h-0 flex flex-col" x-cloak="invisible">
+        {% include "notes/ui/partials/sidebar.html" %}
+      </div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
@@ -243,7 +245,9 @@
         </div>
       </div>
     </div>
-    <div class="h-full w-full" x-show="activeView === 'graph'" x-cloak>{% include "notes/ui/partials/graph.html" %}</div>
+    <div class="h-full w-full" x-show="activeView === 'graph'" x-cloak>
+      {% include "notes/ui/partials/graph.html" %}
+    </div>
 
     <!-- Mobile new note FAB -->
     <button

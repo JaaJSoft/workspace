@@ -138,9 +138,7 @@
             <i data-lucide="users" class="w-4 h-4 text-module"></i>
             {% translate "Access" context "settings section" %}
           </h3>
-          <p
-            class="text-sm text-base-content/60 mt-0.5"
-          >{% translate "Share this project with a group or add people directly." %}</p>
+          <p class="text-sm text-base-content/60 mt-0.5">{% translate "Share this project with a group or add people directly." %}</p>
         </div>
         <template x-if="error">
           <inline-alert type="error"><span x-text="error"></span></inline-alert>
@@ -380,7 +378,9 @@
             </div>
           </div>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">{% translate "Cancel" %}</button>
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">
+              {% translate "Cancel" %}
+            </button>
             <button
               type="submit"
               class="btn btn-module btn-sm"
@@ -574,7 +574,9 @@
             ></textarea>
           </label>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">{% translate "Cancel" %}</button>
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">
+              {% translate "Cancel" %}
+            </button>
             <button
               type="submit"
               class="btn btn-module btn-sm"
@@ -833,7 +835,9 @@
             </div>
           </div>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">{% translate "Cancel" %}</button>
+            <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">
+              {% translate "Cancel" %}
+            </button>
             <button
               type="submit"
               class="btn btn-module btn-sm"

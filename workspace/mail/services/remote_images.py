@@ -9,10 +9,11 @@ blocked all the same; it just goes without the button.
 import re
 from html.parser import HTMLParser
 
-# A CSS url() or image-set() whose target is not inline data: background
-# images, list markers and border images all go through one of them.
+# A CSS url() or image-set() whose target is not part of the message (inline
+# data or a cid: part): background images, list markers and border images all
+# go through one of them.
 _REMOTE_CSS_URL = re.compile(
-    r"(?:url|image-set)\(\s*['\"]?\s*(?!data:)[^)\s'\"]", re.IGNORECASE
+    r"(?:url|image-set)\(\s*['\"]?\s*(?!data:|cid:)[^)\s'\"]", re.IGNORECASE
 )
 
 
@@ -36,7 +37,7 @@ class _RemoteImageFinder(HTMLParser):
 
 
 def _is_inline(url):
-    return url.strip().lower().startswith("data:")
+    return url.strip().lower().startswith(("data:", "cid:"))
 
 
 def has_remote_images(html):

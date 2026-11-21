@@ -25,6 +25,28 @@ test('allowing images opens img-src to the network and nothing else', () => {
   assert.match(csp, /form-action 'none'/);
 });
 
+test('the message own pictures load without consent, from its attachments only', () => {
+  const csp = mailFrameCsp(false, { origin: 'https://ws.example' });
+  assert.match(csp, /img-src data: https:\/\/ws\.example\/api\/v1\/mail\/attachments\/(;|$)/);
+  assert.doesNotMatch(csp, /'self'/);
+});
+
+test('allowing images keeps the attachments source next to the network', () => {
+  const csp = mailFrameCsp(true, { origin: 'http://127.0.0.1:8123' });
+  assert.match(csp, /img-src data: http:\/\/127\.0\.0\.1:8123\/api\/v1\/mail\/attachments\/ https: http:/);
+});
+
+test('an origin that is not one adds no source', () => {
+  for (const origin of ['null', 'https://a.example" onload="x', 'https://a.example/path', '']) {
+    assert.match(mailFrameCsp(false, { origin }), /img-src data:;/);
+  }
+});
+
+test('the document carries the attachments source', () => {
+  const doc = mailFrameDocument('', { origin: 'https://ws.example' });
+  assert.equal(cspOf(doc), mailFrameCsp(false, { origin: 'https://ws.example' }));
+});
+
 test('the policy is in the head, before the body it governs', () => {
   const doc = mailFrameDocument('<p>Hello</p>', { allowImages: false });
   const head = doc.slice(0, doc.indexOf('<body>'));

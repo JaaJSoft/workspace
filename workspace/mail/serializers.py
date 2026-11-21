@@ -15,6 +15,7 @@ from .models import (
     MailRuleLog,
 )
 from .services.imap_parse import sanitize_mail_html
+from .services.inline_images import InlineImages
 from .services.remote_images import has_remote_images
 from .services.rules.schema import (
     SchemaError,
@@ -286,7 +287,8 @@ class MailTrustedSenderSerializer(serializers.Serializer):
 
 
 class MailMessageDetailSerializer(serializers.ModelSerializer):
-    attachments = MailAttachmentSerializer(many=True, read_only=True)
+    # Each with ``embedded``: whether the body shows it as a picture.
+    attachments = serializers.SerializerMethodField()
     labels = serializers.SerializerMethodField()
     ai_summary_html = serializers.SerializerMethodField()
     extractions = serializers.SerializerMethodField()
@@ -301,8 +303,26 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
     def get_from_address(self, obj):
         return {"name": obj.from_name, "email": obj.from_email}
 
+    def _rendered_body(self, obj):
+        """The body to display, its cid: pictures pointing at their parts.
+
+        Memoized on the instance: the body and the attachment list both read it.
+        """
+        if not hasattr(obj, "_rendered_body"):
+            inline_images = InlineImages(obj.attachments.all())
+            html = sanitize_mail_html(obj.body_html, inline_images=inline_images)
+            obj._rendered_body = (html, inline_images.embedded)
+        return obj._rendered_body
+
     def get_body_html(self, obj):
-        return sanitize_mail_html(obj.body_html)
+        return self._rendered_body(obj)[0]
+
+    def get_attachments(self, obj):
+        embedded = {str(uuid) for uuid in self._rendered_body(obj)[1]}
+        return [
+            {**data, "embedded": data["uuid"] in embedded}
+            for data in MailAttachmentSerializer(obj.attachments.all(), many=True).data
+        ]
 
     def get_has_remote_images(self, obj):
         return has_remote_images(obj.body_html)

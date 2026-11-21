@@ -286,13 +286,13 @@
       </div>
     </div>
 
-    <!-- Attachments bar -->
+    <!-- Attachments bar: the pictures the body shows are not listed again -->
     <div
-      x-show="messageDetail.attachments?.length > 0"
+      x-show="listedAttachments().length > 0"
       x-cloak
       class="px-4 py-2 border-b border-base-300 bg-base-100/50 flex flex-wrap gap-2"
     >
-      <template x-for="att in messageDetail.attachments" :key="att.uuid">
+      <template x-for="att in listedAttachments()" :key="att.uuid">
         <div class="group/att relative flex items-center">
           <a
             :href="'/api/v1/mail/attachments/' + att.uuid"

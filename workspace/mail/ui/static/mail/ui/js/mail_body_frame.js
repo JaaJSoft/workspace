@@ -12,13 +12,24 @@
 
 const MAIL_FRAME_CLASS = 'mail-body-frame';
 
+// Where the server points a picture the message embeds (cid:). Those are
+// part of the message, not remote content: they load without consent.
+const MAIL_ATTACHMENTS_PATH = '/api/v1/mail/attachments/';
+
+function _attachmentsSource(origin) {
+  return /^https?:\/\/[^\s"';,/]+$/.test(origin || '') ? `${origin}${MAIL_ATTACHMENTS_PATH}` : null;
+}
+
 // Remote images tell the sender when, and from which address, the message
 // was read. Blocked unless the user allowed them for the message or sender.
-function mailFrameCsp(allowImages) {
+// The attachments source carries the page's origin: a path is only valid in
+// CSP after a host.
+function mailFrameCsp(allowImages, { origin } = {}) {
+  const images = ['data:', _attachmentsSource(origin), ...(allowImages ? ['https:', 'http:'] : [])];
   return [
     "default-src 'none'",
     "style-src 'unsafe-inline'",
-    allowImages ? 'img-src data: https: http:' : 'img-src data:',
+    `img-src ${images.filter(Boolean).join(' ')}`,
     "form-action 'none'",
   ].join('; ');
 }
@@ -52,9 +63,9 @@ blockquote {
 
 // The whole document the frame renders. bodyHtml is the server-sanitized
 // body; the CSP meta comes first so it applies before anything in the body.
-function mailFrameDocument(bodyHtml, { allowImages = false, theme = {} } = {}) {
+function mailFrameDocument(bodyHtml, { allowImages = false, theme = {}, origin } = {}) {
   return '<!doctype html><html><head><meta charset="utf-8">'
-    + `<meta http-equiv="Content-Security-Policy" content="${mailFrameCsp(allowImages)}">`
+    + `<meta http-equiv="Content-Security-Policy" content="${mailFrameCsp(allowImages, { origin })}">`
     + '<base target="_blank">'
     + `<style>${mailFrameStyles(theme)}</style>`
     + `</head><body>${bodyHtml || ''}</body></html>`;
@@ -106,6 +117,7 @@ window.mailBodyFrameMixin = function mailBodyFrameMixin() {
       const allowImages = this.mailImagesAllowed();
       const doc = mailFrameDocument(html, {
         allowImages,
+        origin: window.location.origin,
         theme: mailFrameTheme(frame.parentElement || frame),
       });
       // Assigning srcdoc reloads the frame even when nothing changed.
@@ -129,6 +141,10 @@ window.mailBodyFrameMixin = function mailBodyFrameMixin() {
         width = frame.clientWidth;
         this.fitMailBody(frame);
       }).observe(frame);
+    },
+
+    listedAttachments() {
+      return (this.messageDetail?.attachments || []).filter((att) => !att.embedded);
     },
 
     showMailImages() {

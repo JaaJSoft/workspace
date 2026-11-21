@@ -4,6 +4,7 @@ They survive the sanitizer at import, and the detail endpoint points each one
 at the message's own attachment. A reference to anything else is dropped.
 """
 
+import time
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -143,6 +144,24 @@ class CidResolvedOnReadTests(InlineImageFixtures):
         self.assertFalse(attachments[str(report.uuid)]["embedded"])
         self.assertFalse(attachments[str(unused.uuid)]["embedded"])
 
+    def test_a_cid_naming_a_file_that_is_not_an_image_stays_an_attachment(self):
+        message = self._message('<img src="cid:report@example.com" alt="report">')
+        report = MailAttachment.objects.create(
+            message=message,
+            filename="report.csv",
+            content_type="text/csv",
+            size=3,
+            content=ContentFile(b"a,b", name="report.csv"),
+            content_id="report@example.com",
+            is_inline=True,
+        )
+
+        detail = self._detail(message)
+
+        self.assertEqual(detail["body_html"], '<img alt="report">')
+        attachments = {a["uuid"]: a for a in detail["attachments"]}
+        self.assertFalse(attachments[str(report.uuid)]["embedded"])
+
     def test_cid_pictures_are_not_remote(self):
         message = self._message('<img src="cid:logo@example.com">')
         self._attachment(message, "logo@example.com")
@@ -153,6 +172,33 @@ class CidResolvedOnReadTests(InlineImageFixtures):
 class CidIsNotRemoteTests(TestCase):
     def test_a_cid_img_is_not_remote(self):
         self.assertFalse(has_remote_images('<img src="cid:logo@example.com">'))
+
+    def test_a_remote_candidate_after_an_inline_one_in_an_image_set_counts(self):
+        for first in ("cid:bg@example.com", "data:image/png;base64,AA"):
+            with self.subTest(first=first):
+                self.assertTrue(
+                    has_remote_images(
+                        f'<div style="background-image: image-set(&quot;{first}&quot; 1x, '
+                        '&quot;https://t.example/large.png&quot; 2x)"></div>'
+                    )
+                )
+
+    def test_an_image_set_of_inline_candidates_is_not_remote(self):
+        self.assertFalse(
+            has_remote_images(
+                '<div style="background-image: image-set('
+                "&quot;cid:bg@example.com&quot; type(&quot;image/png&quot;) 1x, "
+                'url(data:image/png;base64,AA) 2x)"></div>'
+            )
+        )
+
+    def test_unclosed_image_sets_are_read_in_one_pass(self):
+        # Only an inline candidate: every image-set( has to be read.
+        style = "image-set(" * 20_000 + "&quot;cid:bg@example.com&quot;"
+        started = time.perf_counter()
+
+        self.assertFalse(has_remote_images(f'<div style="{style}"></div>'))
+        self.assertLess(time.perf_counter() - started, 1)
 
     def test_a_cid_css_background_is_not_remote(self):
         self.assertFalse(

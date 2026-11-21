@@ -32,7 +32,9 @@ class InlineImages:
         self._by_content_id = {}
         for attachment in attachments:
             content_id = attachment.content_id.strip()
-            if content_id:
+            # Only a picture can be what an <img> shows: a file of another type
+            # named by a cid: stays an attachment, and the reference drops.
+            if content_id and attachment.content_type.lower().startswith("image/"):
                 self._by_content_id.setdefault(content_id, attachment)
         self.embedded = set()
 

@@ -8,6 +8,7 @@ them whether the archival half worked.
 
 import logging
 from typing import NamedTuple
+from uuid import UUID
 
 from workspace.common.logging import scrub
 
@@ -19,6 +20,10 @@ class Delivery(NamedTuple):
 
     archived: bool
     """Whether the copy reached the Sent folder. The mail went out either way."""
+
+    answered: UUID | None = None
+    """The message this send answered and now marks answered, if any. Not
+    necessarily the UUID the caller passed: one of another account is none."""
 
 
 def deliver_email(
@@ -63,15 +68,17 @@ def deliver_email(
         in_reply_to=in_reply_to,
         references=references,
     ) as sent:
-        delivery = Delivery(archived=_archive(account, sent))
-    if parent is not None:
-        _mark_answered(parent)
-    return delivery
+        archived = _archive(account, sent)
+    answered = parent.uuid if parent is not None and _mark_answered(parent) else None
+    return Delivery(archived=archived, answered=answered)
 
 
 def _mark_answered(parent):
-    """Flag `parent` answered. Never raises: the reply is already out, and
-    a send reported as failed would be sent a second time."""
+    """Flag `parent` answered; True once its row says so.
+
+    Never raises: the reply is already out, and a send reported as failed
+    would be sent a second time.
+    """
     from .triage import set_flag
 
     try:
@@ -85,6 +92,8 @@ def _mark_answered(parent):
             scrub(parent.account.email),
             scrub(str(exc)),
         )
+        return False
+    return True
 
 
 def _archive(account, sent):

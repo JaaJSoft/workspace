@@ -137,3 +137,53 @@ test('a restored localStorage draft keeps its parent message', () => {
 
   assert.equal(app._getLocalStorageDraft().reply_message_id, 'parent-uuid');
 });
+
+// A send the server accepted, answered once the test calls `resolve(body)`.
+function makeSendingInstance() {
+  const app = makeInstance();
+  let resolve;
+  app._fetch = (url, options) => {
+    app.requests.push({ url, options });
+    return new Promise((r) => {
+      resolve = (body) => r({ ok: true, json: () => Promise.resolve(body) });
+    });
+  };
+  app.messages = [
+    { uuid: 'parent-a', is_answered: false },
+    { uuid: 'parent-b', is_answered: false },
+  ];
+  app.messageDetail = app.messages[1];
+  app.compose.account_id = 'acct-1';
+  app.compose.to = ['bob@example.com'];
+  app.compose.reply_message_id = 'parent-a';
+  return { app, answer: (body) => resolve(body) };
+}
+
+test('the message marked answered is the one the server names', async () => {
+  const { app, answer } = makeSendingInstance();
+
+  const sending = app.sendEmail();
+  // Closed and reopened on another message while the send was pending.
+  app.compose = { ..._defaultCompose(), reply_message_id: 'parent-b' };
+  answer({ status: 'sent', answered_message_id: 'parent-a' });
+  await sending;
+
+  assert.equal(app.messages[0].is_answered, true);
+  assert.equal(
+    app.messages[1].is_answered,
+    false,
+    'the reply in flight answered parent-a, not the message the dialog moved on to',
+  );
+});
+
+test('a parent the server did not mark stays unanswered', async () => {
+  // Sent from another account than the parent's: the server threads nothing
+  // and marks nothing.
+  const { app, answer } = makeSendingInstance();
+
+  const sending = app.sendEmail();
+  answer({ status: 'sent', answered_message_id: null });
+  await sending;
+
+  assert.deepEqual(app.messages.map(m => m.is_answered), [false, false]);
+});

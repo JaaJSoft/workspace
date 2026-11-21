@@ -310,8 +310,9 @@ class ReplyMarksItsParentAnsweredTests(TestCase):
             )
 
     def test_the_parent_is_answered_here_and_on_the_server(self):
-        self._reply(self.parent.uuid)
+        delivery = self._reply(self.parent.uuid)
 
+        self.assertEqual(delivery.answered, self.parent.uuid)
         self.parent.refresh_from_db()
         self.assertTrue(self.parent.is_answered)
         self.assertEqual(
@@ -325,6 +326,8 @@ class ReplyMarksItsParentAnsweredTests(TestCase):
         delivery = self._reply(self.parent.uuid)
 
         self.assertTrue(delivery.archived)
+        # Answered here all the same, until the next sync says otherwise.
+        self.assertEqual(delivery.answered, self.parent.uuid)
         self.assertEqual(self.server.flags("INBOX", self.parent.imap_uid), {r"\Seen"})
         # The next sync reads the folder in full and puts the row right.
         self.inbox.refresh_from_db()
@@ -352,8 +355,9 @@ class ReplyMarksItsParentAnsweredTests(TestCase):
         )
         theirs = MailMessage.objects.create(account=other, folder=folder, imap_uid=1)
 
-        self._reply(theirs.uuid)
+        delivery = self._reply(theirs.uuid)
 
+        self.assertIsNone(delivery.answered)
         theirs.refresh_from_db()
         self.assertFalse(theirs.is_answered)
         self.assertEqual(self.server.named("add_flags"), [])

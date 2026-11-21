@@ -335,11 +335,13 @@ window.mailComposeMixin = function mailComposeMixin() {
         if (res.ok) {
           if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
           const draftId = this.compose.draft_id;
-          const repliedTo = this.compose.reply_message_id;
-          if (repliedTo) {
-            const listMsg = this.messages.find(m => m.uuid === repliedTo);
+          // From the server, not compose state: the dialog may have moved on to
+          // another message meanwhile, and a parent of another account is not answered.
+          const { answered_message_id: answered } = await res.json().catch(() => ({}));
+          if (answered) {
+            const listMsg = this.messages.find(m => m.uuid === answered);
             if (listMsg) listMsg.is_answered = true;
-            if (this.messageDetail?.uuid === repliedTo) this.messageDetail.is_answered = true;
+            if (this.messageDetail?.uuid === answered) this.messageDetail.is_answered = true;
           }
           this._clearLocalStorageDraft();
           document.getElementById('mail-compose-dialog').close();

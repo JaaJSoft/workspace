@@ -94,17 +94,28 @@ msgid "Choose what the Today card lists."
 msgstr "Choisissez ce que la carte Aujourd’hui affiche."
 
 #: templates/dashboard/partials/today.html
-msgid "What is on your plate today."
-msgstr "Ce qui vous attend aujourd’hui."
-
-#: templates/dashboard/partials/today.html
-msgid "See all"
-msgstr "Tout voir"
-
-#: templates/dashboard/partials/today.html
-msgid "Nothing left on your calendar today."
-msgstr "Plus rien à votre agenda aujourd’hui."
-
-#: templates/dashboard/partials/today.html
 msgid "Nothing is waiting on you."
 msgstr "Rien ne vous attend."
+
+#: templates/dashboard/partials/today.html
+msgctxt "today filter"
+msgid "All"
+msgstr "Tout"
+
+#: templates/dashboard/partials/today.html
+msgctxt "today filter"
+msgid "Urgent"
+msgstr "Urgent"
+
+#: templates/dashboard/partials/today.html
+#, python-format
+msgid "Show %(counter)s more"
+msgid_plural "Show %(counter)s more"
+msgstr[0] "Afficher %(counter)s de plus"
+msgstr[1] "Afficher %(counter)s de plus"
+msgstr[2] "Afficher %(counter)s de plus"
+
+#: templates/dashboard/partials/today.html
+#, python-format
+msgid "See all in %(source)s"
+msgstr "Tout voir dans %(source)s"

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from itertools import count
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -14,7 +15,7 @@ from workspace.mail.models import (
     MailMessage,
     MailMessageLabel,
 )
-from workspace.mail.today import MAIL_LIMIT, important_mail
+from workspace.mail.today import MAIL_LIMIT, important_mail, is_urgent_mail
 
 User = get_user_model()
 
@@ -133,6 +134,26 @@ class ImportantMailTests(TestCase):
             important_mail(self.user, NOW, timezone.get_current_timezone())
 
         self.assertNotIn("body_html", queries.captured_queries[0]["sql"])
+
+    def test_unread_mail_with_a_notifying_label_is_urgent_starred_mail_is_not(self):
+        self._message("Server down", labels=[self.urgent], age=1)
+        self._message("Follow up", is_starred=True, is_read=True, age=2)
+
+        rows = important_mail(self.user, NOW, timezone.get_current_timezone())
+
+        self.assertEqual(
+            {m.subject: is_urgent_mail(m) for m in rows.items},
+            {"Server down": True, "Follow up": False},
+        )
+
+    def test_received_today_is_the_users_local_day(self):
+        tokyo = ZoneInfo("Asia/Tokyo")
+        # 20:00 UTC on Nov 20 is already Nov 21 in Tokyo, NOW's local day.
+        self._message("Overnight", is_starred=True, age=13 * 60)
+
+        (message,) = important_mail(self.user, NOW, tokyo).items
+
+        self.assertTrue(message.received_today)
 
     def test_a_short_list_is_its_own_count(self):
         self._message("Only one", is_starred=True)

@@ -94,12 +94,8 @@ class MailConfig(AppConfig):
         )
 
         import workspace.mail.signals  # noqa: F401
-        from workspace.core.today_registry import (
-            TodayColumn,
-            TodaySource,
-            today_registry,
-        )
-        from workspace.mail.today import important_mail
+        from workspace.core.today_registry import TodaySource, today_registry
+        from workspace.mail.today import important_mail, is_urgent_mail
 
         today_registry.register(
             TodaySource(
@@ -111,9 +107,9 @@ class MailConfig(AppConfig):
                 ),
                 icon="mail",
                 url="/mail",
-                column=TodayColumn.TODO,
                 items_fn=important_mail,
                 template="mail/ui/partials/today_mail.html",
-                order=40,
+                is_urgent=is_urgent_mail,
+                order=30,
             )
         )

@@ -7,7 +7,7 @@ from django.test import TestCase
 from workspace.projects.models import Task
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
-from workspace.projects.today import TASKS_LIMIT, tasks_for_today
+from workspace.projects.today import TASKS_LIMIT, is_urgent_task, tasks_for_today
 
 User = get_user_model()
 
@@ -41,7 +41,7 @@ class TasksForTodayTests(TestCase):
         self._task("Next week", due_date=TOKYO_TODAY + timedelta(days=7))
         self._task("Someday")
 
-        self.assertEqual(self._titles(), ["Late", "Today", "Fire"])
+        self.assertEqual(self._titles(), ["Late", "Fire", "Today"])
 
     def test_today_is_the_users_local_day(self):
         # Due on the Tokyo date, which UTC has not reached yet.
@@ -53,24 +53,39 @@ class TasksForTodayTests(TestCase):
         self.assertEqual(rows.total, 1)
         self.assertTrue(rows.items[0].due_today)
         self.assertFalse(rows.items[0].overdue)
-        self.assertFalse(rows.items[0].coming_up)
 
-    def test_the_next_tasks_stand_in_when_nothing_is_due(self):
+    def test_nothing_due_lists_nothing(self):
         self._task("Next week", due_date=TOKYO_TODAY + timedelta(days=7))
         self._task("Someday")
 
         rows = tasks_for_today(self.user, NOW, TOKYO)
 
-        self.assertEqual([task.title for task in rows.items], ["Next week", "Someday"])
-        self.assertTrue(all(task.coming_up for task in rows.items))
-        # None of them is due today, so there is nothing to count.
-        self.assertIsNone(rows.total)
+        self.assertEqual((rows.items, rows.total), ([], 0))
+
+    def test_overdue_and_urgent_tasks_are_urgent_rows(self):
+        self._task("Late", due_date=TOKYO_TODAY - timedelta(days=1))
+        self._task("Today", due_date=TOKYO_TODAY)
+        self._task("Fire", priority=Task.Priority.URGENT)
+
+        urgent = {
+            task.title: is_urgent_task(task)
+            for task in tasks_for_today(self.user, NOW, TOKYO).items
+        }
+
+        self.assertEqual(urgent, {"Late": True, "Today": False, "Fire": True})
 
     def test_tasks_assigned_to_someone_else_are_not_listed(self):
         other = User.objects.create_user(username="other", password="pw")
         self._task("Theirs", assignee=other, due_date=TOKYO_TODAY)
 
         self.assertEqual(self._titles(), [])
+
+    def test_an_urgent_task_without_a_due_date_survives_the_cap(self):
+        for i in range(TASKS_LIMIT):
+            self._task(f"Today {i}", due_date=TOKYO_TODAY)
+        self._task("Fire", priority=Task.Priority.URGENT)
+
+        self.assertIn("Fire", self._titles())
 
     def test_the_list_is_capped(self):
         for i in range(TASKS_LIMIT + 2):

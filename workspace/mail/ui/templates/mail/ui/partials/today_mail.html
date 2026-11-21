@@ -1,36 +1,37 @@
 {% load i18n ui_filters %}
-{% for message in items %}
-  <li>
-    <a
-      href="/mail?message={{ message.uuid }}"
-      class="flex items-center gap-3 py-1.5 group"
-    >
-      <span
-        class="text-xs text-base-content/60 truncate shrink-0 w-20 {% if not message.is_read %}font-semibold text-base-content{% endif %}"
-      >
-        {{ message.from_name|default:message.from_email }}
-      </span>
-      <span
-        class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline"
-      >
-        {{ message.subject|default:_("(no subject)") }}
-      </span>
-      {% for link in message.notify_labels|slice:":1" %}
-        <span
-          class="badge badge-sm badge-{{ link.label.color|default:'ghost' }} shrink-0"
-        >{{ link.label.name }}</span>
-      {% empty %}
-        {% if message.is_starred %}
-          <i
-            data-lucide="star"
-            class="w-3.5 h-3.5 text-warning fill-warning shrink-0"
-            aria-label="{% translate 'Starred' context 'starred message' %}"
-          ></i>
-        {% endif %}
-      {% endfor %}
-      <span
-        class="text-xs text-base-content/50 tabular-nums shrink-0 w-16 text-right"
-      >{{ message.date|localtime_tag:"date" }}</span>
-    </a>
-  </li>
-{% endfor %}
+<a
+  href="/mail?message={{ item.uuid }}"
+  class="flex items-center gap-3 py-2 group"
+>
+  <span class="w-4 flex justify-center shrink-0">
+    {% if item.is_starred and not urgent %}
+      <i
+        data-lucide="star"
+        class="w-3.5 h-3.5 text-warning fill-warning"
+        aria-label="{% translate 'Starred' context 'starred message' %}"
+      ></i>
+    {% else %}
+      <i
+        data-lucide="mail"
+        class="w-3.5 h-3.5 {% if urgent %}text-error{% else %}text-base-content/50{% endif %}"
+      ></i>
+    {% endif %}
+  </span>
+  <span
+    class="text-xs text-base-content/60 tabular-nums shrink-0 w-16 truncate"
+  >
+    {% if item.received_today %}
+      {{ item.date|localtime_tag:"time" }}
+    {% else %}
+      {{ item.date|localtime_tag:"date" }}
+    {% endif %}
+  </span>
+  <span
+    class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline{% if not item.is_read %} font-medium{% endif %}"
+  >{{ item.subject|default:_("(no subject)") }}</span>
+  <span
+    class="text-xs text-base-content/50 truncate max-w-40 shrink-0 hidden sm:block"
+  >
+    {{ item.from_name|default:item.from_email }}
+  </span>
+</a>

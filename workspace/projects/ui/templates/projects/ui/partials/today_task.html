@@ -1,0 +1,25 @@
+{% load i18n %}
+{# Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25". #}
+{% translate "M j" context "short due date format" as due_date_format %}
+<a
+  href="/projects/{{ item.project_id }}?task={{ item.uuid }}"
+  class="flex items-center gap-3 py-2 group"
+>
+  <span class="w-4 flex justify-center shrink-0">
+    <i
+      data-lucide="{% if item.priority == 'urgent' %}flame{% else %}list-todo{% endif %}"
+      class="w-3.5 h-3.5 {% if urgent %}text-error{% else %}text-base-content/50{% endif %}"
+    ></i>
+  </span>
+  <span
+    class="text-xs tabular-nums shrink-0 w-16 truncate {% if item.overdue %}text-error font-medium{% elif item.due_today %}text-warning font-medium{% else %}text-base-content/60{% endif %}"
+  >
+    {% if item.due_date %}{{ item.due_date|date:due_date_format }}{% endif %}
+  </span>
+  <span
+    class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline"
+  >{{ item.title }}</span>
+  <span
+    class="text-xs text-base-content/50 truncate max-w-40 shrink-0 hidden sm:block"
+  >{{ item.project.name }}</span>
+</a>

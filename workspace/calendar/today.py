@@ -43,7 +43,7 @@ def pending_invitations(user, now, tz):
             recurrence_parent__isnull=True,
         )
         .filter(one_off_ahead | series_running)
-        .select_related("calendar")
+        .select_related("calendar", "owner")
         .order_by("start")
     )
     invitations = []

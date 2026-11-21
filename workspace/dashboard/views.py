@@ -11,7 +11,7 @@ from workspace.core.services.activity import (
     get_sources,
     get_usage_headlines,
 )
-from workspace.core.today_registry import TodayColumn, today_registry
+from workspace.core.today_registry import today_registry
 from workspace.files.services.quota import (
     effective_quota,
     personal_usage,
@@ -27,6 +27,8 @@ from .services.preferences import (
 )
 
 ACTIVITY_LIMIT = 10
+# Rows the Today card shows before its show-more button.
+TODAY_LIMIT = 8
 
 
 def _today_sources(user, dashboard_settings):
@@ -38,28 +40,26 @@ def _today_sources(user, dashboard_settings):
     ]
 
 
-def _today_columns(user, sources):
-    """The card's columns: each enabled one with the groups that have rows.
+def _today_list(user, sources):
+    """The card's rows, urgent first, and one filter per source with rows.
 
-    A column is listed as soon as one of its sources is enabled, empty or
-    not, so the card can say there is nothing left rather than vanish.
+    Sorting is stable, so outside the urgent ones the rows keep their
+    source's order and, within a source, the order the source gave them.
     """
     now = timezone.now()
     tz = timezone.get_current_timezone()
-    columns = []
-    for column in TodayColumn:
-        enabled = [source for source in sources if source.column == column]
-        if not enabled:
+    rows, filters = [], []
+    for source in sources:
+        result = source.items_fn(user, now, tz)
+        if not result.items:
             continue
-        groups = []
-        for source in enabled:
-            rows = source.items_fn(user, now, tz)
-            if rows.items:
-                groups.append(
-                    {"source": source, "items": rows.items, "total": rows.total}
-                )
-        columns.append({"kind": column.value, "groups": groups})
-    return columns
+        rows.extend(
+            {"source": source, "item": item, "urgent": source.is_urgent(item)}
+            for item in result.items
+        )
+        filters.append({"source": source, "total": result.total})
+    rows.sort(key=lambda row: not row["urgent"])
+    return rows, filters
 
 
 def _get_activity_context(user, source=None, offset=0, search=None):
@@ -187,7 +187,15 @@ def today_fragment(request):
     ]
     context = {"show_today": bool(sources)}
     if sources:
-        context["today_columns"] = _today_columns(request.user, sources)
+        rows, filters = _today_list(request.user, sources)
+        context.update(
+            today_rows=rows,
+            today_filters=filters,
+            today_urgent=sum(row["urgent"] for row in rows),
+            today_total=sum(f["total"] for f in filters),
+            today_limit=TODAY_LIMIT,
+            today_more=max(len(rows) - TODAY_LIMIT, 0),
+        )
     return render(request, "dashboard/partials/today.html", context)
 
 

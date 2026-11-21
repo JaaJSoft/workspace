@@ -109,11 +109,7 @@ class CalendarConfig(AppConfig):
         register_fulltext_index(EVENT_FTS)
 
         from workspace.calendar.today import pending_invitations, todays_events
-        from workspace.core.today_registry import (
-            TodayColumn,
-            TodaySource,
-            today_registry,
-        )
+        from workspace.core.today_registry import TodaySource, today_registry
 
         today_registry.register(
             TodaySource(
@@ -123,9 +119,8 @@ class CalendarConfig(AppConfig):
                 description=gettext_lazy("What is left on your calendar today."),
                 icon="calendar",
                 url="/calendar",
-                column=TodayColumn.SCHEDULE,
                 items_fn=todays_events,
-                template="calendar/ui/partials/today_events.html",
+                template="calendar/ui/partials/today_event.html",
                 order=10,
             )
         )
@@ -137,9 +132,8 @@ class CalendarConfig(AppConfig):
                 description=gettext_lazy("Events you have not answered yet."),
                 icon="mail-question-mark",
                 url="/calendar",
-                column=TodayColumn.SCHEDULE,
                 items_fn=pending_invitations,
-                template="calendar/ui/partials/today_invitations.html",
-                order=20,
+                template="calendar/ui/partials/today_invitation.html",
+                order=40,
             )
         )

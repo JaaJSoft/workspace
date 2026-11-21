@@ -1,6 +1,7 @@
 """The mail's source for the dashboard's Today card."""
 
 from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.utils import timezone
 
 from workspace.core.today_registry import capped_rows
 from workspace.mail.models import MailFolder, MailMessage, MailMessageLabel
@@ -15,7 +16,8 @@ def important_mail(user, now, tz):
     Two kinds: unread mail carrying a label that notifies on apply (the
     default *Urgent* label is one), and starred mail, which IMAP calls
     ``\\Flagged`` and most clients present as "follow up", read or not.
-    Trash and Spam are left out. Each row carries ``notify_labels``.
+    Trash and Spam are left out. Each row carries ``notify_labels``, and
+    ``received_today`` read on the user's local day.
     """
     notify_links = MailMessageLabel.objects.filter(label__notify_on_apply=True)
     has_notify_label = Exists(notify_links.filter(message=OuterRef("pk")))
@@ -43,4 +45,16 @@ def important_mail(user, now, tz):
         )
         .order_by("-date")
     )
-    return capped_rows(messages, MAIL_LIMIT)
+    rows = capped_rows(messages, MAIL_LIMIT)
+    today = timezone.localdate(now, timezone=tz)
+    for message in rows.items:
+        message.received_today = (
+            message.date is not None
+            and timezone.localdate(message.date, timezone=tz) == today
+        )
+    return rows
+
+
+def is_urgent_mail(message):
+    """Unread and labelled to notify: what the classifier flagged as pressing."""
+    return bool(message.notify_labels) and not message.is_read

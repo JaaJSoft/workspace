@@ -67,27 +67,21 @@ class ProjectsConfig(AppConfig):
             )
         )
 
-        from workspace.core.today_registry import (
-            TodayColumn,
-            TodaySource,
-            today_registry,
-        )
-        from workspace.projects.today import tasks_for_today
+        from workspace.core.today_registry import TodaySource, today_registry
+        from workspace.projects.today import is_urgent_task, tasks_for_today
 
         today_registry.register(
             TodaySource(
                 slug="tasks",
                 module_slug="projects",
                 label=gettext_lazy("Tasks"),
-                description=gettext_lazy(
-                    "Your tasks overdue, due today or urgent, else the next ones."
-                ),
+                description=gettext_lazy("Your tasks overdue, due today or urgent."),
                 icon="list-todo",
                 url="/projects",
-                column=TodayColumn.TODO,
                 items_fn=tasks_for_today,
-                template="projects/ui/partials/today_tasks.html",
-                order=30,
+                template="projects/ui/partials/today_task.html",
+                is_urgent=is_urgent_task,
+                order=20,
             )
         )
 

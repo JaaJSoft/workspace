@@ -6,7 +6,6 @@ from django.test import TestCase, override_settings
 
 from workspace.core.module_registry import registry
 from workspace.core.today_registry import (
-    TodayColumn,
     TodayRegistry,
     TodayRows,
     TodaySource,
@@ -23,7 +22,6 @@ def _source(slug, module_slug="chat", order=100):
         description="",
         icon="circle",
         url="/",
-        column=TodayColumn.TODO,
         items_fn=lambda user, now, tz: TodayRows([], 0),
         template="",
         order=order,

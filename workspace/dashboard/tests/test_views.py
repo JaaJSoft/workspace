@@ -13,7 +13,6 @@ from django.test.utils import CaptureQueriesContext
 
 from workspace.core.module_registry import ModuleInfo, registry
 from workspace.core.today_registry import (
-    TodayColumn,
     TodayRows,
     TodaySource,
     today_registry,
@@ -818,12 +817,12 @@ class IndexViewTests(TestCase):
         self.assertContains(resp, 'id="dashboard-today"')
         self.assertNotContains(resp, "$ajax('/dashboard/today')")
 
-    @patch("workspace.dashboard.views._today_columns")
-    def test_does_not_query_today_sources_on_initial_render(self, mock_columns):
+    @patch("workspace.dashboard.views._today_list")
+    def test_does_not_query_today_sources_on_initial_render(self, mock_list):
         self.client.login(username="viewuser", password="pass123")
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        mock_columns.assert_not_called()
+        mock_list.assert_not_called()
 
     @patch("workspace.dashboard.views.get_recent_events")
     def test_does_not_compute_feed_on_initial_render(self, mock_events):
@@ -1093,12 +1092,10 @@ class ActivityFeedSourceParamTests(TestCase):
 
 
 # {% include %} renders a Template object as is, so the test needs no file.
-_ROWS = Template("{% for item in items %}<li>{{ item }}</li>{% endfor %}")
+_ROW = Template("<span>{{ item }}{% if urgent %}!{% endif %}</span>")
 
 
-def _source(
-    slug, column=TodayColumn.TODO, items=(), order=1, module_slug="chat", total=None
-):
+def _source(slug, items=(), order=1, module_slug="chat", total=None, urgent=()):
     return TodaySource(
         slug=slug,
         module_slug=module_slug,
@@ -1106,9 +1103,11 @@ def _source(
         description="",
         icon="circle",
         url=f"/{slug}",
-        column=column,
-        items_fn=lambda user, now, tz: TodayRows(list(items), total),
-        template=_ROWS,
+        items_fn=lambda user, now, tz: TodayRows(
+            list(items), len(items) if total is None else total
+        ),
+        template=_ROW,
+        is_urgent=lambda item: item in urgent,
         order=order,
     )
 
@@ -1128,74 +1127,109 @@ class TodayFragmentViewTests(TestCase):
         for source in sources:
             today_registry.register(source)
 
+    def _rows(self, resp):
+        return [(row["source"].slug, row["item"]) for row in resp.context["today_rows"]]
+
     def test_requires_login(self):
         self.client.logout()
         resp = self.client.get("/dashboard/today")
         self.assertEqual(resp.status_code, 302)
         self.assertIn("login", resp.url)
 
-    def test_lists_each_source_with_its_rows_in_its_column(self):
+    def test_every_source_lands_in_one_list_in_source_order(self):
         self._register(
-            _source("agenda", TodayColumn.SCHEDULE, items=["Standup"]),
-            _source("inbox", TodayColumn.TODO, items=["Contract"]),
+            _source("inbox", items=["Contract"], order=2),
+            _source("agenda", items=["Standup", "Review"], order=1),
         )
 
         resp = self.client.get("/dashboard/today")
 
         self.assertTemplateUsed(resp, "dashboard/partials/today.html")
-        columns = {c["kind"]: c["groups"] for c in resp.context["today_columns"]}
-        self.assertEqual([g["source"].slug for g in columns["schedule"]], ["agenda"])
-        self.assertEqual([g["source"].slug for g in columns["todo"]], ["inbox"])
-        self.assertContains(resp, "<li>Standup</li>", html=True)
-        self.assertContains(resp, "<li>Contract</li>", html=True)
-        self.assertContains(resp, 'href="/inbox"')
+        self.assertEqual(
+            self._rows(resp),
+            [("agenda", "Standup"), ("agenda", "Review"), ("inbox", "Contract")],
+        )
+        self.assertContains(resp, "<span>Standup</span>", html=True)
+        self.assertContains(resp, 'data-today-source="inbox"')
 
-    def test_a_source_shows_its_total_next_to_its_label(self):
+    def test_urgent_rows_come_first_whatever_their_source(self):
+        self._register(
+            _source("agenda", items=["Standup"], order=1),
+            _source("tasks", items=["Later", "Fire"], order=2, urgent={"Fire"}),
+            _source("inbox", items=["Outage", "Hello"], order=3, urgent={"Outage"}),
+        )
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertEqual(
+            self._rows(resp),
+            [
+                ("tasks", "Fire"),
+                ("inbox", "Outage"),
+                ("agenda", "Standup"),
+                ("tasks", "Later"),
+                ("inbox", "Hello"),
+            ],
+        )
+        self.assertEqual(resp.context["today_urgent"], 2)
+        self.assertContains(resp, "<span>Fire!</span>", html=True)
+
+    def test_each_source_gets_a_filter_counting_all_its_rows(self):
         self._register(
             _source("inbox", items=["a", "b"], total=12),
-            _source("later", items=["c"], total=None, order=2),
+            _source("agenda", items=["c"], order=2),
         )
 
         resp = self.client.get("/dashboard/today")
 
         counters = re.findall(r"data-today-count\s*>(\d+)<", resp.content.decode())
-        self.assertEqual(counters, ["12"])
+        self.assertEqual(counters, ["12", "1"])
+        self.assertEqual(resp.context["today_total"], 13)
+        self.assertContains(resp, 'data-today-filter="all"')
+        self.assertNotContains(resp, 'data-today-filter="urgent"')
 
-    def test_sources_follow_their_order(self):
+    def test_a_single_source_needs_no_filter(self):
+        self._register(_source("inbox", items=["a"]))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertNotContains(resp, "data-today-filter")
+
+    def test_rows_past_the_limit_start_hidden_behind_show_more(self):
+        from workspace.dashboard.views import TODAY_LIMIT
+
+        items = [f"row {i}" for i in range(TODAY_LIMIT + 3)]
+        self._register(_source("inbox", items=items))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertEqual(resp.context["today_more"], 3)
+        self.assertEqual(resp.content.decode().count('style="display: none"'), 3)
+        self.assertContains(resp, "Show 3 more")
+
+    def test_a_source_without_rows_is_left_out(self):
         self._register(
-            _source("second", items=["b"], order=2),
-            _source("first", items=["a"], order=1),
+            _source("agenda"),
+            _source("inbox", items=["Contract"], order=2),
         )
 
         resp = self.client.get("/dashboard/today")
 
-        groups = resp.context["today_columns"][0]["groups"]
-        self.assertEqual([g["source"].slug for g in groups], ["first", "second"])
-
-    def test_a_source_without_rows_is_left_out_and_its_column_says_so(self):
-        self._register(
-            _source("agenda", TodayColumn.SCHEDULE),
-            _source("inbox", TodayColumn.TODO, items=["Contract"]),
-        )
-
-        resp = self.client.get("/dashboard/today")
-
+        self.assertEqual(self._rows(resp), [("inbox", "Contract")])
         self.assertNotContains(resp, 'data-today-source="agenda"')
-        self.assertContains(resp, "Nothing left on your calendar today.")
 
-    def test_a_column_without_an_enabled_source_is_not_drawn(self):
-        self._register(_source("inbox", TodayColumn.TODO, items=["Contract"]))
+    def test_nothing_anywhere_says_so(self):
+        self._register(_source("agenda"))
 
         resp = self.client.get("/dashboard/today")
 
-        self.assertEqual([c["kind"] for c in resp.context["today_columns"]], ["todo"])
-        self.assertNotContains(resp, "Nothing left on your calendar today.")
+        self.assertContains(resp, "Nothing is waiting on you.")
 
     def test_a_switched_off_source_is_never_queried(self):
         items_fn = Mock(return_value=TodayRows(["Secret"], 1))
         self._register(
             replace(_source("inbox"), items_fn=items_fn),
-            _source("agenda", TodayColumn.SCHEDULE, items=["Standup"]),
+            _source("agenda", items=["Standup"]),
         )
         set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, ["inbox"])
 
@@ -1228,7 +1262,7 @@ class TodayFragmentViewTests(TestCase):
 
         self.assertContains(resp, 'id="dashboard-today"')
         self.assertNotContains(resp, "Contract")
-        self.assertNotIn("today_columns", resp.context)
+        self.assertNotIn("today_rows", resp.context)
 
     def test_sources_get_the_users_local_clock(self):
         seen = {}
@@ -1325,6 +1359,13 @@ class TodayCardWithEverySourceTests(TestCase):
         self.assertContains(resp, f"/mail?message={self.message.uuid}")
         for slug in ("events", "invitations", "tasks", "mail"):
             self.assertContains(resp, f'data-today-source="{slug}"')
+
+    def test_the_overdue_task_leads_the_list(self):
+        resp = self.client.get("/dashboard/today")
+
+        first = resp.context["today_rows"][0]
+        self.assertEqual((first["source"].slug, first["item"]), ("tasks", self.task))
+        self.assertTrue(first["urgent"])
 
 
 # ── query budget guard ──────────────────────────────────────────
@@ -1454,4 +1495,4 @@ class DashboardFrenchTests(TestCase):
     def test_today_card_in_french(self):
         resp = self.client.get("/dashboard/today")
         self.assertContains(resp, "Aujourd’hui")
-        self.assertContains(resp, "Plus rien à votre agenda aujourd’hui.")
+        self.assertContains(resp, "Rien ne vous attend.")

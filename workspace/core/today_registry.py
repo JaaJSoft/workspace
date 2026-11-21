@@ -1,16 +1,14 @@
 """Sources of the dashboard's Today card.
 
 A module registers a ``TodaySource`` from its ``AppConfig.ready()``: the
-query stays in the module, next to its access rules, and so does the row
-template that renders what the query returns. The dashboard only lays the
-sources out, in two columns: ``SCHEDULE`` for what happens at a given time,
-``TODO`` for what waits on the user.
+query stays in the module, next to its access rules, and so does the
+template that renders one of its rows. The dashboard merges every source
+into one list, urgent rows first, and lets the user filter it by source.
 """
 
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import StrEnum
 
 from .services.module_visibility import is_module_slug_visible
 
@@ -20,9 +18,7 @@ class TodayRows:
     """What a source lists: its first rows, and how many it has in all."""
 
     items: list
-    # Shown as the source's counter. None when the rows count nothing the
-    # user has to do (a stand-in list), which leaves the counter out.
-    total: int | None
+    total: int
 
 
 def capped_rows(queryset, limit):
@@ -36,9 +32,8 @@ def capped_rows(queryset, limit):
     return TodayRows(items, total)
 
 
-class TodayColumn(StrEnum):
-    SCHEDULE = "schedule"
-    TODO = "todo"
+def never_urgent(item):
+    return False
 
 
 @dataclass(frozen=True)
@@ -50,12 +45,15 @@ class TodaySource:
     description: str
     icon: str
     url: str
-    column: TodayColumn
     # (user, now, tz) -> TodayRows, already capped by the source. No
     # items: the source stays out of the card.
     items_fn: Callable
-    # Rendered with ``items`` in context; it writes the ``<li>`` rows.
+    # Renders one row, the link inside its <li>, with ``item`` and
+    # ``urgent`` in context.
     template: str
+    # item -> bool: the row goes to the top of the list, whatever its source.
+    is_urgent: Callable = never_urgent
+    # Rows that are not urgent follow their source's order.
     order: int = 100
 
 

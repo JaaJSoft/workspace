@@ -146,8 +146,8 @@ preferences. From the task panel you can watch a task or mute it.
 
 ## Elsewhere in Workspace
 
-- **Dashboard**: the *Today* card lists your assigned tasks that are
-  overdue, due today or urgent, or the next ones when none is.
+- **Dashboard**: the *Today* list shows your assigned tasks that are
+  overdue, due today or urgent, the overdue and urgent ones first.
 - **Calendar**: the due dates of open tasks in your projects show as
   all-day items. A switch in the calendar sidebar hides them.
 - **Search**: projects and tasks appear in the global search, by title,

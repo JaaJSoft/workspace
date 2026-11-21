@@ -4,60 +4,110 @@
   class="max-w-4xl mx-auto w-full{% if not show_today %} hidden{% endif %}"
 >
   {% if show_today %}
-    <div class="card bg-base-100 shadow-sm border border-base-300">
-      <div class="card-body gap-4 p-4 sm:p-6">
-        <div class="space-y-1">
+    <div
+      class="card bg-base-100 shadow-sm border border-base-300"
+      x-data="todayCard({{ today_limit }})"
+    >
+      <div class="card-body gap-3 p-4 sm:p-6">
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <h2 class="card-title text-xl">
             <i data-lucide="sunrise" class="w-5 h-5"></i>
             {% translate "Today" %}
           </h2>
-          <p class="text-sm text-base-content/60">{% translate "What is on your plate today." %}</p>
-        </div>
-        <div
-          class="grid grid-cols-1 gap-x-8 gap-y-5{% if today_columns|length > 1 %} md:grid-cols-2{% endif %}"
-        >
-          {% for column in today_columns %}
-            <div class="space-y-4 min-w-0" data-today-column="{{ column.kind }}">
-              {% for group in column.groups %}
-                <div data-today-source="{{ group.source.slug }}">
-                  <div class="flex items-center gap-2">
-                    <i
-                      data-lucide="{{ group.source.icon }}"
-                      class="w-4 h-4 text-base-content/50 shrink-0"
-                    ></i>
-                    <h3
-                      class="text-xs font-semibold uppercase tracking-wide text-base-content/60 truncate"
-                    >
-                      {{ group.source.label }}
-                    </h3>
-                    {% if group.total is not None %}
-                      <span
-                        class="badge badge-sm badge-ghost tabular-nums shrink-0"
-                        data-today-count
-                      >{{ group.total }}</span>
-                    {% endif %}
-                    <span class="flex-1"></span>
-                    <a
-                      href="{{ group.source.url }}"
-                      class="link link-hover text-xs text-base-content/50 shrink-0"
-                    >{% translate "See all" %}</a>
-                  </div>
-                  <ul class="divide-y divide-base-200">
-                    {% include group.source.template with items=group.items %}
-                  </ul>
-                </div>
-              {% empty %}
-                <p class="text-sm text-base-content/50">
-                  {% if column.kind == "schedule" %}
-                    {% translate "Nothing left on your calendar today." %}
-                  {% else %}
-                    {% translate "Nothing is waiting on you." %}
-                  {% endif %}
-                </p>
+          {% if today_filters|length > 1 %}
+            <div
+              class="flex items-center gap-1 overflow-x-auto max-w-full -mx-1 px-1"
+              role="group"
+              aria-label="{% translate 'Filter' %}"
+            >
+              <button
+                type="button"
+                class="btn btn-xs rounded-full gap-1 btn-primary"
+                :class="{ 'btn-primary': filter === 'all', 'btn-ghost': filter !== 'all' }"
+                @click="pick('all')"
+                data-today-filter="all"
+              >
+                {% translate "All" context "today filter" %}
+                <span class="tabular-nums opacity-60">{{ today_total }}</span>
+              </button>
+              {% if today_urgent %}
+                <button
+                  type="button"
+                  class="btn btn-xs rounded-full gap-1 btn-ghost text-error"
+                  :class="{ 'btn-error': filter === 'urgent', 'btn-ghost text-error': filter !== 'urgent' }"
+                  @click="pick('urgent')"
+                  data-today-filter="urgent"
+                >
+                  <i data-lucide="flame" class="w-3 h-3"></i>
+                  {% translate "Urgent" context "today filter" %}
+                  <span class="tabular-nums opacity-60">{{ today_urgent }}</span>
+                </button>
+              {% endif %}
+              {% for entry in today_filters %}
+                <button
+                  type="button"
+                  class="btn btn-xs rounded-full gap-1 btn-ghost"
+                  :class="{ 'btn-primary': filter === '{{ entry.source.slug|escapejs }}', 'btn-ghost': filter !== '{{ entry.source.slug|escapejs }}' }"
+                  @click="pick('{{ entry.source.slug|escapejs }}')"
+                  data-today-filter="{{ entry.source.slug }}"
+                >
+                  <i data-lucide="{{ entry.source.icon }}" class="w-3 h-3"></i>
+                  {{ entry.source.label }}
+                  <span class="tabular-nums opacity-60" data-today-count>{{ entry.total }}</span>
+                </button>
               {% endfor %}
             </div>
-          {% endfor %}
+          {% endif %}
         </div>
+
+        {% if today_rows %}
+          <ul class="divide-y divide-base-200">
+            {% for row in today_rows %}
+              <li
+                data-today-source="{{ row.source.slug }}"
+                {% if row.urgent %}data-today-urgent{% endif %}
+                x-show="shows('{{ row.source.slug|escapejs }}', {{ row.urgent|yesno:'true,false' }}, {{ forloop.counter0 }})"
+                {% if forloop.counter0 >= today_limit %}style="display: none"{% endif %}
+              >
+                {% include row.source.template with item=row.item urgent=row.urgent %}
+              </li>
+            {% endfor %}
+          </ul>
+          {% if today_more or today_filters|length > 1 %}
+            <div class="flex justify-center">
+              {% if today_more %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  x-show="filter === 'all' && !expanded"
+                  @click="expanded = true"
+                >
+                  {% blocktranslate trimmed count counter=today_more %}
+                    Show {{ counter }} more
+                  {% plural %}
+                    Show {{ counter }} more
+                  {% endblocktranslate %}
+                </button>
+              {% endif %}
+              {% if today_filters|length > 1 %}
+                {% for entry in today_filters %}
+                  <a
+                    href="{{ entry.source.url }}"
+                    class="link link-hover text-xs text-base-content/60"
+                    x-show="filter === '{{ entry.source.slug|escapejs }}'"
+                    style="display: none"
+                  >
+                    {% blocktranslate trimmed with source=entry.source.label %}
+                      See all in {{ source }}
+                    {% endblocktranslate %}
+                  </a>
+                {% endfor %}
+              {% endif %}
+            </div>
+          {% endif %}
+        {% else %}
+          <p class="text-sm text-base-content/50">{% translate "Nothing is waiting on you." %}</p>
+        {% endif %}
       </div>
     </div>
   {% endif %}

@@ -8,7 +8,13 @@ from django.test import SimpleTestCase, override_settings
 from pydantic import BaseModel
 from pydantic_ai import NativeOutput, direct
 from pydantic_ai.exceptions import OutputTokenLimitExceeded, UnexpectedModelBehavior
-from pydantic_ai.messages import BinaryContent, ModelResponse, TextPart, ToolReturnPart
+from pydantic_ai.messages import (
+    BinaryContent,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    ToolReturnPart,
+)
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
@@ -152,6 +158,46 @@ class BackendRequestTests(SimpleTestCase):
         (turn,) = [m for m in backend.bodies[1]["messages"] if m["role"] == "assistant"]
         self.assertEqual(turn["tool_calls"][0]["id"], "c1")
 
+    @override_settings(AI_BASE_URL="http://lmstudio.test/v1/")
+    def test_a_model_named_after_a_vendor_is_asked_like_any_other(self):
+        # The library reads a vendor off a "vendor/model" name and takes that
+        # vendor's own API as the limit: no JSON schema, no system message
+        # past the first. Behind a compatible endpoint the name says nothing
+        # of what the endpoint can do.
+        class Payload(BaseModel):
+            n: int
+
+        conversation = prompt("count", "three")
+        send(conversation, SystemPromptPart("<context>now</context>"))
+        for name in ("Qwen/Qwen3-32B", "meta-llama/Llama-4", "anthropic/claude-x"):
+            with self.subTest(model=name):
+                with _Backend({"role": "assistant", "content": '{"n": 3}'}) as backend:
+                    result = run_prompt(
+                        conversation,
+                        model=name,
+                        output_type=NativeOutput(Payload, strict=True),
+                    )
+
+                self.assertEqual(result.output, Payload(n=3))
+                (body,) = backend.bodies
+                self.assertTrue(body["response_format"]["json_schema"]["strict"])
+                self.assertEqual(
+                    [message["role"] for message in body["messages"]],
+                    ["system", "user", "system"],
+                )
+                self.assertEqual(body["max_tokens"], 321)
+
+    @override_settings(AI_MODEL="gpt-5")
+    def test_openai_named_by_its_url_is_still_openai(self):
+        for url in ("https://api.openai.com/v1", "https://api.openai.com/v1/"):
+            with self.subTest(url=url), override_settings(AI_BASE_URL=url):
+                with _Backend() as backend:
+                    run_prompt(prompt("be brief", "hi"))
+
+                (body,) = backend.bodies
+                self.assertEqual(body["max_completion_tokens"], 321)
+                self.assertNotIn("max_tokens", body)
+
     @override_settings(AI_BASE_URL=None, AI_MODEL="gpt-5")
     def test_a_structured_reply_is_asked_for_as_a_strict_schema(self):
         class Payload(BaseModel):
@@ -253,6 +299,26 @@ class MessagesForStorageTests(SimpleTestCase):
         self.assertEqual(text, "what is this?")
         self.assertEqual(stored["data"], "[stripped]")
         self.assertEqual(stored["media_type"], "image/png")
+
+    @override_settings(AI_TOOL_RESULT_TASK_MAX_CHARS=300)
+    def test_a_tool_result_is_cut_to_the_records_own_budget(self):
+        # A deployment lowers it to keep less of a mail or a file for the 90
+        # days the row lives.
+        page = "HEAD" + ("p" * 5000) + "TAIL"
+        history = [
+            *prompt("s", "u"),
+            reply("", call("read_webpage", {"url": "https://a.test"}, "c1")),
+        ]
+        send(
+            history,
+            ToolReturnPart(tool_name="read_webpage", content=page, tool_call_id="c1"),
+        )
+
+        stored = messages_for_storage(history)[2]["parts"][0]["content"]
+
+        self.assertLessEqual(len(stored), 300)
+        self.assertTrue(stored.startswith("HEAD"))
+        self.assertTrue(stored.endswith("TAIL"))
 
     def test_a_very_long_text_loses_its_tail(self):
         (request,) = messages_for_storage(prompt("s", "x" * 60_000))

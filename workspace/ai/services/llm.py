@@ -9,6 +9,7 @@ of backend the settings describe.
 
 import time
 from dataclasses import dataclass, replace
+from urllib.parse import urlsplit
 
 import pydantic_ai
 from django.conf import settings
@@ -25,7 +26,11 @@ from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
 
 from workspace.ai.metrics import AI_REQUEST_DURATION, AI_TOKENS
-from workspace.ai.services.reply_text import clean_llm_content, split_inline_thinking
+from workspace.ai.services.reply_text import (
+    clean_llm_content,
+    split_inline_thinking,
+    truncate_middle,
+)
 
 # Printed into the worker's log on the first run of a process otherwise.
 pydantic_ai.BANNER_ENABLED = False
@@ -34,31 +39,57 @@ pydantic_ai.BANNER_ENABLED = False
 _STORED_TEXT_MAX_CHARS = 50_000
 
 
+def _is_openai(base_url: str) -> bool:
+    """Whether *base_url* is OpenAI's own API, hosted by it or by Azure."""
+    host = urlsplit(base_url).hostname or ""
+    return host == "api.openai.com" or host.endswith(".openai.azure.com")
+
+
+def _compatible_profile(model_name: str):
+    """What an endpoint that only speaks OpenAI's protocol is taken to do.
+
+    The same whatever its model is called. Left to itself the library reads
+    a vendor off a "vendor/model" name and takes that vendor's own API as
+    the limit: no JSON schema output, no system message past the first.
+    Behind LM Studio, vLLM or OpenRouter the name says nothing of the kind.
+    """
+    from pydantic_ai.profiles import merge_profile
+    from pydantic_ai.profiles.openai import OpenAIModelProfile, openai_model_profile
+
+    return merge_profile(
+        openai_model_profile(model_name),
+        OpenAIModelProfile(
+            supports_json_schema_output=True,
+            supports_json_object_output=True,
+            supports_inline_system_prompts=True,
+            # Ollama ignores `max_completion_tokens` without a word and
+            # answers uncapped; every such service reads `max_tokens`.
+            openai_chat_supports_max_completion_tokens=False,
+            # Handed its reasoning back, gpt-oss writes its next tool
+            # call into its reasoning, where nothing runs it.
+            openai_chat_send_back_thinking_parts=False,
+        ),
+    )
+
+
 def get_model(name: str | None = None) -> Model:
     """The model *name*, or the default one, on the configured backend."""
     from pydantic_ai.models.openai import OpenAIChatModel
-    from pydantic_ai.profiles.openai import OpenAIModelProfile
     from pydantic_ai.providers.openai import OpenAIProvider
     from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
     if not settings.AI_API_KEY:
         raise RuntimeError("AI is not configured (AI_API_KEY missing)")
-    if settings.AI_BASE_URL:
+    base_url = settings.AI_BASE_URL
+    if not base_url or _is_openai(base_url):
+        provider = OpenAIProvider(base_url=base_url, api_key=settings.AI_API_KEY)
+    else:
         provider = OpenAICompatibleProvider(
             "openai-compatible",
-            base_url=settings.AI_BASE_URL,
+            base_url=base_url,
             api_key=settings.AI_API_KEY,
-            profile=OpenAIModelProfile(
-                # Ollama ignores `max_completion_tokens` without a word and
-                # answers uncapped; every such service reads `max_tokens`.
-                openai_chat_supports_max_completion_tokens=False,
-                # Handed its reasoning back, gpt-oss writes its next tool
-                # call into its reasoning, where nothing runs it.
-                openai_chat_send_back_thinking_parts=False,
-            ),
+            profile=_compatible_profile,
         )
-    else:
-        provider = OpenAIProvider(api_key=settings.AI_API_KEY)
     return OpenAIChatModel(name or settings.AI_MODEL, provider=provider)
 
 
@@ -166,6 +197,13 @@ def _stored(value):
     if isinstance(value, dict):
         if value.get("kind") == "binary":
             return {**value, "data": "[stripped]"}
+        if value.get("part_kind") == "tool-return" and isinstance(
+            value.get("content"), str
+        ):
+            cut = truncate_middle(
+                value["content"], settings.AI_TOOL_RESULT_TASK_MAX_CHARS
+            )
+            return {**value, "content": cut}
         return {key: _stored(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_stored(item) for item in value]
@@ -178,6 +216,7 @@ def messages_for_storage(messages: list[ModelMessage]) -> list:
     """A conversation as ``AITask.raw_messages`` keeps it, for a human to read.
 
     Pydantic AI's own serialization, minus what makes a row heavy: the bytes
-    of images, and the tail of very long texts.
+    of images, the tail of very long texts, and all of a tool result past
+    ``AI_TOOL_RESULT_TASK_MAX_CHARS``.
     """
     return _stored(ModelMessagesTypeAdapter.dump_python(messages, mode="json"))

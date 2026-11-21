@@ -65,6 +65,14 @@ class CaptionTaskTests(TestCase):
         att.refresh_from_db()
         self.assertEqual(att.ai_description, "A red square on white background.")
 
+    @override_settings(AI_MAX_TOKENS=2048)
+    def test_a_caption_is_given_room_for_a_model_that_reasons_first(self):
+        # A cap sized for two sentences is spent on reasoning before a word
+        # of the caption is written, and the image never gets one.
+        att = make_attachment(self.msg)
+        script, _ = self._caption(att)
+        self.assertEqual(script.settings[0]["max_tokens"], 2048)
+
     @override_settings(AI_VISION_MODEL="vision-model", AI_MODEL="big-model")
     def test_captions_go_to_the_vision_model(self):
         att = make_attachment(self.msg)

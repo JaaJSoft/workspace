@@ -181,12 +181,23 @@ class ToolLoopMetricsTests(BotRunCase):
 
         self.assertEqual(counted.by, 1)
 
-    def test_a_tool_the_model_invented_names_no_series(self):
-        # Its name never reaches a label: the library answers the call itself.
-        with self._calls("made_up", "ok") as ok, self._calls("made_up", "error") as bad:
+    def test_a_tool_the_model_invented_folds_into_one_series(self):
+        # A model can invent any name, and a name is a label.
+        with (
+            self._calls("made_up", "error") as named,
+            self._calls("unknown", "error") as folded,
+        ):
             self.run_bot(reply("", call("made_up", {}, "c1")), reply("done"))
 
-        self.assertEqual((ok.by, bad.by), (0, 0))
+        self.assertEqual((named.by, folded.by), (0, 1))
+
+    def test_a_call_the_schema_refuses_counts_as_an_error(self):
+        with self._calls("read_webpage", "error") as counted:
+            self.run_bot(
+                reply("", call("read_webpage", {"url": 3}, "c1")), reply("done")
+            )
+
+        self.assertEqual(counted.by, 1)
 
     @override_settings(AI_MAX_IDENTICAL_TOOL_CALLS=1)
     def test_a_refused_duplicate_counts_as_a_repeat_and_stops_the_loop(self):

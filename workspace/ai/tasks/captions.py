@@ -46,10 +46,11 @@ def generate_attachment_caption(attachment_uuid):
         return
     image = BinaryContent(data=data, media_type=att.mime_type)
     try:
+        # No cap of its own: a reasoning model spends its tokens thinking
+        # first, and one sized for two sentences leaves none for them.
         result = run_prompt(
             prompt(CAPTION_SYSTEM_PROMPT, [image]),
             model=settings.AI_VISION_MODEL or settings.AI_MODEL,
-            max_tokens=150,
         )
     except Exception:
         logger.warning("Caption generation failed for %s", scrub(str(attachment_uuid)))

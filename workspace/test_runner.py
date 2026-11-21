@@ -35,10 +35,6 @@ from django.test.runner import DiscoverRunner, ParallelTestSuite, _init_worker
 from django.test.utils import override_settings
 
 VAULT_TEST_SWITCHES = {"VAULT_TEST_SUITES": True, "VAULT_TEST_RUNNER_ACTIVE": True}
-# A bot's reading tools share a round on pool threads, whose connections do
-# not see the transaction a TestCase keeps open: here every tool runs on the
-# test's own thread. A test about tools running together sets its own width.
-AI_TEST_SWITCHES = {"AI_TOOL_CONCURRENCY": 1}
 
 # Rows whose status, claim token or trash stamp is written by several actors at
 # once - a request, a Celery worker, a dispatcher. A full-row save on one of
@@ -131,9 +127,7 @@ def _init_worker_with_media_root(counter, *args, **kwargs):
     # Under spawn and forkserver ``_init_worker`` has just re-imported the
     # settings from the environment, so the override has to follow it.
     worker_root = make_worker_media_root(os.environ["MEDIA_ROOT"])
-    override_settings(
-        MEDIA_ROOT=worker_root, **VAULT_TEST_SWITCHES, **AI_TEST_SWITCHES
-    ).enable()
+    override_settings(MEDIA_ROOT=worker_root, **VAULT_TEST_SWITCHES).enable()
     from workspace.common.tests.s3 import ON_OBJECT_STORAGE, session_storages
 
     if ON_OBJECT_STORAGE:
@@ -166,7 +160,7 @@ class MediaRootTestRunner(DiscoverRunner):
             _override_from_env("FILE_UPLOAD_TEMP_DIR", upload_temp_dir),
             _override_from_env("PREVIEW_VISIBILITY", "all"),
         ]
-        vault_switches = override_settings(**VAULT_TEST_SWITCHES, **AI_TEST_SWITCHES)
+        vault_switches = override_settings(**VAULT_TEST_SWITCHES)
         vault_switches.enable()
         self._restore_settings.append(vault_switches.disable)
         from workspace.common.tests.s3 import ON_OBJECT_STORAGE, use_session_bucket

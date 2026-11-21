@@ -12,11 +12,14 @@ are refused, who is told a tool is running, and when the user's
 cancellation stops everything.
 """
 
+import asyncio
 import json
 import logging
 from collections import Counter
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from enum import Enum
+from itertools import groupby
 
 from asgiref.sync import async_to_sync, sync_to_async
 from django.conf import settings
@@ -57,6 +60,12 @@ class StopReason(Enum):
     ROUND_CAP = "round_cap"
 
 
+# The library fails a run whose model keeps calling a tool wrongly. Here a
+# wrong call costs a round like any other, and the rounds and the repeat
+# guard are what bound a reply.
+_NO_RETRY_BUDGET = 1_000_000
+
+
 def produced_media(tool_context) -> bool:
     """Whether tools left media for the reply to carry.
 
@@ -81,85 +90,165 @@ def _signature(call) -> str:
 class BotLoop(AbstractCapability[ToolDeps]):
     """What a bot reply adds around the agent's loop.
 
-    - The tools are taken away, and the model left to answer from what it
-      gathered, once *max_rounds* rounds have run or a whole round was
-      refused duplicates.
+    - A reply gets *max_rounds* rounds of tools. The calls of a round past
+      them are refused, and the tools taken away for the answer.
     - A call already made *max_identical_calls* times with the same
       arguments is refused: a model stuck re-issuing one call burns its
-      rounds on an answer it already has.
+      rounds on an answer it already has. A round of nothing but such
+      repeats takes the tools away too.
     - Each call is shown to the conversation's members while it runs.
       Membership is read per call, not once for the run: a member who
       leaves must stop receiving progress.
-    - *is_cancelled* is read before every call, so a cancellation never
-      starts a tool that writes memories, schedules messages or bills an
-      image.
+    - *is_cancelled* is read as each call gets its turn, so a cancellation
+      never starts a tool that writes memories, schedules messages or bills
+      an image.
+
+    A round is settled when the reply that asks for it arrives, from every
+    call it holds: the library answers by itself a call to a tool that does
+    not exist or with arguments its schema refuses, and such a call never
+    reaches :meth:`wrap_tool_execute`.
     """
 
     conversation_id: object
     bot_user: object
     max_rounds: int
     max_identical_calls: int
+    concurrency: int
     is_cancelled: object = None
     stop: StopReason = StopReason.ANSWERED
+    _rounds: int = 0
     _seen: Counter = field(default_factory=Counter)
-    # Whether each call of the round under way was refused.
-    _round: list = field(default_factory=list)
+    # What the model is told in place of a result, per refused call of the
+    # round under way.
+    _refusals: dict = field(default_factory=dict)
+    # Calls of that round that got as far as their tool.
+    _reached: set = field(default_factory=set)
+    _known: frozenset = frozenset()
+    _slots: asyncio.Semaphore | None = None
 
     async def prepare_tools(self, ctx, tool_defs):
-        refused, self._round = self._round, []
-        if refused and all(refused):
-            self.stop = StopReason.REPEAT_LOOP
-        elif ctx.run_step > self.max_rounds:
-            self.stop = StopReason.ROUND_CAP
         return tool_defs if self.stop is StopReason.ANSWERED else []
 
-    async def wrap_tool_execute(self, ctx, *, call, tool_def, args, handler):
-        if await self.cancelled():
-            # Ends the run once the calls already under way have returned.
-            ctx.cancel()
-            raise ToolFailed("Not executed: the reply was cancelled.")
-        signature = _signature(call)
-        self._seen[signature] += 1
-        refused = self._seen[signature] > self.max_identical_calls
-        self._round.append(refused)
-        if refused:
-            logger.info("Refused tool call %s", scrub(call.tool_name))
-            AI_TOOL_CALLS.labels(tool=call.tool_name, status="repeat").inc()
-            raise ToolFailed(
-                f"Not executed: this is the same call to {call.tool_name} with the "
-                f"same arguments, {self.max_identical_calls} times already in this "
-                "reply. Repeating it returns what you already have. Read the "
-                "earlier result again, try a different tool or different "
-                "arguments, or answer with what you know."
+    async def after_model_request(self, ctx, *, request_context, response):
+        if response.tool_calls:
+            offered = request_context.model_request_parameters.function_tools
+            self._settle_round(ctx.deps, response.tool_calls, offered)
+        return response
+
+    def _settle_round(self, deps, calls, offered):
+        self._rounds += 1
+        self._known = frozenset(tool.name for tool in offered)
+        self._refusals, self._reached = {}, set()
+        if self._rounds > self.max_rounds:
+            self.stop = StopReason.ROUND_CAP
+            self._refusals = dict.fromkeys(
+                (call.tool_call_id for call in calls),
+                f"Not executed: this reply has used its {self.max_rounds} rounds "
+                "of tools. Answer now with what you have gathered.",
             )
-        await sync_to_async(self._announce)(call)
-        status = "error"
-        try:
-            result = await handler(args)
-            status = "ok"
-            return result
-        finally:
-            AI_TOOL_CALLS.labels(tool=call.tool_name, status=status).inc()
-            await sync_to_async(self._announce_done)(call)
+        else:
+            for call in calls:
+                signature = _signature(call)
+                self._seen[signature] += 1
+                if self._seen[signature] > self.max_identical_calls:
+                    self._refuse_repeat(call)
+            if len(self._refusals) == len(calls):
+                self.stop = StopReason.REPEAT_LOOP
+        deps.parallel_calls = self._parallel(calls, offered)
+
+    def _refuse_repeat(self, call):
+        logger.info("Refused tool call %s", scrub(call.tool_name))
+        AI_TOOL_CALLS.labels(tool=self._label(call), status="repeat").inc()
+        self._refusals[call.tool_call_id] = (
+            f"Not executed: this is the same call to {call.tool_name} with the "
+            f"same arguments, {self.max_identical_calls} times already in this "
+            "reply. Repeating it returns what you already have. Read the "
+            "earlier result again, try a different tool or different "
+            "arguments, or answer with what you know."
+        )
+
+    def _parallel(self, calls, offered) -> frozenset:
+        """The calls of a round that run beside another, on pool threads.
+
+        A read with no neighbour to run beside stays on the task's thread:
+        a thread and a database connection of its own would buy it nothing.
+        """
+        if self.concurrency <= 1:
+            return frozenset()
+        concurrent = {tool.name for tool in offered if not tool.sequential}
+        together = set()
+        for shares, group in groupby(calls, key=lambda c: c.tool_name in concurrent):
+            pending = [
+                c.tool_call_id for c in group if c.tool_call_id not in self._refusals
+            ]
+            if shares and len(pending) > 1:
+                together.update(pending)
+        return frozenset(together)
+
+    def _label(self, call) -> str:
+        # A model can invent any name, and a name is a metric label.
+        return call.tool_name if call.tool_name in self._known else "unknown"
+
+    async def wrap_tool_execute(self, ctx, *, call, tool_def, args, handler):
+        self._reached.add(call.tool_call_id)
+        if refusal := self._refusals.get(call.tool_call_id):
+            raise ToolFailed(refusal)
+        if self._slots is None:
+            self._slots = asyncio.Semaphore(self.concurrency)
+        pooled = call.tool_call_id in ctx.deps.parallel_calls
+        async with self._slots if pooled else nullcontext():
+            # Read once the call has its slot, not when it joined the queue:
+            # the ones before it may have run for minutes.
+            if await self.cancelled():
+                # Ends the run once the calls already under way have returned.
+                ctx.cancel()
+                raise ToolFailed("Not executed: the reply was cancelled.")
+            await sync_to_async(self._announce)(call)
+            status = "error"
+            try:
+                result = await handler(args)
+                status = "ok"
+                return result
+            finally:
+                AI_TOOL_CALLS.labels(tool=call.tool_name, status=status).inc()
+                await sync_to_async(self._announce_done)(call)
+
+    def count_unreached(self, results):
+        """Count the calls of the round the library answered by itself.
+
+        *results* is the request it built from the round. A tool that does
+        not exist, arguments the schema refuses: those are failed calls like
+        any other, and a model that starts making them has to show.
+        """
+        for part in results.parts:
+            if (
+                isinstance(part, ToolReturnPart)
+                and part.outcome in ERROR_OUTCOMES
+                and part.tool_call_id not in self._reached
+                and part.tool_call_id not in self._refusals
+            ):
+                label = part.tool_name if part.tool_name in self._known else "unknown"
+                AI_TOOL_CALLS.labels(tool=label, status="error").inc()
 
     async def cancelled(self) -> bool:
         return bool(self.is_cancelled and await sync_to_async(self.is_cancelled)())
 
     def _announce(self, call):
-        if self.conversation_id:
-            notify_tool_step(
-                step_recipients(self.conversation_id, self.bot_user),
-                self.conversation_id,
-                call,
-            )
+        self._show(notify_tool_step, call)
 
     def _announce_done(self, call):
-        if self.conversation_id:
-            notify_tool_step_done(
-                step_recipients(self.conversation_id, self.bot_user),
-                self.conversation_id,
-                call,
-            )
+        self._show(notify_tool_step_done, call)
+
+    def _show(self, notify, call):
+        # Watching only: by the time a step cannot be shown the tool may
+        # have sent an email, and the reply must not fail for it.
+        if not self.conversation_id:
+            return
+        try:
+            recipients = step_recipients(self.conversation_id, self.bot_user)
+            notify(recipients, self.conversation_id, call)
+        except Exception:
+            logger.exception("Could not show a tool step")
 
 
 def tool_rounds(messages: list[ModelMessage]) -> list[dict]:
@@ -246,7 +335,10 @@ class BotRun:
 
     @property
     def raw_messages(self) -> dict:
-        return {"messages": llm.messages_for_storage(self.messages)}
+        return {
+            "messages": llm.messages_for_storage(self.messages),
+            "stop": self.stop.value,
+        }
 
     def task_fields(self) -> dict:
         """What the run cost, as the AITask columns that record it."""
@@ -288,6 +380,7 @@ def run_bot(
         bot_user=bot_user,
         max_rounds=settings.AI_MAX_TOOL_ROUNDS,
         max_identical_calls=settings.AI_MAX_IDENTICAL_TOOL_CALLS,
+        concurrency=settings.AI_TOOL_CONCURRENCY,
         is_cancelled=is_cancelled,
     )
     timer = llm.RequestMetrics()
@@ -299,8 +392,7 @@ def run_bot(
         output_type=str | None,
         toolsets=[tool_registry.toolset()],
         model_settings=llm.model_settings(),
-        # A wrong call costs a round, and the rounds are what bounds a reply.
-        retries={"tools": settings.AI_MAX_TOOL_ROUNDS, "output": 1},
+        retries={"tools": _NO_RETRY_BUDGET, "output": 1},
         capabilities=[llm.ReplyHygiene(), timer, loop],
     )
 
@@ -357,6 +449,7 @@ async def _iterate(agent, deps, loop, messages):
                 so_far = agent_run.all_messages()
                 if after_tools:
                     so_far = [*so_far, node.request]
+                    loop.count_unreached(node.request)
                 if await loop.cancelled():
                     return so_far, StopReason.CANCELLED, agent_run.usage
                 # A tool asked to wait for the user: the results of its round

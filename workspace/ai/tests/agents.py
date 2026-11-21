@@ -76,17 +76,20 @@ class Script:
     the last reply is given again for every request past the end, the way
     a stuck model keeps asking for the same call. ``requests`` holds
     ``(messages, tools)`` per request: the Pydantic AI messages sent, and
-    the names of the tools on offer.
+    the names of the tools on offer. ``settings`` holds the model settings
+    each request went out with.
     """
 
     def __init__(self, *replies, repeat=False):
         self._replies = replies
         self._repeat = repeat
         self.requests = []
+        self.settings = []
 
     def __call__(self, messages, info):
         tools = [tool.name for tool in info.function_tools]
         self.requests.append((list(messages), tools))
+        self.settings.append(info.model_settings)
         index = len(self.requests) - 1
         if index >= len(self._replies):
             if not self._repeat:
@@ -243,7 +246,7 @@ class RecordingTools(ToolProvider):
         return ToolReturn(return_value="a cat", content=[image])
 
 
-class _Bot:
+class StandInBot:
     """Stands for a bot profile: the model it runs on."""
 
     def get_model(self):
@@ -272,7 +275,7 @@ class BotRunCase(TestCase):
     def run_bot(self, *replies, repeat=False, **options):
         with scripted(*replies, repeat=repeat) as self.script:
             return run_bot(
-                _Bot(),
+                StandInBot(),
                 options.pop("user", None),
                 None,
                 options.pop("conversation_id", None),

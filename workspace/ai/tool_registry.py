@@ -23,7 +23,6 @@ from functools import wraps
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.conf import settings
 from django.db import connections
 from django.utils import translation
 from pydantic_ai import Tool
@@ -52,6 +51,8 @@ class ToolDeps:
     # Read once, where the run is put together: a tool on a pool thread
     # would otherwise open a connection there to look it up.
     language: str | None = None
+    # The calls of the round under way that run beside another, by id.
+    parallel_calls: frozenset = frozenset()
 
     def __post_init__(self):
         if self.language is None and self.user is not None:
@@ -115,7 +116,16 @@ def tool(
 
 
 class ToolProvider:
-    """Base class of the objects whose :func:`tool` methods are registered."""
+    """Base class of the objects whose :func:`tool` methods are registered.
+
+    ``instructions`` is what the model is told about using these tools, on
+    top of each tool's own description: when to reach for them, how they go
+    together. It is a section of the bot's system prompt, there only while
+    the provider is registered. A string, or a method taking the bot for
+    instructions that depend on which one is answering.
+    """
+
+    instructions = None
 
 
 _pool = None
@@ -123,25 +133,22 @@ _pool_lock = threading.Lock()
 
 
 def _thread_pool():
-    """The threads concurrent tools run on, as many as a round may use."""
+    """The threads tools share a round on. How many run at once is the loop's to say."""
     global _pool
     with _pool_lock:
         if _pool is None:
-            _pool = ThreadPoolExecutor(
-                max_workers=settings.AI_TOOL_CONCURRENCY,
-                thread_name_prefix="ai-tool",
-            )
+            _pool = ThreadPoolExecutor(thread_name_prefix="ai-tool")
         return _pool
 
 
-def _on_django_thread(handler, *, concurrent):
+def _on_django_thread(handler):
     """*handler* as the coroutine the agent awaits.
 
     A tool is synchronous Django code, and the agent runs on an event loop
-    where the ORM refuses to work. A tool that runs alone goes back to the
+    where the ORM refuses to work. A call that runs alone goes back to the
     thread that started the run, where it finds that thread's database
-    connection. A concurrent one takes a pool thread, and hands back the
-    connections it opened there: nothing else closes them.
+    connection. One that shares its round with another takes a pool thread,
+    and hands back the connections it opened there: nothing else closes them.
 
     Either way it runs in the user's language: a refusal another module
     translates reaches the chat in the words of whoever asked.
@@ -160,7 +167,7 @@ def _on_django_thread(handler, *, concurrent):
 
     @wraps(handler)
     async def call(ctx, **arguments):
-        if concurrent and settings.AI_TOOL_CONCURRENCY > 1:
+        if ctx.tool_call_id in ctx.deps.parallel_calls:
             return await sync_to_async(
                 run_in_pool, thread_sensitive=False, executor=_thread_pool()
             )(ctx, **arguments)
@@ -174,10 +181,12 @@ class ToolRegistry:
 
     def __init__(self):
         self._tools: dict[str, Tool] = {}
+        self._providers: list[ToolProvider] = []
         self._lock = threading.Lock()
 
     def register_provider(self, provider: ToolProvider):
         """Register all ``@tool``-decorated methods from *provider*."""
+        self._providers.append(provider)
         for name, method in inspect.getmembers(provider, predicate=callable):
             meta = getattr(method, "_tool_meta", None)
             if meta is None:
@@ -190,7 +199,7 @@ class ToolRegistry:
                 )
             label = meta["badge_label"] or name.replace("_", " ").title()
             registered = Tool(
-                _on_django_thread(method, concurrent=meta["concurrent"]),
+                _on_django_thread(method),
                 takes_ctx=True,
                 name=name,
                 description=description,
@@ -216,6 +225,24 @@ class ToolRegistry:
     def toolset(self) -> FunctionToolset[ToolDeps]:
         """The registered tools, as the toolset an agent is given."""
         return FunctionToolset(self.get_all())
+
+    def instructions(self, bot=None) -> list[str]:
+        """What each registered provider says about its tools, for *bot*.
+
+        They are written into the system prompt rather than handed to the
+        library with the toolset: it would place them after every system
+        message the conversation opens with, which includes the line that
+        introduces the first message, and so between that line and the
+        message.
+        """
+        sections = []
+        for provider in self._providers:
+            told = provider.instructions
+            if callable(told):
+                told = told(bot)
+            if told:
+                sections.append(told)
+        return sections
 
     # -- display ------------------------------------------------------------
 

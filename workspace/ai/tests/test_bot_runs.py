@@ -117,6 +117,16 @@ class AnsweredTests(BotRunCase):
         self.assertEqual(fields["model_used"], "test-model")
         self.assertGreater(fields["generation_seconds"], fields["answer_seconds"])
 
+    def test_nothing_is_slipped_between_a_header_line_and_its_message(self):
+        # Instructions handed to the library land after every system message
+        # the conversation opens with: after the line that introduces the
+        # first message, and so between that line and the message.
+        self.run_bot(reply("hello"))
+
+        (request,) = self.script.sent
+        self.assertIsNone(request.instructions)
+        self.assertEqual([part.content for part in request.parts], ["be helpful", "go"])
+
     def test_reasoning_written_between_inline_tags_is_cut_from_the_answer(self):
         run = self.run_bot(reply("<thought>let me see</thought>The answer"))
 
@@ -156,23 +166,39 @@ class EmptyReplyTests(BotRunCase):
 
 @override_settings(AI_MAX_TOOL_ROUNDS=2, AI_MAX_IDENTICAL_TOOL_CALLS=10)
 class RoundCapTests(BotRunCase):
-    def test_the_tools_are_taken_away_once_the_rounds_are_spent(self):
+    def test_a_round_past_the_cap_is_refused_and_the_tools_taken_away(self):
         def model(messages, tools):
             return reply("", _write(f"c{len(messages)}")) if tools else reply("done")
 
         run = self.run_bot(model, repeat=True)
 
-        # Two rounds with tools on offer, then a request offering none.
-        self.assertEqual([bool(tools) for _, tools in self.script.requests], [1, 1, 0])
+        # Two rounds that run, a third that is refused, then no tool on offer.
+        self.assertEqual(
+            [bool(tools) for _, tools in self.script.requests], [1, 1, 1, 0]
+        )
         self.assertEqual(len(self.tools.executed), 2)
         self.assertIs(run.stop, StopReason.ROUND_CAP)
         self.assertEqual(run.output, "done")
-        self.assertEqual(len(run.tool_data), 2)
+        refused = run.tool_data[2]["results"][0]
+        self.assertEqual(refused["outcome"], "failed")
+        self.assertIn("Not executed", refused["content"])
 
     def test_an_answer_before_the_cap_is_not_a_cap(self):
         run = self.run_bot(reply("", _write("c1")), reply("done"))
 
         self.assertIs(run.stop, StopReason.ANSWERED)
+
+    def test_a_run_that_spends_its_rounds_then_answers_was_not_cut_short(self):
+        run = self.run_bot(
+            reply("", _write("c1", "a")), reply("", _write("c2", "b")), reply("done")
+        )
+
+        self.assertEqual(len(self.tools.executed), 2)
+        self.assertIs(run.stop, StopReason.ANSWERED)
+        self.assertEqual(
+            self.script.tools,
+            ["ask_user", "explode", "fail", "read_webpage", "show_image", "write_note"],
+        )
 
 
 @override_settings(AI_MAX_IDENTICAL_TOOL_CALLS=3)
@@ -213,6 +239,44 @@ class RepeatedToolCallTests(BotRunCase):
             self.run_bot(reply("", *same), reply("done"))
 
         self.assertEqual(self.tools.executed, ["c1"])
+
+    def test_a_model_stuck_on_a_malformed_call_is_stopped_like_any_repeat(self):
+        # The library answers such a call itself: it never reaches a tool.
+        def model(messages, tools):
+            if not tools:
+                return reply("done")
+            return reply("", call("read_webpage", {"url": 3}, f"c{len(messages)}"))
+
+        run = self.run_bot(model, repeat=True)
+
+        self.assertIs(run.stop, StopReason.REPEAT_LOOP)
+        self.assertEqual(len(self.script.requests), 5)
+        self.assertEqual(self.tools.executed, [])
+
+    def test_a_model_stuck_on_a_tool_it_invented_is_stopped_too(self):
+        def model(messages, tools):
+            if not tools:
+                return reply("done")
+            return reply("", call("made_up", {"n": 1}, f"c{len(messages)}"))
+
+        run = self.run_bot(model, repeat=True)
+
+        self.assertIs(run.stop, StopReason.REPEAT_LOOP)
+        self.assertEqual(len(self.script.requests), 5)
+
+    def test_a_refused_repeat_beside_a_malformed_call_is_not_a_loop(self):
+        # The model did ask for something else: the round is not all repeats.
+        with override_settings(AI_MAX_IDENTICAL_TOOL_CALLS=1):
+            run = self.run_bot(
+                reply("", _write("c1")),
+                reply("", _write("c2"), call("read_webpage", {"url": 3}, "c3")),
+                reply("", _write("c4", "other")),
+                reply("done"),
+            )
+
+        self.assertIs(run.stop, StopReason.ANSWERED)
+        self.assertEqual(self.tools.executed, ["c1", "c4"])
+        self.assertTrue(all(tools for _, tools in self.script.requests))
 
     def test_same_tool_with_different_arguments_is_not_a_repeat(self):
         run = self.run_bot(
@@ -278,6 +342,29 @@ class CancellationTests(BotRunCase):
         self.assertEqual(self.tools.executed, ["c1"])
         self.assertEqual(len(self.script.requests), 1)
 
+    @override_settings(AI_TOOL_CONCURRENCY=2)
+    def test_a_call_waiting_for_a_slot_reads_the_cancellation_before_it_runs(self):
+        # Six images asked for, four at a time: cancelling during the first
+        # four must not generate, and bill, the last two.
+        cancelled = threading.Event()
+
+        def gate(call_id):
+            cancelled.set()
+            time.sleep(0.2)
+
+        self.tools.gate = gate
+
+        run = self.run_bot(
+            reply("", *[_read(f"c{i}", str(i)) for i in range(1, 7)]),
+            repeat=True,
+            is_cancelled=cancelled.is_set,
+        )
+
+        self.assertIs(run.stop, StopReason.CANCELLED)
+        self.assertLessEqual(len(self.tools.executed), 2)
+        self.assertNotIn("c5", self.tools.executed)
+        self.assertNotIn("c6", self.tools.executed)
+
     def test_a_cancellation_read_after_the_round_buys_no_more_model_call(self):
         seen = []
         self.tools.gate = seen.append
@@ -331,8 +418,9 @@ class ToolFailureTests(BotRunCase):
 
         run = self.run_bot(model, repeat=True)
 
+        # Six rounds, a seventh that is refused, and the answer.
         self.assertIs(run.stop, StopReason.ROUND_CAP)
-        self.assertEqual(len(self.script.requests), 7)
+        self.assertEqual(len(self.script.requests), 8)
 
 
 class RecordTests(BotRunCase):
@@ -369,6 +457,23 @@ class RecordTests(BotRunCase):
         stored = str(run.raw_messages)
         self.assertIn("[stripped]", stored)
 
+    def test_the_record_says_why_the_run_stopped(self):
+        answered = self.run_bot(reply("hello"))
+        halted = self.run_bot(reply("", call("ask_user", {}, "c1")), repeat=True)
+
+        self.assertEqual(answered.raw_messages["stop"], "answered")
+        self.assertEqual(halted.raw_messages["stop"], "awaiting_user")
+
+    @override_settings(AI_TOOL_RESULT_TASK_MAX_CHARS=200)
+    def test_the_record_keeps_less_of_a_result_than_the_next_turn_does(self):
+        page = "HEAD" + ("p" * 5000) + "TAIL"
+        with patch.object(RecordingTools, "_run", lambda tools, ctx, result="ok": page):
+            run = self.run_bot(reply("", _read("c1", "doc")), reply("done"))
+
+        recorded = run.raw_messages["messages"][2]["parts"][0]["content"]
+        self.assertLessEqual(len(recorded), 200)
+        self.assertGreater(len(run.tool_data[0]["results"][0]["content"]), 200)
+
     def test_the_run_context_reaches_the_tools_and_comes_back(self):
         run = self.run_bot(
             reply("", _write("c1")), reply("done"), context={"agent_checkin": True}
@@ -389,6 +494,25 @@ class ThreadTests(BotRunCase):
         self.run_bot(reply("", _write("w1")), reply("done"))
 
         self.assertEqual(self.tools.threads, {"w1": threading.get_ident()})
+
+    def test_a_lone_read_stays_on_that_thread_too(self):
+        # The commonest round there is: a thread and a connection of its own
+        # would buy it nothing.
+        with patch("workspace.ai.tool_registry.connections") as connections:
+            self.run_bot(reply("", _read("c1")), reply("done"))
+
+        self.assertEqual(self.tools.threads, {"c1": threading.get_ident()})
+        connections.close_all.assert_not_called()
+
+    def test_a_read_whose_neighbour_was_refused_stays_on_that_thread(self):
+        with override_settings(AI_MAX_IDENTICAL_TOOL_CALLS=1):
+            self.run_bot(
+                reply("", _read("c1", "a")),
+                reply("", _read("c2", "a"), _read("c3", "b")),
+                reply("done"),
+            )
+
+        self.assertEqual(self.tools.threads["c3"], threading.get_ident())
 
     def test_reads_of_one_round_run_at_the_same_time_in_pool_threads(self):
         # Both calls must be in flight together for the barrier to release.
@@ -500,6 +624,20 @@ class StepTests(BotRunCase):
         )
 
         self.assertEqual((started, done), (["c1"], ["c1"]))
+
+    def test_a_step_that_cannot_be_shown_never_fails_the_reply(self):
+        # The tool has run by then: an email is sent, a task created.
+        with patch(
+            "workspace.ai.services.bot_runs.step_recipients",
+            side_effect=RuntimeError("database is locked"),
+        ):
+            with self.assertLogs("workspace.ai.services.bot_runs", level="ERROR"):
+                run = self.run_bot(
+                    reply("", _write("w1")), reply("ok"), conversation_id="conv-1"
+                )
+
+        self.assertEqual(run.output, "ok")
+        self.assertEqual(run.context["written"], ["https://a.test"])
 
     def test_a_run_outside_a_conversation_shows_nobody_anything(self):
         with patch("workspace.ai.services.bot_runs.notify_tool_step") as started:

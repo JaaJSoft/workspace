@@ -173,13 +173,19 @@ Every text request (a bot's reply and its tool loop, titles, summaries, mail
 and the editor) is made with [Pydantic AI](https://pydantic.dev/docs/ai/),
 which writes each request for the backend it talks to:
 
-- With `AI_BASE_URL` unset the backend is OpenAI, and the reply cap is sent
-  as `max_completion_tokens`, the only name its reasoning models (`gpt-5`
-  included) accept.
-- With `AI_BASE_URL` set the backend is treated as a service that speaks
-  OpenAI's protocol and nothing more: the cap is sent as `max_tokens`, the
-  one name all of them read (Ollama ignores the other and answers uncapped),
-  and a reply's reasoning is not sent back to the model on the next round.
+- With `AI_BASE_URL` unset, or naming OpenAI itself (`api.openai.com`, an
+  Azure OpenAI resource under `*.openai.azure.com`), the backend is OpenAI,
+  and the reply cap is sent as `max_completion_tokens`, the only name its
+  reasoning models (`gpt-5` included) accept.
+- With any other `AI_BASE_URL` the backend is treated as a service that
+  speaks OpenAI's protocol and nothing more: the cap is sent as `max_tokens`,
+  the one name all of them read (Ollama ignores the other and answers
+  uncapped), and a reply's reasoning is not sent back to the model on the
+  next round. What the model is called changes nothing: a name with a vendor
+  in front (`anthropic/...`, `meta-llama/...`) gets the same requests,
+  structured output included.
+- The cap counts a model's reasoning too. One that thinks before it answers
+  needs an `AI_MAX_TOKENS` with room for both.
 - An image a tool returns reaches the model as an image in a message of its
   own, not inside the tool result, which OpenAI refuses.
 - A model has to call tools natively. One that writes its calls out as JSON
@@ -201,7 +207,7 @@ own endpoints, below.
 | `AI_VISION_MAX_IMAGES` | `8` | Most images a vision bot sees at once. |
 | `AI_MAX_TOOL_ROUNDS` | `20` | Tool rounds per reply before the bot must answer. |
 | `AI_MAX_IDENTICAL_TOOL_CALLS` | `3` | Times one reply may repeat the same call. |
-| `AI_TOOL_CONCURRENCY` | `4` | Reading tools (and image generation) one round runs at once; `1` runs them one by one. Each can use a database connection. |
+| `AI_TOOL_CONCURRENCY` | `4` | Reading tools (and image generation) one round runs at once; `1` runs them one by one. Each can use a database connection, when a round holds more than one. |
 | `AI_TOOL_RESULT_STORE_MAX_CHARS` | `12000` | Characters of a tool result replayed on the next turn. |
 | `AI_TOOL_RESULT_REPLAY_MIN_CHARS` | `1500` | What an older tool result shrinks to. |
 | `AI_TOOL_RESULT_TASK_MAX_CHARS` | `2000` | Characters of a tool result kept in the run record. |

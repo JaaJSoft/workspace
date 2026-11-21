@@ -48,7 +48,7 @@
             x-show="open"
             x-cloak
             x-transition.opacity
-            class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+            class="absolute right-0 top-full mt-2 z-50 w-80 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
           >
             {% include "dashboard/partials/usage_widget.html" %}
           </div>
@@ -292,12 +292,9 @@
           }
         },
         _animateCounts() {
-          const refs = ['countFiles', 'countMessages', 'countMail', 'countEvents'];
           const duration = 600;
-          for (let i = 0; i < refs.length; i++) {
-            const el = this.$refs[refs[i]];
-            if (!el) continue;
-            const target = parseInt(el.dataset.target) || 0;
+          for (const el of this.$root.querySelectorAll('[data-usage-count]')) {
+            const target = parseInt(el.dataset.usageCount) || 0;
             if (target === 0) {
               el.textContent = '0';
               continue;

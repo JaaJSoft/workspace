@@ -72,6 +72,32 @@ class ImportFolderServiceTests(ImportFolderTestCase):
         self.assertIsNone(import_folder(self.user))
 
 
+class ImportFolderLanguageTests(ImportFolderTestCase):
+    def setUp(self):
+        super().setUp()
+        set_setting(self.user, "core", "language", "fr")
+
+    def test_the_default_folder_is_created_in_the_users_language(self):
+        folder = ensure_import_folder(self.user)
+
+        self.assertEqual(folder.name, "Images")
+        self.assertFalse(self._root_pictures_folders().exists())
+
+    def test_the_default_folder_is_shown_in_the_users_language_before_it_exists(self):
+        response = self.client.get(API)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "Images")
+        self.assertIsNone(response.json()["uuid"])
+
+    def test_a_language_change_keeps_the_folder_created_before(self):
+        folder = ensure_import_folder(self.user)
+        set_setting(self.user, "core", "language", "en")
+
+        self.assertEqual(ensure_import_folder(self.user).pk, folder.pk)
+        self.assertFalse(self._root_pictures_folders().exists())
+
+
 class ImportFolderApiTests(ImportFolderTestCase):
     def test_login_required(self):
         self.client.logout()

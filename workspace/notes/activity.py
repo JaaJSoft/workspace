@@ -1,8 +1,9 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
+from django.utils.translation import gettext
 
 from workspace.common.datetimes import local_date_range
-from workspace.core.activity_registry import ActivityProvider
+from workspace.core.activity_registry import ActivityProvider, UsageHeadline
 
 # Notes are markdown files; their activity is the FileEvent stream filtered
 # to that mime type. The files provider excludes the same mime type, so the
@@ -150,3 +151,6 @@ class NotesActivityProvider(ActivityProvider):
             .count()
         )
         return {"total_notes": count}
+
+    def get_headline(self, stats):
+        return UsageHeadline(stats["total_notes"], gettext("Notes"))

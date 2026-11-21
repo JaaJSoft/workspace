@@ -25,6 +25,15 @@ class ActivityProviderInfo:
     provider_cls: type  # subclass of ActivityProvider
 
 
+@dataclass(frozen=True)
+class UsageHeadline:
+    """The one count a module shows in the dashboard's usage popover."""
+
+    count: int
+    label: str
+    detail: str = ""
+
+
 class ActivityProvider(ABC):
     """Base class for activity providers.
 
@@ -74,6 +83,14 @@ class ActivityProvider(ABC):
     @abstractmethod
     def get_stats(self, user_id: int | None, *, viewer_id: int | None = None) -> dict:
         """Return stat-card data for this provider."""
+
+    def get_headline(self, stats: dict) -> UsageHeadline | None:
+        """The headline read from *stats*, a ``get_stats`` result.
+
+        Called at render time, so labels are in the viewer's language. None
+        keeps the module out of the usage popover.
+        """
+        return None
 
 
 class ActivityRegistry:
@@ -202,6 +219,21 @@ class ActivityRegistry:
                 )
                 stats[info.slug] = {}
         return stats
+
+    def get_headline(self, slug: str, stats: dict | None) -> UsageHeadline | None:
+        """*slug*'s headline, or None when it has none or its stats are empty.
+
+        ``get_stats`` stores ``{}`` for a provider that failed, so an empty
+        dict means "no numbers", not "zero of everything".
+        """
+        info = self._providers.get(slug)
+        if info is None or not stats:
+            return None
+        try:
+            return info.provider_cls().get_headline(stats)
+        except Exception:
+            logger.exception("Activity provider '%s' failed in get_headline", slug)
+            return None
 
 
 activity_registry = ActivityRegistry()

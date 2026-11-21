@@ -1,9 +1,10 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 from workspace.common.datetimes import local_date_range
-from workspace.core.activity_registry import ActivityProvider
+from workspace.core.activity_registry import ActivityProvider, UsageHeadline
 
 
 class MailActivityProvider(ActivityProvider):
@@ -118,3 +119,12 @@ class MailActivityProvider(ActivityProvider):
             "unread_messages": unread_messages,
             "total_accounts": total_accounts,
         }
+
+    def get_headline(self, stats):
+        unread = stats["unread_messages"]
+        detail = (
+            ngettext("%(count)s unread", "%(count)s unread", unread) % {"count": unread}
+            if unread
+            else ""
+        )
+        return UsageHeadline(stats["total_messages"], _("Mail"), detail)

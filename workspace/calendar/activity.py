@@ -6,7 +6,7 @@ from django.utils import formats, timezone
 from django.utils.translation import gettext as _
 
 from workspace.common.datetimes import local_date_range
-from workspace.core.activity_registry import ActivityProvider
+from workspace.core.activity_registry import ActivityProvider, UsageHeadline
 
 
 class CalendarActivityProvider(ActivityProvider):
@@ -147,3 +147,6 @@ class CalendarActivityProvider(ActivityProvider):
             "upcoming_events": upcoming,
             "total_events": total,
         }
+
+    def get_headline(self, stats):
+        return UsageHeadline(stats["total_events"], _("Events"))

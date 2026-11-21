@@ -19,6 +19,14 @@ msgstr "E-mail envoyé"
 msgid "Email received"
 msgstr "E-mail reçu"
 
+#: activity.py
+#, python-format
+msgid "%(count)s unread"
+msgid_plural "%(count)s unread"
+msgstr[0] "%(count)s non lu"
+msgstr[1] "%(count)s non lus"
+msgstr[2] "%(count)s non lus"
+
 #: activity.py services/notifications.py
 #: ui/templates/mail/ui/partials/message_detail.html
 #: ui/templates/mail/ui/partials/message_list.html

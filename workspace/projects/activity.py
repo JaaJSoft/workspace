@@ -1,8 +1,9 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
+from django.utils.translation import gettext
 
 from workspace.common.datetimes import local_date_range
-from workspace.core.activity_registry import ActivityProvider
+from workspace.core.activity_registry import ActivityProvider, UsageHeadline
 
 
 class ProjectsActivityProvider(ActivityProvider):
@@ -103,3 +104,6 @@ class ProjectsActivityProvider(ActivityProvider):
             "total_tasks": agg["total_tasks"] or 0,
             "completed_tasks": agg["completed_tasks"] or 0,
         }
+
+    def get_headline(self, stats):
+        return UsageHeadline(stats["total_tasks"], gettext("Tasks"))

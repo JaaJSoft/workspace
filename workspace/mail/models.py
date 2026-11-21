@@ -45,7 +45,7 @@ class MailAccount(models.Model):
     username = models.CharField(max_length=255)
     password_encrypted = models.BinaryField(null=True, blank=True)
 
-    # OAuth2 (prepared for future use)
+    # OAuth2 sign-in: Google, Microsoft or the generic provider
     oauth2_provider = models.CharField(max_length=50, blank=True, default="")
     oauth2_data_encrypted = models.BinaryField(null=True, blank=True)
 

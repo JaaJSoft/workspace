@@ -1011,6 +1011,10 @@ msgid "One or more workspace files not found or not accessible."
 msgstr "Un ou plusieurs fichiers Workspace sont introuvables ou inaccessibles."
 
 #: views/compose.py
+msgid "One or more attachments not found."
+msgstr "Une ou plusieurs pièces jointes sont introuvables."
+
+#: views/compose.py
 #, python-format
 msgid "Attachments are limited to %(limit)s MB per email."
 msgstr "Les pièces jointes sont limitées à %(limit)s Mo par e-mail."

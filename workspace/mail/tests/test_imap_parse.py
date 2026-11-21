@@ -85,3 +85,31 @@ class ImapParseTests(TestCase):
         )
         msg = _parse_message(raw, self.account, self.folder, uid=45, flags_str="")
         self.assertEqual(msg.references, "")
+
+    def _parse_html(self, html, uid=100):
+        raw = (
+            b"From: alice@example.com\r\n"
+            b"Subject: Hello\r\n"
+            b"Message-ID: <html@example.com>\r\n"
+            b"Date: Thu, 14 May 2026 10:00:00 +0000\r\n"
+            b"Content-Type: text/html; charset=utf-8\r\n"
+            b"\r\n" + html.encode()
+        )
+        return _parse_message(raw, self.account, self.folder, uid=uid, flags_str="")
+
+    def test_every_link_opens_in_a_new_tab_whatever_target_it_named(self):
+        msg = self._parse_html(
+            '<a href="https://a.example" target="_self">a</a>'
+            '<a href="https://b.example" target="_top">b</a>'
+        )
+
+        self.assertEqual(
+            msg.body_html,
+            '<a href="https://a.example" target="_blank" rel="noopener noreferrer">a</a>'
+            '<a href="https://b.example" target="_blank" rel="noopener noreferrer">b</a>',
+        )
+
+    def test_class_and_style_are_kept_for_the_frame(self):
+        msg = self._parse_html('<div class="fixed" style="color: red">x</div>')
+
+        self.assertEqual(msg.body_html, '<div class="fixed" style="color: red">x</div>')

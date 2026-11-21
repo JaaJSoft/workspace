@@ -55,3 +55,38 @@ class MessageDetailSoftDeletedTests(TestCase):
         # Defensive: a 404 must not have applied the patch.
         self.deleted_msg.refresh_from_db()
         self.assertFalse(self.deleted_msg.is_starred)
+
+
+class MessageDetailBodyIsCleanedOnReadTests(TestCase):
+    """A body stored before the allow-list last changed renders under today's."""
+
+    def test_a_stored_link_target_and_script_are_dropped(self):
+        user = User.objects.create_user(username="reader", password="pass")
+        account = MailAccount.objects.create(
+            owner=user,
+            email="reader@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="reader@example.com",
+        )
+        folder = MailFolder.objects.create(
+            account=account, name="INBOX", display_name="Inbox", folder_type="inbox"
+        )
+        message = MailMessage.objects.create(
+            account=account,
+            folder=folder,
+            imap_uid=1,
+            body_html=(
+                '<a href="https://x.example" target="_top">x</a>'
+                "<script>alert(1)</script>"
+            ),
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        body = client.get(f"/api/v1/mail/messages/{message.uuid}").json()["body_html"]
+
+        self.assertEqual(
+            body,
+            '<a href="https://x.example" target="_blank" rel="noopener noreferrer">x</a>',
+        )

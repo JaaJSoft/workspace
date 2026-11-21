@@ -68,7 +68,8 @@ class TriageServiceTestCase(TestCase):
 class SetFlagTests(TriageServiceTestCase):
     def test_every_flag_name_maps_to_a_call_and_a_column(self):
         self.assertEqual(
-            set(flag_operations()), {"read", "unread", "starred", "unstarred"}
+            set(flag_operations()),
+            {"read", "unread", "starred", "unstarred", "answered"},
         )
 
     def test_a_synced_flag_reports_true_and_recomputes_counts(self):

@@ -37,13 +37,20 @@ def flag_operations():
     Exposed so the bulk path can drive its own loop off the same table
     instead of restating which IMAP call goes with which column.
     """
-    from .imap_messages import mark_read, mark_unread, star_message, unstar_message
+    from .imap_messages import (
+        mark_answered,
+        mark_read,
+        mark_unread,
+        star_message,
+        unstar_message,
+    )
 
     return {
         "read": (mark_read, "is_read", True),
         "unread": (mark_unread, "is_read", False),
         "starred": (star_message, "is_starred", True),
         "unstarred": (unstar_message, "is_starred", False),
+        "answered": (mark_answered, "is_answered", True),
     }
 
 

@@ -11,12 +11,14 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.drafts import save_composed_draft
 from workspace.mail.services.sending import deliver_email
 from workspace.mail.services.smtp import SentMessage
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
 
@@ -236,6 +238,19 @@ class DeliverEmailTests(TestCase):
         self.assertFalse(result.archived)
         append.assert_not_called()
 
+    def test_a_send_without_a_parent_flags_nothing(self):
+        with (
+            fake_imap() as server,
+            patch(
+                "workspace.mail.services.smtp.send_email", return_value=self.delivery
+            ),
+            patch("workspace.mail.services.imap_messages.append_to_sent"),
+            patch.object(mail_tasks.sync_folder, "delay"),
+        ):
+            deliver_email(self.account, to=["bob@example.com"], subject="Hi")
+
+        self.assertEqual(server.named("add_flags"), [])
+
     def test_an_smtp_failure_propagates(self):
         with (
             patch(
@@ -247,3 +262,142 @@ class DeliverEmailTests(TestCase):
             with self.assertRaises(OSError):
                 deliver_email(self.account, to=["bob@example.com"], subject="Hi")
         append.assert_not_called()
+
+
+class ReplyMarksItsParentAnsweredTests(TestCase):
+    """Issue #1770: a reply sent from here left no mark on what it answered."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="replier", password="pw")
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="me@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="me@example.com",
+        )
+        self.inbox = MailFolder.objects.create(
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+            remote_state={"highestmodseq": 7},
+        )
+        MailFolder.objects.create(
+            account=self.account, name="Sent", display_name="Sent", folder_type="sent"
+        )
+        self.server = self.enterContext(fake_imap())
+        uid = self.server.deliver("INBOX", flags=[r"\Seen"])
+        self.parent = MailMessage.objects.create(
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=uid,
+            message_id="<parent@example.com>",
+            is_read=True,
+        )
+        self.enterContext(patch("workspace.mail.services.imap_messages.append_to_sent"))
+        self.enterContext(patch.object(mail_tasks.sync_folder, "delay"))
+
+    def _reply(self, parent_uuid, **smtp):
+        with patch(
+            "workspace.mail.services.smtp.send_email",
+            **(smtp or {"return_value": sent_message()}),
+        ):
+            return deliver_email(
+                self.account,
+                to=["bob@example.com"],
+                subject="Re: Hi",
+                reply_message_id=parent_uuid,
+            )
+
+    def test_the_parent_is_answered_here_and_on_the_server(self):
+        delivery = self._reply(self.parent.uuid)
+
+        self.assertEqual(delivery.answered, self.parent.uuid)
+        self.parent.refresh_from_db()
+        self.assertTrue(self.parent.is_answered)
+        self.assertEqual(
+            self.server.flags("INBOX", self.parent.imap_uid),
+            {r"\Seen", r"\Answered"},
+        )
+
+    def test_a_refused_flag_leaves_the_send_standing(self):
+        self.server.fail("add_flags")
+
+        delivery = self._reply(self.parent.uuid)
+
+        self.assertTrue(delivery.archived)
+        # Answered here all the same, until the next sync says otherwise.
+        self.assertEqual(delivery.answered, self.parent.uuid)
+        self.assertEqual(self.server.flags("INBOX", self.parent.imap_uid), {r"\Seen"})
+        # The next sync reads the folder in full and puts the row right.
+        self.inbox.refresh_from_db()
+        self.assertIsNone(self.inbox.remote_state)
+
+    def test_a_parent_moved_during_the_send_is_marked_where_it_now_is(self):
+        archive = MailFolder.objects.create(
+            account=self.account,
+            name="Archive",
+            display_name="Archive",
+            folder_type="archive",
+        )
+
+        def archived_while_sending(**kwargs):
+            new_uid = self.server.deliver("Archive", flags=[r"\Seen"])
+            self.server.remove("INBOX", self.parent.imap_uid)
+            MailMessage.objects.filter(pk=self.parent.pk).update(
+                folder=archive, imap_uid=new_uid
+            )
+            return sent_message()
+
+        delivery = self._reply(self.parent.uuid, side_effect=archived_while_sending)
+
+        self.parent.refresh_from_db()
+        self.assertEqual(delivery.answered, self.parent.uuid)
+        self.assertEqual(self.parent.folder, archive)
+        self.assertTrue(self.parent.is_answered)
+        self.assertEqual(
+            self.server.flags("Archive", self.parent.imap_uid),
+            {r"\Seen", r"\Answered"},
+        )
+
+    def test_a_parent_deleted_during_the_send_is_left_alone(self):
+        def deleted_while_sending(**kwargs):
+            MailMessage.objects.filter(pk=self.parent.pk).update(
+                deleted_at=timezone.now()
+            )
+            return sent_message()
+
+        delivery = self._reply(self.parent.uuid, side_effect=deleted_while_sending)
+
+        self.assertIsNone(delivery.answered)
+        self.assertEqual(self.server.named("add_flags"), [])
+
+    def test_a_reply_that_did_not_go_out_marks_nothing(self):
+        with self.assertRaises(OSError):
+            self._reply(self.parent.uuid, side_effect=OSError("refused"))
+
+        self.parent.refresh_from_db()
+        self.assertFalse(self.parent.is_answered)
+        self.assertEqual(self.server.named("add_flags"), [])
+
+    def test_a_parent_on_another_account_is_left_alone(self):
+        stranger = User.objects.create_user(username="stranger", password="pw")
+        other = MailAccount.objects.create(
+            owner=stranger,
+            email="other@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="other@example.com",
+        )
+        folder = MailFolder.objects.create(
+            account=other, name="INBOX", display_name="Inbox", folder_type="inbox"
+        )
+        theirs = MailMessage.objects.create(account=other, folder=folder, imap_uid=1)
+
+        delivery = self._reply(theirs.uuid)
+
+        self.assertIsNone(delivery.answered)
+        theirs.refresh_from_db()
+        self.assertFalse(theirs.is_answered)
+        self.assertEqual(self.server.named("add_flags"), [])

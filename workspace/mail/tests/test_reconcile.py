@@ -38,13 +38,16 @@ class ReconcileFolderMixin:
             folder_type="inbox",
         )
 
-    def _make_msg(self, uid, is_read=False, is_starred=False, deleted_at=None):
+    def _make_msg(
+        self, uid, is_read=False, is_starred=False, is_answered=False, deleted_at=None
+    ):
         return MailMessage.objects.create(
             account=self.account,
             folder=self.folder,
             imap_uid=uid,
             is_read=is_read,
             is_starred=is_starred,
+            is_answered=is_answered,
             deleted_at=deleted_at,
         )
 
@@ -224,6 +227,27 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
         self.assertFalse(msg.is_starred)
+
+    def test_marks_answered(self):
+        """A message answered from another client comes in answered."""
+        self._make_msg(100)
+
+        conn = self._mock_conn([100], flags={100: r"\Answered"})
+        _reconcile(conn, self.folder)
+
+        msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
+        self.assertTrue(msg.is_answered)
+
+    def test_marks_unanswered(self):
+        """Answered local message unmarked when server lacks \\Answered."""
+        self._make_msg(100, is_answered=True)
+
+        conn = self._mock_conn([100], flags={100: r"\Seen"})
+        _reconcile(conn, self.folder)
+
+        msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
+        self.assertFalse(msg.is_answered)
+        self.assertTrue(msg.is_read)
 
     def test_combined_flags(self):
         """Both \\Seen and \\Flagged are applied together."""

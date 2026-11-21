@@ -264,13 +264,15 @@ class HostileMessageTests(ImapParseTests):
             self.account,
             self.folder,
             uid=1,
-            flags={"\\Seen", "\\Flagged", "\\Draft"},
+            flags={"\\Seen", "\\Flagged", "\\Draft", "\\Answered"},
         )
 
         self.assertTrue(msg.is_read)
         self.assertTrue(msg.is_starred)
         self.assertTrue(msg.is_draft)
+        self.assertTrue(msg.is_answered)
         unflagged = _parse_message(raw, self.account, self.folder, uid=2, flags=())
         self.assertFalse(unflagged.is_read)
         self.assertFalse(unflagged.is_starred)
         self.assertFalse(unflagged.is_draft)
+        self.assertFalse(unflagged.is_answered)

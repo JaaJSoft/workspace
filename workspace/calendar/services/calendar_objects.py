@@ -85,8 +85,6 @@ def store_object(calendar, name, parsed, existing=None):
     """Write *parsed* as the object *name* of *calendar*; return its master.
 
     *existing* is the master currently served under *name*, None for a create.
-    Exceptions are replaced as a set: an occurrence override the client no
-    longer sends is an edit it undid.
     """
     if existing is not None and object_uid(existing) != parsed.uid:
         raise InvalidObject("An object's UID cannot change.", "no-uid-conflict")
@@ -106,45 +104,95 @@ def store_object(calendar, name, parsed, existing=None):
         )
     else:
         master = existing
-    _apply(master, parsed.master, parsed.master.rule)
-    if existing is None:
-        master.save()
-    else:
-        master.save(update_fields=_EVENT_COLUMNS)
-
-    current = {exc.original_start: exc for exc in master.exceptions.all()}
-    kept = set()
-    for override in parsed.overrides:
-        exc = current.get(override.recurrence_id)
-        if exc is None:
-            exc = Event(
-                calendar=master.calendar,
-                owner=master.owner,
-                recurrence_parent=master,
-                original_start=override.recurrence_id,
-                source=Event.Source.CALDAV,
-            )
-            _apply(exc, override, "")
-            exc.save()
-        else:
-            _apply(exc, override, "")
-            exc.save(update_fields=_EVENT_COLUMNS)
-        kept.add(override.recurrence_id)
-    for start, exc in current.items():
-        if start not in kept:
-            exc.delete()
+    save_object(master, parsed, exception_source=Event.Source.CALDAV)
     return master
 
 
+def save_object(master, parsed, exception_source=None, **fields):
+    """Write *parsed* onto *master* and its exception rows.
+
+    *master* is a saved row or a new one. Exceptions are replaced as a set: an
+    occurrence override the object no longer holds is an edit undone. *fields*
+    are further master columns the caller owns (the organizer of a feed event,
+    the message an invitation came in).
+    """
+    _apply(master, parsed.master, parsed.master.rule)
+    for name, value in fields.items():
+        setattr(master, name, value)
+    created = master._state.adding
+    if created:
+        master.save()
+    else:
+        master.save(update_fields=[*_EVENT_COLUMNS, *fields])
+
+    current = (
+        {} if created else {exc.original_start: exc for exc in master.exceptions.all()}
+    )
+    for override in parsed.overrides:
+        save_occurrence(
+            master,
+            override,
+            current.pop(override.recurrence_id, None),
+            exception_source,
+        )
+    for exc in current.values():
+        exc.delete()
+
+
+def save_occurrence(master, override, existing=None, source=None):
+    """Write the occurrence *override* of *master*: *existing*, or a new row."""
+    exc = existing or Event(
+        calendar=master.calendar,
+        owner=master.owner,
+        recurrence_parent=master,
+        original_start=override.recurrence_id,
+        source=source or master.source,
+    )
+    _apply(exc, override, "")
+    if exc._state.adding:
+        exc.save()
+    else:
+        exc.save(update_fields=_EVENT_COLUMNS)
+    return exc
+
+
+def object_unchanged(master, parsed, **fields):
+    """Whether saving *parsed* (and *fields*) would leave *master* as it is.
+
+    Reads ``master.exceptions``, so prefetch them when checking many objects.
+    """
+    expected = {**_columns(parsed.master, parsed.master.rule), **fields}
+    if any(getattr(master, name) != value for name, value in expected.items()):
+        return False
+    current = {exc.original_start: exc for exc in master.exceptions.all()}
+    if current.keys() != {override.recurrence_id for override in parsed.overrides}:
+        return False
+    return all(
+        getattr(current[override.recurrence_id], name) == value
+        for override in parsed.overrides
+        for name, value in _columns(override, "").items()
+    )
+
+
+def _columns(parsed, rule):
+    return {
+        "title": parsed.title,
+        "description": parsed.description,
+        "location": parsed.location,
+        "start": parsed.start,
+        "end": parsed.end,
+        "all_day": parsed.all_day,
+        "timezone": parsed.timezone,
+        "ical_sequence": parsed.sequence,
+        "is_cancelled": parsed.cancelled,
+        "ical_extra": parsed.extra,
+        "recurrence_rule": rule,
+    }
+
+
 def _apply(event, parsed, rule):
-    event.title = parsed.title
-    event.description = parsed.description
-    event.location = parsed.location
-    event.start = parsed.start
-    event.end = parsed.end
-    event.all_day = parsed.all_day
-    event.timezone = parsed.timezone
-    event.ical_sequence = parsed.sequence
-    event.is_cancelled = parsed.cancelled
-    event.ical_extra = parsed.extra
+    columns = _columns(parsed, rule)
+    rule = columns.pop("recurrence_rule")
+    for name, value in columns.items():
+        setattr(event, name, value)
     apply_rule(event, rule)

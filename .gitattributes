@@ -15,3 +15,7 @@ workspace/mail/tests/corpus/*.eml -text
 
 # Mounted into a Linux container whatever the host it was checked out on.
 workspace/mail/tests/live/*.conf text eol=lf
+
+# iCalendar fixtures are exports kept as their producers wrote them, CRLF line
+# endings and folded lines included.
+workspace/calendar/tests/ics/*.ics -text

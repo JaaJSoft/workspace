@@ -3607,6 +3607,7 @@ dependencies = [
     { name = "vobject" },
     { name = "whitenoise" },
     { name = "wsgidav" },
+    { name = "x-wr-timezone" },
     { name = "zipstream-ng" },
 ]
 
@@ -3688,6 +3689,7 @@ requires-dist = [
     { name = "vobject", specifier = ">=0.9.9" },
     { name = "whitenoise", specifier = ">=6.11.0" },
     { name = "wsgidav", specifier = ">=4.4.0" },
+    { name = "x-wr-timezone", specifier = ">=2.0.1" },
     { name = "zipstream-ng", specifier = ">=1.9.3" },
 ]
 

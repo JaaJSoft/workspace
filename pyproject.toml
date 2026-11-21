@@ -47,6 +47,9 @@ dependencies = [
     "nh3>=0.3.7",
     "python-dateutil>=2.9",
     "icalendar>=7.3.0",
+    # calendar: feeds that publish UTC times plus an X-WR-TIMEZONE (LGPL-3.0+,
+    # installed unmodified from PyPI and never vendored)
+    "x-wr-timezone>=2.0.1",
     # people: vCard import/export, phone normalisation
     "vobject>=0.9.9",
     # QR codes (pure Python, no dependencies): a contact as a scannable card

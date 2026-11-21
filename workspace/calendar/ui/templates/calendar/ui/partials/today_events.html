@@ -1,0 +1,23 @@
+{% load i18n ui_filters %}
+{% for event in items %}
+  <li>
+    <a
+      href="/calendar?event={{ event.uuid }}"
+      class="flex items-center gap-3 py-1.5 group"
+      onmouseenter="window.matchMedia('(hover: hover)').matches&&window._eventCardShow(this,'{{ event.uuid|escapejs }}')"
+      onmouseleave="window.matchMedia('(hover: hover)').matches&&window._cardPopoverScheduleHide(this)"
+    >
+      <span class="text-xs text-base-content/60 tabular-nums shrink-0 w-14">
+        {% if event.all_day %}
+          {% translate "All day" context "short event time slot" %}
+        {% else %}
+          {{ event.start|localtime_tag:"time" }}
+        {% endif %}
+      </span>
+      <span class="w-2 h-2 rounded-full bg-{{ event.calendar.color }} shrink-0"></span>
+      <span
+        class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline"
+      >{{ event.title }}</span>
+    </a>
+  </li>
+{% endfor %}

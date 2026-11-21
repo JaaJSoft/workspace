@@ -107,3 +107,39 @@ class CalendarConfig(AppConfig):
         from workspace.common.search.schema import register_fulltext_index
 
         register_fulltext_index(EVENT_FTS)
+
+        from workspace.calendar.today import pending_invitations, todays_events
+        from workspace.core.today_registry import (
+            TodayColumn,
+            TodaySource,
+            today_registry,
+        )
+
+        today_registry.register(
+            TodaySource(
+                slug="events",
+                module_slug="calendar",
+                label=gettext_lazy("Events"),
+                description=gettext_lazy("What is left on your calendar today."),
+                icon="calendar",
+                url="/calendar",
+                column=TodayColumn.SCHEDULE,
+                items_fn=todays_events,
+                template="calendar/ui/partials/today_events.html",
+                order=10,
+            )
+        )
+        today_registry.register(
+            TodaySource(
+                slug="invitations",
+                module_slug="calendar",
+                label=gettext_lazy("Invitations"),
+                description=gettext_lazy("Events you have not answered yet."),
+                icon="mail-question-mark",
+                url="/calendar",
+                column=TodayColumn.SCHEDULE,
+                items_fn=pending_invitations,
+                template="calendar/ui/partials/today_invitations.html",
+                order=20,
+            )
+        )

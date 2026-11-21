@@ -71,6 +71,8 @@
         {# ── Dashboard settings popover ── #}
         <div class="dropdown dropdown-end" x-data="dashboardPrefsForm()">
           {{ dashboard_apps|json_script:"dashboard-apps-data" }}
+          {{ today_sources|json_script:"dashboard-today-sources-data" }}
+          {{ hidden_today_sources|json_script:"dashboard-hidden-today-data" }}
           <button
             type="button"
             tabindex="0"
@@ -124,21 +126,14 @@
       {% include "dashboard/partials/modules_grid_fragment.html" %}
     </div>
 
-    {% if show_upcoming_events %}
-      {# ── Upcoming events (loaded async via alpine-ajax) ── #}
-      <section class="max-w-4xl mx-auto w-full">
-        {% include "dashboard/partials/upcoming_skeleton.html" %}
-      </section>
-    {% endif %}
-
-    {# ── My tasks: async load; empty hidden slot kept so the prefs toggle can swap it live ── #}
+    {# ── Today: async load; empty hidden slot kept so the prefs toggles can swap it live ── #}
     <section
-      id="dashboard-tasks"
-      class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}"
-      {% if show_my_tasks %} x-data="{}" x-init="$ajax('{% url 'dashboard:tasks_fragment' %}')" @ajax:error="$el.replaceChildren()" {% endif %}
+      id="dashboard-today"
+      class="max-w-4xl mx-auto w-full{% if not show_today %} hidden{% endif %}"
+      {% if show_today %} x-data="{}" x-init="$ajax('{% url 'dashboard:today_fragment' %}')" @ajax:error="$el.replaceChildren()" {% endif %}
     >
-      {% if show_my_tasks %}
-        {% include "dashboard/partials/my_tasks_skeleton.html" %}
+      {% if show_today %}
+        {% include "dashboard/partials/today_skeleton.html" %}
       {% endif %}
     </section>
 
@@ -417,22 +412,27 @@
     }
 
     function dashboardPrefsForm() {
-      const apps = JSON.parse(document.getElementById('dashboard-apps-data').textContent);
+      const readJson = (id) => JSON.parse(document.getElementById(id).textContent);
+      const apps = readJson('dashboard-apps-data');
       return {
-        showUpcoming: {{ show_upcoming_events|yesno:"true,false" }},
-        showEmpty: {{ show_upcoming_empty|yesno:"true,false" }},
-        showMyTasks: {{ show_my_tasks|yesno:"true,false" }},
         apps: apps,
         hidden: apps.filter(a => a.hidden).map(a => a.slug),
+        todaySources: readJson('dashboard-today-sources-data'),
+        hiddenToday: readJson('dashboard-hidden-today-data'),
         isVisible(slug) {
           return !this.hidden.includes(slug);
         },
-        toggleMyTasks() {
-          // Persist first, then re-fetch the section: the server decides whether
-          // the widget or the empty hidden slot comes back.
-          this.save('show_my_tasks', this.showMyTasks).then(() => {
-            this.$ajax('{% url 'dashboard:tasks_fragment' %}', {
-              target: 'dashboard-tasks'
+        isTodayShown(slug) {
+          return !this.hiddenToday.includes(slug);
+        },
+        toggleToday(slug, shown) {
+          this.hiddenToday = shown ?
+            this.hiddenToday.filter(s => s !== slug) : [...this.hiddenToday, slug];
+          // Persist first, then re-fetch the card: the server decides whether
+          // the card or the empty hidden slot comes back.
+          this.save('hidden_today_sources', this.hiddenToday).then(() => {
+            this.$ajax('{% url 'dashboard:today_fragment' %}', {
+              target: 'dashboard-today'
             });
           });
         },

@@ -1182,3 +1182,26 @@ msgstr "Trop de votes envoyés. Réessayez plus tard."
 #: views/polls.py
 msgid "A guest voted on your poll."
 msgstr "Un invité a répondu à votre sondage."
+
+#: apps.py
+msgid "Invitations"
+msgstr "Invitations"
+
+#: apps.py
+msgid "What is left on your calendar today."
+msgstr "Ce qu’il reste à votre agenda aujourd’hui."
+
+#: apps.py
+msgid "Events you have not answered yet."
+msgstr "Les événements auxquels vous n’avez pas encore répondu."
+
+#: ui/templates/calendar/ui/partials/today_events.html
+msgctxt "short event time slot"
+msgid "All day"
+msgstr "Journée"
+
+#. Translators: a PHP-style date format (Django's date filter) for an event day in a narrow column, e.g. "Oct 25".
+#: ui/templates/calendar/ui/partials/today_invitations.html
+msgctxt "short event day format"
+msgid "M j"
+msgstr "j N"

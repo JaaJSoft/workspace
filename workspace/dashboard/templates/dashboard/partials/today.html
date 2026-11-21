@@ -1,0 +1,57 @@
+{% load i18n %}
+<section
+  id="dashboard-today"
+  class="max-w-4xl mx-auto w-full{% if not show_today %} hidden{% endif %}"
+>
+  {% if show_today %}
+    <div class="card bg-base-100 shadow-sm border border-base-300">
+      <div class="card-body gap-4 p-4 sm:p-6">
+        <div class="space-y-1">
+          <h2 class="card-title text-xl">
+            <i data-lucide="sunrise" class="w-5 h-5"></i>
+            {% translate "Today" %}
+          </h2>
+          <p class="text-sm text-base-content/60">{% translate "What is on your plate today." %}</p>
+        </div>
+        <div
+          class="grid grid-cols-1 gap-x-8 gap-y-5{% if today_columns|length > 1 %} md:grid-cols-2{% endif %}"
+        >
+          {% for column in today_columns %}
+            <div class="space-y-4 min-w-0" data-today-column="{{ column.kind }}">
+              {% for group in column.groups %}
+                <div data-today-source="{{ group.source.slug }}">
+                  <div class="flex items-center gap-2">
+                    <i
+                      data-lucide="{{ group.source.icon }}"
+                      class="w-4 h-4 text-base-content/50 shrink-0"
+                    ></i>
+                    <h3
+                      class="text-xs font-semibold uppercase tracking-wide text-base-content/60 flex-1 truncate"
+                    >
+                      {{ group.source.label }}
+                    </h3>
+                    <a
+                      href="{{ group.source.url }}"
+                      class="link link-hover text-xs text-base-content/50 shrink-0"
+                    >{% translate "See all" %}</a>
+                  </div>
+                  <ul class="divide-y divide-base-200">
+                    {% include group.source.template with items=group.items %}
+                  </ul>
+                </div>
+              {% empty %}
+                <p class="text-sm text-base-content/50">
+                  {% if column.kind == "schedule" %}
+                    {% translate "Nothing left on your calendar today." %}
+                  {% else %}
+                    {% translate "Nothing is waiting on you." %}
+                  {% endif %}
+                </p>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</section>

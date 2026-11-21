@@ -62,32 +62,6 @@ msgid "Good evening, %%(name)s."
 msgstr "Bonsoir, %%(name)s."
 
 #: templates/dashboard/partials/_preferences_content.html
-msgid "Show upcoming events"
-msgstr "Afficher les événements à venir"
-
-#: templates/dashboard/partials/_preferences_content.html
-msgid "Display today's calendar events on the dashboard."
-msgstr "Afficher les événements du jour sur le tableau de bord."
-
-#: templates/dashboard/partials/_preferences_content.html
-msgid "Show empty state"
-msgstr "Afficher l’état vide"
-
-#: templates/dashboard/partials/_preferences_content.html
-msgid "Display \"No upcoming events today.\" when the list is empty."
-msgstr ""
-"Afficher « Aucun événement à venir aujourd’hui. » quand la liste est vide."
-
-#: templates/dashboard/partials/_preferences_content.html
-msgid "Show my tasks"
-msgstr "Afficher mes tâches"
-
-#: templates/dashboard/partials/_preferences_content.html
-msgid "Display your assigned project tasks on the dashboard."
-msgstr ""
-"Afficher sur le tableau de bord les tâches de projet qui vous sont assignées."
-
-#: templates/dashboard/partials/_preferences_content.html
 msgid "Choose which apps appear on your dashboard."
 msgstr "Choisissez les applications affichées sur votre tableau de bord."
 
@@ -103,28 +77,26 @@ msgstr ""
 msgid "Preview"
 msgstr "Préversion"
 
-#: templates/dashboard/partials/my_tasks.html
-msgid "My Tasks"
-msgstr "Mes tâches"
-
-#: templates/dashboard/partials/my_tasks.html
-msgid "Your assigned tasks, most urgent first."
-msgstr "Vos tâches assignées, les plus urgentes d’abord."
-
-#. Translators: a PHP-style date format (Django's date filter) for a due date in a narrow column, e.g. "Oct 25".
-#: templates/dashboard/partials/my_tasks.html
-msgctxt "short due date format"
-msgid "M j"
-msgstr "j N"
-
-#: templates/dashboard/partials/my_tasks.html
-msgid "No open tasks assigned to you."
-msgstr "Aucune tâche ouverte ne vous est assignée."
-
-#: templates/dashboard/partials/upcoming_events.html
-msgid "No upcoming events today."
-msgstr "Aucun événement à venir aujourd’hui."
-
 #: templates/dashboard/partials/usage_widget.html
 msgid "Storage"
 msgstr "Stockage"
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Choose what the Today card lists."
+msgstr "Choisissez ce que la carte Aujourd’hui affiche."
+
+#: templates/dashboard/partials/today.html
+msgid "What is on your plate today."
+msgstr "Ce qui vous attend aujourd’hui."
+
+#: templates/dashboard/partials/today.html
+msgid "See all"
+msgstr "Tout voir"
+
+#: templates/dashboard/partials/today.html
+msgid "Nothing left on your calendar today."
+msgstr "Plus rien à votre agenda aujourd’hui."
+
+#: templates/dashboard/partials/today.html
+msgid "Nothing is waiting on you."
+msgstr "Rien ne vous attend."

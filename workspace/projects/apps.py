@@ -67,6 +67,30 @@ class ProjectsConfig(AppConfig):
             )
         )
 
+        from workspace.core.today_registry import (
+            TodayColumn,
+            TodaySource,
+            today_registry,
+        )
+        from workspace.projects.today import tasks_for_today
+
+        today_registry.register(
+            TodaySource(
+                slug="tasks",
+                module_slug="projects",
+                label=gettext_lazy("Tasks"),
+                description=gettext_lazy(
+                    "Your tasks overdue, due today or urgent, else the next ones."
+                ),
+                icon="list-todo",
+                url="/projects",
+                column=TodayColumn.TODO,
+                items_fn=tasks_for_today,
+                template="projects/ui/partials/today_tasks.html",
+                order=30,
+            )
+        )
+
         # The actions register on import, project actions before task
         # actions. Imported here rather than lazily so a broken import fails
         # the boot instead of a worker answering "no actions" forever.

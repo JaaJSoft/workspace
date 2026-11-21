@@ -25,7 +25,7 @@ This file is the forward-looking roadmap, sorted by priority: the structural pro
 | **P0 - Now** | Clean-up release: the open bugs, starting with #1618-#1626 and the Mail data issues (#1504, #1505, #1513, #1514), and housekeeping | The quick wins filed as issues |
 | **P1 - Next** | Instance email; sign-in hardening; backup and restore; real-time v2; split Celery queues | Calendar reminders, Mail send queue, Projects "My work" |
 | **P2 - Then** | Team spaces (spaces on groups, chat channels, group calendars, folder sharing, guests); file versions | Photos memories and Live Photos, Notes knowledge pack |
-| **P3 - Later** | Event journal (audit log, automations, webhooks); AI à la carte and MCP; migrations and account export | Module backlogs below |
+| **P3 - Later** | Event journal (audit log, automations, webhooks); AI à la carte: an agent harness and MCP; migrations and account export | Module backlogs below |
 | **Someday** | Music & Audio, Bookmarks, RSS/Feeds, native desktop integration, JMAP, end-to-end encrypted mail; far off, a video library | |
 
 ---
@@ -120,8 +120,18 @@ A space is that team made visible. Chat channels, a shared drive and boards in o
 
 ### AI à la carte - P1 (fixes) to P3
 
-- [ ] **Per-bot tool sets, loaded on demand** - every bot receives all 56 tools today, roughly 12k tokens resent on every model call (estimate). Sets per module, ticked per bot, plus a "load a tool set" meta-tool. After #1622 - #797 (M/L)
-- [ ] **System prompt built from the tools a bot actually has** - #796 (S)
+The chat is meant to become a real agent, with a harness in the spirit of Claude Code. The runner, the concurrent dispatcher, the observers and the policies of `ai/harness/` are the base it grows from.
+
+- [ ] **Agent harness** - the pieces an agent needs beyond a tool loop (L):
+  - tools loaded on demand: the context holds their names, and a search tool loads a definition when the task needs it (#797);
+  - skills: instruction packs that enter the context with their tools or their task, instead of one system prompt that carries everything (#796);
+  - subagents that work in a context of their own and report back, for research or bulk work (#803);
+  - context managed by tokens: a budget per model, and compaction of older turns;
+  - a plan the user can follow in the conversation;
+  - permission levels per kind of tool (read, write, send), on top of bound confirmations (#852);
+  - hooks before and after a tool call, on the existing observers and policies.
+- [ ] **Per-bot tool sets** - every bot receives all 56 tools today, roughly 12k tokens resent on every model call (estimate). Sets per module bound what a bot may use, and the search tool loads them. After #1622 - #797 (M/L)
+- [ ] **System prompt built from the tools a bot actually has**, then split into skills - #796 (S, then M)
 - [ ] **Provider layer** - a `Provider` model (OpenAI-compatible, Anthropic, Ollama; URL, encrypted key, context window, prices), small, reading and vision roles per provider, native adapters with prompt caching (L)
 - [ ] **MCP server** - expose the tool registry to external AI clients with personal API tokens (M). Then an MCP client for servers the admin declares (M/L)
 - [ ] **Knowledge bases** - attach a folder or notes to a bot. Hybrid full-text + vector search on `common/vectors`, with answers that cite their sources (L)

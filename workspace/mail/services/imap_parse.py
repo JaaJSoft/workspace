@@ -16,7 +16,7 @@ from workspace.common.logging import scrub
 
 from .addresses import sender_columns
 from .html_text import html_to_text
-from .imap_messages import DRAFT, FLAGGED, SEEN
+from .imap_messages import ANSWERED, DRAFT, FLAGGED, SEEN
 from .inline_images import InlineImages
 
 logger = logging.getLogger(__name__)
@@ -437,6 +437,7 @@ def _parse_message(raw_email, account, folder, uid, flags, known_uids=None):
         body_html=body_html,
         is_read=is_read,
         is_starred=FLAGGED in flags,
+        is_answered=ANSWERED in flags,
         is_draft=DRAFT in flags,
         has_attachments=has_attachments,
         has_calendar_event=bool(invitations),

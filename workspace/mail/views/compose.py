@@ -117,7 +117,7 @@ class MailSendView(APIView):
         try:
             # A Sent copy that did not land is not a failed send: deliver_email
             # reports it through `archived`, and the response stays 201.
-            deliver_email(
+            delivery = deliver_email(
                 account=account,
                 to=d["to"],
                 subject=d["subject"],
@@ -129,7 +129,10 @@ class MailSendView(APIView):
                 attachments=attachments,
                 reply_message_id=d.get("reply_message_id"),
             )
-            return Response({"status": "sent"}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"status": "sent", "answered_message_id": delivery.answered},
+                status=status.HTTP_201_CREATED,
+            )
         except Exception as e:
             # Use logger.error + scrub(str(e)) instead of logger.exception:
             # the latter would include the raw traceback which can contain

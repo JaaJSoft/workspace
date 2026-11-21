@@ -61,9 +61,14 @@ class ReplyThreadingTests(TestCase):
             **extra,
         }
         server = RecordingSMTP()
-        with patch("workspace.mail.services.smtp.connect_smtp", return_value=server):
-            with patch("workspace.mail.services.imap_messages.append_to_sent"):
-                self.client.post("/api/v1/mail/messages/send", payload, format="json")
+        with (
+            patch("workspace.mail.services.smtp.connect_smtp", return_value=server),
+            patch("workspace.mail.services.imap_messages.append_to_sent"),
+            patch("workspace.mail.services.imap_messages.mark_answered"),
+        ):
+            self.response = self.client.post(
+                "/api/v1/mail/messages/send", payload, format="json"
+            )
         self.assertEqual(server.transactions, 1)
         return server.message
 
@@ -118,6 +123,25 @@ class ReplyThreadingTests(TestCase):
 
         msg = self._send(reply_message_id=str(foreign.uuid))
         self.assertIsNone(msg["In-Reply-To"])
+        self.assertIsNone(self.response.data["answered_message_id"])
+        foreign.refresh_from_db()
+        self.assertFalse(foreign.is_answered)
+
+    def test_the_response_names_the_message_marked_answered(self):
+        """The composer marks this one in the list, not the one its own
+        state names: that state may have moved on during the send."""
+        self._send(reply_message_id=str(self.parent.uuid))
+
+        self.assertEqual(self.response.status_code, 201)
+        self.assertEqual(self.response.data["answered_message_id"], self.parent.uuid)
+        self.assertEqual(
+            self.response.json()["answered_message_id"], str(self.parent.uuid)
+        )
+
+    def test_a_fresh_message_answers_nothing(self):
+        self._send()
+
+        self.assertIsNone(self.response.data["answered_message_id"])
 
     @patch("workspace.mail.services.imap_messages.save_draft")
     def test_saved_draft_reply_carries_threading_headers(self, mock_save):

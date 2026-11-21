@@ -2,9 +2,10 @@ from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
+from workspace.core.activity_registry import UsageHeadline
 from workspace.mail.activity import MailActivityProvider
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
@@ -264,3 +265,17 @@ class MailActivityProviderTests(TestCase):
         )
         events = self.provider.get_recent_events(self.user.id)
         self.assertEqual(len(events), 1)
+
+
+class MailHeadlineTests(SimpleTestCase):
+    def test_headline_counts_messages_and_details_the_unread(self):
+        headline = MailActivityProvider().get_headline(
+            {"total_messages": 12, "unread_messages": 2, "total_accounts": 1}
+        )
+        self.assertEqual(headline, UsageHeadline(12, "Mail", "2 unread"))
+
+    def test_no_unread_line_when_everything_is_read(self):
+        headline = MailActivityProvider().get_headline(
+            {"total_messages": 12, "unread_messages": 0, "total_accounts": 1}
+        )
+        self.assertEqual(headline.detail, "")

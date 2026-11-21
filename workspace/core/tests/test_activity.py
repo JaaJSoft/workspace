@@ -8,6 +8,7 @@ from workspace.core.activity_registry import (
     ActivityProvider,
     ActivityProviderInfo,
     ActivityRegistry,
+    UsageHeadline,
 )
 from workspace.core.services.activity import annotate_time_ago
 
@@ -719,3 +720,179 @@ class ExcludedActorBurstTests(TestCase):
         self._seed(own_events=70)
         events = self._feed(limit=11, source="files")
         self.assertEqual([e["actor"]["id"] for e in events], [self.bob.id])
+
+
+class UsageHeadlineRegistryTests(TestCase):
+    def setUp(self):
+        self.registry = ActivityRegistry()
+
+    def _register(self, slug, provider_cls):
+        self.registry.register(
+            ActivityProviderInfo(
+                slug=slug, label=slug, icon="i", provider_cls=provider_cls
+            )
+        )
+
+    def test_provider_reads_its_headline_from_its_stats(self):
+        class Counted(StubProvider):
+            def get_headline(self, stats):
+                return UsageHeadline(stats["total"], "Things")
+
+        self._register("things", Counted)
+        self.assertEqual(
+            self.registry.get_headline("things", {"total": 4}),
+            UsageHeadline(4, "Things"),
+        )
+
+    def test_provider_without_a_headline_gives_none(self):
+        self._register("plain", StubProvider)
+        self.assertIsNone(self.registry.get_headline("plain", {"total": 4}))
+
+    def test_empty_stats_give_no_headline(self):
+        class Counted(StubProvider):
+            def get_headline(self, stats):
+                return UsageHeadline(stats.get("total", 0), "Things")
+
+        self._register("things", Counted)
+        self.assertIsNone(self.registry.get_headline("things", {}))
+        self.assertIsNone(self.registry.get_headline("things", None))
+
+    def test_unknown_slug_gives_none(self):
+        self.assertIsNone(self.registry.get_headline("nope", {"total": 4}))
+
+    def test_failing_headline_gives_none(self):
+        class Broken(StubProvider):
+            def get_headline(self, stats):
+                return UsageHeadline(stats["missing"], "Things")
+
+        self._register("broken", Broken)
+        with self.assertLogs("workspace.core.activity_registry", "ERROR"):
+            self.assertIsNone(self.registry.get_headline("broken", {"total": 4}))
+
+
+class UsageHeadlinesServiceTests(TestCase):
+    """get_usage_headlines joins the providers' headlines with the module registry."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        from workspace.core.module_registry import ModuleInfo
+
+        cache.clear()
+        self.normal = User.objects.create_user(username="head-n", password="x")
+        self.staff = User.objects.create_user(
+            username="head-s", password="x", is_staff=True
+        )
+
+        def counted(key, label, detail=""):
+            class Counted(StubProvider):
+                def get_stats(self, user_id, *, viewer_id=None):
+                    return {key: 3}
+
+                def get_headline(self, stats):
+                    return UsageHeadline(stats[key], label, detail)
+
+            return Counted
+
+        class Silent(StubProvider):
+            def get_stats(self, user_id, *, viewer_id=None):
+                return {"total_albums": 2}
+
+        class Failing(StubProvider):
+            def get_stats(self, user_id, *, viewer_id=None):
+                raise RuntimeError("boom")
+
+            def get_headline(self, stats):
+                return UsageHeadline(0, "Never")
+
+        self.activity_registry = ActivityRegistry()
+        # Registered out of module order on purpose.
+        for slug, provider_cls in (
+            ("mail", counted("total_messages", "Mail", "1 unread")),
+            ("files", counted("total_files", "Files")),
+            ("photos", Silent),
+            ("broken", Failing),
+            ("lab", counted("total_runs", "Runs")),
+        ):
+            self.activity_registry.register(
+                ActivityProviderInfo(
+                    slug=slug, label=slug, icon="i", provider_cls=provider_cls
+                )
+            )
+
+        def module(slug, order, preview=False):
+            return ModuleInfo(
+                name=slug.title(),
+                slug=slug,
+                description="",
+                icon=f"{slug}-icon",
+                color="teal",
+                url=f"/{slug}",
+                order=order,
+                preview=preview,
+            )
+
+        self.modules = [
+            module("files", 10),
+            module("mail", 20),
+            module("photos", 30),
+            module("broken", 40),
+            module("lab", 50, preview=True),
+        ]
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def _headlines(self, user):
+        from unittest.mock import patch
+
+        from workspace.core.services import activity as activity_service
+
+        with (
+            patch.object(activity_service, "activity_registry", self.activity_registry),
+            patch("workspace.core.services.module_visibility.registry") as mods,
+            self.assertLogs("workspace.core.activity_registry", "ERROR"),
+        ):
+            mods.get_active.return_value = self.modules
+            mods.get_all.return_value = self.modules
+            mods.get.side_effect = {m.slug: m for m in self.modules}.get
+            return activity_service.get_usage_headlines(user)
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_rows_follow_module_order_with_module_link_icon_and_color(self):
+        self.assertEqual(
+            self._headlines(self.normal),
+            [
+                {
+                    "slug": "files",
+                    "url": "/files",
+                    "icon": "files-icon",
+                    "color": "teal",
+                    "count": 3,
+                    "label": "Files",
+                    "detail": "",
+                },
+                {
+                    "slug": "mail",
+                    "url": "/mail",
+                    "icon": "mail-icon",
+                    "color": "teal",
+                    "count": 3,
+                    "label": "Mail",
+                    "detail": "1 unread",
+                },
+            ],
+        )
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_preview_module_shows_only_to_who_may_see_it(self):
+        self.assertNotIn("lab", [r["slug"] for r in self._headlines(self.normal)])
+        self.assertIn("lab", [r["slug"] for r in self._headlines(self.staff)])
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_provider_without_headline_or_stats_is_left_out(self):
+        slugs = [r["slug"] for r in self._headlines(self.staff)]
+        self.assertNotIn("photos", slugs)
+        self.assertNotIn("broken", slugs)

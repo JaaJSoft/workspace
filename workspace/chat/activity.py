@@ -3,7 +3,7 @@ from django.db.models.functions import TruncDate
 from django.utils.translation import gettext
 
 from workspace.common.datetimes import local_date_range
-from workspace.core.activity_registry import ActivityProvider
+from workspace.core.activity_registry import ActivityProvider, UsageHeadline
 
 
 class ChatActivityProvider(ActivityProvider):
@@ -103,3 +103,6 @@ class ChatActivityProvider(ActivityProvider):
             "total_messages": msg_count,
             "active_conversations": conv_count,
         }
+
+    def get_headline(self, stats):
+        return UsageHeadline(stats["total_messages"], gettext("Messages"))

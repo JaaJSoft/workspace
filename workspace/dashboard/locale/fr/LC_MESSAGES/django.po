@@ -88,6 +88,14 @@ msgstr ""
 "Afficher sur le tableau de bord les tâches de projet qui vous sont assignées."
 
 #: templates/dashboard/partials/_preferences_content.html
+msgid "Temperature"
+msgstr "Température"
+
+#: templates/dashboard/partials/_preferences_content.html
+msgid "Unit of the weather next to the date."
+msgstr "Unité de la météo à côté de la date."
+
+#: templates/dashboard/partials/_preferences_content.html
 msgid "Choose which apps appear on your dashboard."
 msgstr "Choisissez les applications affichées sur votre tableau de bord."
 

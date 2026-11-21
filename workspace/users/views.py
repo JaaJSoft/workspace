@@ -29,6 +29,7 @@ from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import SearchScope
 from workspace.core.sse_registry import notify_sse
+from workspace.dashboard.services import preferences as dashboard_preferences
 from workspace.files.models import File
 from workspace.files.sensitivity import BlurPreference
 from workspace.users.models import APITokenLabel, UserSetting
@@ -619,6 +620,14 @@ def _validate_setting_value(module, key, value):
         error = _validate_photos_setting(key, value)
         if error:
             return error
+    if (
+        module == dashboard_preferences.MODULE
+        and key == dashboard_preferences.TEMPERATURE_UNIT
+        and value is not None
+        and value not in dashboard_preferences.TEMPERATURE_UNITS
+    ):
+        units = ", ".join(dashboard_preferences.TEMPERATURE_UNITS)
+        return f"temperature_unit must be one of: {units}."
     if module == "vault" and key == "default_sort" and value is not None:
         # The four the preferences panel offers. Stored unchecked, an unknown
         # value reaches the listing as a sort nothing implements, and the sort

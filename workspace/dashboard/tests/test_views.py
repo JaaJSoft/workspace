@@ -376,6 +376,44 @@ class BuildDashboardContextTests(TestCase):
         self.assertTrue(context["show_upcoming_events"])  # default
         self.assertTrue(context["show_upcoming_empty"])  # default
 
+    @patch("workspace.dashboard.services.modules.get_unread_badges", return_value={})
+    @patch("workspace.dashboard.services.modules.visible_modules", return_value=[])
+    def test_temperature_unit_defaults_to_celsius(self, mock_visible, mock_badges):
+        context = _build_dashboard_context(self.user)
+
+        self.assertEqual(context["temperature_unit"], "celsius")
+        self.assertEqual(
+            dict(context["temperature_units"]), {"celsius": "°C", "fahrenheit": "°F"}
+        )
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges", return_value={})
+    @patch("workspace.dashboard.services.modules.visible_modules", return_value=[])
+    def test_temperature_unit_follows_the_setting(self, mock_visible, mock_badges):
+        set_setting(self.user, "dashboard", "temperature_unit", "fahrenheit")
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertEqual(context["temperature_unit"], "fahrenheit")
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges", return_value={})
+    @patch("workspace.dashboard.services.modules.visible_modules", return_value=[])
+    def test_unknown_stored_temperature_unit_falls_back_to_celsius(
+        self, mock_visible, mock_badges
+    ):
+        set_setting(self.user, "dashboard", "temperature_unit", "kelvin")
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertEqual(context["temperature_unit"], "celsius")
+
+    def test_weather_widget_reads_in_the_user_unit(self):
+        set_setting(self.user, "dashboard", "temperature_unit", "fahrenheit")
+        self.client.force_login(self.user)
+
+        response = self.client.get("/")
+
+        self.assertContains(response, "weatherWidget('fahrenheit')")
+
     @patch("workspace.dashboard.views.is_module_slug_visible", return_value=True)
     @patch("workspace.dashboard.services.modules.get_unread_badges")
     @patch("workspace.dashboard.services.modules.visible_modules")

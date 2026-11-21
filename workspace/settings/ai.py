@@ -46,6 +46,10 @@ AI_TOOL_RESULT_STORE_MAX_CHARS = int(
 AI_TOOL_RESULT_REPLAY_MIN_CHARS = int(
     os.getenv("AI_TOOL_RESULT_REPLAY_MIN_CHARS", "1500")
 )  # floor a replayed tool result decays to once its turn is old
+# What runs a bot's reply: "native" is the loop of workspace/ai/harness,
+# "pydantic_ai" the same reply on a Pydantic AI agent. The second is being
+# evaluated against the first (scripts/agent_bench.py) before it replaces it.
+AI_AGENT_RUNTIME = os.getenv("AI_AGENT_RUNTIME", "native")
 AI_TIMEOUT = int(os.getenv("AI_TIMEOUT", "300"))  # seconds per request
 AI_MAX_RETRIES = int(
     os.getenv("AI_MAX_RETRIES", "2")

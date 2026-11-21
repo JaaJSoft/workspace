@@ -166,6 +166,34 @@ then finish it under *Bot profiles* in the Django admin:
 | `AI_MAX_TOKENS` | `2048` | Most tokens per response. |
 | `AI_TIMEOUT` | `300` | Seconds per request. |
 | `AI_MAX_RETRIES` | `2` | Retries on timeouts and server errors. |
+| `AI_AGENT_RUNTIME` | `native` | What runs a bot's reply, see [Agent runtime](#agent-runtime). |
+
+### Agent runtime
+
+A bot's reply is a loop: ask the model, run the tools it asked for, ask
+again. Two runtimes can run it, and `AI_AGENT_RUNTIME` picks one for every
+bot of the instance:
+
+- `native`, the default: the loop Workspace ships.
+- `pydantic_ai`: the same reply on [Pydantic AI](https://pydantic.dev/docs/ai/).
+  It is being evaluated to replace the first, and is not the default yet.
+
+Bots, tools, confirmations, limits and run records are the same on both.
+What differs on `pydantic_ai`:
+
+- The request is written by the library for the backend it talks to.
+  OpenAI's reasoning models, `gpt-5` included, refuse the `max_tokens` the
+  native loop sends; here they are sent `max_completion_tokens`, and so is
+  any other endpoint.
+- An image a tool returns reaches the model as an image in a message of its
+  own, not inside the tool result, which OpenAI refuses.
+- It only covers the bots. Titles, summaries, mail and the editor still go
+  through the native client.
+- It needs a Celery worker that runs tasks in processes or threads (the
+  default `prefork` pool, or `threads`), not `gevent` or `eventlet`.
+
+To compare the two on your own backend and model, see the
+[agent bench](agent-bench.md).
 
 ### Limits
 

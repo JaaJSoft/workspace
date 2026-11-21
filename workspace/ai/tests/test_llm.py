@@ -6,13 +6,13 @@ from django.test import SimpleTestCase, TestCase
 from pydantic import BaseModel
 
 from workspace.ai.services.llm import (
-    _extract_thinking,
     build_tool_content,
     call_llm,
     call_llm_structured,
     extract_text_tool_calls,
     reply_was_truncated,
     serialize_response,
+    split_inline_thinking,
     truncate_middle,
     truncate_tool_result,
 )
@@ -110,19 +110,19 @@ class ExtractTextToolCallsTests(TestCase):
 
 class ExtractThinkingTests(SimpleTestCase):
     def test_no_think_block_returns_empty_thinking(self):
-        thinking, cleaned = _extract_thinking("just a reply")
+        thinking, cleaned = split_inline_thinking("just a reply")
         self.assertEqual(thinking, "")
         self.assertEqual(cleaned, "just a reply")
 
     def test_think_block_is_captured_and_stripped(self):
-        thinking, cleaned = _extract_thinking(
+        thinking, cleaned = split_inline_thinking(
             "<think>plan the answer</think>Hello there"
         )
         self.assertEqual(thinking, "plan the answer")
         self.assertEqual(cleaned, "Hello there")
 
     def test_multiple_blocks_join_with_blank_line(self):
-        thinking, cleaned = _extract_thinking(
+        thinking, cleaned = split_inline_thinking(
             "<think>first</think>mid<think>second</think>end"
         )
         self.assertEqual(thinking, "first\n\nsecond")
@@ -130,19 +130,19 @@ class ExtractThinkingTests(SimpleTestCase):
 
     def test_unclosed_tag_captures_nothing_and_keeps_content(self):
         content = "<think>never closed... Hello"
-        thinking, cleaned = _extract_thinking(content)
+        thinking, cleaned = split_inline_thinking(content)
         self.assertEqual(thinking, "")
         self.assertEqual(cleaned, content)
 
     def test_case_insensitive(self):
-        thinking, cleaned = _extract_thinking("<THINK>loud</THINK>hi")
+        thinking, cleaned = split_inline_thinking("<THINK>loud</THINK>hi")
         self.assertEqual(thinking, "loud")
         self.assertEqual(cleaned, "hi")
 
     def test_tag_spelling_variants_are_captured(self):
         for tag in ("thought", "thoughts", "thinking", "reasoning"):
             with self.subTest(tag=tag):
-                thinking, cleaned = _extract_thinking(
+                thinking, cleaned = split_inline_thinking(
                     f"<{tag}>weighing options</{tag}>Hello there"
                 )
                 self.assertEqual(thinking, "weighing options")
@@ -150,12 +150,12 @@ class ExtractThinkingTests(SimpleTestCase):
 
     def test_mismatched_open_and_close_tags_are_left_alone(self):
         content = "<think>oops</thought>Hello"
-        thinking, cleaned = _extract_thinking(content)
+        thinking, cleaned = split_inline_thinking(content)
         self.assertEqual(thinking, "")
         self.assertEqual(cleaned, content)
 
     def test_mismatched_block_does_not_swallow_the_next_one(self):
-        thinking, cleaned = _extract_thinking(
+        thinking, cleaned = split_inline_thinking(
             "<think>bad</thought><think>real</think>Answer"
         )
         self.assertEqual(thinking, "real")

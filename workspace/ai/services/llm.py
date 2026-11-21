@@ -159,7 +159,7 @@ def build_tool_content(tool_result: str):
     return tool_result
 
 
-def _extract_thinking(content: str) -> tuple[str, str]:
+def split_inline_thinking(content: str) -> tuple[str, str]:
     """Split inline reasoning blocks (<think>, <thought>, ...) out of model output.
 
     Returns (thinking, cleaned). Multiple blocks join with a blank line.
@@ -265,7 +265,7 @@ def call_llm(
             ).inc(response.usage.completion_tokens)
 
     choice = response.choices[0]
-    thinking, content = _extract_thinking(choice.message.content or "")
+    thinking, content = split_inline_thinking(choice.message.content or "")
     # Some backends (vLLM/DeepSeek: reasoning_content, OpenRouter: reasoning)
     # return reasoning as a separate field instead of <think> tags. First
     # non-blank field wins, so a whitespace-only reasoning_content still

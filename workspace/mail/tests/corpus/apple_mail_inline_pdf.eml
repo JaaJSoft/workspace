@@ -1,0 +1,59 @@
+From: =?utf-8?Q?Am=C3=A9lie_Durand?= <amelie@example.org>
+Content-Type: multipart/alternative;
+	boundary="Apple-Mail=_3B9B6C0A-7E1F-4D55-9C1B-0E6E4B7A2F10"
+Mime-Version: 1.0 (Mac OS X Mail 16.0 \(3826.200.121\))
+Subject: =?utf-8?Q?Devis_r=C3=A9vis=C3=A9_pour_la_salle?=
+Message-Id: <5D0E1A52-2C8B-4B0F-9B55-6F1D8A3C7E21@example.org>
+Date: Tue, 3 Nov 2026 08:41:17 +0100
+To: Pierre Martin <pierre@example.com>
+X-Mailer: Apple Mail (2.3826.200.121)
+
+
+--Apple-Mail=_3B9B6C0A-7E1F-4D55-9C1B-0E6E4B7A2F10
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain;
+	charset=utf-8
+
+Bonjour Pierre,
+
+Voici le devis r=C3=A9vis=C3=A9.
+
+
+
+Bien =C3=A0 toi,
+Am=C3=A9lie
+--Apple-Mail=_3B9B6C0A-7E1F-4D55-9C1B-0E6E4B7A2F10
+Content-Type: multipart/mixed;
+	boundary="Apple-Mail=_A1C4E7F2-6B3D-4E8A-8F0C-2D9B5E6A7C33"
+
+
+--Apple-Mail=_A1C4E7F2-6B3D-4E8A-8F0C-2D9B5E6A7C33
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html;
+	charset=utf-8
+
+<html><head><meta http-equiv=3D"content-type" content=3D"text/html; charset=
+=3Dutf-8"></head><body style=3D"overflow-wrap: break-word;">Bonjour Pierre,=
+<div><br></div><div>Voici le devis r=C3=A9vis=C3=A9.</div><div><br></div><d=
+iv></div></body></html>
+--Apple-Mail=_A1C4E7F2-6B3D-4E8A-8F0C-2D9B5E6A7C33
+Content-Disposition: inline;
+	filename="Devis salle.pdf"
+Content-Type: application/pdf;
+	x-unix-mode=0644;
+	name="Devis salle.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyA+PgplbmRvYmoKdHJhaWxlcgo8PCAv
+Um9vdCAxIDAgUiA+PgolJUVPRgo=
+--Apple-Mail=_A1C4E7F2-6B3D-4E8A-8F0C-2D9B5E6A7C33
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html;
+	charset=utf-8
+
+<html><head><meta http-equiv=3D"content-type" content=3D"text/html; charset=
+=3Dutf-8"></head><body style=3D"overflow-wrap: break-word;"><div></div><div=
+><br></div><div>Bien =C3=A0 toi,</div><div>Am=C3=A9lie</div></body></html>
+--Apple-Mail=_A1C4E7F2-6B3D-4E8A-8F0C-2D9B5E6A7C33--
+
+--Apple-Mail=_3B9B6C0A-7E1F-4D55-9C1B-0E6E4B7A2F10--

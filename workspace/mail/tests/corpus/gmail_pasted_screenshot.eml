@@ -1,0 +1,38 @@
+MIME-Version: 1.0
+Date: Thu, 5 Nov 2026 16:20:11 +0100
+Message-ID: <CAK7dXyQ4fT1n8sWk3uR2mZb0hV6pJ9cL5aE+oD=gN1xY7wq@mail.gmail.com>
+Subject: Capture du bug
+From: Lucie Bernard <lucie.bernard@gmail.example>
+To: pierre@example.com
+Content-Type: multipart/related; boundary="000000000000a1b2c3062f4d5e6f"
+
+--000000000000a1b2c3062f4d5e6f
+Content-Type: multipart/alternative; boundary="000000000000a1b2c0062f4d5e6d"
+
+--000000000000a1b2c0062f4d5e6d
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+Voil=C3=A0 ce que je vois :
+
+[image: image.png]
+
+Lucie
+--000000000000a1b2c0062f4d5e6d
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<div dir=3D"ltr">Voil=C3=A0 ce que je vois :<div><br></div><div><img src=3D=
+"cid:ii_m3a9x7k20" alt=3D"image.png" width=3D"1" height=3D"1"><br></div><di=
+v><br></div><div>Lucie</div></div>
+--000000000000a1b2c0062f4d5e6d--
+--000000000000a1b2c3062f4d5e6f
+Content-Type: image/png; name="image.png"
+Content-Disposition: inline; filename="image.png"
+Content-Transfer-Encoding: base64
+Content-ID: <ii_m3a9x7k20>
+X-Attachment-Id: ii_m3a9x7k20
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6
+kgAAAABJRU5ErkJggg==
+--000000000000a1b2c3062f4d5e6f--

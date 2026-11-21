@@ -11,9 +11,9 @@ it, with optional AI help.
 
 A user can connect several accounts. **Add account** takes an address and a
 password; **Detect** fills in the IMAP and SMTP servers when the provider
-publishes them. Where the administrator has set it up, **Connect with Google**
-or **Connect with Microsoft** signs in through the provider instead, with no
-password stored. [Connecting a Google account](google.md) compares the two
+publishes them. Where the administrator has set it up, **Connect with Google**,
+**Connect with Microsoft** or a button for one more provider of their choice
+signs in through the provider instead, with no password stored. [Connecting a Google account](google.md) compares the two
 for Gmail.
 
 - The **account menu** (right-click the account in the sidebar) syncs it now,
@@ -52,8 +52,10 @@ sidebar lists each account's folders and labels.
 - **Show headers** and **Download .eml** fetch the message from the server as
   it stores it: every header, to see where a suspicious message really came
   from, or the whole original with its attachments, to keep or pass on.
-- **Delete** removes the message from the server; it is not moved to the
-  Trash first.
+- **Delete** moves the message into the account's Trash, where it can still
+  be recovered, in Workspace and from every other client. Deleting it again
+  from the Trash, or on an account without a Trash folder, removes it from the
+  server for good.
 - **Keyboard**: `J`/`K` next and previous, `C` compose, `R` reply, `A` reply
   all, `F` forward, `S` star, `U` read/unread, `E` archive, `!` spam or not
   spam, `#` delete, `?` the full list. `E` and `!` act on the selection when
@@ -173,19 +175,32 @@ sync. AI features run in the worker too.
 | `MAIL_SYNC_INTERVAL` | `300` | Seconds between two syncs of an account. |
 | `MAIL_MAX_ATTACHMENTS_SIZE` | 25 MB | Bytes of attachments one outgoing message may carry. Common SMTP servers refuse 25-50 MB, and encoding adds a third on the wire. |
 
-### Sign in with Google or Microsoft
+### OAuth2 sign-in
 
-Each button appears once its client id and secret are set. Register the
-redirect URI `https://<your-domain>/mail/oauth2/callback` with the provider;
-the instance needs a public HTTPS address for it. [Connecting a Google
-account](google.md#option-b-oauth2) walks through the Google side. The
-Microsoft application is asked for `IMAP.AccessAsUser.All` and `SMTP.Send`
-(Office 365 Exchange Online), `offline_access`, `openid` and `email`.
+A **Connect with ...** button appears for each provider whose client ID is
+set; signing in needs its secret too. Register Workspace with the provider as
+a confidential client, with the redirect URI
+`https://<your-domain>/mail/oauth2/callback`; the instance needs a public
+HTTPS address for it.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET` | empty | Google OAuth client (Gmail, Google Workspace). |
-| `OAUTH_MICROSOFT_CLIENT_ID`, `OAUTH_MICROSOFT_CLIENT_SECRET` | empty | Microsoft application (Outlook, Microsoft 365). |
+| `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET` | empty | Google OAuth client (Gmail, Google Workspace). [Connecting a Google account](google.md#option-b-oauth2) walks through the Google side. |
+| `OAUTH_MICROSOFT_CLIENT_ID`, `OAUTH_MICROSOFT_CLIENT_SECRET` | empty | Microsoft application (Outlook, Hotmail, Microsoft 365), asked for `IMAP.AccessAsUser.All` and `SMTP.Send` (Office 365 Exchange Online), `offline_access`, `openid` and `email`. |
+| `OAUTH_GENERIC_CLIENT_ID`, `OAUTH_GENERIC_CLIENT_SECRET` | empty | One more provider of your choice, configured with the settings below. |
+| `OAUTH_GENERIC_NAME` | `Generic` | Name shown on its button (e.g. `Fastmail`). |
+| `OAUTH_GENERIC_AUTH_URL` | empty | Authorization endpoint. |
+| `OAUTH_GENERIC_TOKEN_URL` | empty | Token endpoint. |
+| `OAUTH_GENERIC_USERINFO_URL` | empty | Userinfo endpoint, answering a JSON object with an `email` field for the access token. Optional for an OpenID Connect provider. |
+| `OAUTH_GENERIC_SCOPES` | empty | Space-separated scopes: the ones the IMAP and SMTP servers require, plus `openid email` for an OpenID Connect provider. |
+| `OAUTH_GENERIC_IMAP_HOST` | empty | IMAP server (port 993, SSL/TLS). |
+| `OAUTH_GENERIC_SMTP_HOST` | empty | SMTP server (port 587, STARTTLS). |
+
+The generic provider's account address is read from the userinfo endpoint.
+Without one, it is taken from the `email` claim of the OpenID Connect ID token
+returned with the tokens, which needs the `openid` and `email` scopes. When
+neither gives an address, the sign-in stops with "Could not determine email
+address from provider."
 
 ### Connection security
 
@@ -220,32 +235,6 @@ Django admin's *Mail accounts* list filters accounts by sync health and has a
 
 AI features need an AI provider (`AI_API_KEY`); `AI_EXTRACT_MODEL` picks the
 model for event extraction. See [AI](../ai/README.md).
-
-## Administration
-
-### OAuth2 providers
-
-One-click sign-in is offered for each provider whose client ID is set. Register Workspace as a confidential client with the provider, using `<origin>/mail/oauth2/callback` as the redirect URI.
-
-| Variable | Purpose |
-|---|---|
-| `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | Gmail and Google Workspace - see [Connecting a Google account](google.md) |
-| `OAUTH_MICROSOFT_CLIENT_ID` / `OAUTH_MICROSOFT_CLIENT_SECRET` | Outlook, Hotmail and Microsoft 365 |
-| `OAUTH_GENERIC_CLIENT_ID` / `OAUTH_GENERIC_CLIENT_SECRET` | One more provider of your choice, configured with the variables below |
-
-The generic provider takes its endpoints and servers from:
-
-| Variable | Purpose |
-|---|---|
-| `OAUTH_GENERIC_NAME` | Name shown on the sign-in button (e.g. `Fastmail`) |
-| `OAUTH_GENERIC_AUTH_URL` | Authorization endpoint |
-| `OAUTH_GENERIC_TOKEN_URL` | Token endpoint |
-| `OAUTH_GENERIC_USERINFO_URL` | Userinfo endpoint, answering a JSON object with an `email` field for the access token |
-| `OAUTH_GENERIC_SCOPES` | Space-separated scopes: the ones the IMAP and SMTP servers require, plus `openid email` for an OpenID Connect provider |
-| `OAUTH_GENERIC_IMAP_HOST` | IMAP server (port 993, SSL/TLS) |
-| `OAUTH_GENERIC_SMTP_HOST` | SMTP server (port 587, STARTTLS) |
-
-The account's email address is read from the userinfo endpoint. With an OpenID Connect provider the userinfo URL can be left empty: the address is then taken from the `email` claim of the ID token returned with the tokens, which needs the `openid` and `email` scopes. When neither gives an address, the sign-in stops with "Could not determine email address from provider."
 
 ## API
 

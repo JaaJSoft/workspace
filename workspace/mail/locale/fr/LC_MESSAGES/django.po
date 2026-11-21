@@ -671,16 +671,29 @@ msgid "View in calendar"
 msgstr "Voir dans le calendrier"
 
 #: ui/templates/mail/ui/partials/message_detail.html
-msgid "Remote images are hidden to protect your privacy."
-msgstr "Les images distantes sont masquées pour protéger votre vie privée."
+msgid "Remote images hidden"
+msgstr "Images distantes masquées"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Why are images hidden?"
+msgstr "Pourquoi les images sont-elles masquées ?"
 
 #: ui/templates/mail/ui/partials/message_detail.html
 msgid ""
-"Images from the web are hidden to protect your privacy. The ones sent with "
-"the message are shown."
+"Loading them would tell the sender when and from where you read this "
+"message."
 msgstr ""
-"Les images venant du web sont masquées pour protéger votre vie privée. "
-"Celles jointes au message sont affichées."
+"Les charger indiquerait à l’expéditeur quand et d’où vous avez lu ce "
+"message."
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Pictures sent with the message itself are shown."
+msgstr "Les images jointes au message sont, elles, affichées."
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgctxt "remote images"
+msgid "Show"
+msgstr "Afficher"
 
 #: ui/templates/mail/ui/partials/message_detail.html
 msgid "Show images"

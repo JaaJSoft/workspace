@@ -38,6 +38,7 @@ OVERLAY_BODY = (
     f'<img src="{TRACKER}" alt="pixel">'
     "</div>"
 )
+EMBEDDED_SHOWN = "Pictures sent with the message itself are shown."
 PIXEL = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 )
@@ -160,7 +161,13 @@ class MailBodyFrameTests(PlaywrightTestCase):
         self._open()
         self.page.wait_for_timeout(300)
         self.assertEqual(self.tracker_hits, [])
-        expect(self.page.get_by_text("Remote images are hidden")).to_be_visible()
+        expect(self.page.get_by_text("Remote images hidden")).to_be_visible()
+        # Nothing in this message is sent with it, so the why says nothing of it.
+        self.page.get_by_role("button", name="Why are images hidden?").click()
+        expect(
+            self.page.get_by_text("Loading them would tell the sender")
+        ).to_be_visible()
+        expect(self.page.get_by_text(EMBEDDED_SHOWN)).to_be_hidden()
 
         self.page.get_by_role("button", name="Show images").click()
 
@@ -170,6 +177,7 @@ class MailBodyFrameTests(PlaywrightTestCase):
 
     def test_a_trusted_sender_shows_images_on_the_next_open(self):
         self._open()
+        self.page.get_by_role("button", name="More actions").click()
         self.page.get_by_role("button", name="Always show from this sender").click()
         expect(
             self.page.get_by_text("Images from this sender are always shown.")
@@ -242,10 +250,8 @@ class MailBodyFrameTests(PlaywrightTestCase):
         # The tracker next to it still waits for consent, and the notice says
         # which images it is about.
         expect(self.page.get_by_role("button", name="Show images")).to_be_visible()
-        expect(
-            self.page.get_by_text("The ones sent with the message are shown.")
-        ).to_be_visible()
-        expect(self.page.get_by_text("Remote images are hidden")).to_be_hidden()
+        self.page.get_by_role("button", name="Why are images hidden?").click()
+        expect(self.page.get_by_text(EMBEDDED_SHOWN)).to_be_visible()
         self.assertEqual(self.tracker_hits, [])
         # The picture shown in the body is not listed again as a file.
         expect(self.page.get_by_role("link", name="terms.png")).to_be_visible()

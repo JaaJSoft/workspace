@@ -409,21 +409,68 @@
 
       <template x-if="messageDetail.body_html">
         <div>
+          {% comment %}
+            One line: the why sits behind the info icon, trusting the sender
+            behind the arrow of the split button. Both are focus-driven daisyUI
+            dropdowns, so they open on a tap as well as a click. The split
+            button's dropdown wraps the whole join: focusing "Show images" would
+            open the menu too, but that click hides the notice.
+          {% endcomment %}
           <div
             x-show="messageDetail.has_remote_images && !mailImagesAllowed()"
-            class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-lg border border-base-300 bg-base-200/60 text-sm"
+            class="mb-3 flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-200/60 py-1 pl-3 pr-1 text-sm"
           >
-            <i data-lucide="image-off" class="w-4 h-4 shrink-0 text-base-content/60"></i>
-            <span x-show="!hasEmbeddedImages()" class="flex-1 min-w-48 text-base-content/80">{% translate "Remote images are hidden to protect your privacy." %}</span>
-            {# The pictures sent with the message already show: say which ones are hidden. #}
-            <span x-show="hasEmbeddedImages()" class="flex-1 min-w-48 text-base-content/80">{% translate "Images from the web are hidden to protect your privacy. The ones sent with the message are shown." %}</span>
-            <div class="flex flex-wrap gap-1">
-              <button type="button" class="btn btn-xs btn-ghost" @click="showMailImages()">
-                {% translate "Show images" %}
+            <i data-lucide="image-off" class="w-4 h-4 shrink-0 text-base-content/60 max-sm:hidden"></i>
+            <span class="min-w-0 truncate text-base-content/80">{% translate "Remote images hidden" %}</span>
+            <span class="dropdown dropdown-bottom dropdown-center shrink-0">
+              <button
+                type="button"
+                tabindex="0"
+                class="btn btn-ghost btn-xs btn-circle text-base-content/50 hover:text-base-content/80"
+                title="{% translate "Why are images hidden?" %}"
+                aria-label="{% translate "Why are images hidden?" %}"
+              >
+                <i data-lucide="info" class="w-3.5 h-3.5"></i>
               </button>
-              <button type="button" class="btn btn-xs btn-ghost" @click="trustMailSender()">
-                {% translate "Always show from this sender" %}
-              </button>
+              <div
+                tabindex="0"
+                class="dropdown-content z-10 mt-1 w-64 rounded-lg border border-base-300 bg-base-100 p-3 text-xs leading-snug text-base-content/80 shadow-lg"
+              >
+                <p>{% translate "Loading them would tell the sender when and from where you read this message." %}</p>
+                <p x-show="hasEmbeddedImages()" class="mt-1.5">{% translate "Pictures sent with the message itself are shown." %}</p>
+              </div>
+            </span>
+            <div class="dropdown dropdown-end ml-auto shrink-0">
+              <div class="join">
+                <button
+                  type="button"
+                  class="btn btn-xs join-item border-base-300 bg-base-100 font-medium shadow-none hover:bg-base-200"
+                  @click="showMailImages()"
+                >
+                  <span class="sm:hidden">{% translate "Show" context "remote images" %}</span>
+                  <span class="max-sm:hidden">{% translate "Show images" %}</span>
+                </button>
+                <button
+                  type="button"
+                  tabindex="0"
+                  class="btn btn-xs btn-square join-item border-base-300 bg-base-100 shadow-none hover:bg-base-200"
+                  title="{% translate "More actions" %}"
+                  aria-label="{% translate "More actions" %}"
+                >
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <ul
+                tabindex="0"
+                class="dropdown-content z-10 menu menu-sm mt-1 w-max rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
+              >
+                <li>
+                  <button type="button" @click="trustMailSender(); $el.blur()">
+                    <i data-lucide="user-check" class="w-4 h-4"></i>
+                    {% translate "Always show from this sender" %}
+                  </button>
+                </li>
+              </ul>
             </div>
           </div>
           <div

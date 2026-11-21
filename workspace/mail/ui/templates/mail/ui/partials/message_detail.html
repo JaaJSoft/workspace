@@ -414,7 +414,9 @@
             class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-lg border border-base-300 bg-base-200/60 text-sm"
           >
             <i data-lucide="image-off" class="w-4 h-4 shrink-0 text-base-content/60"></i>
-            <span class="flex-1 min-w-48 text-base-content/80">{% translate "Remote images are hidden to protect your privacy." %}</span>
+            <span x-show="!hasEmbeddedImages()" class="flex-1 min-w-48 text-base-content/80">{% translate "Remote images are hidden to protect your privacy." %}</span>
+            {# The pictures sent with the message already show: say which ones are hidden. #}
+            <span x-show="hasEmbeddedImages()" class="flex-1 min-w-48 text-base-content/80">{% translate "Images from the web are hidden to protect your privacy. The ones sent with the message are shown." %}</span>
             <div class="flex flex-wrap gap-1">
               <button type="button" class="btn btn-xs btn-ghost" @click="showMailImages()">
                 {% translate "Show images" %}

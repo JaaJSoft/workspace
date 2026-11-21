@@ -675,6 +675,14 @@ msgid "Remote images are hidden to protect your privacy."
 msgstr "Les images distantes sont masquées pour protéger votre vie privée."
 
 #: ui/templates/mail/ui/partials/message_detail.html
+msgid ""
+"Images from the web are hidden to protect your privacy. The ones sent with "
+"the message are shown."
+msgstr ""
+"Les images venant du web sont masquées pour protéger votre vie privée. "
+"Celles jointes au message sont affichées."
+
+#: ui/templates/mail/ui/partials/message_detail.html
 msgid "Show images"
 msgstr "Afficher les images"
 

@@ -143,6 +143,10 @@ window.mailBodyFrameMixin = function mailBodyFrameMixin() {
       }).observe(frame);
     },
 
+    hasEmbeddedImages() {
+      return (this.messageDetail?.attachments || []).some((att) => att.embedded);
+    },
+
     listedAttachments() {
       return (this.messageDetail?.attachments || []).filter((att) => !att.embedded);
     },

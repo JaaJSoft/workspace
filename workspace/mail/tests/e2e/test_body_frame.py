@@ -160,6 +160,7 @@ class MailBodyFrameTests(PlaywrightTestCase):
         self._open()
         self.page.wait_for_timeout(300)
         self.assertEqual(self.tracker_hits, [])
+        expect(self.page.get_by_text("Remote images are hidden")).to_be_visible()
 
         self.page.get_by_role("button", name="Show images").click()
 
@@ -238,8 +239,13 @@ class MailBodyFrameTests(PlaywrightTestCase):
             "() => document.querySelector('iframe.mail-body-frame')"
             ".contentDocument.querySelector('img[alt=Logo]')?.naturalWidth === 1"
         )
-        # The tracker next to it still waits for consent.
+        # The tracker next to it still waits for consent, and the notice says
+        # which images it is about.
         expect(self.page.get_by_role("button", name="Show images")).to_be_visible()
+        expect(
+            self.page.get_by_text("The ones sent with the message are shown.")
+        ).to_be_visible()
+        expect(self.page.get_by_text("Remote images are hidden")).to_be_hidden()
         self.assertEqual(self.tracker_hits, [])
         # The picture shown in the body is not listed again as a file.
         expect(self.page.get_by_role("link", name="terms.png")).to_be_visible()

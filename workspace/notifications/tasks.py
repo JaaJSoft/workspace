@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 
 import orjson
@@ -8,7 +10,7 @@ from django.core.cache import cache
 from workspace.common.logging import scrub
 from workspace.common.task_priority import BACKGROUND_PRIORITY, INTERACTIVE_PRIORITY
 from workspace.common.url_guard import UnsafeUrl
-from workspace.notifications.models import SOURCE_FIELD_NAMES
+from workspace.notifications.models import SOURCE_FIELD_NAMES, Notification
 from workspace.notifications.services.push_transport import GuardedPushSession
 from workspace.notifications.services.vapid import VapidKeyError, load_vapid_key
 from workspace.users.services.presence import is_active
@@ -20,6 +22,23 @@ PUSH_TIMEOUT_SECONDS = 10
 ACTIVE_RETRY_DELAY_SECONDS = 60
 RETENTION_DAYS = 90
 _SOURCE_ID_ATTRS = tuple(f"{name}_id" for name in SOURCE_FIELD_NAMES)
+
+# How long the push service keeps a message for a device it cannot reach
+# (asleep in doze, offline, switched off). pywebpush defaults to a TTL of 0,
+# which means "deliver now or drop", so a phone that is not awake at the
+# instant of sending never gets the notification. A day covers a night and a
+# day without signal; anything older is still in the in-app list.
+PUSH_TTL_SECONDS = 24 * 60 * 60
+
+# RFC 8030 Urgency: lets the push service and the OS decide whether the
+# message is worth waking a device that saves battery. A missing header reads
+# as "normal", so a mention would wait in line with everything else.
+PUSH_URGENCY = {
+    Notification.Priority.LOW: "low",
+    Notification.Priority.NORMAL: "normal",
+    Notification.Priority.HIGH: "high",
+    Notification.Priority.URGENT: "high",
+}
 
 
 def _source_ref(notif):
@@ -54,6 +73,19 @@ def _notification_tag(notif):
     return f"{attr}:{value}"
 
 
+def _push_topic(notif):
+    """RFC 8030 Topic: a message still queued for a sleeping device is
+    replaced by the next one carrying the same topic.
+
+    Derived from the display tag, so the push service collapses exactly what
+    the OS would replace on screen anyway. A topic is at most 32 characters of
+    the URL-safe base64 alphabet, which the tag (a colon and a UUID) is not,
+    so it is hashed: 24 bytes encode to 32 characters with no padding.
+    """
+    digest = hashlib.sha256(_notification_tag(notif).encode()).digest()[:24]
+    return base64.urlsafe_b64encode(digest).decode()
+
+
 @shared_task(
     name="notifications.send_push",
     priority=INTERACTIVE_PRIORITY,
@@ -84,7 +116,7 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
     # queue the task and never sends a push itself.
     from pywebpush import WebPushException, webpush
 
-    from workspace.notifications.models import Notification, PushSubscription
+    from workspace.notifications.models import PushSubscription
 
     try:
         notif = Notification.objects.select_related("recipient").get(
@@ -147,6 +179,10 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
             "tag": _notification_tag(notif),
         }
     )
+    headers = {
+        "Urgency": PUSH_URGENCY[notif.priority],
+        "Topic": _push_topic(notif),
+    }
 
     delivered = 0
     for sub in subscriptions:
@@ -164,6 +200,8 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
                     # dict itself would pin every later push to the first
                     # endpoint's origin, which the other push services reject.
                     vapid_claims=dict(vapid_claims),
+                    ttl=PUSH_TTL_SECONDS,
+                    headers=headers,
                     requests_session=session,
                     timeout=PUSH_TIMEOUT_SECONDS,
                 )

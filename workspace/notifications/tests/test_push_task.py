@@ -368,3 +368,92 @@ class NotificationTagTests(TestCase):
         )
         self.assertIn("mail_message_id", _notification_tag(notif))
         self.assertIsNotNone(_source_cooldown_key(notif))
+
+
+def _subscription_keys():
+    """A p256dh/auth pair pywebpush can really encrypt to."""
+    import os
+
+    from workspace.notifications.tests.vapid_fixtures import b64, generate_keypair
+
+    _pem, _der, _raw, public_b64 = generate_keypair()
+    return public_b64, b64(os.urandom(16))
+
+
+@override_settings(**FAKE_VAPID_SETTINGS)
+@patch("workspace.notifications.tasks.is_active", return_value=False)
+class PushServiceHeadersTests(TestCase):
+    """What reaches the push service over HTTP, past pywebpush's own defaults.
+
+    pywebpush is not mocked: it encrypts, signs and builds the headers, and
+    only the POST is intercepted. Its ``ttl`` defaults to 0, which tells the
+    push service to drop the message when the device is asleep.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="hdruser", password="pass")
+        p256dh, auth = _subscription_keys()
+        PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://push.example.com/hdr/1",
+            p256dh=p256dh,
+            auth=auth,
+        )
+        self.conv = Conversation.objects.create(created_by=self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _send(self, **kwargs):
+        from workspace.notifications.tasks import send_push_notification
+
+        notif = Notification.objects.create(
+            recipient=self.user, origin="chat", icon="", title="t", **kwargs
+        )
+        with patch(
+            "workspace.notifications.services.push_transport.GuardedPushSession.post"
+        ) as mock_post:
+            mock_post.return_value = MagicMock(status_code=201)
+            send_push_notification(str(notif.uuid))
+        mock_post.assert_called_once()
+        return mock_post.call_args.kwargs["headers"]
+
+    def test_message_outlives_a_sleeping_device(self, _):
+        from workspace.notifications.tasks import PUSH_TTL_SECONDS
+
+        headers = self._send(conversation=self.conv)
+        self.assertEqual(headers["TTL"], str(PUSH_TTL_SECONDS))
+        self.assertGreaterEqual(PUSH_TTL_SECONDS, 60 * 60)
+
+    def test_urgency_follows_the_notification_priority(self, _):
+        expected = {"normal": "normal", "high": "high", "urgent": "high"}
+        for priority, urgency in expected.items():
+            with self.subTest(priority=priority):
+                cache.clear()
+                headers = self._send(conversation=self.conv, priority=priority)
+                self.assertEqual(headers["Urgency"], urgency)
+
+    def test_every_priority_has_an_urgency(self, _):
+        from workspace.notifications.tasks import PUSH_URGENCY
+
+        self.assertEqual(set(PUSH_URGENCY), set(Notification.Priority.values))
+
+    def test_topic_is_shared_by_one_source_and_valid_for_rfc_8030(self, _):
+        import re
+
+        first = self._send(conversation=self.conv)["Topic"]
+        cache.clear()
+        second = self._send(conversation=self.conv)["Topic"]
+        other_conv = Conversation.objects.create(created_by=self.user)
+        cache.clear()
+        other = self._send(conversation=other_conv)["Topic"]
+
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, other)
+        self.assertRegex(first, re.compile(r"^[A-Za-z0-9_-]{1,32}$"))
+
+    def test_sourceless_notifications_do_not_share_a_topic(self, _):
+        first = self._send()["Topic"]
+        second = self._send()["Topic"]
+        self.assertNotEqual(first, second)

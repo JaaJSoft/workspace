@@ -620,6 +620,15 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     async fileMessages(action, msgUuids) {
       if (!msgUuids || !msgUuids.length) return;
       this.actionsInFlight += 1;
+      const accountIds = new Set(
+        this.messages
+          .filter(m => msgUuids.includes(m.uuid))
+          .map(m => m.account_id || this.selectedFolder?.account_id)
+          .filter(Boolean),
+      );
+      if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+        accountIds.add(this.messageDetail.account_id);
+      }
       this._optimisticRemoveMessages(msgUuids);
       try {
         const res = await this._fetch('/api/v1/mail/messages/batch-action', {
@@ -640,6 +649,9 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       } finally {
         this.actionsInFlight -= 1;
       }
+      // The target folders' counters moved, and a first archive created the
+      // account's Archive folder on the server.
+      await Promise.all([...accountIds].map(id => this.loadFolders(id)));
     },
 
     // The selected messages `check` ('canArchive', ...) allows, for the

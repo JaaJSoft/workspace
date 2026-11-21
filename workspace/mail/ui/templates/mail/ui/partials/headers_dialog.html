@@ -6,7 +6,7 @@ showHeaders(). State lives on mailApp in headersDialog.
 {% load i18n %}
 <dialog id="mail-headers-dialog" class="modal">
   <div class="modal-box max-w-3xl">
-    {% include "ui/partials/dialog_header.html" with icon="file-code" title=_("Message headers") subtitle_expr="headersDialog.subject" close_form=True only %}
+    {% include "ui/partials/dialog_header.html" with icon="file-code" title=_("Message headers") subtitle_expr="headersDialog.subject" only %}
     <div x-show="headersDialog.loading" class="flex justify-center py-8">
       <span class="loading loading-spinner loading-md text-module"></span>
     </div>

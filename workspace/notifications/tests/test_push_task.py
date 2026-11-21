@@ -411,7 +411,9 @@ class PushServiceHeadersTests(TestCase):
         notif = Notification.objects.create(
             recipient=self.user, origin="chat", icon="", title="t", **kwargs
         )
-        with patch("pywebpush.requests.post") as mock_post:
+        with patch(
+            "workspace.notifications.services.push_transport.GuardedPushSession.post"
+        ) as mock_post:
             mock_post.return_value = MagicMock(status_code=201)
             send_push_notification(str(notif.uuid))
         mock_post.assert_called_once()

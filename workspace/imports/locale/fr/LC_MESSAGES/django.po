@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 11:15+0000\n"
+"POT-Creation-Date: 2026-11-21 09:48+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -338,33 +338,13 @@ msgstr "Import depuis %(name)s annulé"
 msgid "%(kind)s: %(summary)s"
 msgstr "%(kind)s : %(summary)s"
 
-#: services/url_guard.py
-msgid "Only http:// and https:// URLs are supported."
-msgstr "Seules les URL http:// et https:// sont prises en charge."
-
-#: services/url_guard.py
-msgid "The URL has no host."
-msgstr "L’URL n’a pas d’hôte."
-
-#: services/url_guard.py
-#, python-format
-msgid "'%(host)s' could not be resolved."
-msgstr "« %(host)s » n’a pas pu être résolu."
-
-#: services/url_guard.py
-#, python-format
-msgid "'%(host)s' points to an address this server will not contact."
-msgstr "« %(host)s » pointe vers une adresse que ce serveur ne contactera pas."
-
-#: services/url_guard.py
-#, python-format
+#: services/network_policy.py
 msgid ""
-"'%(host)s' is on a private network. Ask the administrator to allow private "
-"networks for imports if your previous cloud lives there."
+"Ask the administrator to allow private networks for imports if your previous "
+"cloud lives there."
 msgstr ""
-"« %(host)s » est sur un réseau privé. Demandez à l’administrateur "
-"d’autoriser les réseaux privés pour les imports si votre ancien cloud s’y "
-"trouve."
+"Demandez à l’administrateur d’autoriser les réseaux privés pour les imports "
+"si votre ancien cloud s’y trouve."
 
 #: ui/templates/imports/ui/index.html
 msgid "Nothing is saved until the server has answered with these credentials."

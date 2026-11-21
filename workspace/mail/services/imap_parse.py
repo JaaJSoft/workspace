@@ -12,6 +12,7 @@ from django.db import transaction
 from workspace.common.logging import scrub
 
 from .addresses import sender_columns
+from .html_text import html_to_text
 from .imap_messages import DRAFT, FLAGGED, SEEN
 
 logger = logging.getLogger(__name__)
@@ -60,14 +61,43 @@ NH3_ALLOWED_TAGS = {
     "ul",
 }
 
+# class and style stay: the body is rendered in a frame of its own, which the
+# app's stylesheets do not reach and out of which no style can draw.
 NH3_ALLOWED_ATTRIBUTES = {
     "*": {"class", "style", "dir", "lang"},
-    "a": {"href", "target", "title"},
+    "a": {"href", "title"},
     "img": {"src", "alt", "width", "height", "title"},
     "td": {"colspan", "rowspan", "align", "valign"},
     "th": {"colspan", "rowspan", "align", "valign"},
     "table": {"border", "cellpadding", "cellspacing", "width"},
 }
+
+# Every link leaves the message's frame for a new tab: a target naming the
+# frame itself would load the linked page in the middle of the app.
+NH3_SET_ATTRIBUTES = {"a": {"target": "_blank"}}
+
+# cid: points at a part of the message itself (RFC 2392). The stored body keeps
+# it; services/inline_images resolves it on read.
+NH3_URL_SCHEMES = nh3.ALLOWED_URL_SCHEMES | {"cid"}
+
+
+def sanitize_mail_html(html, inline_images=None):
+    """Clean an email's HTML body down to what the message frame renders.
+
+    nh3 also gives every link ``rel="noopener noreferrer"``. ``cid:``
+    references are kept as they are, unless ``inline_images`` (an
+    ``InlineImages`` of the message) is given to resolve them.
+    """
+    if not html:
+        return ""
+    return nh3.clean(
+        html,
+        tags=NH3_ALLOWED_TAGS,
+        attributes=NH3_ALLOWED_ATTRIBUTES,
+        set_tag_attribute_values=NH3_SET_ATTRIBUTES,
+        url_schemes=NH3_URL_SCHEMES,
+        attribute_filter=inline_images.resolve if inline_images is not None else None,
+    )
 
 
 def _text(value):
@@ -259,13 +289,9 @@ def _parse_message(raw_email, account, folder, uid, flags, known_uids=None):
             if attachment is not None:
                 attachments_data.append(attachment)
 
-    # Sanitise HTML
-    if body_html:
-        body_html = nh3.clean(
-            body_html,
-            tags=NH3_ALLOWED_TAGS,
-            attributes=NH3_ALLOWED_ATTRIBUTES,
-        )
+    body_html = sanitize_mail_html(body_html)
+    if not body_text:
+        body_text = html_to_text(body_html)
 
     # Snippet from text body
     snippet = ""

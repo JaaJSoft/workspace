@@ -123,17 +123,7 @@
           x-show="selectedGroups.length > 0"
         >
           <template x-for="g in selectedGroups" :key="g.id">
-            <span class="badge badge-outline gap-1">
-              <i data-lucide="users" class="w-3 h-3"></i>
-              <span x-text="g.name"></span>
-              <button
-                type="button"
-                @click="removeSelectedGroup(g.id)"
-                aria-label="{% translate 'Remove' context 'remove item' %}"
-              >
-                <i data-lucide="x" class="w-3 h-3"></i>
-              </button>
-            </span>
+            {% include "ui/partials/group_chip.html" with name_expr="g.name" remove_expr="removeSelectedGroup(g.id)" %}
           </template>
         </div>
         {% include "ui/partials/group_selector.html" with on_select_event="chat-new-conv-group-selected" local_source="selectableGroups()" %}

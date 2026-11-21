@@ -286,13 +286,13 @@
       </div>
     </div>
 
-    <!-- Attachments bar -->
+    <!-- Attachments bar: the pictures the body shows are not listed again -->
     <div
-      x-show="messageDetail.attachments?.length > 0"
+      x-show="listedAttachments().length > 0"
       x-cloak
       class="px-4 py-2 border-b border-base-300 bg-base-100/50 flex flex-wrap gap-2"
     >
-      <template x-for="att in messageDetail.attachments" :key="att.uuid">
+      <template x-for="att in listedAttachments()" :key="att.uuid">
         <div class="group/att relative flex items-center">
           <a
             :href="'/api/v1/mail/attachments/' + att.uuid"
@@ -408,10 +408,97 @@
       </template>
 
       <template x-if="messageDetail.body_html">
-        <div
-          class="mail-body prose prose-sm max-w-none"
-          x-html="messageDetail.body_html"
-        ></div>
+        <div>
+          {% comment %}
+            One line: the why sits behind the info icon, trusting the sender
+            behind the arrow of the split button. Both are focus-driven daisyUI
+            dropdowns, so they open on a tap as well as a click. The split
+            button's dropdown wraps the whole join: focusing "Show images" would
+            open the menu too, but that click hides the notice.
+          {% endcomment %}
+          <div
+            x-show="messageDetail.has_remote_images && !mailImagesAllowed()"
+            class="mb-3 flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-200/60 py-1 pl-3 pr-1 text-sm"
+          >
+            <i
+              data-lucide="image-off"
+              class="w-4 h-4 shrink-0 text-base-content/60 max-sm:hidden"
+            ></i>
+            <span class="min-w-0 truncate text-base-content/80">{% translate "Remote images hidden" %}</span>
+            <span class="dropdown dropdown-bottom dropdown-center shrink-0">
+              <button
+                type="button"
+                tabindex="0"
+                class="btn btn-ghost btn-xs btn-circle text-base-content/50 hover:text-base-content/80"
+                title="{% translate "Why are images hidden?" %}"
+                aria-label="{% translate "Why are images hidden?" %}"
+              >
+                <i data-lucide="info" class="w-3.5 h-3.5"></i>
+              </button>
+              <div
+                tabindex="0"
+                class="dropdown-content z-10 mt-1 w-64 rounded-lg border border-base-300 bg-base-100 p-3 text-xs leading-snug text-base-content/80 shadow-lg"
+              >
+                <p>{% translate "Loading them would tell the sender when and from where you read this message." %}</p>
+                <p
+                  x-show="hasEmbeddedImages()"
+                  class="mt-1.5"
+                >{% translate "Pictures sent with the message itself are shown." %}</p>
+              </div>
+            </span>
+            <div class="dropdown dropdown-end ml-auto shrink-0">
+              <div class="join">
+                <button
+                  type="button"
+                  class="btn btn-xs join-item border-base-300 bg-base-100 font-medium shadow-none hover:bg-base-200"
+                  @click="showMailImages()"
+                >
+                  <span class="sm:hidden">{% translate "Show" context "remote images" %}</span>
+                  <span class="max-sm:hidden">{% translate "Show images" %}</span>
+                </button>
+                <button
+                  type="button"
+                  tabindex="0"
+                  class="btn btn-xs btn-square join-item border-base-300 bg-base-100 shadow-none hover:bg-base-200"
+                  title="{% translate "More actions" %}"
+                  aria-label="{% translate "More actions" %}"
+                >
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <ul
+                tabindex="0"
+                class="dropdown-content z-10 menu menu-sm mt-1 w-max rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
+              >
+                <li>
+                  <button type="button" @click="trustMailSender(); $el.blur()">
+                    <i data-lucide="user-check" class="w-4 h-4"></i>
+                    {% translate "Always show from this sender" %}
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div
+            x-show="messageDetail.has_remote_images && messageDetail.sender_trusted"
+            class="mb-3 flex flex-wrap items-center gap-x-2 text-xs text-base-content/60"
+          >
+            <span>{% translate "Images from this sender are always shown." %}</span>
+            <button type="button" class="link link-hover" @click="distrustMailSender()">
+              {% translate "Stop showing them" %}
+            </button>
+          </div>
+          <iframe
+            class="mail-body-frame block w-full h-0 border-0"
+            title="{% translate "Message body" %}"
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            referrerpolicy="no-referrer"
+            x-init="watchMailBody($el)"
+            x-effect="renderMailBody($el)"
+            @load="fitMailBody($el)"
+            @mail-theme-change="renderMailBody($el)"
+          ></iframe>
+        </div>
       </template>
       <template x-if="!messageDetail.body_html && messageDetail.body_text">
         <pre

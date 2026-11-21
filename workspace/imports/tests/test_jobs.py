@@ -7,12 +7,12 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.common.url_guard import UnsafeUrl
 from workspace.files.models import File
 from workspace.imports.importers.base import Outcome
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
 from workspace.imports.providers.base import RemoteCard
 from workspace.imports.services import jobs as svc
-from workspace.imports.services.url_guard import UnsafeUrl
 from workspace.imports.sse_provider import ImportsSSEProvider
 from workspace.imports.tasks import purge_old_jobs, recover_stale_jobs, run_import_job
 from workspace.notifications.models import Notification

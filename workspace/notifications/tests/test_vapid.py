@@ -145,11 +145,16 @@ class PushSigningTests(TestCase):
 
         def fake_post(endpoint, **kwargs):
             captured.append((endpoint, kwargs.get("headers") or {}))
-            return SimpleNamespace(status_code=201, text="", headers={})
+            return SimpleNamespace(
+                status_code=201, reason="Created", text="", headers={}
+            )
 
         with (
             patch("workspace.notifications.tasks.is_active", return_value=False),
-            patch("pywebpush.requests.post", side_effect=fake_post),
+            patch(
+                "workspace.notifications.services.push_transport.GuardedPushSession.post",
+                side_effect=fake_post,
+            ),
         ):
             send_push_notification(str(self.notif.uuid))
         return captured

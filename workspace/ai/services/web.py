@@ -4,7 +4,6 @@ import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
-from ipaddress import ip_address
 from urllib.parse import urljoin, urlparse
 
 import httpx2
@@ -13,6 +12,13 @@ from django.conf import settings
 
 from workspace.common.documents.extraction import ExtractedDocument
 from workspace.common.logging import scrub
+from workspace.common.url_guard import (
+    ResponseTooLarge,
+    UnsafeUrl,
+    check_remote_url,
+    guarded_transport,
+    read_capped,
+)
 
 from .feeds import Feed, looks_like_feed, parse_feed
 from .paging import check_part, part_count
@@ -20,11 +26,6 @@ from .pdf import MAX_CHARS, extract_pdf
 from .reading import read_for_query
 
 logger = logging.getLogger(__name__)
-
-# Internal/private IP ranges that must not be fetched (SSRF protection).
-_BLOCKED_HOSTS = re.compile(
-    r"^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.0\.0\.0|::1|\[::1\])",
-)
 
 _HEADERS = {
     "User-Agent": (
@@ -47,23 +48,20 @@ def _get_blocked_domains() -> set[str]:
 
 
 def _is_url_safe(url: str) -> bool:
-    """Return False if *url* points to a private/internal address or blocked domain."""
-    parsed = urlparse(url)
-    host = (parsed.hostname or "").lower()
-    if _BLOCKED_HOSTS.search(host):
-        return False
-    # Check domain blocklist (matches domain and all subdomains).
-    blocked = _get_blocked_domains()
-    if blocked:
-        for domain in blocked:
-            if host == domain or host.endswith("." + domain):
-                return False
+    """Return False if *url* is off limits without resolving it - a scheme
+    other than http(s), ``localhost``, a non-public IP address - or on a
+    blocked domain. A host name's addresses are checked when a fetch connects
+    (``guarded_transport``)."""
     try:
-        addr = ip_address(host)
-        return addr.is_global
-    except ValueError:
-        # Not a raw IP — allow DNS names that didn't match the blocklist.
-        return True
+        check_remote_url(url)
+    except UnsafeUrl:
+        return False
+    host = (urlparse(url).hostname or "").lower()
+    # Matches the domain and all its subdomains.
+    return not any(
+        host == domain or host.endswith("." + domain)
+        for domain in _get_blocked_domains()
+    )
 
 
 SEARCH_TIME_RANGES = ("day", "week", "month", "year")
@@ -346,16 +344,18 @@ def _compose(header: str, body: str, links: str, max_chars: int) -> str:
     )
 
 
-def _json_or_none(resp) -> str | None:
+def _json_or_none(content_type: str, content: bytes) -> str | None:
     """Re-serialize a JSON response compactly, or return None if it isn't JSON.
 
     HTML extraction yields nothing on a JSON document, and a pretty-printed
     payload spends most of the character budget on indentation.
     """
-    if "json" not in resp.headers.get("content-type", "").lower():
+    if "json" not in content_type:
         return None
     try:
-        return json.dumps(resp.json(), ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(
+            json.loads(content), ensure_ascii=False, separators=(",", ":")
+        )
     except ValueError:
         return None
 
@@ -549,37 +549,42 @@ def fetch_and_extract(
     if not _is_url_safe(url):
         raise ValueError("URL points to a private or internal address")
 
+    # Every connection, redirect hops included, goes through the guard, which
+    # raises UnsafeUrl (a ValueError) for a name resolving to an internal
+    # address. The body is read up to the larger of the two caps, the PDF one.
     try:
-        with httpx2.Client(
-            timeout=15,
-            follow_redirects=True,
-            headers=_HEADERS,
-            max_redirects=5,
-        ) as client:
-            resp = client.get(url)
+        with (
+            httpx2.Client(
+                transport=guarded_transport(),
+                timeout=15,
+                follow_redirects=True,
+                headers=_HEADERS,
+                max_redirects=5,
+            ) as client,
+            client.stream("GET", url) as resp,
+        ):
             resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "").lower()
+            try:
+                content = read_capped(resp, MAX_PDF_BYTES)
+            except ResponseTooLarge:
+                raise ValueError(_too_large(content_type)) from None
+            encoding = resp.encoding or "utf-8"
+            final_url = str(resp.url)
     except httpx2.HTTPError as exc:
         raise FetchError(
             f"Failed to fetch URL: {exc}", transient=_is_transient(exc)
         ) from exc
 
-    content = resp.content
-    final_url = str(resp.url)
-    content_type = resp.headers.get("content-type", "").lower()
-
     if _is_pdf(content_type, content):
-        if len(content) > MAX_PDF_BYTES:
-            raise ValueError(f"PDF too large (>{MAX_PDF_BYTES // (1024 * 1024)} MB)")
         return _render_pdf(
             extract_pdf(content, max_chars=MAX_CHARS), final_url, max_chars, query, part
         )
 
     if len(content) > MAX_RESPONSE_BYTES:
-        raise ValueError(
-            f"Response too large (>{MAX_RESPONSE_BYTES // (1024 * 1024)} MB)"
-        )
+        raise ValueError(_too_large(content_type))
 
-    payload = _json_or_none(resp)
+    payload = _json_or_none(content_type, content)
     if payload is not None:
         return _paged(payload, max_chars, part)
 
@@ -588,4 +593,11 @@ def fetch_and_extract(
         if feed is not None:
             return _render_feed(feed, final_url, max_chars, query, part)
 
-    return _render_html(resp.text, final_url, max_chars, query, part)
+    text = content.decode(encoding, errors="replace")
+    return _render_html(text, final_url, max_chars, query, part)
+
+
+def _too_large(content_type: str) -> str:
+    if "application/pdf" in content_type:
+        return f"PDF too large (>{MAX_PDF_BYTES // (1024 * 1024)} MB)"
+    return f"Response too large (>{MAX_RESPONSE_BYTES // (1024 * 1024)} MB)"

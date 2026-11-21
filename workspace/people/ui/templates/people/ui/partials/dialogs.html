@@ -45,16 +45,7 @@
       </label>
       <label class="fieldset w-full">
         <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
-        <select
-          name="scope"
-          class="select select-sm w-full"
-          x-model="personForm.scope"
-        >
-          <option value="mine">{% translate "My contacts" %}</option>
-          <template x-for="group in groups" :key="group.id">
-            <option :value="'group:' + group.id" x-text="group.name"></option>
-          </template>
-        </select>
+        {% include "people/ui/partials/address_book_select.html" with model_expr="personForm.scope" %}
       </label>
       <div class="modal-action">
         <button
@@ -111,16 +102,7 @@
       </label>
       <label class="fieldset w-full">
         <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
-        <select
-          name="scope"
-          class="select select-sm w-full"
-          x-model="importForm.scope"
-        >
-          <option value="mine">{% translate "My contacts" %}</option>
-          <template x-for="group in groups" :key="group.id">
-            <option :value="'group:' + group.id" x-text="group.name"></option>
-          </template>
-        </select>
+        {% include "people/ui/partials/address_book_select.html" with model_expr="importForm.scope" %}
       </label>
       <p class="text-xs text-base-content/60">
         {% translate "A contact already in the address book (same card or same email) is updated rather than duplicated. Groups become lists." %}
@@ -289,12 +271,7 @@
       <div x-show="!listForm.uuid">
         <label class="fieldset w-full">
           <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
-          <select name="scope" class="select select-sm w-full" x-model="listForm.scope">
-            <option value="mine">{% translate "My contacts" %}</option>
-            <template x-for="group in groups" :key="group.id">
-              <option :value="'group:' + group.id" x-text="group.name"></option>
-            </template>
-          </select>
+          {% include "people/ui/partials/address_book_select.html" with model_expr="listForm.scope" %}
         </label>
       </div>
       <div class="modal-action">

@@ -4,6 +4,7 @@ from xml.etree import ElementTree
 import httpx2
 from django.test import SimpleTestCase
 
+from workspace.common.url_guard import UnsafeUrl
 from workspace.imports.models import ImportConnection
 from workspace.imports.providers.base import (
     AuthenticationFailed,
@@ -13,7 +14,6 @@ from workspace.imports.providers.base import (
 )
 from workspace.imports.providers.carddav import CardDavSource
 from workspace.imports.providers.webdav import build_client
-from workspace.imports.services.url_guard import UnsafeUrl
 
 ROOT = "https://cloud.example.org/remote.php/dav/addressbooks/users/alice/"
 HOME = "/remote.php/dav/addressbooks/users/alice"

@@ -543,17 +543,8 @@
                       x-text="book.description"
                     ></div>
                   </div>
-                  <select
-                    class="select select-sm w-36 sm:w-44 shrink-0"
-                    x-model="book.target"
-                    :disabled="!book.selected"
-                    aria-label="{% translate "Import into" %}"
-                  >
-                    <option value="mine">{% translate "My contacts" %}</option>
-                    <template x-for="group in groups" :key="group.id">
-                      <option :value="'group:' + group.id" x-text="group.name"></option>
-                    </template>
-                  </select>
+                  {% translate "Import into" as import_into_label %}
+                  {% include "people/ui/partials/address_book_select.html" with model_expr="book.target" disabled_expr="!book.selected" aria_label=import_into_label width_class="w-36 sm:w-44 shrink-0" %}
                 </div>
               </template>
               <p

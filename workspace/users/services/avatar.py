@@ -8,6 +8,7 @@ an avatar is tracked via a ``UserSetting(module='profile', key='has_avatar')``.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from workspace.common.services.image import (
     delete_image,
@@ -18,6 +19,10 @@ from workspace.common.services.image import (
 from workspace.users.services.settings import delete_setting, get_setting, set_setting
 
 logger = logging.getLogger(__name__)
+
+# The picture of a bot nobody gave one: the avatar endpoint serves it, so every
+# surface drawing a bot as a user shows the same picture.
+BOT_AVATAR_PATH = Path(__file__).resolve().parent.parent / "assets" / "bot_avatar.svg"
 
 
 def get_avatar_path(user_id: int) -> str:

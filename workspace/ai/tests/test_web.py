@@ -25,6 +25,7 @@ from workspace.ai.tools import (
     WebSearchParams,
     WebToolProvider,
 )
+from workspace.common.tests.network import OK, FakeNetwork, http_response
 from workspace.common.tests.pdf_fixtures import make_pdf
 
 
@@ -251,8 +252,10 @@ def _fake_response(*, text="", url="https://example.com/", content_type="text/ht
     under test.
     """
     resp = MagicMock()
-    resp.text = text
     resp.content = text.encode()
+    # Read when the body is streamed, so a test may still swap ``content``.
+    resp.iter_bytes.side_effect = lambda: iter([resp.content])
+    resp.encoding = "utf-8"
     resp.url = url
     resp.headers = {"content-type": content_type}
     return resp
@@ -262,7 +265,7 @@ def _client_returning(resp):
     client = MagicMock()
     client.__enter__ = MagicMock(return_value=client)
     client.__exit__ = MagicMock(return_value=False)
-    client.get.return_value = resp
+    client.stream.return_value.__enter__.return_value = resp
     return client
 
 
@@ -329,7 +332,6 @@ class FetchAndExtractTests(TestCase):
             text='{"title": "PR title", "state": "open"}',
             content_type="application/json; charset=utf-8",
         )
-        resp.json.return_value = {"title": "PR title", "state": "open"}
         mock_client_cls.return_value = _client_returning(resp)
 
         text = fetch_and_extract("https://example.com/api/pulls/1")
@@ -343,7 +345,6 @@ class FetchAndExtractTests(TestCase):
         self, mock_client_cls, mock_extract
     ):
         resp = _fake_response(text="not json", content_type="application/json")
-        resp.json.side_effect = ValueError("no")
         mock_client_cls.return_value = _client_returning(resp)
         mock_extract.return_value = "not json"
 
@@ -369,7 +370,7 @@ class FetchAndExtractTests(TestCase):
         self, mock_client_cls, mock_extract
     ):
         resp = _fake_response(text="{}", content_type="application/json")
-        resp.json.return_value = {"body": "B" * 5000}
+        resp.content = json.dumps({"body": "B" * 5000}).encode()
         mock_client_cls.return_value = _client_returning(resp)
 
         text = fetch_and_extract("https://example.com/api", max_chars=200)
@@ -421,7 +422,7 @@ class FetchAndExtractTests(TestCase):
 
     def _fetch_failing_with(self, error):
         client = _client_returning(_fake_response())
-        client.get.side_effect = error
+        client.stream.side_effect = error
         with (
             patch("workspace.ai.services.web.httpx2.Client", return_value=client),
             self.assertRaises(FetchError) as ctx,
@@ -1088,7 +1089,7 @@ class PagedFetchTests(TestCase):
         # Nothing composes the JSON path afterwards, so the room the marker is
         # given is the only thing keeping a part inside the budget.
         resp = _fake_response(text="{}", content_type="application/json")
-        resp.json.return_value = {"body": "B" * 5000}
+        resp.content = json.dumps({"body": "B" * 5000}).encode()
         with patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls:
             mock_client_cls.return_value = _client_returning(resp)
             text = fetch_and_extract("https://example.com/api", max_chars=120)
@@ -1100,7 +1101,7 @@ class PagedFetchTests(TestCase):
 
         def fetch(part):
             resp = _fake_response(text="{}", content_type="application/json")
-            resp.json.return_value = payload
+            resp.content = json.dumps(payload).encode()
             with patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls:
                 mock_client_cls.return_value = _client_returning(resp)
                 return fetch_and_extract(
@@ -1192,3 +1193,53 @@ class ReadWebpageToolTests(TestCase):
         with self.assertRaises(ToolError) as caught:
             self._run(url="   ")
         self.assertIn("url is required", caught.exception.reason)
+
+
+class FetchUrlGuardTests(TestCase):
+    """The real HTTP client and guard, with only DNS and TCP replaced."""
+
+    PUBLIC = "93.184.216.34"
+
+    def _refused(self, answers, response, url="https://example.com/page"):
+        with FakeNetwork(answers, response=response) as net:
+            with self.assertRaises(ValueError) as ctx:
+                fetch_and_extract(url)
+        self.assertNotIsInstance(ctx.exception, FetchError)
+        return net
+
+    def test_a_name_resolving_to_a_private_address_is_never_dialed(self):
+        net = self._refused(
+            {"web": [["172.18.0.2"]]},
+            http_response(200, b"<html>admin</html>", "text/html"),
+            url="http://web:8000/admin/",
+        )
+        self.assertEqual(net.lookups, ["web"])
+        self.assertEqual(net.dialed, [])
+
+    def test_a_redirect_to_an_internal_address_is_not_followed(self):
+        redirect = (
+            b"HTTP/1.1 301 Moved\r\nLocation: http://metadata.internal/\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        answers = {
+            "example.com": [[self.PUBLIC]],
+            "metadata.internal": [["169.254.169.254"]],
+        }
+        net = self._refused(answers, redirect)
+        self.assertEqual(net.dialed, [(self.PUBLIC, 443)])
+
+    def test_a_literal_private_address_is_refused_before_any_lookup(self):
+        net = self._refused({}, OK, url="http://[::ffff:10.0.0.1]/")
+        self.assertEqual((net.lookups, net.dialed), ([], []))
+
+    def test_a_public_page_is_still_read(self):
+        html = (
+            b"<html><head><title>T</title></head><body><p>Hello there</p></body></html>"
+        )
+        with FakeNetwork(
+            {"example.com": [[self.PUBLIC]]},
+            response=http_response(200, html, "text/html; charset=utf-8"),
+        ) as net:
+            text = fetch_and_extract("https://example.com/page")
+        self.assertIn("Hello there", text)
+        self.assertEqual(net.dialed, [(self.PUBLIC, 443)])

@@ -6,7 +6,7 @@ database covers the large providers that do not.
 
 The domain comes from what a user typed, so everything fetched is treated as
 hostile input: the domain must be a plain hostname, the request only connects
-to an address the imports URL guard accepts (no private network), redirects
+to a public address (``workspace.common.url_guard``), redirects
 are not followed, the body is capped, and the XML is parsed without entities
 or a DTD. A server that cannot be reached, is refused by the guard, answers
 anything but 200 or sends a malformed file is skipped, never an error - the
@@ -22,7 +22,7 @@ import httpx2
 from lxml import etree
 
 from workspace.common.logging import scrub
-from workspace.imports.services.url_guard import UnsafeUrl, guarded_transport
+from workspace.common.url_guard import UnsafeUrl, guarded_transport
 
 logger = logging.getLogger(__name__)
 

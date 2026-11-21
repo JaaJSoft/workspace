@@ -477,3 +477,31 @@ class MailRuleLog(models.Model):
 
     def __str__(self):
         return f"log {self.uuid} (rule={self.rule_name_snapshot or 'deleted'})"
+
+
+class MailTrustedSender(models.Model):
+    """A sender whose messages load their remote images without asking.
+
+    Remote images are blocked by default because loading one tells the sender
+    when, and from which address, the message was read.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mail_trusted_senders",
+    )
+    # Stored lowercased: the same sender writes its address in any case.
+    email = models.CharField(max_length=254)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "email"], name="mail_trusted_sender_unique"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.owner_id} trusts {self.email}"

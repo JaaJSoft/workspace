@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('mail', '0036_message_search_splits_punctuation'),
+        ('mail', '0038_backfill_html_only_body_text'),
     ]
 
     operations = [

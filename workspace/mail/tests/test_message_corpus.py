@@ -11,6 +11,7 @@ hold whatever parses the message. A case marked as an expected failure is a
 known bug, named in its reason: fixing it turns the mark into an error.
 """
 
+import itertools
 import unittest
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -58,9 +59,14 @@ class MessageCorpusTests(TestCase):
             folder_type="inbox",
         )
 
+    def setUp(self):
+        self.uids = itertools.count(1)
+
     def parse(self, name):
         raw = (CORPUS / name).read_bytes()
-        return _parse_message(raw, self.account, self.folder, 1, ())
+        # A UID of its own: a second message under a stored UID is skipped.
+        uid = next(self.uids)
+        return _parse_message(raw, self.account, self.folder, uid, ())
 
     def attachments(self, message):
         return [
@@ -200,7 +206,6 @@ class MessageCorpusTests(TestCase):
             [("image.png", "image/png", "ii_m3a9x7k20", True)],
         )
 
-    @known_bug("#1750: the sanitizer drops cid: sources.")
     def test_embedded_pictures_keep_their_place_in_the_body(self):
         for name, reference in (
             ("gmail_pasted_screenshot.eml", "cid:ii_m3a9x7k20"),
@@ -240,7 +245,6 @@ class MessageCorpusTests(TestCase):
         self.assertEqual(self.attachments(message), [])
         self.assertFalse(message.has_attachments)
 
-    @known_bug("#1750: the text is only ever read from a text/plain part.")
     def test_html_only_message_has_text_to_show_and_search(self):
         message = self.parse("html_only_newsletter.eml")
 

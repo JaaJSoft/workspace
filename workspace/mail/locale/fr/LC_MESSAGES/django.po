@@ -530,6 +530,50 @@ msgid "Mark read / unread"
 msgstr "Marquer comme lu / non lu"
 
 #: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Archive message"
+msgstr "Archiver le message"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
+msgid "Report spam / not spam"
+msgstr "Signaler comme spam / pas un spam"
+
+#: ui/templates/mail/ui/partials/headers_dialog.html
+msgid "Message headers"
+msgstr "En-têtes du message"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+msgctxt "verb"
+msgid "Archive"
+msgstr "Archiver"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Report spam"
+msgstr "Signaler comme spam"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Not spam"
+msgstr "Pas un spam"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Show headers"
+msgstr "Afficher les en-têtes"
+
+#: ui/templates/mail/ui/partials/message_context_menu.html
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Download .eml"
+msgstr "Télécharger le .eml"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Archive (E)"
+msgstr "Archiver (E)"
+
+#: ui/templates/mail/ui/partials/help_dialog.html
 msgid "Mail Features"
 msgstr "Fonctionnalités de la messagerie"
 
@@ -568,11 +612,11 @@ msgstr ""
 "jointes."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
-msgid "<strong>Batch actions</strong>: Select multiple messages to mark read/unread, star, or delete in bulk."
+msgid "<strong>Batch actions</strong>: Select multiple messages to mark read/unread, star, archive, report as spam, move or delete in bulk."
 msgstr ""
 "<strong>Actions groupées</strong> : sélectionnez plusieurs messages "
-"pour les marquer comme lus ou non lus, les suivre ou les supprimer en une "
-"fois."
+"pour les marquer comme lus ou non lus, les suivre, les archiver, les "
+"signaler comme spam, les déplacer ou les supprimer en une fois."
 
 #: ui/templates/mail/ui/partials/help_dialog.html
 msgid "<strong>Folders</strong>: Right-click a folder for options: refresh, mark all read, change icon, or sync."
@@ -1087,6 +1131,14 @@ msgstr "Une ou plusieurs étiquettes n’appartiennent pas à ce compte."
 #: views/messages.py
 msgid "Target folder not found"
 msgstr "Dossier cible introuvable"
+
+#: views/messages.py
+msgid "The server no longer has this message"
+msgstr "Le serveur n’a plus ce message"
+
+#: views/messages.py
+msgid "Failed to fetch the message from the server"
+msgstr "Impossible de récupérer le message sur le serveur"
 
 #: views/oauth2.py
 msgid "Invalid state parameter. Please try again."

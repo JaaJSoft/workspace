@@ -51,6 +51,10 @@ def sync_folders(account):
         if delim and delim != account.imap_delimiter:
             account.imap_delimiter = delim
             account.save(update_fields=["imap_delimiter", "updated_at"])
+    archives_in_all_mail = any("\\all" in flags for flags, _d, _n in remote_folders)
+    if archives_in_all_mail != account.archives_in_all_mail:
+        account.archives_in_all_mail = archives_in_all_mail
+        account.save(update_fields=["archives_in_all_mail", "updated_at"])
 
     existing = {f.name: f for f in MailFolder.objects.filter(account=account)}
     # Folders in a merge group carry the type the user chose for the group.

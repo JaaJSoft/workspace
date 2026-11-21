@@ -1,6 +1,7 @@
 // Mail messages: list, pagination, selection, flags (read/star), delete,
 // batch actions, filters, search, message context menu, attachment save,
-// move messages, move dialog, message navigation.
+// move messages, move dialog, archive and spam, original message (headers,
+// .eml), message navigation.
 
 // Kept outside the component so Alpine never wraps the DOM node in a proxy.
 let mailUnsyncedAlert = null;
@@ -483,6 +484,14 @@ window.mailMessagesMixin = function mailMessagesMixin() {
               ? [...this.selectedMessages] : [msg.uuid]
           );
           break;
+        case 'archive':
+        case 'spam':
+        case 'not_spam':
+          await this.fileMessages(action, this._fileTargetIds(msg));
+          break;
+        case 'headers':
+          await this.showHeaders(msg);
+          break;
         case 'delete':
           await this.deleteMessage(msg);
           break;
@@ -567,6 +576,138 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       document.getElementById('mail-move-dialog').close();
       if (targetFolder) {
         await this.moveMessages(this.moveMsgUuids, targetFolder);
+      }
+    },
+
+    // ----- Archive, Report spam, Not spam -----
+    // What the server will do with each message, as far as the loaded folders
+    // tell: hidden folders are not loaded, and a hidden Archive or Spam only
+    // makes the server more willing than this, never less.
+    _messageFolderType(msg) {
+      const accountId = msg.account_id || this.selectedFolder?.account_id;
+      return this._resolveFolderUuid(accountId, msg.folder_id)?.folder_type || null;
+    },
+
+    _accountHasFolderType(accountId, type) {
+      return (this.folders[accountId] || []).some(f => f.folder_type === type);
+    },
+
+    canArchive(msg) {
+      if (!msg) return false;
+      const type = this._messageFolderType(msg);
+      if (['archive', 'trash', 'spam', 'drafts'].includes(type)) return false;
+      const accountId = msg.account_id || this.selectedFolder?.account_id;
+      if (this._accountHasFolderType(accountId, 'archive')) return true;
+      // Gmail keeps every message in All Mail: there, archiving is taking a
+      // message out of the Inbox. Elsewhere the server creates the Archive.
+      const account = this.accounts.find(a => a.uuid === accountId);
+      return !account?.archives_in_all_mail || type === 'inbox';
+    },
+
+    canReportSpam(msg) {
+      if (!msg) return false;
+      const type = this._messageFolderType(msg);
+      if (['spam', 'trash', 'drafts', 'sent'].includes(type)) return false;
+      return this._accountHasFolderType(msg.account_id || this.selectedFolder?.account_id, 'spam');
+    },
+
+    canMarkNotSpam(msg) {
+      return !!msg && this._messageFolderType(msg) === 'spam';
+    },
+
+    // `action` is one of the batch endpoint's filing actions: 'archive',
+    // 'spam' or 'not_spam'. Each message goes to its own account's folder.
+    async fileMessages(action, msgUuids) {
+      if (!msgUuids || !msgUuids.length) return;
+      this.actionsInFlight += 1;
+      const accountIds = new Set(
+        this.messages
+          .filter(m => msgUuids.includes(m.uuid))
+          .map(m => m.account_id || this.selectedFolder?.account_id)
+          .filter(Boolean),
+      );
+      if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+        accountIds.add(this.messageDetail.account_id);
+      }
+      this._optimisticRemoveMessages(msgUuids);
+      try {
+        const res = await this._fetch('/api/v1/mail/messages/batch-action', {
+          method: 'POST',
+          body: { message_ids: msgUuids, action },
+        });
+        if (!res.ok) throw new Error(`${action} failed`);
+        const data = await res.json();
+        // A message the server left where it was (refused, or nowhere to go)
+        // was removed from the list above: put it back.
+        if (data.processed < msgUuids.length) {
+          window.AppAlert.error(gettext('Some messages could not be moved.'));
+          await this.loadMessages();
+        }
+      } catch (e) {
+        window.AppAlert.error(gettext('Some messages could not be moved.'));
+        await this.loadMessages();
+      } finally {
+        this.actionsInFlight -= 1;
+      }
+      // The target folders' counters moved, and a first archive created the
+      // account's Archive folder on the server.
+      await Promise.all([...accountIds].map(id => this.loadFolders(id)));
+    },
+
+    // The selected messages `check` ('canArchive', ...) allows, for the
+    // batch bar: a mixed selection files what it can and leaves the rest.
+    selectedFileable(check) {
+      return this.messages
+        .filter(m => this.selectedMessages.includes(m.uuid) && this[check](m))
+        .map(m => m.uuid);
+    },
+
+    _fileTargetIds(msg) {
+      return this.selectedMessages.length > 0 && this.selectedMessages.includes(msg.uuid)
+        ? [...this.selectedMessages] : [msg.uuid];
+    },
+
+    // The keyboard acts on the open message, or on the selection when there
+    // is one and no message is open.
+    _keyboardFileTargets(allowed) {
+      if (this.messageDetail) {
+        return allowed(this.messageDetail) ? [this.messageDetail.uuid] : [];
+      }
+      return this.messages
+        .filter(m => this.selectedMessages.includes(m.uuid) && allowed(m))
+        .map(m => m.uuid);
+    },
+
+    // ----- Original message: headers and .eml -----
+    originalUrl(msg) {
+      return `/api/v1/mail/messages/${msg.uuid}/original`;
+    },
+
+    async showHeaders(msg) {
+      if (!msg) return;
+      this.headersDialog = { loading: true, text: '', error: '', subject: msg.subject || '' };
+      document.getElementById('mail-headers-dialog')?.showModal();
+      try {
+        const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}/headers`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          this.headersDialog.error = data.detail || gettext('Failed to load the headers.');
+          return;
+        }
+        this.headersDialog.text = data.headers;
+      } catch (e) {
+        this.headersDialog.error = gettext('Failed to load the headers.');
+      } finally {
+        this.headersDialog.loading = false;
+      }
+    },
+
+    async copyHeaders() {
+      try {
+        await navigator.clipboard.writeText(this.headersDialog.text);
+        window.AppAlert.success(gettext('Headers copied'));
+      } catch (e) {
+        window.AppAlert.error(gettext('Could not copy the headers.'));
       }
     },
 

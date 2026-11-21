@@ -22,7 +22,7 @@ import email.policy
 from unittest.mock import patch
 
 from imapclient.exceptions import CapabilityError, IMAPClientError
-from imapclient.imapclient import literal
+from imapclient.imapclient import Namespace, literal
 
 # What IMAPClient leaves unquoted in a SEARCH argument although no atom may
 # hold it (RFC 3501, atom-specials).
@@ -69,9 +69,12 @@ class FakeMailbox:
 
 
 class FakeImapServer:
-    def __init__(self, capabilities=FULL, delimiter="/"):
+    def __init__(self, capabilities=FULL, delimiter="/", personal_prefix=""):
         self.capabilities = set(capabilities)
         self.delimiter = delimiter
+        # What NAMESPACE answers for the personal namespace, when the server
+        # has the capability: "INBOX." on Courier and Cyrus.
+        self.personal_prefix = personal_prefix
         self.mailboxes = {}
         self.connections = []
         self.commands = []
@@ -192,6 +195,13 @@ class FakeImapClient:
         self.closed = True
 
     # -- mailboxes ----------------------------------------------------------
+
+    def namespace(self):
+        self.server._run("namespace")
+        if not self.has_capability("NAMESPACE"):
+            raise CapabilityError("Server does not support NAMESPACE")
+        personal = ((self.server.personal_prefix.encode(), self.server.delimiter),)
+        return Namespace(personal, None, None)
 
     def list_folders(self):
         self.server._run("list")
@@ -324,6 +334,10 @@ class FakeImapClient:
                     item[b"FLAGS"] = tuple(flag.encode() for flag in message.flags)
                 elif name == "BODY.PEEK[]":
                     item[b"BODY[]"] = message.raw
+                elif name == "BODY.PEEK[HEADER]":
+                    # The header block with the blank line that closes it.
+                    header, _blank, _body = message.raw.partition(b"\r\n\r\n")
+                    item[b"BODY[HEADER]"] = header + b"\r\n\r\n"
                 elif name == "RFC822.SIZE":
                     item[b"RFC822.SIZE"] = len(message.raw)
                 else:

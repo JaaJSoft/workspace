@@ -11,6 +11,7 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 
 from .addresses import sender_columns
+from .html_text import html_to_text
 
 # HTML sanitisation whitelist
 NH3_ALLOWED_TAGS = {
@@ -261,6 +262,8 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
                 body_text = decoded
 
     body_html = sanitize_mail_html(body_html)
+    if not body_text:
+        body_text = html_to_text(body_html)
 
     # Snippet from text body
     snippet = ""

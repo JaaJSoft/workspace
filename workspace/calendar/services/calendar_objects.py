@@ -119,12 +119,15 @@ def save_object(master, parsed, exception_source=None, **fields):
     _apply(master, parsed.master, parsed.master.rule)
     for name, value in fields.items():
         setattr(master, name, value)
-    if master._state.adding:
+    created = master._state.adding
+    if created:
         master.save()
     else:
         master.save(update_fields=[*_EVENT_COLUMNS, *fields])
 
-    current = {exc.original_start: exc for exc in master.exceptions.all()}
+    current = (
+        {} if created else {exc.original_start: exc for exc in master.exceptions.all()}
+    )
     for override in parsed.overrides:
         save_occurrence(
             master,

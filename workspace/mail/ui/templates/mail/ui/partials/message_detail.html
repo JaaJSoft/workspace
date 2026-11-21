@@ -420,7 +420,10 @@
             x-show="messageDetail.has_remote_images && !mailImagesAllowed()"
             class="mb-3 flex items-center gap-1.5 rounded-lg border border-base-300 bg-base-200/60 py-1 pl-3 pr-1 text-sm"
           >
-            <i data-lucide="image-off" class="w-4 h-4 shrink-0 text-base-content/60 max-sm:hidden"></i>
+            <i
+              data-lucide="image-off"
+              class="w-4 h-4 shrink-0 text-base-content/60 max-sm:hidden"
+            ></i>
             <span class="min-w-0 truncate text-base-content/80">{% translate "Remote images hidden" %}</span>
             <span class="dropdown dropdown-bottom dropdown-center shrink-0">
               <button
@@ -437,7 +440,10 @@
                 class="dropdown-content z-10 mt-1 w-64 rounded-lg border border-base-300 bg-base-100 p-3 text-xs leading-snug text-base-content/80 shadow-lg"
               >
                 <p>{% translate "Loading them would tell the sender when and from where you read this message." %}</p>
-                <p x-show="hasEmbeddedImages()" class="mt-1.5">{% translate "Pictures sent with the message itself are shown." %}</p>
+                <p
+                  x-show="hasEmbeddedImages()"
+                  class="mt-1.5"
+                >{% translate "Pictures sent with the message itself are shown." %}</p>
               </div>
             </span>
             <div class="dropdown dropdown-end ml-auto shrink-0">

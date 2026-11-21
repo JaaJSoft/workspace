@@ -193,6 +193,136 @@ class CancelTests(InvitationTestCase):
         self.assertTrue(master.is_cancelled)
 
 
+def _sequenced(lines, sequence):
+    return [
+        f"SEQUENCE:{sequence}" if line.startswith("SEQUENCE:") else line
+        for line in lines
+    ]
+
+
+def _cancel(sequence, recurrence_id=None):
+    lines = [f"UID:{UID}", ORGANIZER, f"SEQUENCE:{sequence}"]
+    if recurrence_id:
+        lines.append(f"RECURRENCE-ID;TZID=Europe/Paris:{recurrence_id}")
+    return _itip("CANCEL", lines)
+
+
+class SequenceTests(InvitationTestCase):
+    """RFC 5546 versions each component, the series and every occurrence, by
+    its own SEQUENCE: a revision applies only over an older one."""
+
+    def test_a_newer_occurrence_applies_when_the_series_did_not_change(self):
+        # Google resends the whole object with the series' SEQUENCE untouched
+        # when only one occurrence moved.
+        self._receive(_itip("REQUEST", SERIES))
+        self._receive(_itip("REQUEST", SERIES, MOVED))
+
+        (master,) = self._masters()
+        (moved,) = master.exceptions.all()
+        self.assertEqual(moved.start, MOVED_TO)
+
+    def test_a_request_older_than_the_cancel_does_not_revive_the_series(self):
+        self._receive(_itip("REQUEST", SERIES))
+        self._receive(_cancel(2))
+        self._receive(_itip("REQUEST", _sequenced(SERIES, 1)))
+
+        (master,) = self._masters()
+        self.assertTrue(master.is_cancelled)
+        self.assertEqual(master.ical_sequence, 2)
+
+    def test_a_request_newer_than_the_cancel_revives_the_series(self):
+        self._receive(_itip("REQUEST", SERIES))
+        self._receive(_cancel(2))
+        self._receive(_itip("REQUEST", _sequenced(SERIES, 3)))
+
+        (master,) = self._masters()
+        self.assertFalse(master.is_cancelled)
+
+    def test_a_cancel_older_than_the_occurrence_leaves_it(self):
+        self._receive(_itip("REQUEST", SERIES, _sequenced(MOVED, 3)))
+        self._receive(_cancel(2, "20260316T090000"))
+
+        self.assertIn(MOVED_TO, occurrence_starts(self._calendar()))
+
+    def test_a_cancel_older_than_the_series_leaves_its_occurrences(self):
+        self._receive(_itip("REQUEST", _sequenced(SERIES, 3)))
+        self._receive(_cancel(2, "20260309T090000"))
+
+        self.assertIn(
+            datetime(2026, 3, 9, 8, tzinfo=UTC), occurrence_starts(self._calendar())
+        )
+
+    def test_a_failed_update_leaves_the_series_as_it_was(self):
+        self._receive(_itip("REQUEST", SERIES))
+        newer = _sequenced(SERIES, 2)
+        with (
+            patch(
+                "workspace.calendar.services.calendar_objects.save_occurrence",
+                side_effect=RuntimeError("disk full"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            process_calendar_email(
+                self._create_mail_with_ics(_itip("REQUEST", newer, MOVED), uid=99)
+            )
+
+        (master,) = self._masters()
+        self.assertEqual(master.ical_sequence, 0)
+
+
+class SingleOccurrenceInvitationTests(InvitationTestCase):
+    """An invitation to one date of a series the user never got is stored as a
+    plain event: a later message names that date by its RECURRENCE-ID."""
+
+    def setUp(self):
+        super().setUp()
+        self._receive(_itip("REQUEST", MOVED))
+
+    def test_cancelling_another_occurrence_leaves_it(self):
+        self._receive(_cancel(2, "20260323T090000"))
+
+        (event,) = self._masters()
+        self.assertFalse(event.is_cancelled)
+
+    def test_cancelling_its_occurrence_cancels_it(self):
+        self._receive(_cancel(2, "20260316T090000"))
+
+        (event,) = self._masters()
+        self.assertTrue(event.is_cancelled)
+
+    def test_cancelling_the_series_cancels_it(self):
+        self._receive(_cancel(2))
+
+        (event,) = self._masters()
+        self.assertTrue(event.is_cancelled)
+
+    def test_an_update_of_another_occurrence_leaves_it(self):
+        other = [
+            line.replace("20260316T090000", "20260323T090000")
+            .replace("20260317T140000", "20260324T140000")
+            .replace("20260317T150000", "20260324T150000")
+            for line in _sequenced(MOVED, 2)
+        ]
+        self._receive(_itip("REQUEST", other))
+
+        (event,) = self._masters()
+        self.assertEqual(event.start, MOVED_TO)
+
+    def test_an_update_of_its_occurrence_applies(self):
+        self._receive(
+            _itip(
+                "REQUEST",
+                [
+                    line.replace("SUMMARY:Weekly sync (moved)", "SUMMARY:Moved again")
+                    for line in _sequenced(MOVED, 2)
+                ],
+            )
+        )
+
+        (event,) = self._masters()
+        self.assertEqual(event.title, "Moved again")
+
+
 class MethodTests(InvitationTestCase):
     def test_a_reply_never_creates_an_event(self):
         self._receive(

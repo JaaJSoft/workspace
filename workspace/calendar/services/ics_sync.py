@@ -12,7 +12,12 @@ from workspace.calendar.services.calendar_objects import (
     object_unchanged,
     save_object,
 )
-from workspace.calendar.services.ical_objects import dated, read_calendar, standalone
+from workspace.calendar.services.ical_objects import (
+    dated,
+    is_dated,
+    read_calendar,
+    standalone,
+)
 from workspace.common.url_guard import (
     ResponseTooLarge,
     UnsafeUrl,
@@ -46,6 +51,14 @@ def sync_external_calendar(external_calendar):
         external_calendar.save(update_fields=["last_synced_at"])
         return
 
+    # Scheduled polls are serialized by their claim, manual syncs are not: two
+    # runs reading the same exceptions would each add the same new one.
+    list(
+        type(external_calendar)
+        .objects.select_for_update()
+        .filter(pk=external_calendar.pk)
+        .values_list("pk", flat=True)
+    )
     calendar = external_calendar.calendar
     # Floating (naive) feed times mean "local time of the observer": the
     # closest observer we have is the calendar owner.
@@ -63,14 +76,21 @@ def sync_external_calendar(external_calendar):
         .prefetch_related("exceptions")
     }
 
-    seen_uids = set()
+    # An event the feed lists but that could not be read this time is still
+    # in the feed: only the ones that left it are deleted.
+    seen_uids = set(feed.unreadable)
     for obj in feed.objects:
-        obj = dated(standalone(obj))
+        obj = standalone(obj)
+        seen_uids.add(obj.uid)
+        master = existing_by_uid.get(obj.uid)
+        if master is not None and (obj.uid in feed.unreadable or not is_dated(obj)):
+            # Rewriting it from what could be read would drop the rest, the
+            # exceptions included: keep what is stored until the feed mends.
+            continue
+        obj = dated(obj)
         if obj is None:
             continue
-        seen_uids.add(obj.uid)
         organizer = obj.master.organizer
-        master = existing_by_uid.get(obj.uid)
         if master is None:
             _create_object(calendar, obj, organizer)
         elif not object_unchanged(master, obj, external_organizer=organizer):

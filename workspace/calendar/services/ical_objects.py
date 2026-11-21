@@ -309,10 +309,16 @@ class ParsedObject:
 
 @dataclass
 class ParsedCalendar:
-    """Every object of a VCALENDAR, in the order they first appear."""
+    """Every object of a VCALENDAR, in the order they first appear.
+
+    *unreadable* holds the UIDs of the events that could not be read: the
+    text still lists them, so a reader that keeps what it already has must
+    not take them for events that are gone.
+    """
 
     method: str
     objects: list[ParsedObject]
+    unreadable: set[str] = field(default_factory=set)
 
 
 def parse_object(data, default_tz=UTC):
@@ -321,7 +327,7 @@ def parse_object(data, default_tz=UTC):
     *default_tz* resolves floating times: "local time of the observer", and
     the calendar's owner is the closest observer there is.
     """
-    _method, parsed = _read(data, default_tz, strict=True)
+    _method, parsed, _unreadable = _read(data, default_tz, strict=True)
     if not parsed:
         raise InvalidObject(
             "The object holds no event.", "supported-calendar-component"
@@ -358,8 +364,8 @@ def read_calendar(data, default_tz=UTC):
     whether it needs one. Raises InvalidObject only when the text is not an
     iCalendar object at all.
     """
-    method, parsed = _read(data, default_tz, strict=False)
-    return ParsedCalendar(method=method, objects=_group(parsed))
+    method, parsed, unreadable = _read(data, default_tz, strict=False)
+    return ParsedCalendar(method=method, objects=_group(parsed), unreadable=unreadable)
 
 
 def standalone(obj):
@@ -405,6 +411,33 @@ def without_components(obj, name):
     )
 
 
+def standalone_recurrence_id(extra, default_tz=UTC):
+    """The occurrence a plain event stands for, as ``standalone`` kept it.
+
+    The instant of the RECURRENCE-ID line in *extra*, or None for an event that
+    is not one occurrence of somebody else's series.
+    """
+    line = next(
+        (line for line in _lines(extra) if _property_name(line) == "RECURRENCE-ID"),
+        None,
+    )
+    if line is None:
+        return None
+    try:
+        vevent = icalendar.Event.from_ical(f"BEGIN:VEVENT\r\n{line}\r\nEND:VEVENT\r\n")
+        instant, _ = _instant(vevent.RECURRENCE_ID, default_tz)
+    except ValueError, TypeError, KeyError, IndexError:
+        return None
+    return instant
+
+
+def is_dated(obj):
+    """Whether every event of *obj* has a start."""
+    return all(
+        event.start is not None for event in [obj.master, *obj.overrides] if event
+    )
+
+
 def dated(obj):
     """*obj* without its undated occurrences, or None when its master is undated."""
     if obj.master is None or obj.master.start is None:
@@ -413,7 +446,7 @@ def dated(obj):
 
 
 def _read(data, default_tz, strict):
-    """``(METHOD, [(uid, ParsedEvent)])`` for every VEVENT of *data*."""
+    """``(METHOD, [(uid, ParsedEvent)], unreadable UIDs)`` for *data*'s VEVENTs."""
     if isinstance(data, bytes):
         try:
             data = data.decode("utf-8")
@@ -432,20 +465,23 @@ def _read(data, default_tz, strict):
     if len(vevents) != len(raw_blocks):
         raise InvalidObject("The events could not be read.")
 
-    parsed = []
+    parsed, unreadable = [], set()
     for vevent, raw in zip(vevents, raw_blocks, strict=True):
         try:
             uid, event = _parse_vevent(vevent, raw, default_tz, strict)
         except InvalidObject:
             if strict:
                 raise
-            logger.info("Skipped an unreadable event: %s", scrub(vevent.get("UID")))
+            uid = str(vevent.get("UID", "")).strip()
+            logger.info("Skipped an unreadable event: %s", scrub(uid))
+            if uid:
+                unreadable.add(uid)
             continue
         if not strict and (not uid or len(uid) > _MAX_UID):
             logger.info("Skipped an event without a usable UID")
             continue
         parsed.append((uid, event))
-    return str(calendar.get("METHOD", "")).strip().upper(), parsed
+    return str(calendar.get("METHOD", "")).strip().upper(), parsed, unreadable
 
 
 def _with_declared_zone(calendar):

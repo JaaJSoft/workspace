@@ -13,6 +13,7 @@ The METHOD of the message decides the write:
 """
 
 import logging
+from dataclasses import replace
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone as django_tz
@@ -29,6 +30,7 @@ from workspace.calendar.services.ical_objects import (
     dated,
     read_calendar,
     standalone,
+    standalone_recurrence_id,
     without_components,
 )
 from workspace.common.logging import scrub
@@ -61,11 +63,16 @@ def process_calendar_email(mail_message):
         )
         return
     for obj in calendar.objects:
+        if obj.uid in calendar.unreadable:
+            # Applying the part that could be read would drop the rest.
+            logger.info("Ignored invitation %s: unreadable event", scrub(obj.uid))
+            continue
         # Anyone can mail an invitation, and an alarm would put their reminder
         # on the user's devices (a sound fetched from their URL, an email to
         # addresses they chose): the organizer's alarms are not the attendee's,
         # which is how Thunderbird and Apple Calendar read invitations too.
-        handler(without_components(obj, "VALARM"), mail_message)
+        with transaction.atomic():
+            handler(without_components(obj, "VALARM"), mail_message)
 
 
 def process_calendar_emails(messages):
@@ -90,19 +97,38 @@ def _invitation_events(uid, user, organizer):
     or another organizer's invitation. Feed rows are excluded by calendar,
     not by ``source``: rows synced before that column existed were backfilled
     as ICS. Several rows can match (one per calendar the invitation reached).
+
+    The rows are locked for the caller's transaction: two deliveries of one
+    message read the same exceptions, and would each add the same new one.
     """
     if not organizer:
         return []
+    matching = Event.objects.filter(
+        ical_uid=uid,
+        owner=user,
+        source=Event.Source.ICS,
+        external_organizer__iexact=organizer,
+        calendar__external_source__isnull=True,
+        recurrence_parent__isnull=True,
+    ).values_list("pk", flat=True)
     return list(
-        Event.objects.filter(
-            ical_uid=uid,
-            owner=user,
-            source=Event.Source.ICS,
-            external_organizer__iexact=organizer,
-            calendar__external_source__isnull=True,
-            recurrence_parent__isnull=True,
-        ).prefetch_related("exceptions")
+        Event.objects.select_for_update()
+        .filter(pk__in=list(matching))
+        .prefetch_related("exceptions")
     )
+
+
+def _same_occurrence(event, overrides):
+    """The override naming the occurrence the plain *event* stands for, or None.
+
+    An invitation to one date of a series is stored as a plain event that kept
+    its RECURRENCE-ID; any other event is its own one occurrence.
+    """
+    stands_for = standalone_recurrence_id(
+        event.ical_extra, get_user_timezone(event.owner)
+    )
+    stands_for = stands_for or event.start
+    return next((o for o in overrides if o.recurrence_id == stands_for), None)
 
 
 def _handle_request(obj, mail_message):
@@ -130,12 +156,20 @@ def _handle_request(obj, mail_message):
         return
 
     for master in existing:
-        if obj.master is None and master.is_recurring:
+        if obj.master is not None and obj.master.sequence > master.ical_sequence:
+            update = dated(obj)
+            if update is not None:
+                _update_event(master, update, mail_message)
+        elif master.is_recurring:
+            # The series did not change: each occurrence carries its own
+            # SEQUENCE, as when one occurrence moved.
             _update_occurrences(master, obj, mail_message)
-            continue
-        update = dated(standalone(obj))
-        if update is not None and update.master.sequence > master.ical_sequence:
-            _update_event(master, update, mail_message)
+        elif obj.master is None:
+            override = _same_occurrence(master, obj.overrides)
+            if override is not None and override.sequence > master.ical_sequence:
+                update = dated(standalone(replace(obj, overrides=[override])))
+                if update is not None:
+                    _update_event(master, update, mail_message)
 
 
 @transaction.atomic
@@ -186,23 +220,36 @@ def _handle_cancel(obj, mail_message):
     """Cancel the object, or only the occurrences the message names."""
     user = mail_message.account.owner
     for master in _invitation_events(obj.uid, user, _organizer(obj)):
-        if obj.master is not None or not master.is_recurring:
-            master.is_cancelled = True
-            master.save(update_fields=["is_cancelled", "updated_at"])
-            _notify(master, _("Cancelled: %(title)s"))
-            continue
-        current = {exc.original_start: exc for exc in master.exceptions.all()}
-        for override in obj.overrides:
-            exc = current.get(override.recurrence_id)
-            if exc is None:
-                exc = _occurrence_of(master, override.recurrence_id)
-            exc.is_cancelled = True
-            exc.ical_sequence = max(exc.ical_sequence, override.sequence)
-            if exc._state.adding:
-                exc.save()
-            else:
-                exc.save(update_fields=["is_cancelled", "ical_sequence", "updated_at"])
-            _notify(exc, _("Cancelled: %(title)s"))
+        if obj.master is not None:
+            _cancel(master, obj.master.sequence)
+        elif not master.is_recurring:
+            override = _same_occurrence(master, obj.overrides)
+            if override is not None:
+                _cancel(master, override.sequence)
+        else:
+            current = {exc.original_start: exc for exc in master.exceptions.all()}
+            for override in obj.overrides:
+                exc = current.get(override.recurrence_id)
+                if exc is None:
+                    exc = _occurrence_of(master, override.recurrence_id)
+                _cancel(exc, override.sequence)
+
+
+def _cancel(event, sequence):
+    """Cancel *event* at *sequence*, unless what the user has is newer.
+
+    The sequence is kept, so that a REQUEST older than the cancellation,
+    delivered late, cannot bring the event back.
+    """
+    if sequence < event.ical_sequence:
+        return
+    event.is_cancelled = True
+    event.ical_sequence = sequence
+    if event._state.adding:
+        event.save()
+    else:
+        event.save(update_fields=["is_cancelled", "ical_sequence", "updated_at"])
+    _notify(event, _("Cancelled: %(title)s"))
 
 
 def _occurrence_of(master, original_start):

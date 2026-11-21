@@ -224,6 +224,48 @@ class FeedValueTests(FeedTestCase):
         )
 
 
+class FeedUnreadableUpdateTests(FeedTestCase):
+    """An event the feed still lists but that cannot be read this time is
+    kept as it was: only an event that left the feed is deleted."""
+
+    def setUp(self):
+        super().setUp()
+        self._sync(_feed(SERIES, MOVED))
+        self.before = {e.uuid: e.updated_at for e in Event.objects.all()}
+
+    def _assert_kept(self):
+        self.assertEqual(
+            self.before, {e.uuid: e.updated_at for e in Event.objects.all()}
+        )
+
+    def test_a_series_with_an_unreadable_start_is_kept(self):
+        broken = [
+            "DTSTART:2026XX" if line.startswith("DTSTART") else line for line in SERIES
+        ]
+        self._sync(_feed(broken, MOVED))
+
+        self._assert_kept()
+
+    def test_a_series_without_a_start_is_kept(self):
+        undated = [line for line in SERIES if not line.startswith("DTSTART")]
+        self._sync(_feed(undated, MOVED))
+
+        self._assert_kept()
+
+    def test_an_unreadable_occurrence_keeps_its_exception(self):
+        broken = [
+            "DTSTART:2026XX" if line.startswith("DTSTART") else line for line in MOVED
+        ]
+        self._sync(_feed(SERIES, broken))
+
+        self._assert_kept()
+
+    def test_an_event_that_left_the_feed_is_still_deleted(self):
+        self._sync(_feed(["UID:other@example.com", "DTSTART:20260401T100000Z"]))
+
+        self.assertFalse(Event.objects.filter(ical_uid="series@example.com").exists())
+
+
 class FeedExportTests(FeedTestCase):
     """The real-world shapes, one producer each."""
 

@@ -308,6 +308,7 @@
         hidden: apps.filter(a => a.hidden).map(a => a.slug),
         todaySources: readJson('dashboard-today-sources-data'),
         hiddenToday: readJson('dashboard-hidden-today-data'),
+        todaySaves: window.todaySaveQueue(),
         isVisible(slug) {
           return !this.hidden.includes(slug);
         },
@@ -319,7 +320,8 @@
             this.hiddenToday.filter(s => s !== slug) : [...this.hiddenToday, slug];
           // Persist first, then re-fetch the card: the server decides whether
           // the card or the empty hidden slot comes back.
-          this.save('hidden_today_sources', this.hiddenToday).then(() => {
+          // Queued, and reading the list when it runs: the last save sends the latest list.
+          this.todaySaves(() => this.save('hidden_today_sources', this.hiddenToday)).then(() => {
             this.$ajax('{% url 'dashboard:today_fragment' %}', {
               target: 'dashboard-today'
             });

@@ -628,6 +628,13 @@ def _validate_setting_value(module, key, value):
     ):
         units = ", ".join(dashboard_preferences.TEMPERATURE_UNITS)
         return f"temperature_unit must be one of: {units}."
+    if (
+        module == dashboard_preferences.MODULE
+        and key == dashboard_preferences.HIDDEN_TODAY_SOURCES
+        and value is not None
+        and not dashboard_preferences.is_source_list(value)
+    ):
+        return "hidden_today_sources must be a list of source slugs."
     if module == "vault" and key == "default_sort" and value is not None:
         # The four the preferences panel offers. Stored unchecked, an unknown
         # value reaches the listing as a sort nothing implements, and the sort

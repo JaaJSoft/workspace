@@ -21,8 +21,8 @@ from workspace.users.services.settings import get_module_settings
 
 from .services.modules import dashboard_modules
 from .services.preferences import (
-    HIDDEN_TODAY_SOURCES,
     TEMPERATURE_UNITS,
+    hidden_today_sources,
     temperature_unit,
 )
 
@@ -33,7 +33,7 @@ TODAY_LIMIT = 8
 
 def _today_sources(user, dashboard_settings):
     """The Today sources *user* can see, each flagged ``hidden`` or not."""
-    hidden = set(dashboard_settings.get(HIDDEN_TODAY_SOURCES) or [])
+    hidden = hidden_today_sources(dashboard_settings)
     return [
         (source, source.slug in hidden)
         for source in today_registry.visible_sources(user)
@@ -57,7 +57,13 @@ def _today_list(user, sources):
             {"source": source, "item": item, "urgent": source.is_urgent(item)}
             for item in result.items
         )
-        filters.append({"source": source, "total": result.total})
+        filters.append(
+            {
+                "source": source,
+                "total": result.total,
+                "more": result.total - len(result.items),
+            }
+        )
     rows.sort(key=lambda row: not row["urgent"])
     return rows, filters
 

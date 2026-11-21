@@ -475,6 +475,38 @@ class TemperatureUnitSettingValidationTests(TestCase):
         )
 
 
+class HiddenTodaySourcesSettingValidationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="sources", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _put(self, value):
+        return self.client.put(
+            "/api/v1/settings/dashboard/hidden_today_sources",
+            data={"value": value},
+            content_type="application/json",
+        )
+
+    def test_accepts_a_list_of_slugs(self):
+        self.assertEqual(self._put(["mail", "tasks"]).status_code, 200)
+        self.assertEqual(
+            get_setting(self.user, "dashboard", "hidden_today_sources"),
+            ["mail", "tasks"],
+        )
+
+    def test_rejects_anything_else(self):
+        for value in (1, "mail", {"mail": True}, ["mail", 2]):
+            with self.subTest(value=value):
+                self.assertEqual(self._put(value).status_code, 400)
+        self.assertNotIn(
+            "hidden_today_sources", get_module_settings(self.user, "dashboard")
+        )
+
+
 class TimezoneSettingValidationTests(TestCase):
     def setUp(self):
         cache.clear()

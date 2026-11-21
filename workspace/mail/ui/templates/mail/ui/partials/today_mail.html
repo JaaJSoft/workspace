@@ -29,6 +29,11 @@
   <span
     class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline{% if not item.is_read %} font-medium{% endif %}"
   >{{ item.subject|default:_("(no subject)") }}</span>
+  {% for link in item.notify_labels|slice:":1" %}
+    <span
+      class="badge badge-xs badge-{{ link.label.color|default:'ghost' }} shrink-0"
+    >{{ link.label.name }}</span>
+  {% endfor %}
   <span
     class="text-xs text-base-content/50 truncate max-w-40 shrink-0 hidden sm:block"
   >

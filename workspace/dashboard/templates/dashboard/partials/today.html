@@ -73,7 +73,7 @@
               </li>
             {% endfor %}
           </ul>
-          {% if today_more or today_filters|length > 1 %}
+          {% if today_more or today_filters|length > 1 or today_filters.0.more %}
             <div class="flex justify-center">
               {% if today_more %}
                 <button
@@ -102,6 +102,16 @@
                     {% endblocktranslate %}
                   </a>
                 {% endfor %}
+              {% elif today_filters.0.more %}
+                {# One source: no filter to pick, so its link shows from the start. #}
+                <a
+                  href="{{ today_filters.0.source.url }}"
+                  class="link link-hover text-xs text-base-content/60"
+                >
+                  {% blocktranslate trimmed with source=today_filters.0.source.label %}
+                    See all in {{ source }}
+                  {% endblocktranslate %}
+                </a>
               {% endif %}
             </div>
           {% endif %}

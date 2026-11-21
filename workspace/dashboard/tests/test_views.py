@@ -1195,6 +1195,21 @@ class TodayFragmentViewTests(TestCase):
 
         self.assertNotContains(resp, "data-today-filter")
 
+    def test_a_single_source_links_to_the_rows_it_could_not_show(self):
+        self._register(_source("inbox", items=["a", "b"], total=6))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertContains(resp, 'href="/inbox"')
+        self.assertContains(resp, "See all in Inbox")
+
+    def test_a_single_source_showing_everything_needs_no_link(self):
+        self._register(_source("inbox", items=["a", "b"]))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertNotContains(resp, 'href="/inbox"')
+
     def test_rows_past_the_limit_start_hidden_behind_show_more(self):
         from workspace.dashboard.views import TODAY_LIMIT
 
@@ -1224,6 +1239,17 @@ class TodayFragmentViewTests(TestCase):
         resp = self.client.get("/dashboard/today")
 
         self.assertContains(resp, "Nothing is waiting on you.")
+
+    def test_a_malformed_stored_preference_hides_nothing(self):
+        # Stored before the API checked the value: the page must still render.
+        self._register(_source("inbox", items=["Contract"]))
+        set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, 1)
+
+        page = self.client.get("/")
+        resp = self.client.get("/dashboard/today")
+
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(resp, "<span>Contract</span>", html=True)
 
     def test_a_switched_off_source_is_never_queried(self):
         items_fn = Mock(return_value=TodayRows(["Secret"], 1))

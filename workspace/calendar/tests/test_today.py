@@ -143,6 +143,97 @@ class PendingInvitationsTests(TestCase):
 
         self.assertEqual(self._titles(), [])
 
+    def _series(self, title, start, rule, end=None, all_day=False):
+        series = Event(
+            calendar=self.calendar,
+            owner=self.organizer,
+            title=title,
+            start=start,
+            end=end,
+            all_day=all_day,
+        )
+        apply_rule(series, rule)
+        series.save()
+        EventMember.objects.create(event=series, user=self.guest)
+        return series
+
+    def _exception(self, series, original_start, **fields):
+        return Event.objects.create(
+            calendar=self.calendar,
+            owner=self.organizer,
+            title=series.title,
+            start=fields.pop("start", original_start),
+            end=fields.pop("end", original_start + timedelta(hours=1)),
+            recurrence_parent=series,
+            original_start=original_start,
+            **fields,
+        )
+
+    def _next_starts(self):
+        return {
+            e.title: e.next_start
+            for e in pending_invitations(self.guest, NOW, PARIS).items
+        }
+
+    def test_an_all_day_series_ending_today_is_listed_all_day(self):
+        # No end: the series' bound is the start of its last day, hours before NOW.
+        self._series(
+            "Retreat",
+            datetime(2026, 11, 18, tzinfo=UTC),
+            "RRULE:FREQ=DAILY;COUNT=4",
+            all_day=True,
+        )
+
+        self.assertEqual(
+            self._next_starts(), {"Retreat": datetime(2026, 11, 21, tzinfo=UTC)}
+        )
+
+    def test_a_series_occurrence_under_way_is_listed(self):
+        # The last occurrence runs 08:00-10:00 UTC; NOW is 09:00.
+        start = datetime(2026, 11, 19, 8, 0, tzinfo=UTC)
+        self._series(
+            "Daily sync",
+            start,
+            "RRULE:FREQ=DAILY;COUNT=3",
+            end=start + timedelta(hours=2),
+        )
+
+        self.assertEqual(
+            self._next_starts(),
+            {"Daily sync": datetime(2026, 11, 21, 8, 0, tzinfo=UTC)},
+        )
+
+    def test_a_cancelled_occurrence_is_skipped(self):
+        start = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
+        series = self._series(
+            "Lunch", start, "RRULE:FREQ=DAILY", end=start + timedelta(hours=1)
+        )
+        self._exception(series, start + timedelta(days=1), is_cancelled=True)
+
+        self.assertEqual(self._next_starts(), {"Lunch": start + timedelta(days=2)})
+
+    def test_a_moved_occurrence_answers_with_its_new_start(self):
+        start = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
+        series = self._series(
+            "Lunch", start, "RRULE:FREQ=DAILY", end=start + timedelta(hours=1)
+        )
+        today = start + timedelta(days=1)
+        self._exception(series, today, start=today + timedelta(hours=3))
+
+        self.assertEqual(self._next_starts(), {"Lunch": today + timedelta(hours=3)})
+
+    def test_a_series_whose_remaining_occurrences_are_cancelled_is_left_out(self):
+        start = datetime(2026, 11, 19, 12, 0, tzinfo=UTC)
+        series = self._series(
+            "Training",
+            start,
+            "RRULE:FREQ=DAILY;COUNT=3",
+            end=start + timedelta(hours=1),
+        )
+        self._exception(series, start + timedelta(days=2), is_cancelled=True)
+
+        self.assertEqual(self._next_starts(), {})
+
     def test_the_list_is_capped(self):
         for day in range(INVITATIONS_LIMIT + 2):
             self._invite(f"Event {day}", NOW + timedelta(days=day + 1))

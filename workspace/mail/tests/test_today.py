@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.template.loader import render_to_string
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -154,6 +155,19 @@ class ImportantMailTests(TestCase):
         (message,) = important_mail(self.user, NOW, tokyo).items
 
         self.assertTrue(message.received_today)
+
+    def test_a_row_shows_its_notifying_label(self):
+        self._message("Server down", labels=[self.urgent, self.fyi])
+
+        (message,) = important_mail(
+            self.user, NOW, timezone.get_current_timezone()
+        ).items
+        html = render_to_string(
+            "mail/ui/partials/today_mail.html", {"item": message, "urgent": True}
+        )
+
+        self.assertIn(">Urgent</span>", html)
+        self.assertNotIn("FYI", html)
 
     def test_a_short_list_is_its_own_count(self):
         self._message("Only one", is_starred=True)

@@ -23,3 +23,14 @@ def temperature_unit(dashboard_settings):
     """The unit the weather line reads in, from the module's settings map."""
     value = dashboard_settings.get(TEMPERATURE_UNIT)
     return value if value in TEMPERATURE_UNITS else CELSIUS
+
+
+def is_source_list(value):
+    """Whether *value* can be stored as ``hidden_today_sources``."""
+    return isinstance(value, list) and all(isinstance(slug, str) for slug in value)
+
+
+def hidden_today_sources(dashboard_settings):
+    """Slugs of the Today sources switched off; none on a malformed value."""
+    value = dashboard_settings.get(HIDDEN_TODAY_SOURCES)
+    return set(value) if is_source_list(value) else set()

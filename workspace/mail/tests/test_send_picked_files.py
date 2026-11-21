@@ -71,6 +71,8 @@ class SendPickedFilesTests(APITestCase):
         parts = [p for p in outgoing.walk() if p.get_filename() == "report.txt"]
         self.assertEqual(len(parts), 1)
         self.assertEqual(parts[0].get_payload(decode=True), b"quarterly numbers")
+        self.assertEqual(parts[0].get_content_type(), src.mime_type)
+        self.assertEqual(parts[0].get_content_type(), "text/plain")
 
     def test_foreign_file_rejects_the_send(self, mock_connect, _append, _sync):
         server = RecordingSMTP()

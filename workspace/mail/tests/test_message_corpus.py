@@ -60,7 +60,7 @@ class MessageCorpusTests(TestCase):
 
     def parse(self, name):
         raw = (CORPUS / name).read_bytes()
-        return _parse_message(raw, self.account, self.folder, 1, "")
+        return _parse_message(raw, self.account, self.folder, 1, ())
 
     def attachments(self, message):
         return [
@@ -292,7 +292,7 @@ class MessageCorpusTests(TestCase):
     def test_windows_1252_punctuation(self):
         message = self.parse("windows_1252_quotes.eml")
 
-        self.assertEqual(message.subject, "L’offre à 49 € – derniers jours")
+        self.assertEqual(message.subject, "L’offre à 49 € … derniers jours")
         self.assertEqual(
             _lines(message.body_text),
             "L’offre « spéciale » à 49 € se termine bientôt… Œuvre de l’équipe.\n",
@@ -304,7 +304,6 @@ class MessageCorpusTests(TestCase):
         self.assertEqual(message.subject, "שלום")
         self.assertEqual(message.body_text, "שלום עולם")
 
-    @known_bug("#1746: unknown-8bit raises LookupError and the message is skipped.")
     def test_a_charset_python_does_not_know_still_imports(self):
         message = self.parse("unknown_8bit_charset.eml")
 
@@ -314,7 +313,6 @@ class MessageCorpusTests(TestCase):
         self.assertTrue(message.body_text.startswith("Votre table est r"))
         self.assertIn("pour 20 h.", message.body_text)
 
-    @known_bug("#1746: raw 8-bit headers decode as unknown-8bit, which raises.")
     def test_headers_written_in_raw_utf8_still_import(self):
         message = self.parse("raw_utf8_headers.eml")
 

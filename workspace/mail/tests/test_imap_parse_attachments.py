@@ -1,3 +1,4 @@
+import io
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -7,6 +8,7 @@ from django.test import TestCase
 
 from workspace.mail.models import MailAccount, MailAttachment, MailFolder
 from workspace.mail.services.imap_parse import _parse_message
+from workspace.mail.services.smtp import build_draft_message
 
 User = get_user_model()
 
@@ -60,7 +62,7 @@ class ZeroByteAttachmentTests(TestCase):
     def test_zero_byte_attachment_is_persisted(self):
         raw = self._build_email_with_empty_attachment().as_bytes()
 
-        mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags_str="")
+        mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags=())
 
         self.assertIsNotNone(mail_msg)
         attachments = MailAttachment.objects.filter(message=mail_msg)
@@ -70,3 +72,42 @@ class ZeroByteAttachmentTests(TestCase):
         self.assertEqual(att.filename, "empty.bin")
         self.assertEqual(att.size, 0)
         self.assertEqual(att.content.read(), b"")
+
+    def test_a_message_built_here_keeps_its_attachments_when_read_back(self):
+        """The Sent copy and every draft are parsed from what
+        build_draft_message wrote: a name the parser cannot read back is an
+        attachment missing from the user's own copy."""
+        names = {
+            "r\u00e9union.pdf": "application/pdf",
+            'rapport "final".pdf': "application/pdf",
+            "\u65e5\u672c\u8a9e.txt": "text/plain",
+            "photo.jpg": "image/jpeg",
+        }
+        attachments = []
+        for name in names:
+            attachment = io.BytesIO(name.encode())
+            attachment.name = name
+            attachments.append(attachment)
+        raw = build_draft_message(
+            self.account,
+            to=["bob@example.com"],
+            subject="Four files",
+            body_text="See attached.",
+            attachments=attachments,
+        )
+
+        mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags=())
+
+        stored = {
+            a.filename: (a.content_type, a.content.read(), a.is_inline)
+            for a in MailAttachment.objects.filter(message=mail_msg)
+        }
+        self.assertEqual(
+            stored,
+            {
+                name: (content_type, name.encode(), False)
+                for name, content_type in names.items()
+            },
+        )
+        self.assertTrue(mail_msg.has_attachments)
+        self.assertEqual(mail_msg.body_text.strip(), "See attached.")

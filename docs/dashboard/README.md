@@ -18,9 +18,21 @@ there, and the day ahead.
   notifications from it. The count goes down as items are dealt with and
   updates live. A tile with a single pending item opens it directly - the
   unread conversation, the overdue task - and the app's home otherwise.
-- **Today's events**: what is still ahead today in the user's calendars.
-- **My Tasks**: the five most urgent open tasks assigned to the user, overdue
-  first, then by due date and priority. Each row opens the task.
+- **Today**: one list of what needs the user today, each row opening its
+  item. It gathers:
+  - *Events*: what is still ahead today in the user's calendars;
+  - *Tasks*: assigned open tasks that are overdue, due today or urgent;
+  - *Mail*: starred messages, and unread ones carrying a label that notifies
+    on apply (the default *Urgent* label is one). Trash and Spam stay out;
+  - *Invitations*: events the user was invited to and has not answered,
+    soonest first.
+
+  Urgent rows lead the list whatever their app: overdue and urgent tasks,
+  unread mail with a notifying label. The rest follows in the order above.
+  Quick filters above the list narrow it to the urgent rows or to one app,
+  each with a count of all it holds; the full list shows its first rows and
+  a button for the rest. An item leaves the list once it is dealt with in
+  its app, and an app the user cannot open is left out.
 - **Recent Activity**: what other people did across the workspace, by app,
   with a search and a refresh button. It only lists apps the user has access
   to.
@@ -32,8 +44,7 @@ there, and the day ahead.
 The *Dashboard preferences* button (sliders, top right) holds the page's own
 settings:
 
-- show or hide today's events, and the "No upcoming events today." line when
-  there are none;
-- show or hide My Tasks;
+- which sources the Today card lists. With all of them off, the card goes
+  away;
 - which apps have a tile. A hidden app also leaves the app switcher (`Alt+K`),
   but stays reachable from the search and its links.

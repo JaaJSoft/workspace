@@ -94,3 +94,22 @@ class MailConfig(AppConfig):
         )
 
         import workspace.mail.signals  # noqa: F401
+        from workspace.core.today_registry import TodaySource, today_registry
+        from workspace.mail.today import important_mail, is_urgent_mail
+
+        today_registry.register(
+            TodaySource(
+                slug="mail",
+                module_slug="mail",
+                label=gettext_lazy("Mail"),
+                description=gettext_lazy(
+                    "Starred mail, and unread mail with a label that notifies you."
+                ),
+                icon="mail",
+                url="/mail",
+                items_fn=important_mail,
+                template="mail/ui/partials/today_mail.html",
+                is_urgent=is_urgent_mail,
+                order=30,
+            )
+        )

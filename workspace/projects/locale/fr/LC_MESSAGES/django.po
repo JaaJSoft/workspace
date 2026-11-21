@@ -2461,3 +2461,7 @@ msgstr "Un ou plusieurs fichiers sont introuvables ou inaccessibles."
 #: views/viewsets.py
 msgid "One or more workspace file contents are unavailable."
 msgstr "Le contenu d’un ou plusieurs fichiers de Workspace est indisponible."
+
+#: apps.py
+msgid "Your tasks overdue, due today or urgent."
+msgstr "Vos tâches en retard, du jour ou urgentes."

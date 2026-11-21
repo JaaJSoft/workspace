@@ -3,7 +3,6 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
 
-from workspace.calendar.upcoming import get_upcoming_for_user
 from workspace.common.prefetch import prefetchable
 from workspace.core.services.activity import (
     allowed_activity_sources,
@@ -12,27 +11,61 @@ from workspace.core.services.activity import (
     get_sources,
     get_usage_headlines,
 )
-from workspace.core.services.module_visibility import (
-    is_module_slug_visible,
-)
+from workspace.core.today_registry import today_registry
 from workspace.files.services.quota import (
     effective_quota,
     personal_usage,
     usage_percent,
 )
-from workspace.projects.queries import assigned_open_tasks
-from workspace.users.services.settings import get_module_settings, get_setting
+from workspace.users.services.settings import get_module_settings
 
 from .services.modules import dashboard_modules
-from .services.preferences import TEMPERATURE_UNITS, temperature_unit
+from .services.preferences import (
+    TEMPERATURE_UNITS,
+    hidden_today_sources,
+    temperature_unit,
+)
 
 ACTIVITY_LIMIT = 10
-MY_TASKS_LIMIT = 5
+# Rows the Today card shows before its show-more button.
+TODAY_LIMIT = 8
 
 
-def _get_upcoming_events(user):
-    """Return today's upcoming events for the user, including recurring."""
-    return get_upcoming_for_user(user, timezone.now())
+def _today_sources(user, dashboard_settings):
+    """The Today sources *user* can see, each flagged ``hidden`` or not."""
+    hidden = hidden_today_sources(dashboard_settings)
+    return [
+        (source, source.slug in hidden)
+        for source in today_registry.visible_sources(user)
+    ]
+
+
+def _today_list(user, sources):
+    """The card's rows, urgent first, and one filter per source with rows.
+
+    Sorting is stable, so outside the urgent ones the rows keep their
+    source's order and, within a source, the order the source gave them.
+    """
+    now = timezone.now()
+    tz = timezone.get_current_timezone()
+    rows, filters = [], []
+    for source in sources:
+        result = source.items_fn(user, now, tz)
+        if not result.items:
+            continue
+        rows.extend(
+            {"source": source, "item": item, "urgent": source.is_urgent(item)}
+            for item in result.items
+        )
+        filters.append(
+            {
+                "source": source,
+                "total": result.total,
+                "more": result.total - len(result.items),
+            }
+        )
+    rows.sort(key=lambda row: not row["urgent"])
+    return rows, filters
 
 
 def _get_activity_context(user, source=None, offset=0, search=None):
@@ -84,7 +117,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     dashboard_settings = get_module_settings(user, "dashboard")
     modules, dashboard_apps = dashboard_modules(user)
 
-    my_tasks_available = is_module_slug_visible(user, "projects")
+    today_sources = _today_sources(user, dashboard_settings)
 
     storage_usage = personal_usage(user.pk)
     storage_quota = effective_quota(user.pk)
@@ -92,11 +125,19 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     context = {
         "modules": modules,
         "dashboard_apps": dashboard_apps,
-        "show_upcoming_events": dashboard_settings.get("show_upcoming_events", True),
-        "show_upcoming_empty": dashboard_settings.get("show_upcoming_empty", True),
-        "my_tasks_available": my_tasks_available,
-        "show_my_tasks": my_tasks_available
-        and dashboard_settings.get("show_my_tasks", True),
+        "today_sources": [
+            {
+                "slug": source.slug,
+                "label": str(source.label),
+                "description": str(source.description),
+                "icon": source.icon,
+            }
+            for source, _ in today_sources
+        ],
+        "hidden_today_sources": [
+            source.slug for source, hidden in today_sources if hidden
+        ],
+        "show_today": any(not hidden for _, hidden in today_sources),
         "temperature_unit": temperature_unit(dashboard_settings),
         "temperature_units": TEMPERATURE_UNITS.items(),
         "usage_rows": get_usage_headlines(user),
@@ -136,39 +177,32 @@ def modules_fragment(request):
 
 
 @login_required
-def upcoming_fragment(request):
-    """Dashboard upcoming-events widget, loaded async via alpine-ajax."""
-    return render(
-        request,
-        "dashboard/partials/upcoming_events.html",
-        {
-            "upcoming_events": _get_upcoming_events(request.user),
-            "show_upcoming_empty": get_setting(
-                request.user,
-                "dashboard",
-                "show_upcoming_empty",
-                default=True,
-            ),
-        },
-    )
+def today_fragment(request):
+    """The Today card, loaded after the page via alpine-ajax.
 
-
-@login_required
-def tasks_fragment(request):
-    """Dashboard my-tasks widget, loaded async via alpine-ajax.
-
-    When the widget is disabled or the projects module is not visible to the
-    user, the response is the empty (hidden) slot: the prefs toggle swaps the
-    section live in both directions, so the target id must always render.
+    With every source switched off the response is the empty hidden slot:
+    the preferences swap the card live in both directions, so the target id
+    must always render.
     """
-    show = is_module_slug_visible(request.user, "projects") and get_setting(
-        request.user, "dashboard", "show_my_tasks", default=True
-    )
-    context = {"show_my_tasks": show}
-    if show:
-        context["tasks"] = assigned_open_tasks(request.user)[:MY_TASKS_LIMIT]
-        context["today"] = timezone.localdate()
-    return render(request, "dashboard/partials/my_tasks.html", context)
+    sources = [
+        source
+        for source, hidden in _today_sources(
+            request.user, get_module_settings(request.user, "dashboard")
+        )
+        if not hidden
+    ]
+    context = {"show_today": bool(sources)}
+    if sources:
+        rows, filters = _today_list(request.user, sources)
+        context.update(
+            today_rows=rows,
+            today_filters=filters,
+            today_urgent=sum(row["urgent"] for row in rows),
+            today_total=sum(f["total"] for f in filters),
+            today_limit=TODAY_LIMIT,
+            today_more=max(len(rows) - TODAY_LIMIT, 0),
+        )
+    return render(request, "dashboard/partials/today.html", context)
 
 
 @login_required

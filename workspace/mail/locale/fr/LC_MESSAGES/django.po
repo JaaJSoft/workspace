@@ -1203,3 +1203,12 @@ msgstr "Supprimer"
 msgctxt "mail extraction"
 msgid "Remove"
 msgstr "Retirer"
+
+#: apps.py
+msgid "Starred mail, and unread mail with a label that notifies you."
+msgstr "Les e-mails suivis, et les non lus portant une étiquette qui vous notifie."
+
+#: ui/templates/mail/ui/partials/today_mail.html
+msgctxt "starred message"
+msgid "Starred"
+msgstr "Suivi"

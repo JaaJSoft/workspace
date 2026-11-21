@@ -1,0 +1,33 @@
+{% load i18n tz ui_filters %}
+{# Translators: a PHP-style date format (Django's date filter) for an event day in a narrow column, e.g. "Oct 25". #}
+{% translate "M j" context "short event day format" as day_format %}
+<a
+  href="/calendar?event={{ item.uuid }}"
+  class="flex items-center gap-3 py-2 group"
+  onmouseenter="window.matchMedia('(hover: hover)').matches&&window._eventCardShow(this,'{{ item.uuid|escapejs }}')"
+  onmouseleave="window.matchMedia('(hover: hover)').matches&&window._cardPopoverScheduleHide(this)"
+>
+  <span class="w-4 flex justify-center shrink-0">
+    <i
+      data-lucide="{% if item.is_recurring %}repeat{% else %}mail-question-mark{% endif %}"
+      class="w-3.5 h-3.5 text-{{ item.calendar.color }}"
+    ></i>
+  </span>
+  <span
+    class="text-xs text-base-content/60 tabular-nums shrink-0 w-16 truncate"
+  >
+    {% if item.all_day %}
+      {{ item.next_start|utc|date:day_format }}
+    {% else %}
+      {{ item.next_start|localtime_tag:"date" }}
+    {% endif %}
+  </span>
+  <span
+    class="text-sm text-base-content truncate flex-1 min-w-0 group-hover:underline"
+  >{{ item.title }}</span>
+  <span
+    class="text-xs text-base-content/50 truncate max-w-40 shrink-0 hidden sm:block"
+  >
+    {{ item.owner.get_full_name|default:item.owner.username }}
+  </span>
+</a>

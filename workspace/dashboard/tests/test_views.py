@@ -1,23 +1,28 @@
 import html
 import re
 from dataclasses import replace
-from datetime import UTC
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
+from django.template import Template
 from django.template.defaultfilters import filesizeformat
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from workspace.core.module_registry import ModuleInfo, registry
+from workspace.core.today_registry import (
+    TodayRows,
+    TodaySource,
+    today_registry,
+)
 from workspace.dashboard.services.modules import dashboard_modules, switcher_modules_for
+from workspace.dashboard.services.preferences import HIDDEN_TODAY_SOURCES
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
     _build_dashboard_context,
     _get_activity_context,
-    _get_upcoming_events,
 )
 from workspace.users.services.settings import set_setting
 
@@ -365,17 +370,6 @@ class BuildDashboardContextTests(TestCase):
         # hidden app still appears in the popover list (unlike the grid)
         self.assertIn("mail", apps)
 
-    @patch("workspace.dashboard.services.modules.get_unread_badges")
-    @patch("workspace.dashboard.services.modules.visible_modules")
-    def test_context_includes_upcoming_toggles(self, mock_visible, mock_badges):
-        mock_visible.return_value = [_mod("chat")]
-        mock_badges.return_value = {}
-
-        context = _build_dashboard_context(self.user)
-
-        self.assertTrue(context["show_upcoming_events"])  # default
-        self.assertTrue(context["show_upcoming_empty"])  # default
-
     @patch("workspace.dashboard.services.modules.get_unread_badges", return_value={})
     @patch("workspace.dashboard.services.modules.visible_modules", return_value=[])
     def test_temperature_unit_defaults_to_celsius(self, mock_visible, mock_badges):
@@ -414,50 +408,66 @@ class BuildDashboardContextTests(TestCase):
 
         self.assertContains(response, "weatherWidget('fahrenheit')")
 
-    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=True)
     @patch("workspace.dashboard.services.modules.get_unread_badges")
     @patch("workspace.dashboard.services.modules.visible_modules")
-    def test_context_includes_show_my_tasks_default_true(
-        self, mock_visible, mock_badges, mock_module_visible
+    def test_context_lists_today_sources_shown_by_default(
+        self, mock_visible, mock_badges
     ):
         mock_visible.return_value = []
         mock_badges.return_value = {}
 
         context = _build_dashboard_context(self.user)
 
-        self.assertTrue(context["show_my_tasks"])
-        self.assertTrue(context["my_tasks_available"])
+        slugs = [source["slug"] for source in context["today_sources"]]
+        self.assertIn("events", slugs)
+        self.assertIn("mail", slugs)
+        self.assertEqual(context["hidden_today_sources"], [])
+        self.assertTrue(context["show_today"])
 
-    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=True)
     @patch("workspace.dashboard.services.modules.get_unread_badges")
     @patch("workspace.dashboard.services.modules.visible_modules")
-    def test_context_show_my_tasks_false_when_disabled(
-        self, mock_visible, mock_badges, mock_module_visible
-    ):
+    def test_context_marks_switched_off_today_sources(self, mock_visible, mock_badges):
         mock_visible.return_value = []
         mock_badges.return_value = {}
-        set_setting(self.user, "dashboard", "show_my_tasks", False)
+        set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, ["mail"])
 
         context = _build_dashboard_context(self.user)
 
-        self.assertFalse(context["show_my_tasks"])
+        self.assertEqual(context["hidden_today_sources"], ["mail"])
+        self.assertTrue(context["show_today"])
 
-    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=False)
     @patch("workspace.dashboard.services.modules.get_unread_badges")
     @patch("workspace.dashboard.services.modules.visible_modules")
-    def test_context_show_my_tasks_false_when_projects_module_hidden(
-        self, mock_visible, mock_badges, mock_module_visible
+    def test_context_hides_today_when_every_source_is_off(
+        self, mock_visible, mock_badges
     ):
-        """Setting on, but the projects module is not visible to the user:
-        the widget must not show and the prefs toggle must not be offered."""
         mock_visible.return_value = []
         mock_badges.return_value = {}
+        every_slug = [
+            source.slug for source in today_registry.visible_sources(self.user)
+        ]
+        set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, every_slug)
 
         context = _build_dashboard_context(self.user)
 
-        self.assertFalse(context["show_my_tasks"])
-        self.assertFalse(context["my_tasks_available"])
-        mock_module_visible.assert_called_once_with(self.user, "projects")
+        self.assertFalse(context["show_today"])
+
+    @override_settings(PREVIEW_VISIBILITY="none")
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_context_leaves_out_sources_of_a_module_the_user_cannot_see(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = []
+        mock_badges.return_value = {}
+        with patch.dict(
+            registry._modules,
+            {"mail": replace(registry.get("mail"), preview=True)},
+        ):
+            context = _build_dashboard_context(self.user)
+
+        slugs = [source["slug"] for source in context["today_sources"]]
+        self.assertNotIn("mail", slugs)
 
 
 # ── switcher_modules_for ────────────────────────────────────────
@@ -755,42 +765,6 @@ class ActivityPreviewVisibilityTests(TestCase):
         self.assertNotIn("projects", self._source_slugs(resp))
 
 
-# ── _get_upcoming_events ────────────────────────────────────────
-
-
-class GetUpcomingEventsTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username="eventuser",
-            password="pass123",
-        )
-
-    def test_today_is_the_users_local_day(self):
-        from datetime import datetime
-
-        from django.utils import timezone as dj_timezone
-
-        from workspace.calendar.models import Calendar, Event
-
-        calendar = Calendar.objects.create(name="Work", owner=self.user)
-        for day in (31, 1):
-            Event.objects.create(
-                calendar=calendar,
-                owner=self.user,
-                title=f"all-day {day}",
-                start=datetime(2026, 2 if day == 1 else 1, day, tzinfo=UTC),
-                all_day=True,
-            )
-        # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
-        fixed_now = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
-        dj_timezone.activate("Europe/Paris")
-        self.addCleanup(dj_timezone.deactivate)
-        with patch("django.utils.timezone.now", return_value=fixed_now):
-            titles = [e.title for e in _get_upcoming_events(self.user)]
-
-        self.assertEqual(titles, ["all-day 1"])
-
-
 # ── index view ──────────────────────────────────────────────────
 
 
@@ -823,25 +797,32 @@ class IndexViewTests(TestCase):
         resp = self.client.get("/")
         self.assertEqual(resp.context["activity_tab"], "all")
 
-    def test_show_upcoming_events_defaults_to_true(self):
+    def test_today_card_loads_after_the_page_by_default(self):
         self.client.login(username="viewuser", password="pass123")
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'id="dashboard-upcoming"')
+        self.assertContains(resp, 'id="dashboard-today"')
+        self.assertContains(resp, "$ajax('/dashboard/today')")
 
-    def test_show_upcoming_events_false_hides_section(self):
-        set_setting(self.user, "dashboard", "show_upcoming_events", False)
+    def test_today_card_off_keeps_slot_without_loading(self):
+        """Every source off: the section stays as an empty swap slot (so the
+        prefs toggles can bring it back live) but must not auto-load."""
+        every_slug = [
+            source.slug for source in today_registry.visible_sources(self.user)
+        ]
+        set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, every_slug)
         self.client.login(username="viewuser", password="pass123")
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, 'id="dashboard-upcoming"')
+        self.assertContains(resp, 'id="dashboard-today"')
+        self.assertNotContains(resp, "$ajax('/dashboard/today')")
 
-    def test_show_upcoming_events_false_no_ajax_trigger(self):
-        set_setting(self.user, "dashboard", "show_upcoming_events", False)
+    @patch("workspace.dashboard.views._today_list")
+    def test_does_not_query_today_sources_on_initial_render(self, mock_list):
         self.client.login(username="viewuser", password="pass123")
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, "/dashboard/upcoming")
+        mock_list.assert_not_called()
 
     @patch("workspace.dashboard.views.get_recent_events")
     def test_does_not_compute_feed_on_initial_render(self, mock_events):
@@ -860,45 +841,6 @@ class IndexViewTests(TestCase):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "$ajax(feedUrl, { target: 'dashboard-activity' })")
-
-    @override_settings(PREVIEW_VISIBILITY="all")
-    def test_show_my_tasks_defaults_to_true(self):
-        self.client.login(username="viewuser", password="pass123")
-        resp = self.client.get("/")
-        self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'id="dashboard-tasks"')
-        self.assertContains(resp, "$ajax('/dashboard/tasks')")
-
-    @override_settings(PREVIEW_VISIBILITY="all")
-    def test_show_my_tasks_false_keeps_slot_without_loading(self):
-        """Disabled: the section stays in the page as an empty swap slot (so
-        the prefs toggle can re-enable it live) but must not auto-load."""
-        set_setting(self.user, "dashboard", "show_my_tasks", False)
-        self.client.login(username="viewuser", password="pass123")
-        resp = self.client.get("/")
-        self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'id="dashboard-tasks"')
-        self.assertNotContains(resp, "$ajax('/dashboard/tasks')")
-
-    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=False)
-    def test_my_tasks_hidden_when_projects_module_not_visible(
-        self, mock_module_visible
-    ):
-        """No projects access: no widget auto-load and no prefs toggle."""
-        self.client.login(username="viewuser", password="pass123")
-        resp = self.client.get("/")
-        self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, "$ajax('/dashboard/tasks')")
-        self.assertNotContains(resp, "Show my tasks")
-
-    @patch("workspace.dashboard.views.assigned_open_tasks")
-    def test_does_not_query_tasks_on_initial_render(self, mock_tasks):
-        """The tasks widget loads async, so the initial dashboard render must
-        not run the assigned-tasks query."""
-        self.client.login(username="viewuser", password="pass123")
-        resp = self.client.get("/")
-        self.assertEqual(resp.status_code, 200)
-        mock_tasks.assert_not_called()
 
 
 # ── modules_fragment view ───────────────────────────────────────
@@ -1146,176 +1088,310 @@ class ActivityFeedSourceParamTests(TestCase):
         )
 
 
-# ── upcoming_fragment view ──────────────────────────────────────
+# ── today_fragment view ─────────────────────────────────────────
 
 
-class UpcomingFragmentViewTests(TestCase):
+# {% include %} renders a Template object as is, so the test needs no file.
+_ROW = Template("<span>{{ item }}{% if urgent %}!{% endif %}</span>")
+
+
+def _source(slug, items=(), order=1, module_slug="chat", total=None, urgent=()):
+    return TodaySource(
+        slug=slug,
+        module_slug=module_slug,
+        label=slug.title(),
+        description="",
+        icon="circle",
+        url=f"/{slug}",
+        items_fn=lambda user, now, tz: TodayRows(
+            list(items), len(items) if total is None else total
+        ),
+        template=_ROW,
+        is_urgent=lambda item: item in urgent,
+        order=order,
+    )
+
+
+class TodayFragmentViewTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="fragmentuser",
-            password="pass123",
-        )
+        self.user = User.objects.create_user(username="todayuser", password="pw")
+        self.client.force_login(self.user)
+        patcher = patch.dict(today_registry._sources, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         cache.clear()
 
-    def test_requires_login(self):
-        resp = self.client.get("/dashboard/upcoming")
-        self.assertEqual(resp.status_code, 302)
-        self.assertIn("login", resp.url)
+    def _register(self, *sources):
+        for source in sources:
+            today_registry.register(source)
 
-    @patch("workspace.dashboard.views._get_upcoming_events")
-    def test_returns_partial_template(self, mock_upcoming):
-        mock_upcoming.return_value = []
-        self.client.login(username="fragmentuser", password="pass123")
-
-        resp = self.client.get("/dashboard/upcoming")
-
-        self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, "dashboard/partials/upcoming_events.html")
-
-    @patch("workspace.dashboard.views._get_upcoming_events")
-    def test_passes_events_to_template(self, mock_upcoming):
-        mock_upcoming.return_value = ["event-sentinel"]
-        self.client.login(username="fragmentuser", password="pass123")
-
-        resp = self.client.get("/dashboard/upcoming")
-
-        self.assertEqual(resp.context["upcoming_events"], ["event-sentinel"])
-
-    @patch("workspace.dashboard.views._get_upcoming_events")
-    def test_empty_state_rendered(self, mock_upcoming):
-        mock_upcoming.return_value = []
-        self.client.login(username="fragmentuser", password="pass123")
-
-        resp = self.client.get("/dashboard/upcoming")
-
-        self.assertContains(resp, "No upcoming events today.")
-
-    @patch("workspace.dashboard.views._get_upcoming_events")
-    def test_response_contains_swap_target_id(self, mock_upcoming):
-        mock_upcoming.return_value = []
-        self.client.login(username="fragmentuser", password="pass123")
-
-        resp = self.client.get("/dashboard/upcoming")
-
-        # The response must contain an element with id="dashboard-upcoming"
-        # so alpine-ajax can find it during the swap.
-        self.assertContains(resp, 'id="dashboard-upcoming"')
-
-    @patch("workspace.dashboard.views._get_upcoming_events")
-    def test_show_upcoming_empty_false_hides_empty_state(self, mock_upcoming):
-        mock_upcoming.return_value = []
-        set_setting(self.user, "dashboard", "show_upcoming_empty", False)
-        self.client.login(username="fragmentuser", password="pass123")
-
-        resp = self.client.get("/dashboard/upcoming")
-
-        self.assertNotContains(resp, "No upcoming events today.")
-        # Wrapper must still render so alpine-ajax can swap it.
-        self.assertContains(resp, 'id="dashboard-upcoming"')
-
-    @patch("workspace.dashboard.views._get_upcoming_events")
-    def test_show_upcoming_empty_ignored_when_events_present(self, mock_upcoming):
-        # Build a minimal event-like object that the template can iterate.
-        from types import SimpleNamespace
-
-        fake_event = SimpleNamespace(
-            uuid="01900000-0000-0000-0000-000000000000",
-            title="Fake event",
-            all_day=True,
-            start=None,
-            calendar=SimpleNamespace(color="accent"),
-        )
-        mock_upcoming.return_value = [fake_event]
-        set_setting(self.user, "dashboard", "show_upcoming_empty", False)
-        self.client.login(username="fragmentuser", password="pass123")
-
-        resp = self.client.get("/dashboard/upcoming")
-
-        self.assertContains(resp, "Fake event")
-        self.assertNotContains(resp, "No upcoming events today.")
-
-
-# ── tasks_fragment view ─────────────────────────────────────────
-
-
-@override_settings(PREVIEW_VISIBILITY="all")
-class TasksFragmentViewTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username="taskuser",
-            password="pass123",
-        )
-        self.client.login(username="taskuser", password="pass123")
-
-    def tearDown(self):
-        cache.clear()
-
-    def _make_task(self, title, **kwargs):
-        from workspace.projects.services.projects import create_project
-        from workspace.projects.services.tasks import create_task
-
-        if not hasattr(self, "project"):
-            self.project = create_project(self.user, name="Website")
-        return create_task(
-            self.project,
-            self.user,
-            title=title,
-            assignees=[self.user],
-            **kwargs,
-        )
+    def _rows(self, resp):
+        return [(row["source"].slug, row["item"]) for row in resp.context["today_rows"]]
 
     def test_requires_login(self):
         self.client.logout()
-        resp = self.client.get("/dashboard/tasks")
+        resp = self.client.get("/dashboard/today")
         self.assertEqual(resp.status_code, 302)
         self.assertIn("login", resp.url)
 
-    def test_returns_partial_template(self):
-        resp = self.client.get("/dashboard/tasks")
-        self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, "dashboard/partials/my_tasks.html")
+    def test_every_source_lands_in_one_list_in_source_order(self):
+        self._register(
+            _source("inbox", items=["Contract"], order=2),
+            _source("agenda", items=["Standup", "Review"], order=1),
+        )
 
-    def test_response_contains_swap_target_id(self):
-        resp = self.client.get("/dashboard/tasks")
-        self.assertContains(resp, 'id="dashboard-tasks"')
+        resp = self.client.get("/dashboard/today")
 
-    def test_renders_assigned_task(self):
-        task = self._make_task("Ship the widget")
-        resp = self.client.get("/dashboard/tasks")
-        self.assertContains(resp, "Ship the widget")
-        self.assertContains(resp, task.reference)
-        self.assertContains(resp, f"/projects/{self.project.uuid}?task={task.uuid}")
+        self.assertTemplateUsed(resp, "dashboard/partials/today.html")
+        self.assertEqual(
+            self._rows(resp),
+            [("agenda", "Standup"), ("agenda", "Review"), ("inbox", "Contract")],
+        )
+        self.assertContains(resp, "<span>Standup</span>", html=True)
+        self.assertContains(resp, 'data-today-source="inbox"')
 
-    def test_empty_state_rendered(self):
-        resp = self.client.get("/dashboard/tasks")
-        self.assertContains(resp, "No open tasks assigned to you.")
+    def test_urgent_rows_come_first_whatever_their_source(self):
+        self._register(
+            _source("agenda", items=["Standup"], order=1),
+            _source("tasks", items=["Later", "Fire"], order=2, urgent={"Fire"}),
+            _source("inbox", items=["Outage", "Hello"], order=3, urgent={"Outage"}),
+        )
 
-    def test_list_is_capped(self):
-        from workspace.dashboard.views import MY_TASKS_LIMIT
+        resp = self.client.get("/dashboard/today")
 
-        for i in range(MY_TASKS_LIMIT + 2):
-            self._make_task(f"Task {i}")
-        resp = self.client.get("/dashboard/tasks")
-        self.assertEqual(len(resp.context["tasks"]), MY_TASKS_LIMIT)
+        self.assertEqual(
+            self._rows(resp),
+            [
+                ("tasks", "Fire"),
+                ("inbox", "Outage"),
+                ("agenda", "Standup"),
+                ("tasks", "Later"),
+                ("inbox", "Hello"),
+            ],
+        )
+        self.assertEqual(resp.context["today_urgent"], 2)
+        self.assertContains(resp, "<span>Fire!</span>", html=True)
 
-    def test_empty_slot_when_setting_off(self):
-        """Toggling the pref off must swap the widget out: the fragment keeps
-        the swap-target id but renders no content."""
-        self._make_task("Should not appear")
-        set_setting(self.user, "dashboard", "show_my_tasks", False)
-        resp = self.client.get("/dashboard/tasks")
-        self.assertContains(resp, 'id="dashboard-tasks"')
-        self.assertNotContains(resp, "My Tasks")
-        self.assertNotContains(resp, "Should not appear")
+    def test_each_source_gets_a_filter_counting_all_its_rows(self):
+        self._register(
+            _source("inbox", items=["a", "b"], total=12),
+            _source("agenda", items=["c"], order=2),
+        )
 
-    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=False)
-    def test_empty_slot_when_projects_module_not_visible(self, mock_module_visible):
-        self._make_task("Hidden module task")
-        resp = self.client.get("/dashboard/tasks")
-        self.assertContains(resp, 'id="dashboard-tasks"')
-        self.assertNotContains(resp, "Hidden module task")
+        resp = self.client.get("/dashboard/today")
+
+        counters = re.findall(r"data-today-count\s*>(\d+)<", resp.content.decode())
+        self.assertEqual(counters, ["12", "1"])
+        self.assertEqual(resp.context["today_total"], 13)
+        self.assertContains(resp, 'data-today-filter="all"')
+        self.assertNotContains(resp, 'data-today-filter="urgent"')
+
+    def test_a_single_source_needs_no_filter(self):
+        self._register(_source("inbox", items=["a"]))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertNotContains(resp, "data-today-filter")
+
+    def test_a_single_source_links_to_the_rows_it_could_not_show(self):
+        self._register(_source("inbox", items=["a", "b"], total=6))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertContains(resp, 'href="/inbox"')
+        self.assertContains(resp, "See all in Inbox")
+
+    def test_a_single_source_showing_everything_needs_no_link(self):
+        self._register(_source("inbox", items=["a", "b"]))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertNotContains(resp, 'href="/inbox"')
+
+    def test_rows_past_the_limit_start_hidden_behind_show_more(self):
+        from workspace.dashboard.views import TODAY_LIMIT
+
+        items = [f"row {i}" for i in range(TODAY_LIMIT + 3)]
+        self._register(_source("inbox", items=items))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertEqual(resp.context["today_more"], 3)
+        self.assertEqual(resp.content.decode().count('style="display: none"'), 3)
+        self.assertContains(resp, "Show 3 more")
+
+    def test_a_source_without_rows_is_left_out(self):
+        self._register(
+            _source("agenda"),
+            _source("inbox", items=["Contract"], order=2),
+        )
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertEqual(self._rows(resp), [("inbox", "Contract")])
+        self.assertNotContains(resp, 'data-today-source="agenda"')
+
+    def test_nothing_anywhere_says_so(self):
+        self._register(_source("agenda"))
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertContains(resp, "Nothing is waiting on you.")
+
+    def test_a_malformed_stored_preference_hides_nothing(self):
+        # Stored before the API checked the value: the page must still render.
+        self._register(_source("inbox", items=["Contract"]))
+        set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, 1)
+
+        page = self.client.get("/")
+        resp = self.client.get("/dashboard/today")
+
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(resp, "<span>Contract</span>", html=True)
+
+    def test_a_switched_off_source_is_never_queried(self):
+        items_fn = Mock(return_value=TodayRows(["Secret"], 1))
+        self._register(
+            replace(_source("inbox"), items_fn=items_fn),
+            _source("agenda", items=["Standup"]),
+        )
+        set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, ["inbox"])
+
+        resp = self.client.get("/dashboard/today")
+
+        items_fn.assert_not_called()
+        self.assertNotContains(resp, "Secret")
+
+    @override_settings(PREVIEW_VISIBILITY="none")
+    def test_a_source_of_a_module_the_user_cannot_see_is_never_queried(self):
+        items_fn = Mock(return_value=TodayRows(["Secret"], 1))
+        self._register(replace(_source("inbox", module_slug="mail"), items_fn=items_fn))
+
+        with patch.dict(
+            registry._modules,
+            {"mail": replace(registry.get("mail"), preview=True)},
+        ):
+            resp = self.client.get("/dashboard/today")
+
+        items_fn.assert_not_called()
+        self.assertNotContains(resp, "Secret")
+
+    def test_every_source_off_renders_the_empty_slot(self):
+        """Switching the last source off swaps the card out: the fragment
+        keeps the swap-target id but renders no content."""
+        self._register(_source("inbox", items=["Contract"]))
+        set_setting(self.user, "dashboard", HIDDEN_TODAY_SOURCES, ["inbox"])
+
+        resp = self.client.get("/dashboard/today")
+
+        self.assertContains(resp, 'id="dashboard-today"')
+        self.assertNotContains(resp, "Contract")
+        self.assertNotIn("today_rows", resp.context)
+
+    def test_sources_get_the_users_local_clock(self):
+        seen = {}
+
+        def items_fn(user, now, tz):
+            seen.update(user=user, tz=str(tz))
+            return TodayRows([], 0)
+
+        self._register(replace(_source("inbox"), items_fn=items_fn))
+        set_setting(self.user, "core", "timezone", "Asia/Tokyo")
+
+        self.client.get("/dashboard/today")
+
+        self.assertEqual(seen, {"user": self.user, "tz": "Asia/Tokyo"})
+
+
+@override_settings(PREVIEW_VISIBILITY="all")
+class TodayCardWithEverySourceTests(TestCase):
+    """The real sources, rendered through their own row templates."""
+
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone as dj_timezone
+
+        from workspace.calendar.models import Calendar, Event, EventMember
+        from workspace.mail.models import MailAccount, MailFolder, MailMessage
+        from workspace.projects.services.projects import create_project
+        from workspace.projects.services.tasks import create_task
+
+        self.user = User.objects.create_user(username="busy", password="pw")
+        self.client.force_login(self.user)
+        now = dj_timezone.now()
+
+        calendar = Calendar.objects.create(name="Work", owner=self.user)
+        self.event = Event.objects.create(
+            calendar=calendar,
+            owner=self.user,
+            title="Design review",
+            # Under way at any hour, so the test never lands on the day's edge.
+            start=now - timedelta(minutes=1),
+            end=now + timedelta(hours=1),
+        )
+        organizer = User.objects.create_user(username="organizer", password="pw")
+        invite = Event.objects.create(
+            calendar=Calendar.objects.create(name="Team", owner=organizer),
+            owner=organizer,
+            title="Quarterly planning",
+            start=now + timedelta(days=2),
+        )
+        EventMember.objects.create(event=invite, user=self.user)
+
+        project = create_project(self.user, name="Website")
+        self.task = create_task(
+            project,
+            self.user,
+            title="Fix the login page",
+            assignees=[self.user],
+            due_date=now.date() - timedelta(days=1),
+        )
+
+        account = MailAccount.objects.create(
+            owner=self.user,
+            email="busy@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="busy",
+        )
+        inbox = MailFolder.objects.create(
+            account=account, name="INBOX", display_name="INBOX", folder_type="inbox"
+        )
+        self.message = MailMessage.objects.create(
+            account=account,
+            folder=inbox,
+            imap_uid=1,
+            subject="Contract to sign",
+            from_name="Alice",
+            date=now,
+            is_starred=True,
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_each_source_lists_its_row_and_links_to_it(self):
+        resp = self.client.get("/dashboard/today")
+
+        self.assertContains(resp, "Design review")
+        self.assertContains(resp, f"/calendar?event={self.event.uuid}")
+        self.assertContains(resp, "Quarterly planning")
+        self.assertContains(resp, "Fix the login page")
+        self.assertContains(resp, f"?task={self.task.uuid}")
+        self.assertContains(resp, "Contract to sign")
+        self.assertContains(resp, f"/mail?message={self.message.uuid}")
+        for slug in ("events", "invitations", "tasks", "mail"):
+            self.assertContains(resp, f'data-today-source="{slug}"')
+
+    def test_the_overdue_task_leads_the_list(self):
+        resp = self.client.get("/dashboard/today")
+
+        first = resp.context["today_rows"][0]
+        self.assertEqual((first["source"].slug, first["item"]), ("tasks", self.task))
+        self.assertTrue(first["urgent"])
 
 
 # ── query budget guard ──────────────────────────────────────────
@@ -1442,6 +1518,7 @@ class DashboardFrenchTests(TestCase):
         resp = self.client.get("/")
         self.assertContains(resp, "3 non lus")
 
-    def test_upcoming_empty_state_in_french(self):
-        resp = self.client.get("/dashboard/upcoming")
-        self.assertContains(resp, "Aucun événement à venir aujourd’hui.")
+    def test_today_card_in_french(self):
+        resp = self.client.get("/dashboard/today")
+        self.assertContains(resp, "Aujourd’hui")
+        self.assertContains(resp, "Rien ne vous attend.")

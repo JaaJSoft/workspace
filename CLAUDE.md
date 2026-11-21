@@ -24,12 +24,12 @@ uv run python scripts/face_bench.py --compare before.json
 uv run python scripts/embedding_bench.py --json before.json
 uv run python scripts/embedding_bench.py --compare before.json
 
-# Agent bench - a bot through fixed scenarios on a real model, before and
+# Agent evals - a bot through fixed scenarios on a real model, before and
 # after any change to the chat system prompt, a tool's description,
 # workspace/ai/services/bot_runs.py or llm.py, or a bump of pydantic-ai-slim
-# (needs AI_API_KEY and spends tokens; see docs/ai/agent-bench.md)
-uv run python scripts/agent_bench.py --runs 3 --json before.json
-uv run python scripts/agent_bench.py --runs 3 --compare before.json
+# (needs AI_API_KEY and spends tokens; see docs/ai/agent-evals.md)
+uv run python scripts/agent_evals.py --runs 3 --json before.json
+uv run python scripts/agent_evals.py --runs 3 --compare before.json
 
 # Translations - extract a module's strings into its locale/fr/*.po, then
 # compile (needs GNU gettext; commit the .po and .mo together;

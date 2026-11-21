@@ -190,7 +190,7 @@ The Celery worker has to run tasks in processes or threads (the default
 runs on an event loop of its own.
 
 To check how a bot behaves on your own backend and model, see the
-[agent bench](agent-bench.md). Images, speech and transcription keep their
+[agent evals](agent-evals.md). Images, speech and transcription keep their
 own endpoints, below.
 
 ### Limits

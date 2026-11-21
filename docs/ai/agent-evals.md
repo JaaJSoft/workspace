@@ -1,19 +1,19 @@
-# Agent bench
+# Agent evals
 
-`scripts/agent_bench.py` runs a bot through fixed scenarios on a real model
+`scripts/agent_evals.py` runs a bot through fixed scenarios on a real model
 and checks the shape of each run: which tools were called, what the database
 holds afterwards, how the run stopped. Never the wording of the answer.
 
 Unit tests say that the loop stops where it should. They cannot say that a bot
 still picks the right tool after the system prompt was rewritten, the model
-swapped, or `pydantic-ai-slim` bumped. Run the bench before and after such a
+swapped, or `pydantic-ai-slim` bumped. Run the evals before and after such a
 change, and compare.
 
 ```bash
-uv run python scripts/agent_bench.py --runs 3 --json before.json
+uv run python scripts/agent_evals.py --runs 3 --json before.json
 # ... change something ...
-uv run python scripts/agent_bench.py --runs 3 --compare before.json
-uv run python scripts/agent_bench.py --model gpt-5 --scenario confirmation
+uv run python scripts/agent_evals.py --runs 3 --compare before.json
+uv run python scripts/agent_evals.py --model gpt-5 --scenario confirmation
 ```
 
 It talks to the backend the application is configured for (`AI_API_KEY`,
@@ -53,7 +53,7 @@ A model does not answer twice the same way, so one miss proves little.
 checks passed per scenario beside those of the earlier file: three out of
 three on one side and one on the other is a finding.
 
-That is how the bench earned its place. While the bots were being moved to
+That is how the evals earned their place. While the bots were being moved to
 Pydantic AI, `two_reads` went from six checks out of six to two: the library
 sent each reply's reasoning back to the model, and `gpt-oss` then wrote its
 next tool call into its reasoning, where nothing runs it. No unit test could

@@ -88,7 +88,7 @@ dependencies = [
     # OpenAI models need the openai SDK above and nothing else (the `openai`
     # extra adds tiktoken, which only its embeddings and realtime code use),
     # and every other provider SDK stays out until a deployment can select
-    # it. Run scripts/agent_bench.py before and after a bump.
+    # it. Run scripts/agent_evals.py before and after a bump.
     "pydantic-ai-slim>=2.71.0",
     "ollama>=0.6.3",
     # web search & scraping

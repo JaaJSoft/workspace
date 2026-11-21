@@ -4,7 +4,7 @@
 A unit test can say that the loop stops where it should. It cannot say
 that a bot still picks the right tool, or still stops for a confirmation,
 after a prompt was rewritten, a model was swapped or the agent library was
-bumped. This bench does: each scenario sets up a user with a few rows of
+bumped. These evals do: each scenario sets up a user with a few rows of
 their own (an event, a project, a task), sends the bot one message and
 checks the *shape* of the run - which tools were called, what the database
 looks like afterwards, how the run stopped - never the wording.
@@ -27,10 +27,10 @@ Nothing here runs in CI: it needs a backend and spends tokens. It reads
 works in a database of its own, created for the run and dropped after it.
 
 Usage:
-    uv run python scripts/agent_bench.py
-    uv run python scripts/agent_bench.py --runs 3 --json before.json
-    uv run python scripts/agent_bench.py --compare before.json
-    uv run python scripts/agent_bench.py --model gpt-5 --scenario confirmation
+    uv run python scripts/agent_evals.py
+    uv run python scripts/agent_evals.py --runs 3 --json before.json
+    uv run python scripts/agent_evals.py --compare before.json
+    uv run python scripts/agent_evals.py --model gpt-5 --scenario confirmation
 """
 
 from __future__ import annotations
@@ -79,10 +79,10 @@ def _world(message):
     User = get_user_model()
     serial = next(_serial)
     user = User.objects.create_user(
-        username=f"alice{serial}", first_name="Alice", password="bench"
+        username=f"alice{serial}", first_name="Alice", password="evals"
     )
     bot = User.objects.create_user(
-        username=f"bot{serial}", first_name="Assistant", password="bench"
+        username=f"bot{serial}", first_name="Assistant", password="evals"
     )
     bot_profile = BotProfile.objects.create(
         user=bot, system_prompt="You are a helpful assistant.", is_public=True
@@ -355,7 +355,7 @@ def main():
     if args.model:
         settings.AI_MODEL = args.model
     if not settings.AI_API_KEY:
-        sys.exit("AI_API_KEY is not set: the bench needs a backend to talk to.")
+        sys.exit("AI_API_KEY is not set: the evals need a backend to talk to.")
     print(f"Model {settings.AI_MODEL} at {settings.AI_BASE_URL or 'api.openai.com'}")
 
     databases = setup_databases(verbosity=0, interactive=False)

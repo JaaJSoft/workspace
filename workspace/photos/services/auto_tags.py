@@ -8,8 +8,10 @@ photo's vector must lie to the tag name's. A video is tagged from its key
 frames, at its own table (``video_tag_thresholds``): a tag lands when the
 closest of its key frames is under the tag's threshold. A tag a table leaves
 out is never placed by that backend. Each lands as a FileTag of source AUTO
-on the owner's own Tag of that name (matched case-insensitively, created on
-first use with the classic tag's icon).
+on the owner's own Tag for that classic tag (ClassicTagMapping): the one
+placed for it before, whatever it is called now, else the tag of its name in
+the owner's language (matched case-insensitively, created on first use with
+the classic tag's icon).
 
 A file is tagged once, after it is embedded (``PhotoEmbedding.auto_tagged_at``,
 stamped on every row of the file, reset with every new vector): a tag its
@@ -28,15 +30,17 @@ import logging
 import numpy as np
 from django.core.cache import cache
 from django.db.models import Exists, OuterRef
-from django.utils import timezone
+from django.utils import timezone, translation
+from django.utils.translation import gettext
 
 from workspace.common.logging import scrub
 from workspace.common.vectors.encoding import from_bytes, normalize, to_bytes
 from workspace.files.models import File, FileTag
 from workspace.files.services.tags import get_or_create_tag
+from workspace.users.services.settings import get_user_language
 
 from ..indexes import PHOTO_EMBEDDINGS
-from ..models import PhotoEmbedding
+from ..models import ClassicTagMapping, PhotoEmbedding
 from .embedding.registry import (
     embeddings_available,
     get_embedding_backend,
@@ -92,6 +96,28 @@ def tags_for(vectors, thresholds):
     return [tag for tag, hit in zip(tags, closest <= limits, strict=True) if hit]
 
 
+def owner_tag_ids(owner, classics):
+    """The uuids of *owner*'s tags for the classic tags *classics*: the one
+    each was placed as before, else the tag of its name in the owner's
+    language, created and remembered on first use. A rename or a language
+    change never makes a second tag of one classic tag."""
+    tag_ids = dict(
+        ClassicTagMapping.objects.filter(
+            owner=owner, label__in=[classic.label for classic in classics]
+        ).values_list("label", "tag_id")
+    )
+    missing = [classic for classic in classics if classic.label not in tag_ids]
+    if missing:
+        with translation.override(get_user_language(owner)):
+            for classic in missing:
+                tag = get_or_create_tag(owner, gettext(classic.name), icon=classic.icon)
+                mapping, _ = ClassicTagMapping.objects.get_or_create(
+                    owner=owner, label=classic.label, defaults={"tag": tag}
+                )
+                tag_ids[classic.label] = mapping.tag_id
+    return {tag_ids[classic.label] for classic in classics}
+
+
 def tag_file(row):
     """Give the photo or video of the PhotoEmbedding *row* its automatic
     tags, once: a video from all its key frames together.
@@ -127,15 +153,12 @@ def tag_file(row):
     if taggable:
         is_video = any(timestamp is not None for _pk, timestamp, _e in rows)
         thresholds = video_tag_thresholds() if is_video else tag_thresholds()
-        tags = {
-            get_or_create_tag(file_obj.owner, tag.name, icon=tag.icon)
-            for tag in tags_for(np.stack(vectors), thresholds)
-        }
+        tag_ids = owner_tag_ids(file_obj.owner, tags_for(np.stack(vectors), thresholds))
         # A tag the file already carries, by hand or not, keeps its row.
         FileTag.objects.bulk_create(
             [
-                FileTag(tag=tag, file=file_obj, source=FileTag.Source.AUTO)
-                for tag in tags
+                FileTag(tag_id=tag_id, file=file_obj, source=FileTag.Source.AUTO)
+                for tag_id in tag_ids
             ],
             ignore_conflicts=True,
         )

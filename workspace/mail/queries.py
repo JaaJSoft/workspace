@@ -1,9 +1,31 @@
-from .models import MailAccount, MailFolder
+from .models import MailAccount, MailAttachment, MailFolder
 
 
 def user_account_ids(user):
     """Return mail account UUIDs owned by the user."""
     return MailAccount.objects.filter(owner=user).values_list("uuid", flat=True)
+
+
+def resolve_reachable_attachments(user, attachment_uuids):
+    """Resolve *attachment_uuids* to the user's own MailAttachment rows, or None.
+
+    Deduplicates the input and keeps its order. Returns None as soon as one
+    uuid is unknown or belongs to a message of someone else's account:
+    callers attach all-or-nothing and must not tell the two apart.
+    """
+    attachment_uuids = list(dict.fromkeys(attachment_uuids))
+    if not attachment_uuids:
+        return []
+    by_uuid = {
+        attachment.uuid: attachment
+        for attachment in MailAttachment.objects.filter(
+            uuid__in=attachment_uuids,
+            message__account_id__in=user_account_ids(user),
+        )
+    }
+    if len(by_uuid) != len(attachment_uuids):
+        return None
+    return [by_uuid[uuid] for uuid in attachment_uuids]
 
 
 def canonical_folder(folder):

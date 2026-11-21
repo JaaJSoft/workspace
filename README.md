@@ -136,32 +136,40 @@ An end-to-end encrypted password manager: logins, passwords, authenticator codes
 
 | Layer              | Technology                                                   |
 |--------------------|--------------------------------------------------------------|
-| **Backend**        | Django 6.0, Django REST Framework                            |
-| **Frontend**       | Alpine.js, Tailwind CSS, DaisyUI, Lucide Icons               |
-| **Real-time**      | Server-Sent Events (SSE)                                     |
-| **Database**       | SQLite (WAL mode) or PostgreSQL                              |
-| **Cache / Broker** | Redis (optional, for caching, sessions, and Celery tasks)    |
-| **Task Queue**     | Celery with Redis broker, Celery Beat for periodic tasks     |
+| **Backend**        | Django 6, Django REST Framework, drf-spectacular (OpenAPI)   |
+| **Frontend**       | Server-rendered templates, Alpine.js and alpine-ajax, Tailwind CSS 4, daisyUI 5, Lucide icons. Editors and viewers (Milkdown, Monaco, FullCalendar, Leaflet, foliate-js) are vendored builds, never loaded from a CDN |
+| **Real-time**      | Server-Sent Events, WebRTC for audio and video calls         |
+| **Database**       | SQLite (WAL mode) by default, PostgreSQL for larger instances |
+| **Search**         | Full-text search on SQLite FTS5 or PostgreSQL, vector search with sqlite-vec or pgvector |
+| **Cache / Broker** | Redis: cache, sessions, task queue and WebDAV locks. Optional in development, required in production |
+| **Task Queue**     | Celery workers, Celery Beat for periodic tasks               |
 | **Server**         | Gunicorn with gevent workers, WhiteNoise, Brotli compression |
-| **AI**             | OpenAI API (or any compatible provider)                      |
-| **Imaging**        | Pillow, CairoSVG (thumbnail generation)                      |
+| **Storage**        | Local filesystem or any S3-compatible object store           |
+| **Sync**           | WebDAV (files), CalDAV (calendars), CardDAV (contacts)       |
+| **Mail**           | IMAP and SMTP, OAuth2 sign-in for Gmail and Microsoft 365    |
+| **AI**             | Any OpenAI-compatible API (OpenAI, Ollama, LM Studio...), SearXNG for web search |
+| **Media**          | Pillow, libheif (HEIC), LibRaw (camera RAW), CairoSVG, ffmpeg; ONNX Runtime and FastEmbed for faces and photo search |
+| **Documents**      | Magika (file type detection), Apache Tika (text extraction), optional ClamAV scanning |
+| **Auth**           | Session login, API tokens, OpenID Connect                    |
 | **Monitoring**     | Prometheus metrics, Kubernetes health probes                 |
-| **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)                        |
+| **Tooling**        | uv, Ruff, djLint, Playwright, Docker                         |
 
 
 ## Architecture
 
 ### Simple by Default
 
-At its core, Workspace is Django + SQLite. One Docker container, done. No database servers to manage, no infrastructure lock-in.
+At its core, Workspace is Django and SQLite, with Redis carrying the background tasks. SQLite is the default in every environment, production included: no database server to manage, no infrastructure lock-in.
+
+A single image runs every process: the web server, the Celery worker and the scheduler, chosen by `PROCESS_TYPE` (see [Processes](docs/deployments/README.md#processes)).
 
 ### Scales When You Need It
 
-The same codebase can switch to PostgreSQL for high-concurrency workloads. The architecture supports multiple deployment strategies:
+The same codebase switches to PostgreSQL for high-concurrency workloads, and to an S3-compatible bucket for the files. The architecture supports multiple deployment strategies:
 
-- **Personal** - Run on a VPS with SQLite, or any PaaS with persistent volumes
+- **Personal** - Docker Compose with SQLite on a VPS, a home server or a Raspberry Pi
 - **Teams** - Docker Compose, one instance per team with isolated data
-- **Enterprise** - Kubernetes with PostgreSQL, SSO/LDAP, dedicated infrastructure
+- **Enterprise** - Kubernetes with PostgreSQL, object storage, OpenID Connect single sign-on
 
 Instead of complex multi-tenancy with `tenant_id` columns, Workspace uses **instance-per-tenant**: true data isolation, independent scaling, and simplified security.
 
@@ -177,47 +185,51 @@ uv run python manage.py createsuperuser    # Create admin account
 uv run python manage.py runserver          # Start dev server
 ```
 
-Visit `http://localhost:8000`. No webpack, no npm, no build step.
+Visit `http://localhost:8000`. The frontend bundles and the stylesheet are committed, so there is no npm or build step to run the app; `scripts/frontend` only rebuilds them after a frontend dependency or a template change.
+
+In development (`DEBUG` on, the default) background tasks run inline, in the process that sends them, so no Celery worker is needed; without `REDIS_URL` the cache and sessions stay in memory.
 
 ### Prerequisites
 
 - Python 3.14.1+ (a final release - a 3.14 release candidate is refused, see `requires-python`)
 - [uv](https://docs.astral.sh/uv/) (recommended package manager)
-- Redis (optional, for caching and Celery)
+- Optional: Redis (cache and sessions), ffmpeg (video thumbnails and metadata), Cairo (SVG thumbnails)
 
 ## Deployment
 
-### Docker
+### Docker Compose
+
+The reference deployment runs the web server, a Celery worker and the scheduler from the same image, next to a Redis container, with the database and the files on one volume. Copy [`docker-compose.yml`](docs/deployments/docker-compose/docker-compose.yml) to your server, set `SECRET_KEY` and `ALLOWED_HOSTS` in a `.env` file next to it, then:
 
 ```bash
-docker run -d -p 8000:8000 \
-  -v workspace-db:/app/db \
-  -v workspace-files:/app/files \
-  -e SECRET_KEY=your-secret-key-here \
-  -e ALLOWED_HOSTS=yourdomain.com \
-  ghcr.io/jaajsoft/workspace:main
+docker compose up -d        # migrates the database before anything else starts
+docker compose exec web python manage.py createsuperuser
 ```
 
-The image is published for `linux/amd64` and `linux/arm64`, so the same tag works on an x86 server, an Apple Silicon Mac and a Raspberry Pi 4/5. The Pi needs a 64-bit OS: there is no 32-bit (`linux/arm/v7`) build.
+It runs `ghcr.io/jaajsoft/workspace:latest`, the last release. Release tags (`0.45.0`, `0.45`) pin a version, and `main` follows the main branch. The image is published for `linux/amd64` and `linux/arm64`, so the same tag works on an x86 server, an Apple Silicon Mac and a Raspberry Pi 4/5. The Pi needs a 64-bit OS: there is no 32-bit (`linux/arm/v7`) build.
 
-Prefer building the image yourself? Run `docker build -t workspace .` and use the `workspace` tag above.
+Prefer building the image yourself? Run `docker build -t workspace .` and set `WORKSPACE_IMAGE=workspace`.
+
+With `DEBUG` off, every process refuses to start without `REDIS_URL`: tasks sent by the web server would otherwise never reach the worker.
 
 Add AI by setting `AI_API_KEY` and `AI_MODEL`. Use a self-hosted LLM by pointing `AI_BASE_URL` to Ollama or LM Studio.
 
-See [docs/deployments/](docs/deployments/) for Docker Compose and Kubernetes examples.
+See [docs/deployments/](docs/deployments/) for the Docker Compose and Kubernetes setups, PostgreSQL, S3-compatible storage and running behind a reverse proxy.
 
 ### Environment Variables
 
-The most common variables are listed below. For the full, annotated list - including AI model tiers, web search (SearXNG), OAuth2 mail providers, Web Push (VAPID), and chat call (STUN/TURN) settings - see [`.env.example`](.env.example).
+The most common variables are listed below. For the full, annotated list - including AI model tiers, web search (SearXNG), OpenID Connect, OAuth2 mail providers, Web Push (VAPID), and chat call (STUN/TURN) settings - see [`.env.example`](.env.example).
 
 | Variable               | Description                                       | Default                      |
 |------------------------|---------------------------------------------------|------------------------------|
-| `SECRET_KEY`           | Django secret key                                 | *required in production*     |
-| `DEBUG`                | Enable debug mode                                 | `True`                       |
-| `ALLOWED_HOSTS`        | Comma-separated allowed hosts                     | `*`                          |
+| `SECRET_KEY`           | Django secret key. Always set it in production    | *(an insecure development key)* |
+| `DEBUG`                | Enable debug mode                                 | `True` (`0` in the Compose and Kubernetes setups) |
+| `ALLOWED_HOSTS`        | Comma-separated allowed hosts                     | `*` with `DEBUG` off, localhost only with `DEBUG` on |
 | `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins              | *(none)*                     |
 | `DATABASE_URL`         | Database connection string                        | `sqlite:///db.sqlite3`       |
 | `DB_POOL_MAX_SIZE`     | PostgreSQL connections per process ([sizing](docs/deployments/README.md#database-connections)) | `4` |
+| `MEDIA_ROOT`           | Where user files are stored                       | the project directory        |
+| `STORAGE_BACKEND`      | `local` or `s3` ([object storage](docs/deployments/README.md#object-storage-s3-compatible)) | `local` |
 | `REDIS_URL`            | Redis URL for cache, sessions and background tasks. Required with `DEBUG` off | *(none, in-memory fallback)* |
 | `PROCESS_TYPE`         | What the image runs: `web`, `worker` or `beat`    | `web`                        |
 | `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                    | `2`                          |
@@ -230,7 +242,7 @@ The most common variables are listed below. For the full, annotated list - inclu
 | `AI_BASE_URL`          | Custom LLM API base URL (Ollama, LM Studio, etc.) | *(OpenAI default)*           |
 | `AI_MODEL`             | Default LLM model                                 | `gpt-5`                      |
 | `AI_MAX_TOKENS`        | Maximum tokens per AI response                    | `2048`                       |
-| `AI_IMAGE_MODEL`       | Model for image generation                        | `dall-e-3`                   |
+| `AI_IMAGE_MODEL`       | Model for image generation (e.g. `dall-e-3`)      | *(none, image tools disabled)* |
 | `AI_IMAGE_BASE_URL`    | Custom image generation base URL                  | *(same as AI_BASE_URL)*      |
 
 ## Documentation
@@ -239,7 +251,7 @@ Full documentation - per-module guides, deployment recipes, and how-tos - lives 
 
 ## API
 
-All endpoints are prefixed with `/api/` with no trailing slashes. Interactive documentation is available at:
+All endpoints are prefixed with `/api/` with no trailing slashes. Interactive documentation is available to signed-in users at:
 
 - **Swagger UI** - `/schema/swagger-ui/`
 - **ReDoc** - `/schema/redoc/`
@@ -248,7 +260,7 @@ All endpoints are prefixed with `/api/` with no trailing slashes. Interactive do
 ### Health Checks
 
 - `/health/live` - Liveness probe
-- `/health/ready` - Readiness probe (checks database)
+- `/health/ready` - Readiness probe (checks the database and the cache)
 - `/health/startup` - Startup probe
 
 ### Metrics
@@ -257,23 +269,29 @@ All endpoints are prefixed with `/api/` with no trailing slashes. Interactive do
 
 ## Extending Workspace
 
-Workspace is modular. Each module registers itself at startup via `AppConfig.ready()`:
+Workspace is modular. Each module is a Django app listed in `INSTALLED_APPS` that registers itself at startup via `AppConfig.ready()`:
 
 ```python
-from workspace.core.registry import registry, ModuleInfo
+from django.apps import AppConfig
+
 
 class MyModuleConfig(AppConfig):
+    name = "workspace.my_module"
+
     def ready(self):
+        from workspace.core.module_registry import ModuleInfo, registry
+
         registry.register(ModuleInfo(
-            name='my_module',
-            display_name='My Module',
-            icon='sparkles',
-            color='primary',
-            url='/my-module/',
+            name="My Module",
+            slug="my_module",
+            description="What the module is for.",
+            icon="sparkles",   # a Lucide icon name
+            color="indigo",    # one of MODULE_HUES
+            url="/my-module",
         ))
 ```
 
-Your module automatically appears in the sidebar, dashboard, and search results.
+The module then appears in the app switcher and on the dashboard. The same registry takes its unified search provider (`register_search_provider`) and its command palette entries (`register_commands`); the activity feed and live events (SSE) have registries of their own in `workspace.core`.
 
 ## Roadmap
 

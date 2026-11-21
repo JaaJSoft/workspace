@@ -211,6 +211,142 @@ msgstr "%(length)s mm (éq. 35 mm)"
 msgid "%(actual)s (%(length)s mm eq.)"
 msgstr "%(actual)s (éq. %(length)s mm)"
 
+#: services/import_folder.py
+msgid "Pictures"
+msgstr "Images"
+
+#: services/tag_vocabulary.py
+msgid "Dog"
+msgstr "Chien"
+
+#: services/tag_vocabulary.py
+msgid "Cat"
+msgstr "Chat"
+
+#: services/tag_vocabulary.py
+msgid "Bird"
+msgstr "Oiseau"
+
+#: services/tag_vocabulary.py
+msgid "Horse"
+msgstr "Cheval"
+
+#: services/tag_vocabulary.py
+msgid "Beach"
+msgstr "Plage"
+
+#: services/tag_vocabulary.py
+msgid "Mountain"
+msgstr "Montagne"
+
+#: services/tag_vocabulary.py
+msgid "Snow"
+msgstr "Neige"
+
+#: services/tag_vocabulary.py
+msgid "Sea"
+msgstr "Mer"
+
+#: services/tag_vocabulary.py
+msgid "Forest"
+msgstr "Forêt"
+
+#: services/tag_vocabulary.py
+msgid "Lake"
+msgstr "Lac"
+
+#: services/tag_vocabulary.py
+msgid "Sunset"
+msgstr "Coucher de soleil"
+
+#: services/tag_vocabulary.py
+msgid "Flowers"
+msgstr "Fleurs"
+
+#: services/tag_vocabulary.py
+msgid "Garden"
+msgstr "Jardin"
+
+#: services/tag_vocabulary.py
+msgid "City"
+msgstr "Ville"
+
+#: services/tag_vocabulary.py
+msgid "Night"
+msgstr "Nuit"
+
+#: services/tag_vocabulary.py
+msgid "Car"
+msgstr "Voiture"
+
+#: services/tag_vocabulary.py
+msgid "Boat"
+msgstr "Bateau"
+
+#: services/tag_vocabulary.py
+msgid "Airplane"
+msgstr "Avion"
+
+#: services/tag_vocabulary.py
+msgid "Bicycle"
+msgstr "Vélo"
+
+#: services/tag_vocabulary.py
+msgid "Meal"
+msgstr "Repas"
+
+#: services/tag_vocabulary.py
+msgid "Cake"
+msgstr "Gâteau"
+
+#: services/tag_vocabulary.py
+msgid "Cocktail"
+msgstr "Cocktail"
+
+#: services/tag_vocabulary.py
+msgid "Baby"
+msgstr "Bébé"
+
+#: services/tag_vocabulary.py
+msgid "Child"
+msgstr "Enfant"
+
+#: services/tag_vocabulary.py
+msgid "Selfie"
+msgstr "Selfie"
+
+#: services/tag_vocabulary.py
+msgid "Wedding"
+msgstr "Mariage"
+
+#: services/tag_vocabulary.py
+msgid "Birthday"
+msgstr "Anniversaire"
+
+#: services/tag_vocabulary.py
+msgid "Party"
+msgstr "Fête"
+
+#: services/tag_vocabulary.py
+msgid "Christmas"
+msgstr "Noël"
+
+#: services/tag_vocabulary.py
+msgid "Skiing"
+msgstr "Ski"
+
+#: services/tag_vocabulary.py
+msgid "Swimming pool"
+msgstr "Piscine"
+
+#: services/tag_vocabulary.py
+msgid "Screenshot"
+msgstr "Capture d'écran"
+
+#: services/tag_vocabulary.py
+msgid "Document"
+msgstr "Document"
+
 #: ui/templates/photos/ui/base.html
 msgid "Drop photos and videos to import them"
 msgstr "Déposez des photos et des vidéos pour les importer"

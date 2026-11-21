@@ -14,12 +14,15 @@ from .models import (
     MailRule,
     MailRuleLog,
 )
+from .services.imap_parse import sanitize_mail_html
+from .services.remote_images import has_remote_images
 from .services.rules.schema import (
     SchemaError,
     parse_actions,
     parse_conditions,
     validate_tree_limits,
 )
+from .services.trusted_senders import is_trusted_sender
 
 # escape=True so raw HTML in the AI summary is escaped instead of executed when
 # the rendered string is injected via Alpine x-html. mistune.html() uses escape=False.
@@ -278,6 +281,10 @@ class MailExtractionSerializer(serializers.ModelSerializer):
         return None
 
 
+class MailTrustedSenderSerializer(serializers.Serializer):
+    email = serializers.CharField(max_length=254)
+
+
 class MailMessageDetailSerializer(serializers.ModelSerializer):
     attachments = MailAttachmentSerializer(many=True, read_only=True)
     labels = serializers.SerializerMethodField()
@@ -285,9 +292,23 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
     extractions = serializers.SerializerMethodField()
     # Same {name, email} API contract as the list serializer.
     from_address = serializers.SerializerMethodField()
+    # Cleaned again on the way out, so a body stored before the allow-list
+    # last changed, or written by the composer, renders under today's rules.
+    body_html = serializers.SerializerMethodField()
+    has_remote_images = serializers.SerializerMethodField()
+    sender_trusted = serializers.SerializerMethodField()
 
     def get_from_address(self, obj):
         return {"name": obj.from_name, "email": obj.from_email}
+
+    def get_body_html(self, obj):
+        return sanitize_mail_html(obj.body_html)
+
+    def get_has_remote_images(self, obj):
+        return has_remote_images(obj.body_html)
+
+    def get_sender_trusted(self, obj):
+        return is_trusted_sender(obj.account.owner_id, obj.from_email)
 
     class Meta:
         model = MailMessage
@@ -307,6 +328,8 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             "snippet",
             "body_text",
             "body_html",
+            "has_remote_images",
+            "sender_trusted",
             "is_read",
             "is_starred",
             "is_draft",

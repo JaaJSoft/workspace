@@ -56,14 +56,35 @@ NH3_ALLOWED_TAGS = {
     "ul",
 }
 
+# class and style stay: the body is rendered in a frame of its own, which the
+# app's stylesheets do not reach and out of which no style can draw.
 NH3_ALLOWED_ATTRIBUTES = {
     "*": {"class", "style", "dir", "lang"},
-    "a": {"href", "target", "title"},
+    "a": {"href", "title"},
     "img": {"src", "alt", "width", "height", "title"},
     "td": {"colspan", "rowspan", "align", "valign"},
     "th": {"colspan", "rowspan", "align", "valign"},
     "table": {"border", "cellpadding", "cellspacing", "width"},
 }
+
+# Every link leaves the message's frame for a new tab: a target naming the
+# frame itself would load the linked page in the middle of the app.
+NH3_SET_ATTRIBUTES = {"a": {"target": "_blank"}}
+
+
+def sanitize_mail_html(html):
+    """Clean an email's HTML body down to what the message frame renders.
+
+    nh3 also gives every link ``rel="noopener noreferrer"``.
+    """
+    if not html:
+        return ""
+    return nh3.clean(
+        html,
+        tags=NH3_ALLOWED_TAGS,
+        attributes=NH3_ALLOWED_ATTRIBUTES,
+        set_tag_attribute_values=NH3_SET_ATTRIBUTES,
+    )
 
 
 def _decode_header(value):
@@ -231,13 +252,7 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
             else:
                 body_text = decoded
 
-    # Sanitise HTML
-    if body_html:
-        body_html = nh3.clean(
-            body_html,
-            tags=NH3_ALLOWED_TAGS,
-            attributes=NH3_ALLOWED_ATTRIBUTES,
-        )
+    body_html = sanitize_mail_html(body_html)
 
     # Snippet from text body
     snippet = ""

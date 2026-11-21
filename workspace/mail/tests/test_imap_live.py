@@ -32,6 +32,7 @@ import ssl
 import tempfile
 import unittest
 from email.message import EmailMessage
+from itertools import batched
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -42,7 +43,7 @@ from imapclient import IMAPClient
 from workspace.common.booleans import is_truthy
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.drafts import save_composed_draft
-from workspace.mail.services.imap_connection import test_imap_connection
+from workspace.mail.services.imap_connection import connect_imap, test_imap_connection
 from workspace.mail.services.imap_folders import (
     create_folder,
     delete_folder,
@@ -156,23 +157,30 @@ class LiveImapCase(TestCase):
         self.remote.append(folder, _mail(subject, **mail), flags=flags)
         return uid
 
+    def remote_fetch(self, folder, item):
+        """``{uid: data}`` for every message the server holds in `folder`."""
+        self.remote.select_folder(folder, readonly=True)
+        fetched = {}
+        # A few hundred UIDs a command: this client plays by the rules too.
+        for uids in batched(self.remote.search("ALL"), 500, strict=False):
+            fetched.update(self.remote.fetch(uids, [item]))
+        return fetched
+
     def remote_flags(self, folder):
         """``{uid: flags}`` of every message the server holds in `folder`."""
-        self.remote.select_folder(folder, readonly=True)
-        uids = self.remote.search("ALL")
-        fetched = self.remote.fetch(uids, ["FLAGS"]) if uids else {}
         return {
-            uid: set(data[b"FLAGS"]) - {b"\\Recent"} for uid, data in fetched.items()
+            uid: set(data[b"FLAGS"]) - {b"\\Recent"}
+            for uid, data in self.remote_fetch(folder, "FLAGS").items()
         }
 
     def remote_uids(self, folder):
         return sorted(self.remote_flags(folder))
 
     def remote_subjects(self, folder):
-        self.remote.select_folder(folder, readonly=True)
-        uids = self.remote.search("ALL")
-        fetched = self.remote.fetch(uids, ["ENVELOPE"]) if uids else {}
-        return sorted(data[b"ENVELOPE"].subject.decode() for data in fetched.values())
+        return sorted(
+            data[b"ENVELOPE"].subject.decode()
+            for data in self.remote_fetch(folder, "ENVELOPE").values()
+        )
 
     def remote_folders(self):
         return {name for _flags, _delimiter, name in self.remote.list_folders()}
@@ -330,6 +338,18 @@ class SyncCases:
             MailFolder.objects.filter(account=self.account, name="Old").exists()
         )
 
+    def test_a_pass_over_every_folder_logs_in_once(self):
+        self.deliver("INBOX", "One")
+        self.deliver("Sent", "Two")
+
+        with patch(
+            "workspace.mail.services.imap_connection.connect_imap", wraps=connect_imap
+        ) as connect:
+            self.sync()
+
+        self.assertEqual(connect.call_count, 1)
+        self.assertEqual(MailMessage.objects.filter(account=self.account).count(), 2)
+
 
 class TriageCases:
     def test_a_flag_set_here_reaches_the_server(self):
@@ -455,7 +475,7 @@ class FolderCases:
         child = create_folder(self.account, "Acme Corp", parent_name=parent.name)
         self.assertLessEqual({"Clients", "Clients/Acme Corp"}, self.remote_folders())
 
-        rename_folder(self.account, child, "Clients/Acme")
+        rename_folder(self.account, child, "Acme")
         self.assertIn("Clients/Acme", self.remote_folders())
         self.assertNotIn("Clients/Acme Corp", self.remote_folders())
 
@@ -500,9 +520,22 @@ class LiveImapTests(SyncCases, TriageCases, FolderCases, LiveImapCase):
         self.assertFalse(ok)
         self.assertTrue(error)
 
+    def test_a_pass_over_unchanged_mailboxes_reads_none_of_them(self):
+        uid = self.deliver("INBOX", "One")
+        self.sync()
+
+        with (
+            patch.object(IMAPClient, "search", side_effect=AssertionError("SEARCH")),
+            patch.object(IMAPClient, "fetch", side_effect=AssertionError("FETCH")),
+        ):
+            self.sync()
+
+        self.flag_remotely("INBOX", uid, SEEN)
+        self.sync()
+        self.assertTrue(self.message("INBOX", uid).is_read)
+
     # -- #1513 --------------------------------------------------------------
 
-    @unittest.expectedFailure
     def test_a_move_leaves_the_messages_another_client_marked_deleted(self):
         self.remote.create_folder("Archive")
         marked = self.deliver("INBOX", "Marked deleted elsewhere", flags=[DELETED])
@@ -513,7 +546,6 @@ class LiveImapTests(SyncCases, TriageCases, FolderCases, LiveImapCase):
 
         self.assertEqual(self.remote_flags("INBOX"), {marked: {DELETED}})
 
-    @unittest.expectedFailure
     def test_a_delete_leaves_the_messages_another_client_marked_deleted(self):
         marked = self.deliver("Trash", "Marked deleted elsewhere", flags=[DELETED])
         uid = self.deliver("Trash", "Delete me")
@@ -523,7 +555,6 @@ class LiveImapTests(SyncCases, TriageCases, FolderCases, LiveImapCase):
 
         self.assertEqual(self.remote_flags("Trash"), {marked: {DELETED}})
 
-    @unittest.expectedFailure
     def test_replacing_a_draft_leaves_the_drafts_marked_deleted(self):
         marked = self.deliver("Drafts", "Marked deleted elsewhere", flags=[DELETED])
         self.sync()
@@ -544,7 +575,6 @@ class LiveImapTests(SyncCases, TriageCases, FolderCases, LiveImapCase):
 
     # -- #1759 --------------------------------------------------------------
 
-    @unittest.expectedFailure
     def test_folders_with_accented_names_are_created_and_renamed(self):
         self.sync()
 
@@ -555,7 +585,7 @@ class LiveImapTests(SyncCases, TriageCases, FolderCases, LiveImapCase):
         )
         self.assertEqual(child.display_name, "Été & hiver")
 
-        rename_folder(self.account, child, f"{folder.name}/日本語")
+        rename_folder(self.account, child, "日本語")
         self.assertIn("Réunions/日本語", self.remote_folders())
 
         uid = self.deliver("Réunions", "Ordre du jour")
@@ -577,7 +607,6 @@ class LiveImapTests(SyncCases, TriageCases, FolderCases, LiveImapCase):
 
     # -- #1744 --------------------------------------------------------------
 
-    @unittest.expectedFailure
     def test_a_folder_of_thousands_of_messages_keeps_syncing(self):
         first = self.deliver("INBOX", "First")
         self.sync()

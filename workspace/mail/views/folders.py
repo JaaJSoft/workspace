@@ -165,19 +165,8 @@ class MailFolderUpdateView(APIView):
             if new_display_name and new_display_name != folder.display_name:
                 from ..services.imap_folders import rename_folder
 
-                # rename_folder needs the FULL mailbox name. For nested folders
-                # (Parent/Old) we must keep the parent path so we end up with
-                # Parent/New, not New at the root.
-                delimiter = folder.account.imap_delimiter or "/"
-                parent_path, _sep, _leaf = folder.name.rpartition(delimiter)
-                new_name = (
-                    f"{parent_path}{delimiter}{new_display_name}"
-                    if parent_path
-                    else new_display_name
-                )
-
                 try:
-                    rename_folder(folder.account, folder, new_name)
+                    rename_folder(folder.account, folder, new_display_name)
                 except Exception as e:
                     logger.warning(
                         "Failed to rename folder for %s: %s",

@@ -1,158 +1,170 @@
 """IMAP per-message operations: flags, delete, move, drafts, sent."""
 
-import imaplib
+import contextlib
 import logging
-import mmap
-import re
-import time
+from email import policy
+from email.parser import BytesHeaderParser
 from itertools import batched
 
 from django.utils import timezone as dj_timezone
+from imapclient.exceptions import IMAPClientAbortError, IMAPClientError
 
 from workspace.common.logging import scrub
-from workspace.mail.services.imap_connection import connect_imap
-from workspace.mail.services.imap_mailbox import _quote_mailbox
+from workspace.mail.services.imap_connection import (
+    append_file,
+    imap_session,
+    last_response_code,
+)
 
 logger = logging.getLogger(__name__)
 
-# UIDs per STORE command: keeps each command line well under the length
-# servers accept (Dovecot and Cyrus cut off around 64 KB).
-STORE_BATCH_SIZE = 500
+# UIDs per command: keeps each command line well under the length servers
+# accept (Dovecot and Cyrus cut off around 64 KB).
+UID_BATCH_SIZE = 500
+
+SEEN = "\\Seen"
+FLAGGED = "\\Flagged"
+DELETED = "\\Deleted"
+DRAFT = "\\Draft"
 
 
 def mark_read(account, message):
     """Mark a message as read on the IMAP server."""
-    _set_flag(account, message, "\\Seen", True)
+    _set_flag(account, message, SEEN, True)
 
 
 def mark_unread(account, message):
     """Mark a message as unread on the IMAP server."""
-    _set_flag(account, message, "\\Seen", False)
+    _set_flag(account, message, SEEN, False)
 
 
 def star_message(account, message):
     """Star a message on the IMAP server."""
-    _set_flag(account, message, "\\Flagged", True)
+    _set_flag(account, message, FLAGGED, True)
 
 
 def unstar_message(account, message):
     """Unstar a message on the IMAP server."""
-    _set_flag(account, message, "\\Flagged", False)
+    _set_flag(account, message, FLAGGED, False)
+
+
+def _set_flag(account, message, flag, add):
+    """Add or remove an IMAP flag on a message.
+
+    Raises when the server refuses the SELECT or the STORE: a caller told
+    nothing would believe the flag reached the server.
+    """
+    with _flags_written(message.folder), imap_session(account) as client:
+        client.select_folder(message.folder.name)
+        if add:
+            client.add_flags([message.imap_uid], [flag], silent=True)
+        else:
+            client.remove_flags([message.imap_uid], [flag], silent=True)
 
 
 def mark_uids_read(account, folder, uids):
     """Set ``\\Seen`` on the messages of `folder` carrying these IMAP UIDs.
 
-    Raises when the server refuses the SELECT or a STORE: imaplib answers a
-    ``NO`` with a status, not an exception, and a caller told nothing would
-    believe the flags reached the server.
+    Raises when the server refuses the SELECT or a STORE.
     """
-    conn = connect_imap(account)
+    with _flags_written(folder), imap_session(account) as client:
+        client.select_folder(folder.name)
+        for batch in batched(sorted(uids), UID_BATCH_SIZE, strict=False):
+            client.add_flags(batch, [SEEN], silent=True)
+
+
+@contextlib.contextmanager
+def _flags_written(folder):
+    """Around a flag change the caller applies to its rows whatever happens.
+
+    When the server did not take it, the rows and the mailbox disagree
+    without the mailbox having changed, and the sync would go on skipping a
+    folder it has every reason to believe untouched.
+    """
     try:
-        status, data = conn.select(_quote_mailbox(folder.name))
-        if status != "OK":
-            raise Exception(f"IMAP SELECT failed: {data}")
-        for batch in batched(sorted(uids), STORE_BATCH_SIZE, strict=False):
-            status, data = conn.uid(
-                "STORE", ",".join(map(str, batch)), "+FLAGS.SILENT", "(\\Seen)"
-            )
-            if status != "OK":
-                raise Exception(f"IMAP STORE failed: {data}")
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+        yield
+    except Exception:
+        from workspace.mail.services.imap_sync import forget_remote_state
+
+        forget_remote_state(folder)
+        raise
 
 
 def delete_message(account, message):
-    """Mark a message as deleted on the IMAP server, then expunge."""
-    conn = connect_imap(account)
-    try:
-        conn.select(_quote_mailbox(message.folder.name))
-        conn.uid("STORE", str(message.imap_uid), "+FLAGS", "(\\Deleted)")
-        conn.expunge()
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+    """Remove a message from the IMAP server for good."""
+    with imap_session(account) as client:
+        client.select_folder(message.folder.name)
+        _expunge(client, message.imap_uid)
+
+
+def _expunge(client, uid):
+    """Flag one message of the selected mailbox ``\\Deleted`` and expunge it.
+
+    With UIDPLUS (RFC 4315) the expunge names the UID and takes nothing
+    else. Without it there is only the plain EXPUNGE, which also removes
+    every other message of the mailbox carrying ``\\Deleted``: the ones
+    another mail program marked without expunging yet.
+    """
+    client.add_flags([uid], [DELETED], silent=True)
+    if client.has_capability("UIDPLUS"):
+        client.uid_expunge([uid])
+    else:
+        client.expunge()
 
 
 def move_message(account, message, target_folder):
-    """Move a message to another folder via IMAP COPY + DELETE.
+    """Move a message to another folder.
+
+    One MOVE (RFC 6851) when the server has it: the message is never in
+    both folders nor in neither. Otherwise a COPY, then the source is
+    expunged - only once the copy is known to have succeeded, since the
+    other order loses the message when the target refuses it (gone, over
+    quota, read-only).
 
     Returns the UID the message got in `target_folder`, or None when the
     server did not say (no UIDPLUS) and no single copy carrying its
     Message-ID turned up there either.
     """
-    target = _quote_mailbox(target_folder.name)
-    conn = connect_imap(account)
-    try:
-        uid_next = _uid_next(conn, target)
-        conn.select(_quote_mailbox(message.folder.name))
-        conn.response("COPYUID")
-        # imaplib does NOT raise on a 'NO' response - it returns (status, data).
-        # If COPY fails (target gone, quota exceeded, perms denied) and we
-        # don't check, the STORE+EXPUNGE below would permanently delete the
-        # source message with no copy in target: irrecoverable data loss.
-        st, data = conn.uid("COPY", str(message.imap_uid), target)
-        if st != "OK":
-            raise Exception(f"IMAP COPY failed: {data}")
-        copied_uid = _copied_uid(conn, message.imap_uid)
-        conn.uid("STORE", str(message.imap_uid), "+FLAGS", "(\\Deleted)")
-        conn.expunge()
+    uid = message.imap_uid
+    with imap_session(account) as client:
+        uid_next = _uid_next(client, target_folder.name)
+        client.select_folder(message.folder.name)
+        last_response_code(client, "COPYUID")
+        if client.has_capability("MOVE"):
+            client.move([uid], target_folder.name)
+            copied_uid = _copied_uid(client, uid)
+        else:
+            client.copy([uid], target_folder.name)
+            copied_uid = _copied_uid(client, uid)
+            _expunge(client, uid)
         if copied_uid is None:
-            copied_uid = _find_copy(conn, target, message.message_id, uid_next)
+            copied_uid = _find_copy(
+                client, target_folder.name, message.message_id, uid_next
+            )
         return copied_uid
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
 
 
-def _decoded(value):
-    return (
-        value.decode("ascii", errors="replace") if isinstance(value, bytes) else value
-    )
-
-
-def _uid_next(conn, mailbox):
+def _uid_next(client, mailbox):
     """The UID the next message landing in `mailbox` will get, or None."""
     try:
-        status, data = conn.status(mailbox, "(UIDNEXT)")
-    except imaplib.IMAP4.error, OSError:
+        return client.folder_status(mailbox, ["UIDNEXT"]).get(b"UIDNEXT")
+    except IMAPClientError, OSError:
         return None
-    if status != "OK" or not data:
-        return None
-    match = re.search(r"UIDNEXT (\d+)", _decoded(data[0]) or "")
-    return int(match.group(1)) if match else None
 
 
-def _copied_uid(conn, source_uid):
-    """The target UID from the COPYUID code (RFC 4315) of the last COPY.
+def _copied_uid(client, source_uid):
+    """The target UID from the COPYUID code (RFC 4315) of the last COPY or MOVE.
 
     ``COPYUID <uidvalidity> <source set> <target set>``; a single message
     copied gives a single UID on each side.
     """
-    _code, data = conn.response("COPYUID")
-    for item in reversed(data or []):
-        if not item:
-            continue
-        match = re.fullmatch(r"\d+ (\d+) (\d+)", _decoded(item).strip())
-        if match and int(match.group(1)) == source_uid:
-            return int(match.group(2))
+    match last_response_code(client, "COPYUID"):
+        case (int(), int(source), int(target)) if source == source_uid:
+            return target
     return None
 
 
-def _find_copy(conn, mailbox, message_id, uid_next):
+def _find_copy(client, mailbox, message_id, uid_next):
     """The UID of the one message at or past `uid_next` carrying `message_id`.
 
     The copy just made is the only message that can have both. Anything else
@@ -162,8 +174,7 @@ def _find_copy(conn, mailbox, message_id, uid_next):
     """
     message_id = message_id.strip()
     # The header came off the wire: a CR or LF in it would end the SEARCH
-    # line and start a command of the sender's choosing, and imaplib raises
-    # on anything outside ASCII rather than send it.
+    # line and start a command of the sender's choosing.
     if (
         not message_id
         or not uid_next
@@ -172,37 +183,15 @@ def _find_copy(conn, mailbox, message_id, uid_next):
     ):
         return None
     try:
-        status, _ = conn.select(mailbox, readonly=True)
-        if status != "OK":
-            return None
-        status, data = conn.uid(
-            "SEARCH",
-            None,
-            f"UID {uid_next}:* HEADER Message-ID {_quote_mailbox(message_id)}",
+        client.select_folder(mailbox, readonly=True)
+        found = client.search(
+            ["UID", f"{uid_next}:*", "HEADER", "Message-ID", message_id]
         )
-    except imaplib.IMAP4.error, OSError:
-        return None
-    if status != "OK" or not data or not data[0]:
+    except IMAPClientError, OSError:
         return None
     # "n:*" always matches the highest UID, even when it is below n.
-    found = [int(u) for u in _decoded(data[0]).split() if int(u) >= uid_next]
+    found = [uid for uid in found if uid >= uid_next]
     return found[0] if len(found) == 1 else None
-
-
-def _set_flag(account, message, flag, add):
-    """Add or remove an IMAP flag on a message."""
-    conn = connect_imap(account)
-    try:
-        conn.select(_quote_mailbox(message.folder.name))
-        op = "+FLAGS" if add else "-FLAGS"
-        conn.uid("STORE", str(message.imap_uid), op, f"({flag})")
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
 
 
 def append_to_sent(account, message_file, msg_id):
@@ -211,6 +200,7 @@ def append_to_sent(account, message_file, msg_id):
     `message_file` is a real file holding the whole message with CRLF line
     endings. Checks first whether the server already auto-copied the message
     (Gmail, Outlook, etc.) by searching for its Message-ID to avoid duplicates.
+    Raises when the server refuses the copy.
     """
     from ..models import MailFolder
     from ..queries import special_folder
@@ -222,70 +212,33 @@ def append_to_sent(account, message_file, msg_id):
         )
         return
 
-    conn = connect_imap(account)
-    try:
-        conn.select(_quote_mailbox(sent_folder.name), readonly=True)
-
-        # Check if the server already auto-copied it
-        if msg_id:
-            status, data = conn.uid("SEARCH", None, f'HEADER Message-ID "{msg_id}"')
-            if status == "OK" and data[0] and data[0].strip():
-                logger.info(
-                    "Message already in Sent for %s (auto-copied by server)",
-                    scrub(account.email),
-                )
-                return
-
-        # Not found - append it ourselves
-        conn.select(_quote_mailbox(sent_folder.name), readonly=False)
-        status, _ = _append_file(
-            conn, _quote_mailbox(sent_folder.name), "(\\Seen)", message_file
-        )
-        if status == "OK":
+    with imap_session(account) as client:
+        client.select_folder(sent_folder.name, readonly=True)
+        if msg_id and client.search(["HEADER", "Message-ID", msg_id]):
             logger.info(
-                "Appended sent message to %s for %s",
-                scrub(sent_folder.name),
+                "Message already in Sent for %s (auto-copied by server)",
                 scrub(account.email),
             )
-        else:
-            logger.warning(
-                "IMAP APPEND to %s failed for %s",
-                scrub(sent_folder.name),
-                scrub(account.email),
-            )
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+            return
 
-
-def _append_file(conn, mailbox, flags, message_file):
-    """`imaplib.IMAP4.append` for a message held in a file.
-
-    append wants the message as bytes and copies it once more to normalize
-    its line endings. A memory map of the file, already CRLF, goes out as
-    the literal instead: sent from the page cache, never copied to the heap.
-    """
-    message_file.flush()
-    with mmap.mmap(message_file.fileno(), 0, access=mmap.ACCESS_READ) as literal:
-        conn.literal = literal
-        return conn._simple_command(
-            "APPEND", mailbox, flags, imaplib.Time2Internaldate(time.time())
+        append_file(client, sent_folder.name, [SEEN], message_file)
+        logger.info(
+            "Appended sent message to %s for %s",
+            scrub(sent_folder.name),
+            scrub(account.email),
         )
 
 
 def save_draft(account, raw_message_bytes, old_uid=None):
     """Save a draft message to the account's Drafts folder via IMAP APPEND.
 
-    If old_uid is provided, deletes the previous draft first.
-    Returns the created MailMessage.
+    If old_uid is provided, deletes the previous draft once the new one is
+    stored. Returns the created MailMessage, or None when the account has
+    no Drafts folder or the server refused the draft.
     """
     from workspace.mail.services.imap_sync import sync_folder_messages
 
-    from ..models import MailFolder
+    from ..models import MailFolder, MailMessage
     from ..queries import special_folder
 
     drafts_folder = special_folder(account, MailFolder.FolderType.DRAFTS)
@@ -295,56 +248,46 @@ def save_draft(account, raw_message_bytes, old_uid=None):
         )
         return None
 
-    # Extract Message-ID from raw bytes BEFORE the network call so we can find
-    # our exact draft after sync. order_by('-created_at') is unsafe: a parallel
-    # IMAP session (mobile, web client) could APPEND a different draft between
-    # our APPEND and our sync, and we'd return the wrong message.
-    msg_id = None
-    for line in raw_message_bytes.split(b"\n"):
-        if line.lower().startswith(b"message-id:"):
-            msg_id = line.split(b":", 1)[1].strip().decode(errors="replace")
-            break
+    # Read before the network call, to find our exact draft after the sync.
+    # "The newest draft" is unsafe: another session (mobile, web client)
+    # could APPEND a different one between our APPEND and our sync.
+    headers = BytesHeaderParser(policy=policy.default).parsebytes(
+        raw_message_bytes.partition(b"\r\n\r\n")[0]
+    )
+    msg_id = str(headers.get("Message-ID", "")).strip()
 
-    conn = connect_imap(account)
-    try:
-        conn.select(_quote_mailbox(drafts_folder.name), readonly=False)
-
-        # Append new draft FIRST, then delete the old one only on APPEND
-        # success. The reverse order risks losing both copies if APPEND fails
-        # (network drop, quota exceeded), since EXPUNGE is irreversible.
-        status, _ = conn.append(
-            _quote_mailbox(drafts_folder.name),
-            "(\\Draft \\Seen)",
-            imaplib.Time2Internaldate(time.time()),
-            raw_message_bytes,
-        )
-        if status != "OK":
+    with imap_session(account) as client:
+        # The new draft first, the old one deleted only once it is stored.
+        # The reverse order risks losing both copies if the APPEND fails
+        # (network drop, quota exceeded), since an expunge is irreversible.
+        try:
+            client.append(
+                drafts_folder.name,
+                raw_message_bytes,
+                flags=[DRAFT, SEEN],
+                msg_time=dj_timezone.now(),
+            )
+        except IMAPClientAbortError:
+            raise
+        except IMAPClientError as e:
             logger.warning(
-                "IMAP APPEND draft to %s failed for %s",
+                "IMAP APPEND draft to %s failed for %s: %s",
                 scrub(drafts_folder.name),
                 scrub(account.email),
+                scrub(e),
             )
             return None
 
         if old_uid:
-            conn.uid("STORE", str(old_uid), "+FLAGS", "(\\Deleted)")
-            conn.expunge()
+            client.select_folder(drafts_folder.name)
+            _expunge(client, old_uid)
 
         logger.info(
             "Saved draft to %s for %s", scrub(drafts_folder.name), scrub(account.email)
         )
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
 
-    # Sync to pick up the new message locally
-    sync_folder_messages(account, drafts_folder)
-
-    from ..models import MailMessage
+        # Sync to pick up the new message locally
+        sync_folder_messages(account, drafts_folder)
 
     qs = MailMessage.objects.filter(folder=drafts_folder, deleted_at__isnull=True)
     if msg_id:
@@ -357,18 +300,9 @@ def save_draft(account, raw_message_bytes, old_uid=None):
 
 def delete_draft(account, message):
     """Delete a draft message from the IMAP server and locally."""
-    conn = connect_imap(account)
-    try:
-        conn.select(_quote_mailbox(message.folder.name), readonly=False)
-        conn.uid("STORE", str(message.imap_uid), "+FLAGS", "(\\Deleted)")
-        conn.expunge()
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+    with imap_session(account) as client:
+        client.select_folder(message.folder.name)
+        _expunge(client, message.imap_uid)
 
     message.deleted_at = dj_timezone.now()
     message.save(update_fields=["deleted_at", "updated_at"])

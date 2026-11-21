@@ -85,6 +85,7 @@ def mark_folder_read(folder):
     """
     from ..models import MailFolder, MailMessage
     from ..queries import folder_group_ids
+    from .imap_connection import shared_connections
     from .imap_messages import mark_uids_read
     from .label_counts import refresh_labels_for_messages
 
@@ -99,16 +100,17 @@ def mark_folder_read(folder):
         uids_by_folder[folder_id].append(uid)
 
     synced = True
-    for mailbox in MailFolder.objects.filter(uuid__in=uids_by_folder):
-        try:
-            mark_uids_read(folder.account, mailbox, uids_by_folder[mailbox.pk])
-        except Exception as e:
-            synced = False
-            logger.warning(
-                "IMAP mark-all-read failed for folder %s: %s",
-                scrub(mailbox.name),
-                scrub(e),
-            )
+    with shared_connections():
+        for mailbox in MailFolder.objects.filter(uuid__in=uids_by_folder):
+            try:
+                mark_uids_read(folder.account, mailbox, uids_by_folder[mailbox.pk])
+            except Exception as e:
+                synced = False
+                logger.warning(
+                    "IMAP mark-all-read failed for folder %s: %s",
+                    scrub(mailbox.name),
+                    scrub(e),
+                )
 
     # Only the rows the STORE flagged: matched by the folder and UID it was
     # sent, not by primary key. A message the sync imported during the IMAP

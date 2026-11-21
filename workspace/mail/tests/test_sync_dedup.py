@@ -2,7 +2,7 @@
 per-message existence queries (regression for the FETCH-loop N+1)."""
 
 import re
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -10,17 +10,11 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.services import imap_sync
+from workspace.mail.services.imap_sync import sync_folder_messages
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
-
-RAW_EMAIL = (
-    b"From: sender@example.com\r\n"
-    b"To: me@example.com\r\n"
-    b"Subject: hello\r\n"
-    b"Message-ID: <m%d@example.com>\r\n"
-    b"\r\n"
-    b"body\r\n"
-)
 
 
 class SyncDedupTests(TestCase):
@@ -41,20 +35,14 @@ class SyncDedupTests(TestCase):
         )
 
     def _run_sync(self, uids):
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
-        search_bytes = b" ".join(str(u).encode() for u in uids)
-        fetch_parts = [(f"1 (UID {u} FLAGS ())".encode(), RAW_EMAIL % u) for u in uids]
-        conn = MagicMock()
-        conn.select.return_value = ("OK", [b"1"])
-        conn.uid.side_effect = [
-            ("OK", [search_bytes]),
-            ("OK", fetch_parts),
-        ]
-        with (
-            patch("workspace.mail.services.imap_sync._reconcile_folder"),
-            patch("workspace.mail.services.imap_sync.connect_imap", return_value=conn),
-        ):
+        with fake_imap() as server:
+            for uid in uids:
+                server.deliver(
+                    "INBOX",
+                    uid=uid,
+                    subject="hello",
+                    message_id=f"<m{uid}@example.com>",
+                )
             sync_folder_messages(self.account, self.folder)
 
     def test_existing_uid_not_duplicated(self):
@@ -103,10 +91,22 @@ class SyncDedupTests(TestCase):
         batch snapshot and race to insert it; the loser hits the
         (folder, imap_uid) unique constraint. That collision is an
         expected skip, not a parse failure, so it must not reach the
-        error log. Simulated by repeating a UID inside one FETCH batch:
-        the snapshot predates both copies, the second insert collides."""
-        with self.assertNoLogs("workspace.mail.services.imap_sync", level="ERROR"):
-            self._run_sync([1, 2, 2])
+        error log. Simulated by inserting the row, as the other sync
+        would, between this one's snapshot and its own insert."""
+        parse = imap_sync._parse_message
+
+        def parse_after_the_other_sync(raw, account, folder, uid, flags, **kwargs):
+            if uid == 2:
+                MailMessage.objects.create(account=account, folder=folder, imap_uid=2)
+            return parse(raw, account, folder, uid, flags, **kwargs)
+
+        with (
+            patch.object(
+                imap_sync, "_parse_message", side_effect=parse_after_the_other_sync
+            ),
+            self.assertNoLogs("workspace.mail.services.imap_sync", level="ERROR"),
+        ):
+            self._run_sync([1, 2])
         self.assertEqual(
             MailMessage.objects.filter(folder=self.folder, imap_uid=2).count(), 1
         )

@@ -6,6 +6,7 @@ from rest_framework.test import APIClient
 
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
 
@@ -57,9 +58,7 @@ class BatchActionLargeSelectionTests(TestCase):
         self.assertFalse(unread.exists())
 
 
-class BatchActionSyncOutcomeTests(TestCase):
-    """A flag the server refused is still applied locally, and the answer says so."""
-
+class TwoMessageBatchMixin:
     def setUp(self):
         self.user = User.objects.create_user(username="syncuser", password="pass")
         self.account = MailAccount.objects.create(
@@ -91,6 +90,10 @@ class BatchActionSyncOutcomeTests(TestCase):
             format="json",
         )
 
+
+class BatchActionSyncOutcomeTests(TwoMessageBatchMixin, TestCase):
+    """A flag the server refused is still applied locally, and the answer says so."""
+
     @patch("workspace.mail.services.imap_messages.star_message")
     def test_reports_synced_when_the_server_took_every_flag(self, _star):
         resp = self._post("star")
@@ -107,6 +110,53 @@ class BatchActionSyncOutcomeTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["processed"], 2)
         self.assertIs(resp.data["synced"], False)
+        self.assertFalse(
+            MailMessage.objects.filter(folder=self.inbox, is_read=False).exists()
+        )
+
+
+class BatchActionOnTheServerTests(TwoMessageBatchMixin, TestCase):
+    """The batch endpoint, down to the mailbox the flags are written to."""
+
+    def setUp(self):
+        super().setUp()
+        self.server = self.enterContext(fake_imap())
+        for message in self.messages:
+            self.server.deliver("INBOX", uid=message.imap_uid)
+
+    def _server_flags(self):
+        return [self.server.flags("INBOX", m.imap_uid) for m in self.messages]
+
+    def test_the_flags_reach_the_mailbox_over_one_connection(self):
+        resp = self._post("mark_read")
+
+        self.assertIs(resp.data["synced"], True)
+        self.assertEqual(self._server_flags(), [{r"\Seen"}, {r"\Seen"}])
+        (connection,) = self.server.connections
+        self.assertTrue(connection.closed)
+
+    def test_a_store_answered_no_reports_unsynced(self):
+        """Issue #1740: the answer to the STORE was not read, so a flag the
+        server refused was reported as synced."""
+        self.server.fail("add_flags")
+
+        resp = self._post("star")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["processed"], 2)
+        self.assertIs(resp.data["synced"], False)
+        self.assertEqual(self._server_flags(), [set(), set()])
+        self.assertFalse(
+            MailMessage.objects.filter(folder=self.inbox, is_starred=False).exists()
+        )
+
+    def test_one_store_answered_no_reports_unsynced(self):
+        self.server.fail("add_flags", times=1)
+
+        resp = self._post("mark_read")
+
+        self.assertIs(resp.data["synced"], False)
+        self.assertEqual(sorted(map(len, self._server_flags())), [0, 1])
         self.assertFalse(
             MailMessage.objects.filter(folder=self.inbox, is_read=False).exists()
         )

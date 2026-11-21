@@ -19,11 +19,12 @@ from workspace.mail.models import (
     MailMessage,
     MailMessageLabel,
 )
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
 
 
-class MessageFlagsViewTests(TestCase):
+class MessageFlagsMixin:
     def setUp(self):
         self.user = User.objects.create_user(username="flagger", password="pass")
         self.account = MailAccount.objects.create(
@@ -53,6 +54,8 @@ class MessageFlagsViewTests(TestCase):
     def _url(self):
         return f"/api/v1/mail/messages/{self.message.uuid}"
 
+
+class MessageFlagsViewTests(MessageFlagsMixin, TestCase):
     def test_marking_read_syncs_imap_and_recomputes_counts(self):
         with patch("workspace.mail.services.imap_messages.mark_read") as mark:
             resp = self.client.patch(self._url(), {"is_read": True}, format="json")
@@ -154,3 +157,55 @@ class MessageFlagsViewTests(TestCase):
         self.message.refresh_from_db()
         self.assertEqual(self.message.ai_summary, "Pay before Friday.")
         mark.assert_not_called()
+
+
+class MessageFlagsOnTheServerTests(MessageFlagsMixin, TestCase):
+    """The flag endpoint, down to the mailbox the flag is written to."""
+
+    def setUp(self):
+        super().setUp()
+        self.server = self.enterContext(fake_imap())
+        self.server.deliver("INBOX", uid=self.message.imap_uid, flags=[r"\Flagged"])
+
+    def _server_flags(self):
+        return self.server.flags("INBOX", self.message.imap_uid)
+
+    def test_the_flags_reach_the_mailbox(self):
+        resp = self.client.patch(
+            self._url(), {"is_read": True, "is_starred": False}, format="json"
+        )
+
+        self.assertIs(resp.data["synced"], True)
+        self.assertEqual(self._server_flags(), {r"\Seen"})
+
+    def test_a_store_answered_no_reports_unsynced(self):
+        """Issue #1740: the answer to the STORE was not read, so a flag the
+        server refused was reported as synced."""
+        self.server.fail("add_flags")
+
+        resp = self.client.patch(self._url(), {"is_read": True}, format="json")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIs(resp.data["synced"], False)
+        self.assertIs(resp.data["is_read"], True)
+        self.assertEqual(self._server_flags(), {r"\Flagged"})
+        self.message.refresh_from_db()
+        self.assertTrue(self.message.is_read)
+
+    def test_one_store_of_two_answered_no_reports_unsynced(self):
+        self.server.fail("remove_flags")
+
+        resp = self.client.patch(
+            self._url(), {"is_read": True, "is_starred": False}, format="json"
+        )
+
+        self.assertIs(resp.data["synced"], False)
+        self.assertEqual(self._server_flags(), {r"\Seen", r"\Flagged"})
+        self.message.refresh_from_db()
+        self.assertTrue(self.message.is_read)
+        self.assertFalse(self.message.is_starred)
+
+    def test_ai_summary_alone_opens_no_connection(self):
+        self.client.patch(self._url(), {"ai_summary": "Pay."}, format="json")
+
+        self.assertEqual(self.server.connections, [])

@@ -1,4 +1,3 @@
-import time
 from unittest.mock import patch
 
 import httpx2
@@ -134,25 +133,6 @@ class GuardedTransportTests(SimpleTestCase):
             with self.assertRaisesRegex(httpx2.ConnectError, PUBLIC):
                 self._get("http://cloud.example.org/")
         self.assertEqual(net.dialed, [(PUBLIC_V6, 80), (PUBLIC, 80)])
-
-    def test_a_trickling_answer_is_cut_off_at_the_deadline(self):
-        # Each byte comes well within any per-read timeout; only a deadline
-        # on the whole request ends it.
-        transport = guarded_transport(deadline=time.monotonic() + 0.3)
-        started = time.monotonic()
-        with FakeNetwork({"cloud.example.org": [[PUBLIC]]}, trickle=0.05):
-            with httpx2.Client(transport=transport, timeout=5) as client:
-                with self.assertRaises(httpx2.TimeoutException):
-                    client.get("https://cloud.example.org/")
-        self.assertLess(time.monotonic() - started, 1)
-
-    def test_a_request_within_the_deadline_is_answered(self):
-        transport = guarded_transport(deadline=time.monotonic() + 30)
-        with FakeNetwork({"cloud.example.org": [[PUBLIC]]}):
-            with httpx2.Client(transport=transport) as client:
-                self.assertEqual(
-                    client.get("https://cloud.example.org/").status_code, 200
-                )
 
     def test_an_unresolvable_host_is_refused(self):
         with FakeNetwork({}) as net:

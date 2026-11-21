@@ -2,7 +2,6 @@
 watch which address it dials without touching the network."""
 
 import socket
-import time
 from unittest import mock
 
 import httpcore2
@@ -25,15 +24,13 @@ class FakeNetwork:
     Every connection is recorded: ``dialed`` holds ``(host, port)``,
     ``server_names`` the TLS server name, ``sent`` the bytes written. It
     answers ``response``, or raises ``ConnectError`` for an address in
-    ``unreachable``. With ``trickle`` set, it answers one byte per read, each
-    that many seconds after the last, as a slow-loris server would.
+    ``unreachable``.
     """
 
-    def __init__(self, answers, response=OK, unreachable=(), trickle=None):
+    def __init__(self, answers, response=OK, unreachable=()):
         self._answers = {host: list(lists) for host, lists in answers.items()}
         self.response = response
         self.unreachable = set(unreachable)
-        self.trickle = trickle
         self.lookups = []
         self.dialed = []
         self.server_names = []
@@ -83,17 +80,8 @@ class FakeNetwork:
 
 class _Stream(httpcore2.MockStream):
     def __init__(self, network):
-        response = network.response
-        if network.trickle is None:
-            super().__init__([response])
-        else:
-            super().__init__([response[i : i + 1] for i in range(len(response))])
+        super().__init__([network.response])
         self._network = network
-
-    def read(self, max_bytes, timeout=None):
-        if self._network.trickle is not None:
-            time.sleep(self._network.trickle)
-        return super().read(max_bytes, timeout)
 
     def write(self, buffer, timeout=None):
         self._network.sent += buffer

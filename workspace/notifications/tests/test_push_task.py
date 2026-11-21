@@ -1,8 +1,7 @@
-import threading
-import time
 import uuid
 from unittest.mock import MagicMock, patch
 
+from celery.exceptions import SoftTimeLimitExceeded
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -461,91 +460,127 @@ class PushServiceHeadersTests(TestCase):
         self.assertNotEqual(first, second)
 
 
-HANG_SECONDS = 5
-
-
 @override_settings(**FAKE_VAPID_SETTINGS)
-@patch("workspace.notifications.tasks.PUSH_DEADLINE_SECONDS", 0.5)
 @patch("workspace.notifications.tasks.is_active", return_value=False)
-class StalledPushServiceTests(TestCase):
-    """A push service that accepts the connection and never answers."""
+class OneTaskPerDeviceTests(TestCase):
+    """A push service that never answers holds up its own send, not the
+    others: each subscription is sent from a task of its own, ended by that
+    task's time limit."""
 
     def setUp(self):
         cache.clear()
         self.user = User.objects.create_user(username="stalluser", password="pass")
         self.conv = Conversation.objects.create(created_by=self.user)
-        self.stalled = PushSubscription.objects.create(
-            user=self.user,
-            endpoint="https://stalled.example.com/sub",
-            p256dh="p256dh-stalled",
-            auth="auth-stalled",
-        )
-        self.release = threading.Event()
-        self.addCleanup(self.release.set)
-        self.delivered_to = []
+        self.stalled = self._subscribe("https://stalled.example.com/sub")
 
     def tearDown(self):
         cache.clear()
 
-    def _webpush(self, subscription_info, **kwargs):
-        endpoint = subscription_info["endpoint"]
-        if endpoint == self.stalled.endpoint:
-            # Stands in for the read timeout that ends the send eventually.
-            self.release.wait(HANG_SECONDS)
-            raise TimeoutError("push service did not answer")
-        self.delivered_to.append(endpoint)
+    def _subscribe(self, endpoint):
+        return PushSubscription.objects.create(
+            user=self.user, endpoint=endpoint, p256dh="p256dh", auth="auth"
+        )
 
-    def _send(self):
+    def _notif(self):
+        return Notification.objects.create(
+            recipient=self.user, origin="chat", title="t", conversation=self.conv
+        )
+
+    def _webpush(self, delivered_to):
+        def webpush(subscription_info, **kwargs):
+            endpoint = subscription_info["endpoint"]
+            if endpoint == self.stalled.endpoint:
+                # What the worker raises when the send's soft limit fires.
+                raise SoftTimeLimitExceeded()
+            delivered_to.append(endpoint)
+
+        return webpush
+
+    def _queued_sends(self, notif):
+        """Run the task with the sends queued, not run: their arguments."""
+        from workspace.notifications.tasks import deliver_push, send_push_notification
+
+        with patch.object(deliver_push, "apply_async") as queued:
+            send_push_notification(str(notif.uuid))
+        return [(c.args[0], c.args[1]) for c in queued.call_args_list]
+
+    def test_each_subscription_is_sent_from_a_task_of_its_own(self, _):
+        other = self._subscribe("https://push.example.com/other")
+        sends = self._queued_sends(self._notif())
+        self.assertCountEqual(
+            [args[0] for args, _ in sends], [str(self.stalled.pk), str(other.pk)]
+        )
+
+    def test_a_send_is_bounded_by_its_own_time_limits(self, _):
+        from workspace.notifications.tasks import PUSH_TIMEOUT_SECONDS, deliver_push
+
+        self.assertLess(PUSH_TIMEOUT_SECONDS, deliver_push.soft_time_limit)
+        self.assertLess(deliver_push.soft_time_limit, deliver_push.time_limit)
+
+    def test_a_timed_out_send_is_logged_and_the_others_deliver(self, _):
         from workspace.notifications.tasks import send_push_notification
 
-        notif = Notification.objects.create(
-            recipient=self.user,
-            origin="chat",
-            icon="",
-            title="t",
-            conversation=self.conv,
-        )
-        started = time.monotonic()
-        with patch("pywebpush.webpush", side_effect=self._webpush):
-            send_push_notification(str(notif.uuid))
-        return time.monotonic() - started
+        others = [self._subscribe(f"https://push.example.com/{n}") for n in range(2)]
+        delivered_to = []
+        with (
+            patch("pywebpush.webpush", side_effect=self._webpush(delivered_to)),
+            self.assertLogs("workspace.notifications.tasks", "WARNING") as logs,
+        ):
+            send_push_notification(str(self._notif().uuid))
 
-    def test_other_devices_get_the_push_and_the_task_ends_on_time(self, _):
-        others = [
-            PushSubscription.objects.create(
-                user=self.user,
-                endpoint=f"https://push.example.com/stall/{n}",
-                p256dh=f"p256dh-{n}",
-                auth=f"auth-{n}",
-            )
-            for n in range(3)
-        ]
-        with self.assertLogs("workspace.notifications.tasks", "WARNING") as logs:
-            elapsed = self._send()
-
-        self.assertLess(elapsed, HANG_SECONDS)
-        self.assertCountEqual(self.delivered_to, [sub.endpoint for sub in others])
-        self.assertIn("stalled.example.com", "\n".join(logs.output))
+        self.assertCountEqual(delivered_to, [sub.endpoint for sub in others])
+        (message,) = logs.output
+        self.assertIn("stalled.example.com", message)
+        self.assertIn("timed out", message)
         # A partial delivery keeps the cooldown.
-        self.release.set()
-        self.delivered_to.clear()
-        self._send()
-        self.assertEqual(self.delivered_to, [])
+        with patch("pywebpush.webpush") as webpush:
+            send_push_notification(str(self._notif().uuid))
+        webpush.assert_not_called()
 
-    def test_a_stalled_only_device_releases_the_cooldown(self, _):
-        with self.assertLogs("workspace.notifications.tasks", "WARNING"):
-            elapsed = self._send()
-        self.assertLess(elapsed, HANG_SECONDS)
+    def test_a_run_whose_only_device_timed_out_releases_the_cooldown(self, _):
+        from workspace.notifications.tasks import send_push_notification
 
-        self.release.set()
-        working = PushSubscription.objects.create(
-            user=self.user,
-            endpoint="https://push.example.com/stall/ok",
-            p256dh="p256dh-ok",
-            auth="auth-ok",
-        )
-        self._send()
-        self.assertEqual(self.delivered_to, [working.endpoint])
+        with (
+            patch("pywebpush.webpush", side_effect=self._webpush([])),
+            self.assertLogs("workspace.notifications.tasks", "WARNING"),
+        ):
+            send_push_notification(str(self._notif().uuid))
+        with patch("pywebpush.webpush") as webpush:
+            send_push_notification(str(self._notif().uuid))
+        webpush.assert_called()
+
+    def test_the_cooldown_waits_for_the_last_send_of_the_run(self, _):
+        from pywebpush import WebPushException
+
+        from workspace.notifications.tasks import _source_cooldown_key, deliver_push
+
+        self._subscribe("https://push.example.com/second")
+        notif = self._notif()
+        first, second = self._queued_sends(notif)
+        key = _source_cooldown_key(notif)
+        failure = WebPushException("boom", response=MagicMock(status_code=500))
+
+        with (
+            patch("pywebpush.webpush", side_effect=failure),
+            self.assertLogs("workspace.notifications.tasks", "WARNING"),
+        ):
+            deliver_push(*first[0], **first[1])
+            self.assertIsNotNone(cache.get(key))
+            deliver_push(*second[0], **second[1])
+        self.assertIsNone(cache.get(key))
+
+    def test_a_send_finishing_after_its_run_expired_is_harmless(self, _):
+        from workspace.notifications.tasks import _source_cooldown_key, deliver_push
+
+        notif = self._notif()
+        ((args, kwargs),) = self._queued_sends(notif)
+        cache.delete(f"push:run:{kwargs['run_id']}:pending")
+        with (
+            patch("pywebpush.webpush", side_effect=self._webpush([])),
+            self.assertLogs("workspace.notifications.tasks", "WARNING"),
+        ):
+            deliver_push(*args, **kwargs)
+        self.assertIsNotNone(cache.get(_source_cooldown_key(notif)))
 
 
 @override_settings(**FAKE_VAPID_SETTINGS)

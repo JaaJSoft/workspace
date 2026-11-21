@@ -10,6 +10,14 @@ updates:
     schedule:
       interval: "daily"
     versioning-strategy: increase
+    groups:
+      # pydantic-evals pins the pydantic-ai-slim of the same release, and
+      # pydantic-graph is pinned by it in turn: none resolves without the others.
+      pydantic-ai:
+        patterns:
+          - "pydantic-ai-slim"
+          - "pydantic-evals"
+          - "pydantic-graph"
 
   - package-ecosystem: "github-actions"
     directory: "/" # Workflows under .github/workflows

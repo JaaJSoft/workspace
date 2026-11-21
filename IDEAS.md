@@ -9,7 +9,10 @@ This file is the forward-looking roadmap and idea backlog, sorted by priority. S
 **Working rhythm:** one structural project at a time (a cross-cutting foundation or a module overhaul), with quick wins on existing modules alongside. The AI thread runs through everything: each module ships its AI tools with it.
 
 **Reading the items:**
-- **Effort:** S is up to 3 days, M is 1-2 weeks, L is more than 2 weeks.
+- **Effort:** S, M or L measures scope and risk, not duration:
+  - **S:** a contained change in one module, with no new model and no design decision.
+  - **M:** a feature or a refactor within one module, with model or API changes, new UI and their tests.
+  - **L:** a new subsystem, a change across several modules, a data or format migration, or a design decision to settle first.
 - **Issues:** `#123` is the issue that tracks an item.
 - **Source:** the file was rewritten from a full audit of every module against v0.45.0 (November 2026).
 

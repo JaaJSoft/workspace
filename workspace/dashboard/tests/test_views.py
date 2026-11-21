@@ -7,6 +7,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
+from django.template.defaultfilters import filesizeformat
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
@@ -99,13 +100,17 @@ class UsagePopoverTests(TestCase):
         self.assertNotIn("notes", [row["slug"] for row in rows])
         self.assertNotIn('href="/notes"', page)
 
-    def test_only_the_files_row_carries_the_storage_gauge(self):
-        rows, page = self._render()
-
-        self.assertEqual(
-            [row["slug"] for row in rows if row["storage_gauge"]], ["files"]
-        )
+    @patch("workspace.dashboard.views.effective_quota", return_value=2048)
+    def test_storage_bar_shows_against_a_quota(self, _quota):
+        _, page = self._render()
         self.assertEqual(page.count('x-ref="storageBar"'), 1)
+        self.assertIn(f"/ {filesizeformat(2048)}", page)
+
+    @patch("workspace.dashboard.views.effective_quota", return_value=None)
+    def test_unlimited_storage_shows_usage_without_a_bar(self, _quota):
+        _, page = self._render()
+        self.assertNotIn('x-ref="storageBar"', page)
+        self.assertIn("used", page)
 
     @patch("workspace.core.services.activity.get_usage_stats")
     def test_mail_row_shows_the_unread_count(self, mock_stats):

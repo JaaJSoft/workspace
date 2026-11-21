@@ -124,3 +124,7 @@ msgstr "Aucune tâche ouverte ne vous est assignée."
 #: templates/dashboard/partials/upcoming_events.html
 msgid "No upcoming events today."
 msgstr "Aucun événement à venir aujourd’hui."
+
+#: templates/dashboard/partials/usage_widget.html
+msgid "Storage"
+msgstr "Stockage"

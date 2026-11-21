@@ -129,9 +129,9 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
 
         from workspace.ai.tool_registry import tool_registry
 
-        name = tool_call.name
+        name = tool_call.tool_name
         badge = tool_registry.get_badge(name)
-        raw_args = tool_call.arguments or ""
+        raw_args = tool_call.args_as_json_str()
         try:
             parsed = json.loads(raw_args) if raw_args else {}
         except json.JSONDecodeError, TypeError:
@@ -162,7 +162,7 @@ def notify_tool_step(recipient_ids, conversation_id, tool_call):
             recipient_ids,
             {
                 "conversation_id": str(conversation_id),
-                "call_id": tool_call.id,
+                "call_id": tool_call.tool_call_id,
                 "html": html,
             },
         )
@@ -189,7 +189,7 @@ def notify_tool_step_done(recipient_ids, conversation_id, tool_call):
             recipient_ids,
             {
                 "conversation_id": str(conversation_id),
-                "call_id": tool_call.id,
+                "call_id": tool_call.tool_call_id,
                 "done": True,
             },
         )

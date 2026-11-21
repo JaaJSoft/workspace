@@ -20,12 +20,13 @@ import uuid as uuid_mod
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from pydantic_ai import RunContext
 
 from workspace.ai.services.confirmation import (
     consume_bound_confirmation,
     request_bound_confirmation,
 )
-from workspace.ai.tool_registry import ToolError, ToolProvider, tool
+from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 from workspace.common.logging import scrub
 from workspace.mail.queries import reachable_message
 
@@ -267,13 +268,13 @@ class MailToolProvider(ToolProvider):
         badge_label="Read email",
         badge_running_label="Reading email",
         detail_key="uuid",
-        params=ReadEmailParams,
         concurrent=True,
     )
-    def read_email(self, args, user, bot, conversation_id, context):
+    def read_email(self, ctx: RunContext[ToolDeps], args: ReadEmailParams) -> str:
         """Read the full content of an email by its UUID: subject, sender, recipients, date, and body text. \
 Call this after finding an email via search_emails to get its complete content, \
 or when the user asks to read, open, or see the details of a specific email."""
+        user = ctx.deps.user
         from workspace.mail.models import MailMessage
         from workspace.mail.queries import canonical_folder, user_account_ids
 
@@ -321,14 +322,14 @@ or when the user asks to read, open, or see the details of a specific email."""
         badge_label="Searched emails",
         badge_running_label="Searching emails",
         detail_key="query",
-        params=SearchEmailsParams,
         concurrent=True,
     )
-    def search_emails(self, args, user, bot, conversation_id, context):
+    def search_emails(self, ctx: RunContext[ToolDeps], args: SearchEmailsParams) -> str:
         """Search through your emails by subject, content, or sender. \
 Returns up to 20 matches with subject, sender, date, and folder. \
 Call this when the user asks to find, look up, or locate an email. \
 Use read_email with the returned UUID to get the full content."""
+        user = ctx.deps.user
         query = args.query.strip()
         if not query:
             raise ToolError("query is required")
@@ -418,13 +419,13 @@ Use read_email with the returned UUID to get the full content."""
         badge_label="Drafted an email",
         badge_running_label="Drafting an email",
         detail_key="subject",
-        params=DraftEmailParams,
     )
-    def draft_email(self, args, user, bot, conversation_id, context):
+    def draft_email(self, ctx: RunContext[ToolDeps], args: DraftEmailParams) -> str:
         """Write an email and leave it in the user's Drafts folder for them to review and send. \
 Nothing is sent: the user opens the draft in the mail app, edits it if needed, and sends it themselves. \
 Prefer this over send_email whenever the user asks you to write, prepare or draft a message. \
 Use reply_to_email instead when answering an existing message, so the reply threads properly."""
+        user = ctx.deps.user
         account, error = _resolve_account(user, args.account)
         if error:
             return error
@@ -454,13 +455,15 @@ Use reply_to_email instead when answering an existing message, so the reply thre
         badge_icon="↩️",
         badge_label="Drafted a reply",
         badge_running_label="Drafting a reply",
-        params=ReplyToEmailParams,
     )
-    def reply_to_email(self, args, user, bot, conversation_id, context):
+    def reply_to_email(
+        self, ctx: RunContext[ToolDeps], args: ReplyToEmailParams
+    ) -> str:
         """Draft a reply to an email and leave it in the user's Drafts folder for them to send. \
 Recipients, subject, the quoted original and the threading headers are filled in from the \
 message being answered — you only write what to say. Nothing is sent. \
 Call read_email first when you need the content you are answering."""
+        user = ctx.deps.user
         from workspace.mail.services.compose import build_reply
 
         message = reachable_message(user, args.uuid)
@@ -494,15 +497,20 @@ Call read_email first when you need the content you are answering."""
         badge_label="Sent an email",
         badge_running_label="Sending an email",
         detail_key="subject",
-        params=SendEmailParams,
     )
-    def send_email(self, args, user, bot, conversation_id, context):
+    def send_email(self, ctx: RunContext[ToolDeps], args: SendEmailParams) -> str:
         """Send an email immediately, in two steps. Call it first with the message and no \
 confirmation_token: the user is shown exactly what would go out and asked to approve it. \
 Once they agree, call it again passing back the token you were given — the message that gets \
 sent is the one they saw, so the other arguments are ignored on that second call. \
 Only use this when the user explicitly asks to send; draft_email is the right tool otherwise, \
 and a sent email cannot be recalled."""
+        user, bot, conversation_id, context = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         profile = getattr(bot, "bot_profile", None)
         if not (profile and profile.can_send_email):
             return (
@@ -634,13 +642,15 @@ and a sent email cannot be recalled."""
         badge_icon="📁",
         badge_label="Listed folders",
         badge_running_label="Listing folders",
-        params=ListMailAccountScopedParams,
         concurrent=True,
     )
-    def list_folders(self, args, user, bot, conversation_id, context):
+    def list_folders(
+        self, ctx: RunContext[ToolDeps], args: ListMailAccountScopedParams
+    ) -> str:
         """List the folders of a mail account, with their unread counts. \
 Call this before move_email: folders belong to one account and their names vary \
 between providers, so a folder name you guessed is a call that fails."""
+        user = ctx.deps.user
         from workspace.mail.models import MailFolder
 
         account, error = _resolve_account(user, args.account)
@@ -673,13 +683,15 @@ between providers, so a folder name you guessed is a call that fails."""
         badge_icon="🏷️",
         badge_label="Listed labels",
         badge_running_label="Listing labels",
-        params=ListMailAccountScopedParams,
         concurrent=True,
     )
-    def list_labels(self, args, user, bot, conversation_id, context):
+    def list_labels(
+        self, ctx: RunContext[ToolDeps], args: ListMailAccountScopedParams
+    ) -> str:
         """List the labels defined on a mail account. \
 Call this before label_email: labels are per-account and user-defined, so only a name \
 returned here can be applied."""
+        user = ctx.deps.user
         from workspace.mail.models import MailLabel
 
         account, error = _resolve_account(user, args.account)
@@ -699,12 +711,12 @@ returned here can be applied."""
         badge_label="Flagged an email",
         badge_running_label="Flagging an email",
         detail_key="action",
-        params=MarkEmailParams,
     )
-    def mark_email(self, args, user, bot, conversation_id, context):
+    def mark_email(self, ctx: RunContext[ToolDeps], args: MarkEmailParams) -> str:
         """Mark an email as read, unread, starred or unstarred. \
 Use it to help the user work through a backlog: star what needs an answer, \
 mark read what they have decided to ignore."""
+        user = ctx.deps.user
         from workspace.mail.services.triage import set_flag
 
         message = reachable_message(user, args.uuid)
@@ -726,12 +738,12 @@ mark read what they have decided to ignore."""
         badge_label="Moved an email",
         badge_running_label="Moving an email",
         detail_key="folder",
-        params=MoveEmailParams,
     )
-    def move_email(self, args, user, bot, conversation_id, context):
+    def move_email(self, ctx: RunContext[ToolDeps], args: MoveEmailParams) -> str:
         """File an email into another folder of the same account. \
 Call list_folders first to learn which folders exist and how they are named. \
 To throw a message away, use delete_email instead."""
+        user = ctx.deps.user
         message = reachable_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
@@ -745,12 +757,12 @@ To throw a message away, use delete_email instead."""
         badge_icon="🗑️",
         badge_label="Trashed an email",
         badge_running_label="Trashing an email",
-        params=DeleteEmailParams,
     )
-    def delete_email(self, args, user, bot, conversation_id, context):
+    def delete_email(self, ctx: RunContext[ToolDeps], args: DeleteEmailParams) -> str:
         """Move an email to the trash. It leaves the inbox but stays recoverable, \
 so the user can undo it from their mail app. Use this rather than move_email when \
 the user wants a message gone."""
+        user = ctx.deps.user
         from workspace.mail.models import MailFolder
         from workspace.mail.queries import special_folder
 
@@ -787,12 +799,12 @@ the user wants a message gone."""
         badge_label="Labelled an email",
         badge_running_label="Labelling an email",
         detail_key="label",
-        params=LabelEmailParams,
     )
-    def label_email(self, args, user, bot, conversation_id, context):
+    def label_email(self, ctx: RunContext[ToolDeps], args: LabelEmailParams) -> str:
         """Attach a label to an email, or take one off. Labels live in this workspace only, \
 so this touches nothing on the mail server. Call list_labels first — only an existing \
 label can be applied."""
+        user = ctx.deps.user
         from workspace.mail.models import MailLabel
         from workspace.mail.services.triage import set_label
 

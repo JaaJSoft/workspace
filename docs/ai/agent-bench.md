@@ -1,20 +1,19 @@
 # Agent bench
 
-`scripts/agent_bench.py` runs a bot through fixed scenarios on a real model,
-once on each [agent runtime](README.md#agent-runtime), and checks the shape
-of each run: which tools were called, what the database holds afterwards, how
-the run stopped. Never the wording of the answer.
+`scripts/agent_bench.py` runs a bot through fixed scenarios on a real model
+and checks the shape of each run: which tools were called, what the database
+holds afterwards, how the run stopped. Never the wording of the answer.
 
 Unit tests say that the loop stops where it should. They cannot say that a bot
 still picks the right tool after the system prompt was rewritten, the model
-swapped, or the runtime under the loop replaced. Run the bench before and
-after such a change, and compare.
+swapped, or `pydantic-ai-slim` bumped. Run the bench before and after such a
+change, and compare.
 
 ```bash
 uv run python scripts/agent_bench.py --runs 3 --json before.json
 # ... change something ...
 uv run python scripts/agent_bench.py --runs 3 --compare before.json
-uv run python scripts/agent_bench.py --runtime pydantic_ai --scenario confirmation
+uv run python scripts/agent_bench.py --model gpt-5 --scenario confirmation
 ```
 
 It talks to the backend the application is configured for (`AI_API_KEY`,
@@ -27,8 +26,8 @@ and dropped after it: the development database is never touched.
 Each scenario creates a user, a bot and the few rows the question is about,
 posts one message, and runs what a chat reply runs short of posting the
 answer: the real history, the real system prompt, every registered tool,
-through `build_bot_runner`. Nothing is simulated, so a change to the prompt,
-to a tool's description or to the loop shows up in the result.
+through `run_bot`. Nothing is simulated, so a change to the prompt, to a
+tool's description or to the loop shows up in the result.
 
 | Scenario | The user says | What is checked |
 |---|---|---|
@@ -46,13 +45,19 @@ to answer.
 
 One line per run: the checks passed, how the run stopped, the model calls it
 made, its tokens (prompt + completion), the seconds it took and the tools it
-called, in order. A missed check is named under its run. The totals add
-every run of a runtime up.
+called, in order. A missed check is named under its run. The total adds
+every run up.
 
 A model does not answer twice the same way, so one miss proves little.
 `--runs 3` runs each scenario three times, and `--compare` then sets the
-checks passed per scenario and runtime beside those of the earlier file:
-three out of three on one side and one on the other is a finding.
+checks passed per scenario beside those of the earlier file: three out of
+three on one side and one on the other is a finding.
+
+That is how the bench earned its place. While the bots were being moved to
+Pydantic AI, `two_reads` went from six checks out of six to two: the library
+sent each reply's reasoning back to the model, and `gpt-oss` then wrote its
+next tool call into its reasoning, where nothing runs it. No unit test could
+have seen it.
 
 ## Adding a scenario
 

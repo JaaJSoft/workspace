@@ -3907,7 +3907,7 @@ requires-dist = [
     { name = "pi-heif-decoder", specifier = ">=1.7.0.post4" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.8" },
-    { name = "pydantic-ai-slim", specifier = "==2.71.0" },
+    { name = "pydantic-ai-slim", specifier = ">=2.71.0" },
     { name = "pygments", specifier = ">=2.21.0" },
     { name = "python-dateutil", specifier = ">=2.9" },
     { name = "python-dotenv", specifier = ">=1.2.4" },

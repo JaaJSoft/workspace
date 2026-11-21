@@ -1,6 +1,5 @@
 """What a vision model is shown of a video attachment, read by the real ffmpeg."""
 
-import base64
 import io
 import shutil
 import subprocess
@@ -12,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase
 from PIL import Image
+from pydantic_ai.messages import BinaryContent
 
 from workspace.ai.services.video import extract_video_frames
 from workspace.files.services import tree
@@ -53,10 +53,9 @@ def _long_clip(seconds):
 
 
 def _frame(part):
-    url = part["image_url"]["url"]
-    prefix = "data:image/jpeg;base64,"
-    assert url.startswith(prefix)
-    return Image.open(io.BytesIO(base64.b64decode(url[len(prefix) :])))
+    assert isinstance(part, BinaryContent)
+    assert part.media_type == "image/jpeg"
+    return Image.open(io.BytesIO(part.data))
 
 
 @requires_ffmpeg

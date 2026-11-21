@@ -5,14 +5,17 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
+from pydantic_ai.usage import RunUsage
 from rest_framework.test import APITestCase
 
-from workspace.ai.harness.model import ModelResponse
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.services.ai_task import failed_task_count
+from workspace.ai.services.bot_runs import BotRun, StopReason
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.ai.tasks.editor import editor_action
 from workspace.chat.models import Conversation, ConversationMember, Message
+
+from .agents import reply, scripted
 
 User = get_user_model()
 
@@ -47,13 +50,6 @@ class FailedTaskCountTests(TestCase):
 class RedeliveredTaskTests(TestCase):
     """A Celery redelivery runs the job again on a row that already moved on."""
 
-    SECOND_ANSWER = {
-        "content": "second answer",
-        "model": "m",
-        "prompt_tokens": 1,
-        "completion_tokens": 1,
-    }
-
     def setUp(self):
         self.user = User.objects.create_user(username="redelivered", password="pw")
 
@@ -72,12 +68,10 @@ class RedeliveredTaskTests(TestCase):
             AITask.Status.COMPLETED, result="first answer", completed_at=done_at
         )
 
-        with patch(
-            "workspace.ai.tasks.editor.call_llm", return_value=self.SECOND_ANSWER
-        ) as call_llm:
+        with scripted(reply("second answer")) as script:
             outcome = editor_action(str(task.uuid))
 
-        call_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertEqual(outcome["status"], "skipped")
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.COMPLETED)
@@ -87,12 +81,10 @@ class RedeliveredTaskTests(TestCase):
     def test_a_task_already_running_is_not_run_twice(self):
         task = self._task(AITask.Status.PROCESSING)
 
-        with patch(
-            "workspace.ai.tasks.editor.call_llm", return_value=self.SECOND_ANSWER
-        ) as call_llm:
+        with scripted(reply("second answer")) as script:
             editor_action(str(task.uuid))
 
-        call_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.PROCESSING)
 
@@ -133,13 +125,18 @@ class CancelledReplyTests(APITestCase):
     def test_a_reply_finished_after_the_cancel_is_not_posted(self, mock_push):
         self._cancel()
 
-        posted = post_bot_message(
-            self.conv,
-            self.bot,
-            ModelResponse(content="Too late", model="m"),
-            {},
-            self.ai_task,
+        answer = reply("Too late")
+        run = BotRun(
+            output="Too late",
+            response=answer,
+            messages=[answer],
+            new_messages=[answer],
+            context={},
+            stop=StopReason.ANSWERED,
+            usage=RunUsage(),
         )
+
+        posted = post_bot_message(self.conv, self.bot, run, self.ai_task)
 
         self.assertIsNone(posted)
         self.assertFalse(self._bot_messages().exists())

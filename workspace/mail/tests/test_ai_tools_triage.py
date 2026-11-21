@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.ai.tests.agents import tool_context
 from workspace.mail.ai_tools import (
     DeleteEmailParams,
     LabelEmailParams,
@@ -65,7 +66,7 @@ class MailTriageToolsTestCase(TestCase):
         cache.clear()
 
     def _call(self, tool, params):
-        return tool(params, user=self.user, bot=None, conversation_id=None, context={})
+        return tool(tool_context(user=self.user), params)
 
 
 class ListFoldersAndLabelsTests(MailTriageToolsTestCase):

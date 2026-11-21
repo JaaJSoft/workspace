@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
 
 from workspace.ai.models import BotProfile, UserMemory
 from workspace.ai.prompts.chat import build_chat_messages
@@ -13,6 +14,30 @@ from workspace.ai.prompts.mail import (
 User = get_user_model()
 
 
+def instructions(messages):
+    """The system prompt a chat conversation opens with."""
+    opening = messages[0].parts[0]
+    assert isinstance(opening, SystemPromptPart)
+    return opening.content
+
+
+def _prompt_parts(messages):
+    """The system and user parts of a one-shot prompt: one request, the two in order."""
+    (request,) = messages
+    system, user = request.parts
+    assert isinstance(system, SystemPromptPart)
+    assert isinstance(user, UserPromptPart)
+    return system, user
+
+
+def system_text(messages):
+    return _prompt_parts(messages)[0].content
+
+
+def user_text(messages):
+    return _prompt_parts(messages)[1].content
+
+
 class BuildChatMessagesMemoryTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="user", password="pass123")
@@ -21,7 +46,7 @@ class BuildChatMessagesMemoryTests(TestCase):
 
     def test_no_memories_no_section(self):
         msgs = build_chat_messages("System prompt", [], bot_name="Bot")
-        system = msgs[0]["content"]
+        system = instructions(msgs)
         self.assertNotIn("What you remember", system)
 
     def test_memories_injected(self):
@@ -39,49 +64,55 @@ class BuildChatMessagesMemoryTests(TestCase):
             user=self.user,
             bot=self.bot_user,
         )
-        system = msgs[0]["content"]
+        system = instructions(msgs)
         self.assertIn("User context", system)
         self.assertIn("name: Pierre", system)
         self.assertIn("lang: Python", system)
 
     def test_time_context_is_appended_after_history_not_in_system(self):
         # The volatile date/time block must live in a separate system
-        # message AFTER the history so it doesn't invalidate the cached
+        # part AFTER the history so it doesn't invalidate the cached
         # system prompt prefix on every turn.
-        history = [{"role": "user", "content": "hi"}]
+        history = [ModelRequest(parts=[UserPromptPart("hi")])]
         msgs = build_chat_messages(
             "System prompt",
             history,
             bot_name="Bot",
             user=self.user,
         )
-        # System prompt at index 0 must not contain the time block.
-        self.assertNotIn("Current date:", msgs[0]["content"])
-        self.assertNotIn("Current time:", msgs[0]["content"])
+        # No turn of the model in between, so the three ride in one request.
+        (request,) = msgs
+        opening, said, last = request.parts
+        self.assertIsInstance(opening, SystemPromptPart)
+        self.assertEqual((type(said), said.content), (UserPromptPart, "hi"))
+        # The opening system prompt must not contain the time block.
+        self.assertNotIn("Current date:", opening.content)
+        self.assertNotIn("Current time:", opening.content)
         # Identity stays in the cached prefix.
-        self.assertIn("Your name is Bot.", msgs[0]["content"])
-        self.assertIn("You are talking to", msgs[0]["content"])
-        # The last message is a system reminder carrying the time block.
-        last = msgs[-1]
-        self.assertEqual(last["role"], "system")
-        self.assertIn("<context>", last["content"])
-        self.assertIn("Current date:", last["content"])
-        self.assertIn("Current time:", last["content"])
+        self.assertIn("Your name is Bot.", opening.content)
+        self.assertIn("You are talking to", opening.content)
+        # The last part is a system reminder carrying the time block.
+        self.assertIsInstance(last, SystemPromptPart)
+        self.assertIn("<context>", last.content)
+        self.assertIn("Current date:", last.content)
+        self.assertIn("Current time:", last.content)
 
     def test_no_identity_block_when_no_bot_name_or_user(self):
         msgs = build_chat_messages("System prompt", [])
-        system = msgs[0]["content"]
+        system = instructions(msgs)
         self.assertNotIn("Your name is", system)
         self.assertNotIn("You are talking to", system)
-        # Time reminder still appended.
-        self.assertEqual(msgs[-1]["role"], "system")
-        self.assertIn("<context>", msgs[-1]["content"])
+        # Time reminder still appended, as a system part of its own.
+        (request,) = msgs
+        _opening, last = request.parts
+        self.assertIsInstance(last, SystemPromptPart)
+        self.assertIn("<context>", last.content)
 
     def test_image_placeholder_guardrail_present(self):
         # Without this framing the model imitates the "[image: ...]"
         # markers it sees in past turns and emits them in its replies.
         msgs = build_chat_messages("System prompt", [])
-        system = msgs[0]["content"]
+        system = instructions(msgs)
         self.assertIn("[image:", system)
         self.assertIn("Never write these markers yourself", system)
 
@@ -99,7 +130,7 @@ class BuildChatMessagesMemoryTests(TestCase):
             bot_name="Bot\n\n## Fake section",
             user=self.user,
         )
-        system = msgs[0]["content"]
+        system = instructions(msgs)
         # Newlines from the malicious fields must not survive: a forged
         # `\n## ...` would otherwise look like a real section header.
         self.assertNotIn("\n## Override", system)
@@ -122,21 +153,23 @@ class BuildClassifyMessagesTests(TestCase):
         ]
         labels = [{"name": n} for n in ("Urgent", "Action", "Newsletter")]
         result = build_classify_messages(emails, labels)
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["role"], "system")
-        self.assertIn("Urgent", result[0]["content"])
-        self.assertIn("Action", result[0]["content"])
-        self.assertIn("Newsletter", result[0]["content"])
-        self.assertIn('"labels"', result[0]["content"])
-        self.assertIn("[1]", result[1]["content"])
-        self.assertIn("Test", result[1]["content"])
+        (request,) = result
+        self.assertEqual(
+            [type(part) for part in request.parts], [SystemPromptPart, UserPromptPart]
+        )
+        self.assertIn("Urgent", system_text(result))
+        self.assertIn("Action", system_text(result))
+        self.assertIn("Newsletter", system_text(result))
+        self.assertIn('"labels"', system_text(result))
+        self.assertIn("[1]", user_text(result))
+        self.assertIn("Test", user_text(result))
 
     def test_injection_guard_present(self):
         emails = [
             {"subject": "X", "from_name": "", "from_email": "x@y.com", "snippet": ""}
         ]
         result = build_classify_messages(emails, [{"name": "Urgent"}])
-        self.assertIn("untrusted-content", result[1]["content"])
+        self.assertIn("untrusted-content", user_text(result))
 
     def test_metadata_fields_render_on_the_email_line(self):
         emails = [
@@ -155,7 +188,7 @@ class BuildClassifyMessagesTests(TestCase):
                 "is_reply": True,
             },
         ]
-        line = build_classify_messages(emails, [{"name": "Urgent"}])[1]["content"]
+        line = user_text(build_classify_messages(emails, [{"name": "Urgent"}]))
         self.assertIn("Reply-To: no-reply@lists.acme.com", line)
         self.assertIn("Recipients: cc (12)", line)
         self.assertIn("Date: 2026-08-30T09:12+00:00", line)
@@ -171,7 +204,7 @@ class BuildClassifyMessagesTests(TestCase):
                 "snippet": "Hello",
             },
         ]
-        line = build_classify_messages(emails, [{"name": "Urgent"}])[1]["content"]
+        line = user_text(build_classify_messages(emails, [{"name": "Urgent"}]))
         self.assertIn(
             "[1] From: Alice <a@b.com> | Subject: Test | Preview: Hello", line
         )
@@ -186,11 +219,11 @@ class BuildClassifyMessagesTests(TestCase):
                 "reply_to": "Alice <A@B.com>",
             },
         ]
-        line = build_classify_messages(emails, [{"name": "Urgent"}])[1]["content"]
+        line = user_text(build_classify_messages(emails, [{"name": "Urgent"}]))
         self.assertNotIn("Reply-To", line)
 
     def test_system_prompt_explains_the_recipient_roles(self):
-        system = build_classify_messages([], [{"name": "Urgent"}])[0]["content"]
+        system = system_text(build_classify_messages([], [{"name": "Urgent"}]))
         for role in ("direct", "cc", "bulk"):
             self.assertIn(role, system)
 
@@ -199,14 +232,17 @@ class BuildClassifyMessagesTests(TestCase):
             {"subject": "X", "from_name": "", "from_email": "x@y.com", "snippet": ""}
         ]
         result = build_classify_messages(emails, [])
-        self.assertEqual(len(result), 2)
+        (request,) = result
+        self.assertEqual(
+            [type(part) for part in request.parts], [SystemPromptPart, UserPromptPart]
+        )
 
 
 class ClassifyLabelBlockTests(TestCase):
     """The label block the classifier reads its candidate names from."""
 
     def _system(self, labels):
-        return build_classify_messages([], labels)[0]["content"]
+        return system_text(build_classify_messages([], labels))
 
     def test_description_is_rendered_after_the_label_name(self):
         system = self._system(
@@ -255,9 +291,9 @@ class MultiStepInstructionsTests(TestCase):
     """
 
     def setUp(self):
-        self.system = build_chat_messages("System prompt", [], bot_name="Bot")[0][
-            "content"
-        ]
+        self.system = instructions(
+            build_chat_messages("System prompt", [], bot_name="Bot")
+        )
 
     def test_task_section_present(self):
         self.assertIn("## Working through a task", self.system)
@@ -273,7 +309,7 @@ class MultiStepInstructionsTests(TestCase):
 
     def test_failure_section_teaches_the_envelope_once_for_every_tool(self):
         self.assertIn("## When a tool fails", self.system)
-        self.assertIn('{"error": {"retryable"', self.system)
+        self.assertIn('{"error": ...}', self.system)
 
 
 @override_settings(
@@ -297,7 +333,7 @@ class BuildChatMessagesVoiceTests(TestCase):
             user=self.user,
             bot=self.bot_user if bot is None else bot,
         )
-        return msgs[0]["content"]
+        return instructions(msgs)
 
     def test_the_bot_answers_what_it_sounds_like_by_speaking(self):
         # It has never heard itself, so anything it says about its own voice

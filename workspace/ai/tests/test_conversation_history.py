@@ -7,6 +7,15 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from pydantic_ai.messages import (
+    BinaryContent,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 
 from workspace.ai.models import AITask, BotProfile, ConversationSummary
 from workspace.ai.services.conversation_history import (
@@ -14,9 +23,57 @@ from workspace.ai.services.conversation_history import (
     build_conversation_history,
     unprompted_run_note,
 )
+from workspace.ai.tests.agents import tool_results
 from workspace.chat.models import Conversation, Message, MessageAttachment
 
 User = get_user_model()
+
+ROLES = {
+    SystemPromptPart: "system",
+    UserPromptPart: "user",
+    ToolReturnPart: "tool",
+    TextPart: "assistant",
+    ToolCallPart: "tool_call",
+}
+
+
+def turns(history):
+    """Every part of *history* as ``(role, content)``, in the order the model reads them.
+
+    One request holds everything sent between two turns of the model, so a
+    header, the message under it and a note about the turn before are
+    neighbours here, each under the role it is sent with. A tool call
+    stands as its tool's name.
+    """
+    return [
+        (
+            ROLES[type(part)],
+            part.tool_name if isinstance(part, ToolCallPart) else part.content,
+        )
+        for message in history
+        for part in message.parts
+    ]
+
+
+def written(content):
+    """The text of a content, its images left out."""
+    if isinstance(content, str):
+        return content
+    return "\n".join(item for item in content if isinstance(item, str))
+
+
+def text_sent(history, *roles):
+    """The text of every part sent under *roles* (all of them when none is named)."""
+    return "\n".join(
+        written(content)
+        for role, content in turns(history)
+        if not roles or role in roles
+    )
+
+
+def model_turns(history):
+    """The turns of the model itself: what it reads back as its own writing."""
+    return [message for message in history if isinstance(message, ModelResponse)]
 
 
 class HistoryToolLessRoundsTests(TestCase):
@@ -57,12 +114,13 @@ class HistoryToolLessRoundsTests(TestCase):
         history = build_conversation_history(
             self.conv.pk, self.bot_profile, self.user
         ).messages
-        # No assistant message with empty tool_calls, no thinking anywhere.
-        for entry in history:
-            self.assertNotEqual(entry.get("tool_calls"), [])
-            self.assertNotIn("secret", str(entry.get("content", "")))
+        # No empty turn of the model, no thinking anywhere.
+        for response in model_turns(history):
+            self.assertTrue(response.parts)
+            self.assertIsNone(response.thinking)
+        self.assertNotIn("secret", str(history))
         # The real tool round is still reconstructed.
-        tool_rounds = [e for e in history if e.get("tool_calls")]
+        tool_rounds = [r for r in model_turns(history) if r.tool_calls]
         self.assertEqual(len(tool_rounds), 1)
 
     def test_round_missing_tool_calls_key_does_not_crash(self):
@@ -75,7 +133,7 @@ class HistoryToolLessRoundsTests(TestCase):
         history = build_conversation_history(
             self.conv.pk, self.bot_profile, self.user
         ).messages
-        self.assertTrue(any(e.get("content") == "Hello!" for e in history))
+        self.assertIn(("assistant", "Hello!"), turns(history))
 
 
 PNG_BYTES = base64.b64decode(
@@ -98,11 +156,14 @@ def attach_image(message, name="pic.png", ai_description=""):
     return att
 
 
-def image_parts(entry):
-    content = entry.get("content")
+def image_parts(content):
     if not isinstance(content, list):
         return []
-    return [p for p in content if isinstance(p, dict) and p.get("type") == "image_url"]
+    return [item for item in content if isinstance(item, BinaryContent)]
+
+
+def turns_with_pixels(history):
+    return [(role, content) for role, content in turns(history) if image_parts(content)]
 
 
 class VisualWindowTests(TestCase):
@@ -139,11 +200,11 @@ class VisualWindowTests(TestCase):
         )
         attach_image(m2, "upload.png")
         history = self._history()
-        with_pixels = [e for e in history if image_parts(e)]
+        with_pixels = turns_with_pixels(history)
         self.assertEqual(len(with_pixels), 2)
         # Bot images must never ride in an assistant-role message.
-        for entry in with_pixels:
-            self.assertEqual(entry["role"], "user")
+        for role, _content in with_pixels:
+            self.assertEqual(role, "user")
 
     def test_third_visual_message_degrades_to_caption(self):
         old = Message.objects.create(
@@ -156,9 +217,8 @@ class VisualWindowTests(TestCase):
             )
             attach_image(m, f"new{i}.png")
         history = self._history()
-        flat = str(history)
-        self.assertIn("[image: old.png - A sunset over the sea.]", flat)
-        self.assertEqual(len([e for e in history if image_parts(e)]), 2)
+        self.assertIn("[image: old.png - A sunset over the sea.]", text_sent(history))
+        self.assertEqual(len(turns_with_pixels(history)), 2)
 
     @override_settings(AI_API_KEY="k")
     def test_missing_caption_falls_back_and_reenqueues(self):
@@ -175,7 +235,7 @@ class VisualWindowTests(TestCase):
             "workspace.ai.tasks.captions.generate_attachment_caption.delay"
         ) as mock_delay:
             history = self._history()
-        self.assertIn("[image: old.png]", str(history))
+        self.assertIn("[image: old.png]", text_sent(history))
         mock_delay.assert_called_once_with(str(att.uuid))
 
     @override_settings(AI_VISION_MAX_IMAGES=1, AI_API_KEY="k")
@@ -192,8 +252,8 @@ class VisualWindowTests(TestCase):
         # which must be mocked so the test never touches the Celery broker.
         with patch("workspace.ai.tasks.captions.generate_attachment_caption.delay"):
             history = self._history()
-        self.assertEqual(len([e for e in history if image_parts(e)]), 1)
-        self.assertIn("[image: first.png]", str(history))
+        self.assertEqual(len(turns_with_pixels(history)), 1)
+        self.assertIn("[image: first.png]", text_sent(history))
 
     def test_bot_caption_note_never_rides_in_assistant_turn(self):
         # Assistant turns are few-shot examples of the bot's own style: a
@@ -209,10 +269,8 @@ class VisualWindowTests(TestCase):
             )
             attach_image(m, f"new{i}.png")
         history = self._history()
-        for entry in history:
-            if entry["role"] == "assistant":
-                self.assertNotIn("[image:", str(entry.get("content", "")))
-        user_flat = str([e for e in history if e["role"] == "user"])
+        self.assertNotIn("[image:", str(model_turns(history)))
+        user_flat = text_sent(history, "user")
         self.assertIn("[image: generated.png - A blue circle.]", user_flat)
         self.assertIn("[Images sent by the assistant in the message above]", user_flat)
 
@@ -247,10 +305,8 @@ class VisualWindowTests(TestCase):
             )
             attach_image(m, f"new{i}.png")
         history = self._history()
-        for entry in history:
-            if entry["role"] == "assistant":
-                self.assertNotIn("[image:", str(entry.get("content", "")))
-        user_flat = str([e for e in history if e["role"] == "user"])
+        self.assertNotIn("[image:", str(model_turns(history)))
+        user_flat = text_sent(history, "user")
         self.assertIn("[image: generated.png - A blue circle.]", user_flat)
         self.assertIn("[Images sent by the assistant in the message above]", user_flat)
 
@@ -261,8 +317,8 @@ class VisualWindowTests(TestCase):
         att = attach_image(m, "pic.png", ai_description="A red square.")
         with patch.object(type(att.file), "read", side_effect=OSError("gone")):
             history = self._history()
-        self.assertEqual([e for e in history if image_parts(e)], [])
-        self.assertIn("[image: pic.png - A red square.]", str(history))
+        self.assertEqual(turns_with_pixels(history), [])
+        self.assertIn("[image: pic.png - A red square.]", text_sent(history))
 
     def test_non_vision_bot_unchanged(self):
         self.bot_profile.supports_vision = False
@@ -275,7 +331,7 @@ class VisualWindowTests(TestCase):
             "workspace.ai.tasks.captions.generate_attachment_caption.delay"
         ) as mock_delay:
             history = self._history()
-        self.assertEqual([e for e in history if image_parts(e)], [])
+        self.assertEqual(turns_with_pixels(history), [])
         self.assertNotIn("[image:", str(history))
         mock_delay.assert_not_called()
 
@@ -295,7 +351,7 @@ def tool_round(call_id, content, name="search_everything", query="alpha migratio
 
 
 def tool_contents(history):
-    return [e["content"] for e in history if e.get("role") == "tool"]
+    return [content for _call_id, content in tool_results(history)]
 
 
 @override_settings(
@@ -404,7 +460,7 @@ class VoiceMessageHistoryTests(TestCase):
 
         history = self._history()
 
-        self.assertIn('[Voice message you sent: "Bonjour Pierre."]', str(history))
+        self.assertIn('[Voice message you sent: "Bonjour Pierre."]', text_sent(history))
 
     def test_bot_voice_note_never_rides_in_the_assistant_turn(self):
         # An assistant turn holding a bracketed marker teaches the model to
@@ -416,8 +472,7 @@ class VoiceMessageHistoryTests(TestCase):
 
         history = self._history()
 
-        assistant = [e for e in history if e.get("role") == "assistant"]
-        self.assertNotIn("Voice message", str(assistant))
+        self.assertNotIn("Voice message", str(model_turns(history)))
 
     def test_a_tool_round_turn_still_gets_its_voice_note(self):
         m = Message.objects.create(
@@ -429,7 +484,7 @@ class VoiceMessageHistoryTests(TestCase):
         attach_voice(m, text="Bonjour Pierre.")
 
         self.assertIn(
-            '[Voice message you sent: "Bonjour Pierre."]', str(self._history())
+            '[Voice message you sent: "Bonjour Pierre."]', text_sent(self._history())
         )
 
     def test_user_voice_message_is_announced_as_unlistenable(self):
@@ -438,10 +493,15 @@ class VoiceMessageHistoryTests(TestCase):
 
         history = self._history()
 
-        note = [e for e in history if "voice message" in str(e.get("content", ""))]
+        note = [
+            (role, content)
+            for role, content in turns(history)
+            if "voice message" in written(content)
+        ]
         self.assertEqual(len(note), 1)
-        self.assertEqual(note[0]["role"], "user")
-        self.assertIn("cannot listen", note[0]["content"])
+        role, content = note[0]
+        self.assertEqual(role, "user")
+        self.assertIn("cannot listen", content)
 
     @override_settings(
         AI_ASR_MODEL="test-listen-model",
@@ -454,15 +514,16 @@ class VoiceMessageHistoryTests(TestCase):
         attach_voice(m)
 
         note = [
-            e
-            for e in self._history()
-            if "Voice message from the user" in str(e.get("content", ""))
+            (role, content)
+            for role, content in turns(self._history())
+            if "Voice message from the user" in written(content)
         ]
 
         self.assertEqual(len(note), 1)
-        self.assertEqual(note[0]["role"], "user")
-        self.assertIn("Tu peux me rappeler demain ?", note[0]["content"])
-        self.assertNotIn("cannot listen", note[0]["content"])
+        role, content = note[0]
+        self.assertEqual(role, "user")
+        self.assertIn("Tu peux me rappeler demain ?", content)
+        self.assertNotIn("cannot listen", content)
 
     @override_settings(
         AI_ASR_MODEL="test-listen-model",
@@ -495,12 +556,12 @@ class VoiceMessageHistoryTests(TestCase):
         att = attach_voice(m)
 
         note = [
-            e
-            for e in self._history()
-            if "voice message" in str(e.get("content", "")).lower()
+            content
+            for _role, content in turns(self._history())
+            if "voice message" in written(content).lower()
         ]
 
-        self.assertIn("cannot listen", note[0]["content"])
+        self.assertIn("cannot listen", note[0])
         att.refresh_from_db()
         self.assertEqual(att.ai_description, "")
 
@@ -524,7 +585,7 @@ class VoiceMessageHistoryTests(TestCase):
         attach_voice(m, text="Bonjour Pierre.")
 
         self.assertIn(
-            '[Voice message you sent: "Bonjour Pierre."]', str(self._history())
+            '[Voice message you sent: "Bonjour Pierre."]', text_sent(self._history())
         )
 
 
@@ -574,7 +635,7 @@ class HistoryHeaderTests(TestCase):
         history = build_conversation_history(
             self.conv.pk, self.bot_profile, self.user
         ).messages
-        return [e["content"] for e in history if e["role"] == "system"]
+        return [content for role, content in turns(history) if role == "system"]
 
     def test_user_message_header_names_the_user(self):
         self._post(self.user, "hi", self.t0)

@@ -17,12 +17,12 @@ import os
 
 from playwright.sync_api import expect
 
-from workspace.ai.harness.model import ToolCall
 from workspace.ai.services.stream_steps import (
     notify_tool_step,
     notify_tool_step_done,
     read_steps,
 )
+from workspace.ai.tests.agents import call
 from workspace.chat.models import Conversation, ConversationMember
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 
@@ -30,7 +30,7 @@ SHOTS = os.environ.get("SHOTS")
 
 
 def _tool_call(call_id, name, arguments="{}"):
-    return ToolCall(id=call_id, name=name, arguments=arguments)
+    return call(name, arguments, call_id)
 
 
 class BotStepRowTests(PlaywrightTestCase):

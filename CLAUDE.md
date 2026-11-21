@@ -24,10 +24,10 @@ uv run python scripts/face_bench.py --compare before.json
 uv run python scripts/embedding_bench.py --json before.json
 uv run python scripts/embedding_bench.py --compare before.json
 
-# Agent bench - a bot through fixed scenarios on a real model, on each agent
-# runtime (AI_AGENT_RUNTIME), before and after any change to the chat system
-# prompt, a tool's description, workspace/ai/harness/ or the pydantic-ai-slim
-# pin (needs AI_API_KEY and spends tokens; see docs/ai/agent-bench.md)
+# Agent bench - a bot through fixed scenarios on a real model, before and
+# after any change to the chat system prompt, a tool's description,
+# workspace/ai/services/bot_runs.py or llm.py, or a bump of pydantic-ai-slim
+# (needs AI_API_KEY and spends tokens; see docs/ai/agent-bench.md)
 uv run python scripts/agent_bench.py --runs 3 --json before.json
 uv run python scripts/agent_bench.py --runs 3 --compare before.json
 

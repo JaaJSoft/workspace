@@ -1,6 +1,5 @@
 """Core AI chat tools (memory, workspace search, avatar, image generation)."""
 
-import base64
 import json
 import logging
 import threading
@@ -11,6 +10,8 @@ from typing import Literal
 from django.conf import settings
 from django.utils import timezone
 from pydantic import BaseModel, Field, field_validator
+from pydantic_ai import RunContext
+from pydantic_ai.messages import BinaryContent, ToolReturn
 
 from workspace.common.datetimes import parse_local_datetime
 from workspace.common.limits import clamp_limit
@@ -18,8 +19,7 @@ from workspace.common.logging import scrub
 
 from .models import UserMemory
 from .services.agent_goals import close_goal, update_open_goal
-from .services.call_order import call_position
-from .tool_registry import ToolError, ToolProvider, tool
+from .tool_registry import ToolDeps, ToolError, ToolProvider, tool
 
 logger = logging.getLogger(__name__)
 
@@ -352,13 +352,9 @@ def _image_tool_payload(image_data, text):
 
     detection = detect_from_bytes(image_data)
     mime = detection.mime_type if detection.group == "image" else "image/png"
-    return json.dumps(
-        {
-            "type": "image",
-            "mime_type": mime,
-            "data": base64.b64encode(image_data).decode(),
-            "text": text,
-        }
+    return ToolReturn(
+        return_value=text,
+        content=[BinaryContent(data=image_data, media_type=mime)],
     )
 
 
@@ -417,9 +413,10 @@ class CoreToolProvider(ToolProvider):
         badge_running_label="Looking up profile",
         concurrent=True,
     )
-    def get_current_user_info(self, args, user, bot, conversation_id, context):
+    def get_current_user_info(self, ctx: RunContext[ToolDeps]) -> str:
         """Get the profile of the user you are chatting with: username, full name, email, and join date. \
 Call this when you need to address the user by name, check their email, or answer questions about their account."""
+        user = ctx.deps.user
         if not user:
             raise ToolError("no user context")
         from workspace.users.services.settings import get_user_timezone
@@ -439,12 +436,12 @@ Call this when you need to address the user by name, check their email, or answe
         badge_label="Retained",
         badge_running_label="Retaining",
         detail_key="key",
-        params=SaveMemoryParams,
     )
-    def save_memory(self, args, user, bot, conversation_id, context):
+    def save_memory(self, ctx: RunContext[ToolDeps], args: SaveMemoryParams) -> str:
         """Persistently save a fact about the user so you can recall it in future conversations. \
 Call this proactively when the user tells you their name, preferences, projects, or any personal detail worth remembering. \
 If the key already exists it will be updated."""
+        user, bot = ctx.deps.user, ctx.deps.bot
         key = args.key.strip()[:100]
         content = args.content.strip()
         if not key or not content:
@@ -468,11 +465,11 @@ If the key already exists it will be updated."""
         badge_label="Forgot",
         badge_running_label="Forgetting",
         detail_key="key",
-        params=DeleteMemoryParams,
     )
-    def delete_memory(self, args, user, bot, conversation_id, context):
+    def delete_memory(self, ctx: RunContext[ToolDeps], args: DeleteMemoryParams) -> str:
         """Delete a previously saved memory. \
 Call this when the user explicitly asks you to forget something or when a stored fact is no longer correct."""
+        user, bot = ctx.deps.user, ctx.deps.bot
         key = args.key.strip()
         deleted, _ = UserMemory.objects.filter(user=user, bot=bot, key=key).delete()
         if deleted:
@@ -491,9 +488,10 @@ Call this when the user explicitly asks you to forget something or when a stored
         badge_running_label="Viewing own avatar",
         concurrent=True,
     )
-    def get_my_avatar(self, args, user, bot, conversation_id, context):
+    def get_my_avatar(self, ctx: RunContext[ToolDeps]) -> str | ToolReturn:
         """Retrieve your own avatar image so you can see or describe it. \
 Call this when the user asks what you look like, wants to see your avatar, or mentions your appearance."""
+        bot = ctx.deps.bot
         if not bot:
             raise ToolError("no bot context")
         from django.core.files.storage import default_storage
@@ -505,14 +503,8 @@ Call this when the user asks what you look like, wants to see your avatar, or me
         try:
             path = get_avatar_path(bot.id)
             with default_storage.open(path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode()
-            return json.dumps(
-                {
-                    "type": "image",
-                    "mime_type": "image/webp",
-                    "data": b64,
-                }
-            )
+                avatar = BinaryContent(data=f.read(), media_type="image/webp")
+            return ToolReturn(return_value="Here is your avatar:", content=[avatar])
         except Exception:
             logger.warning("Could not read avatar for bot %s", bot.id)
             raise ToolError("could not read avatar file.") from None
@@ -526,10 +518,11 @@ class SearchToolProvider(ToolProvider):
         badge_label="Searched the workspace",
         badge_running_label="Searching the workspace",
         detail_key="query",
-        params=SearchEverythingParams,
         concurrent=True,
     )
-    def search_everything(self, args, user, bot, conversation_id, context):
+    def search_everything(
+        self, ctx: RunContext[ToolDeps], args: SearchEverythingParams
+    ) -> str:
         """Search the whole workspace at once — files, notes, emails, contacts, \
 conversations, messages, events, polls, projects and tasks — and return where each match lives. \
 Call this when you don't know which module holds the answer ("what do we have on the Alpha migration", \
@@ -538,6 +531,7 @@ so you can then chain into the matching reader (read_file, read_email, read_even
 Returns at most 3 hits per source by default (5 max), so prefer the per-module search tools \
 (search_filenames, search_emails, search_events, search_messages) once you know where to look - \
 they alone support filters like unread-only, attachments or date ranges."""
+        user = ctx.deps.user
         from workspace.core.services.search import MIN_QUERY_LENGTH, search_modules
 
         query = args.query.strip()
@@ -599,10 +593,9 @@ class WebToolProvider(ToolProvider):
         badge_label="Searched the web",
         badge_running_label="Searching the web",
         detail_key="queries",
-        params=WebSearchParams,
         concurrent=True,
     )
-    def web_search(self, args, user, bot, conversation_id, context):
+    def web_search(self, ctx: RunContext[ToolDeps], args: WebSearchParams) -> str:
         """Search the web for current information. \
 Call this when the user asks about recent events, news, facts you're unsure about, \
 or anything that requires up-to-date information you don't have. \
@@ -638,10 +631,9 @@ read_webpage rather than answering from the snippets."""
         badge_label="Read webpage",
         badge_running_label="Reading webpage",
         detail_key="url",
-        params=ReadWebpageParams,
         concurrent=True,
     )
-    def read_webpage(self, args, user, bot, conversation_id, context):
+    def read_webpage(self, ctx: RunContext[ToolDeps], args: ReadWebpageParams) -> str:
         """Fetch a webpage and return its main content as markdown, links included. \
 Call this on any URL the user shares or that web_search returned, and call it again \
 on the links inside the result to reach details the first page only refers to. \
@@ -688,10 +680,9 @@ class WeatherToolProvider(ToolProvider):
         badge_label="Checked the weather",
         badge_running_label="Checking the weather",
         detail_key="location",
-        params=GetWeatherParams,
         concurrent=True,
     )
-    def get_weather(self, args, user, bot, conversation_id, context):
+    def get_weather(self, ctx: RunContext[ToolDeps], args: GetWeatherParams) -> str:
         """Get the current weather for a place given its name. \
 Call this when the user asks about the weather, temperature, or conditions somewhere \
 (e.g. "what's the weather in Paris?", "is it raining in Tokyo?"). \
@@ -717,17 +708,23 @@ class ImageToolProvider(ToolProvider):
         badge_label="Generated image",
         badge_running_label="Generating image",
         detail_key="prompt",
-        params=GenerateImageParams,
         # The exception to "nothing that bills runs in parallel": four images
         # asked for in one breath are the longest wait in the product, and
         # each call is independent of its siblings. What it costs is that a
         # round already in flight can overshoot the failure budget.
         concurrent=True,
     )
-    def generate_image(self, args, user, bot, conversation_id, context):
+    def generate_image(
+        self, ctx: RunContext[ToolDeps], args: GenerateImageParams
+    ) -> str | ToolReturn:
         """Generate a brand-new image from a text description. \
 Call this when the user asks you to create, draw, generate, make an image from scratch, send a picture or a photo of itself, or any other image-related request. \
 Do NOT use this to modify an existing image — use edit_image instead."""
+        bot, conversation_id, context = (
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .services.image import (
             ImageGenerationError,
             ai_generate_image,
@@ -753,7 +750,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
-                "position": call_position(),
+                "call_id": ctx.tool_call_id,
             }
         )
 
@@ -767,17 +764,23 @@ Do NOT use this to modify an existing image — use edit_image instead."""
         badge_label="Edited image",
         badge_running_label="Editing image",
         detail_key="prompt",
-        params=EditImageParams,
         # Stays sequential where generate_image does not: it edits the last
         # image of the turn, so running it beside the call that produces that
         # image would pick a source by race.
     )
-    def edit_image(self, args, user, bot, conversation_id, context):
+    def edit_image(
+        self, ctx: RunContext[ToolDeps], args: EditImageParams
+    ) -> str | ToolReturn:
         """Edit an existing image from the conversation based on a text instruction. \
 Automatically uses the most recent image in the conversation as the source. \
 Call this when the user asks you to modify, change, update, transform, or edit a picture — \
 for example "make it darker", "remove the background", "add a hat". \
 Do NOT use this to create an image from scratch — use generate_image instead."""
+        bot, conversation_id, context = (
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .services.image import (
             ImageGenerationError,
             ai_edit_image,
@@ -833,7 +836,7 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
-                "position": call_position(),
+                "call_id": ctx.tool_call_id,
             }
         )
 
@@ -851,14 +854,20 @@ class VoiceToolProvider(ToolProvider):
         badge_label="Recorded a voice message",
         badge_running_label="Recording a voice message",
         detail_key="text",
-        params=SendVoiceMessageParams,
     )
-    def send_voice_message(self, args, user, bot, conversation_id, context):
+    def send_voice_message(
+        self, ctx: RunContext[ToolDeps], args: SendVoiceMessageParams
+    ) -> str:
         """Say something out loud in your own voice, as a voice message in the conversation. \
 Call this when the user asks you to speak, to send a voice message or a vocal, to read something aloud, \
 to sing, or to say how something is pronounced. \
 The audio is attached to the reply you are writing: say the whole thing here, then keep the written \
 part of that reply to a short line or nothing at all — never repeat out loud what you also typed."""
+        bot, conversation_id, context = (
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .services.speech import (
             SpeechSynthesisError,
             ai_synthesize_speech,
@@ -909,7 +918,7 @@ part of that reply to a short line or nothing at all — never repeat out loud w
             {
                 "data": audio,
                 "text": text,
-                "position": call_position(),
+                "call_id": ctx.tool_call_id,
             }
         )
         return f"Voice message recorded and attached to your reply: {text}"
@@ -941,15 +950,21 @@ class AgentGoalToolProvider(ToolProvider):
         badge_label="Created goal",
         badge_running_label="Creating goal",
         detail_key="title",
-        params=CreateAgentGoalParams,
     )
-    def create_agent_goal(self, args, user, bot, conversation_id, context):
+    def create_agent_goal(
+        self, ctx: RunContext[ToolDeps], args: CreateAgentGoalParams
+    ) -> str:
         """Create a long-term autonomous goal that you will pursue across days, weeks or months. \
 Call this when the user gives you a lasting mission: track something over time, coach them toward \
 an objective, research a topic in depth, follow up until something is done. You will wake up at \
 each check-in without user interaction, work on the goal with your tools, and decide yourself \
 when to check in next and whether to message the user. \
 IMPORTANT: Always call list_agent_goals first — update the existing goal instead of creating a duplicate."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.users.services.settings import get_user_timezone
 
         from .models import AgentGoal
@@ -1047,13 +1062,18 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
         badge_running_label="Listing goals",
         concurrent=True,
     )
-    def list_agent_goals(self, args, user, bot, conversation_id, context):
+    def list_agent_goals(self, ctx: RunContext[ToolDeps]) -> str:
         """List your long-term goals in this conversation: the active and paused ones with \
 their private notes, next check-in and deadline, plus the ones closed in the last 30 days with \
 their closing date and outcome. Call this before creating a goal (to avoid duplicates or \
 re-opening something already finished) and whenever the user asks what you are working on \
 autonomously. In a group, goals another member set are listed too, but only their creator can \
 update or close them."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 
@@ -1112,13 +1132,20 @@ update or close them."""
         badge_label="Updated goal",
         badge_running_label="Updating goal",
         detail_key="notes",
-        params=UpdateAgentGoalParams,
     )
-    def update_agent_goal(self, args, user, bot, conversation_id, context):
+    def update_agent_goal(
+        self, ctx: RunContext[ToolDeps], args: UpdateAgentGoalParams
+    ) -> str:
         """Update one of your long-term goals: rewrite your private working notes, set your \
 next check-in time, change the deadline, record what the user asks of the mission (definition \
 of done, constraints, when to report), or pause/resume it. During an autonomous check-in, \
 ALWAYS call this to save your updated notes and choose your next check-in time."""
+        user, bot, conversation_id, context = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from workspace.users.services.settings import get_user_timezone
 
         from .models import AgentGoal
@@ -1206,11 +1233,18 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
         badge_label="Closed goal",
         badge_running_label="Closing goal",
         detail_key="outcome",
-        params=CompleteAgentGoalParams,
     )
-    def complete_agent_goal(self, args, user, bot, conversation_id, context):
+    def complete_agent_goal(
+        self, ctx: RunContext[ToolDeps], args: CompleteAgentGoalParams
+    ) -> str:
         """Close a long-term goal, either achieved or abandoned, with a final outcome summary. \
 Call this when the goal is reached, has become irrelevant, or the user asks you to stop pursuing it."""
+        user, bot, conversation_id, context = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .models import AgentGoal
 
         goal = self._open_goal(args.goal_id, conversation_id, bot, user)
@@ -1241,14 +1275,16 @@ Call this when the goal is reached, has become irrelevant, or the user asks you 
         badge_label="Messaged the user",
         badge_running_label="Messaging the user",
         detail_key="message",
-        params=SendUserMessageParams,
     )
-    def send_user_message(self, args, user, bot, conversation_id, context):
+    def send_user_message(
+        self, ctx: RunContext[ToolDeps], args: SendUserMessageParams
+    ) -> str:
         """Deliver a message to the user at the end of an autonomous goal check-in. \
 During a check-in your plain replies are DISCARDED — this tool is the only way to reach the user. \
 Call it only when you have something genuinely worth telling them (a result, an important change, \
 a deadline at risk), never for routine progress reports. \
 Outside a check-in, do not use this tool: you are already talking to the user, just write your reply."""
+        context = ctx.deps.context
         if not context.get("agent_checkin"):
             raise ToolError(
                 "you are chatting with the user right now — "
@@ -1272,13 +1308,19 @@ class ScheduleToolProvider(ToolProvider):
         badge_label="Scheduled message",
         badge_running_label="Scheduling message",
         detail_key="prompt",
-        params=ScheduleMessageParams,
     )
-    def schedule_message(self, args, user, bot, conversation_id, context):
+    def schedule_message(
+        self, ctx: RunContext[ToolDeps], args: ScheduleMessageParams
+    ) -> str:
         """Schedule a message to be sent later, either once at a specific time or on a recurring basis. \
 Call this when the user asks you to send a message later, set a reminder, or create a recurring message. \
 IMPORTANT: Before creating a new schedule, always call list_schedules first to check for existing \
 schedules with a similar prompt — update or cancel the old one instead of creating duplicates."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         import calendar
         from datetime import time, timedelta
 
@@ -1442,11 +1484,17 @@ schedules with a similar prompt — update or cancel the old one instead of crea
         badge_label="Cancelled schedule",
         badge_running_label="Cancelling schedule",
         detail_key="schedule_id",
-        params=CancelScheduleParams,
     )
-    def cancel_schedule(self, args, user, bot, conversation_id, context):
+    def cancel_schedule(
+        self, ctx: RunContext[ToolDeps], args: CancelScheduleParams
+    ) -> str:
         """Cancel an active scheduled message by its ID. \
 Call this when the user wants to stop or remove a previously scheduled message."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.chat.services.bot_tasks import can_manage_bot_task
 
         from .models import ScheduledMessage
@@ -1471,10 +1519,15 @@ Call this when the user wants to stop or remove a previously scheduled message."
         badge_running_label="Listing schedules",
         concurrent=True,
     )
-    def list_schedules(self, args, user, bot, conversation_id, context):
+    def list_schedules(self, ctx: RunContext[ToolDeps]) -> str:
         """List all active scheduled messages in this conversation. \
 Call this when the user wants to see what messages are scheduled or pending. \
 In a group, schedules another member set are listed too, but only their creator can cancel them."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 

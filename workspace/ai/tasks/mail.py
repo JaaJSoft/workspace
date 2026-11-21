@@ -9,15 +9,15 @@ from django.conf import settings
 from django.db import transaction
 from django.utils.translation import gettext, ngettext
 from pydantic import BaseModel
+from pydantic_ai import NativeOutput, capture_run_messages
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
-from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
-from workspace.ai.services.llm import (
-    call_llm,
-    call_llm_structured,
-    reply_was_truncated,
-    sanitize_messages_for_storage,
-    serialize_response,
+from workspace.ai.services.ai_task import (
+    TaskNotPending,
+    ai_task_lifecycle,
+    record_prompt_run,
 )
+from workspace.ai.services.llm import messages_for_storage, run_prompt
 from workspace.common.logging import scrub
 from workspace.common.task_priority import INTERACTIVE_PRIORITY, NORMAL_PRIORITY
 
@@ -30,7 +30,7 @@ class LabelAssignment(BaseModel):
 
 
 class ClassifiedEmails(BaseModel):
-    """Envelope: the json_schema response format requires a top-level object."""
+    """Envelope: a structured reply has to be a top-level object."""
 
     results: list[LabelAssignment]
 
@@ -63,28 +63,21 @@ def summarize(self, task_id: str):
 
             body = message.body_text or message.body_html or ""
             messages = build_summarize_messages(message.subject or "", body)
-            result = call_llm(messages, model=settings.AI_SMALL_MODEL)
+            result = run_prompt(messages, model=settings.AI_SMALL_MODEL)
 
             with transaction.atomic():
-                ai_task.result = result["content"]
-                ai_task.model_used = result["model"]
-                ai_task.prompt_tokens = result["prompt_tokens"]
-                ai_task.completion_tokens = result["completion_tokens"]
-                ai_task.raw_messages = {
-                    "messages": sanitize_messages_for_storage(messages),
-                    "response": serialize_response(result),
-                }
+                record_prompt_run(ai_task, result)
                 # ``ai_task_lifecycle`` will set status=COMPLETED + completed_at
                 # on context exit. We need to save the message inside the
                 # atomic block though.
-                message.ai_summary = result["content"]
+                message.ai_summary = result.output
                 message.save(update_fields=["ai_summary"])
 
             logger.info(
                 "Summarize complete: task=%s tokens=%s+%s",
                 scrub(task_id),
-                result["prompt_tokens"],
-                result["completion_tokens"],
+                result.usage.input_tokens,
+                result.usage.output_tokens,
             )
             return {"status": "ok", "task_id": task_id}
     except TaskNotPending:
@@ -156,21 +149,14 @@ def compose_email(self, task_id: str):
                     sender_email=sender_email,
                 )
 
-            result = call_llm(messages)
-            ai_task.result = result["content"]
-            ai_task.model_used = result["model"]
-            ai_task.prompt_tokens = result["prompt_tokens"]
-            ai_task.completion_tokens = result["completion_tokens"]
-            ai_task.raw_messages = {
-                "messages": sanitize_messages_for_storage(messages),
-                "response": serialize_response(result),
-            }
+            result = run_prompt(messages)
+            record_prompt_run(ai_task, result)
 
             logger.info(
                 "Compose complete: task=%s tokens=%s+%s",
                 scrub(task_id),
-                result["prompt_tokens"],
-                result["completion_tokens"],
+                result.usage.input_tokens,
+                result.usage.output_tokens,
             )
             return {"status": "ok", "task_id": task_id}
     except TaskNotPending:
@@ -328,37 +314,31 @@ def classify_mail_messages(self, task_id: str):
                     ]
 
                     messages = build_classify_messages(emails, label_specs)
-                    max_tokens = max(settings.AI_MAX_TOKENS, CLASSIFY_MAX_TOKENS)
-                    parsed, result = call_llm_structured(
-                        messages,
-                        ClassifiedEmails,
-                        model=settings.AI_SMALL_MODEL,
-                        max_tokens=max_tokens,
-                    )
-
-                    model_used = result["model"]
-                    total_prompt += result["prompt_tokens"] or 0
-                    total_completion += result["completion_tokens"] or 0
-
-                    if parsed is None:
-                        # Keep the reply on the failed task: the error string
-                        # alone cannot say what the model actually sent.
-                        ai_task.raw_messages = {
-                            "messages": sanitize_messages_for_storage(messages),
-                            "response": serialize_response(result),
-                        }
-                        if reply_was_truncated(result):
-                            raise ValueError(
-                                f"LLM reply cut off at {max_tokens} tokens: the "
-                                "model ran out of budget before answering"
+                    # A reply that is not the schema, or that the backend
+                    # cut at the token cap, raises and fails the task: the
+                    # messages of the attempt go with it, the error string
+                    # alone cannot say what the model actually sent.
+                    with capture_run_messages() as attempt:
+                        try:
+                            result = run_prompt(
+                                messages,
+                                model=settings.AI_SMALL_MODEL,
+                                max_tokens=max(
+                                    settings.AI_MAX_TOKENS, CLASSIFY_MAX_TOKENS
+                                ),
+                                output_type=NativeOutput(ClassifiedEmails, strict=True),
                             )
-                        logger.warning(
-                            "Classify: malformed JSON response for task %s",
-                            scrub(task_id),
-                        )
-                        raise ValueError("Malformed JSON response from LLM")
+                        except UnexpectedModelBehavior:
+                            ai_task.raw_messages = {
+                                "messages": messages_for_storage(attempt)
+                            }
+                            raise
 
-                    for item in parsed.results:
+                    model_used = result.response.model_name or ""
+                    total_prompt += result.usage.input_tokens
+                    total_completion += result.usage.output_tokens
+
+                    for item in result.output.results:
                         msg = uuid_index.get(item.i)
                         if not msg:
                             continue

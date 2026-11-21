@@ -1,7 +1,9 @@
 from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
+from pydantic_ai.messages import UserPromptPart
 
+from workspace.ai.services import llm
 from workspace.ai.services.reading import (
     CHUNK_MAX_CHARS,
     MAX_CHUNKS,
@@ -10,6 +12,8 @@ from workspace.ai.services.reading import (
     Finding,
     read_for_query,
 )
+
+from .agents import reply, scripted
 
 _INTRO = "Everything the service exposes is documented on this single page."
 _ANSWER = (
@@ -42,7 +46,7 @@ def _reference_page() -> str:
 
 
 def _answers(*items, missing=""):
-    """A model reporting *items* for every chunk it is given.
+    """The reply of a model reporting *items* for the chunk it is given.
 
     An item is the text of a finding, or a ``(section, text)`` pair when the
     section it came from matters to the test.
@@ -53,7 +57,14 @@ def _answers(*items, missing=""):
         else Finding(text=item)
         for item in items
     ]
-    return lambda *a, **kw: (Extraction(findings=findings, missing=missing), {})
+    return reply(Extraction(findings=findings, missing=missing).model_dump_json())
+
+
+def _document(messages):
+    """The user text of a request: the query and the chunk to read."""
+    return "".join(
+        part.content for part in messages[0].parts if isinstance(part, UserPromptPart)
+    )
 
 
 @override_settings(
@@ -63,13 +74,16 @@ class ReadForQueryTests(SimpleTestCase):
     def setUp(self):
         self.page = _reference_page()
 
-    def _read(self, side_effect, *, query="what happens at the cap?", max_chars=1500):
-        with patch(
-            "workspace.ai.services.reading.call_llm_structured",
-            side_effect=side_effect,
-        ) as mock_call:
+    def _read(self, answer, *, query="what happens at the cap?", max_chars=1500):
+        with scripted(answer, repeat=True) as script:
             text = read_for_query(self.page, query, max_chars=max_chars)
-        return text, mock_call
+        return text, script
+
+    def _models_asked(self):
+        with scripted(_answers(_ANSWER), repeat=True):
+            read_for_query(self.page, "the cap", max_chars=1500)
+            # scripted() stands in for get_model: its calls name the models asked.
+            return {call.args[0] for call in llm.get_model.call_args_list}
 
     def test_what_the_model_reports_is_what_the_reader_gets(self):
         condensed = "429 once the cap is exceeded; Retry-After names the delay."
@@ -149,10 +163,7 @@ class ReadForQueryTests(SimpleTestCase):
         long_answer = "\n\n".join(_filler("Token", 20))
         page = f"# Manual\n\n{long_answer}\n\n" + "\n\n".join(_filler("Callback", 40))
 
-        with patch(
-            "workspace.ai.services.reading.call_llm_structured",
-            side_effect=_answers(long_answer),
-        ):
+        with scripted(_answers(long_answer), repeat=True):
             text = read_for_query(page, "tokens", max_chars=700)
 
         self.assertLessEqual(len(text), 700)
@@ -161,33 +172,24 @@ class ReadForQueryTests(SimpleTestCase):
     def test_a_query_in_another_language_reaches_the_model_unchanged(self):
         query = "que se passe-t-il quand la limite est atteinte ?"
 
-        _, mock_call = self._read(_answers(_ANSWER), query=query)
+        _, script = self._read(_answers(_ANSWER), query=query)
 
-        prompt = mock_call.call_args.args[0][1]["content"]
-        self.assertIn(query, prompt)
+        self.assertIn(query, _document(script.sent))
 
     def test_the_model_is_the_small_one(self):
-        _, mock_call = self._read(_answers(_ANSWER))
-
-        self.assertEqual(mock_call.call_args.kwargs["model"], "small-model")
+        self.assertEqual(self._models_asked(), {"small-model"})
 
     @override_settings(AI_READING_MODEL="reading-model")
     def test_the_reading_model_wins_over_the_small_one(self):
-        _, mock_call = self._read(_answers(_ANSWER))
-
-        self.assertEqual(mock_call.call_args.kwargs["model"], "reading-model")
+        self.assertEqual(self._models_asked(), {"reading-model"})
 
     @override_settings(AI_READING_MODEL="reading-model", AI_SMALL_MODEL="")
     def test_the_reading_model_stands_alone(self):
-        _, mock_call = self._read(_answers(_ANSWER))
-
-        self.assertEqual(mock_call.call_args.kwargs["model"], "reading-model")
+        self.assertEqual(self._models_asked(), {"reading-model"})
 
     @override_settings(AI_SMALL_MODEL="", AI_MODEL="big-model")
     def test_the_main_model_is_used_when_there_is_no_small_one(self):
-        _, mock_call = self._read(_answers(_ANSWER))
-
-        self.assertEqual(mock_call.call_args.kwargs["model"], "big-model")
+        self.assertEqual(self._models_asked(), {"big-model"})
 
 
 @override_settings(AI_SMALL_MODEL="small-model", AI_MODEL="big-model")
@@ -195,9 +197,9 @@ class ReadForQueryShortcutTests(SimpleTestCase):
     """Cases answered without ever calling a model."""
 
     def _read_without_a_model_call(self, markdown, query, *, max_chars):
-        with patch("workspace.ai.services.reading.call_llm_structured") as mock_call:
+        with scripted() as script:
             text = read_for_query(markdown, query, max_chars=max_chars)
-        mock_call.assert_not_called()
+        self.assertEqual(script.requests, [])
         return text
 
     def test_a_document_that_fits_is_returned_untouched(self):
@@ -228,18 +230,21 @@ class ReadForQueryFallbackTests(SimpleTestCase):
     def setUp(self):
         self.page = _reference_page()
 
-    def _read(self, side_effect):
-        with patch(
-            "workspace.ai.services.reading.call_llm_structured",
-            side_effect=side_effect,
-        ):
+    def _read(self, answer):
+        with scripted(answer, repeat=True):
             return read_for_query(self.page, "the cap", max_chars=1500)
 
     def test_an_llm_exception_falls_back(self):
-        self.assertEqual(self._read(RuntimeError("AI is not configured")), self.page)
+        with patch(
+            "workspace.ai.services.llm.get_model",
+            side_effect=RuntimeError("AI is not configured"),
+        ):
+            text = read_for_query(self.page, "the cap", max_chars=1500)
+
+        self.assertEqual(text, self.page)
 
     def test_a_malformed_result_falls_back(self):
-        self.assertEqual(self._read(lambda *a, **kw: (None, {})), self.page)
+        self.assertEqual(self._read(reply("not the schema")), self.page)
 
     def test_an_empty_extraction_falls_back(self):
         self.assertEqual(self._read(_answers()), self.page)
@@ -249,10 +254,10 @@ class ReadForQueryFallbackTests(SimpleTestCase):
 
     @override_settings(AI_READING_MODEL="", AI_SMALL_MODEL="", AI_MODEL="")
     def test_no_model_configured_falls_back(self):
-        with patch("workspace.ai.services.reading.call_llm_structured") as mock_call:
+        with scripted() as script:
             text = read_for_query(self.page, "the cap", max_chars=1500)
 
-        mock_call.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertEqual(text, self.page)
 
 
@@ -266,35 +271,31 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         body = "x" * (CHUNK_MAX_CHARS // 5)
         return "\n\n".join(f"Block {i}: {body}" for i in range(blocks))
 
-    def _read(self, page, side_effect=None, *, max_chars=2000, part=1):
-        with patch(
-            "workspace.ai.services.reading.call_llm_structured",
-            side_effect=side_effect or _answers("Block 0"),
-        ) as mock_call:
+    def _read(self, page, answer=None, *, max_chars=2000, part=1):
+        with scripted(answer or _answers("Block 0"), repeat=True) as script:
             text = read_for_query(page, "blocks", max_chars=max_chars, part=part)
-        return text, mock_call
+        return text, script
 
-    def _blocks_sent(self, mock_call):
-        return "".join(call.args[0][1]["content"] for call in mock_call.call_args_list)
+    def _blocks_sent(self, script):
+        return "".join(_document(messages) for messages, _ in script.requests)
 
     def test_a_long_document_is_split_into_chunks(self):
-        _, mock_call = self._read(self._page(12))
+        _, script = self._read(self._page(12))
 
-        self.assertGreater(mock_call.call_count, 1)
+        self.assertGreater(len(script.requests), 1)
 
     def test_no_chunk_exceeds_the_prompt_size(self):
-        _, mock_call = self._read(self._page(12))
+        _, script = self._read(self._page(12))
 
-        for call in mock_call.call_args_list:
-            document = call.args[0][1]["content"]
-            self.assertLessEqual(len(document), CHUNK_MAX_CHARS + 200)
+        for messages, _ in script.requests:
+            self.assertLessEqual(len(_document(messages)), CHUNK_MAX_CHARS + 200)
 
     def test_every_chunk_of_a_short_enough_document_is_sent(self):
         page = self._page(12)
 
-        _, mock_call = self._read(page)
+        _, script = self._read(page)
 
-        sent = "".join(call.args[0][1]["content"] for call in mock_call.call_args_list)
+        sent = self._blocks_sent(script)
         for i in range(12):
             self.assertIn(f"Block {i}:", sent)
 
@@ -302,9 +303,9 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         page = self._page(5 * (MAX_CHUNKS + 4))
 
         with self.assertLogs("workspace.ai.services.reading", level="INFO") as logs:
-            _, mock_call = self._read(page)
+            _, script = self._read(page)
 
-        self.assertEqual(mock_call.call_count, MAX_CHUNKS)
+        self.assertEqual(len(script.requests), MAX_CHUNKS)
         self.assertTrue(
             any("Page too long to read whole" in line for line in logs.output)
         )
@@ -349,7 +350,7 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         page = self._page(5 * (MAX_CHUNKS + 4))
 
         with self.assertLogs("workspace.ai.services.reading", level="INFO"):
-            text, _ = self._read(page, side_effect=_answers(), part=2, max_chars=4000)
+            text, _ = self._read(page, _answers(), part=2, max_chars=4000)
 
         self.assertIn("Part 2 of 2", text)
         self.assertIn("Block 99:", text)
@@ -359,9 +360,9 @@ class ReadForQueryChunkingTests(SimpleTestCase):
     def test_a_read_with_no_model_falls_back_to_the_part_asked_for(self):
         page = self._page(5 * (MAX_CHUNKS + 4))
 
-        text, mock_call = self._read(page, part=2)
+        text, script = self._read(page, part=2)
 
-        mock_call.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertIn("Part 2 of 2", text)
         self.assertIn("Block 99:", text)
         self.assertNotIn("Block 0:", text)
@@ -386,13 +387,13 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         page = self._page(12)
         calls = []
 
-        def flaky(*args, **kwargs):
+        def flaky(messages, tools):
             calls.append(1)
             if len(calls) == 1:
                 raise RuntimeError("backend down")
-            return Extraction(findings=[Finding(text="Block 5")], missing=""), {}
+            return _answers("Block 5")
 
-        text, _ = self._read(page, side_effect=flaky)
+        text, _ = self._read(page, flaky)
 
         self.assertIn("Block 5", text)
         self.assertNotEqual(text, page)
@@ -401,19 +402,13 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         page = self._page(12)
         calls = []
 
-        def flaky(*args, **kwargs):
+        def flaky(messages, tools):
             calls.append(1)
             if len(calls) == 1:
                 raise RuntimeError("backend down")
-            return (
-                Extraction(
-                    findings=[Finding(text="Block 5")],
-                    missing="Nothing here about blocks.",
-                ),
-                {},
-            )
+            return _answers("Block 5", missing="Nothing here about blocks.")
 
-        text, _ = self._read(page, side_effect=flaky)
+        text, _ = self._read(page, flaky)
 
         self.assertIn("Block 5", text)
         self.assertNotIn("Not on this page:", text)
@@ -422,11 +417,11 @@ class ReadForQueryChunkingTests(SimpleTestCase):
         page = self._page(12)
         calls = []
 
-        def partial(*args, **kwargs):
+        def partial(messages, tools):
             calls.append(1)
             missing = "Nothing here about blocks." if len(calls) > 1 else ""
-            return Extraction(findings=[Finding(text="Block 0")], missing=missing), {}
+            return _answers("Block 0", missing=missing)
 
-        text, _ = self._read(page, side_effect=partial)
+        text, _ = self._read(page, partial)
 
         self.assertNotIn("Not on this page:", text)

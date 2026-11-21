@@ -6,8 +6,9 @@ import uuid
 from datetime import date, timedelta
 
 from pydantic import BaseModel, Field
+from pydantic_ai import RunContext
 
-from workspace.ai.tool_registry import ToolError, ToolProvider, tool
+from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -189,10 +190,11 @@ class ProjectsToolProvider(ToolProvider):
         badge_running_label="Listing projects",
         concurrent=True,
     )
-    def list_projects(self, args, user, bot, conversation_id, context):
+    def list_projects(self, ctx: RunContext[ToolDeps]) -> str:
         """List the user's projects with their board statuses (column names). \
 Call this before create_task, move_task or search_tasks when you need a real \
 project name or status name - statuses are per-project, never guess them."""
+        user = ctx.deps.user
         from .models import Project
         from .queries import user_project_ids
 
@@ -221,14 +223,14 @@ project name or status name - statuses are per-project, never guess them."""
         badge_icon="✅",
         badge_label="Checked tasks",
         badge_running_label="Checking tasks",
-        params=ListMyTasksParams,
         concurrent=True,
     )
-    def list_my_tasks(self, args, user, bot, conversation_id, context):
+    def list_my_tasks(self, ctx: RunContext[ToolDeps], args: ListMyTasksParams) -> str:
         """List the open tasks assigned to the user, most urgent first \
 (overdue first, undated last). Call this when the user asks what is on their \
 plate, what they should work on, or about their deadlines. Optionally filter \
 by project or due window. For tasks assigned to other people use search_tasks."""
+        user = ctx.deps.user
         from .queries import assigned_open_tasks
 
         qs = assigned_open_tasks(user)
@@ -257,15 +259,15 @@ by project or due window. For tasks assigned to other people use search_tasks.""
         badge_label="Searched tasks",
         badge_running_label="Searching tasks",
         detail_key="query",
-        params=SearchTasksParams,
         concurrent=True,
     )
-    def search_tasks(self, args, user, bot, conversation_id, context):
+    def search_tasks(self, ctx: RunContext[ToolDeps], args: SearchTasksParams) -> str:
         """Search tasks by keyword or by reference (e.g. WR-42) across every \
 project the user can access - not just their own tasks. Returns up to 20 \
 matches with reference, title, project, status, priority, due date and \
 assignees. Call this when the user asks about a task by topic or reference, \
 or wants an overview like the overdue tasks of a project."""
+        user = ctx.deps.user
         from django.db.models import Q, prefetch_related_objects
 
         from .services.search import combined_task_search
@@ -298,14 +300,14 @@ or wants an overview like the overdue tasks of a project."""
         badge_label="Created task",
         badge_running_label="Creating task",
         detail_key="title",
-        params=CreateTaskParams,
     )
-    def create_task(self, args, user, bot, conversation_id, context):
+    def create_task(self, ctx: RunContext[ToolDeps], args: CreateTaskParams) -> str:
         """Create a task on one of the user's project boards. Call this when \
 the user asks to add, create, or note down a task or todo. Without a project \
 the task goes to their personal project; when the user names a project, call \
 list_projects first if unsure of its exact name. New tasks land in the \
 project's backlog column."""
+        user = ctx.deps.user
         from .models import Task
         from .services import tasks as task_service
         from .services.projects import get_or_create_personal_project
@@ -361,13 +363,13 @@ project's backlog column."""
         badge_label="Moved task",
         badge_running_label="Moving task",
         detail_key="status",
-        params=MoveTaskParams,
     )
-    def move_task(self, args, user, bot, conversation_id, context):
+    def move_task(self, ctx: RunContext[ToolDeps], args: MoveTaskParams) -> str:
         """Move a task to another status (board column) of its project, e.g. \
 mark it done or start working on it. Statuses are per-project: use the names \
 returned by list_projects for the task's project. Find the task's UUID with \
 list_my_tasks or search_tasks first."""
+        user = ctx.deps.user
         from .services.tasks import change_task_status
 
         task = _get_task(user, args.task_uuid)
@@ -414,13 +416,13 @@ list_my_tasks or search_tasks first."""
         badge_icon="✏️",
         badge_label="Updated task",
         badge_running_label="Updating task",
-        params=UpdateTaskParams,
     )
-    def update_task(self, args, user, bot, conversation_id, context):
+    def update_task(self, ctx: RunContext[ToolDeps], args: UpdateTaskParams) -> str:
         """Assign a task to a project member and/or change its due date. Call \
 this to reassign work or push a deadline; to change a task's status use \
 move_task instead. Find the task's UUID with list_my_tasks or search_tasks \
 first."""
+        user = ctx.deps.user
         from .models import TaskEvent
         from .services.assignments import notify_assigned
         from .services.events import record_task_event
@@ -482,13 +484,15 @@ first."""
         badge_icon="💬",
         badge_label="Commented on task",
         badge_running_label="Commenting on task",
-        params=CommentOnTaskParams,
     )
-    def comment_on_task(self, args, user, bot, conversation_id, context):
+    def comment_on_task(
+        self, ctx: RunContext[ToolDeps], args: CommentOnTaskParams
+    ) -> str:
         """Post a comment on a task, in the user's name. The task's watchers, \
 assignees and prior commenters are notified; mention a project member with \
 @username to ping them directly. Find the task's UUID with list_my_tasks or \
 search_tasks first."""
+        user = ctx.deps.user
         from .services.comments import add_comment
 
         task = _get_task(user, args.task_uuid)

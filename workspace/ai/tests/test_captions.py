@@ -6,12 +6,15 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
+from workspace.ai.services import llm
 from workspace.ai.tasks.captions import (
     enqueue_caption_if_image,
     enqueue_caption_retry,
     generate_attachment_caption,
 )
 from workspace.chat.models import Conversation, Message, MessageAttachment
+
+from .agents import reply, scripted
 
 User = get_user_model()
 
@@ -47,49 +50,44 @@ class CaptionTaskTests(TestCase):
             conversation=self.conv, author=self.user, body="look"
         )
 
+    def _caption(self, att, text="A red square."):
+        """Caption *att* with a model answering *text*: the script, the model asked."""
+        with scripted(reply(text)) as script:
+            generate_attachment_caption(str(att.uuid))
+            # scripted() stands in for get_model: its calls name the models asked.
+            asked = [call.args[0] for call in llm.get_model.call_args_list]
+        return script, asked
+
     def test_writes_caption(self):
         att = make_attachment(self.msg)
-        with patch(
-            "workspace.ai.services.llm.call_llm",
-            return_value={"content": "A red square on white background."},
-        ) as mock_llm:
-            generate_attachment_caption(str(att.uuid))
-        mock_llm.assert_called_once()
+        script, _ = self._caption(att, "A red square on white background.")
+        self.assertEqual(len(script.requests), 1)
         att.refresh_from_db()
         self.assertEqual(att.ai_description, "A red square on white background.")
 
     @override_settings(AI_VISION_MODEL="vision-model", AI_MODEL="big-model")
     def test_captions_go_to_the_vision_model(self):
         att = make_attachment(self.msg)
-        with patch(
-            "workspace.ai.services.llm.call_llm",
-            return_value={"content": "A red square."},
-        ) as mock_llm:
-            generate_attachment_caption(str(att.uuid))
-        self.assertEqual(mock_llm.call_args.kwargs["model"], "vision-model")
+        _, asked = self._caption(att)
+        self.assertEqual(asked, ["vision-model"])
 
     @override_settings(AI_VISION_MODEL="", AI_MODEL="big-model")
     def test_the_main_model_captions_when_no_vision_model_is_set(self):
         att = make_attachment(self.msg)
-        with patch(
-            "workspace.ai.services.llm.call_llm",
-            return_value={"content": "A red square."},
-        ) as mock_llm:
-            generate_attachment_caption(str(att.uuid))
-        self.assertEqual(mock_llm.call_args.kwargs["model"], "big-model")
+        _, asked = self._caption(att)
+        self.assertEqual(asked, ["big-model"])
 
     def test_idempotent_when_caption_exists(self):
         att = make_attachment(self.msg, ai_description="already here")
-        with patch("workspace.ai.services.llm.call_llm") as mock_llm:
-            generate_attachment_caption(str(att.uuid))
-        mock_llm.assert_not_called()
+        script, _ = self._caption(att)
+        self.assertEqual(script.requests, [])
         att.refresh_from_db()
         self.assertEqual(att.ai_description, "already here")
 
     def test_llm_failure_leaves_caption_empty(self):
         att = make_attachment(self.msg)
         with patch(
-            "workspace.ai.services.llm.call_llm", side_effect=RuntimeError("down")
+            "workspace.ai.services.llm.get_model", side_effect=RuntimeError("down")
         ):
             generate_attachment_caption(str(att.uuid))  # must not raise
         att.refresh_from_db()
@@ -97,9 +95,8 @@ class CaptionTaskTests(TestCase):
 
     def test_skips_non_image(self):
         att = make_attachment(self.msg, name="doc.pdf", category="document")
-        with patch("workspace.ai.services.llm.call_llm") as mock_llm:
-            generate_attachment_caption(str(att.uuid))
-        mock_llm.assert_not_called()
+        script, _ = self._caption(att)
+        self.assertEqual(script.requests, [])
 
     def test_missing_attachment_does_not_raise(self):
         generate_attachment_caption("00000000-0000-0000-0000-000000000000")

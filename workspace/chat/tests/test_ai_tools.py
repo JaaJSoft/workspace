@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from pydantic import ValidationError
 
 from workspace.ai.models import BotProfile, ConversationSummary
+from workspace.ai.tests.agents import reply, scripted, tool_context
 from workspace.ai.tool_registry import ToolError
 from workspace.chat.ai_tools import (
     READ_MAX_BODY_CHARS,
@@ -49,11 +50,7 @@ class AskUserQuestionToolTests(TestCase):
         args = AskUserQuestionParams(question=question, options=opts)
         ctx = context if context is not None else {}
         result = self.provider.ask_user_question(
-            args,
-            user=self.user,
-            bot=self.bot,
-            conversation_id=None,
-            context=ctx,
+            tool_context(user=self.user, bot=self.bot, context=ctx), args
         )
         return result, ctx
 
@@ -84,11 +81,7 @@ class AskUserQuestionToolTests(TestCase):
         ctx = {}
         with self.assertRaises(ToolError) as caught:
             self.provider.ask_user_question(
-                args,
-                user=self.user,
-                bot=self.bot,
-                conversation_id=None,
-                context=ctx,
+                tool_context(user=self.user, bot=self.bot, context=ctx), args
             )
         self.assertIn("at least 2 distinct", caught.exception.reason)
         self.assertNotIn("question", ctx)
@@ -114,11 +107,7 @@ class AskUserQuestionToolTests(TestCase):
         ctx = {}
         with self.assertRaises(ToolError) as caught:
             self.provider.ask_user_question(
-                args,
-                user=self.user,
-                bot=self.bot,
-                conversation_id=None,
-                context=ctx,
+                tool_context(user=self.user, bot=self.bot, context=ctx), args
             )
         self.assertIn("question cannot be empty", caught.exception.reason)
         self.assertNotIn("question", ctx)
@@ -144,7 +133,7 @@ class SearchMessagesTimezoneTests(TestCase):
     def _search(self, **kwargs):
         args = SearchMessagesParams(query="boundary", **kwargs)
         return self.provider.search_messages(
-            args, user=self.user, bot=self.bot, conversation_id=None, context={}
+            tool_context(user=self.user, bot=self.bot), args
         )
 
     def _make_message(self, created_at):
@@ -211,7 +200,7 @@ class ConversationToolsTestCase(TestCase):
             conversation_id=(conversation or self.conv).uuid, **kwargs
         )
         return self.provider.read_conversation(
-            args, user=self.user, bot=self.bot, conversation_id=None, context={}
+            tool_context(user=self.user, bot=self.bot), args
         )
 
     def _summarize(self, conversation=None):
@@ -219,7 +208,7 @@ class ConversationToolsTestCase(TestCase):
             conversation_id=(conversation or self.conv).uuid
         )
         return self.provider.summarize_conversation(
-            args, user=self.user, bot=self.bot, conversation_id=None, context={}
+            tool_context(user=self.user, bot=self.bot), args
         )
 
 
@@ -339,9 +328,6 @@ class ReadConversationToolTests(ConversationToolsTestCase):
 
 @override_settings(AI_CHAT_CONTEXT_SIZE=2)
 class SummarizeConversationToolTests(ConversationToolsTestCase):
-    def _llm(self, content="FRESH SUMMARY"):
-        return {"content": content, "prompt_tokens": 1, "completion_tokens": 1}
-
     def _fill(self, count=5):
         for i in range(count):
             self._message(f"m{i}", i)
@@ -350,25 +336,22 @@ class SummarizeConversationToolTests(ConversationToolsTestCase):
         self._message("hi", 0)
         self._message("there", 1)
 
-        with patch("workspace.ai.services.chat_summary.call_llm") as llm:
+        with scripted() as script:
             payload = json.loads(self._summarize())
 
-        llm.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertIn("Short conversation", payload["note"])
         self.assertEqual([m["body"] for m in payload["messages"]], ["hi", "there"])
 
     def test_current_summary_is_served_without_a_model_call(self):
         self._fill()
-        with patch(
-            "workspace.ai.services.chat_summary.call_llm",
-            return_value=self._llm("STORED SUMMARY"),
-        ):
+        with scripted(reply("STORED SUMMARY")):
             self._summarize()
 
-        with patch("workspace.ai.services.chat_summary.call_llm") as llm:
+        with scripted() as script:
             payload = json.loads(self._summarize())
 
-        llm.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertEqual(payload["summary"], "STORED SUMMARY")
         self.assertEqual(payload["conversation"], "Roadmap")
         self.assertIn("read_conversation", payload["covers"])
@@ -381,19 +364,17 @@ class SummarizeConversationToolTests(ConversationToolsTestCase):
             up_to=BASE_TIME - timedelta(hours=1),
         )
 
-        with patch(
-            "workspace.ai.services.chat_summary.call_llm", return_value=self._llm()
-        ) as llm:
+        with scripted(reply("FRESH SUMMARY")) as script:
             payload = json.loads(self._summarize())
 
-        llm.assert_called_once()
+        self.assertEqual(len(script.requests), 1)
         self.assertEqual(payload["summary"], "FRESH SUMMARY")
 
     def test_model_failure_surfaces_as_an_error(self):
         self._fill()
 
         with patch(
-            "workspace.ai.services.chat_summary.call_llm",
+            "workspace.ai.services.llm.get_model",
             side_effect=RuntimeError("backend down"),
         ):
             with self.assertRaises(ToolError) as caught:
@@ -409,9 +390,9 @@ class SummarizeConversationToolTests(ConversationToolsTestCase):
         )
         ConversationMember.objects.create(conversation=foreign, user=other)
 
-        with patch("workspace.ai.services.chat_summary.call_llm") as llm:
+        with scripted() as script:
             with self.assertRaises(ToolError) as caught:
                 self._summarize(conversation=foreign)
 
-        llm.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertIn("not a member", caught.exception.reason)

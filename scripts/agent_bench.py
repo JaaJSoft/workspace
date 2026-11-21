@@ -1,17 +1,16 @@
 #!/usr/bin/env python
-"""Run a bot through fixed scenarios on a real model, on each agent runtime.
+"""Run a bot through fixed scenarios on a real model.
 
 A unit test can say that the loop stops where it should. It cannot say
 that a bot still picks the right tool, or still stops for a confirmation,
-after a prompt was rewritten, a model was swapped or the runtime under the
-loop was replaced. This bench does: each scenario sets up a user with a few
-rows of their own (an event, a project, a task), sends the bot one message
-and checks the *shape* of the run - which tools were called, what the
-database looks like afterwards, how the run stopped - never the wording.
+after a prompt was rewritten, a model was swapped or the agent library was
+bumped. This bench does: each scenario sets up a user with a few rows of
+their own (an event, a project, a task), sends the bot one message and
+checks the *shape* of the run - which tools were called, what the database
+looks like afterwards, how the run stopped - never the wording.
 
-Every scenario runs on each runtime of ``AI_AGENT_RUNTIME`` in turn, through
-``build_bot_runner``, with the prompt and the tools a chat reply gets. What
-is reported for each run:
+Every scenario runs through ``run_bot``, with the prompt and the tools a
+chat reply gets. What is reported for each run:
 
 - the checks it passed;
 - the tools it called, in order, and the rounds that took;
@@ -31,7 +30,7 @@ Usage:
     uv run python scripts/agent_bench.py
     uv run python scripts/agent_bench.py --runs 3 --json before.json
     uv run python scripts/agent_bench.py --compare before.json
-    uv run python scripts/agent_bench.py --runtime pydantic_ai --scenario confirmation
+    uv run python scripts/agent_bench.py --model gpt-5 --scenario confirmation
 """
 
 from __future__ import annotations
@@ -52,7 +51,6 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
 
-RUNTIMES = ("native", "pydantic_ai")
 EVENT_READS = {"list_upcoming_events", "search_events", "search_everything"}
 TASK_READS = {"list_my_tasks", "search_tasks", "search_everything"}
 
@@ -139,7 +137,7 @@ def _called(run):
 
 
 def _says(run, *words):
-    answer = run.response.content.lower()
+    answer = run.output.lower()
     return all(word.lower() in answer for word in words)
 
 
@@ -203,7 +201,7 @@ def _two_reads():
 
 
 def _confirmation():
-    from workspace.ai.harness.runner import StopReason
+    from workspace.ai.services.bot_runs import StopReason
     from workspace.calendar.models import Event
 
     world = _with_dentist(_world("Cancel my dentist appointment tomorrow."))
@@ -237,9 +235,8 @@ SCENARIOS = {
 def _reply(world):
     """What a chat reply runs, short of posting the message."""
     from workspace.ai.prompts.chat import build_chat_messages
-    from workspace.ai.services.bot_runs import build_bot_runner
+    from workspace.ai.services.bot_runs import run_bot
     from workspace.ai.services.conversation_history import build_conversation_history
-    from workspace.ai.services.responses import produced_media
 
     history = build_conversation_history(
         world.conversation.pk, world.bot_profile, world.user
@@ -252,24 +249,19 @@ def _reply(world):
         bot=world.bot,
         summary=history.summary,
     )
-    runner = build_bot_runner(
-        world.bot_profile, world.user, world.bot, world.conversation.pk
+    return run_bot(
+        world.bot_profile, world.user, world.bot, world.conversation.pk, messages
     )
-    run = runner.run(messages)
-    if not run.response.content and not produced_media(run.context):
-        run = runner.retry_final(messages, run)
-    return run
 
 
-def run_scenario(name, runtime):
-    from django.test import override_settings
+def run_scenario(name):
+    from pydantic_ai.messages import ModelResponse
 
     world, checks = SCENARIOS[name]()
-    result = {"scenario": name, "runtime": runtime, "checks": {}}
+    result = {"scenario": name, "checks": {}}
     started = time.monotonic()
     try:
-        with override_settings(AI_AGENT_RUNTIME=runtime):
-            run = _reply(world)
+        run = _reply(world)
     except Exception as exc:
         result["error"] = f"{type(exc).__name__}: {exc}"
         result["checks"] = dict.fromkeys((label for label, _ in checks), False)
@@ -279,12 +271,12 @@ def run_scenario(name, runtime):
         checks={label: bool(check(run, world)) for label, check in checks},
         tools=_called(run),
         rounds=len(run.tool_data or []),
-        model_calls=len(run.rounds),
-        prompt_tokens=run.usage.prompt_tokens,
-        completion_tokens=run.usage.completion_tokens,
+        model_calls=sum(isinstance(m, ModelResponse) for m in run.new_messages),
+        prompt_tokens=run.usage.input_tokens,
+        completion_tokens=run.usage.output_tokens,
         seconds=round(time.monotonic() - started, 1),
         stop=run.stop.value,
-        answer=run.response.content,
+        answer=run.output,
     )
     return result
 
@@ -296,13 +288,12 @@ def _passed(result):
 def _print_run(result):
     checks = f"{_passed(result)}/{len(result['checks'])}"
     if "error" in result:
-        print(f"  {result['runtime']:<12} {checks:<6} FAILED  {result['error'][:90]}")
+        print(f"  {checks:<6} FAILED  {result['error'][:100]}")
         return
     tokens = f"{result['prompt_tokens'] or '?'}+{result['completion_tokens'] or '?'}"
     print(
-        f"  {result['runtime']:<12} {checks:<6} {result['stop']:<14}"
-        f" {result['model_calls']} calls  {tokens:<12} {result['seconds']:>6}s"
-        f"  {', '.join(result['tools']) or '-'}"
+        f"  {checks:<6} {result['stop']:<14} {result['model_calls']} calls"
+        f"  {tokens:<12} {result['seconds']:>6}s  {', '.join(result['tools']) or '-'}"
     )
     for label, ok in result["checks"].items():
         if not ok:
@@ -310,47 +301,40 @@ def _print_run(result):
 
 
 def _print_totals(results):
-    totals = defaultdict(lambda: defaultdict(float))
-    for result in results:
-        total = totals[result["runtime"]]
-        total["passed"] += _passed(result)
-        total["checks"] += len(result["checks"])
-        total["errors"] += "error" in result
-        total["model_calls"] += result.get("model_calls", 0)
-        total["tokens"] += (result.get("prompt_tokens") or 0) + (
-            result.get("completion_tokens") or 0
-        )
-        total["seconds"] += result["seconds"]
-    print("\nTotals")
-    for runtime, total in totals.items():
-        print(
-            f"  {runtime:<12} {int(total['passed'])}/{int(total['checks'])} checks"
-            f"  {int(total['errors'])} failed runs  {int(total['model_calls'])} model calls"
-            f"  {int(total['tokens'])} tokens  {total['seconds']:.1f}s"
-        )
+    checks = sum(len(result["checks"]) for result in results)
+    tokens = sum(
+        (result.get("prompt_tokens") or 0) + (result.get("completion_tokens") or 0)
+        for result in results
+    )
+    print()
+    print(
+        f"Total  {sum(map(_passed, results))}/{checks} checks"
+        f"  {sum('error' in result for result in results)} failed runs"
+        f"  {sum(result.get('model_calls', 0) for result in results)} model calls"
+        f"  {tokens} tokens  {sum(result['seconds'] for result in results):.1f}s"
+    )
 
 
 def _print_comparison(results, before):
-    def by_cell(rows):
+    def by_scenario(rows):
         cells = defaultdict(lambda: [0, 0])
         for row in rows:
-            cell = cells[row["scenario"], row["runtime"]]
-            cell[0] += _passed(row)
-            cell[1] += len(row["checks"])
+            cells[row["scenario"]][0] += _passed(row)
+            cells[row["scenario"]][1] += len(row["checks"])
         return cells
 
-    old, new = by_cell(before["results"]), by_cell(results)
-    print(f"\nAgainst {before['model']} ({before['runs']} runs)")
-    for key in sorted(new):
-        was = "{}/{}".format(*old[key]) if key in old else "-"
-        now = "{}/{}".format(*new[key])
+    old, new = by_scenario(before["results"]), by_scenario(results)
+    print()
+    print(f"Against {before['model']} ({before['runs']} runs)")
+    for name in new:
+        was = "{}/{}".format(*old[name]) if name in old else "-"
+        now = "{}/{}".format(*new[name])
         mark = "" if was == now else "   <- changed"
-        print(f"  {key[0]:<16} {key[1]:<12} {was:>6} -> {now:<6}{mark}")
+        print(f"  {name:<16} {was:>6} -> {now:<6}{mark}")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--runtime", action="append", choices=RUNTIMES)
     parser.add_argument("--scenario", action="append", choices=SCENARIOS)
     parser.add_argument("--runs", type=int, default=1, help="runs of each scenario")
     parser.add_argument("--model", help="override AI_MODEL")
@@ -372,7 +356,6 @@ def main():
         settings.AI_MODEL = args.model
     if not settings.AI_API_KEY:
         sys.exit("AI_API_KEY is not set: the bench needs a backend to talk to.")
-    runtimes = args.runtime or RUNTIMES
     print(f"Model {settings.AI_MODEL} at {settings.AI_BASE_URL or 'api.openai.com'}")
 
     databases = setup_databases(verbosity=0, interactive=False)
@@ -381,10 +364,9 @@ def main():
         for name in args.scenario or SCENARIOS:
             print(f"\n{name}")
             for _ in range(args.runs):
-                for runtime in runtimes:
-                    result = run_scenario(name, runtime)
-                    results.append(result)
-                    _print_run(result)
+                result = run_scenario(name)
+                results.append(result)
+                _print_run(result)
     finally:
         teardown_databases(databases, verbosity=0)
 

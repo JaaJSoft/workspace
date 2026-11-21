@@ -166,38 +166,32 @@ then finish it under *Bot profiles* in the Django admin:
 | `AI_MAX_TOKENS` | `2048` | Most tokens per response. |
 | `AI_TIMEOUT` | `300` | Seconds per request. |
 | `AI_MAX_RETRIES` | `2` | Retries on timeouts and server errors. |
-| `AI_AGENT_RUNTIME` | `native` | What runs a bot's reply, see [Agent runtime](#agent-runtime). |
 
-### Agent runtime
+### How requests reach the provider
 
-A bot's reply is a loop: ask the model, run the tools it asked for, ask
-again. Two runtimes can run it, and `AI_AGENT_RUNTIME` picks one for every
-bot of the instance:
+Every text request (a bot's reply and its tool loop, titles, summaries, mail
+and the editor) is made with [Pydantic AI](https://pydantic.dev/docs/ai/),
+which writes each request for the backend it talks to:
 
-- `native`, the default: the loop Workspace ships.
-- `pydantic_ai`: the same reply on [Pydantic AI](https://pydantic.dev/docs/ai/).
-  It is being evaluated to replace the first, and is not the default yet.
-
-Bots, tools, confirmations, limits and run records are the same on both.
-What differs on `pydantic_ai`:
-
-- The request is written by the library for the backend it talks to.
-  OpenAI's reasoning models, `gpt-5` included, refuse the `max_tokens` the
-  native loop sends; here OpenAI is sent `max_completion_tokens`, and an
-  endpoint set with `AI_BASE_URL` still gets `max_tokens`, the one name all
-  of them read.
-- The reasoning of a reply is not sent back to the model on the next round,
-  as on the native loop. The library's default is to send it back, and a
-  model given its own reasoning can write its next tool call into it.
+- With `AI_BASE_URL` unset the backend is OpenAI, and the reply cap is sent
+  as `max_completion_tokens`, the only name its reasoning models (`gpt-5`
+  included) accept.
+- With `AI_BASE_URL` set the backend is treated as a service that speaks
+  OpenAI's protocol and nothing more: the cap is sent as `max_tokens`, the
+  one name all of them read (Ollama ignores the other and answers uncapped),
+  and a reply's reasoning is not sent back to the model on the next round.
 - An image a tool returns reaches the model as an image in a message of its
   own, not inside the tool result, which OpenAI refuses.
-- It only covers the bots. Titles, summaries, mail and the editor still go
-  through the native client.
-- It needs a Celery worker that runs tasks in processes or threads (the
-  default `prefork` pool, or `threads`), not `gevent` or `eventlet`.
+- A model has to call tools natively. One that writes its calls out as JSON
+  in its answer is not understood.
 
-To compare the two on your own backend and model, see the
-[agent bench](agent-bench.md).
+The Celery worker has to run tasks in processes or threads (the default
+`prefork` pool, or `threads`), not `gevent` or `eventlet`: a bot's reply
+runs on an event loop of its own.
+
+To check how a bot behaves on your own backend and model, see the
+[agent bench](agent-bench.md). Images, speech and transcription keep their
+own endpoints, below.
 
 ### Limits
 

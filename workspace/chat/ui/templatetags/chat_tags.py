@@ -198,6 +198,35 @@ def render_ai_usage(message):
     }
 
 
+def _failure_reason(stored, result):
+    """Why a stored tool call failed, or None when it did not.
+
+    A failure is marked on the stored result. Rounds stored before that
+    carry it in the result itself, as ``{"error": {"retryable", "reason"}}``:
+    that exact shape only, since a tool hands back an API's own error body
+    as the result of a call that worked.
+    """
+    if stored.get("outcome") == "failed":
+        return result
+    if not result.startswith('{"error"'):
+        return None
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict) or parsed.keys() != {"error"}:
+        return None
+    error = parsed["error"]
+    if (
+        isinstance(error, dict)
+        and error.keys() == {"retryable", "reason"}
+        and isinstance(error["retryable"], bool)
+        and isinstance(error["reason"], str)
+    ):
+        return error["reason"]
+    return None
+
+
 @register.inclusion_tag("chat/ui/partials/_ai_steps.html")
 def render_ai_steps(message):
     """Flatten Message.tool_data rounds into a chronological step timeline.
@@ -207,7 +236,7 @@ def render_ai_steps(message):
     'thinking' (model reasoning), 'text' (intermediate assistant text emitted
     between tool rounds), 'tool' (one executed call).
     """
-    from workspace.ai.tool_registry import parse_tool_failure, tool_registry
+    from workspace.ai.tool_registry import tool_registry
 
     tool_data = getattr(message, "tool_data", None)
     if not isinstance(tool_data, list):
@@ -232,11 +261,7 @@ def render_ai_steps(message):
         if not isinstance(results, list):
             results = []
         results_by_id = {
-            r.get("tool_call_id"): r.get("content")
-            if isinstance(r.get("content"), str)
-            else ""
-            for r in results
-            if isinstance(r, dict)
+            r.get("tool_call_id"): r for r in results if isinstance(r, dict)
         }
         tool_calls = td_round.get("tool_calls")
         if not isinstance(tool_calls, list):
@@ -257,8 +282,11 @@ def render_ai_steps(message):
                 if isinstance(parsed, dict)
                 else ""
             )
-            result = results_by_id.get(tc.get("id"), "")
-            failure = parse_tool_failure(result)
+            stored = results_by_id.get(tc.get("id"), {})
+            result = stored.get("content")
+            if not isinstance(result, str):
+                result = ""
+            reason = _failure_reason(stored, result)
             steps.append(
                 {
                     "type": "tool",
@@ -267,8 +295,8 @@ def render_ai_steps(message):
                     "detail": detail,
                     "args": display_args(parsed),
                     "args_raw": raw_args if parsed is None else "",
-                    "result": failure["reason"] if failure else _pretty_result(result),
-                    "is_error": failure is not None,
+                    "result": _pretty_result(result) if reason is None else reason,
+                    "is_error": reason is not None,
                 }
             )
 

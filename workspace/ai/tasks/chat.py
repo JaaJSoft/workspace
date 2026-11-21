@@ -11,22 +11,14 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
-from workspace.ai.harness.runner import StopReason
+from workspace.ai.prompts.base import prompt
 from workspace.ai.services.ai_task import claim_task, close_task
 from workspace.ai.services.bot_access import run_refusal
-from workspace.ai.services.bot_runs import build_bot_runner
+from workspace.ai.services.bot_runs import StopReason, run_bot
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import build_conversation_history
-from workspace.ai.services.llm import (
-    call_llm,
-    clean_llm_content,
-    sanitize_messages_for_storage,
-)
-from workspace.ai.services.responses import (
-    handle_generation_error,
-    post_bot_message,
-    produced_media,
-)
+from workspace.ai.services.llm import run_prompt
+from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.common.logging import scrub
 from workspace.common.task_priority import (
     INTERACTIVE_PRIORITY,
@@ -113,62 +105,26 @@ def generate_chat_response(self, ai_task_id: str):
             summary=history.summary,
         )
 
-        initial_messages = sanitize_messages_for_storage(list(messages))
-
         def cancelled_by_user():
             ai_task.refresh_from_db(fields=["status"])
             return ai_task.status == AITask.Status.FAILED
 
-        runner = build_bot_runner(
+        run = run_bot(
             bot_profile,
             human_user,
             bot_user,
             conversation_id,
+            messages,
             is_cancelled=cancelled_by_user,
         )
-        run = runner.run(messages)
 
-        # Checked before the retry below: a cancelled run must not spend one
-        # more model call on an answer nobody will read.
         if run.stop is StopReason.CANCELLED or cancelled_by_user():
             logger.info(
                 "Bot response cancelled: conversation=%s", scrub(conversation_id)
             )
             return {"status": "cancelled"}
 
-        # Auto-retry once if the model returned an empty response.
-        # Only the final completion is retried (no tools): rerunning
-        # the whole loop would re-execute side-effectful tools and
-        # discard the first pass's context / tool_data.
-        body_preview = clean_llm_content(run.response.content)
-        if not body_preview and not produced_media(run.context):
-            logger.warning(
-                "Empty response, retrying once: conversation=%s", scrub(conversation_id)
-            )
-            run = runner.retry_final(messages, run)
-            body_preview = clean_llm_content(run.response.content)
-            if not body_preview and not produced_media(run.context):
-                raise RuntimeError("Empty response from model")
-
-        raw_messages = {"messages": initial_messages, "rounds": run.rounds}
-
-        # Re-checked: the retry above can take as long as a model call.
-        if cancelled_by_user():
-            logger.info(
-                "Bot response cancelled: conversation=%s", scrub(conversation_id)
-            )
-            return {"status": "cancelled"}
-
-        posted = post_bot_message(
-            conversation,
-            bot_user,
-            run.response,
-            run.context,
-            ai_task,
-            raw_messages,
-            tool_data=run.tool_data,
-            usage=run.usage,
-        )
+        posted = post_bot_message(conversation, bot_user, run, ai_task)
         if posted is None:
             logger.info(
                 "Bot response cancelled: conversation=%s", scrub(conversation_id)
@@ -189,8 +145,8 @@ def generate_chat_response(self, ai_task_id: str):
         logger.info(
             "Bot response generated: conversation=%s tokens=%s+%s",
             scrub(conversation_id),
-            run.usage.prompt_tokens,
-            run.usage.completion_tokens,
+            run.usage.input_tokens,
+            run.usage.output_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 
@@ -258,21 +214,16 @@ def generate_conversation_title(self, conversation_id: str, force: bool = False)
     excerpt = "\n".join(m for m in messages if m)
 
     try:
-        result = call_llm(
-            [
-                {
-                    "role": "system",
-                    "content": (
-                        "Generate a short title (max 6 words) for this conversation. "
-                        "Reply with ONLY the title, no quotes, no punctuation at the end."
-                    ),
-                },
-                {"role": "user", "content": excerpt},
-            ],
+        result = run_prompt(
+            prompt(
+                "Generate a short title (max 6 words) for this conversation. "
+                "Reply with ONLY the title, no quotes, no punctuation at the end.",
+                excerpt,
+            ),
             model=settings.AI_SMALL_MODEL or settings.AI_MODEL,
             max_tokens=2048,
         )
-        title = result["content"].strip().strip("\"'")
+        title = result.output.strip().strip("\"'")
         if title:
             conversation.title = title[:255]
             conversation.save(update_fields=["title"])

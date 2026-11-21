@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from pydantic import ValidationError
 
+from workspace.ai.tests.agents import tool_context
 from workspace.ai.tool_registry import ToolError
 from workspace.notifications.models import Notification
 from workspace.projects.ai_tools import (
@@ -36,7 +37,8 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
 
     def _call(self, tool, args, user):
         handler = getattr(self.provider, tool)
-        return handler(args, user=user, bot=None, conversation_id=None, context={})
+        ctx = tool_context(user=user)
+        return handler(ctx) if args is None else handler(ctx, args)
 
     def _status(self, name):
         return self.project.statuses.get(name=name)
@@ -44,7 +46,7 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
     # -- list_projects -------------------------------------------------------
 
     def test_list_projects_returns_statuses_in_board_order(self):
-        result = self._call("list_projects", {}, self.member)
+        result = self._call("list_projects", None, self.member)
         data = json.loads(result)
         self.assertEqual([p["name"] for p in data], ["Website"])
         self.assertEqual(
@@ -52,12 +54,12 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         )
 
     def test_list_projects_excludes_inaccessible_and_archived(self):
-        result = self._call("list_projects", {}, self.outsider)
+        result = self._call("list_projects", None, self.outsider)
         self.assertEqual(result, "You have no projects yet.")
 
         self.project.archived_at = timezone.now()
         self.project.save(update_fields=["archived_at"])
-        result = self._call("list_projects", {}, self.member)
+        result = self._call("list_projects", None, self.member)
         self.assertEqual(result, "You have no projects yet.")
 
     # -- list_my_tasks -------------------------------------------------------

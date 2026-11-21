@@ -1,134 +1,64 @@
 """Tests for Prometheus instrumentation in the AI module.
 
-Targets the call sites where the LLM/image SDK is invoked:
-- workspace.ai.services.llm.call_llm  → ai_request_duration_seconds, ai_tokens_total
-- workspace.ai.tools.GenerateImageTool → ai_image_requests_total
-- workspace.ai.harness.observers.MetricsObserver → ai_tool_calls_total,
-  ai_tool_rounds, ai_tool_loop_stops_total
+- every model request -> ai_request_duration_seconds, ai_tokens_total
+- the image backend -> ai_image_requests_total
+- a bot's tool loop -> ai_tool_calls_total, ai_tool_rounds,
+  ai_tool_loop_stops_total
 """
 
-import itertools
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from prometheus_client import REGISTRY
 
-from workspace.ai.harness.observers import MetricsObserver
-from workspace.ai.harness.runner import StopReason
-from workspace.ai.tool_registry import tool_failure
+from workspace.ai.prompts.base import prompt
+from workspace.ai.services.llm import run_prompt
 
-from .harness import ScriptedModel, StubToolset, build_runner, call, reply, tool_reply
+from .agents import BotRunCase, call, reply, scripted, tool_context, write_call
 
 
 def _sample(name, labels=None):
     return REGISTRY.get_sample_value(name, labels or {}) or 0.0
 
 
-@override_settings(
-    AI_API_KEY="test-key",
-    AI_MODEL="gpt-4o-mini",
-    AI_MAX_TOKENS=100,
-)
-class CallLlmMetricsTests(TestCase):
-    def _make_response(
-        self, model="gpt-4o-mini", prompt_tokens=10, completion_tokens=5
-    ):
-        choice = MagicMock(message=MagicMock(content="hi", tool_calls=None))
-        usage = MagicMock(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
+class _Change:
+    """How much a sample moved while the block ran."""
+
+    def __init__(self, name, **labels):
+        self._read = lambda: _sample(name, labels)
+
+    def __enter__(self):
+        self._before = self._read()
+        return self
+
+    def __exit__(self, *exc):
+        self.by = self._read() - self._before
+
+
+class ModelRequestMetricsTests(SimpleTestCase):
+    def test_a_request_records_its_duration_and_its_tokens(self):
+        ok = _Change("ai_request_duration_seconds_count", model="m-ok", status="ok")
+        sent = _Change("ai_tokens_total", model="m-ok", kind="prompt")
+        written = _Change("ai_tokens_total", model="m-ok", kind="completion")
+        with ok, sent, written:
+            with scripted(reply("hi", input_tokens=42, output_tokens=7), model="m-ok"):
+                run_prompt(prompt("be brief", "hi"))
+
+        self.assertEqual((ok.by, sent.by, written.by), (1, 42, 7))
+
+    def test_a_failed_request_is_timed_as_an_error_and_still_raises(self):
+        def down(messages, tools):
+            raise RuntimeError("upstream down")
+
+        failed = _Change(
+            "ai_request_duration_seconds_count", model="m-down", status="error"
         )
-        return MagicMock(choices=[choice], model=model, usage=usage)
+        with failed:
+            with scripted(down, model="m-down"):
+                with self.assertRaisesMessage(RuntimeError, "upstream down"):
+                    run_prompt(prompt("be brief", "hi"))
 
-    @patch("workspace.ai.client.get_ai_client")
-    def test_successful_call_records_duration_and_tokens(self, mock_get_client):
-        client = MagicMock()
-        client.chat.completions.create.return_value = self._make_response(
-            prompt_tokens=42,
-            completion_tokens=7,
-        )
-        mock_get_client.return_value = client
-
-        from workspace.ai.services.llm import call_llm
-
-        before_ok = _sample(
-            "ai_request_duration_seconds_count",
-            {"model": "gpt-4o-mini", "status": "ok"},
-        )
-        before_prompt = _sample(
-            "ai_tokens_total",
-            {"model": "gpt-4o-mini", "kind": "prompt"},
-        )
-        before_completion = _sample(
-            "ai_tokens_total",
-            {"model": "gpt-4o-mini", "kind": "completion"},
-        )
-
-        call_llm(messages=[{"role": "user", "content": "hi"}])
-
-        self.assertEqual(
-            _sample(
-                "ai_request_duration_seconds_count",
-                {"model": "gpt-4o-mini", "status": "ok"},
-            )
-            - before_ok,
-            1,
-        )
-        self.assertEqual(
-            _sample("ai_tokens_total", {"model": "gpt-4o-mini", "kind": "prompt"})
-            - before_prompt,
-            42,
-        )
-        self.assertEqual(
-            _sample("ai_tokens_total", {"model": "gpt-4o-mini", "kind": "completion"})
-            - before_completion,
-            7,
-        )
-
-    @patch("workspace.ai.client.get_ai_client")
-    def test_api_error_observes_duration_with_error_status_and_reraises(
-        self, mock_get_client
-    ):
-        client = MagicMock()
-        client.chat.completions.create.side_effect = RuntimeError("boom")
-        mock_get_client.return_value = client
-
-        from workspace.ai.services.llm import call_llm
-
-        before_err = _sample(
-            "ai_request_duration_seconds_count",
-            {"model": "gpt-4o-mini", "status": "error"},
-        )
-        with self.assertRaises(RuntimeError):
-            call_llm(messages=[{"role": "user", "content": "hi"}])
-
-        self.assertEqual(
-            _sample(
-                "ai_request_duration_seconds_count",
-                {"model": "gpt-4o-mini", "status": "error"},
-            )
-            - before_err,
-            1,
-        )
-
-    @patch("workspace.ai.client.get_ai_client")
-    def test_zero_tokens_does_not_create_a_zero_sample(self, mock_get_client):
-        # When usage reports 0 tokens for a kind, we skip the .inc() so the
-        # series isn't materialized — keeps the /metrics surface clean.
-        client = MagicMock()
-        client.chat.completions.create.return_value = self._make_response(
-            prompt_tokens=10,
-            completion_tokens=0,
-        )
-        mock_get_client.return_value = client
-
-        from workspace.ai.services.llm import call_llm
-
-        labels_completion = {"model": "gpt-4o-mini", "kind": "completion"}
-        before = _sample("ai_tokens_total", labels_completion)
-        call_llm(messages=[{"role": "user", "content": "x"}])
-        # Counter not bumped for the zero-token kind.
-        self.assertEqual(_sample("ai_tokens_total", labels_completion), before)
+        self.assertEqual(failed.by, 1)
 
 
 @override_settings(
@@ -154,11 +84,7 @@ class ImageRequestMetricsTests(TestCase):
         before = _sample("ai_image_requests_total", labels)
 
         ImageToolProvider().generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id="conv-1",
-            context={},
+            tool_context(conversation_id="conv-1"), GenerateImageParams(prompt="a cat")
         )
 
         self.assertEqual(_sample("ai_image_requests_total", labels) - before, 1)
@@ -177,11 +103,8 @@ class ImageRequestMetricsTests(TestCase):
 
         with self.assertRaises(ToolError):
             ImageToolProvider().generate_image(
+                tool_context(conversation_id="conv-1"),
                 GenerateImageParams(prompt="a cat"),
-                user=None,
-                bot=None,
-                conversation_id="conv-1",
-                context={},
             )
 
         # One sample per attempt: the counter tracks calls to the backend,
@@ -233,152 +156,81 @@ class ImageRequestMetricsTests(TestCase):
         self.assertEqual(_sample("ai_image_requests_total", labels) - before, 3)
 
 
-class ToolLoopMetricsTests(TestCase):
-    """Instrumentation of the harness: per-call outcomes, rounds, early stops."""
+class ToolLoopMetricsTests(BotRunCase):
+    """What a bot run counts: each call, its rounds, and why it was cut short."""
 
-    def _run(self, script, handler=None, definitions=("search",), **limits):
-        toolset = StubToolset(handler=handler, definitions=definitions)
-        model = ScriptedModel(script, repeat=True)
-        runner = build_runner(
-            model,
-            toolset,
-            observers=[MetricsObserver(toolset, "metrics-model")],
-            **limits,
-        )
-        return runner.run([{"role": "user", "content": "go"}])
+    def _calls(self, tool, status):
+        return _Change("ai_tool_calls_total", tool=tool, status=status)
 
-    def test_successful_call_counts_as_ok_for_its_tool(self):
-        labels = {"tool": "search", "status": "ok"}
-        before = _sample("ai_tool_calls_total", labels)
+    def test_a_call_that_returns_counts_as_ok_for_its_tool(self):
+        with self._calls("write_note", "ok") as counted:
+            self.run_bot(reply("", write_call("c1")), reply("done"))
 
-        self._run(
-            [tool_reply(call("c1")), reply("done")], handler=lambda tc, ctx: "3 results"
-        )
+        self.assertEqual(counted.by, 1)
 
-        self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
+    def test_a_failing_tool_counts_as_an_error(self):
+        with self._calls("fail", "error") as counted:
+            self.run_bot(reply("", call("fail", {}, "c1")), reply("done"))
 
-    def test_failure_envelope_counts_as_error(self):
-        labels = {"tool": "search", "status": "error"}
-        before = _sample("ai_tool_calls_total", labels)
+        self.assertEqual(counted.by, 1)
 
-        self._run(
-            [tool_reply(call("c1")), reply("done")],
-            handler=lambda tc, ctx: tool_failure("query is required"),
-        )
+    def test_a_raising_tool_counts_as_an_error_and_still_propagates(self):
+        with self._calls("explode", "error") as counted:
+            with self.assertRaises(RuntimeError):
+                self.run_bot(reply("", call("explode", {}, "c1")), repeat=True)
 
-        self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
+        self.assertEqual(counted.by, 1)
 
-    def test_a_result_that_only_reads_like_an_error_counts_as_ok(self):
-        # A page about error handling is a result: only the envelope says a
-        # call failed.
-        labels = {"tool": "search", "status": "ok"}
-        before = _sample("ai_tool_calls_total", labels)
+    def test_a_tool_the_model_invented_names_no_series(self):
+        # Its name never reaches a label: the library answers the call itself.
+        with self._calls("made_up", "ok") as ok, self._calls("made_up", "error") as bad:
+            self.run_bot(reply("", call("made_up", {}, "c1")), reply("done"))
 
-        self._run(
-            [tool_reply(call("c1")), reply("done")],
-            handler=lambda tc, ctx: "Error: 404 is what this server answers",
-        )
+        self.assertEqual((ok.by, bad.by), (0, 0))
 
-        self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
+    @override_settings(AI_MAX_IDENTICAL_TOOL_CALLS=1)
+    def test_a_refused_duplicate_counts_as_a_repeat_and_stops_the_loop(self):
+        def model(messages, tools):
+            return reply("", write_call(f"c{len(messages)}")) if tools else reply("ok")
 
-    def test_raising_tool_counts_as_error_and_still_propagates(self):
-        def boom(tool_call, context):
-            raise RuntimeError("boom")
+        stops = _Change("ai_tool_loop_stops_total", reason="repeat_loop")
+        with self._calls("write_note", "repeat") as repeats, stops:
+            self.run_bot(model, repeat=True)
 
-        labels = {"tool": "search", "status": "error"}
-        before = _sample("ai_tool_calls_total", labels)
+        self.assertEqual((repeats.by, stops.by), (1, 1))
 
-        with self.assertRaises(RuntimeError):
-            self._run([tool_reply(call("c1")), reply("done")], handler=boom)
+    @override_settings(AI_MAX_TOOL_ROUNDS=2, AI_MAX_IDENTICAL_TOOL_CALLS=10)
+    def test_the_round_cap_is_counted_as_an_early_stop(self):
+        def model(messages, tools):
+            return reply("", write_call(f"c{len(messages)}")) if tools else reply("ok")
 
-        self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
+        with _Change("ai_tool_loop_stops_total", reason="round_cap") as stops:
+            self.run_bot(model, repeat=True)
 
-    def test_unregistered_tool_name_folds_into_one_series(self):
-        invented = {"tool": "teleport_user", "status": "error"}
-        folded = {"tool": "unknown", "status": "error"}
-        before = _sample("ai_tool_calls_total", folded)
+        self.assertEqual(stops.by, 1)
 
-        self._run(
-            [tool_reply(call("c1", name="teleport_user")), reply("done")],
-            handler=lambda tc, ctx: tool_failure(
-                "there is no tool named teleport_user"
-            ),
-        )
-
-        self.assertEqual(_sample("ai_tool_calls_total", folded) - before, 1)
-        self.assertEqual(_sample("ai_tool_calls_total", invented), 0)
-
-    def test_refused_duplicate_counts_as_repeat_and_stops_the_loop(self):
-        repeat = {"tool": "search", "status": "repeat"}
-        before_repeat = _sample("ai_tool_calls_total", repeat)
-        before_stop = _sample("ai_tool_loop_stops_total", {"reason": "repeat_loop"})
-
-        run = self._run([tool_reply(call("c1"))], handler=lambda tc, ctx: "ok")
-
-        self.assertIs(run.stop, StopReason.REPEAT_LOOP)
-        self.assertEqual(_sample("ai_tool_calls_total", repeat) - before_repeat, 1)
-        self.assertEqual(
-            _sample("ai_tool_loop_stops_total", {"reason": "repeat_loop"})
-            - before_stop,
-            1,
-        )
-
-    def test_round_cap_is_counted_as_an_early_stop(self):
-        labels = {"reason": "round_cap"}
-        before = _sample("ai_tool_loop_stops_total", labels)
-
-        # Distinct arguments each round, so the repeat guard never fires and
-        # the run dies on the round cap instead.
-        args = itertools.count()
-        run = self._run(
-            lambda messages, tools: tool_reply(
-                call("c1", arguments=f'{{"q":{next(args)}}}')
-            ),
-            handler=lambda tc, ctx: "ok",
-            max_rounds=2,
-        )
-
-        self.assertIs(run.stop, StopReason.ROUND_CAP)
-        self.assertEqual(_sample("ai_tool_loop_stops_total", labels) - before, 1)
-
-    def test_rounds_histogram_records_one_sample_per_reply(self):
-        labels = {"model": "metrics-model"}
-        before_count = _sample("ai_tool_rounds_count", labels)
-        before_sum = _sample("ai_tool_rounds_sum", labels)
-
-        self._run(
-            [
-                tool_reply(call("c1", arguments='{"q":"a"}')),
-                tool_reply(call("c2", arguments='{"q":"b"}')),
+    def test_the_rounds_histogram_takes_one_sample_per_reply(self):
+        runs = _Change("ai_tool_rounds_count", model="test-model")
+        rounds = _Change("ai_tool_rounds_sum", model="test-model")
+        with runs, rounds:
+            self.run_bot(
+                reply("", write_call("c1", "a")),
+                reply("", write_call("c2", "b")),
                 reply("done"),
-            ],
-            handler=lambda tc, ctx: "ok",
-        )
+            )
 
-        self.assertEqual(_sample("ai_tool_rounds_count", labels) - before_count, 1)
-        self.assertEqual(_sample("ai_tool_rounds_sum", labels) - before_sum, 2)
+        self.assertEqual((runs.by, rounds.by), (1, 2))
 
-    def test_reply_without_tools_records_a_zero_round_sample(self):
-        labels = {"model": "metrics-model"}
-        before_count = _sample("ai_tool_rounds_count", labels)
-        before_zero = _sample("ai_tool_rounds_bucket", {**labels, "le": "0.0"})
+    def test_a_reply_without_tools_is_a_sample_of_zero_rounds(self):
+        runs = _Change("ai_tool_rounds_count", model="test-model")
+        rounds = _Change("ai_tool_rounds_sum", model="test-model")
+        with runs, rounds:
+            self.run_bot(reply("hello"))
 
-        self._run([reply("hello")])
+        self.assertEqual((runs.by, rounds.by), (1, 0))
 
-        self.assertEqual(_sample("ai_tool_rounds_count", labels) - before_count, 1)
-        self.assertEqual(
-            _sample("ai_tool_rounds_bucket", {**labels, "le": "0.0"}) - before_zero, 1
-        )
+    def test_a_cancelled_run_is_left_out_of_the_distribution(self):
+        with _Change("ai_tool_rounds_count", model="test-model") as runs:
+            self.run_bot(reply("hello"), is_cancelled=lambda: True)
 
-    def test_cancelled_run_is_left_out_of_the_distribution(self):
-        labels = {"model": "metrics-model"}
-        before = _sample("ai_tool_rounds_count", labels)
-
-        run = self._run(
-            [tool_reply(call("c1"))],
-            handler=lambda tc, ctx: "ok",
-            is_cancelled=lambda: True,
-        )
-
-        self.assertIs(run.stop, StopReason.CANCELLED)
-        self.assertEqual(_sample("ai_tool_rounds_count", labels), before)
+        self.assertEqual(runs.by, 0)

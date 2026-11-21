@@ -5,31 +5,28 @@ calls and notifications run in a worker, where no language is active unless
 the code activates the user's.
 """
 
-import json
 import threading
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone, translation
-from django.utils.translation import gettext
 from rest_framework.test import APITestCase
 
-from workspace.ai.harness.dispatch import Dispatcher
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.prompts.chat import build_chat_messages
 from workspace.ai.prompts.editor import build_explain_messages
 from workspace.ai.services.responses import handle_generation_error
-from workspace.ai.tool_registry import tool_registry
+from workspace.ai.tool_registry import ToolError
 from workspace.calendar.models import Calendar, Event, EventMember
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.mail.models import MailAccount, MailFolder, MailMessageLabel
 from workspace.notifications.models import Notification
-from workspace.users.services.settings import set_setting
+from workspace.users.services.settings import get_user_language, set_setting
 
-from .harness import StubToolset, call
+from .agents import BotRunCase, read_call, reply, run_tool
 
 User = get_user_model()
 
@@ -101,11 +98,6 @@ class ToolResultTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def _dispatcher(self, toolset, concurrency=1):
-        return Dispatcher(
-            toolset, concurrency=concurrency, user=self.user, bot=None, context={}
-        )
-
     def test_a_tool_refusal_is_in_the_requesting_users_language(self):
         owner = User.objects.create_user(username="bob", password="pw")
         event = Event.objects.create(
@@ -115,36 +107,46 @@ class ToolResultTests(TestCase):
             start=timezone.now() + timedelta(days=1),
         )
         EventMember.objects.create(event=event, user=self.user)
-        arguments = json.dumps(
-            {"event_id": str(event.uuid), "scope": "all", "title": "Hijacked"}
-        )
+        arguments = {"event_id": str(event.uuid), "scope": "all", "title": "Hijacked"}
 
-        outcome = self._dispatcher(tool_registry).run_round(
-            [call("c1", name="update_event", arguments=arguments)]
-        )
+        # Called from a worker's language, not the user's.
+        with translation.override("en"), self.assertRaises(ToolError) as refused:
+            run_tool("update_event", arguments, user=self.user)
 
         self.assertIn(
             "Seul le propriétaire peut modifier cet événement.",
-            outcome.outcomes[0].result,
+            str(refused.exception),
         )
+
+
+@override_settings(AI_TOOL_CONCURRENCY=2)
+class PoolThreadToolTests(BotRunCase):
+    def setUp(self):
+        super().setUp()
+        self.user = _french_user("alice")
+        # Cached from here: a pool thread has a connection of its own, which
+        # cannot read the row this test's open transaction holds.
+        get_user_language(self.user)
+
+    def tearDown(self):
+        cache.clear()
 
     def test_calls_run_in_pool_threads_keep_the_users_language(self):
         # The barrier holds both calls in flight together, so they can only
-        # have run in the dispatcher's pool threads, not on this one.
+        # have run in the pool's threads, not on this one.
         barrier = threading.Barrier(2, timeout=10)
+        self.tools.gate = lambda call_id: barrier.wait()
 
-        def handler(tool_call, context):
-            barrier.wait()
-            return gettext("Cancel")
+        with translation.override("en"):
+            self.run_bot(
+                reply("", read_call("c1"), read_call("c2")),
+                reply("done"),
+                user=self.user,
+            )
 
-        toolset = StubToolset(concurrent={"read_webpage"}, handler=handler)
-
-        outcome = self._dispatcher(toolset, concurrency=2).run_round(
-            [call("c1", name="read_webpage"), call("c2", name="read_webpage")]
-        )
-
-        self.assertEqual(toolset.peak_in_flight, 2)
-        self.assertEqual([o.result for o in outcome.outcomes], ["Annuler"] * 2)
+        self.assertEqual(self.tools.peak_in_flight, 2)
+        self.assertNotIn(threading.get_ident(), self.tools.threads.values())
+        self.assertEqual(self.tools.languages, {"c1": "fr", "c2": "fr"})
 
 
 @patch("workspace.notifications.services.notifications.notify_sse")
@@ -214,9 +216,11 @@ class ReplyLanguageTests(TestCase):
     def test_the_chat_prompt_names_the_users_language(self):
         messages = build_chat_messages("", [], user=_french_user("alice"))
 
-        self.assertIn("The user's interface language is French", messages[0]["content"])
+        self.assertIn(
+            "The user's interface language is French", messages[0].parts[0].content
+        )
 
     def test_the_editor_prompt_names_the_users_language(self):
         messages = build_explain_messages("x = 1", user=_french_user("alice"))
 
-        self.assertIn("Write any prose in French", messages[0]["content"])
+        self.assertIn("Write any prose in French", messages[0].parts[0].content)

@@ -15,6 +15,8 @@ from workspace.ai.tools import (
 from workspace.files.models import File
 from workspace.files.services.search_index import index_file
 
+from .agents import tool_context
+
 User = get_user_model()
 
 
@@ -29,11 +31,7 @@ class SearchEverythingTests(TestCase):
         if limit is not None:
             kwargs["limit"] = limit
         return SearchToolProvider().search_everything(
-            SearchEverythingParams(**kwargs),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.user), SearchEverythingParams(**kwargs)
         )
 
     def test_finds_a_file_and_reports_where_it_lives(self):
@@ -111,11 +109,7 @@ class SearchEverythingPayloadTests(TestCase):
         with patch("workspace.core.services.search.search_modules", return_value=hits):
             return json.loads(
                 SearchToolProvider().search_everything(
-                    SearchEverythingParams(query="sync"),
-                    user=self.user,
-                    bot=None,
-                    conversation_id=None,
-                    context={},
+                    tool_context(user=self.user), SearchEverythingParams(query="sync")
                 )
             )
 

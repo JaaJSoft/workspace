@@ -9,6 +9,8 @@ from rest_framework.test import APITestCase
 from workspace.ai.models import AITask, BotProfile, UserMemory
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
+from .agents import reply, scripted
+
 User = get_user_model()
 
 
@@ -361,18 +363,11 @@ class ClassifyViewTests(APITestCase):
         self.client.force_authenticate(self.user)
 
         with (
-            patch(
-                "workspace.ai.tasks.mail.call_llm",
-                return_value={
-                    "content": '[{"i": 1, "labels": ["Urgent"]}]',
-                    "model": "test",
-                    "prompt_tokens": 1,
-                    "completion_tokens": 1,
-                },
-            ),
+            scripted(reply('{"results": [{"i": 1, "labels": ["Urgent"]}]}')),
             patch("workspace.notifications.tasks.send_push_notification.delay"),
         ):
             resp = self.client.post("/api/v1/ai/tasks/mail/classify", {}, format="json")
 
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(self.msg.message_labels.get().label.name, "Urgent")
         self.assertEqual(Notification.objects.filter(recipient=self.user).count(), 0)

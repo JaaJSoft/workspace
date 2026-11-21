@@ -1,10 +1,10 @@
 """Show a video attachment to a vision model as a series of still frames."""
 
-import base64
 import io
 import logging
 
 from PIL import Image
+from pydantic_ai.messages import BinaryContent
 
 from workspace.common.logging import scrub
 from workspace.files.services import ffmpeg
@@ -22,8 +22,8 @@ _TIMEOUT = 120
 def extract_video_frames(att):
     """Extract evenly-spaced frames from a video attachment (max _VIDEO_MAX_FRAMES).
 
-    Returns (frame_parts, description) where frame_parts is a list of image_url
-    content parts and description is a string summarising the video for the model.
+    Returns (frames, description) where frames are JPEG images and
+    description is a string summarising the video for the model.
     Returns ([], None) when ffmpeg is unavailable or the extraction fails so
     the caller can degrade gracefully without a full bot-response failure.
     """
@@ -56,13 +56,7 @@ def _extract(path, att):
         Image.frombytes("RGB", size, pixels).save(
             buffer, format="JPEG", quality=_JPEG_QUALITY
         )
-        b64 = base64.b64encode(buffer.getvalue()).decode()
-        parts.append(
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
-            }
-        )
+        parts.append(BinaryContent(data=buffer.getvalue(), media_type="image/jpeg"))
 
     ffmpeg.sample_frames(
         path,

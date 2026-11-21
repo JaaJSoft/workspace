@@ -12,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from workspace.ai.tests.agents import tool_context
 from workspace.mail.ai_tools import MailToolProvider, SearchEmailsParams
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.search import search_contacts, search_mail
@@ -207,7 +208,7 @@ class SenderSearchUsesFlatColumnsTests(MailFixtureMixin, APITestCase):
 
     def test_ai_search_emails_matches_sender_name(self):
         out = MailToolProvider().search_emails(
-            SearchEmailsParams(query="wonder"), self.user, None, None, {}
+            tool_context(user=self.user), SearchEmailsParams(query="wonder")
         )
         self.assertIn(str(self.msg.uuid), out)
         self.assertIn("Alice Wonder", json.loads(out)[0]["from"])

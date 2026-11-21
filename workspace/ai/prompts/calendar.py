@@ -3,7 +3,9 @@
 from zoneinfo import ZoneInfo
 
 from django.utils import timezone
+from pydantic_ai.messages import ModelMessage
 
+from workspace.ai.prompts.base import prompt
 from workspace.ai.prompts.mail import INJECTION_GUARD
 
 _UTC = ZoneInfo("UTC")
@@ -42,9 +44,8 @@ SYSTEM_PROMPT = (
 def build_event_extraction_messages(
     thread_messages: list,
     user_tz: ZoneInfo | None = None,
-) -> list[dict]:
-    """Render a chronological thread into the chat-format messages
-    expected by call_llm().
+) -> list[ModelMessage]:
+    """Render a chronological thread into the conversation a model is sent.
 
     thread_messages is a list of MailMessage instances (or compatible
     objects with subject, body_text, body_html, from_email, date),
@@ -81,22 +82,17 @@ def build_event_extraction_messages(
     anchor = anchor_dt.astimezone(tz).strftime("%Y-%m-%d %H:%M")
     tz_name = str(tz)
 
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": (
-                f"Resolve relative references ('tomorrow', 'demain', 'next "
-                f"Tuesday', 'in three weeks') in each message against the "
-                f"date that message was sent (the ISO timestamp shown after "
-                f"'[Message N |'), NOT against today's date. The most "
-                f"recent message in this thread was sent on {anchor} "
-                f"({tz_name}); use that as the default anchor. When an "
-                f"email mentions a time WITHOUT an explicit timezone (e.g., "
-                f"'8h', '3pm'), interpret it in {tz_name}, NOT in UTC.\n\n"
-                f"Extract events from this email thread:\n\n"
-                f"<untrusted-content>\n{thread_block}\n</untrusted-content>\n\n"
-                f"{INJECTION_GUARD}"
-            ),
-        },
-    ]
+    return prompt(
+        SYSTEM_PROMPT,
+        f"Resolve relative references ('tomorrow', 'demain', 'next "
+        f"Tuesday', 'in three weeks') in each message against the "
+        f"date that message was sent (the ISO timestamp shown after "
+        f"'[Message N |'), NOT against today's date. The most "
+        f"recent message in this thread was sent on {anchor} "
+        f"({tz_name}); use that as the default anchor. When an "
+        f"email mentions a time WITHOUT an explicit timezone (e.g., "
+        f"'8h', '3pm'), interpret it in {tz_name}, NOT in UTC.\n\n"
+        f"Extract events from this email thread:\n\n"
+        f"<untrusted-content>\n{thread_block}\n</untrusted-content>\n\n"
+        f"{INJECTION_GUARD}",
+    )

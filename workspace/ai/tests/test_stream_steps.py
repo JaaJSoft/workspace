@@ -7,17 +7,18 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.ai.harness.model import ToolCall
 from workspace.ai.models import AITask
 from workspace.ai.services import stream_steps
 from workspace.ai.sse_provider import GENERATING_HEARTBEAT_SECONDS, AIStreamSSEProvider
 from workspace.chat.models import Conversation, ConversationMember
 
+from .agents import call
+
 User = get_user_model()
 
 
 def make_tool_call(name="search_web", arguments='{"query": "meteo paris"}'):
-    return ToolCall(id="call_1", name=name, arguments=arguments)
+    return call(name, arguments, "call_1")
 
 
 class MailboxTests(TestCase):
@@ -311,10 +312,7 @@ class NotifyToolStepDoneTests(TestCase):
         enqueue lock two reports racing lose one - and the row it belonged
         to spins until the reply lands.
         """
-        calls = [
-            ToolCall(id=f"call_{index}", name="search_web", arguments="{}")
-            for index in range(8)
-        ]
+        calls = [call("search_web", "{}", f"call_{index}") for index in range(8)]
         start = threading.Barrier(len(calls), timeout=10)
 
         def report(tool_call):
@@ -328,7 +326,7 @@ class NotifyToolStepDoneTests(TestCase):
         out, _ = stream_steps.read_steps(1, None)
         self.assertEqual(
             sorted(e["data"]["call_id"] for e in out),
-            sorted(tool_call.id for tool_call in calls),
+            sorted(tool_call.tool_call_id for tool_call in calls),
         )
 
 

@@ -10,10 +10,6 @@ updates:
     schedule:
       interval: "daily"
     versioning-strategy: increase
-    ignore:
-      # Released several times a week and pinned to an exact version: it is
-      # bumped on purpose, with scripts/agent_bench.py run before and after.
-      - dependency-name: "pydantic-ai-slim"
 
   - package-ecosystem: "github-actions"
     directory: "/" # Workflows under .github/workflows

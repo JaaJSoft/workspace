@@ -1,21 +1,29 @@
-import json
 import uuid
 from datetime import time, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from pydantic import ValidationError
+from pydantic_ai.messages import SystemPromptPart
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.ai.models import BotProfile, ScheduledMessage
+from workspace.ai.models import AITask, BotProfile, ScheduledMessage, UserMemory
 from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import CancelScheduleParams, ScheduleMessageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 
+from .agents import call, reply, run_tool, scripted, tool_context
+
 User = get_user_model()
+
+
+def _system_text(part):
+    """The text of *part* when the application speaks in it, else None."""
+    return part.content if isinstance(part, SystemPromptPart) else None
 
 
 # ---------------------------------------------------------------------------
@@ -337,17 +345,7 @@ class GenerateScheduledResponseTests(TestCase):
             conversation=self.conversation, user=self.bot_user
         )
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_generates_message_and_deactivates_once(self, mock_llm):
-        mock_llm.return_value = {
-            "content": "Hello!",
-            "tool_calls": None,
-            "message": MagicMock(content="Hello!", tool_calls=None, to_dict=lambda: {}),
-            "model": "gpt-4o-mini",
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-        }
-
+    def test_generates_message_and_deactivates_once(self):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
@@ -359,7 +357,8 @@ class GenerateScheduledResponseTests(TestCase):
 
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        result = generate_scheduled_response(str(schedule.uuid))
+        with scripted(reply("Hello!", input_tokens=10, output_tokens=5)):
+            result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result["status"], "ok")
 
@@ -376,19 +375,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertFalse(schedule.is_active)
         self.assertIsNotNone(schedule.last_run_at)
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_recurring_stays_active(self, mock_llm):
-        mock_llm.return_value = {
-            "content": "Check-in time!",
-            "tool_calls": None,
-            "message": MagicMock(
-                content="Check-in time!", tool_calls=None, to_dict=lambda: {}
-            ),
-            "model": "gpt-4o-mini",
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-        }
-
+    def test_recurring_stays_active(self):
         now = timezone.now()
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -403,7 +390,8 @@ class GenerateScheduledResponseTests(TestCase):
 
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        result = generate_scheduled_response(str(schedule.uuid))
+        with scripted(reply("Check-in time!", input_tokens=10, output_tokens=5)):
+            result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result["status"], "ok")
 
@@ -413,8 +401,7 @@ class GenerateScheduledResponseTests(TestCase):
         # next_run_at should have advanced (at least 1 hour in the future from last_run_at)
         self.assertGreater(schedule.next_run_at, schedule.last_run_at)
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_skips_inactive_schedule(self, mock_llm):
+    def test_skips_inactive_schedule(self):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
@@ -427,23 +414,14 @@ class GenerateScheduledResponseTests(TestCase):
 
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        result = generate_scheduled_response(str(schedule.uuid))
+        with scripted(reply("Should not be asked")) as script:
+            result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result["status"], "skipped")
-        mock_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_empty_response_skips_message(self, mock_llm):
+    def test_empty_response_skips_message(self):
         """Scheduled messages with empty AI responses should not post empty messages."""
-        mock_llm.return_value = {
-            "content": "",
-            "tool_calls": None,
-            "message": MagicMock(content="", tool_calls=None, to_dict=lambda: {}),
-            "model": "gpt-4o-mini",
-            "prompt_tokens": 10,
-            "completion_tokens": 0,
-        }
-
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
@@ -455,7 +433,8 @@ class GenerateScheduledResponseTests(TestCase):
 
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        result = generate_scheduled_response(str(schedule.uuid))
+        with scripted(reply("", input_tokens=10), repeat=True) as script:
+            result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "empty_response")
@@ -467,68 +446,16 @@ class GenerateScheduledResponseTests(TestCase):
         ).first()
         self.assertIsNone(bot_msg)
 
-        # OpenAI should have been called twice (initial + retry)
-        self.assertEqual(mock_llm.call_count, 2)
+        # Nobody is waiting for it: the model is not asked a second time.
+        self.assertEqual(len(script.requests), 1)
+        task = AITask.objects.get(owner=self.bot_user)
+        self.assertEqual(task.status, AITask.Status.COMPLETED)
+        self.assertEqual(task.result, "[EMPTY]")
 
-    @patch("workspace.ai.tool_registry.tool_registry.execute")
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_empty_response_retry_does_not_replay_tools(
-        self,
-        mock_llm,
-        mock_execute,
-    ):
-        """Regression for #143/#144: an empty initial response must
-        retry only the final completion, not the whole tool loop.
-        Otherwise side-effectful tools would fire twice on retry.
+    def test_empty_response_does_not_replay_tools(self):
+        """Regression for #143/#144: an empty reply after a tool round must
+        not run the tool loop again, or side-effectful tools would fire twice.
         """
-        tool_call = MagicMock()
-        tool_call.id = "call_abc"
-        tool_call.type = "function"
-        tool_call.function.name = "save_memory"
-        tool_call.function.arguments = '{"key": "x", "content": "y"}'
-
-        def tool_resp():
-            return {
-                "content": "",
-                "tool_calls": [tool_call],
-                "message": MagicMock(
-                    content=None,
-                    tool_calls=[tool_call],
-                    role="assistant",
-                ),
-                "model": "gpt-4o-mini",
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-            }
-
-        def empty_resp():
-            return {
-                "content": "",
-                "tool_calls": None,
-                "message": MagicMock(content="", tool_calls=None),
-                "model": "gpt-4o-mini",
-                "prompt_tokens": 10,
-                "completion_tokens": 0,
-            }
-
-        def final_resp():
-            return {
-                "content": "Check-in!",
-                "tool_calls": None,
-                "message": MagicMock(content="Check-in!", tool_calls=None),
-                "model": "gpt-4o-mini",
-                "prompt_tokens": 15,
-                "completion_tokens": 5,
-            }
-
-        mock_llm.side_effect = [
-            tool_resp(),  # round 1: tool_call → execute
-            empty_resp(),  # round 2: empty → triggers retry
-            tool_resp(),  # round 3 (bug only): would re-execute
-            final_resp(),  # round 4 (bug only): final text
-        ]
-        mock_execute.return_value = "Saved."
-
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
@@ -540,12 +467,24 @@ class GenerateScheduledResponseTests(TestCase):
 
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        generate_scheduled_response(str(schedule.uuid))
+        tool_reply = reply(
+            "", call("save_memory", {"key": "x", "content": "y"}, "call_abc")
+        )
+        # The two last replies are only read if the run starts over.
+        with (
+            scripted(tool_reply, reply(""), tool_reply, reply("Check-in!")) as script,
+            patch.object(
+                UserMemory.objects,
+                "update_or_create",
+                wraps=UserMemory.objects.update_or_create,
+            ) as saved,
+        ):
+            result = generate_scheduled_response(str(schedule.uuid))
 
-        # The tool was executed exactly once: a retry re-entering
-        # run_tool_loop would fire save_memory a second time
-        # (mock_execute.call_count == 2).
-        self.assertEqual(mock_execute.call_count, 1)
+        self.assertEqual(result, {"status": "skipped", "reason": "empty_response"})
+        self.assertEqual(len(script.requests), 2)
+        self.assertEqual(saved.call_count, 1)
+        self.assertEqual(UserMemory.objects.get(user=self.user).content, "y")
 
     def test_nonexistent_schedule(self):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
@@ -554,8 +493,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("not found", result["error"])
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_duplicate_delivery_does_not_double_send_recurring(self, mock_llm):
+    def test_duplicate_delivery_does_not_double_send_recurring(self):
         # Celery can redeliver a task after the first worker has already
         # committed (lost ack, worker death, etc.). Without keying the CAS
         # off the dispatcher's claim token, worker B reads the post-A
@@ -563,14 +501,6 @@ class GenerateScheduledResponseTests(TestCase):
         # worker B advances the row again and posts a duplicate message
         # for recurring schedules. Pinning the CAS to the claim token
         # written by the dispatcher closes that window.
-        mock_llm.return_value = {
-            "content": "Hello!",
-            "tool_calls": None,
-            "message": MagicMock(content="Hello!", tool_calls=None, to_dict=lambda: {}),
-            "model": "gpt-4o-mini",
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-        }
 
         # Recurring 2-hour schedule: when worker A advances it, the row
         # gets a fresh next_run_at that worker B (the duplicate delivery)
@@ -595,21 +525,22 @@ class GenerateScheduledResponseTests(TestCase):
 
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        # Worker A processes the original delivery.
-        result_a = generate_scheduled_response(
-            str(schedule.uuid),
-            claim_token.isoformat(),
-        )
-        self.assertEqual(result_a["status"], "ok")
+        with scripted(reply("Hello!", input_tokens=10, output_tokens=5), repeat=True):
+            # Worker A processes the original delivery.
+            result_a = generate_scheduled_response(
+                str(schedule.uuid),
+                claim_token.isoformat(),
+            )
+            self.assertEqual(result_a["status"], "ok")
 
-        # Worker B is the duplicate redelivery, with the *same* claim
-        # token. The row's next_run_at is now whatever worker A computed
-        # (a real recurrence value, not the token) - so the CAS keyed on
-        # the token must match zero rows and bail.
-        result_b = generate_scheduled_response(
-            str(schedule.uuid),
-            claim_token.isoformat(),
-        )
+            # Worker B is the duplicate redelivery, with the *same* claim
+            # token. The row's next_run_at is now whatever worker A computed
+            # (a real recurrence value, not the token) - so the CAS keyed on
+            # the token must match zero rows and bail.
+            result_b = generate_scheduled_response(
+                str(schedule.uuid),
+                claim_token.isoformat(),
+            )
         self.assertEqual(result_b["status"], "skipped")
         self.assertEqual(result_b["reason"], "already_claimed")
 
@@ -619,21 +550,11 @@ class GenerateScheduledResponseTests(TestCase):
         )
         self.assertEqual(bot_msgs.count(), 1)
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_concurrent_worker_does_not_double_send(self, mock_llm):
+    def test_concurrent_worker_does_not_double_send(self):
         # Simulate the worker race: two workers loaded the row at the same
         # next_run_at, the other one already advanced it in the DB before
         # this worker reaches its CAS update. The CAS predicate matches zero
         # rows, the worker bails, and no bot message is posted.
-        mock_llm.return_value = {
-            "content": "Hello!",
-            "tool_calls": None,
-            "message": MagicMock(content="Hello!", tool_calls=None, to_dict=lambda: {}),
-            "model": "gpt-4o-mini",
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-        }
-
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
@@ -652,14 +573,17 @@ class GenerateScheduledResponseTests(TestCase):
             )
             return original_compute(self_obj, user_tz=user_tz)
 
-        with patch.object(
-            ScheduledMessage,
-            "compute_next_run",
-            autospec=True,
-            side_effect=race_then_compute,
-        ):
-            from workspace.ai.tasks.scheduled import generate_scheduled_response
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
 
+        with (
+            patch.object(
+                ScheduledMessage,
+                "compute_next_run",
+                autospec=True,
+                side_effect=race_then_compute,
+            ),
+            scripted(reply("Hello!", input_tokens=10, output_tokens=5)),
+        ):
             result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result["status"], "skipped")
@@ -852,15 +776,15 @@ class ScheduleToolTests(TestCase):
         self.conv_id = str(self.conversation.uuid)
         self.context = {}
 
-    def _call(self, method_name, args):
+    def _call(self, method_name, args=None):
         method = getattr(self.provider, method_name)
-        return method(
-            args,
+        ctx = tool_context(
             user=self.user,
             bot=self.bot_user,
             conversation_id=self.conv_id,
             context=self.context,
         )
+        return method(ctx) if args is None else method(ctx, args)
 
     def test_schedule_once(self):
         future = (timezone.now() + timedelta(hours=2)).isoformat()
@@ -1014,36 +938,29 @@ class ScheduleToolTests(TestCase):
         self.assertFalse(schedule.is_active)
 
     def _execute_cancel(self, schedule_id):
-        from workspace.ai.harness.model import ToolCall
-        from workspace.ai.tool_registry import tool_registry
-
-        call = ToolCall(
-            id="c1",
-            name="cancel_schedule",
-            arguments=json.dumps({"schedule_id": schedule_id}),
-        )
-        return tool_registry.execute(
-            call, self.user, self.bot_user, self.conv_id, self.context
+        return run_tool(
+            "cancel_schedule",
+            {"schedule_id": schedule_id},
+            user=self.user,
+            bot=self.bot_user,
+            conversation_id=self.conv_id,
+            context=self.context,
         )
 
     def test_cancel_schedule_malformed_id_is_a_tool_failure(self):
-        from workspace.ai.tool_registry import parse_tool_failure
+        with self.assertRaises(ValidationError) as caught:
+            self._execute_cancel("not-a-uuid")
 
-        failure = parse_tool_failure(self._execute_cancel("not-a-uuid"))
-
-        self.assertIsNotNone(failure)
-        self.assertIn("invalid arguments", failure["reason"])
+        self.assertIn("schedule_id", str(caught.exception))
 
     def test_cancel_schedule_unknown_id_is_a_tool_failure(self):
-        from workspace.ai.tool_registry import parse_tool_failure
+        with self.assertRaises(ToolError) as caught:
+            self._execute_cancel(str(uuid.uuid4()))
 
-        failure = parse_tool_failure(self._execute_cancel(str(uuid.uuid4())))
-
-        self.assertIsNotNone(failure)
-        self.assertIn("no active schedule", failure["reason"])
+        self.assertIn("no active schedule", caught.exception.reason)
 
     def test_list_schedules_empty(self):
-        result = self._call("list_schedules", {})
+        result = self._call("list_schedules")
         self.assertIn("No active schedules", result)
 
     def test_list_schedules_with_entries(self):
@@ -1065,7 +982,7 @@ class ScheduleToolTests(TestCase):
             recurrence_interval=1,
             next_run_at=timezone.now() + timedelta(days=1),
         )
-        result = self._call("list_schedules", {})
+        result = self._call("list_schedules")
         self.assertIn("Active schedules (2)", result)
         self.assertIn("First schedule", result)
         self.assertIn("Second schedule", result)
@@ -1089,7 +1006,7 @@ class ScheduleToolTests(TestCase):
             next_run_at=timezone.now() + timedelta(days=1),
         )
 
-        result = self._call("list_schedules", {})
+        result = self._call("list_schedules")
 
         self.assertIn("at 09:00 (Asia/Tokyo)", result)
 
@@ -1106,7 +1023,7 @@ class ScheduleToolTests(TestCase):
             next_run_at=timezone.now() + timedelta(hours=2),
         )
 
-        result = self._call("list_schedules", {})
+        result = self._call("list_schedules")
 
         self.assertNotIn("at 09:00", result)
 
@@ -1132,18 +1049,7 @@ class ScheduledRunContextTests(TestCase):
             conversation=self.conversation, author=self.bot_user, body="hello"
         )
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_run_tells_the_model_nobody_wrote_to_it(self, mock_llm):
-        mock_llm.return_value = {
-            "content": "Still there?",
-            "tool_calls": None,
-            "message": MagicMock(
-                content="Still there?", tool_calls=None, to_dict=lambda: {}
-            ),
-            "model": "m",
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-        }
+    def test_run_tells_the_model_nobody_wrote_to_it(self):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
@@ -1154,11 +1060,11 @@ class ScheduledRunContextTests(TestCase):
         )
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        generate_scheduled_response(str(schedule.uuid))
+        with scripted(reply("Still there?", input_tokens=1, output_tokens=1)) as script:
+            generate_scheduled_response(str(schedule.uuid))
 
-        messages = mock_llm.call_args.args[0]
-        last = messages[-1]
-        self.assertEqual(last["role"], "system")
-        self.assertIn("<context>", last["content"])
-        self.assertIn("own initiative", last["content"])
-        self.assertIn("The last message in the conversation is yours", last["content"])
+        last = _system_text(script.sent[-1].parts[-1])
+        self.assertIsNotNone(last)
+        self.assertIn("<context>", last)
+        self.assertIn("own initiative", last)
+        self.assertIn("The last message in the conversation is yours", last)

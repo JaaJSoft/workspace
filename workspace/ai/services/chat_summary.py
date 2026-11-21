@@ -10,7 +10,8 @@ import logging
 from django.conf import settings
 from django.db.models import Q
 
-from workspace.ai.services.llm import call_llm
+from workspace.ai.prompts.base import prompt
+from workspace.ai.services.llm import run_prompt
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -97,26 +98,13 @@ def update_summary(conversation_id: str) -> dict:
     else:
         user_content = f"Messages:\n{messages_text}"
 
-    prompt_messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user_content},
-    ]
-
     try:
-        result = call_llm(
-            prompt_messages,
+        result = run_prompt(
+            prompt(system, user_content),
             model=settings.AI_SMALL_MODEL or settings.AI_MODEL,
             max_tokens=4096,
         )
-        summary_content = result["content"]
-        if not summary_content:
-            logger.warning(
-                "Empty summary from model (tokens=%s+%s), skipping: conversation=%s",
-                result.get("prompt_tokens"),
-                result.get("completion_tokens"),
-                scrub(conversation_id),
-            )
-            return {"status": "error", "error": "Empty summary from model"}
+        summary_content = result.output
 
         # Guard ``up_to`` so it can only move forward: if two summary jobs for
         # the same conversation overlap, the older one (with an older
@@ -145,8 +133,8 @@ def update_summary(conversation_id: str) -> dict:
             "Conversation summary updated: conversation=%s messages_summarized=%d tokens=%s+%s",
             scrub(conversation_id),
             len(new_messages),
-            result["prompt_tokens"],
-            result["completion_tokens"],
+            result.usage.input_tokens,
+            result.usage.output_tokens,
         )
         return {"status": "ok"}
 

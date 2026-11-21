@@ -28,6 +28,8 @@ from workspace.ai.tools import (
 from workspace.common.tests.network import OK, FakeNetwork, http_response
 from workspace.common.tests.pdf_fixtures import make_pdf
 
+from .agents import reply, scripted, tool_context
+
 
 class IsUrlSafeTests(TestCase):
     def test_localhost_blocked(self):
@@ -466,7 +468,7 @@ class WebSearchToolTests(TestCase):
     def _run(self, **kwargs):
         provider = WebToolProvider()
         args = WebSearchParams(**kwargs)
-        return provider.web_search(args, None, None, None, {})
+        return provider.web_search(tool_context(), args)
 
     def test_queries_are_deduplicated_stripped_and_capped(self):
         with patch(
@@ -810,10 +812,10 @@ def _manual_markdown() -> str:
 
 def _extracting(*findings, missing=""):
     """Stand in for the extraction model, reporting *findings* for every chunk."""
-    return lambda *a, **kw: (
-        Extraction(findings=[Finding(text=f) for f in findings], missing=missing),
-        {},
+    extraction = Extraction(
+        findings=[Finding(text=f) for f in findings], missing=missing
     )
+    return scripted(reply(extraction.model_dump_json()), repeat=True)
 
 
 @override_settings(AI_SMALL_MODEL="small-model", AI_MODEL="big-model")
@@ -827,10 +829,7 @@ class QueryScopedFetchTests(TestCase):
         with (
             patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
             patch("workspace.ai.services.web.trafilatura.extract") as mock_extract,
-            patch(
-                "workspace.ai.services.reading.call_llm_structured",
-                side_effect=_extracting(*says, missing=missing),
-            ),
+            _extracting(*says, missing=missing),
         ):
             mock_client_cls.return_value = _client_returning(
                 _fake_response(text="<html/>", url=url)
@@ -933,10 +932,7 @@ class QueryScopedFetchTests(TestCase):
         resp.content = data
         with (
             patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
-            patch(
-                "workspace.ai.services.reading.call_llm_structured",
-                side_effect=_extracting(*says),
-            ),
+            _extracting(*says),
         ):
             mock_client_cls.return_value = _client_returning(resp)
             return fetch_and_extract(
@@ -958,10 +954,7 @@ class QueryScopedFetchTests(TestCase):
     def _fetch_feed(self, body, *, query="", says=(), max_chars=900):
         with (
             patch("workspace.ai.services.web.httpx2.Client") as mock_client_cls,
-            patch(
-                "workspace.ai.services.reading.call_llm_structured",
-                side_effect=_extracting(*says),
-            ),
+            _extracting(*says),
         ):
             mock_client_cls.return_value = _client_returning(
                 _fake_response(
@@ -1120,7 +1113,7 @@ class PagedFetchTests(TestCase):
 class ReadWebpageToolTests(TestCase):
     def _run(self, **kwargs):
         provider = WebToolProvider()
-        return provider.read_webpage(ReadWebpageParams(**kwargs), None, None, None, {})
+        return provider.read_webpage(tool_context(), ReadWebpageParams(**kwargs))
 
     def test_the_query_reaches_the_service(self):
         with patch(

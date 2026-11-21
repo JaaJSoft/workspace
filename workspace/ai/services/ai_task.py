@@ -106,9 +106,8 @@ def ai_task_lifecycle(task_id, *, log_label):
     Example:
         try:
             with ai_task_lifecycle(task_id, log_label='Editor action') as ai_task:
-                result = call_llm(build_messages(ai_task.input_data))
-                ai_task.result = result['content']
-                ai_task.model_used = result['model']
+                result = run_prompt(build_messages(ai_task.input_data))
+                record_prompt_run(ai_task, result)
             return {'status': 'ok', 'task_id': task_id}
         except AITask.DoesNotExist:
             return {'status': 'error', 'error': 'Task not found'}
@@ -148,6 +147,17 @@ def ai_task_lifecycle(task_id, *, log_label):
         outcome = {field: getattr(ai_task, field) for field in OUTCOME_FIELDS}
         if close_task(ai_task, status, **outcome):
             notify_sse("ai", ai_task.owner_id)
+
+
+def record_prompt_run(ai_task, result):
+    """Write what a one-shot prompt came to on its AITask: the text, its cost,
+    and the conversation, for whoever reads the row later."""
+    from workspace.ai.services.llm import messages_for_storage, usage_fields
+
+    ai_task.result = result.output
+    for column, value in usage_fields(result.response, result.usage).items():
+        setattr(ai_task, column, value)
+    ai_task.raw_messages = {"messages": messages_for_storage(result.all_messages())}
 
 
 def failed_task_count(since):

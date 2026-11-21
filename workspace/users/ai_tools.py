@@ -3,8 +3,9 @@
 import json
 
 from pydantic import BaseModel, Field
+from pydantic_ai import RunContext
 
-from workspace.ai.tool_registry import ToolError, ToolProvider, tool
+from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 
 
 class CheckUserStatusParams(BaseModel):
@@ -29,13 +30,15 @@ class UsersToolProvider(ToolProvider):
         badge_label="Checked status",
         badge_running_label="Checking status",
         detail_key="username",
-        params=CheckUserStatusParams,
         concurrent=True,
     )
-    def check_user_status(self, args, user, bot, conversation_id, context):
+    def check_user_status(
+        self, ctx: RunContext[ToolDeps], args: CheckUserStatusParams
+    ) -> str:
         """Check whether a specific colleague is online, away, busy, or offline. \
 Also returns their last-seen time if offline. \
 Call this when the user asks if someone is available, reachable, or what their status is."""
+        user = ctx.deps.user
         username = args.username.strip()
         if not username:
             raise ToolError("username is required")
@@ -68,15 +71,15 @@ Call this when the user asks if someone is available, reachable, or what their s
         badge_label="Searched people",
         badge_running_label="Searching people",
         detail_key="query",
-        params=SearchUsersParams,
         concurrent=True,
     )
-    def search_users(self, args, user, bot, conversation_id, context):
+    def search_users(self, ctx: RunContext[ToolDeps], args: SearchUsersParams) -> str:
         """Find colleagues by a partial name or username, returning their exact username \
 and display name (up to 10 matches, excluding yourself and other assistants). \
 Call this first whenever the user names a person informally ("is Marie around?", "share it with Tom") \
 and you need the exact username for another tool — check_user_status, event attendees, \
 task assignment, file sharing."""
+        user = ctx.deps.user
         from workspace.users.queries import MIN_SEARCH_QUERY_LENGTH, search_people
 
         query = args.query.strip()
@@ -103,10 +106,11 @@ task assignment, file sharing."""
         badge_icon="👥",
         badge_label="Listed online users",
         badge_running_label="Listing online users",
-        params=ListOnlineUsersParams,
         concurrent=True,
     )
-    def list_online_users(self, args, user, bot, conversation_id, context):
+    def list_online_users(
+        self, ctx: RunContext[ToolDeps], args: ListOnlineUsersParams
+    ) -> str:
         """List all users who are currently online, away, or busy (excludes offline users and bots). \
 Call this when the user asks who is available, who is online, or wants an overview of active colleagues."""
         limit = min(args.limit, 50)

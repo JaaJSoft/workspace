@@ -7,8 +7,9 @@ from datetime import UTC, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from pydantic_ai import RunContext
 
-from workspace.ai.tool_registry import ToolError, ToolProvider, tool
+from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 from workspace.calendar.services.timezones import all_day_label
 from workspace.common.datetimes import parse_local_datetime
 from workspace.common.logging import scrub
@@ -329,14 +330,14 @@ class CalendarToolProvider(ToolProvider):
         badge_label="Searched events",
         badge_running_label="Searching events",
         detail_key="query",
-        params=SearchEventsParams,
         concurrent=True,
     )
-    def search_events(self, args, user, bot, conversation_id, context):
+    def search_events(self, ctx: RunContext[ToolDeps], args: SearchEventsParams) -> str:
         """Search your calendar events by title, description or location, and \
 scheduling polls by title. Returns up to 20 matches with title, date, calendar, \
 and location. Call this when the user asks about upcoming events, meetings, or \
 scheduling polls."""
+        user = ctx.deps.user
         query = args.query.strip()
         if not query:
             raise ToolError("query is required")
@@ -392,12 +393,14 @@ scheduling polls."""
         badge_icon="\U0001f4c5",
         badge_label="Checked availability",
         badge_running_label="Checking availability",
-        params=CheckAvailabilityParams,
         concurrent=True,
     )
-    def check_availability(self, args, user, bot, conversation_id, context):
+    def check_availability(
+        self, ctx: RunContext[ToolDeps], args: CheckAvailabilityParams
+    ) -> str:
         """Check whether the user is available (free) during a given time range. \
 Call this when the user asks if they are free, available, or have any events during a specific period."""
+        user = ctx.deps.user
         from datetime import datetime, time
 
         from django.db.models import Q
@@ -556,10 +559,11 @@ Call this when the user asks if they are free, available, or have any events dur
         badge_running_label="Listing calendars",
         concurrent=True,
     )
-    def list_calendars(self, args, user, bot, conversation_id, context):
+    def list_calendars(self, ctx: RunContext[ToolDeps]) -> str:
         """List the user's own calendars (the ones you can add events to). \
 Call this before create_event when the user names a specific calendar, \
 or when the user asks which calendars they have."""
+        user = ctx.deps.user
         from workspace.calendar.queries import visible_calendars
 
         owned, _ = visible_calendars(user)
@@ -572,16 +576,18 @@ or when the user asks which calendars they have."""
         badge_icon="📅",
         badge_label="Checked agenda",
         badge_running_label="Checking agenda",
-        params=ListUpcomingEventsParams,
         concurrent=True,
     )
-    def list_upcoming_events(self, args, user, bot, conversation_id, context):
+    def list_upcoming_events(
+        self, ctx: RunContext[ToolDeps], args: ListUpcomingEventsParams
+    ) -> str:
         """List the user's upcoming events, including recurring occurrences. \
 Call this when the user asks what is coming up, what they have this week, or \
 about their next events. For a keyword lookup use search_events; to check \
 whether a specific time range is free use check_availability. Each entry \
 carries the event_id (and, for a recurring occurrence, its original_start) \
 that update_event and cancel_event take."""
+        user = ctx.deps.user
 
         from django.utils import timezone
 
@@ -638,13 +644,13 @@ that update_event and cancel_event take."""
         badge_label="Added to calendar",
         badge_running_label="Adding to calendar",
         detail_key="title",
-        params=CreateEventParams,
     )
-    def create_event(self, args, user, bot, conversation_id, context):
+    def create_event(self, ctx: RunContext[ToolDeps], args: CreateEventParams) -> str:
         """Create a new event in the user's calendar. \
 Call this when the user asks to add, create, schedule, or book an event, \
 meeting, or appointment. Creates a single (non-recurring) event. If the user \
 names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
+        user = ctx.deps.user
         from django.utils import timezone as dj_tz
 
         from workspace.calendar.models import Calendar, Event
@@ -729,9 +735,8 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
         badge_label="Updated event",
         badge_running_label="Updating event",
         detail_key="title",
-        params=UpdateEventParams,
     )
-    def update_event(self, args, user, bot, conversation_id, context):
+    def update_event(self, ctx: RunContext[ToolDeps], args: UpdateEventParams) -> str:
         """Change an existing event: its title, time, location, description or \
 guest list. Call this when the user wants to move, rename, re-locate or re-staff \
 something already in their calendar — never re-create the event with create_event, \
@@ -739,6 +744,7 @@ which leaves the old one behind. You must pass `scope`; on a recurring event ask
 the user whether they mean this occurrence, this one and the following, or the \
 whole series before choosing. Only the owner can edit, and events from an external \
 (subscribed ICS) calendar cannot be edited at all."""
+        user, context = ctx.deps.user, ctx.deps.context
         from workspace.ai.services.confirmation import request_confirmation
         from workspace.calendar.services import event_scope
         from workspace.users.services.settings import get_user_timezone
@@ -846,9 +852,8 @@ whole series before choosing. Only the owner can edit, and events from an extern
         badge_icon="🗑️",
         badge_label="Cancelled event",
         badge_running_label="Cancelling event",
-        params=CancelEventParams,
     )
-    def cancel_event(self, args, user, bot, conversation_id, context):
+    def cancel_event(self, ctx: RunContext[ToolDeps], args: CancelEventParams) -> str:
         """Cancel an event: remove it from the calendar and tell the guests. \
 Call this when the user says a meeting is off, cancelled, or should be deleted. \
 You must pass `scope`; on a recurring event ask the user whether they mean to skip \
@@ -856,6 +861,7 @@ this one occurrence, end the series from here on, or delete it entirely — dele
 a whole weekly meeting when they wanted to skip one Monday cannot be undone. Only \
 the owner can cancel, and events from an external (subscribed ICS) calendar cannot \
 be cancelled at all."""
+        user, context = ctx.deps.user, ctx.deps.context
         from workspace.ai.services.confirmation import request_confirmation
         from workspace.calendar.services import event_scope
         from workspace.users.services.settings import get_user_timezone
@@ -899,14 +905,16 @@ be cancelled at all."""
         badge_icon="✉️",
         badge_label="Answered invitation",
         badge_running_label="Answering invitation",
-        params=RespondToInvitationParams,
     )
-    def respond_to_invitation(self, args, user, bot, conversation_id, context):
+    def respond_to_invitation(
+        self, ctx: RunContext[ToolDeps], args: RespondToInvitationParams
+    ) -> str:
         """Accept or decline an invitation the user has received. Call this when \
 the user says yes or no to a meeting someone else organised. The answer leaves the \
 workspace — the organiser is notified, and for an invitation that arrived by email \
 an iCalendar reply is sent back to them — so it always needs the user's explicit \
 confirmation first."""
+        user, context = ctx.deps.user, ctx.deps.context
         from workspace.ai.services.confirmation import request_confirmation
         from workspace.calendar.models import Event
         from workspace.calendar.queries import visible_events_q
@@ -944,15 +952,15 @@ confirmation first."""
         badge_label="Created poll",
         badge_running_label="Creating poll",
         detail_key="title",
-        params=CreatePollParams,
     )
-    def create_poll(self, args, user, bot, conversation_id, context):
+    def create_poll(self, ctx: RunContext[ToolDeps], args: CreatePollParams) -> str:
         """Create a scheduling poll so invitees can vote on which of several \
 candidate slots suits them. Call this when the user wants to FIND a time rather \
 than book one — "when can we all meet", "propose a few slots to the team". Use \
 check_availability first to pick candidate slots the user is actually free for. \
 Once the votes are in, get_poll_results reports the winner and the user turns it \
 into an event."""
+        user = ctx.deps.user
 
         from django.contrib.auth import get_user_model
         from django.db import transaction
@@ -1046,13 +1054,15 @@ into an event."""
         badge_icon="📊",
         badge_label="Read poll results",
         badge_running_label="Reading poll results",
-        params=GetPollResultsParams,
         concurrent=True,
     )
-    def get_poll_results(self, args, user, bot, conversation_id, context):
+    def get_poll_results(
+        self, ctx: RunContext[ToolDeps], args: GetPollResultsParams
+    ) -> str:
         """Report where a scheduling poll stands: every candidate slot with who \
 voted yes, maybe or no, and which slot is currently winning. Call this when the \
 user asks how a poll is going, who has answered, or which slot works best."""
+        user = ctx.deps.user
         from django.db.models import Count, Q
 
         from workspace.calendar.models import Poll, PollInvitee, PollSlot, PollVote

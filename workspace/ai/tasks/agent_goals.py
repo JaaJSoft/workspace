@@ -1,7 +1,6 @@
 """Autonomous agent goal Celery tasks (dispatcher + check-in worker)."""
 
 import logging
-from dataclasses import replace
 
 from celery import shared_task
 from django.utils import timezone
@@ -9,18 +8,13 @@ from django.utils import timezone
 from workspace.ai.metrics import AI_AGENT_CHECKINS
 from workspace.ai.services.ai_task import close_task
 from workspace.ai.services.bot_access import run_refusal
-from workspace.ai.services.bot_runs import build_bot_runner
+from workspace.ai.services.bot_runs import produced_media, run_bot
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import (
     build_conversation_history,
     unprompted_run_note,
 )
-from workspace.ai.services.llm import sanitize_messages_for_storage
-from workspace.ai.services.responses import (
-    post_bot_message,
-    produced_media,
-    run_usage_fields,
-)
+from workspace.ai.services.responses import post_bot_message
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 from workspace.common.task_priority import LOW_PRIORITY
@@ -256,20 +250,17 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     )
 
     try:
-        initial_messages = sanitize_messages_for_storage(list(messages))
-
         # agent_checkin marks the run for send_user_message, which refuses to
         # queue outside a check-in (in normal chat the reply IS the message).
-        runner = build_bot_runner(
+        run = run_bot(
             bot_profile,
             human_user,
             bot_user,
             str(conversation.pk),
+            messages,
             context={"agent_checkin": True},
+            expects_answer=False,
         )
-        run = runner.run(messages)
-
-        raw_messages = {"messages": initial_messages, "rounds": run.rounds}
 
         # Check-ins are silent by default: the model's final plain text is
         # never shown to the user. What gets delivered is what the agent
@@ -281,8 +272,8 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
                 ai_task,
                 AITask.Status.COMPLETED,
                 result="[SILENT]",
-                raw_messages=raw_messages,
-                **run_usage_fields(run.response, run.usage),
+                raw_messages=run.raw_messages,
+                **run.task_fields(),
             )
             AI_AGENT_CHECKINS.labels(outcome="silent").inc()
             logger.info("Agent check-in done silently: goal=%s", scrub(goal_id))
@@ -305,8 +296,8 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
                 ai_task,
                 AITask.Status.COMPLETED,
                 result="[SUPPRESSED]",
-                raw_messages=raw_messages,
-                **run_usage_fields(run.response, run.usage),
+                raw_messages=run.raw_messages,
+                **run.task_fields(),
             )
             AI_AGENT_CHECKINS.labels(outcome="suppressed").inc()
             logger.info(
@@ -318,14 +309,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             return {"status": "skipped", "reason": "goal_closed_by_user"}
 
         posted = post_bot_message(
-            conversation,
-            bot_user,
-            replace(run.response, content="\n\n".join(queued)),
-            run.context,
-            ai_task,
-            raw_messages,
-            tool_data=run.tool_data,
-            usage=run.usage,
+            conversation, bot_user, run, ai_task, body="\n\n".join(queued)
         )
         if posted is None:
             AI_AGENT_CHECKINS.labels(outcome="suppressed").inc()
@@ -343,8 +327,8 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             "Agent check-in posted a message: goal=%s conversation=%s tokens=%s+%s",
             scrub(goal_id),
             scrub(conversation.pk),
-            run.usage.prompt_tokens,
-            run.usage.completion_tokens,
+            run.usage.input_tokens,
+            run.usage.output_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 

@@ -22,6 +22,8 @@ from workspace.ai.tools import (
 )
 from workspace.chat.models import Conversation, ConversationMember
 
+from .agents import tool_context
+
 User = get_user_model()
 
 
@@ -67,13 +69,13 @@ class AgentGoalToolRaceTests(TestCase):
         )
 
     def _call(self, name, args):
-        return getattr(AgentGoalToolProvider(), name)(
-            args,
+        ctx = tool_context(
             user=self.user,
             bot=self.bot,
             conversation_id=str(self.conversation.uuid),
             context=self.context,
         )
+        return getattr(AgentGoalToolProvider(), name)(ctx, args)
 
     def _assert_still_stopped(self):
         self.goal.refresh_from_db()

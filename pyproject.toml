@@ -83,14 +83,13 @@ dependencies = [
     "clamdpy>=0.2.0",
     # ai
     "openai>=3.51.0",
-    # The agent runtime behind AI_AGENT_RUNTIME=pydantic_ai. No extra: its
+    # Every text request goes through it: the bots' agent and the one-shot
+    # prompts (workspace/ai/services/llm.py, bot_runs.py). No extra: its
     # OpenAI models need the openai SDK above and nothing else (the `openai`
     # extra adds tiktoken, which only its embeddings and realtime code use),
     # and every other provider SDK stays out until a deployment can select
-    # it. Pinned to an exact version because the library releases several
-    # times a week: bump it on purpose, with scripts/agent_bench.py run
-    # before and after.
-    "pydantic-ai-slim==2.71.0",
+    # it. Run scripts/agent_bench.py before and after a bump.
+    "pydantic-ai-slim>=2.71.0",
     "ollama>=0.6.3",
     # web search & scraping
     "httpx2>=2.16.0",

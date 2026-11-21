@@ -10,6 +10,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
+from workspace.ai.tests.agents import tool_context
 from workspace.files.actions import ActionRegistry
 from workspace.files.ai_tools import FilesToolProvider
 from workspace.files.models import FileShare
@@ -243,7 +244,7 @@ class ShortcutAssistantSearchTests(ShortcutBrowserFixtures, TestCase):
             query = "report"
             file_type = ""
 
-        result = provider.search_filenames(Args(), self.alice, None, None, {})
+        result = provider.search_filenames(tool_context(user=self.alice), Args())
 
         self.assertIn("report.txt", result)
         self.assertNotIn("report link", result)

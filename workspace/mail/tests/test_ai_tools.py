@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.ai.tests.agents import tool_context
 from workspace.mail.ai_tools import (
     ListMailAccountScopedParams,
     MailToolProvider,
@@ -49,11 +50,7 @@ class ReadEmailTimezoneTests(TestCase):
         )
         set_setting(self.user, "core", "timezone", "Europe/Paris")
         result = MailToolProvider().read_email(
-            ReadEmailParams(uuid=str(msg.uuid)),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.user), ReadEmailParams(uuid=str(msg.uuid))
         )
         self.assertIn("Date: 2026-02-01 00:30", result)
 
@@ -125,11 +122,8 @@ class ListFoldersMergeTests(TestCase):
 
     def test_listing_skips_aliases_and_sums_the_group(self):
         raw = MailToolProvider().list_folders(
+            tool_context(user=self.user),
             ListMailAccountScopedParams(account="user@example.com"),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
         )
         folders = json.loads(raw)
 
@@ -149,11 +143,7 @@ class ListFoldersMergeTests(TestCase):
             subject="quarterly invoice",
         )
         raw = MailToolProvider().search_emails(
-            SearchEmailsParams(query="invoice"),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.user), SearchEmailsParams(query="invoice")
         )
         results = json.loads(raw)
         self.assertEqual(len(results), 1)
@@ -169,11 +159,7 @@ class ListFoldersMergeTests(TestCase):
             from_email="ext@example.com",
         )
         result = MailToolProvider().read_email(
-            ReadEmailParams(uuid=str(msg.uuid)),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.user), ReadEmailParams(uuid=str(msg.uuid))
         )
         self.assertIn("Folder: Trash", result)
 

@@ -1,6 +1,7 @@
 from django.conf import settings
+from pydantic_ai.messages import ModelMessage, ModelRequest, SystemPromptPart
 
-from .base import build_context_block, reply_language, sanitize_prompt_line
+from .base import build_context_block, reply_language, sanitize_prompt_line, send
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a friendly, engaging companion in a chat application. "
@@ -60,18 +61,18 @@ def _build_tools_block() -> str:
 
 def build_chat_messages(
     system_prompt: str,
-    history: list[dict],
+    history: list[ModelMessage],
     bot_name: str = "",
     user=None,
     bot=None,
     summary: str = "",
     situation: str = "",
-) -> list[dict]:
-    """Build the messages list for the OpenAI API from conversation history.
+) -> list[ModelMessage]:
+    """Build the conversation a bot is sent: its instructions, then the history.
 
     Args:
         system_prompt: The bot's system prompt.
-        history: List of dicts with 'role' and 'content' keys.
+        history: The conversation so far (``build_conversation_history``).
         bot_name: The display name of the bot.
         user: The user interacting with the bot (for memory lookup).
         bot: The bot's user instance (for memory lookup).
@@ -169,11 +170,12 @@ def build_chat_messages(
     failure_instructions = (
         "\n\n## When a tool fails\n"
         "A call that could not do what you asked returns "
-        '{"error": {"retryable": ..., "reason": "..."}} instead of a result. '
+        '{"error": ...} instead of a result, with the reason. '
         "Nothing was produced, saved or sent.\n"
-        '- "retryable": true - the service behind the tool failed, not your '
-        "call. Make the call again before giving up on it.\n"
-        '- "retryable": false - the same call fails the same way every time. '
+        "- A reason that says the failure is temporary - the service behind "
+        "the tool failed, not your call. Make the call again before giving "
+        "up on it.\n"
+        "- Any other reason - the same call fails the same way every time. "
         "When the reason says what to change (an argument, a lookup to do "
         "first, a different wording), change it and call again; otherwise "
         "carry on without it.\n"
@@ -430,10 +432,14 @@ def build_chat_messages(
         f"{memory_block}"
         f"{summary_block}"
     )
-    messages = [{"role": "system", "content": system_content}]
-    messages.extend(history)
+    messages = [ModelRequest(parts=[SystemPromptPart(system_content)])]
+    for message in history:
+        if isinstance(message, ModelRequest):
+            send(messages, *message.parts)
+        else:
+            messages.append(message)
     context = build_context_block(user=user)
     if situation:
         context += f"\n{situation}"
-    messages.append({"role": "system", "content": f"<context>\n{context}\n</context>"})
+    send(messages, SystemPromptPart(f"<context>\n{context}\n</context>"))
     return messages

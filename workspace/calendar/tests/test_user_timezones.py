@@ -16,6 +16,7 @@ from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
+from workspace.ai.tests.agents import tool_context
 from workspace.calendar.activity import CalendarActivityProvider
 from workspace.calendar.ai_tools import (
     CalendarToolProvider,
@@ -307,9 +308,7 @@ class CalendarAiToolTimezoneTests(_CalendarUser):
         self.provider = CalendarToolProvider()
 
     def _call(self, name, params):
-        return getattr(self.provider, name)(
-            params, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        return getattr(self.provider, name)(tool_context(user=self.user), params)
 
     def _zone(self, name):
         set_setting(self.user, "core", "timezone", name)

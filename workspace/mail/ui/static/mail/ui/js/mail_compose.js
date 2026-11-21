@@ -50,8 +50,9 @@ window.mailComposeMixin = function mailComposeMixin() {
       }
 
       // Pre-insert the active account's signature, but never on a restored
-      // draft (the saved body already contains its signature).
-      if (!restored) {
+      // draft (the saved body already contains its signature) nor on a body
+      // the server built, which comes signed with its block in _sigBlock.
+      if (!restored && defaults._sigBlock === undefined) {
         const acc = this.accounts.find(a => a.uuid === this.compose.account_id);
         const r = window.mailSignature.applySignature(this.compose.body, acc && acc.signature);
         this.compose.body = r.body;
@@ -81,64 +82,43 @@ window.mailComposeMixin = function mailComposeMixin() {
       this.compose._sigBlock = r.block;
     },
 
+    // Reply, reply all and forward are built by the server
+    // (services/compose.py), the same builder the assistant drafts with, so
+    // every entry point gets the full message whatever object it holds: the
+    // open message, or a list row from the context menu.
     replyTo(msg) {
-      const from = msg.from_address?.email || '';
-      const subject = msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject || ''}`;
-      this.showCompose({
-        to: from,
-        subject,
-        body: '\n\n---\n' + interpolate(gettext('On %(date)s, %(sender)s wrote:'), {
-          date: this.formatFullDate(msg.date),
-          sender: msg.from_address?.name || from,
-        }, true) + `\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
-        account_id: msg.account_id,
-        is_reply: true,
-        reply_message_id: msg.uuid,
-      });
+      return this._composeFrom(msg, 'reply');
     },
 
     replyAll(msg) {
-      const from = msg.from_address?.email || '';
-      const subject = msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject || ''}`;
-      // Collect all "to" addresses except our own account
-      const account = this.accounts.find(a => a.uuid === msg.account_id);
-      const myEmail = account?.email?.toLowerCase() || '';
-      const toAddrs = [from, ...(msg.to_addresses || []).map(a => a.email)]
-        .filter(e => e && e.toLowerCase() !== myEmail);
-      const ccAddrs = (msg.cc_addresses || []).map(a => a.email)
-        .filter(e => e && e.toLowerCase() !== myEmail);
-      this.showCompose({
-        to: [...new Set(toAddrs)],
-        cc: [...new Set(ccAddrs)],
-        subject,
-        body: '\n\n---\n' + interpolate(gettext('On %(date)s, %(sender)s wrote:'), {
-          date: this.formatFullDate(msg.date),
-          sender: msg.from_address?.name || from,
-        }, true) + `\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
-        account_id: msg.account_id,
-        is_reply: true,
-        reply_message_id: msg.uuid,
-      });
+      return this._composeFrom(msg, 'reply_all');
     },
 
-    // A list row carries neither the body nor the attachments: forwarding
-    // one from the context menu loads the message first.
-    async forwardMessage(msg) {
-      if (!Array.isArray(msg.attachments)) {
-        try {
-          const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
-          if (res.ok) msg = await res.json();
-        } catch (e) {}
+    forwardMessage(msg) {
+      return this._composeFrom(msg, 'forward');
+    },
+
+    async _composeFrom(msg, mode) {
+      let prefill = null;
+      try {
+        const res = await this._fetch(
+          `/api/v1/mail/messages/${msg.uuid}/compose?mode=${mode}`);
+        if (res.ok) prefill = await res.json();
+      } catch (e) {}
+      if (!prefill) {
+        AppAlert.error(gettext('Could not open the message'));
+        return;
       }
-      const subject = msg.subject?.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject || ''}`;
-      this.showCompose({
-        subject,
-        body: '\n\n---\n' + interpolate(gettext('Forwarded message from %(sender)s:'), {
-          sender: msg.from_address?.name || msg.from_address?.email || gettext('Unknown'),
-        }, true) + `\n\n${msg.body_text || msg.snippet || ''}`,
-        account_id: msg.account_id,
+      await this.showCompose({
+        to: prefill.to,
+        cc: prefill.cc,
+        subject: prefill.subject,
+        body: prefill.body_text,
+        _sigBlock: prefill.signature_block,
+        account_id: prefill.account_id,
         is_reply: true,
-        mail_attachments: _forwardedAttachments(msg),
+        reply_message_id: prefill.reply_message_id,
+        mail_attachments: prefill.attachments,
       });
     },
 
@@ -498,12 +478,3 @@ window.mailComposeMixin = function mailComposeMixin() {
     },
   };
 };
-
-// What a forward carries over: every attachment of the original except the
-// pictures its body displays, which the forwarded text does not show and
-// would otherwise arrive as stray files.
-function _forwardedAttachments(msg) {
-  return (msg.attachments || [])
-    .filter(a => !a.embedded)
-    .map(a => ({ uuid: a.uuid, filename: a.filename, size: a.size }));
-}

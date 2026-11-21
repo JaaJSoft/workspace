@@ -1,9 +1,22 @@
-from .models import MailAccount, MailAttachment, MailFolder
+from .models import MailAccount, MailAttachment, MailFolder, MailMessage
 
 
 def user_account_ids(user):
     """Return mail account UUIDs owned by the user."""
     return MailAccount.objects.filter(owner=user).values_list("uuid", flat=True)
+
+
+def reachable_message(user, uuid):
+    """The user's non-deleted message with that UUID, or None."""
+    return (
+        MailMessage.objects.select_related("account", "folder")
+        .filter(
+            uuid=uuid,
+            account_id__in=user_account_ids(user),
+            deleted_at__isnull=True,
+        )
+        .first()
+    )
 
 
 def resolve_reachable_attachments(user, attachment_uuids):

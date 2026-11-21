@@ -88,6 +88,27 @@ msgstr ""
 msgid "at least one action is required"
 msgstr "au moins une action est requise"
 
+#: services/compose.py
+msgid "an earlier date"
+msgstr "une date antérieure"
+
+#. Translators: Django date format of the "On <date>, <sender> wrote:" line
+#. that opens the quote of a reply, "Wednesday, March 4, 2026, 10:15".
+#: services/compose.py
+msgctxt "reply quote date"
+msgid "l, F j, Y, H:i"
+msgstr "l j F Y à H:i"
+
+#: services/compose.py
+#, python-format
+msgid "On %(date)s, %(sender)s wrote:"
+msgstr "Le %(date)s, %(sender)s a écrit :"
+
+#: services/compose.py
+#, python-format
+msgid "Forwarded message from %(sender)s:"
+msgstr "Message transféré de %(sender)s :"
+
 #: services/oauth2.py
 #, python-format
 msgid "Mail account %(email)s disconnected"
@@ -772,7 +793,7 @@ msgstr "Ne plus les afficher"
 msgid "Message body"
 msgstr "Corps du message"
 
-#: ui/templates/mail/ui/partials/message_list.html
+#: services/compose.py ui/templates/mail/ui/partials/message_list.html
 msgctxt "mail sender"
 msgid "Unknown"
 msgstr "Inconnu"
@@ -1081,6 +1102,10 @@ msgstr "Échec de l’envoi de l’e-mail"
 msgid "Failed to save draft"
 msgstr "Échec de l’enregistrement du brouillon"
 
+#: views/compose.py
+msgid "Unknown compose mode"
+msgstr "Mode de rédaction inconnu"
+
 #: views/folders.py
 msgid "Cannot hide a special folder"
 msgstr "Impossible de masquer un dossier spécial"
@@ -1132,6 +1157,10 @@ msgstr "Une étiquette de ce nom existe déjà pour ce compte."
 #: views/labels.py
 msgid "One or more labels do not belong to this account."
 msgstr "Une ou plusieurs étiquettes n’appartiennent pas à ce compte."
+
+#: views/messages.py
+msgid "Failed to move the message to trash"
+msgstr "Impossible de déplacer le message dans la corbeille"
 
 #: views/messages.py
 msgid "Target folder not found"

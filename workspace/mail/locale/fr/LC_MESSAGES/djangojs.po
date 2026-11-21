@@ -136,24 +136,16 @@ msgid "AI composition failed"
 msgstr "La rédaction par IA a échoué"
 
 #: ui/static/mail/ui/js/mail_compose.js
+msgid "Could not open the message"
+msgstr "Impossible d’ouvrir le message"
+
+#: ui/static/mail/ui/js/mail_compose.js
 msgid "Restore draft"
 msgstr "Restaurer le brouillon"
 
 #: ui/static/mail/ui/js/mail_compose.js
 msgid "You have an unsaved draft. Would you like to restore it?"
 msgstr "Vous avez un brouillon non enregistré. Voulez-vous le restaurer ?"
-
-#: ui/static/mail/ui/js/mail_compose.js
-msgid "On %(date)s, %(sender)s wrote:"
-msgstr "Le %(date)s, %(sender)s a écrit :"
-
-#: ui/static/mail/ui/js/mail_compose.js
-msgid "Forwarded message from %(sender)s:"
-msgstr "Message transféré de %(sender)s :"
-
-#: ui/static/mail/ui/js/mail_compose.js
-msgid "Unknown"
-msgstr "Inconnu"
 
 #: ui/static/mail/ui/js/mail_compose.js
 msgid "Directory"

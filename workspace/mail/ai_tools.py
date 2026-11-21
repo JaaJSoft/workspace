@@ -27,6 +27,7 @@ from workspace.ai.services.confirmation import (
 )
 from workspace.ai.tool_registry import ToolError, ToolProvider, tool
 from workspace.common.logging import scrub
+from workspace.mail.queries import reachable_message
 
 logger = logging.getLogger(__name__)
 
@@ -70,22 +71,6 @@ def _resolve_account(user, hint):
             "required: " + ", ".join(account.email for account in accounts) + "."
         )
     return accounts[0], None
-
-
-def _resolve_message(user, uuid):
-    """The user's non-deleted message with that UUID, or None."""
-    from workspace.mail.models import MailMessage
-    from workspace.mail.queries import user_account_ids
-
-    return (
-        MailMessage.objects.filter(
-            uuid=uuid,
-            account_id__in=user_account_ids(user),
-            deleted_at__isnull=True,
-        )
-        .select_related("account", "folder")
-        .first()
-    )
 
 
 def _resolve_folder(account, hint):
@@ -477,33 +462,31 @@ Recipients, subject, the quoted original and the threading headers are filled in
 message being answered — you only write what to say. Nothing is sent. \
 Call read_email first when you need the content you are answering."""
         from workspace.mail.services.compose import build_reply
-        from workspace.users.services.settings import get_user_timezone
 
-        message = _resolve_message(user, args.uuid)
+        message = reachable_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 
-        account = message.account
         reply = build_reply(
             message,
-            account,
-            args.body[:BODY_MAX_CHARS],
-            get_user_timezone(user),
+            user,
             reply_all=args.reply_all,
+            body=args.body[:BODY_MAX_CHARS],
         )
         if not reply.to:
             return (
-                "That message has no one to answer — it was sent from this "
-                "account itself. Use draft_email to write a new message."
+                "That message has no one to answer: it was sent from this "
+                "account itself, to no one else. Use draft_email to write a "
+                "new message."
             )
 
         return self._save_draft(
-            account,
+            reply.account,
             to=reply.to,
             subject=reply.subject,
             body_text=reply.body_text,
             cc=reply.cc,
-            reply_message_id=message.uuid,
+            reply_message_id=reply.reply_message_id,
         )
 
     @tool(
@@ -724,7 +707,7 @@ Use it to help the user work through a backlog: star what needs an answer, \
 mark read what they have decided to ignore."""
         from workspace.mail.services.triage import set_flag
 
-        message = _resolve_message(user, args.uuid)
+        message = reachable_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 
@@ -749,7 +732,7 @@ mark read what they have decided to ignore."""
         """File an email into another folder of the same account. \
 Call list_folders first to learn which folders exist and how they are named. \
 To throw a message away, use delete_email instead."""
-        message = _resolve_message(user, args.uuid)
+        message = reachable_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 
@@ -771,7 +754,7 @@ the user wants a message gone."""
         from workspace.mail.models import MailFolder
         from workspace.mail.queries import special_folder
 
-        message = _resolve_message(user, args.uuid)
+        message = reachable_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 
@@ -813,7 +796,7 @@ label can be applied."""
         from workspace.mail.models import MailLabel
         from workspace.mail.services.triage import set_label
 
-        message = _resolve_message(user, args.uuid)
+        message = reachable_message(user, args.uuid)
         if not message:
             return "Email not found or access denied."
 

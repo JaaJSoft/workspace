@@ -354,7 +354,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Big projects**
 
-- [ ] **IMAP sync v2** on a maintained library (IMAPClient):
+- [ ] **IMAP sync v2 on maintained libraries** - IMAPClient for the protocol, the standard library's modern email API for parsing and composing - #1774:
   - one connection per pass, CONDSTORE/QRESYNC to skip unchanged folders;
   - MOVE and UID EXPUNGE;
   - a cadence per folder.
@@ -370,9 +370,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 - [ ] **Indexed correspondents table** - replaces two 500-message scans per keystroke, and serves People (M)
 - [ ] **Cursor pagination** instead of OFFSET + count (S/M)
-- [ ] **Grouped IMAP actions** for rules and bulk actions (S/M)
 - [ ] **Labels at user level** instead of per account (M)
-- [ ] **An `imap-live` CI job** against Dovecot or GreenMail (M)
 - [ ] **Split and cover** - split `ai_tools.py` (843 lines) and `mail_folders.js`, and raise the 55% coverage floor (S)
 
 ### Calendar

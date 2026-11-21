@@ -390,7 +390,8 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Big projects**
 
-- [ ] **iTIP and attendees overhaul** - one attendee model mapped to ATTENDEE and ORGANIZER in CalDAV and ICS, and the full organizer flow. After the fixes in #1623, #1657 and #1660 (L)
+- [ ] **One iCalendar reader** for CalDAV objects, subscribed feeds and emailed invitations, with the same fidelity everywhere; fixes #1623 - #1775 (M)
+- [ ] **iTIP and attendees overhaul** - one attendee model mapped to ATTENDEE and ORGANIZER in CalDAV and ICS, and the full organizer flow. After #1775 and the reply fixes in #1657 and #1660 (L)
 - [ ] **Sharing and availability foundation** - per-calendar rights, group calendars, free/busy. Booking pages plug into it (L)
 - [ ] **FullCalendar 7** - with `calendar_events.js` split and drag and drop on. Evaluate EventCalendar (MIT) if rooms come in - #1102 (M/L)
 

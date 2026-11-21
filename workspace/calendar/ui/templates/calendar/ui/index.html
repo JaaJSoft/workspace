@@ -124,86 +124,116 @@
         x-show="currentView === 'agenda'"
         class="agenda-view flex-1 min-h-0 overflow-y-auto"
       >
-
-        <!-- Empty state -->
-        <template
-          x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading"
-        >
-          <div class="agenda-empty">
-            <i data-lucide="calendar" class="w-10 h-10 opacity-50"></i>
-            <p>{% translate "No upcoming events" %}</p>
-          </div>
-        </template>
-
-        <!-- Loading (initial) -->
-        <template x-if="!agenda.initialLoaded && agenda.loading">
-          <div class="agenda-loading">
-            <span class="loading loading-spinner loading-md"></span>
-          </div>
-        </template>
-
-        <!-- Day-grouped list -->
-        <template x-for="group in agendaByDay()" :key="group.date">
-          <div class="agenda-day-group">
-            <div
-              class="agenda-day-header"
-              :class="group.isToday ? 'is-today' : ''"
-              x-text="group.label"
-            ></div>
-            <template x-for="event in group.events" :key="event.uuid">
-              <div
-                class="agenda-event"
-                :class="agendaEventClasses(event)"
-                @click="openViewPanel(event)"
-                @contextmenu.prevent="(e) => { window._cardPopoverScheduleHide($el); openContextMenu(e, event); }"
-                @mouseenter="_hasHover && !ctxMenu.open && window._eventCardShow($el, event.uuid)"
-                @mouseleave="_hasHover && window._cardPopoverScheduleHide($el)"
-              >
-                <span class="agenda-event-time" x-text="formatAgendaEventTime(event)"></span>
-                <span class="agenda-event-title" x-text="event.title"></span>
-                <svg
-                  x-show="event.is_recurring"
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="agenda-recurring-icon"
-                >
-                  <path d="m17 2 4 4-4 4" />
-                  <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
-                  <path d="m7 22-4-4 4-4" />
-                  <path d="M21 13v1a4 4 0 0 1-4 4H3" />
-                </svg>
-              </div>
-            </template>
-          </div>
-        </template>
-
-        <!-- Intersection sentinel for auto-load on scroll -->
-        <div x-ref="agendaSentinel" class="agenda-sentinel" aria-hidden="true"></div>
-
-        <!-- Load more (fallback button; auto-load runs via IntersectionObserver) -->
-        <div
-          class="agenda-load-more"
-          x-show="agenda.nextAfter !== null && agenda.initialLoaded"
-        >
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            @click="loadMoreAgenda()"
-            :disabled="agenda.loading"
+        <div class="agenda-inner">
+          <!-- Empty state -->
+          <template
+            x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading"
           >
-            <span x-show="!agenda.loading">{% translate "Load more" %}</span>
-            <span x-show="agenda.loading">
-              <span class="loading loading-spinner loading-xs"></span>
-              {% translate "Loading…" %}
-            </span>
-          </button>
+            <div class="agenda-empty">
+              <p>{% translate "No upcoming events" %}</p>
+              <button type="button" class="btn btn-sm" @click="createEventNow()">{% translate "New event" %}</button>
+            </div>
+          </template>
+
+          <!-- Loading (initial) -->
+          <template x-if="!agenda.initialLoaded && agenda.loading">
+            <div class="agenda-loading">
+              <span class="loading loading-spinner loading-md"></span>
+            </div>
+          </template>
+
+          <!-- Day-grouped list -->
+          <template x-for="group in agendaByDay()" :key="group.date">
+            <section class="agenda-day-group" :aria-label="group.label">
+              <h2
+                class="agenda-month"
+                x-show="group.monthLabel"
+                x-text="group.monthLabel"
+              ></h2>
+              <div class="agenda-day" :class="{ 'is-today': group.isToday }">
+                <div class="agenda-date" aria-hidden="true">
+                  <span class="agenda-date-number" x-text="group.dayNumber"></span>
+                  <span class="agenda-date-weekday" x-text="group.weekday"></span>
+                </div>
+                <ul class="agenda-events">
+                  <template x-for="event in group.events" :key="event.uuid">
+                    <li>
+                      <button
+                        type="button"
+                        class="agenda-event"
+                        :class="agendaEventClasses(event)"
+                        @click="openViewPanel(event)"
+                        @contextmenu.prevent="(e) => { window._cardPopoverScheduleHide($el); openContextMenu(e, event); }"
+                        @mouseenter="_hasHover && !ctxMenu.open && window._eventCardShow($el, event.uuid)"
+                        @mouseleave="_hasHover && window._cardPopoverScheduleHide($el)"
+                      >
+                        <span class="agenda-event-time">
+                          <span x-text="agendaEventTimes(event).start"></span>
+                          <span
+                            class="agenda-event-end"
+                            x-show="agendaEventTimes(event).end"
+                            x-text="agendaEventTimes(event).end"
+                          ></span>
+                        </span>
+                        <span class="agenda-event-dot" aria-hidden="true"></span>
+                        <span class="agenda-event-body">
+                          <span class="agenda-event-title">
+                            <span class="agenda-event-title-text" x-text="event.title"></span>
+                            <svg
+                              x-show="event.is_recurring"
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2.25"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="agenda-recurring-icon"
+                              aria-label="{% translate "Recurring event" %}"
+                            >
+                              <path d="m17 2 4 4-4 4" />
+                              <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+                              <path d="m7 22-4-4 4-4" />
+                              <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+                            </svg>
+                          </span>
+                          <span
+                            class="agenda-event-details"
+                            x-show="agendaEventDetails(event).length"
+                            x-text="agendaEventDetails(event).join(' · ')"
+                          ></span>
+                        </span>
+                      </button>
+                    </li>
+                  </template>
+                </ul>
+              </div>
+            </section>
+          </template>
+
+          <!-- Intersection sentinel for auto-load on scroll -->
+          <div x-ref="agendaSentinel" class="agenda-sentinel" aria-hidden="true"></div>
+
+          <!-- Load more (fallback button; auto-load runs via IntersectionObserver) -->
+          <div
+            class="agenda-load-more"
+            x-show="agenda.nextAfter !== null && agenda.initialLoaded"
+          >
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="loadMoreAgenda()"
+              :disabled="agenda.loading"
+            >
+              <span x-show="!agenda.loading">{% translate "Load more" %}</span>
+              <span x-show="agenda.loading">
+                <span class="loading loading-spinner loading-xs"></span>
+                {% translate "Loading…" %}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

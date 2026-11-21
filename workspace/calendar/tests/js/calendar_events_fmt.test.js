@@ -305,3 +305,74 @@ test('all-day form boundaries round-trip the exclusive API end', () => {
   assert.equal(merged._allDayPayloadEnd('2026-08-31'), '2026-09-01');
   assert.equal(merged._allDayFormEnd('2026-08-30', '2026-09-01'), '2026-08-31');
 });
+
+function makeAgenda(tz, extra) {
+  const { ctx, mixin } = makeEventsMixin(tz);
+  ctx.document.body = { dataset: { userId: '1' } };
+  return Object.assign(mixin, {
+    prefs: { timeFormat: '24h' },
+    ownedCalendars: [{ uuid: 'c1', name: 'Work', color: 'error' }],
+    subscribedCalendars: [],
+    externalCalendars: [],
+  }, extra || {});
+}
+
+test('agendaByDay prints a month banner on the first day of each month only', () => {
+  const mixin = makeAgenda('UTC');
+  mixin.agenda = {
+    events: [
+      { uuid: 'a', start: '2026-11-29T09:00:00Z', all_day: false },
+      { uuid: 'b', start: '2026-11-30T09:00:00Z', all_day: false },
+      { uuid: 'c', start: '2026-12-01T09:00:00Z', all_day: false },
+    ],
+  };
+  const banners = Array.from(mixin.agendaByDay(), g => g.monthLabel);
+  assert.match(banners[0], /November 2026|novembre 2026/);
+  assert.equal(banners[1], null);
+  assert.match(banners[2], /December 2026|décembre 2026/);
+});
+
+test('agendaEventTimes keeps the end line for a same-day event only', () => {
+  const mixin = makeAgenda('Asia/Tokyo');
+  const sameDay = mixin.agendaEventTimes({ start: '2026-08-05T01:00:00Z', end: '2026-08-05T02:30:00Z', all_day: false });
+  assert.equal(sameDay.start, '10:00');
+  assert.equal(sameDay.end, '11:30');
+  // 14:00Z is 23:00 in Tokyo and 16:00Z is 01:00 the next day there.
+  const overnight = mixin.agendaEventTimes({ start: '2026-08-05T14:00:00Z', end: '2026-08-05T16:00:00Z', all_day: false });
+  assert.equal(overnight.start, '23:00');
+  assert.equal(overnight.end, '');
+});
+
+test('agendaEventDetails names the last covered day of a multi-day all-day event', () => {
+  const mixin = makeAgenda('America/Los_Angeles');
+  const owner = { id: 1 };
+  // Exclusive end Aug 8: the event runs through Aug 7.
+  const details = mixin.agendaEventDetails({
+    start: '2026-08-05', end: '2026-08-08', all_day: true, calendar_id: 'c1', location: 'Lyon', owner,
+  });
+  assert.equal(details.length, 3);
+  assert.match(details[0], /Aug 7|7 août/);
+  assert.deepEqual(details.slice(1), ['Lyon', 'Work']);
+  // A single-day all-day event has no end to spell out.
+  const single = mixin.agendaEventDetails({
+    start: '2026-08-05', end: '2026-08-06', all_day: true, calendar_id: 'c1', location: '', owner,
+  });
+  assert.deepEqual(Array.from(single), ['Work']);
+});
+
+test('agendaEventDetails spells out the end of an overnight event and an unanswered invitation', () => {
+  const mixin = makeAgenda('Asia/Tokyo');
+  const details = mixin.agendaEventDetails({
+    start: '2026-08-05T14:00:00Z',
+    end: '2026-08-05T16:00:00Z',
+    all_day: false,
+    calendar_id: 'c1',
+    location: '',
+    owner: { id: 2 },
+    members: [{ user: { id: 1 }, status: 'pending' }],
+  });
+  assert.match(details[0], /Aug 6.*01:00|6 août.*01:00/);
+  assert.equal(details[1], 'Work');
+  assert.equal(details[2], 'Awaiting your reply');
+  assert.match(mixin.agendaEventClasses({ calendar_id: 'c1', owner: { id: 2 }, members: [{ user: { id: 1 }, status: 'pending' }] }), /cal-error.*event-pending/);
+});

@@ -356,15 +356,17 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     },
 
     agendaByDay() {
-      // Regular method (not a getter - Alpine getters are not reliably reactive
-      // per the project memory note). Groups events by local date, and marks
-      // the "today" group so the template can highlight it with the accent color.
+      // A method, not a getter: a getter in a spread mixin is evaluated once.
+      // Groups events by day; a group opening a new month carries the month
+      // banner the template prints above it.
       const groups = [];
       let currentKey = null;
       let currentGroup = null;
+      let currentMonth = null;
 
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const keyIn = (d, zone) => dayKeyFormatter(zone).format(d);
+      const locale = userLocale();
 
       const todayDate = new Date();
       const todayKey = keyIn(todayDate, tz);
@@ -378,7 +380,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         const key = keyIn(d, evTz);
         if (key !== currentKey) {
           currentKey = key;
-          const dateLabel = d.toLocaleDateString(userLocale(), { timeZone: evTz, weekday: 'long', day: 'numeric', month: 'long' });
+          const dateLabel = d.toLocaleDateString(locale, { timeZone: evTz, weekday: 'long', day: 'numeric', month: 'long' });
           let label;
           if (key === todayKey) {
             label = interpolate(gettext('Today · %(date)s'), { date: dateLabel }, true);
@@ -387,12 +389,19 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           } else {
             label = dateLabel;
           }
+          const month = key.slice(0, 7);
           currentGroup = {
             date: key,
             label,
+            dayNumber: d.toLocaleDateString(locale, { timeZone: evTz, day: 'numeric' }),
+            weekday: d.toLocaleDateString(locale, { timeZone: evTz, weekday: 'short' }),
+            monthLabel: month !== currentMonth
+              ? d.toLocaleDateString(locale, { timeZone: evTz, month: 'long', year: 'numeric' })
+              : null,
             isToday: key === todayKey,
             events: [],
           };
+          currentMonth = month;
           groups.push(currentGroup);
         }
         currentGroup.events.push(event);
@@ -400,37 +409,78 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       return groups;
     },
 
-    formatAgendaEventTime(event) {
-      if (event.all_day) return gettext('All day');
+    _agendaTime(value) {
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      const d = new Date(event.start);
       const opts = this.prefs.timeFormat === '12h'
         ? { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }
         : { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false };
-      return d.toLocaleTimeString(userLocale(), opts);
+      return new Date(value).toLocaleTimeString(userLocale(), opts);
+    },
+
+    // The two lines of the time column. An event that ends on another day
+    // has no end line: agendaEventDetails() spells out the end date instead.
+    agendaEventTimes(event) {
+      if (event.all_day) return { start: pgettext('agenda time column', 'All day'), end: '' };
+      const start = this._agendaTime(event.start);
+      if (!event.end) return { start, end: '' };
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+      const sameDay = dayKeyFormatter(tz).format(new Date(event.start))
+        === dayKeyFormatter(tz).format(new Date(event.end));
+      return { start, end: sameDay ? this._agendaTime(event.end) : '' };
+    },
+
+    // Secondary line under the title: end of a multi-day event, location,
+    // calendar, and the viewer's answer when it is not an acceptance.
+    agendaEventDetails(event) {
+      const details = [];
+      const locale = userLocale();
+      if (event.all_day && event.end) {
+        // The stored all-day end is exclusive: the last covered day is the one before.
+        const lastDay = this._shiftDayLabel(event.end, -1);
+        if (lastDay > event.start.slice(0, 10)) {
+          const label = new Date(lastDay).toLocaleDateString(locale, {
+            timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short',
+          });
+          details.push(interpolate(gettext('Until %(date)s'), { date: label }, true));
+        }
+      } else if (event.end && !this.agendaEventTimes(event).end) {
+        const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+        const date = new Date(event.end).toLocaleDateString(locale, {
+          timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
+        });
+        const label = `${date}, ${this._agendaTime(event.end)}`;
+        details.push(interpolate(gettext('Until %(date)s'), { date: label }, true));
+      }
+      if (event.location) details.push(event.location);
+      const cal = this._agendaCalendar(event);
+      if (cal?.name) details.push(cal.name);
+      const status = this._agendaResponse(event);
+      if (status === 'pending') details.push(gettext('Awaiting your reply'));
+      if (status === 'declined') details.push(gettext('Declined'));
+      return details;
+    },
+
+    _agendaCalendar(event) {
+      return [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars]
+        .find(c => c.uuid === event.calendar_id);
+    },
+
+    // The viewer's answer to an invitation, or null on their own events.
+    _agendaResponse(event) {
+      const currentUserId = document.body.dataset.userId;
+      if (String(event.owner.id) === String(currentUserId)) return null;
+      const membership = (event.members || []).find(m => String(m.user?.id) === String(currentUserId));
+      return membership ? membership.status : null;
     },
 
     agendaEventClasses(event) {
-      // Returns the space-separated class string for an agenda event row.
-      // `cal-<color>` selects the calendar color via a CSS custom property
-      // (see .agenda-event.cal-* rules in calendar.css). The FullCalendar-scoped
-      // `event-color-*` classes don't apply here because the agenda is rendered
-      // outside the .fc container.
-      const currentUserId = document.body.dataset.userId;
-      const isOwner = String(event.owner.id) === String(currentUserId);
-      const membership = (event.members || []).find(m => String(m.user?.id) === String(currentUserId));
-      const isInvited = !isOwner && !!membership;
-      const isPending = isInvited && membership.status === 'pending';
-      const isDeclined = isInvited && membership.status === 'declined';
-
-      const cal = [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars]
-        .find(c => c.uuid === event.calendar_id);
-      const color = cal?.color || 'primary';
-
+      // `cal-<color>` sets --cal-color (calendar.css); the FullCalendar
+      // `event-color-*` classes are scoped to .fc and do not reach the agenda.
+      const color = this._agendaCalendar(event)?.color || 'primary';
       const classes = [`cal-${color}`];
-      if (isInvited) classes.push('event-invited');
-      if (isPending) classes.push('event-pending');
-      if (isDeclined) classes.push('event-declined');
+      const status = this._agendaResponse(event);
+      if (status === 'pending') classes.push('event-pending');
+      if (status === 'declined') classes.push('event-declined');
       return classes.join(' ');
     },
 

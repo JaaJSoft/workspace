@@ -349,6 +349,10 @@ msgstr "Agenda"
 msgid "No upcoming events"
 msgstr "Aucun événement à venir"
 
+#: ui/templates/calendar/ui/index.html
+msgid "Recurring event"
+msgstr "Événement récurrent"
+
 #: ui/templates/calendar/ui/partials/_calendar_modals.html
 #: ui/templates/calendar/ui/partials/_sidebar.html
 msgid "New calendar"

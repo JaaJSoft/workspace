@@ -36,14 +36,17 @@ async def open_model(name: str | None):
         timeout=settings.AI_TIMEOUT,
         max_retries=settings.AI_MAX_RETRIES,
     )
-    # Anything but OpenAI gets the reply cap as `max_tokens`: Ollama ignores
-    # `max_completion_tokens` without a word and answers uncapped.
     if settings.AI_BASE_URL:
         provider = OpenAICompatibleProvider(
             "openai-compatible",
             openai_client=client,
             profile=OpenAIModelProfile(
-                openai_chat_supports_max_completion_tokens=False
+                # Ollama ignores `max_completion_tokens` without a word and
+                # answers uncapped; every such service reads `max_tokens`.
+                openai_chat_supports_max_completion_tokens=False,
+                # Handed its reasoning back, gpt-oss writes its next tool
+                # call into its reasoning, where nothing runs it.
+                openai_chat_send_back_thinking_parts=False,
             ),
         )
     else:

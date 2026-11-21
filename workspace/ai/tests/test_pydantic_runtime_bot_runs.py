@@ -11,10 +11,11 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 from pydantic_ai import direct
-from pydantic_ai.messages import ModelRequest
+from pydantic_ai.messages import ModelRequest, ToolReturnPart
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
+from workspace.ai.harness.pydantic_runtime.messages import to_model_response
 from workspace.ai.harness.pydantic_runtime.model import model_settings, open_model
 from workspace.ai.harness.pydantic_runtime.runner import PydanticAIRunner
 from workspace.ai.harness.runner import AgentRunner
@@ -231,6 +232,56 @@ class OpenModelTests(SimpleTestCase):
         # Ollama answers uncapped when the cap comes under OpenAI's new name.
         self.assertEqual(body["max_tokens"], 321)
         self.assertNotIn("max_completion_tokens", body)
+
+    @override_settings(AI_BASE_URL="http://ollama.test:11434/v1/", AI_MODEL="gpt-oss")
+    def test_reasoning_is_never_sent_back_to_the_model(self):
+        # Measured on gpt-oss behind Ollama: given its own reasoning back, it
+        # wrote its next tool call into the reasoning five times out of seven.
+        sent = []
+
+        def backend(request):
+            sent.append(json.loads(request.content))
+            reply = _completion(request)
+            message = json.loads(reply.content)
+            message["choices"][0]["message"] = {
+                "role": "assistant",
+                "content": "",
+                "reasoning_content": "I should look first.",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "look", "arguments": "{}"},
+                    }
+                ],
+            }
+            return httpx2.Response(200, json=message)
+
+        def client(**options):
+            transport = httpx2.MockTransport(backend)
+            return real_client(
+                **options, http_client=httpx2.AsyncClient(transport=transport)
+            )
+
+        async def two_rounds():
+            history = [ModelRequest.user_text_prompt("hi")]
+            async with open_model(None) as model:
+                reply = await direct.model_request(model, history)
+                result = ToolReturnPart(
+                    tool_name="look", content="seen", tool_call_id="c1"
+                )
+                history += [reply, ModelRequest(parts=[result])]
+                await direct.model_request(model, history)
+            return reply
+
+        real_client = openai.AsyncOpenAI
+        with patch("openai.AsyncOpenAI", client):
+            reply = async_to_sync(two_rounds)()
+
+        self.assertEqual(to_model_response(reply).thinking, "I should look first.")
+        self.assertNotIn("I should look first.", json.dumps(sent[1]))
+        (turn,) = [m for m in sent[1]["messages"] if m["role"] == "assistant"]
+        self.assertEqual(turn["tool_calls"][0]["id"], "c1")
 
     @override_settings(AI_API_KEY="")
     def test_no_key_is_no_backend(self):

@@ -186,6 +186,9 @@ What differs on `pydantic_ai`:
   native loop sends; here OpenAI is sent `max_completion_tokens`, and an
   endpoint set with `AI_BASE_URL` still gets `max_tokens`, the one name all
   of them read.
+- The reasoning of a reply is not sent back to the model on the next round,
+  as on the native loop. The library's default is to send it back, and a
+  model given its own reasoning can write its next tool call into it.
 - An image a tool returns reaches the model as an image in a message of its
   own, not inside the tool result, which OpenAI refuses.
 - It only covers the bots. Titles, summaries, mail and the editor still go

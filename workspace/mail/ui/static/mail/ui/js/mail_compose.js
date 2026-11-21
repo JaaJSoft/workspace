@@ -4,7 +4,12 @@
 window.mailComposeMixin = function mailComposeMixin() {
   return {
     // ----- Compose -----
+    // Bumped by every compose that starts: a reply still loading opens only
+    // if nothing else was started while it loaded.
+    _composeSession: 0,
+
     async showCompose(defaults = {}) {
+      this._composeSession++;
       let restored = false;
       this.compose = { ..._defaultCompose(), ...defaults };
       this.clearAttachments();
@@ -99,12 +104,14 @@ window.mailComposeMixin = function mailComposeMixin() {
     },
 
     async _composeFrom(msg, mode) {
+      const session = ++this._composeSession;
       let prefill = null;
       try {
         const res = await this._fetch(
           `/api/v1/mail/messages/${msg.uuid}/compose?mode=${mode}`);
         if (res.ok) prefill = await res.json();
       } catch (e) {}
+      if (session !== this._composeSession) return;
       if (!prefill) {
         AppAlert.error(gettext('Could not open the message'));
         return;

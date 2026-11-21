@@ -111,6 +111,9 @@ def _recipients(message, account, reply_all):
             (_address(entry) for entry in message.cc_addresses),
             own | {address.casefold() for address in to},
         )
+    # A message the account sent to itself, copying others: answer them.
+    if not to and cc:
+        to, cc = cc[:1], cc[1:]
     return to, cc
 
 

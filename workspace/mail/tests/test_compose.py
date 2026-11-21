@@ -122,6 +122,16 @@ class BuildReplyRecipientsTests(ComposeFixtures):
         self.assertEqual(reply.to, ["bob@example.com"])
         self.assertEqual(reply.cc, [])
 
+    def test_reply_all_to_a_sent_message_promotes_a_cc_when_to_is_empty(self):
+        message = self._message(
+            from_email="me@example.com",
+            to_addresses=[{"email": "me@example.com"}],
+            cc_addresses=[{"email": "carol@example.com"}, {"email": "dan@example.com"}],
+        )
+        reply = build_reply(message, self.user, reply_all=True)
+        self.assertEqual(reply.to, ["carol@example.com"])
+        self.assertEqual(reply.cc, ["dan@example.com"])
+
     def test_reply_to_a_message_sent_only_to_oneself_has_no_recipient(self):
         message = self._message(
             from_email="me@example.com",

@@ -95,9 +95,11 @@ const PREFILLS = {
 
 // The prefill endpoint answers from PREFILLS (or fails with `failPrefill`);
 // every other request answers "not ok", which keeps sendEmail/_saveDraft on
-// their short error path.
-function makeInstance({ failPrefill = false } = {}) {
+// their short error path. With `held`, a prefill waits until the test calls
+// the `release(mode)` it gets, so responses can arrive out of order.
+function makeInstance({ failPrefill = false, held = false } = {}) {
   const requests = [];
+  const pending = {};
   const instance = {
     compose: _defaultCompose(),
     // The account's signature differs from the one the server put in the
@@ -111,7 +113,9 @@ function makeInstance({ failPrefill = false } = {}) {
       if (match && !options) {
         if (failPrefill) return Promise.reject(new Error('offline'));
         const body = JSON.stringify(PREFILLS[match[2]]);
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(body)) });
+        const response = { ok: true, json: () => Promise.resolve(JSON.parse(body)) };
+        if (!held) return Promise.resolve(response);
+        return new Promise((resolve) => { pending[match[2]] = () => resolve(response); });
       }
       return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
     },
@@ -123,6 +127,7 @@ function makeInstance({ failPrefill = false } = {}) {
   for (const key of Object.keys(instance)) {
     if (typeof instance[key] === 'function') instance[key] = instance[key].bind(instance);
   }
+  instance.release = (mode) => pending[mode]();
   return instance;
 }
 
@@ -169,6 +174,33 @@ test('switching account swaps the signature the server put in', async () => {
   app.onComposeAccountChange();
 
   assert.match(app.compose.body, /^\n-- \nSomeone else\n\n\n---\nOn Wednesday/);
+});
+
+test('the last reply asked for wins, whatever order the answers arrive in', async () => {
+  const app = makeInstance({ held: true });
+
+  const first = app.replyTo(ROW);
+  const second = app.forwardMessage(ROW);
+  app.release('forward');
+  await second;
+  app.release('reply');
+  await first;
+
+  assert.equal(app.compose.subject, 'Fwd: Numbers');
+});
+
+test('a reply still loading never replaces a compose opened since', async () => {
+  const app = makeInstance({ held: true });
+
+  const reply = app.replyTo(ROW);
+  await app.showCompose({ to: ['zoe@example.com'], subject: 'Lunch', body: 'Typed already' });
+  const opened = app.compose;
+  app.release('reply');
+  await reply;
+
+  assert.equal(app.compose, opened);
+  assert.equal(app.compose.subject, 'Lunch');
+  assert.match(app.compose.body, /^Typed already/);
 });
 
 test('a prefill that cannot be loaded opens nothing and says so', async () => {

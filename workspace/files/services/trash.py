@@ -23,6 +23,7 @@ from ..models import File, FileEvent
 from ..storage_layout import live_path
 from . import names, storage_ops
 from .events import record_event
+from .folder_dates import touch_folders
 from .hard_delete import hard_delete_tree
 from .refusals import refusals, require_action, require_unlocked
 from .trash_paths import trash_root_of
@@ -149,6 +150,7 @@ def trash_subtree(node, deleted_at=None):
     ).update(deleted_at=deleted_at)
     if not count:
         return 0
+    touch_folders(node.parent_id)
 
     node.deleted_at = deleted_at
     if source:
@@ -190,13 +192,16 @@ def restore_subtree(node):
         try:
             with names.name_claim(claimant.owner, claimant.parent, claimant.name):
                 updated = _bring_back(node, trashed_at)
-                _restore_parents(node)
+                came_back = _restore_parents(node)
             break
         except names.NameTaken:
             continue  # taken between the check and the write: pick again
     else:
         raise names.NameTaken()
     node.deleted_at = None
+    # The folders the restored chain reappears in: the node's parent, and the
+    # parent of every trashed ancestor brought back with it.
+    touch_folders(node.parent_id, *(parent_id for _, parent_id in came_back))
 
     if root is not None and source:
         root.deleted_at = None
@@ -218,8 +223,9 @@ def _bring_back(node, trashed_at):
 
 
 def _restore_parents(node):
+    """Bring back the trashed folders above *node*; return them as (pk, parent_id)."""
     parent_id = node.parent_id
-    restored_ids = []
+    restored = []
     while parent_id:
         parent = (
             File.objects.filter(pk=parent_id)
@@ -228,8 +234,8 @@ def _restore_parents(node):
         )
         if not parent or parent["deleted_at"] is None:
             break
-        restored_ids.append(parent["pk"])
+        restored.append((parent["pk"], parent["parent_id"]))
         parent_id = parent["parent_id"]
-    if restored_ids:
-        File.objects.filter(pk__in=restored_ids).update(deleted_at=None)
-    return len(restored_ids)
+    if restored:
+        File.objects.filter(pk__in=[pk for pk, _ in restored]).update(deleted_at=None)
+    return restored

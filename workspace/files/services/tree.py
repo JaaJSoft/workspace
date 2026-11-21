@@ -23,6 +23,7 @@ from . import bucket_usage, detection, names, storage_ops
 from .content_hash import hash_storage_file, upload_hash
 from .events import record_event
 from .filetype import pin_viewer_for_upload
+from .folder_dates import touch_folders
 from .quota import check_write_allowed, subtree_bytes
 from .scanning.policy import check_copy_allowed
 
@@ -339,6 +340,7 @@ def move(file_obj, new_parent, *, acting_user=None):
         # namespace, so it belongs inside the claim too.
         if (old_group and old_group != new_group) or (not old_group and new_group):
             propagate_group(file_obj, new_group)
+    touch_folders(old_parent_id, new_parent_id)
     if source:
         storage_ops.move_node_storage(
             file_obj, source, storage_ops.node_storage_path(file_obj)
@@ -385,6 +387,7 @@ def rename(file_obj, new_name, *, acting_user=None):
     file_obj.name = new_name
     with names.name_claim(file_obj.owner, file_obj.parent, new_name):
         file_obj.save(update_fields=["name"])
+    touch_folders(file_obj.parent_id)
     if source:
         storage_ops.move_node_storage(
             file_obj, source, storage_ops.node_storage_path(file_obj)

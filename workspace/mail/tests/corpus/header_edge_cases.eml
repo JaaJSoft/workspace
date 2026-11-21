@@ -1,0 +1,24 @@
+Received: from mx.example.net (mx.example.net [192.0.2.10])
+	by imap.example.com with ESMTPS id 7731;
+	Wed, 18 Nov 2026 07:59:58 +0000 (UTC)
+From: "Martin, Zoe (Achats)" <zoe.martin@example.net>
+Reply-To: Achats <achats@example.net>
+To: "O'Neil, Sean" <sean@example.com>, pierre@example.com,
+	=?utf-8?B?SsO8cmdlbiBNw7xsbGVy?= <juergen@example.de>
+To: Equipe: anna@example.com, bob@example.com;
+Cc: undisclosed-recipients:;
+Bcc: secret@example.com
+Subject: A subject folded
+ over two lines, with =?utf-8?Q?un_mot_encod=C3=A9?= =?utf-8?Q?_coll=C3=A9?=
+Date: Wed, 18 Nov 2026 08:00:00 -0000
+Message-ID: <edge-1@example.net>
+In-Reply-To: <parent@example.com>
+References: <root@example.com>
+	<middle@example.com>
+ <parent@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii; format=flowed
+Content-Transfer-Encoding: 7bit
+
+First line.
+Second line.

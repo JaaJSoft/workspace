@@ -91,7 +91,7 @@ class TestICSEmailFlagsHasCalendarEvent(ICSDetectionMixin, TestCase):
         msg = self._build_calendar_email()
         raw = msg.as_bytes()
 
-        mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags_str="")
+        mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags=())
 
         self.assertIsNotNone(mail_msg)
         self.assertTrue(mail_msg.has_calendar_event)
@@ -104,7 +104,7 @@ class TestICSEmailStoresCalendarAttachment(ICSDetectionMixin, TestCase):
         msg = self._build_calendar_email()
         raw = msg.as_bytes()
 
-        mail_msg = _parse_message(raw, self.account, self.folder, uid=2, flags_str="")
+        mail_msg = _parse_message(raw, self.account, self.folder, uid=2, flags=())
 
         self.assertIsNotNone(mail_msg)
         attachments = MailAttachment.objects.filter(message=mail_msg)
@@ -123,7 +123,7 @@ class TestNormalEmailNotFlagged(ICSDetectionMixin, TestCase):
         msg = self._build_normal_email()
         raw = msg.as_bytes()
 
-        mail_msg = _parse_message(raw, self.account, self.folder, uid=3, flags_str="")
+        mail_msg = _parse_message(raw, self.account, self.folder, uid=3, flags=())
 
         self.assertIsNotNone(mail_msg)
         self.assertFalse(mail_msg.has_calendar_event)

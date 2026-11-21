@@ -153,6 +153,12 @@ class MailFolder(models.Model):
     message_count = models.IntegerField(default=0)
     unread_count = models.IntegerField(default=0)
     last_sync_uid = models.BigIntegerField(default=0)
+    # What the server said of the mailbox when the last complete sync pass
+    # selected it (imap_sync.remote_state); None when it cannot be trusted.
+    remote_state = models.JSONField(null=True, blank=True, editable=False)
+    # Counts the times remote_state was declared untrustworthy. A sync pass
+    # stores the state it read only if nobody did so while it ran.
+    remote_state_version = models.PositiveIntegerField(default=0, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

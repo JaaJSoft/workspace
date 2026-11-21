@@ -5,13 +5,19 @@ IMAP server until the new draft has been APPENDed successfully. Otherwise a
 network/quota failure mid-save would lose both copies.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from workspace.mail.models import MailAccount, MailFolder
-from workspace.mail.services.imap_messages import save_draft
+from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.services.imap_messages import DELETED, DRAFT, SEEN, save_draft
+from workspace.mail.tests.imap_fake import (
+    BARE,
+    FakeImapClient,
+    fake_imap,
+    raw_message,
+)
 
 User = get_user_model()
 
@@ -43,99 +49,111 @@ class SaveDraftTests(TestCase):
             folder_type=MailFolder.FolderType.DRAFTS,
         )
 
-    def _mock_conn(self, append_status="OK"):
-        conn = MagicMock()
-        conn.select.return_value = ("OK", [b""])
-        conn.append.return_value = (append_status, [b"APPENDUID 1 99"])
-        conn.uid.return_value = ("OK", [b""])
-        conn.expunge.return_value = ("OK", [b""])
-        return conn
+    def test_append_failure_leaves_old_draft_intact(self):
+        """If APPEND fails, the old draft must NOT be flagged deleted nor
+        expunged; otherwise the user loses both old and new drafts."""
+        with fake_imap() as server:
+            old = server.deliver("Drafts", subject="Old draft")
+            server.fail("append")
 
-    @patch("workspace.mail.services.imap_sync.sync_folder_messages")
-    @patch("workspace.mail.services.imap_messages.connect_imap")
-    def test_append_failure_leaves_old_draft_intact(self, mock_connect, _sync):
-        """If APPEND fails, the old draft must NOT be STOREd as deleted nor
-        EXPUNGEd; otherwise the user loses both old and new drafts."""
-        conn = self._mock_conn(append_status="NO")
-        mock_connect.return_value = conn
-
-        result = save_draft(self.account, RAW_DRAFT, old_uid=42)
+            result = save_draft(self.account, RAW_DRAFT, old_uid=old)
 
         self.assertIsNone(result)
-        conn.append.assert_called_once()
-        conn.uid.assert_not_called()
-        conn.expunge.assert_not_called()
+        self.assertEqual(server.uids("Drafts"), [old])
+        self.assertEqual(server.flags("Drafts", old), set())
 
-    @patch("workspace.mail.services.imap_sync.sync_folder_messages")
-    @patch("workspace.mail.services.imap_messages.connect_imap")
-    def test_append_success_then_deletes_old_draft(self, mock_connect, _sync):
-        """On APPEND success with old_uid, the old draft is STOREd \\Deleted
-        and EXPUNGEd, in that order, after APPEND."""
-        conn = self._mock_conn(append_status="OK")
-        mock_connect.return_value = conn
-        call_order = []
-        conn.append.side_effect = lambda *a, **kw: (
-            call_order.append("append") or ("OK", [b""])
+    def test_a_lost_connection_propagates_and_leaves_old_draft_intact(self):
+        with fake_imap() as server:
+            old = server.deliver("Drafts", subject="Old draft")
+            server.fail("append", OSError("connection reset"))
+
+            with self.assertRaises(OSError):
+                save_draft(self.account, RAW_DRAFT, old_uid=old)
+
+        self.assertEqual(server.uids("Drafts"), [old])
+
+    def test_append_success_then_deletes_old_draft(self):
+        """On APPEND success with old_uid, the old draft is expunged, after
+        the APPEND, and the new one carries the draft flags."""
+        with fake_imap() as server:
+            old = server.deliver("Drafts", subject="Old draft")
+
+            result = save_draft(self.account, RAW_DRAFT, old_uid=old)
+
+        (new,) = server.uids("Drafts")
+        self.assertNotEqual(new, old)
+        self.assertEqual(server.flags("Drafts", new), {DRAFT, SEEN})
+        self.assertEqual(
+            [command[0] for command in server.named("append", "uid_expunge")],
+            ["append", "uid_expunge"],
         )
-        conn.uid.side_effect = lambda *a, **kw: (
-            call_order.append(("uid",) + a) or ("OK", [b""])
-        )
-        conn.expunge.side_effect = lambda *a, **kw: (
-            call_order.append("expunge") or ("OK", [b""])
-        )
+        self.assertEqual(result.imap_uid, new)
+        self.assertTrue(result.is_draft)
 
-        save_draft(self.account, RAW_DRAFT, old_uid=42)
+    def test_replacing_a_draft_keeps_the_drafts_another_client_marked_deleted(self):
+        """The expunge names the old draft: a plain EXPUNGE would also take
+        every draft another mail program flagged deleted and kept."""
+        with fake_imap() as server:
+            marked = server.deliver("Drafts", subject="Marked", flags=[DELETED])
+            old = server.deliver("Drafts", subject="Old draft")
 
-        self.assertEqual(call_order[0], "append")
-        self.assertEqual(call_order[1], ("uid", "STORE", "42", "+FLAGS", "(\\Deleted)"))
-        self.assertEqual(call_order[2], "expunge")
+            result = save_draft(self.account, RAW_DRAFT, old_uid=old)
 
-    @patch("workspace.mail.services.imap_sync.sync_folder_messages")
-    @patch("workspace.mail.services.imap_messages.connect_imap")
-    def test_no_old_uid_skips_delete(self, mock_connect, _sync):
-        """A first-time draft save (no old_uid) must not call STORE/EXPUNGE."""
-        conn = self._mock_conn(append_status="OK")
-        mock_connect.return_value = conn
+        self.assertEqual(server.uids("Drafts"), [marked, result.imap_uid])
 
-        save_draft(self.account, RAW_DRAFT, old_uid=None)
+    def test_without_uidplus_the_old_draft_is_still_deleted(self):
+        with fake_imap(capabilities=BARE) as server:
+            old = server.deliver("Drafts", subject="Old draft")
 
-        conn.append.assert_called_once()
-        conn.uid.assert_not_called()
-        conn.expunge.assert_not_called()
+            result = save_draft(self.account, RAW_DRAFT, old_uid=old)
 
-    @patch("workspace.mail.services.imap_sync.sync_folder_messages")
-    @patch("workspace.mail.services.imap_messages.connect_imap")
-    def test_returns_appended_draft_not_concurrent_intruder(
-        self, mock_connect, mock_sync
-    ):
+        self.assertEqual(server.uids("Drafts"), [result.imap_uid])
+        self.assertEqual(len(server.named("expunge")), 1)
+
+    def test_no_old_uid_skips_delete(self):
+        """A first-time draft save (no old_uid) expunges nothing."""
+        with fake_imap() as server:
+            server.deliver("Drafts", subject="Another draft")
+
+            save_draft(self.account, RAW_DRAFT, old_uid=None)
+
+        self.assertEqual(len(server.uids("Drafts")), 2)
+        self.assertEqual(server.named("add_flags", "expunge", "uid_expunge"), [])
+
+    def test_the_save_and_its_sync_share_one_connection(self):
+        with fake_imap() as server:
+            old = server.deliver("Drafts", subject="Old draft")
+
+            save_draft(self.account, RAW_DRAFT, old_uid=old)
+
+        self.assertEqual(len(server.connections), 1)
+
+    def test_returns_appended_draft_not_concurrent_intruder(self):
         """If a parallel IMAP session APPENDed a different draft and the sync
         picked both up, we must return OUR draft (matched by Message-ID), not
-        the intruder, even when the intruder has a more recent created_at."""
-        from workspace.mail.models import MailMessage
+        the intruder, even when the intruder is the most recent."""
+        append = FakeImapClient.append
 
-        conn = self._mock_conn(append_status="OK")
-        mock_connect.return_value = conn
-
-        def _fake_sync(account, folder):
-            # The intruder is created LAST (most recent created_at) - exactly
-            # the scenario where order_by('-created_at') would return it.
-            MailMessage.objects.create(
-                account=account,
-                folder=folder,
-                imap_uid=100,
-                message_id="<our-draft-id@example.com>",
-            )
-            MailMessage.objects.create(
-                account=account,
-                folder=folder,
-                imap_uid=101,
-                message_id="<intruder@other-client.example.com>",
+        def append_then_intrude(client, *args, **kwargs):
+            # The intruder lands after our APPEND, before our sync reads the
+            # folder: exactly where "the newest draft" would return it.
+            append(client, *args, **kwargs)
+            client.server.deliver(
+                "Drafts",
+                raw=raw_message(message_id="<intruder@other-client.example.com>"),
             )
 
-        mock_sync.side_effect = _fake_sync
+        with (
+            fake_imap() as server,
+            patch.object(FakeImapClient, "append", append_then_intrude),
+        ):
+            server.mailbox("Drafts")
 
-        result = save_draft(self.account, RAW_DRAFT, old_uid=None)
+            result = save_draft(self.account, RAW_DRAFT, old_uid=None)
 
-        self.assertIsNotNone(result)
+        self.assertEqual(
+            MailMessage.objects.filter(folder=self.drafts).count(),
+            2,
+            "the sync imported both drafts",
+        )
         self.assertEqual(result.message_id, "<our-draft-id@example.com>")
-        self.assertEqual(result.imap_uid, 100)

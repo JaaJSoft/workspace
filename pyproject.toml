@@ -41,6 +41,8 @@ dependencies = [
     "rawpy>=0.28.0",
     "cairosvg>=2.9.1",
     # mail
+    # IMAP client (pure Python): parsed responses, modified UTF-7 folder names
+    "imapclient>=4.3.0",
     "cryptography>=50.0.2",
     "nh3>=0.3.7",
     "python-dateutil>=2.9",

@@ -78,6 +78,7 @@ class MailSendView(APIView):
             try:
                 handle = ws_file.content.open("rb")
                 handle.name = ws_file.name
+                handle.content_type = ws_file.mime_type
                 ws_file_handles.append(handle)
                 attachments.append(handle)
             except FileNotFoundError, OSError:

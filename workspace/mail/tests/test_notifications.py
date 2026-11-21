@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -21,6 +21,7 @@ from workspace.mail.services.notifications import (
     resolve_notify_burst,
     resolve_notify_mode,
 )
+from workspace.mail.tests.imap_fake import FakeImapServer, fake_imap
 from workspace.notifications.models import Notification
 from workspace.users.services.settings import set_setting
 
@@ -308,27 +309,32 @@ class NotifyLabeledMessagesTests(MailNotifyBase):
 class SyncWiringTests(MailNotifyBase):
     """sync_folder_messages must hand the notifier a correct initial-sync flag."""
 
-    def test_uidvalidity_reset_is_treated_as_an_initial_sync(self):
-        from workspace.mail.services import imap_sync
-
+    def setUp(self):
+        super().setUp()
         self.inbox.last_sync_uid = 500
         self.inbox.uid_validity = 111
         self.inbox.save(update_fields=["last_sync_uid", "uid_validity"])
 
-        conn = MagicMock()
-        conn.select.return_value = ("OK", [b""])
-        conn.uid.return_value = ("OK", [b""])
+    def _sync(self, uid_validity, uids=()):
+        """Sync the inbox with a server holding `uids` under `uid_validity`;
+        returns the notifier the pass called."""
+        from workspace.mail.services.imap_sync import sync_folder_messages
 
+        server = FakeImapServer()
+        server.mailbox("INBOX").uidvalidity = uid_validity
+        for uid in uids:
+            server.deliver("INBOX", uid=uid)
         with (
-            patch.object(imap_sync, "connect_imap", return_value=conn),
-            patch.object(imap_sync, "_get_uidvalidity", return_value=222),
-            patch.object(imap_sync, "_reconcile_folder"),
-            patch.object(imap_sync, "_update_folder_counts"),
+            fake_imap(server),
             patch(
                 "workspace.mail.services.notifications.notify_new_messages"
             ) as notifier,
         ):
-            imap_sync.sync_folder_messages(self.account, self.inbox)
+            sync_folder_messages(self.account, self.inbox)
+        return notifier
+
+    def test_uidvalidity_reset_is_treated_as_an_initial_sync(self):
+        notifier = self._sync(uid_validity=222)
 
         # The UIDVALIDITY mismatch purged the folder and reset the cursor to 0,
         # so everything is about to be re-imported: as silent as a first sync.
@@ -336,67 +342,21 @@ class SyncWiringTests(MailNotifyBase):
         self.assertTrue(notifier.call_args.kwargs["was_initial_sync"])
 
     def test_incremental_sync_reports_a_non_initial_sync(self):
-        from workspace.mail.services import imap_sync
-
-        self.inbox.last_sync_uid = 500
-        self.inbox.uid_validity = 111
-        self.inbox.save(update_fields=["last_sync_uid", "uid_validity"])
-
-        conn = MagicMock()
-        conn.select.return_value = ("OK", [b""])
-        conn.uid.return_value = ("OK", [b""])
-
-        with (
-            patch.object(imap_sync, "connect_imap", return_value=conn),
-            patch.object(imap_sync, "_get_uidvalidity", return_value=111),
-            patch.object(imap_sync, "_reconcile_folder"),
-            patch.object(imap_sync, "_update_folder_counts"),
-            patch(
-                "workspace.mail.services.notifications.notify_new_messages"
-            ) as notifier,
-        ):
-            imap_sync.sync_folder_messages(self.account, self.inbox)
+        notifier = self._sync(uid_validity=111)
 
         self.assertTrue(notifier.called)
         self.assertFalse(notifier.call_args.kwargs["was_initial_sync"])
 
     def test_a_reset_that_refetches_messages_still_reports_an_initial_sync(self):
-        from workspace.mail.models import MailMessage
-        from workspace.mail.services import imap_sync
-
-        self.inbox.last_sync_uid = 500
-        self.inbox.uid_validity = 111
-        self.inbox.save(update_fields=["last_sync_uid", "uid_validity"])
-
-        conn = MagicMock()
-        conn.select.return_value = ("OK", [b""])
-        # SEARCH answers the post-reset "initial sync" branch (last_sync_uid
-        # is now 0 in memory), FETCH must return a UID above 500 so max_uid
-        # actually advances past 0 - otherwise this test cannot tell the
-        # correct capture point from one taken after "Update sync position",
-        # since both would read last_sync_uid == 0.
-        conn.uid.side_effect = [
-            ("OK", [b"501"]),
-            ("OK", [(b"501 (UID 501 FLAGS ())", b"fake")]),
-        ]
-        fetched_message = MailMessage(
-            account=self.account, folder=self.inbox, imap_uid=501
-        )
-
-        with (
-            patch.object(imap_sync, "connect_imap", return_value=conn),
-            patch.object(imap_sync, "_get_uidvalidity", return_value=222),
-            patch.object(imap_sync, "_parse_message", return_value=fetched_message),
-            patch.object(imap_sync, "_reconcile_folder"),
-            patch.object(imap_sync, "_update_folder_counts"),
-            patch(
-                "workspace.mail.services.notifications.notify_new_messages"
-            ) as notifier,
-        ):
-            imap_sync.sync_folder_messages(self.account, self.inbox)
+        # A UID above 500, so the cursor actually advances past 0 - otherwise
+        # this test cannot tell the correct capture point from one taken after
+        # the cursor is saved, since both would read last_sync_uid == 0.
+        notifier = self._sync(uid_validity=222, uids=[501])
 
         self.assertTrue(notifier.called)
         self.assertTrue(notifier.call_args.kwargs["was_initial_sync"])
+        self.inbox.refresh_from_db()
+        self.assertEqual(self.inbox.last_sync_uid, 501)
 
 
 class ClassifyWiringTests(MailNotifyBase):

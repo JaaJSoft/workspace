@@ -80,7 +80,7 @@ class CidSurvivesImportTests(InlineImageFixtures):
         image.add_header("Content-ID", "<logo@example.com>")
         raw.attach(image)
 
-        message = _parse_message(raw.as_bytes(), self.account, self.inbox, 1, "")
+        message = _parse_message(raw.as_bytes(), self.account, self.inbox, 1, ())
 
         self.assertIn('src="cid:logo@example.com"', message.body_html)
         attachment = message.attachments.get()

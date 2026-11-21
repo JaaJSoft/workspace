@@ -1,3 +1,4 @@
+import email.policy
 import io
 import smtplib
 import ssl
@@ -140,6 +141,97 @@ class BuildDraftMessageTests(TestCase):
         (part,) = [p for p in message_from_bytes(raw).walk() if p.get_filename()]
         self.assertEqual(part.get_filename(), "doc.pdf")
         self.assertEqual(part.get_payload(decode=True), b"%PDF-fake")
+
+    def _attachment_part(self, name, content_type=None):
+        attachment = io.BytesIO(b"content")
+        attachment.name = name
+        if content_type is not None:
+            attachment.content_type = content_type
+        raw = build_draft_message(
+            self._make_account(), to=["bob@example.com"], attachments=[attachment]
+        )
+        message = message_from_bytes(raw, policy=email.policy.default)
+        (part,) = message.iter_attachments()
+        return part, raw
+
+    def test_attachment_goes_out_with_the_type_its_source_gives(self):
+        part, _raw = self._attachment_part("scan", "image/png")
+
+        self.assertEqual(part.get_content_type(), "image/png")
+        self.assertEqual(part.get_content_disposition(), "attachment")
+        self.assertEqual(part.get_content(), b"content")
+
+    def test_attachment_type_falls_back_on_the_name(self):
+        for declared in (None, "", "application/octet-stream", "not a type", 7):
+            with self.subTest(declared=declared):
+                part, _raw = self._attachment_part("report.pdf", declared)
+
+                self.assertEqual(part.get_content_type(), "application/pdf")
+
+    def test_attachment_of_no_known_type_is_plain_bytes(self):
+        part, _raw = self._attachment_part("mystery.zzz")
+
+        self.assertEqual(part.get_content_type(), "application/octet-stream")
+
+    def test_attachment_type_parameters_are_left_out(self):
+        part, _raw = self._attachment_part("notes.txt", "Text/Plain; charset=utf-8")
+
+        self.assertEqual(part.get_content_type(), "text/plain")
+        self.assertEqual(part.get_payload(decode=True), b"content")
+
+    def test_an_attached_message_travels_as_plain_bytes(self):
+        """A message/rfc822 part may not be base64: sent under that type,
+        the file would reach nobody intact."""
+        part, _raw = self._attachment_part("forwarded.eml", "message/rfc822")
+
+        self.assertEqual(part.get_content_type(), "application/octet-stream")
+        self.assertEqual(part.get_content(), b"content")
+
+    def test_attachment_names_outside_ascii_arrive_whole(self):
+        for name in (
+            "r\u00e9union.pdf",
+            'rapport "final".pdf',
+            "\u65e5\u672c\u8a9e.txt",
+        ):
+            with self.subTest(name=name):
+                part, raw = self._attachment_part(name)
+
+                self.assertEqual(part.get_filename(), name)
+                self.assertEqual(part.get_param("name"), name)
+                self.assertEqual(part.get_content_disposition(), "attachment")
+                # The older half of the email package reads it too.
+                (legacy,) = [
+                    p for p in message_from_bytes(raw).walk() if p.get_filename()
+                ]
+                self.assertEqual(legacy.get_filename(), name)
+
+    def test_text_outside_ascii_goes_out_in_seven_bits(self):
+        raw = build_draft_message(
+            self._make_account(),
+            to=["Am\u00e9lie <amelie@example.com>"],
+            subject="R\u00e9union d\u00e9cal\u00e9e",
+            body_text="\u00c0 demain.",
+            body_html="<p>\u00c0 demain.</p>",
+        )
+
+        self.assertTrue(raw.isascii())
+        message = message_from_bytes(raw, policy=email.policy.default)
+        self.assertEqual(message["Subject"], "R\u00e9union d\u00e9cal\u00e9e")
+        self.assertEqual(message["To"].addresses[0].display_name, "Am\u00e9lie")
+        self.assertEqual(
+            message.get_body(("plain",)).get_content().strip(), "À demain."
+        )
+        self.assertEqual(
+            message.get_body(("html",)).get_content().strip(), "<p>À demain.</p>"
+        )
+
+    def test_a_line_break_cannot_add_a_header(self):
+        with self.assertRaises(ValueError):
+            build_draft_message(
+                self._make_account(),
+                to=["bob@example.com"],
+                subject="Hello\r\nBcc: eve@example.com",
+            )
 
     def test_attachment_read_in_uneven_chunks_round_trips(self):
         # A storage stream may return fewer bytes than asked for; the base64

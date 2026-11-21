@@ -1,44 +1,49 @@
 """IMAP sync logic: folders, messages, reconciliation."""
 
 import logging
-import re
+from datetime import timedelta
 from itertools import batched
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone as dj_timezone
+from django.utils.dateparse import parse_datetime
+from imapclient.exceptions import IMAPClientError
 
 from workspace.common.logging import scrub
-from workspace.mail.services.imap_connection import connect_imap
+from workspace.mail.services.imap_connection import ConnectionLost, imap_session
 from workspace.mail.services.imap_mailbox import (
     _detect_folder_type,
     _display_name,
-    _quote_mailbox,
     list_folders,
 )
+from workspace.mail.services.imap_messages import FLAGGED, SEEN, UID_BATCH_SIZE
 from workspace.mail.services.imap_parse import _parse_message
 
 logger = logging.getLogger(__name__)
 
 # Maximum messages to fetch on initial sync per folder
 INITIAL_SYNC_LIMIT = 200
-# Batch size for FETCH commands
+# Most messages one FETCH brings back
 FETCH_BATCH_SIZE = 50
+# Most bytes of message data one FETCH brings back: the whole answer is held
+# in memory before it is parsed, and parsing copies each message again. A
+# message larger than this is fetched on its own.
+FETCH_BATCH_BYTES = 20 * 1024 * 1024
+# How long a folder goes without its flags being read in full. In between a
+# pass builds on what the server said last time (see `remote_state`), which
+# is only right while nothing but the server changed the rows: read in full
+# now and then, a folder that drifted for a reason nobody thought of comes
+# back in line within the day.
+FULL_READ_INTERVAL = timedelta(days=1)
 
 
 def sync_folders(account):
     """Sync the list of IMAP folders for the given account to the database."""
     from ..models import MailFolder
 
-    conn = connect_imap(account)
-    try:
-        remote_folders = list_folders(conn)
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+    with imap_session(account) as client:
+        remote_folders = list_folders(client)
 
     # Detect and store the IMAP hierarchy delimiter
     if remote_folders:
@@ -63,10 +68,10 @@ def sync_folders(account):
     with transaction.atomic():
         for flags, _delim, name in remote_folders:
             # Skip non-selectable containers (e.g. [Gmail])
-            if "\\noselect" in flags.lower():
+            if "\\noselect" in flags or "\\nonexistent" in flags:
                 continue
             # Skip \All folder (Gmail "All Mail") - duplicates every message
-            if "\\all" in flags.lower():
+            if "\\all" in flags:
                 continue
             remote_names.add(name)
             folder_type = _detect_folder_type(name, flags)
@@ -105,297 +110,457 @@ def sync_folders(account):
             MailFolder.objects.filter(account=account, name__in=gone).delete()
 
 
-def _get_uidvalidity(conn):
-    """Extract UIDVALIDITY from the last SELECT/EXAMINE response."""
-    for resp in conn.untagged_responses.get("OK") or []:
-        decoded = (
-            resp.decode("ascii", errors="replace") if isinstance(resp, bytes) else resp
-        )
-        m = re.search(r"\[UIDVALIDITY\s+(\d+)\]", decoded)
-        if m:
-            return int(m.group(1))
-    return None
+def remote_state(selected):
+    """What a SELECT says of a mailbox, when that is enough to tell later
+    that nothing in it changed. None when it is not.
+
+    A new message moves UIDNEXT, an expunge moves EXISTS and a flag moves
+    HIGHESTMODSEQ, the one counter only a CONDSTORE server (RFC 7162) keeps.
+    Without it a flag set by another mail program leaves no trace here, so
+    there is no state to compare and every pass reads the mailbox.
+    """
+    modseq = selected.get(b"HIGHESTMODSEQ")
+    if not modseq:
+        return None
+    return {
+        "uidvalidity": selected.get(b"UIDVALIDITY"),
+        "uidnext": selected.get(b"UIDNEXT"),
+        "exists": selected.get(b"EXISTS"),
+        "highestmodseq": modseq,
+    }
+
+
+def _trusted_state(folder):
+    """The state `folder` was left in by its last complete pass, when its
+    flags were read in full recently enough to build on. None otherwise."""
+    known = folder.remote_state
+    if not known:
+        return None
+    read_at = parse_datetime(known.get("read_at") or "")
+    if read_at is None or dj_timezone.now() - read_at > FULL_READ_INTERVAL:
+        return None
+    return known
+
+
+def forget_remote_state(folder_ids):
+    """Make the next pass read these folders in full.
+
+    For whoever leaves a row saying something the server may not: a flag
+    kept here although the server refused it is put right by the next pass,
+    which has to look at the mailbox for that.
+
+    Call it once the row is written, in the same transaction when there is
+    one. Earlier, a pass could start, read the row before it changes, and
+    store a state that vouches for it. The version tells a pass already
+    running that what it read is no longer enough (see `_store_state`).
+    """
+    from ..models import MailFolder
+
+    MailFolder.objects.filter(pk__in=folder_ids).update(
+        remote_state=None, remote_state_version=F("remote_state_version") + 1
+    )
 
 
 def sync_folder_messages(account, folder):
     """Incrementally sync messages for one folder."""
-    from ..models import MailMessage
-
-    conn = connect_imap(account)
-    try:
-        status, data = conn.select(_quote_mailbox(folder.name), readonly=True)
-        if status != "OK":
+    with imap_session(account) as client:
+        # Read before anything is asked of the server, and not left to the
+        # caller's copy, which a whole account pass may have loaded minutes
+        # ago: a state forgotten since then is one this pass must not use.
+        folder.refresh_from_db(fields=["remote_state", "remote_state_version"])
+        try:
+            selected = client.select_folder(folder.name, readonly=True)
+        except ConnectionLost:
+            raise
+        except IMAPClientError as e:
             logger.warning(
-                "Could not SELECT folder %s: %s", scrub(folder.name), scrub(data)
+                "Could not SELECT folder %s: %s", scrub(folder.name), scrub(e)
             )
             return
 
-        # Check UIDVALIDITY (parsed from untagged OK response, NOT from
-        # data[0] which is the EXISTS message count)
-        uid_validity = _get_uidvalidity(conn)
-        if uid_validity and folder.uid_validity and folder.uid_validity != uid_validity:
-            # The cursor counts UIDs of the old validity: stored apart from the
-            # new validity, a sync dying in between would skip every message
-            # whose new UID falls at or below it, for good.
-            logger.info("UIDVALIDITY changed for %s, resetting", scrub(folder.name))
-            with transaction.atomic():
-                MailMessage.objects.filter(folder=folder).delete()
-                folder.uid_validity = uid_validity
-                folder.last_sync_uid = 0
-                folder.save(
-                    update_fields=["uid_validity", "last_sync_uid", "updated_at"]
-                )
-        elif uid_validity and folder.uid_validity != uid_validity:
-            folder.uid_validity = uid_validity
-            folder.save(update_fields=["uid_validity", "updated_at"])
+        state = remote_state(selected)
+        known = _trusted_state(folder)
+        if state is not None and known is not None and state.items() <= known.items():
+            # Nothing arrived, left or changed flags since the last pass.
+            return
 
-        # Captured here on purpose. Reading it at function entry would miss the
-        # UIDVALIDITY reset just above, which purges the folder and re-imports
-        # everything - as silent an event as a first sync. Reading it at the end
-        # would always say "not initial", because the cursor advances below.
-        was_initial_sync = folder.last_sync_uid == 0
-
-        # Search for new UIDs (always use UID SEARCH to get real UIDs)
-        uid_list = []
-        if folder.last_sync_uid > 0:
-            status, search_data = conn.uid(
-                "SEARCH", None, f"UID {folder.last_sync_uid + 1}:*"
-            )
-            if status == "OK":
-                uid_list = search_data[0].split()
-                uid_list = [
-                    u.decode() if isinstance(u, bytes) else u for u in uid_list if u
-                ]
-                # Filter out the already-synced UID (server may include it)
-                uid_list = [u for u in uid_list if int(u) > folder.last_sync_uid]
-        else:
-            # Initial sync: get all UIDs then take last N
-            status, search_data = conn.uid("SEARCH", None, "ALL")
-            if status == "OK":
-                all_uids = search_data[0].split()
-                all_uids = [
-                    u.decode() if isinstance(u, bytes) else u for u in all_uids if u
-                ]
-                # Limit initial sync
-                if len(all_uids) > INITIAL_SYNC_LIMIT:
-                    all_uids = all_uids[-INITIAL_SYNC_LIMIT:]
-                uid_list = all_uids
-
-        max_uid = folder.last_sync_uid
-        new_message_uuids = []
-        # Fetch in batches
-        for batch in batched(uid_list, FETCH_BATCH_SIZE, strict=False):
-            uid_set = ",".join(batch)
-            status, msg_data = conn.uid("FETCH", uid_set, "(UID FLAGS RFC822)")
-            if status != "OK":
-                continue
-
-            # One existence probe for the whole batch; _parse_message would
-            # otherwise check each message individually (N queries per
-            # batch, paid in full on initial sync and crash re-sync).
-            known_uids = set(
-                MailMessage.objects.filter(
-                    folder=folder,
-                    imap_uid__in=[int(u) for u in batch],
-                ).values_list("imap_uid", flat=True)
-            )
-
-            for response_part in msg_data:
-                if not isinstance(response_part, tuple):
-                    continue
-                # Parse UID from response
-                uid_match = re.search(rb"UID (\d+)", response_part[0])
-                if not uid_match:
-                    continue
-                uid = int(uid_match.group(1))
-
-                # Parse flags
-                flags_match = re.search(rb"FLAGS \(([^)]*)\)", response_part[0])
-                flags_str = flags_match.group(1).decode() if flags_match else ""
-
-                raw_email = response_part[1]
-                try:
-                    msg = _parse_message(
-                        raw_email,
-                        account,
-                        folder,
-                        uid,
-                        flags_str,
-                        known_uids=known_uids,
-                    )
-                    # Advance max_uid even when msg is None (already present in
-                    # DB): otherwise last_sync_uid never moves past UIDs we've
-                    # confirmed, and every future sync re-FETCHes the same
-                    # RFC822 bytes - happens after a crash mid-sync where some
-                    # messages were persisted but last_sync_uid wasn't updated.
-                    max_uid = max(max_uid, uid)
-                    if msg:
-                        new_message_uuids.append(str(msg.uuid))
-                except IntegrityError:
-                    # Duplicate-insert race with a concurrent sync of this
-                    # folder: the batch existence snapshot above predates
-                    # the other sync's insert, so the (folder, imap_uid)
-                    # unique constraint fires. The message is stored, just
-                    # not by us - skip it and keep the cursor moving.
-                    if MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
-                        max_uid = max(max_uid, uid)
-                    else:
-                        logger.exception(
-                            "Failed to parse message UID %d in %s",
-                            uid,
-                            scrub(folder.name),
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to parse message UID %d in %s", uid, scrub(folder.name)
-                    )
-
-        # Update sync position
-        if max_uid > folder.last_sync_uid:
-            folder.last_sync_uid = max_uid
-
-        # Reconciliation: detect messages deleted/moved by other clients
-        _reconcile_folder(conn, folder)
-
-        _update_folder_counts(folder)
-
-        # Run user-defined rules first - explicit user intent takes precedence
-        # over AI classification. Wrapped in try/except so a misbehaving rule
-        # never breaks the sync.
-        if new_message_uuids and folder.folder_type not in ("sent", "drafts"):
-            try:
-                from workspace.mail.services.rules.engine import run_rules_for_messages
-
-                run_rules_for_messages(account, new_message_uuids)
-            except Exception:
-                logger.exception("rules engine failed for %s", scrub(folder.name))
-
-        # After rules, not before: notify_new_messages re-queries is_read and
-        # deleted_at, so a rule that marks read/deletes a message here also
-        # suppresses its push. Own try/except, like the AI dispatch below: a
-        # notification failure must never break a sync.
-        try:
-            from workspace.mail.services.notifications import notify_new_messages
-
-            notify_new_messages(
-                folder, new_message_uuids, was_initial_sync=was_initial_sync
-            )
-        except Exception:
-            logger.exception(
-                "Failed to send mail notifications for %s", scrub(folder.name)
-            )
-
-        # Dispatch AI classification / extraction for new messages
-        # (skip sent/drafts). Classify and extract are gated by independent
-        # per-user toggles AND wrapped in independent try/except blocks so a
-        # failure dispatching one never prevents the other.
-        if new_message_uuids and folder.folder_type not in ("sent", "drafts"):
-            try:
-                from workspace.ai.client import is_ai_enabled
-                from workspace.mail.services.ai_settings import (
-                    is_mail_ai_feature_enabled,
-                )
-
-                if is_ai_enabled():
-                    from workspace.ai.models import AITask
-                    from workspace.ai.services.dispatch import dispatch
-
-                    dispatched = []
-                    if (
-                        is_mail_ai_feature_enabled(account.owner, "classify")
-                        and not folder.ai_classify_disabled
-                    ):
-                        try:
-                            dispatch(
-                                owner=account.owner,
-                                task_type=AITask.TaskType.CLASSIFY,
-                                input_data={
-                                    "message_uuids": new_message_uuids,
-                                    "suppress_notifications": was_initial_sync,
-                                },
-                            )
-                            dispatched.append("classify")
-                        except Exception:
-                            logger.exception(
-                                "Failed to dispatch classify task for %s",
-                                scrub(folder.name),
-                            )
-                    if is_mail_ai_feature_enabled(account.owner, "extract"):
-                        try:
-                            dispatch(
-                                owner=account.owner,
-                                task_type=AITask.TaskType.EXTRACT,
-                                input_data={"message_uuids": new_message_uuids},
-                            )
-                            dispatched.append("extract")
-                        except Exception:
-                            logger.exception(
-                                "Failed to dispatch extract task for %s",
-                                scrub(folder.name),
-                            )
-                    if dispatched:
-                        logger.info(
-                            "Dispatched %s tasks for %d new messages in %s",
-                            "+".join(dispatched),
-                            len(new_message_uuids),
-                            scrub(folder.name),
-                        )
-            except Exception:
-                logger.exception(
-                    "Failed to dispatch classify/extract tasks for %s",
-                    scrub(folder.name),
-                )
-
-        # Process calendar invitations among messages just synced.
-        # Scoping on new_message_uuids avoids re-parsing every old ICS
-        # email on every sync (has_calendar_event is set once at parse
-        # time and never flipped later, so old messages never need a
-        # second pass).
-        if new_message_uuids:
-            from ..models import MailMessage as _MailMsg
-
-            cal_messages = _MailMsg.objects.filter(
-                folder=folder,
-                has_calendar_event=True,
-                uuid__in=new_message_uuids,
-            )
-            if cal_messages.exists():
-                from workspace.calendar.services.ics_processor import (
-                    process_calendar_emails,
-                )
-
-                process_calendar_emails(cal_messages)
-
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+        was_initial_sync, new_message_uuids, error = _read_mailbox(
+            client, account, folder, selected, state, known
+        )
+        _after_import(account, folder, new_message_uuids, was_initial_sync)
+        if error is not None:
+            raise error
 
 
-def _reconcile_folder(conn, folder):
-    """Remove local messages whose UIDs no longer exist on the IMAP server.
+def _read_mailbox(client, account, folder, selected, state, known):
+    """Bring `folder` in line with the mailbox `client` has selected.
 
-    Also updates flags (read/starred) for messages that still exist.
+    `state` is what the SELECT said of the mailbox and `known` what the last
+    pass left, each None when there is nothing to go by.
+
+    Returns ``(was_initial_sync, new_message_uuids, error)``. The last one
+    is what cut the pass short, if anything did: the caller raises it once
+    the messages imported before it have had their rules and notifications.
+    Raised from here, it would cost them both for good, since the next pass
+    finds those messages stored and has no reason to look at them again.
     """
     from ..models import MailMessage
 
-    local_msgs = MailMessage.objects.filter(
-        folder=folder,
-        deleted_at__isnull=True,
-    ).values_list("imap_uid", flat=True)
-    local_uids = set(local_msgs)
-    if not local_uids:
+    known_modseq = None
+    uid_validity = selected.get(b"UIDVALIDITY")
+    if uid_validity and folder.uid_validity and folder.uid_validity != uid_validity:
+        # The cursor counts UIDs of the old validity: stored apart from the
+        # new validity, a sync dying in between would skip every message
+        # whose new UID falls at or below it, for good.
+        logger.info("UIDVALIDITY changed for %s, resetting", scrub(folder.name))
+        with transaction.atomic():
+            MailMessage.objects.filter(folder=folder).delete()
+            folder.uid_validity = uid_validity
+            folder.last_sync_uid = 0
+            folder.remote_state = None
+            folder.save(
+                update_fields=[
+                    "uid_validity",
+                    "last_sync_uid",
+                    "remote_state",
+                    "updated_at",
+                ]
+            )
+    else:
+        if uid_validity and folder.uid_validity != uid_validity:
+            folder.uid_validity = uid_validity
+            folder.save(update_fields=["uid_validity", "updated_at"])
+        if state is not None and known is not None:
+            known_modseq = known.get("highestmodseq")
+
+    # Captured here on purpose. Reading it at function entry would miss the
+    # UIDVALIDITY reset just above, which purges the folder and re-imports
+    # everything - as silent an event as a first sync. Reading it at the end
+    # would always say "not initial", because the cursor advances below.
+    was_initial_sync = folder.last_sync_uid == 0
+
+    # The stored messages, read before the server is asked what it holds
+    # and never after. A message stored while the pass runs (a draft saved,
+    # a concurrent pass importing) would otherwise be missing from an answer
+    # that predates it, be taken for deleted, and stay hidden for good: the
+    # next pass finds its row and does not import it again.
+    local_uids = set(
+        MailMessage.objects.filter(folder=folder, deleted_at__isnull=True).values_list(
+            "imap_uid", flat=True
+        )
+    )
+
+    new_message_uuids = []
+    error = None
+    complete = True
+    try:
+        if was_initial_sync:
+            remote_uids = sorted(client.search("ALL"))
+            new_uids = remote_uids[-INITIAL_SYNC_LIMIT:]
+        else:
+            # One SEARCH for both questions: which messages are new, and
+            # which of the stored ones are still there. Its command line is
+            # the same length whatever the size of the folder.
+            first_new = folder.last_sync_uid + 1
+            oldest = min(min(local_uids, default=first_new), first_new)
+            remote_uids = sorted(client.search(["UID", f"{oldest}:*"]))
+            new_uids = [uid for uid in remote_uids if uid > folder.last_sync_uid]
+
+        for batch in _fetch_batches(client, new_uids):
+            imported, stored_all = _import_batch(client, account, folder, batch)
+            new_message_uuids += imported
+            complete = complete and stored_all
+            # Saved batch by batch: a pass that dies further on (a worker
+            # killed for its memory, a connection lost) resumes here instead
+            # of downloading everything again. Not on a first pass, which
+            # starts over: resumed, it would no longer be a first pass and
+            # would notify for mail that is weeks old.
+            if not was_initial_sync:
+                folder.save(update_fields=["last_sync_uid", "updated_at"])
+
+        # Reconciliation: detect messages deleted/moved by other clients
+        _reconcile_folder(
+            client, folder, local_uids, remote_uids, changed_since=known_modseq
+        )
+    except Exception as e:
+        logger.exception("Sync of %s cut short", scrub(folder.name))
+        error = e
+        if was_initial_sync:
+            folder.last_sync_uid = 0
+
+    _update_folder_counts(folder)
+
+    # A message that could not be stored (a locked database, a storage
+    # error on an attachment) is fetched again by the next pass, as long as
+    # there is one: a stored state would let the folder be skipped with the
+    # message still missing.
+    if error is None and complete:
+        new_state = None
+        if state is not None:
+            # CHANGEDSINCE read part of the flags: the last full read stays
+            # the one it was.
+            read_at = known["read_at"] if known_modseq else dj_timezone.now()
+            new_state = {**state, "read_at": str(read_at)}
+        _store_state(folder, new_state)
+
+    return was_initial_sync, new_message_uuids, error
+
+
+def _store_state(folder, state):
+    """Remember `state` as what the pass that just ended left `folder` in,
+    unless the state was forgotten while it ran.
+
+    Whoever forgot it changed a row this pass may have read too early to
+    put right. Writing the state all the same would vouch for that row.
+    """
+    if state == folder.remote_state:
+        return
+    stored = (
+        type(folder)
+        .objects.filter(pk=folder.pk, remote_state_version=folder.remote_state_version)
+        .update(remote_state=state, updated_at=dj_timezone.now())
+    )
+    if stored:
+        folder.remote_state = state
+
+
+def _import_batch(client, account, folder, batch):
+    """Fetch and store the messages `batch` names, moving the folder's
+    cursor (unsaved) past the last one stored.
+
+    Returns their UUIDs, and whether every message fetched was stored.
+    """
+    from ..models import MailMessage
+
+    fetched = client.fetch(batch, ["FLAGS", "BODY.PEEK[]"])
+
+    # One existence probe for the whole batch; _parse_message would
+    # otherwise check each message individually (N queries per
+    # batch, paid in full on initial sync and crash re-sync).
+    known_uids = set(
+        MailMessage.objects.filter(folder=folder, imap_uid__in=batch).values_list(
+            "imap_uid", flat=True
+        )
+    )
+
+    new_message_uuids = []
+    stored_all = True
+    max_uid = folder.last_sync_uid
+    for uid in batch:
+        data = fetched.get(uid)
+        if data is None or data.get(b"BODY[]") is None:
+            # Expunged between the SEARCH and the FETCH.
+            continue
+        try:
+            msg = _parse_message(
+                data[b"BODY[]"],
+                account,
+                folder,
+                uid,
+                _flags(data),
+                known_uids=known_uids,
+            )
+            # Advance max_uid even when msg is None (already present in
+            # DB): otherwise last_sync_uid never moves past UIDs we've
+            # confirmed, and every future sync re-FETCHes the same
+            # messages - happens after a crash mid-sync where some
+            # messages were persisted but last_sync_uid wasn't updated.
+            max_uid = max(max_uid, uid)
+            if msg:
+                new_message_uuids.append(str(msg.uuid))
+        except IntegrityError:
+            # Duplicate-insert race with a concurrent sync of this
+            # folder: the batch existence snapshot above predates
+            # the other sync's insert, so the (folder, imap_uid)
+            # unique constraint fires. The message is stored, just
+            # not by us - skip it and keep the cursor moving.
+            if MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
+                max_uid = max(max_uid, uid)
+            else:
+                stored_all = False
+                logger.exception(
+                    "Failed to parse message UID %d in %s",
+                    uid,
+                    scrub(folder.name),
+                )
+        except Exception:
+            stored_all = False
+            logger.exception(
+                "Failed to parse message UID %d in %s", uid, scrub(folder.name)
+            )
+
+    folder.last_sync_uid = max(folder.last_sync_uid, max_uid)
+    return new_message_uuids, stored_all
+
+
+def _flags(fetched):
+    """The flags of one FETCH answer, as text."""
+    return frozenset(
+        flag.decode("ascii", errors="replace") if isinstance(flag, bytes) else str(flag)
+        for flag in fetched.get(b"FLAGS") or ()
+    )
+
+
+def _fetch_batches(client, uids):
+    """Cut `uids` into the groups one FETCH brings back whole.
+
+    At most FETCH_BATCH_SIZE messages and FETCH_BATCH_BYTES of message
+    data: fifty scans of 20 MB in one answer would put a gigabyte in the
+    worker. A message larger than the budget makes a group of its own.
+    """
+    if len(uids) <= 1:
+        # Nothing to group: not worth asking for a size.
+        if uids:
+            yield list(uids)
         return
 
-    # Ask the server for all UIDs currently in this folder
-    status, search_data = conn.uid("SEARCH", None, "ALL")
-    if status != "OK":
+    sizes = {}
+    for chunk in batched(uids, UID_BATCH_SIZE, strict=False):
+        for uid, data in client.fetch(chunk, ["RFC822.SIZE"]).items():
+            sizes[uid] = data.get(b"RFC822.SIZE") or 0
+
+    batch, weight = [], 0
+    for uid in uids:
+        if uid not in sizes:
+            # Expunged since the SEARCH.
+            continue
+        if batch and (
+            len(batch) == FETCH_BATCH_SIZE or weight + sizes[uid] > FETCH_BATCH_BYTES
+        ):
+            yield batch
+            batch, weight = [], 0
+        batch.append(uid)
+        weight += sizes[uid]
+    if batch:
+        yield batch
+
+
+def _after_import(account, folder, new_message_uuids, was_initial_sync):
+    """Hand the messages a pass just imported to rules, notifications, AI
+    and the calendar."""
+    # Run user-defined rules first - explicit user intent takes precedence
+    # over AI classification. Wrapped in try/except so a misbehaving rule
+    # never breaks the sync.
+    if new_message_uuids and folder.folder_type not in ("sent", "drafts"):
+        try:
+            from workspace.mail.services.rules.engine import run_rules_for_messages
+
+            run_rules_for_messages(account, new_message_uuids)
+        except Exception:
+            logger.exception("rules engine failed for %s", scrub(folder.name))
+
+    # After rules, not before: notify_new_messages re-queries is_read and
+    # deleted_at, so a rule that marks read/deletes a message here also
+    # suppresses its push. Own try/except, like the AI dispatch below: a
+    # notification failure must never break a sync.
+    try:
+        from workspace.mail.services.notifications import notify_new_messages
+
+        notify_new_messages(
+            folder, new_message_uuids, was_initial_sync=was_initial_sync
+        )
+    except Exception:
+        logger.exception("Failed to send mail notifications for %s", scrub(folder.name))
+
+    # Dispatch AI classification / extraction for new messages
+    # (skip sent/drafts). Classify and extract are gated by independent
+    # per-user toggles AND wrapped in independent try/except blocks so a
+    # failure dispatching one never prevents the other.
+    if new_message_uuids and folder.folder_type not in ("sent", "drafts"):
+        try:
+            from workspace.ai.client import is_ai_enabled
+            from workspace.mail.services.ai_settings import (
+                is_mail_ai_feature_enabled,
+            )
+
+            if is_ai_enabled():
+                from workspace.ai.models import AITask
+                from workspace.ai.services.dispatch import dispatch
+
+                dispatched = []
+                if (
+                    is_mail_ai_feature_enabled(account.owner, "classify")
+                    and not folder.ai_classify_disabled
+                ):
+                    try:
+                        dispatch(
+                            owner=account.owner,
+                            task_type=AITask.TaskType.CLASSIFY,
+                            input_data={
+                                "message_uuids": new_message_uuids,
+                                "suppress_notifications": was_initial_sync,
+                            },
+                        )
+                        dispatched.append("classify")
+                    except Exception:
+                        logger.exception(
+                            "Failed to dispatch classify task for %s",
+                            scrub(folder.name),
+                        )
+                if is_mail_ai_feature_enabled(account.owner, "extract"):
+                    try:
+                        dispatch(
+                            owner=account.owner,
+                            task_type=AITask.TaskType.EXTRACT,
+                            input_data={"message_uuids": new_message_uuids},
+                        )
+                        dispatched.append("extract")
+                    except Exception:
+                        logger.exception(
+                            "Failed to dispatch extract task for %s",
+                            scrub(folder.name),
+                        )
+                if dispatched:
+                    logger.info(
+                        "Dispatched %s tasks for %d new messages in %s",
+                        "+".join(dispatched),
+                        len(new_message_uuids),
+                        scrub(folder.name),
+                    )
+        except Exception:
+            logger.exception(
+                "Failed to dispatch classify/extract tasks for %s",
+                scrub(folder.name),
+            )
+
+    # Process calendar invitations among messages just synced.
+    # Scoping on new_message_uuids avoids re-parsing every old ICS
+    # email on every sync (has_calendar_event is set once at parse
+    # time and never flipped later, so old messages never need a
+    # second pass).
+    if new_message_uuids:
+        from ..models import MailMessage as _MailMsg
+
+        cal_messages = _MailMsg.objects.filter(
+            folder=folder,
+            has_calendar_event=True,
+            uuid__in=new_message_uuids,
+        )
+        if cal_messages.exists():
+            from workspace.calendar.services.ics_processor import (
+                process_calendar_emails,
+            )
+
+            process_calendar_emails(cal_messages)
+
+
+def _reconcile_folder(client, folder, local_uids, remote_uids, changed_since=None):
+    """Remove local messages whose UIDs no longer exist on the IMAP server.
+
+    Also updates flags (read/starred) for messages that still exist.
+
+    `local_uids` are the UIDs stored for the folder, as they were before
+    the server was asked for `remote_uids`: the UIDs it holds, at least
+    from the oldest stored one up. `changed_since` is the HIGHESTMODSEQ the
+    folder had when its flags were last read in full: with it only the
+    messages whose flags moved since are read (CONDSTORE), and the others
+    keep the flags they have here.
+    """
+    from ..models import MailMessage
+
+    if not local_uids:
         return
-    raw = search_data[0].split() if search_data[0] else []
-    remote_uids = {int(u.decode() if isinstance(u, bytes) else u) for u in raw if u}
+    remote_uids = set(remote_uids)
 
     # Soft-delete messages that are no longer on the server
     gone = local_uids - remote_uids
@@ -429,36 +594,29 @@ def _reconcile_folder(conn, folder):
     present = local_uids & remote_uids
     if not present:
         return
-    uid_set = ",".join(str(u) for u in sorted(present))
-    status, flags_data = conn.uid("FETCH", uid_set, "(UID FLAGS)")
-    if status != "OK":
-        return
 
-    remote_read = set()
-    remote_starred = set()
-    for response_part in flags_data:
-        if not isinstance(response_part, (tuple, bytes)):
-            continue
-        raw_line = (
-            response_part[0] if isinstance(response_part, tuple) else response_part
+    if changed_since:
+        # One SEARCH names the messages whose flags moved, whatever the size
+        # of the folder: usually a handful, often none.
+        changed = client.search(
+            ["UID", f"{min(present)}:*", "MODSEQ", changed_since + 1]
         )
-        if not isinstance(raw_line, bytes):
-            continue
-        uid_match = re.search(rb"UID (\d+)", raw_line)
-        flags_match = re.search(rb"FLAGS \(([^)]*)\)", raw_line)
-        if not uid_match:
-            continue
-        uid = int(uid_match.group(1))
-        flags_str = flags_match.group(1).decode() if flags_match else ""
-        if r"\Seen" in flags_str:
-            remote_read.add(uid)
-        if r"\Flagged" in flags_str:
-            remote_starred.add(uid)
+        present &= set(changed)
+
+    # In commands of bounded length: one naming every UID of a large folder
+    # is longer than a server accepts.
+    remote_flags = {}
+    for batch in batched(sorted(present), UID_BATCH_SIZE, strict=False):
+        for uid, data in client.fetch(batch, ["FLAGS"]).items():
+            if b"FLAGS" in data:
+                remote_flags[uid] = _flags(data)
+    if not remote_flags:
+        return
 
     # Load current local state to diff against remote
     local_state = MailMessage.objects.filter(
         folder=folder,
-        imap_uid__in=present,
+        imap_uid__in=remote_flags,
         deleted_at__isnull=True,
     ).values_list("imap_uid", "is_read", "is_starred")
 
@@ -467,8 +625,8 @@ def _reconcile_folder(conn, folder):
     need_starred = set()
     need_unstarred = set()
     for uid, is_read, is_starred in local_state:
-        should_read = uid in remote_read
-        should_star = uid in remote_starred
+        should_read = SEEN in remote_flags[uid]
+        should_star = FLAGGED in remote_flags[uid]
         if should_read and not is_read:
             need_read.add(uid)
         elif not should_read and is_read:
@@ -537,21 +695,22 @@ def _update_folder_counts(folder):
 
 
 def sync_account(account):
-    """Full sync: folders then messages for each folder."""
+    """Full sync: folders then messages for each folder, on one connection."""
     from ..models import MailFolder
 
-    sync_folders(account)
-    error_occurred = False
-    for folder in MailFolder.objects.filter(account=account):
-        try:
-            sync_folder_messages(account, folder)
-        except Exception:
-            logger.exception(
-                "Failed to sync folder %s for %s",
-                scrub(folder.name),
-                scrub(account.email),
-            )
-            error_occurred = True
+    with imap_session(account):
+        sync_folders(account)
+        error_occurred = False
+        for folder in MailFolder.objects.filter(account=account):
+            try:
+                sync_folder_messages(account, folder)
+            except Exception:
+                logger.exception(
+                    "Failed to sync folder %s for %s",
+                    scrub(folder.name),
+                    scrub(account.email),
+                )
+                error_occurred = True
 
     account.last_sync_at = dj_timezone.now()
     account.last_sync_error = "Some folders failed to sync." if error_occurred else ""

@@ -64,7 +64,8 @@ permissions:
 jobs:
   # Detects which parts of the tree changed so jobs that only exercise a
   # slice of it (ruff, djlint, JS unit tests, the davfs2 mount, the live
-  # Nextcloud imports, the live S3 storage) can be skipped.
+  # Nextcloud imports, the live S3 storage, the live IMAP servers) can be
+  # skipped.
   # The Django and E2E matrices always run: they load templates and read
   # static assets, so nearly any non-doc change can affect them.
   changes:
@@ -78,6 +79,7 @@ jobs:
       nextcloud: ${{ steps.filter.outputs.nextcloud }}
       vectors: ${{ steps.filter.outputs.vectors }}
       storage: ${{ steps.filter.outputs.storage }}
+      mail: ${{ steps.filter.outputs.mail }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -172,6 +174,19 @@ jobs:
               - 'workspace/imports/**'
               - 'workspace/people/**'
               - 'workspace/files/**'
+              - 'workspace/common/**'
+              - 'workspace/settings/**'
+              - 'workspace/*.py'
+              - 'manage.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/tests.yml'
+            # The mail code, what a sync hands its new messages to
+            # (notifications) and the shared plumbing, plus the dependency
+            # manifests.
+            mail:
+              - 'workspace/mail/**'
+              - 'workspace/notifications/**'
               - 'workspace/common/**'
               - 'workspace/settings/**'
               - 'workspace/*.py'
@@ -527,6 +542,78 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.imports.tests.test_nextcloud_live -v 2
+
+  # The mail suite answers its IMAP calls from a fake. Here the same services
+  # talk to real Dovecot servers, where the protocol's edge cases live: the
+  # length a command line may have, what an EXPUNGE takes with it, how a
+  # mailbox name travels. The image takes its password from the environment,
+  # so the full-featured server is a service container; the second one needs
+  # a configuration file from the checkout to hide MOVE, UIDPLUS and
+  # CONDSTORE, and is started by hand.
+  imap-live:
+    runs-on: ubuntu-latest
+    name: Mail (live IMAP)
+    needs: changes
+    if: needs.changes.outputs.mail == 'true'
+    services:
+      imap:
+        # Pulled through mirror.gcr.io: anonymous Docker Hub pulls from shared
+        # runners hit its rate limit and fail the job before it starts.
+        image: mirror.gcr.io/dovecot/dovecot:2.4.5
+        env:
+          USER_PASSWORD: ci-imap-password-5b2e
+        ports:
+          - 31143:31143
+          - 31993:31993
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Start the IMAP server without extensions
+        run: |
+          docker run -d --name imap-bare -p 32993:31993 \
+            -e USER_PASSWORD=ci-imap-password-5b2e \
+            -v "$PWD/workspace/mail/tests/live/dovecot-bare.conf:/etc/dovecot/conf.d/zz-bare.conf:ro" \
+            mirror.gcr.io/dovecot/dovecot:2.4.5
+
+      - name: Wait for the IMAP servers
+        run: |
+          for _ in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/localhost/31993) 2>/dev/null \
+              && (exec 3<>/dev/tcp/localhost/32993) 2>/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The IMAP servers did not come up in time" >&2
+          docker logs imap-bare || true
+          exit 1
+
+      - name: Run the live IMAP tests
+        env:
+          # A server the tests cannot reach is a failure here, not a skip.
+          WORKSPACE_IMAP_TESTS: '1'
+          WORKSPACE_IMAP_HOST: localhost
+          WORKSPACE_IMAP_PORT: '31993'
+          WORKSPACE_IMAP_STARTTLS_PORT: '31143'
+          WORKSPACE_IMAP_BARE_PORT: '32993'
+          WORKSPACE_IMAP_PASSWORD: ci-imap-password-5b2e
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.mail.tests.test_imap_live -v 2
 
   # moto runs the object storage tests in every Django job. Here the same cases
   # run against a real S3-compatible server, where an implementation's edge

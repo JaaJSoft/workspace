@@ -58,6 +58,8 @@ def set_flag(message, flag):
     optimistic here and the next sync reconciles. A caller that wants to
     tell the user about the drift reads the return value.
     """
+    from .imap_sync import forget_remote_state
+
     remote, field, value = flag_operations()[flag]
     synced = True
     setattr(message, field, value)
@@ -68,6 +70,8 @@ def set_flag(message, flag):
 
     with transaction.atomic():
         message.save(update_fields=[field, "updated_at"])
+        if not synced:
+            forget_remote_state([message.folder_id])
         refresh_folder_counts(message.folder)
         if field == "is_read":
             refresh_message_label_counts(message)
@@ -85,7 +89,9 @@ def mark_folder_read(folder):
     """
     from ..models import MailFolder, MailMessage
     from ..queries import folder_group_ids
+    from .imap_connection import shared_connections
     from .imap_messages import mark_uids_read
+    from .imap_sync import forget_remote_state
     from .label_counts import refresh_labels_for_messages
 
     group_ids = folder_group_ids(folder)
@@ -98,17 +104,18 @@ def mark_folder_read(folder):
     for folder_id, uid in unread.values_list("folder_id", "imap_uid"):
         uids_by_folder[folder_id].append(uid)
 
-    synced = True
-    for mailbox in MailFolder.objects.filter(uuid__in=uids_by_folder):
-        try:
-            mark_uids_read(folder.account, mailbox, uids_by_folder[mailbox.pk])
-        except Exception as e:
-            synced = False
-            logger.warning(
-                "IMAP mark-all-read failed for folder %s: %s",
-                scrub(mailbox.name),
-                scrub(e),
-            )
+    refused = []
+    with shared_connections():
+        for mailbox in MailFolder.objects.filter(uuid__in=uids_by_folder):
+            try:
+                mark_uids_read(folder.account, mailbox, uids_by_folder[mailbox.pk])
+            except Exception as e:
+                refused.append(mailbox.pk)
+                logger.warning(
+                    "IMAP mark-all-read failed for folder %s: %s",
+                    scrub(mailbox.name),
+                    scrub(e),
+                )
 
     # Only the rows the STORE flagged: matched by the folder and UID it was
     # sent, not by primary key. A message the sync imported during the IMAP
@@ -131,8 +138,9 @@ def mark_folder_read(folder):
                 is_read=True, updated_at=now
             )
             refresh_labels_for_messages(pks)
+        forget_remote_state(refused)
         refresh_folders_counts_bulk(group_ids)
-    return updated, synced
+    return updated, not refused
 
 
 def move_to_folder(message, target, refresh=True):

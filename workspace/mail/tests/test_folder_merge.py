@@ -1,5 +1,4 @@
 import tempfile
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -7,6 +6,7 @@ from django.test import TestCase
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.search import search_mail
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
 
@@ -317,19 +317,13 @@ class SentCopyTargetTests(FolderMergeTestMixin, TestCase):
 
         merge_folder(self.envoyes, self.sent)
 
-        with (
-            patch("workspace.mail.services.imap_messages.connect_imap") as connect,
-            tempfile.TemporaryFile() as message,
-        ):
-            conn = connect.return_value
-            conn.select.return_value = ("OK", [b""])
-            conn.uid.return_value = ("OK", [b""])
-            conn._simple_command.return_value = ("OK", [b""])
+        with fake_imap() as server, tempfile.TemporaryFile() as message:
+            server.mailbox("Sent")
+            server.mailbox("Envoyes")
             from workspace.mail.services.imap_messages import append_to_sent
 
             message.write(b"Message-ID: <x@example.com>\r\n\r\nbody")
             append_to_sent(self.account, message, "<x@example.com>")
 
-        selected = conn.select.call_args[0][0]
-        self.assertIn("Sent", selected)
-        self.assertNotIn("Envoyes", selected)
+        self.assertEqual(len(server.uids("Sent")), 1)
+        self.assertEqual(server.uids("Envoyes"), [])

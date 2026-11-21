@@ -13,11 +13,12 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.tests.imap_fake import BARE, FULL, fake_imap
 
 User = get_user_model()
 
 
-class BatchMoveIMAPFailureTests(TestCase):
+class BatchMoveMixin:
     def setUp(self):
         self.user = User.objects.create_user(username="moveuser", password="pass")
         self.account = MailAccount.objects.create(
@@ -49,6 +50,8 @@ class BatchMoveIMAPFailureTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
+
+class BatchMoveIMAPFailureTests(BatchMoveMixin, TestCase):
     @patch("workspace.mail.services.imap_messages.move_message", return_value=900)
     def test_imap_move_failure_leaves_folder_unchanged(self, mock_move):
         """If move_message raises, the message must stay in its source folder
@@ -96,6 +99,79 @@ class BatchMoveIMAPFailureTests(TestCase):
         self.assertEqual(resp.data.get("processed", 0), 1)
         self.msg.refresh_from_db()
         self.assertEqual(self.msg.folder_id, self.archive.pk)
+
+
+class BatchMoveOnTheServerTests(BatchMoveMixin, TestCase):
+    """The batch move, down to the mailboxes the messages end up in."""
+
+    # A message another mail program flagged in the Inbox without expunging.
+    OTHER_DELETED_UID = 7
+
+    def _server(self, capabilities=FULL):
+        server = self.enterContext(fake_imap(capabilities=capabilities))
+        server.deliver("INBOX", uid=self.OTHER_DELETED_UID, flags=[r"\Deleted"])
+        server.deliver("INBOX", uid=42)
+        server.deliver("INBOX", uid=43)
+        server.deliver("Archive", uid=899)
+        return server
+
+    def _move_both(self):
+        self.second = MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=43
+        )
+        return self.client.post(
+            "/api/v1/mail/messages/batch-action",
+            {
+                "message_ids": [str(self.msg.uuid), str(self.second.uuid)],
+                "action": "move",
+                "target_folder_id": str(self.archive.uuid),
+            },
+            format="json",
+        )
+
+    def assert_both_moved(self, server):
+        self.assertEqual(server.uids("INBOX"), [self.OTHER_DELETED_UID])
+        self.assertEqual(server.uids("Archive"), [899, 900, 901])
+        moved = MailMessage.objects.filter(folder=self.archive, deleted_at__isnull=True)
+        self.assertEqual(sorted(moved.values_list("imap_uid", flat=True)), [900, 901])
+        self.assertFalse(MailMessage.objects.filter(folder=self.inbox).exists())
+
+    def test_moves_with_the_move_command_over_one_connection(self):
+        server = self._server()
+
+        resp = self._move_both()
+
+        self.assertEqual(resp.data["processed"], 2)
+        self.assert_both_moved(server)
+        self.assertEqual(len(server.named("move")), 2)
+        self.assertEqual(server.named("copy", "expunge", "uid_expunge"), [])
+        (connection,) = server.connections
+        self.assertTrue(connection.closed)
+
+    def test_without_move_the_expunge_takes_the_moved_messages_alone(self):
+        """Issue #1513: a plain EXPUNGE also removed every other message of
+        the mailbox flagged ``\\Deleted``."""
+        server = self._server(capabilities=BARE | {"UIDPLUS"})
+
+        resp = self._move_both()
+
+        self.assertEqual(resp.data["processed"], 2)
+        self.assert_both_moved(server)
+        self.assertEqual(
+            server.named("uid_expunge"), [("uid_expunge", [42]), ("uid_expunge", [43])]
+        )
+        self.assertEqual(server.named("expunge"), [])
+
+    def test_a_refused_move_leaves_the_messages_where_they_are(self):
+        server = self._server()
+        server.fail("move")
+
+        resp = self._move_both()
+
+        self.assertEqual(resp.data["processed"], 0)
+        self.assertEqual(server.uids("INBOX"), [self.OTHER_DELETED_UID, 42, 43])
+        self.assertEqual(server.uids("Archive"), [899])
+        self.assertEqual(MailMessage.objects.filter(folder=self.inbox).count(), 2)
 
 
 class BatchMoveMergeTests(APITestCase):

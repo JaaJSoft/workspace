@@ -8,7 +8,6 @@ client that verifies certificates.
 """
 
 import datetime
-import imaplib
 import ipaddress
 import socketserver
 import ssl
@@ -23,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from imapclient.exceptions import IMAPClientError, LoginError
 
 from workspace.mail.models import MailAccount
 from workspace.mail.services.imap_connection import connect_imap
@@ -81,9 +81,12 @@ class _Server(socketserver.ThreadingTCPServer):
 class _Handler(socketserver.StreamRequestHandler):
     def handle(self):
         self.tls = False
-        if self.server.implicit_tls:
-            self.start_tls()
-        self.converse()
+        try:
+            if self.server.implicit_tls:
+                self.start_tls()
+            self.converse()
+        finally:
+            self.server.hung_up.set()
 
     def start_tls(self):
         self.wfile.flush()
@@ -116,7 +119,10 @@ class _IMAPHandler(_Handler):
                 self.wfile.write(tag + b" OK begin TLS\r\n")
                 self.start_tls()
             elif command == b"LOGIN":
-                self.wfile.write(tag + b" OK logged in\r\n")
+                if self.server.refuses_login:
+                    self.wfile.write(tag + b" NO [AUTHENTICATIONFAILED] no\r\n")
+                else:
+                    self.wfile.write(tag + b" OK logged in\r\n")
             elif command == b"LOGOUT":
                 self.wfile.write(b"* BYE\r\n" + tag + b" OK done\r\n")
                 return
@@ -147,11 +153,15 @@ class _SMTPHandler(_Handler):
                 self.wfile.write(b"502 unknown\r\n")
 
 
-def _serve(test, handler, *, implicit_tls=False, offers_starttls=True):
+def _serve(
+    test, handler, *, implicit_tls=False, offers_starttls=True, refuses_login=False
+):
     cert_path, key_path = _self_signed_cert(test)
     server = _Server(("127.0.0.1", 0), handler)
     server.received = []
     server.errors = 0
+    server.refuses_login = refuses_login
+    server.hung_up = threading.Event()
     server.implicit_tls = implicit_tls
     server.offers_starttls = offers_starttls
     server.tls_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -218,7 +228,7 @@ class ConnectImapSecurityTests(_AccountMixin, TestCase):
     def test_starttls_refused_when_the_server_does_not_offer_it(self):
         server = _serve(self, _IMAPHandler, offers_starttls=False)
 
-        with _trusting(server), self.assertRaises(imaplib.IMAP4.error):
+        with _trusting(server), self.assertRaises(IMAPClientError):
             self._connect(server, implicit_tls=False)
 
         self.assertNotIn(
@@ -251,6 +261,16 @@ class ConnectImapSecurityTests(_AccountMixin, TestCase):
             self._connect(server, implicit_tls=True)
 
         self.assertEqual(server.received, [])
+
+    def test_a_refused_login_hangs_up(self):
+        """Left open, every failed attempt would hold a socket until the
+        server's own timeout."""
+        server = _serve(self, _IMAPHandler, implicit_tls=True, refuses_login=True)
+
+        with _trusting(server), self.assertRaises(LoginError):
+            self._connect(server, implicit_tls=True)
+
+        self.assertTrue(server.hung_up.wait(timeout=5))
 
 
 class ConnectSmtpSecurityTests(_AccountMixin, TestCase):

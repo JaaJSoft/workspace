@@ -23,6 +23,7 @@ from ..imap_messages import (
     star_message,
     unstar_message,
 )
+from ..imap_sync import forget_remote_state
 from ..notifications import settle_message_notifications
 from ..triage import move_to_folder, trash_message
 from .schema import (
@@ -79,6 +80,7 @@ def _flag(
             "IMAP %s failed for message %s: %s", type_, message.uuid, scrub(e)
         )
         imap_warning = "imap_failed"
+        forget_remote_state([message.folder_id])
     result = _ok(type_)
     if imap_warning:
         result["imap_warning"] = imap_warning

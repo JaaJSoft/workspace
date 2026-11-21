@@ -146,6 +146,24 @@ class FlagActionTests(_BaseActionTests):
         self.msg.refresh_from_db()
         self.assertTrue(self.msg.is_read)
 
+    @patch(
+        "workspace.mail.services.rules.actions.mark_read",
+        side_effect=Exception("IMAP down"),
+    )
+    def test_a_flag_the_server_did_not_take_makes_the_sync_read_the_folder(self, _mock):
+        """The row says read and the mailbox does not, without the mailbox
+        having changed: taken for untouched, the folder would be skipped."""
+        folder = self.msg.folder
+        type(folder).objects.filter(pk=folder.pk).update(
+            remote_state={"highestmodseq": 7}
+        )
+
+        apply_action(parse_actions([{"type": "mark_read"}])[0], self.msg)
+
+        folder.refresh_from_db()
+        self.assertIsNone(folder.remote_state)
+        self.assertEqual(folder.remote_state_version, 1)
+
 
 class MoveDeleteActionTests(_BaseActionTests):
     def setUp(self):

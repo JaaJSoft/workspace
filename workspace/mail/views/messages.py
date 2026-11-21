@@ -277,6 +277,8 @@ class MailBatchActionView(APIView):
             deleted_at__isnull=True,
         ).select_related("account", "folder")
 
+        from ..services.imap_connection import shared_connections
+        from ..services.imap_sync import forget_remote_state
         from ..services.triage import (
             TRASHED,
             flag_operations,
@@ -314,66 +316,75 @@ class MailBatchActionView(APIView):
 
         processed = 0
         synced = True
+        refused_folders = set()
         affected_folders = set()
         to_bulk_update = []
         bulk_update_fields = set()
-        for msg in messages:
-            affected_folders.add(msg.folder_id)
-            try:
-                if action == "delete":
-                    try:
-                        # refresh=False: the counters are recomputed once for
-                        # the whole batch below.
-                        outcome = trash_message(msg, refresh=False)
-                    except Exception as e:
-                        logger.warning(
-                            "IMAP move to trash failed for message %s: %s",
-                            msg.uuid,
-                            scrub(e),
-                        )
-                        continue
-                    if outcome == TRASHED:
-                        affected_folders.add(msg.folder_id)
-                elif action == "move" and target_folder:
-                    if target_folder.account_id != msg.account_id:
-                        continue
-                    # Already in this logical folder: an IMAP COPY + EXPUNGE
-                    # here would be a real server round trip for a move the
-                    # user sees as "it is already there".
-                    if canonical_folder_id(msg.folder) == target_folder.pk:
-                        continue
-                    try:
-                        # refresh=False: the counters are recomputed once for
-                        # the whole batch below.
-                        move_to_folder(msg, target_folder, refresh=False)
-                    except Exception as e:
-                        logger.warning(
-                            "IMAP move failed for message %s: %s", msg.uuid, scrub(e)
-                        )
-                        continue
-                    # Use .pk to match msg.folder_id added above. refresh_folders_counts_bulk
-                    # filters via folder_id__in, so a UUID would never match.
-                    affected_folders.add(target_folder.pk)
-                elif action in action_map:
-                    imap_fn, field, value = action_map[action]
-                    setattr(msg, field, value)
-                    bulk_update_fields.add(field)
-                    to_bulk_update.append(msg)
-                    try:
-                        imap_fn(msg.account, msg)
-                    except Exception as e:
-                        synced = False
-                        logger.warning(
-                            "IMAP %s failed for message %s: %s",
-                            scrub(action),
-                            msg.uuid,
-                            scrub(e),
-                        )
-                processed += 1
-            except Exception:
-                logger.warning(
-                    "Batch action '%s' failed for message %s", scrub(action), msg.uuid
-                )
+        # One connection per account for the whole batch, opened by the first
+        # message that needs it.
+        with shared_connections():
+            for msg in messages:
+                affected_folders.add(msg.folder_id)
+                try:
+                    if action == "delete":
+                        try:
+                            # refresh=False: the counters are recomputed once for
+                            # the whole batch below.
+                            outcome = trash_message(msg, refresh=False)
+                        except Exception as e:
+                            logger.warning(
+                                "IMAP move to trash failed for message %s: %s",
+                                msg.uuid,
+                                scrub(e),
+                            )
+                            continue
+                        if outcome == TRASHED:
+                            affected_folders.add(msg.folder_id)
+                    elif action == "move" and target_folder:
+                        if target_folder.account_id != msg.account_id:
+                            continue
+                        # Already in this logical folder: an IMAP COPY + EXPUNGE
+                        # here would be a real server round trip for a move the
+                        # user sees as "it is already there".
+                        if canonical_folder_id(msg.folder) == target_folder.pk:
+                            continue
+                        try:
+                            # refresh=False: the counters are recomputed once for
+                            # the whole batch below.
+                            move_to_folder(msg, target_folder, refresh=False)
+                        except Exception as e:
+                            logger.warning(
+                                "IMAP move failed for message %s: %s",
+                                msg.uuid,
+                                scrub(e),
+                            )
+                            continue
+                        # Use .pk to match msg.folder_id added above. refresh_folders_counts_bulk
+                        # filters via folder_id__in, so a UUID would never match.
+                        affected_folders.add(target_folder.pk)
+                    elif action in action_map:
+                        imap_fn, field, value = action_map[action]
+                        setattr(msg, field, value)
+                        bulk_update_fields.add(field)
+                        to_bulk_update.append(msg)
+                        try:
+                            imap_fn(msg.account, msg)
+                        except Exception as e:
+                            synced = False
+                            refused_folders.add(msg.folder_id)
+                            logger.warning(
+                                "IMAP %s failed for message %s: %s",
+                                scrub(action),
+                                msg.uuid,
+                                scrub(e),
+                            )
+                    processed += 1
+                except Exception:
+                    logger.warning(
+                        "Batch action '%s' failed for message %s",
+                        scrub(action),
+                        msg.uuid,
+                    )
 
         from ..services.counts import refresh_folders_counts_bulk
         from ..services.label_counts import refresh_labels_for_messages
@@ -383,6 +394,7 @@ class MailBatchActionView(APIView):
                 MailMessage.objects.bulk_update(
                     to_bulk_update, list(bulk_update_fields)
                 )
+                forget_remote_state(refused_folders)
 
             # Refresh counts for all affected folders in a single batch:
             # 1 aggregate + 1 bulk_update instead of 2N queries.

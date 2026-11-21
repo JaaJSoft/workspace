@@ -1,0 +1,48 @@
+From: Jean Dupont <jean.dupont@contoso.example>
+To: Pierre Martin <pierre@example.com>
+Subject: =?utf-8?B?SW52aXRhdGlvbiA6IFBvaW50IGQnw6lxdWlwZQ==?=
+Date: Fri, 13 Nov 2026 10:15:00 +0000
+Message-ID: <invite-7731@contoso.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_mixed_7731"
+
+--=_mixed_7731
+Content-Type: multipart/alternative; boundary="=_alt_7731"
+
+--=_alt_7731
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Vous =C3=AAtes invit=C3=A9 : Point d'=C3=A9quipe, vendredi 20 novembre =C3=
+=A0 15 h.
+--=_alt_7731
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html><body><p>Vous =C3=AAtes invit=C3=A9 : <b>Point d'=C3=A9quipe</b>, ven=
+dredi 20 novembre =C3=A0 15 h.</p></body></html>
+--=_alt_7731
+Content-Type: text/calendar; charset="utf-8"; method=REQUEST
+Content-Transfer-Encoding: base64
+
+QkVHSU46VkNBTEVOREFSDQpQUk9ESUQ6LS8vRXhhbXBsZSBDb3JwLy9DYWxlbmRhciAxLjAvL0VO
+DQpWRVJTSU9OOjIuMA0KTUVUSE9EOlJFUVVFU1QNCkJFR0lOOlZFVkVOVA0KVUlEOjIwMjYxMTIw
+VDE0MDAwMFotNzczMUBleGFtcGxlLmNvbQ0KRFRTVEFNUDoyMDI2MTExM1QxMDE1MDBaDQpEVFNU
+QVJUOjIwMjYxMTIwVDE0MDAwMFoNCkRURU5EOjIwMjYxMTIwVDE1MDAwMFoNClNVTU1BUlk6UG9p
+bnQgZCfDqXF1aXBlDQpPUkdBTklaRVI7Q049SmVhbiBEdXBvbnQ6bWFpbHRvOmplYW4uZHVwb250
+QGNvbnRvc28uZXhhbXBsZQ0KQVRURU5ERUU7Q049UGllcnJlIE1hcnRpbjtSU1ZQPVRSVUU6bWFp
+bHRvOnBpZXJyZUBleGFtcGxlLmNvbQ0KRU5EOlZFVkVOVA0KRU5EOlZDQUxFTkRBUg0K
+--=_alt_7731--
+--=_mixed_7731
+Content-Type: application/ics; name="invite.ics"
+Content-Disposition: attachment; filename="invite.ics"
+Content-Transfer-Encoding: base64
+
+QkVHSU46VkNBTEVOREFSDQpQUk9ESUQ6LS8vRXhhbXBsZSBDb3JwLy9DYWxlbmRhciAxLjAvL0VO
+DQpWRVJTSU9OOjIuMA0KTUVUSE9EOlJFUVVFU1QNCkJFR0lOOlZFVkVOVA0KVUlEOjIwMjYxMTIw
+VDE0MDAwMFotNzczMUBleGFtcGxlLmNvbQ0KRFRTVEFNUDoyMDI2MTExM1QxMDE1MDBaDQpEVFNU
+QVJUOjIwMjYxMTIwVDE0MDAwMFoNCkRURU5EOjIwMjYxMTIwVDE1MDAwMFoNClNVTU1BUlk6UG9p
+bnQgZCfDqXF1aXBlDQpPUkdBTklaRVI7Q049SmVhbiBEdXBvbnQ6bWFpbHRvOmplYW4uZHVwb250
+QGNvbnRvc28uZXhhbXBsZQ0KQVRURU5ERUU7Q049UGllcnJlIE1hcnRpbjtSU1ZQPVRSVUU6bWFp
+bHRvOnBpZXJyZUBleGFtcGxlLmNvbQ0KRU5EOlZFVkVOVA0KRU5EOlZDQUxFTkRBUg0K
+--=_mixed_7731--

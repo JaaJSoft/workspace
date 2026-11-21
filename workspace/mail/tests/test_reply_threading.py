@@ -87,7 +87,7 @@ class ReplyThreadingTests(TestCase):
             account=self.account, name="Sent", folder_type="sent"
         )
         reply = _parse_message(
-            raw.encode("utf-8"), self.account, sent_folder, uid=2, flags_str=""
+            raw.encode("utf-8"), self.account, sent_folder, uid=2, flags=()
         )
         self.assertEqual(get_thread(reply), [self.parent, reply])
 

@@ -77,7 +77,7 @@ class HtmlOnlyImportTests(MailFixtures):
         part["Subject"] = "Report"
         part["From"] = "sender@example.com"
         part["Message-ID"] = "<report-001@example.com>"
-        return _parse_message(part.as_bytes(), self.account, self.inbox, 1, "")
+        return _parse_message(part.as_bytes(), self.account, self.inbox, 1, ())
 
     def test_an_html_only_message_gets_a_text_body_and_a_preview(self):
         message = self._parse(MIMEText(NEWSLETTER, "html"))

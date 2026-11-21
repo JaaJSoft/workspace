@@ -1595,6 +1595,15 @@ wheels = [
 ]
 
 [[package]]
+name = "imapclient"
+version = "4.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/d1/32440f5e80d5b7bff1c56c5f6d37bd7d78d045a05cef64d6325ca88dd94b/imapclient-4.3.0.tar.gz", hash = "sha256:71c9cb3e8ee0835bcae79b49c9059ef26901a308c94261f7a7002bd76ada5ad8", size = 74087, upload-time = "2026-11-17T17:43:34.032Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/69/000aac3d3da7ec9cca0648c29fc4db2a139908ac4d427894936d7cefba91/imapclient-4.3.0-py3-none-any.whl", hash = "sha256:8341a0db668ab0aa5aad4b0526d059d0e21f03b0a943c4bb6d01083518eaaed2", size = 56787, upload-time = "2026-11-17T17:43:32.868Z" },
+]
+
+[[package]]
 name = "inflection"
 version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3570,6 +3579,7 @@ dependencies = [
     { name = "hiredis" },
     { name = "httpx2" },
     { name = "icalendar" },
+    { name = "imapclient" },
     { name = "iscc-tika" },
     { name = "joserfc" },
     { name = "lxml" },
@@ -3650,6 +3660,7 @@ requires-dist = [
     { name = "hiredis", specifier = ">=3.5.0" },
     { name = "httpx2", specifier = ">=2.16.0" },
     { name = "icalendar", specifier = ">=7.3.0" },
+    { name = "imapclient", specifier = ">=4.3.0" },
     { name = "iscc-tika", specifier = ">=0.6.0" },
     { name = "joserfc", specifier = ">=1.7.6" },
     { name = "lxml", specifier = ">=6.1.3" },

@@ -1,11 +1,13 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.ai.models import AITask
-from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.models import MailAccount, MailFolder
+from workspace.mail.services.imap_sync import sync_folder_messages
+from workspace.mail.tests.imap_fake import fake_imap
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -31,35 +33,18 @@ class SyncExtractDispatchTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def _run_sync(self):
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<n@x>",
-            imap_uid=2,
-            subject="S",
-            date="2026-05-14T10:00:00Z",
-        )
-
-        conn = MagicMock()
-        conn.uid.side_effect = [
-            ("OK", [b"2"]),
-            ("OK", [(b"2 (UID 2 FLAGS ())", b"fake"), b")"]),
-        ]
-        conn.select.return_value = ("OK", [b"1"])
-
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
+    def _run_sync(self, dispatch_side_effect=None):
+        """Sync one new message; returns the AI dispatch mock."""
         with (
-            patch("workspace.mail.services.imap_sync.connect_imap", return_value=conn),
-            patch(
-                "workspace.mail.services.imap_sync._parse_message", return_value=new_msg
-            ),
-            patch("workspace.mail.services.imap_sync._reconcile_folder"),
+            fake_imap() as server,
             patch("workspace.calendar.services.ics_processor.process_calendar_emails"),
             patch("workspace.ai.client.is_ai_enabled", return_value=True),
-            patch("workspace.ai.services.dispatch.dispatch") as mock_dispatch,
+            patch(
+                "workspace.ai.services.dispatch.dispatch",
+                side_effect=dispatch_side_effect,
+            ) as mock_dispatch,
         ):
+            server.deliver("INBOX")
             sync_folder_messages(self.account, self.folder)
             return mock_dispatch
 
@@ -92,43 +77,12 @@ class SyncExtractDispatchTests(TestCase):
     def test_extract_still_dispatched_when_classify_dispatch_raises(self):
         # If the classify dispatch blows up, extract must still run - they're
         # independently gated AND independently wrapped.
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<n@x>",
-            imap_uid=2,
-            subject="S",
-            date="2026-05-14T10:00:00Z",
-        )
-
-        conn = MagicMock()
-        conn.uid.side_effect = [
-            ("OK", [b"2"]),
-            ("OK", [(b"2 (UID 2 FLAGS ())", b"fake"), b")"]),
-        ]
-        conn.select.return_value = ("OK", [b"1"])
-
         def dispatch_side_effect(*args, **kwargs):
             if kwargs.get("task_type") == AITask.TaskType.CLASSIFY:
                 raise RuntimeError("classify dispatch failed")
             return None
 
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
-        with (
-            patch("workspace.mail.services.imap_sync.connect_imap", return_value=conn),
-            patch(
-                "workspace.mail.services.imap_sync._parse_message", return_value=new_msg
-            ),
-            patch("workspace.mail.services.imap_sync._reconcile_folder"),
-            patch("workspace.calendar.services.ics_processor.process_calendar_emails"),
-            patch("workspace.ai.client.is_ai_enabled", return_value=True),
-            patch(
-                "workspace.ai.services.dispatch.dispatch",
-                side_effect=dispatch_side_effect,
-            ) as mock_dispatch,
-        ):
-            sync_folder_messages(self.account, self.folder)
+        mock_dispatch = self._run_sync(dispatch_side_effect)
 
         task_types = [c.kwargs.get("task_type") for c in mock_dispatch.call_args_list]
         # Both attempted, classify failed but extract was still called.

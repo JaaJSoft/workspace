@@ -1,17 +1,25 @@
-"""IMAP mailbox-name helpers: quoting, decoding, type detection."""
+"""IMAP mailbox names: listing, encoding, display, type detection.
 
-import re
+A mailbox name travels in modified UTF-7 (RFC 3501, section 5.1.3):
+"Réunions" is ``R&AOk-unions`` on the wire. `MailFolder.name` holds that
+wire form, exactly as the server spells it, so a name read from a LIST goes
+back unchanged in the next SELECT whatever it contains. Only the two ends
+convert, both with IMAPClient's codec: `encode_name` for what the user
+types, `_display_name` for what the user reads.
+"""
 
-# Special-use folder attributes (RFC 6154)
+from imapclient import imap_utf7
+
+# Special-use folder attributes (RFC 6154), lowercased
 SPECIAL_USE_MAP = {
-    "\\Sent": "sent",
-    "\\Drafts": "drafts",
-    "\\Trash": "trash",
-    "\\Jstrash": "trash",
-    "\\Junk": "spam",
-    "\\Spam": "spam",
-    "\\Archive": "archive",
-    "\\All": "archive",
+    "\\sent": "sent",
+    "\\drafts": "drafts",
+    "\\trash": "trash",
+    "\\jstrash": "trash",
+    "\\junk": "spam",
+    "\\spam": "spam",
+    "\\archive": "archive",
+    "\\all": "archive",
 }
 
 # Fallback name-based detection
@@ -33,42 +41,19 @@ NAME_TYPE_MAP = {
 }
 
 
-def _quote_mailbox(name):
-    """Quote an IMAP mailbox name for use in commands.
-
-    Python 3.14 removed automatic quoting from imaplib._command, so
-    folder names containing spaces, brackets, etc. must be quoted by
-    the caller.
-    """
-    name = name.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{name}"'
-
-
-def _decode_mutf7(s):
-    """Decode IMAP Modified UTF-7 (RFC 3501 §5.1.3) to Unicode."""
-    result = []
-    i = 0
-    while i < len(s):
-        if s[i] == "&":
-            j = s.index("-", i + 1)
-            if j == i + 1:
-                result.append("&")
-            else:
-                encoded = s[i + 1 : j].replace(",", "/")
-                result.append(("+" + encoded + "-").encode("ascii").decode("utf-7"))
-            i = j + 1
-        else:
-            result.append(s[i])
-            i += 1
-    return "".join(result)
+def encode_name(name):
+    """The wire form of a mailbox name the user typed."""
+    return imap_utf7.encode(name).decode("ascii")
 
 
 def _detect_folder_type(name, flags):
-    """Detect folder type from special-use attributes or name."""
-    # Check RFC 6154 special-use attributes
-    for attr, ftype in SPECIAL_USE_MAP.items():
-        if attr.lower() in flags.lower():
-            return ftype
+    """Detect folder type from special-use attributes or name.
+
+    `flags` are the lowercased LIST attributes of the mailbox.
+    """
+    for attribute, folder_type in SPECIAL_USE_MAP.items():
+        if attribute in flags:
+            return folder_type
 
     # Name-based detection
     lower_name = name.lower().split("/")[-1].split(".")[-1]
@@ -88,52 +73,33 @@ def _display_name(name):
     for sep in ("/", "."):
         if sep in name:
             name = name.rsplit(sep, 1)[-1]
-    # Decode IMAP Modified UTF-7 for display
-    if "&" in name and "-" in name:
-        try:
-            name = _decode_mutf7(name)
-        except ValueError, UnicodeDecodeError:
-            # Malformed mUTF-7 shouldn't break display: keep the raw value.
-            pass
-    return name
+    try:
+        return imap_utf7.decode(name.encode("ascii"))
+    except ValueError:
+        # Not modified UTF-7 after all (a server sending raw UTF-8, a
+        # truncated sequence): the raw value is the best label there is.
+        return name
 
 
-def list_folders(conn):
-    """List all IMAP folders. Returns [(flags, delimiter, name), ...]."""
-    result = []
-    status, data = conn.list()
-    if status != "OK":
-        return result
+def list_folders(client):
+    """Every mailbox of the account, as ``(flags, delimiter, name)``.
 
-    i = 0
-    while i < len(data):
-        item = data[i]
-        if item is None:
-            i += 1
-            continue
-
-        # imaplib returns tuples for literal folder names:
-        #   (b'(\\flags) "/" {N}', b'folder name')
-        if isinstance(item, tuple):
-            header = item[0].decode("utf-8", errors="replace")
-            name = item[1].decode("utf-8", errors="replace")
-            match = re.match(r'\(([^)]*)\)\s+"([^"]+)"\s+\{', header)
-            if match:
-                flags = match.group(1)
-                delimiter = match.group(2)
-                result.append((flags, delimiter, name))
-            i += 1
-            continue
-
-        decoded = (
-            item.decode("utf-8", errors="replace") if isinstance(item, bytes) else item
+    `flags` is the set of the mailbox's LIST attributes, lowercased;
+    `name` is its wire form.
+    """
+    return [
+        (
+            frozenset(_text(flag).lower() for flag in flags),
+            _text(delimiter),
+            _text(name),
         )
-        # Parse: (\flags) "delimiter" "name"
-        match = re.match(r'\(([^)]*)\)\s+"([^"]+)"\s+"?([^"]*)"?', decoded)
-        if match:
-            flags = match.group(1)
-            delimiter = match.group(2)
-            name = match.group(3).strip('"')
-            result.append((flags, delimiter, name))
-        i += 1
-    return result
+        for flags, delimiter, name in client.list_folders()
+    ]
+
+
+def _text(value):
+    """A LIST field as text: IMAPClient leaves atoms as bytes, and reads a
+    mailbox named with digits alone as a number."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return "" if value is None else str(value)

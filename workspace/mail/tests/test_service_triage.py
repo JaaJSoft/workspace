@@ -5,11 +5,12 @@ through the same functions, so each rule is pinned once, at the level both
 callers share.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
 from django.test import TestCase
+from imapclient.exceptions import IMAPClientError
 
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import (
@@ -26,6 +27,7 @@ from workspace.mail.services.triage import (
     set_flag,
     set_label,
 )
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
 
@@ -104,6 +106,98 @@ class SetFlagTests(TriageServiceTestCase):
             set_flag(self.message, "starred")
         label.refresh_from_db()
         self.assertEqual(label.unread_count, 7)
+
+
+class SetFlagOnTheServerTests(TriageServiceTestCase):
+    """`set_flag` down to the mailbox it writes to."""
+
+    def setUp(self):
+        super().setUp()
+        self.server = self.enterContext(fake_imap())
+        self.server.deliver("INBOX", uid=self.message.imap_uid, subject="Invoice")
+
+    def _server_flags(self):
+        return self.server.flags("INBOX", self.message.imap_uid)
+
+    def test_each_flag_reaches_the_mailbox(self):
+        self.assertTrue(set_flag(self.message, "read"))
+        self.assertEqual(self._server_flags(), {r"\Seen"})
+        self.assertTrue(set_flag(self.message, "starred"))
+        self.assertEqual(self._server_flags(), {r"\Seen", r"\Flagged"})
+        self.assertTrue(set_flag(self.message, "unread"))
+        self.assertEqual(self._server_flags(), {r"\Flagged"})
+        self.assertTrue(set_flag(self.message, "unstarred"))
+        self.assertEqual(self._server_flags(), set())
+
+    def test_a_store_answered_no_reports_false(self):
+        """Issue #1740: the answer to the STORE was not read, so a flag the
+        server refused was reported as synced."""
+        self.server.fail("add_flags")
+
+        self.assertFalse(set_flag(self.message, "read"))
+
+        self.assertEqual(self._server_flags(), set())
+        self.message.refresh_from_db()
+        self.assertTrue(self.message.is_read)
+
+    def test_a_removal_answered_no_reports_false(self):
+        self.server.set_flags("INBOX", self.message.imap_uid, r"\Flagged")
+        self.server.fail("remove_flags")
+
+        self.assertFalse(set_flag(self.message, "unstarred"))
+
+        self.assertEqual(self._server_flags(), {r"\Flagged"})
+
+    def test_a_store_answered_no_raises_from_the_imap_service(self):
+        from workspace.mail.services.imap_messages import mark_read, unstar_message
+
+        self.server.fail("add_flags")
+        self.server.fail("remove_flags")
+
+        with self.assertRaises(IMAPClientError):
+            mark_read(self.account, self.message)
+        with self.assertRaises(IMAPClientError):
+            unstar_message(self.account, self.message)
+
+    def test_a_refused_select_reports_false(self):
+        self.server.fail("select")
+
+        self.assertFalse(set_flag(self.message, "starred"))
+        self.assertEqual(self.server.named("add_flags"), [])
+
+    def test_a_refused_flag_is_put_right_by_the_next_sync(self):
+        """The row says read and the mailbox does not, without the mailbox
+        having changed: the sync must not skip it as untouched."""
+        from workspace.mail.services.imap_sync import sync_folder_messages
+
+        MailFolder.objects.filter(pk=self.inbox.pk).update(
+            uid_validity=self.server.mailbox("INBOX").uidvalidity,
+            last_sync_uid=self.message.imap_uid,
+        )
+        self.inbox.refresh_from_db()
+        sync_folder_messages(self.account, self.inbox)
+        self.inbox.refresh_from_db()
+        self.assertIsNotNone(self.inbox.remote_state)
+        self.message.refresh_from_db()
+
+        self.server.fail("add_flags")
+        self.assertFalse(set_flag(self.message, "read"))
+        self.inbox.refresh_from_db()
+        self.assertIsNone(self.inbox.remote_state)
+
+        self.server.recover("add_flags")
+        sync_folder_messages(self.account, self.inbox)
+        self.message.refresh_from_db()
+        self.assertFalse(self.message.is_read)
+
+    def test_a_flag_the_server_took_keeps_the_remote_state(self):
+        state = {"uidvalidity": 1, "uidnext": 2, "exists": 1, "highestmodseq": 3}
+        MailFolder.objects.filter(pk=self.inbox.pk).update(remote_state=state)
+
+        self.assertTrue(set_flag(self.message, "read"))
+
+        self.inbox.refresh_from_db()
+        self.assertEqual(self.inbox.remote_state, state)
 
 
 class MarkFolderReadTests(TriageServiceTestCase):
@@ -335,44 +429,26 @@ class MoveToFolderTests(TriageServiceTestCase):
 
         label = MailLabel.objects.get(account=self.account, name="Urgent")
         MailMessageLabel.objects.create(message=self.message, label=label)
-        MailFolder.objects.filter(pk=self.archive.pk).update(
-            uid_validity=7, last_sync_uid=899
-        )
-        self.archive.refresh_from_db()
+        with fake_imap() as server:
+            server.deliver(
+                "INBOX", uid=1, subject="Invoice", message_id="<inv@example.com>"
+            )
+            # The Archive's counter is at 900: the copy takes that UID.
+            server.remove("Archive", server.deliver("Archive", uid=899))
+            MailFolder.objects.filter(pk=self.archive.pk).update(
+                uid_validity=server.mailbox("Archive").uidvalidity, last_sync_uid=899
+            )
+            self.archive.refresh_from_db()
 
-        imap = MagicMock()
-        imap.select.return_value = ("OK", [b"1"])
-        imap.status.return_value = ("OK", [b'"Archive" (UIDNEXT 900)'])
-        imap.untagged_responses = {"OK": [b"[UIDVALIDITY 7]"]}
-        responses = {"COPYUID": [None]}
-
-        def uid(command, *args):
-            if command == "COPY":
-                responses["COPYUID"] = [b"7 1 900"]
-                return ("OK", [None])
-            if command == "SEARCH":
-                return ("OK", [b"900"])
-            if command == "FETCH" and "RFC822" in args[1]:
-                raw = b"Subject: Invoice\r\nMessage-ID: <inv@example.com>\r\n\r\nhi"
-                return ("OK", [(b"1 (UID 900 FLAGS ())", raw)])
-            if command == "FETCH":
-                return ("OK", [b"1 (UID 900 FLAGS ())"])
-            return ("OK", [b""])
-
-        imap.uid.side_effect = uid
-        imap.response.side_effect = lambda code: (code, responses.pop(code, [None]))
-
-        with (
-            patch(
-                "workspace.mail.services.imap_messages.connect_imap", return_value=imap
-            ),
-            patch("workspace.mail.services.imap_sync.connect_imap", return_value=imap),
-        ):
             move_to_folder(self.message, self.archive)
             sync_folder_messages(self.account, self.archive)
 
+        self.assertEqual(server.uids("Archive"), [900])
+        self.message.refresh_from_db()
+        self.assertEqual(self.message.imap_uid, 900)
         live = MailMessage.objects.filter(folder=self.archive, deleted_at__isnull=True)
         self.assertEqual(list(live), [self.message])
+        self.assertEqual(MailMessage.objects.filter(folder=self.archive).count(), 1)
         self.assertTrue(
             MailMessageLabel.objects.filter(message=self.message, label=label).exists()
         )

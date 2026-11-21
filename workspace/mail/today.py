@@ -2,6 +2,7 @@
 
 from django.db.models import Exists, OuterRef, Prefetch, Q
 
+from workspace.core.today_registry import capped_rows
 from workspace.mail.models import MailFolder, MailMessage, MailMessageLabel
 from workspace.mail.queries import user_account_ids
 
@@ -18,7 +19,7 @@ def important_mail(user, now, tz):
     """
     notify_links = MailMessageLabel.objects.filter(label__notify_on_apply=True)
     has_notify_label = Exists(notify_links.filter(message=OuterRef("pk")))
-    return list(
+    messages = (
         MailMessage.objects.filter(
             account_id__in=user_account_ids(user),
             deleted_at__isnull=True,
@@ -31,6 +32,8 @@ def important_mail(user, now, tz):
             ]
         )
         .filter(Q(is_starred=True) | Q(has_notify_label, is_read=False))
+        # A row shows the envelope only; bodies can weigh megabytes.
+        .only("subject", "from_name", "from_email", "date", "is_read", "is_starred")
         .prefetch_related(
             Prefetch(
                 "message_labels",
@@ -38,5 +41,6 @@ def important_mail(user, now, tz):
                 to_attr="notify_labels",
             )
         )
-        .order_by("-date")[:MAIL_LIMIT]
+        .order_by("-date")
     )
+    return capped_rows(messages, MAIL_LIMIT)

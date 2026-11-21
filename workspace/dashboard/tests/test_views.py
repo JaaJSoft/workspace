@@ -12,7 +12,12 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from workspace.core.module_registry import ModuleInfo, registry
-from workspace.core.today_registry import TodayColumn, TodaySource, today_registry
+from workspace.core.today_registry import (
+    TodayColumn,
+    TodayRows,
+    TodaySource,
+    today_registry,
+)
 from workspace.dashboard.services.modules import dashboard_modules, switcher_modules_for
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
@@ -1053,7 +1058,9 @@ class ActivityFeedSourceParamTests(TestCase):
 _ROWS = Template("{% for item in items %}<li>{{ item }}</li>{% endfor %}")
 
 
-def _source(slug, column=TodayColumn.TODO, items=(), order=1, module_slug="chat"):
+def _source(
+    slug, column=TodayColumn.TODO, items=(), order=1, module_slug="chat", total=None
+):
     return TodaySource(
         slug=slug,
         module_slug=module_slug,
@@ -1062,7 +1069,7 @@ def _source(slug, column=TodayColumn.TODO, items=(), order=1, module_slug="chat"
         icon="circle",
         url=f"/{slug}",
         column=column,
-        items_fn=lambda user, now, tz: list(items),
+        items_fn=lambda user, now, tz: TodayRows(list(items), total),
         template=_ROWS,
         order=order,
     )
@@ -1105,6 +1112,17 @@ class TodayFragmentViewTests(TestCase):
         self.assertContains(resp, "<li>Contract</li>", html=True)
         self.assertContains(resp, 'href="/inbox"')
 
+    def test_a_source_shows_its_total_next_to_its_label(self):
+        self._register(
+            _source("inbox", items=["a", "b"], total=12),
+            _source("later", items=["c"], total=None, order=2),
+        )
+
+        resp = self.client.get("/dashboard/today")
+
+        counters = re.findall(r"data-today-count\s*>(\d+)<", resp.content.decode())
+        self.assertEqual(counters, ["12"])
+
     def test_sources_follow_their_order(self):
         self._register(
             _source("second", items=["b"], order=2),
@@ -1136,7 +1154,7 @@ class TodayFragmentViewTests(TestCase):
         self.assertNotContains(resp, "Nothing left on your calendar today.")
 
     def test_a_switched_off_source_is_never_queried(self):
-        items_fn = Mock(return_value=["Secret"])
+        items_fn = Mock(return_value=TodayRows(["Secret"], 1))
         self._register(
             replace(_source("inbox"), items_fn=items_fn),
             _source("agenda", TodayColumn.SCHEDULE, items=["Standup"]),
@@ -1150,7 +1168,7 @@ class TodayFragmentViewTests(TestCase):
 
     @override_settings(PREVIEW_VISIBILITY="none")
     def test_a_source_of_a_module_the_user_cannot_see_is_never_queried(self):
-        items_fn = Mock(return_value=["Secret"])
+        items_fn = Mock(return_value=TodayRows(["Secret"], 1))
         self._register(replace(_source("inbox", module_slug="mail"), items_fn=items_fn))
 
         with patch.dict(
@@ -1179,7 +1197,7 @@ class TodayFragmentViewTests(TestCase):
 
         def items_fn(user, now, tz):
             seen.update(user=user, tz=str(tz))
-            return []
+            return TodayRows([], 0)
 
         self._register(replace(_source("inbox"), items_fn=items_fn))
         set_setting(self.user, "core", "timezone", "Asia/Tokyo")

@@ -36,7 +36,7 @@ class TodaysEventsTests(TestCase):
         # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
         now = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
 
-        titles = [event.title for event in todays_events(user, now, PARIS)]
+        titles = [event.title for event in todays_events(user, now, PARIS).items]
 
         self.assertEqual(titles, ["all-day 1"])
 
@@ -60,7 +60,7 @@ class PendingInvitationsTests(TestCase):
         return event
 
     def _titles(self):
-        return [e.title for e in pending_invitations(self.guest, NOW, PARIS)]
+        return [e.title for e in pending_invitations(self.guest, NOW, PARIS).items]
 
     def test_unanswered_invitations_ahead_are_listed_soonest_first(self):
         self._invite("Later", NOW + timedelta(days=3))
@@ -101,7 +101,7 @@ class PendingInvitationsTests(TestCase):
         event = self._invite("Mine", NOW + timedelta(days=1))
         EventMember.objects.create(event=event, user=other)
 
-        titles = [e.title for e in pending_invitations(other, NOW, PARIS)]
+        titles = [e.title for e in pending_invitations(other, NOW, PARIS).items]
 
         self.assertEqual(titles, ["Mine"])
         EventMember.objects.filter(user=self.guest).update(
@@ -122,7 +122,7 @@ class PendingInvitationsTests(TestCase):
         series.save()
         EventMember.objects.create(event=series, user=self.guest)
 
-        (row,) = pending_invitations(self.guest, NOW, PARIS)
+        (row,) = pending_invitations(self.guest, NOW, PARIS).items
 
         self.assertEqual(row.title, "Weekly sync")
         self.assertGreaterEqual(row.next_start, NOW)
@@ -147,4 +147,7 @@ class PendingInvitationsTests(TestCase):
         for day in range(INVITATIONS_LIMIT + 2):
             self._invite(f"Event {day}", NOW + timedelta(days=day + 1))
 
-        self.assertEqual(len(self._titles()), INVITATIONS_LIMIT)
+        rows = pending_invitations(self.guest, NOW, PARIS)
+
+        self.assertEqual(len(rows.items), INVITATIONS_LIMIT)
+        self.assertEqual(rows.total, INVITATIONS_LIMIT + 2)

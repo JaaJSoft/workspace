@@ -2,7 +2,9 @@ from datetime import UTC, datetime, timedelta
 from itertools import count
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.mail.models import (
@@ -59,12 +61,12 @@ class ImportantMailTests(TestCase):
 
     def _subjects(self, user=None):
         tz = timezone.get_current_timezone()
-        return [m.subject for m in important_mail(user or self.user, NOW, tz)]
+        return [m.subject for m in important_mail(user or self.user, NOW, tz).items]
 
     def test_unread_mail_with_a_notifying_label_is_listed(self):
         message = self._message("Server down", labels=[self.urgent])
 
-        rows = important_mail(self.user, NOW, timezone.get_current_timezone())
+        rows = important_mail(self.user, NOW, timezone.get_current_timezone()).items
 
         self.assertEqual(rows, [message])
         self.assertEqual([link.label for link in rows[0].notify_labels], [self.urgent])
@@ -87,7 +89,7 @@ class ImportantMailTests(TestCase):
     def test_only_the_notifying_labels_ride_along(self):
         self._message("Both", labels=[self.urgent, self.fyi])
 
-        rows = important_mail(self.user, NOW, timezone.get_current_timezone())
+        rows = important_mail(self.user, NOW, timezone.get_current_timezone()).items
 
         self.assertEqual([link.label for link in rows[0].notify_labels], [self.urgent])
 
@@ -117,4 +119,26 @@ class ImportantMailTests(TestCase):
         for age in range(MAIL_LIMIT + 2):
             self._message(f"m{age}", is_starred=True, age=age)
 
-        self.assertEqual(self._subjects(), [f"m{age}" for age in range(MAIL_LIMIT)])
+        rows = important_mail(self.user, NOW, timezone.get_current_timezone())
+
+        self.assertEqual(
+            [m.subject for m in rows.items], [f"m{age}" for age in range(MAIL_LIMIT)]
+        )
+        self.assertEqual(rows.total, MAIL_LIMIT + 2)
+
+    def test_rows_leave_the_message_bodies_in_the_database(self):
+        self._message("Heavy", is_starred=True, body_html="<p>" + "x" * 1000)
+
+        with CaptureQueriesContext(connection) as queries:
+            important_mail(self.user, NOW, timezone.get_current_timezone())
+
+        self.assertNotIn("body_html", queries.captured_queries[0]["sql"])
+
+    def test_a_short_list_is_its_own_count(self):
+        self._message("Only one", is_starred=True)
+
+        # The page and its labels; no COUNT for a page that is not full.
+        with self.assertNumQueries(2):
+            rows = important_mail(self.user, NOW, timezone.get_current_timezone())
+
+        self.assertEqual(rows.total, 1)

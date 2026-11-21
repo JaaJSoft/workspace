@@ -32,7 +32,7 @@ class TasksForTodayTests(TestCase):
         )
 
     def _titles(self):
-        return [task.title for task in tasks_for_today(self.user, NOW, TOKYO)]
+        return [task.title for task in tasks_for_today(self.user, NOW, TOKYO).items]
 
     def test_overdue_due_today_and_urgent_tasks_are_listed(self):
         self._task("Late", due_date=TOKYO_TODAY - timedelta(days=1))
@@ -49,10 +49,11 @@ class TasksForTodayTests(TestCase):
 
         rows = tasks_for_today(self.user, NOW, TOKYO)
 
-        self.assertEqual(rows, [task])
-        self.assertTrue(rows[0].due_today)
-        self.assertFalse(rows[0].overdue)
-        self.assertFalse(rows[0].coming_up)
+        self.assertEqual(rows.items, [task])
+        self.assertEqual(rows.total, 1)
+        self.assertTrue(rows.items[0].due_today)
+        self.assertFalse(rows.items[0].overdue)
+        self.assertFalse(rows.items[0].coming_up)
 
     def test_the_next_tasks_stand_in_when_nothing_is_due(self):
         self._task("Next week", due_date=TOKYO_TODAY + timedelta(days=7))
@@ -60,8 +61,10 @@ class TasksForTodayTests(TestCase):
 
         rows = tasks_for_today(self.user, NOW, TOKYO)
 
-        self.assertEqual([task.title for task in rows], ["Next week", "Someday"])
-        self.assertTrue(all(task.coming_up for task in rows))
+        self.assertEqual([task.title for task in rows.items], ["Next week", "Someday"])
+        self.assertTrue(all(task.coming_up for task in rows.items))
+        # None of them is due today, so there is nothing to count.
+        self.assertIsNone(rows.total)
 
     def test_tasks_assigned_to_someone_else_are_not_listed(self):
         other = User.objects.create_user(username="other", password="pw")
@@ -73,4 +76,7 @@ class TasksForTodayTests(TestCase):
         for i in range(TASKS_LIMIT + 2):
             self._task(f"Task {i}", due_date=TOKYO_TODAY)
 
-        self.assertEqual(len(self._titles()), TASKS_LIMIT)
+        rows = tasks_for_today(self.user, NOW, TOKYO)
+
+        self.assertEqual(len(rows.items), TASKS_LIMIT)
+        self.assertEqual(rows.total, TASKS_LIMIT + 2)

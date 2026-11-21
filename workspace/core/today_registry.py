@@ -15,6 +15,27 @@ from enum import StrEnum
 from .services.module_visibility import is_module_slug_visible
 
 
+@dataclass(frozen=True)
+class TodayRows:
+    """What a source lists: its first rows, and how many it has in all."""
+
+    items: list
+    # Shown as the source's counter. None when the rows count nothing the
+    # user has to do (a stand-in list), which leaves the counter out.
+    total: int | None
+
+
+def capped_rows(queryset, limit):
+    """The first *limit* rows of *queryset* and its size.
+
+    Counts in the database only when the page is full: a shorter page is
+    already the whole set.
+    """
+    items = list(queryset[:limit])
+    total = queryset.count() if len(items) == limit else len(items)
+    return TodayRows(items, total)
+
+
 class TodayColumn(StrEnum):
     SCHEDULE = "schedule"
     TODO = "todo"
@@ -30,8 +51,8 @@ class TodaySource:
     icon: str
     url: str
     column: TodayColumn
-    # (user, now, tz) -> the rows to list, already capped by the source.
-    # Empty list: the source stays out of the card.
+    # (user, now, tz) -> TodayRows, already capped by the source. No
+    # items: the source stays out of the card.
     items_fn: Callable
     # Rendered with ``items`` in context; it writes the ``<li>`` rows.
     template: str

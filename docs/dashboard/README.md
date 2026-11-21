@@ -29,7 +29,9 @@ there, and the day ahead.
   - *Mail*: starred messages, and unread ones carrying a label that notifies
     on apply (the default *Urgent* label is one). Trash and Spam stay out.
 
-  An item leaves the card once it is dealt with in its app. A source whose app
+  Each source lists its first few rows, with a counter of how many it has in
+  all; the stand-in tasks get none, since none of them is due. An item leaves
+  the card once it is dealt with in its app. A source whose app
   the user cannot open is left out.
 - **Recent Activity**: what other people did across the workspace, by app,
   with a search and a refresh button. It only lists apps the user has access

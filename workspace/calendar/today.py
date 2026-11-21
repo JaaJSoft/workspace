@@ -6,13 +6,15 @@ from workspace.calendar.models import Event, EventMember
 from workspace.calendar.recurrence import next_occurrences_after
 from workspace.calendar.services.timezones import all_day_label
 from workspace.calendar.upcoming import get_upcoming_for_user
+from workspace.core.today_registry import TodayRows
 
 INVITATIONS_LIMIT = 5
 
 
 def todays_events(user, now, tz):
     """Every event still ahead today: the day is short enough to list whole."""
-    return get_upcoming_for_user(user, now, tz)
+    events = get_upcoming_for_user(user, now, tz)
+    return TodayRows(events, len(events))
 
 
 def pending_invitations(user, now, tz):
@@ -55,4 +57,4 @@ def pending_invitations(user, now, tz):
             event.next_start = event.start
         invitations.append(event)
     invitations.sort(key=lambda event: event.next_start)
-    return invitations[:INVITATIONS_LIMIT]
+    return TodayRows(invitations[:INVITATIONS_LIMIT], len(invitations))

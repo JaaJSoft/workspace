@@ -51,9 +51,11 @@ def _today_columns(user, sources):
             continue
         groups = []
         for source in enabled:
-            items = source.items_fn(user, now, tz)
-            if items:
-                groups.append({"source": source, "items": items})
+            rows = source.items_fn(user, now, tz)
+            if rows.items:
+                groups.append(
+                    {"source": source, "items": rows.items, "total": rows.total}
+                )
         columns.append({"kind": column.value, "groups": groups})
     return columns
 

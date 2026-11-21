@@ -33,8 +33,9 @@ class SyncExtractDispatchTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def _run_sync(self, dispatch_side_effect=None):
+    def _run_sync(self, dispatch_side_effect=None, folder=None):
         """Sync one new message; returns the AI dispatch mock."""
+        folder = folder or self.folder
         with (
             fake_imap() as server,
             patch("workspace.calendar.services.ics_processor.process_calendar_emails"),
@@ -44,8 +45,8 @@ class SyncExtractDispatchTests(TestCase):
                 side_effect=dispatch_side_effect,
             ) as mock_dispatch,
         ):
-            server.deliver("INBOX")
-            sync_folder_messages(self.account, self.folder)
+            server.deliver(folder.name)
+            sync_folder_messages(self.account, folder)
             return mock_dispatch
 
     def test_both_dispatched_by_default(self):
@@ -89,3 +90,11 @@ class SyncExtractDispatchTests(TestCase):
         self.assertEqual(
             task_types, [AITask.TaskType.CLASSIFY, AITask.TaskType.EXTRACT]
         )
+
+    def test_nothing_dispatched_for_folders_that_receive_no_new_mail(self):
+        for folder_type in ("sent", "drafts", "spam", "trash"):
+            with self.subTest(folder_type=folder_type):
+                folder = MailFolder.objects.create(
+                    account=self.account, name=folder_type, folder_type=folder_type
+                )
+                self._run_sync(folder=folder).assert_not_called()

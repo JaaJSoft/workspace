@@ -33,8 +33,16 @@
             {% endblocktranslate %}
           </h1>
         {% endwith %}
-        <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
+        <p
+          class="text-base-content/60"
+          x-data="weatherWidget('{{ temperature_unit|escapejs }}')"
+          @temperature-unit-changed.window="setUnit($event.detail)"
+          x-cloak
+        >
           <span x-text="label"></span>
+          <template x-if="icon">
+            <i :data-lucide="icon" class="inline-block w-4 h-4 ml-1 -translate-y-px"></i>
+          </template>
         </p>
       </div>
 
@@ -219,6 +227,7 @@
 
   <script src="{% static 'calendar/ui/js/event_card.js' %}"></script>
   <script src="{% static 'dashboard/js/badges.js' %}"></script>
+  <script src="{% static 'dashboard/js/weather.js' %}"></script>
   {% translate "Good night, %(name)s." as greeting_night %}
   {% translate "Good morning, %(name)s." as greeting_morning %}
   {% translate "Good afternoon, %(name)s." as greeting_afternoon %}
@@ -239,50 +248,6 @@
         name: name
       }, true);
     }
-
-    const _weatherCodes = {
-      0: 'clear-day',
-      1: 'clear-day',
-      2: 'partly-cloudy',
-      3: 'cloudy',
-      45: 'fog',
-      48: 'fog',
-      51: 'drizzle',
-      53: 'drizzle',
-      55: 'drizzle',
-      56: 'drizzle',
-      57: 'drizzle',
-      61: 'rain',
-      63: 'rain',
-      65: 'rain',
-      66: 'rain',
-      67: 'rain',
-      71: 'snow',
-      73: 'snow',
-      75: 'snow',
-      77: 'snow',
-      80: 'rain',
-      81: 'rain',
-      82: 'rain',
-      85: 'snow',
-      86: 'snow',
-      95: 'thunderstorm',
-      96: 'thunderstorm',
-      99: 'thunderstorm',
-    };
-    const _weatherIcons = {
-      'clear-day': 'sun',
-      'clear-night': 'moon',
-      'partly-cloudy': 'cloud-sun',
-      'cloudy': 'cloud',
-      'fog': 'cloud-fog',
-      'drizzle': 'cloud-drizzle',
-      'rain': 'cloud-rain',
-      'snow': 'snowflake',
-      'thunderstorm': 'cloud-lightning',
-    };
-    const _WEATHER_CACHE_KEY = 'dashboard_weather';
-    const _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
     function usagePopover() {
       return {
@@ -333,88 +298,11 @@
       };
     }
 
-    function weatherWidget() {
-      return {
-        label: '',
-        init() {
-          const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-          const now = new Date();
-          this.label = now.toLocaleDateString(window.getUserLocale(), {
-            timeZone: tz,
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric'
-          });
-          this._loadWeather();
-        },
-        _loadWeather() {
-          const self = this;
-          // Check cache
-          try {
-            const raw = localStorage.getItem(_WEATHER_CACHE_KEY);
-            if (raw) {
-              const c = JSON.parse(raw);
-              if (c.ts + _WEATHER_CACHE_TTL > Date.now()) {
-                self._applyWeather(c.temp, c.code);
-                return;
-              }
-            }
-          } catch (e) {}
-
-          if (!navigator.geolocation) return;
-          navigator.geolocation.getCurrentPosition(function(pos) {
-            const lat = pos.coords.latitude.toFixed(2);
-            const lon = pos.coords.longitude.toFixed(2);
-            fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,weather_code')
-              .then(function(r) {
-                return r.json();
-              })
-              .then(function(data) {
-                const temp = Math.round(data.current.temperature_2m);
-                const code = data.current.weather_code;
-                try {
-                  localStorage.setItem(_WEATHER_CACHE_KEY, JSON.stringify({
-                    temp: temp,
-                    code: code,
-                    ts: Date.now()
-                  }));
-                } catch (e) {}
-                self._applyWeather(temp, code);
-              }).catch(function() {});
-          }, function() {}, {
-            timeout: 5000
-          });
-        },
-        _applyWeather(temp, code) {
-          let condition = _weatherCodes[code] || 'cloudy';
-          const h = new Date().getHours();
-          if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
-          const icon = _weatherIcons[condition] || 'cloud';
-          const dateStr = new Date().toLocaleDateString(window.getUserLocale(), {
-            timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined,
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric'
-          });
-          this.label = dateStr + '  ·  ' + temp + '°C';
-          // Inject lucide icon next to temperature
-          this.$nextTick(() => {
-            const el = this.$el.querySelector('[data-weather-icon]');
-            if (el) el.remove();
-            const span = document.createElement('i');
-            span.setAttribute('data-lucide', icon);
-            span.setAttribute('data-weather-icon', '');
-            span.className = 'inline-block w-4 h-4 ml-1 -translate-y-px';
-            this.$el.querySelector('span').appendChild(span);
-          });
-        },
-      };
-    }
-
     function dashboardPrefsForm() {
       const readJson = (id) => JSON.parse(document.getElementById(id).textContent);
       const apps = readJson('dashboard-apps-data');
       return {
+        temperatureUnit: '{{ temperature_unit|escapejs }}',
         apps: apps,
         hidden: apps.filter(a => a.hidden).map(a => a.slug),
         todaySources: readJson('dashboard-today-sources-data'),
@@ -435,6 +323,10 @@
               target: 'dashboard-today'
             });
           });
+        },
+        setTemperatureUnit() {
+          this.save('temperature_unit', this.temperatureUnit);
+          this.$dispatch('temperature-unit-changed', this.temperatureUnit);
         },
         toggleApp(slug, visible) {
           if (visible) {

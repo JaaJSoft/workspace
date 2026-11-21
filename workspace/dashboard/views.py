@@ -20,11 +20,13 @@ from workspace.files.services.quota import (
 from workspace.users.services.settings import get_module_settings
 
 from .services.modules import dashboard_modules
+from .services.preferences import (
+    HIDDEN_TODAY_SOURCES,
+    TEMPERATURE_UNITS,
+    temperature_unit,
+)
 
 ACTIVITY_LIMIT = 10
-
-# Dashboard setting: slugs of the Today sources the user switched off.
-HIDDEN_TODAY_SOURCES = "hidden_today_sources"
 
 
 def _today_sources(user, dashboard_settings):
@@ -130,6 +132,8 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
             source.slug for source, hidden in today_sources if hidden
         ],
         "show_today": any(not hidden for _, hidden in today_sources),
+        "temperature_unit": temperature_unit(dashboard_settings),
+        "temperature_units": TEMPERATURE_UNITS.items(),
         "usage_rows": get_usage_headlines(user),
         "storage_usage": storage_usage,
         "storage_quota": storage_quota,

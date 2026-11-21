@@ -445,6 +445,36 @@ class SearchScopeSettingValidationTests(TestCase):
         self.assertNotIn("search_scope", get_module_settings(self.user, "core"))
 
 
+class TemperatureUnitSettingValidationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="units", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _put(self, value):
+        return self.client.put(
+            "/api/v1/settings/dashboard/temperature_unit",
+            data={"value": value},
+            content_type="application/json",
+        )
+
+    def test_accepts_celsius_and_fahrenheit(self):
+        for value in ("celsius", "fahrenheit"):
+            self.assertEqual(self._put(value).status_code, 200)
+            self.assertEqual(
+                get_setting(self.user, "dashboard", "temperature_unit"), value
+            )
+
+    def test_rejects_a_unit_the_forecast_does_not_take(self):
+        self.assertEqual(self._put("kelvin").status_code, 400)
+        self.assertNotIn(
+            "temperature_unit", get_module_settings(self.user, "dashboard")
+        )
+
+
 class TimezoneSettingValidationTests(TestCase):
     def setUp(self):
         cache.clear()

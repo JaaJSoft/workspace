@@ -183,8 +183,8 @@ class NotifyNewMessagesTests(MailNotifyBase):
     def test_skips_messages_that_arrived_already_read(self):
         self.assertEqual(self.notify([self.make_message(uid=1, is_read=True)]), 0)
 
-    def test_skips_sent_and_drafts(self):
-        for folder_type in ("sent", "drafts"):
+    def test_skips_folders_that_receive_no_new_mail(self):
+        for folder_type in ("sent", "drafts", "spam", "trash"):
             with self.subTest(folder_type=folder_type):
                 folder = MailFolder.objects.create(
                     account=self.account,
@@ -283,6 +283,23 @@ class NotifyLabeledMessagesTests(MailNotifyBase):
         self.assertEqual(
             notify_labeled_messages(self.alice, [message], was_initial_sync=True), 0
         )
+
+    def test_skips_spam_and_trash(self):
+        for folder_type in ("spam", "trash"):
+            with self.subTest(folder_type=folder_type):
+                folder = MailFolder.objects.create(
+                    account=self.account,
+                    name=folder_type,
+                    display_name=folder_type,
+                    folder_type=folder_type,
+                )
+                message = self.make_message(uid=100, folder=folder)
+                self.assertEqual(
+                    notify_labeled_messages(
+                        self.alice, [message], was_initial_sync=False
+                    ),
+                    0,
+                )
 
     def test_stops_at_the_burst_limit(self):
         set_setting(self.alice, "mail", "notify_max_burst", 2)

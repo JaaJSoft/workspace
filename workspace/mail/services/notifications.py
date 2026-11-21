@@ -24,9 +24,6 @@ NOTIFY_MODES = ("all", "labels", "never")
 DEFAULT_NOTIFY_BURST = 10
 HARD_MAX_NOTIFY_BURST = 50
 
-# A message we sent or drafted is not news to its sender.
-_SILENT_FOLDER_TYPES = ("sent", "drafts")
-
 
 def _classifier_available(user) -> bool:
     from workspace.ai.client import is_ai_enabled
@@ -64,7 +61,7 @@ def resolve_notify_burst(user) -> int:
 
 
 def _is_notifiable_folder(folder) -> bool:
-    return folder.folder_type not in _SILENT_FOLDER_TYPES and not folder.is_hidden
+    return folder.receives_new_mail and not folder.is_hidden
 
 
 def _notify_messages(user, messages, *, priority) -> int:

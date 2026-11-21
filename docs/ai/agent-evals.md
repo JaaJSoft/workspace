@@ -40,6 +40,7 @@ tool's description or to the loop shows up in the result.
 | `calendar_read` | What is on my calendar tomorrow? | The calendar is read, the answer names the appointment. |
 | `task_create` | Add a task "Buy milk" to my Home project. | `create_task` is called, the task exists. |
 | `two_reads` | What is on my calendar tomorrow, and which tasks are assigned to me? | Calendar and tasks are both read, the answer names the appointment and the task. |
+| `language` | Salut, je dois faire quoi aujourd'hui ? (from a user whose interface is in English) | The tasks are read, the answer is in French. |
 | `confirmation` | Cancel my dentist appointment tomorrow. | The event is still there, the run stopped to ask the user. |
 
 Web search, images and voice are left out: they need more than a chat model

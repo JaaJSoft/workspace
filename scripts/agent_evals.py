@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -51,6 +52,14 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
 
 EVENT_READS = {"list_upcoming_events", "search_events", "search_everything"}
 TASK_READS = {"list_my_tasks", "search_tasks", "search_everything"}
+FRENCH_WORDS = frozenset(
+    "le la les un une des du de et est sont vous tu votre vos ton tes pour dans "
+    "avec sur que qui pas aujourd'hui tâche tâches voici".split()
+)
+ENGLISH_WORDS = frozenset(
+    "the a an of and is are you your for in with on that which not today task "
+    "tasks here have has".split()
+)
 
 _serial = count(1)
 
@@ -65,6 +74,8 @@ class Scenario:
     # A project called Home, and a task assigned to the user in it.
     project: bool = False
     task: str = ""
+    # The language of the user's interface, when the case turns on it.
+    interface_language: str = ""
 
 
 @dataclass
@@ -91,7 +102,7 @@ def _world(scenario):
     from workspace.chat.models import Conversation, ConversationMember, Message
     from workspace.projects.services.projects import create_project
     from workspace.projects.services.tasks import create_task
-    from workspace.users.services.settings import get_user_timezone
+    from workspace.users.services.settings import get_user_timezone, set_setting
 
     User = get_user_model()
     serial = next(_serial)
@@ -101,6 +112,8 @@ def _world(scenario):
     bot = User.objects.create_user(
         username=f"bot{serial}", first_name="Assistant", password="evals"
     )
+    if scenario.interface_language:
+        set_setting(user, "core", "language", scenario.interface_language)
     world = {
         "user": user,
         "bot": bot,
@@ -252,6 +265,14 @@ def stops_to_ask_the_user(ctx: EvaluatorContext[Scenario, Outcome]) -> bool:
     return ctx.output.stop == "awaiting_user" and ctx.output.asked_user
 
 
+def answers_in_french(ctx: EvaluatorContext[Scenario, Outcome]) -> bool:
+    """Whether the answer reads as French: more of its small words than of English's."""
+    words = re.findall(r"[a-zàâçéèêëîïôûùüœ']+", ctx.output.answer.lower())
+    return sum(w in FRENCH_WORDS for w in words) > sum(
+        w in ENGLISH_WORDS for w in words
+    )
+
+
 CASES = [
     Case(
         name="plain_answer",
@@ -287,6 +308,16 @@ CASES = [
             names_the_appointment,
             names_the_task,
         ),
+    ),
+    Case(
+        name="language",
+        inputs=Scenario(
+            "Salut, je dois faire quoi aujourd'hui ?",
+            project=True,
+            task="Renew passport",
+            interface_language="en",
+        ),
+        evaluators=(reads_the_tasks, answers_in_french),
     ),
     Case(
         name="confirmation",

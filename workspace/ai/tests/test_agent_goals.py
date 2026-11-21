@@ -14,6 +14,7 @@ from rest_framework.test import APITestCase
 from workspace.ai.models import AgentGoal, AITask, BotProfile
 from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import (
+    AgentGoalToolProvider,
     CompleteAgentGoalParams,
     CreateAgentGoalParams,
     SendUserMessageParams,
@@ -1153,18 +1154,16 @@ class AgentGoalToolTests(TestCase):
 
 
 class AgentGoalPromptTests(TestCase):
-    def test_system_prompt_includes_autonomous_goals_section(self):
-        from workspace.ai.prompts.chat import build_chat_messages
+    """What a bot is told about goals travels with the goal tools."""
 
-        content = build_chat_messages("You are a bot.", [])[0].parts[0].content
+    def test_the_goal_tools_come_with_their_section(self):
+        content = AgentGoalToolProvider.instructions
         self.assertIn("## Autonomous goals", content)
         self.assertIn("create_agent_goal", content)
         self.assertIn("send_user_message", content)
 
-    def test_system_prompt_mentions_the_mission_brief(self):
-        from workspace.ai.prompts.chat import build_chat_messages
-
-        content = build_chat_messages("You are a bot.", [])[0].parts[0].content
+    def test_the_section_mentions_the_mission_brief(self):
+        content = AgentGoalToolProvider.instructions
         self.assertIn("success_criteria", content)
         self.assertIn("constraints", content)
         self.assertIn("reporting", content)

@@ -184,6 +184,24 @@ def _task_entry(task):
 
 
 class ProjectsToolProvider(ToolProvider):
+    instructions = (
+        "## Projects and tasks\n"
+        "You can read and act on the user's projects and kanban boards with the "
+        "task tools. Ground rules:\n"
+        "- Statuses (board columns) are per-project. Call list_projects before "
+        "move_task or before filtering by status, and use a returned name - a "
+        "guessed column name fails the call.\n"
+        '- Use list_my_tasks for "what is on my plate" questions; use '
+        "search_tasks to find tasks by keyword across all projects, including "
+        "other people's tasks.\n"
+        "- create_task without a project puts the task in the user's personal "
+        "project - the right default when the user just wants something noted.\n"
+        "- Assigning tasks needs the exact username: call search_users first "
+        "when the user names a person informally.\n"
+        "- move_task, update_task and comment_on_task need the task's UUID from "
+        "list_my_tasks, search_tasks or create_task - never invent one."
+    )
+
     @tool(
         badge_icon="📋",
         badge_label="Listed projects",

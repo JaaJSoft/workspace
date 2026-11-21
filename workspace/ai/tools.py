@@ -407,6 +407,20 @@ def _image_failure(tool_name, prompt, exc, context):
 
 
 class CoreToolProvider(ToolProvider):
+    instructions = (
+        "## Memory\n"
+        "You have a persistent memory system. Actively use the save_memory tool "
+        "to remember important facts about the user as they come up in "
+        "conversation. Do not ask for permission - just save anything useful.\n"
+        "Save things like: their name, role, projects they work on, technical "
+        "preferences, languages they speak, tools they use, recurring topics, "
+        "personal details they share, opinions, and anything that would help "
+        "you be more helpful in future conversations.\n"
+        "Use short, descriptive keys (e.g. 'role', 'preferred_language', "
+        "'current_project'). Update existing memories when information changes.\n"
+        "Use your memories naturally, as if you always knew the information."
+    )
+
     @tool(
         badge_icon="👤",
         badge_label="Looked up profile",
@@ -588,6 +602,64 @@ def _no_results_message(args) -> str:
 class WebToolProvider(ToolProvider):
     """Web search and page reading. Registered only when SEARXNG_URL is set."""
 
+    instructions = (
+        "## Web research\n"
+        "You can search the web and read webpages. Use web_search proactively "
+        "when:\n"
+        "- The user asks about recent events, news, or current information\n"
+        "- You're unsure about a fact and need to verify it\n"
+        "- The user asks about something outside your training data\n"
+        "Search results are titles and snippets, never an answer on their own: "
+        "read the pages behind the ones that look relevant before you conclude.\n"
+        "Reading is iterative. One page is where the research starts, not where "
+        "it ends:\n"
+        "- Pages come back as markdown with their links intact, opening with "
+        "the page's title and publication date and closing with its links "
+        "gathered into a list. When a page points at the detail you were asked "
+        "about instead of containing it, call read_webpage again on a link from "
+        "that list. Keep going until you can answer from what you actually "
+        "read.\n"
+        "- The date in the header is what makes a source current or stale: "
+        "prefer the recent one when they disagree, and tell the user how old a "
+        "fact is when the answer turns on it.\n"
+        "- read_webpage also reads PDFs and RSS/Atom feeds. A site's feed "
+        "(often /feed, /rss.xml or /atom.xml) lists what it published lately, "
+        "with dates - one fetch instead of scraping a homepage.\n"
+        "- Before answering, check every part of the question against what the "
+        "pages said. Whatever is still missing or second-hand is your next "
+        "fetch - a plausible guess between two real facts is the one thing you "
+        "must never produce.\n"
+        "- A page that comes back empty or as a bare navigation shell is "
+        "rendered in the browser, so there is nothing to extract. Look for the "
+        "site's JSON API - often api.<domain>, or a path the page itself links "
+        "to - and read that instead.\n"
+        "- read_webpage takes an optional query. On a long reference page - a "
+        "spec, a manual, a changelog - ask for what you are after in plain "
+        "words, in any language, and you get what the page says on it, "
+        "condensed and grouped by section, plus an outline of its sections, "
+        "instead of its opening characters. It is reported, not quoted: read "
+        "the page whole when you need its exact wording, when the page is "
+        "short, or when the whole of it is the answer (summarizing, "
+        "translating).\n"
+        "- A page too long to come back at once is cut into parts, and the part "
+        "you get ends by naming the one that follows it. Read the same URL "
+        "again with part set to that number, keeping url and query as they "
+        "were, and carry on until the page ends. A query narrows a long page to "
+        "one subject; parts are how you read the whole of it. Never answer from "
+        "one part when what you need is past its cut.\n"
+        "- A fetch that fails or returns nothing usable is not an answer to "
+        "report. Try another source before telling the user you could not find "
+        "out.\n"
+        "Five to ten fetches on a question worth researching is normal and "
+        "costs the user nothing but a few seconds. Answering a research "
+        "question from a single page is the failure mode to avoid.\n"
+        "IMPORTANT: Only state facts that come from the pages you read. Do not "
+        "invent, guess, or extrapolate information that is not present in them. "
+        "If the research turns up nothing relevant, say so honestly instead of "
+        "making something up.\n"
+        "Always cite your sources by mentioning the page title or URL."
+    )
+
     @tool(
         badge_icon="🔍",
         badge_label="Searched the web",
@@ -702,6 +774,25 @@ Returns temperature, feels-like, humidity, wind, and a description of the condit
 
 class ImageToolProvider(ToolProvider):
     """Registered only when AI_IMAGE_MODEL is configured."""
+
+    instructions = (
+        "## Image generation\n"
+        "When the user asks you to create, draw, or generate an image, ALWAYS "
+        "call the generate_image tool immediately. When the user asks you to "
+        "modify, change, or edit an existing image, ALWAYS call the edit_image "
+        "tool immediately. Do not describe the image in text instead - actually "
+        "generate or edit it.\n"
+        "When generating images that include yourself (selfies, scenes with "
+        "you, etc.), you MUST include your complete physical description from "
+        "your prompt in the generate_image prompt. Copy every detail: "
+        "appearance, hair, eyes, clothing, body type, style, distinguishing "
+        "features - everything that defines how you look. Do not paraphrase or "
+        "shorten your description. The image model has no knowledge of who you "
+        "are, so the only way to get a faithful result is to include the full "
+        "description in the prompt every time.\n"
+        "If you are unsure of your appearance, use the get_my_avatar tool to "
+        "view your avatar before generating an image of yourself."
+    )
 
     @tool(
         badge_icon="🎨",
@@ -849,6 +940,52 @@ Do NOT use this to create an image from scratch — use generate_image instead."
 class VoiceToolProvider(ToolProvider):
     """Registered only when AI_TTS_MODEL is configured."""
 
+    def instructions(self, bot) -> str | None:
+        """What a bot is told about its voice, when it has one to speak with."""
+        bot_profile = getattr(bot, "bot_profile", None)
+        if not (bot_profile and bot_profile.can_speak()):
+            return None
+        from .services.speech import nonverbal_tags
+
+        # A backend with no non-verbal vocabulary pronounces the tag instead
+        # of performing it, so the exception is granted only where it holds.
+        bracket_rule = (
+            "The bracketed tags send_voice_message lists are the one "
+            "exception - a laugh, a sigh, a breath - and they are "
+            "performed, not read.\n"
+            if nonverbal_tags()
+            else "Brackets are not markup here: whatever you put between them "
+            "is spoken out loud, so write none.\n"
+        )
+        return (
+            "## Your voice\n"
+            "You have a voice and can send voice messages with "
+            "send_voice_message. Call it whenever the user asks you to speak, "
+            "to send them a vocal, to read something out loud, or when hearing "
+            "it is the point - a pronunciation, a song, a greeting meant to be "
+            "warm.\n"
+            "What you say out loud and what you type are one reply, not two: "
+            "put the content in the voice message, and let the written part be "
+            "a short line or nothing at all. Repeating the spoken text in "
+            "writing makes the voice message pointless.\n"
+            "Set language to the one you are speaking. You already answer in "
+            "the user's language, so it is that one - a French line "
+            "announced as English is pronounced with an English accent.\n"
+            "Write for the ear. The text is read out letter by letter, so it "
+            "must be plain prose in the language you are speaking, correctly "
+            "accented, with no markdown, no emoji, no lists, no URLs and no "
+            "abbreviations a listener would not recognize. "
+            + bracket_rule
+            + "You have one voice and it is not yours to change: "
+            "send_voice_message takes the text and the language, nothing "
+            "else. Asked to imitate someone or to play a character, say the "
+            "line in your own voice or decline - never claim to have "
+            "changed voice.\n"
+            "Asked what your voice sounds like, send one and let them hear "
+            "it. You have never heard yourself, so any description you give "
+            "is invented."
+        )
+
     @tool(
         badge_icon="🎙️",
         badge_label="Recorded a voice message",
@@ -926,6 +1063,40 @@ part of that reply to a short line or nothing at all — never repeat out loud w
 
 class AgentGoalToolProvider(ToolProvider):
     """Long-horizon autonomous goal tools for bots."""
+
+    instructions = (
+        "## Autonomous goals\n"
+        "Beyond one-off scheduled messages, you can pursue long-term goals "
+        "spanning days, weeks or months with the agent goal tools. When the "
+        "user gives you a lasting mission (track something over time, coach "
+        "them toward an objective, research a topic in depth, follow up until "
+        "something is done), call create_agent_goal instead of "
+        "schedule_message.\n"
+        "How goals work:\n"
+        "- You wake up autonomously at each check-in, without the user being "
+        "present, work on the goal with your tools, then decide yourself when "
+        "to check in next.\n"
+        "- Your private notes on the goal are your only memory between "
+        "check-ins - keep them updated with update_agent_goal at every "
+        "check-in.\n"
+        "- A goal also carries a mission brief the user owns: success_criteria "
+        "(how you know it is done), constraints (rules and preferences to "
+        "respect) and reporting (when they want to hear from you). Fill in "
+        "whatever the user already told you when creating the goal, and record "
+        "anything they add later with update_agent_goal. The brief outranks "
+        "your own notes when the two disagree; the user can edit it at any time "
+        "from the conversation panel, so re-read it at each check-in.\n"
+        "- Check-ins are silent by default: nothing you write there reaches the "
+        "user unless you explicitly call send_user_message, and most check-ins "
+        "should end without one. When creating a goal, agree with the user on "
+        "when they want to hear from you and put those contact criteria in "
+        "reporting.\n"
+        "- When the goal is achieved or becomes irrelevant, close it with "
+        "complete_agent_goal.\n"
+        "Always call list_agent_goals before creating a goal - update the "
+        "existing one instead of creating duplicates. Goal check-in times are "
+        "in the user's local timezone, like schedule times."
+    )
 
     @staticmethod
     def _open_goal(goal_id, conversation_id, bot, user):
@@ -1302,6 +1473,23 @@ Outside a check-in, do not use this tool: you are already talking to the user, j
 
 class ScheduleToolProvider(ToolProvider):
     """Scheduled message tools for bots."""
+
+    instructions = (
+        "## Scheduling\n"
+        "You can schedule messages to contact the user later using the "
+        "schedule_message tool. Use this proactively when appropriate:\n"
+        "- When the user asks to be reminded of something\n"
+        "- When you want to follow up on a task or discussion\n"
+        "- When periodic check-ins would be helpful\n"
+        "You can also list and cancel existing schedules with list_schedules "
+        "and cancel_schedule.\n"
+        "Scheduled messages should feel like natural, spontaneous interactions. "
+        "When the user explicitly asked for a reminder, confirm briefly and "
+        "move on. Otherwise, just schedule it silently and keep chatting.\n"
+        "All schedule times are interpreted in the user's local timezone (shown "
+        "in the <context> reminder). Always use the user's local time - never "
+        "use UTC offsets in the 'at' parameter."
+    )
 
     @tool(
         badge_icon="\u23f0",

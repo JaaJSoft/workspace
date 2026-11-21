@@ -6,9 +6,14 @@ name: Run Tests
 # file. Anything shipped only in the Docker image (Dockerfile, .dockerignore)
 # is covered by the Docker workflow instead. Order matters: a later positive
 # pattern re-includes a path a previous negative one excluded.
+#
+# Branches are tested through their pull request, main through its pushes. A
+# push trigger on every branch would run the pipeline a second time for each
+# push to a PR, and the concurrency group cannot fold the two runs into one:
+# github.ref is the branch on a push and refs/pull/<n>/merge on a PR.
 on:
   push:
-    branches: [ '*' ]
+    branches: [ main ]
     paths:
       - '**'
       - '!**.md'

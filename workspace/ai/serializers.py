@@ -15,7 +15,6 @@ _md = mistune.create_markdown(
 class BotProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     display_name = serializers.SerializerMethodField()
-    avatar_url = serializers.SerializerMethodField()
     user_id = serializers.IntegerField(source="user.id", read_only=True)
 
     class Meta:
@@ -25,19 +24,11 @@ class BotProfileSerializer(serializers.ModelSerializer):
             "username",
             "display_name",
             "description",
-            "avatar_url",
             "created_at",
         ]
 
     def get_display_name(self, obj):
         return obj.user.get_full_name() or obj.user.username
-
-    def get_avatar_url(self, obj):
-        from workspace.users.services.avatar import has_avatar
-
-        if has_avatar(obj.user):
-            return f"/api/v1/users/{obj.user_id}/avatar"
-        return None
 
 
 class AITaskSerializer(serializers.ModelSerializer):

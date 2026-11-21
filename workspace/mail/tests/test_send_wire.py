@@ -1,13 +1,12 @@
-"""The streamed send against the real smtplib and imaplib clients.
+"""The streamed send against the real smtplib and IMAPClient clients.
 
-Streaming bypasses `SMTP.sendmail` and `IMAP4.append`, so it leans on the
-lower-level halves of both clients (`mail`/`rcpt`/`docmd`/`send`, and the
-`literal` imaplib sends after a continuation). Minimal servers on loopback
-check that a Python upgrade has not changed what those halves put on the
-wire.
+Streaming bypasses `SMTP.sendmail` and `IMAPClient.append`, so it leans on
+the lower-level halves of both clients (`mail`/`rcpt`/`docmd`/`send`, and
+the `literal` that imaplib, under IMAPClient, sends after a continuation).
+Minimal servers on loopback check that an upgrade of Python or of IMAPClient
+has not changed what those halves put on the wire.
 """
 
-import imaplib
 import io
 import re
 import smtplib
@@ -18,6 +17,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from imapclient import IMAPClient
 
 from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder
@@ -66,6 +66,11 @@ class _IMAPHandler(socketserver.StreamRequestHandler):
             elif command in (b"SELECT", b"EXAMINE"):
                 self.wfile.write(b"* 0 EXISTS\r\n" + tag + b" OK done\r\n")
             elif command == b"UID":
+                # The Message-ID of the SEARCH arrives as a literal.
+                size = int(re.search(rb"\{(\d+)\}\r\n$", line).group(1))
+                self.wfile.write(b"+ Ready\r\n")
+                server.searched = self.rfile.read(size)
+                self.rfile.readline()
                 self.wfile.write(b"* SEARCH\r\n" + tag + b" OK done\r\n")
             elif command == b"APPEND":
                 server.append_command = line
@@ -114,12 +119,14 @@ class SendOverTheWireTests(TestCase):
             client.ehlo()
             return client
 
+        def connect_imap(account):
+            client = IMAPClient(*imap_server.server_address, ssl=False, timeout=10)
+            client.folder_encode = False
+            return client
+
         with (
             patch("workspace.mail.services.smtp.connect_smtp", connect_smtp),
-            patch(
-                "workspace.mail.services.imap_messages.connect_imap",
-                lambda account: imaplib.IMAP4(*imap_server.server_address, timeout=10),
-            ),
+            patch("workspace.mail.services.imap_connection.connect_imap", connect_imap),
             patch.object(mail_tasks.sync_folder, "delay"),
         ):
             delivery = deliver_email(
@@ -146,4 +153,5 @@ class SendOverTheWireTests(TestCase):
         archived = message_from_bytes(imap_server.literal)
         self.assertEqual(archived["Bcc"], "carol@example.com")
         self.assertEqual(archived["Message-ID"], outgoing["Message-ID"])
+        self.assertEqual(imap_server.searched.decode(), outgoing["Message-ID"])
         self.assertTrue(imap_server.literal.endswith(smtp_server.data))

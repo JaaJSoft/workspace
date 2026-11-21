@@ -1,16 +1,25 @@
-"""Email message and address parsing helpers."""
+"""Reading a message off the wire into a MailMessage."""
 
 import email
-import email.header
-import email.utils
-import re
+import email.message
+import email.policy
+import logging
 from datetime import UTC, datetime
+from email.parser import BytesHeaderParser
+from email.utils import getaddresses, parsedate_to_datetime
 
 import nh3
 from django.core.files.base import ContentFile
 from django.db import transaction
 
+from workspace.common.logging import scrub
+
 from .addresses import sender_columns
+from .html_text import html_to_text
+from .imap_messages import ANSWERED, DRAFT, FLAGGED, SEEN
+from .inline_images import InlineImages
+
+logger = logging.getLogger(__name__)
 
 # HTML sanitisation whitelist
 NH3_ALLOWED_TAGS = {
@@ -56,81 +65,252 @@ NH3_ALLOWED_TAGS = {
     "ul",
 }
 
+# class and style stay: the body is rendered in a frame of its own, which the
+# app's stylesheets do not reach and out of which no style can draw.
 NH3_ALLOWED_ATTRIBUTES = {
     "*": {"class", "style", "dir", "lang"},
-    "a": {"href", "target", "title"},
+    "a": {"href", "title"},
     "img": {"src", "alt", "width", "height", "title"},
     "td": {"colspan", "rowspan", "align", "valign"},
     "th": {"colspan", "rowspan", "align", "valign"},
     "table": {"border", "cellpadding", "cellspacing", "width"},
 }
 
+# Every link leaves the message's frame for a new tab: a target naming the
+# frame itself would load the linked page in the middle of the app.
+NH3_SET_ATTRIBUTES = {"a": {"target": "_blank"}}
 
-def _decode_header(value):
-    """Decode an RFC 2047 encoded header value."""
-    if not value:
+# cid: points at a part of the message itself (RFC 2392). The stored body keeps
+# it; services/inline_images resolves it on read.
+NH3_URL_SCHEMES = nh3.ALLOWED_URL_SCHEMES | {"cid"}
+
+
+def sanitize_mail_html(html, attribute_filter=None):
+    """Clean an email's HTML body down to what the message frame renders.
+
+    nh3 also gives every link ``rel="noopener noreferrer"``. ``cid:``
+    references are kept as they are, unless ``attribute_filter`` (a method
+    of the message's ``InlineImages``) rewrites them.
+    """
+    if not html:
         return ""
-    decoded_parts = email.header.decode_header(value)
+    return nh3.clean(
+        html,
+        tags=NH3_ALLOWED_TAGS,
+        attributes=NH3_ALLOWED_ATTRIBUTES,
+        set_tag_attribute_values=NH3_SET_ATTRIBUTES,
+        url_schemes=NH3_URL_SCHEMES,
+        attribute_filter=attribute_filter,
+    )
+
+
+def _text(value):
+    """`value` as text a database stores.
+
+    The email package keeps the bytes it could not decode as lone
+    surrogates, which no UTF-8 column takes: they are read as UTF-8 where
+    they happen to be (a header written raw, without an encoded word) and
+    replaced where they are not. PostgreSQL refuses a NUL.
+    """
+    text = str(value)
+    try:
+        text = text.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+    except UnicodeEncodeError:
+        # A surrogate that stands for no byte.
+        text = text.encode("utf-8", "replace").decode("utf-8")
+    return text.replace("\x00", "")
+
+
+def _header(msg, name):
+    """Header `name` as text: decoded and unfolded, "" when absent."""
+    values = _headers(msg, name)
+    return _text(values[0]) if values else ""
+
+
+def _headers(msg, name):
+    """Every `name` header of `msg`, parsed.
+
+    The package's header parsers are strict readers of a lenient world, and
+    a header one of them chokes on must not cost the whole message: it is
+    then read as the plain text it came as.
+    """
+    try:
+        return msg.get_all(name, [])
+    except Exception:
+        logger.warning("Unreadable %s header, kept as plain text", scrub(name))
+        return [
+            " ".join(str(value).split())
+            for key, value in msg.raw_items()
+            if key.lower() == name.lower()
+        ]
+
+
+def _addresses(msg, name):
+    """The addresses of every `name` header, as ``[{name, email}, ...]``.
+
+    Group syntax is flattened to its members, and an entry without an
+    address (``<>``, a group with nobody in it) is left out.
+    """
     result = []
-    for part, charset in decoded_parts:
-        if isinstance(part, bytes):
-            result.append(part.decode(charset or "utf-8", errors="replace"))
-        else:
-            result.append(part)
-    return "".join(result)
-
-
-def _parse_address(addr_string):
-    """Parse an email address string into {name, email}."""
-    if not addr_string:
-        return {"name": "", "email": ""}
-    decoded = _decode_header(addr_string)
-    name, email_addr = email.utils.parseaddr(decoded)
-    if not email_addr:
-        # Fallback: parseaddr fails on ambiguous formats like "user@d <user@d>"
-        match = re.search(r"[\w.+-]+@[\w.-]+\.\w+", decoded)
-        if match:
-            email_addr = match.group(0)
-    return {"name": name, "email": email_addr}
-
-
-def _parse_address_list(header_values):
-    """Parse a list of header values (possibly with multiple addresses each) into [{name, email}, ...]."""
-    decoded_values = [_decode_header(v) for v in header_values if v]
-    result = []
-    for name, addr in email.utils.getaddresses(decoded_values):
-        if addr:
-            result.append({"name": name, "email": addr})
+    for header in _headers(msg, name):
+        if isinstance(header, str):
+            # The plain text `_headers` falls back on: read by the older,
+            # simpler parser, which takes what it finds.
+            result += [
+                {"name": _text(display_name), "email": _text(address)}
+                for display_name, address in getaddresses([header])
+                if address
+            ]
+            continue
+        for address in header.addresses:
+            # Without a domain the address is whatever stood there, taken as
+            # written: `addr_spec` would quote it.
+            spec = address.addr_spec if address.domain else address.username
+            if spec:
+                result.append(
+                    {"name": _text(address.display_name), "email": _text(spec)}
+                )
     return result
 
 
-def _collect_attachment(part, attachments_data, is_inline=False):
-    """Extract attachment data from an email part."""
-    filename = part.get_filename()
-    if filename:
-        filename = _decode_header(filename)
-    else:
-        ext = part.get_content_type().split("/")[-1]
-        filename = f"attachment.{ext}"
+def _date(msg):
+    """When the message says it was written, else now."""
+    headers = _headers(msg, "Date")
+    parsed = None
+    if headers and isinstance(headers[0], str):
+        try:
+            parsed = parsedate_to_datetime(headers[0])
+        except ValueError:
+            parsed = None
+    elif headers:
+        parsed = headers[0].datetime
+    if parsed is None:
+        return datetime.now(UTC)
+    if parsed.tzinfo is None:
+        # "-0000": a time in UTC whose author's zone is not known.
+        return parsed.replace(tzinfo=UTC)
+    try:
+        parsed.astimezone(UTC)
+    except OverflowError:
+        # Year 1 or 9999 with an offset that leaves the calendar.
+        return datetime.now(UTC)
+    return parsed
 
+
+def _body_part(msg, subtype):
+    """The part holding the message's text/`subtype` body, or None."""
+    if not msg.is_multipart():
+        # A message that is one part is its own body, of whatever text type.
+        is_html = msg.get_content_type() == "text/html"
+        return msg if is_html == (subtype == "html") else None
+    return msg.get_body(preferencelist=(subtype,))
+
+
+def _decoded(part):
+    """The text of `part`, whatever it says its charset is."""
+    if part is None:
+        return ""
     payload = part.get_payload(decode=True)
-    # Accept empty bytes (b'') as a valid zero-byte attachment; only skip when
-    # decoding produced no payload at all (None).
-    if payload is not None:
-        attachments_data.append(
-            {
-                "filename": filename,
-                "content_type": part.get_content_type(),
-                "data": payload,
-                "content_id": (part.get("Content-ID") or "").strip("<>"),
-                "is_inline": is_inline,
-            }
-        )
+    if not payload:
+        return ""
+    charset = part.get_content_charset() or "utf-8"
+    try:
+        text = payload.decode(charset, errors="replace")
+    except LookupError:
+        # A label Python has no codec for ("unknown-8bit").
+        text = payload.decode("utf-8", errors="replace")
+    return _text(text)
+
+
+def _leaves(part):
+    """The parts of `part` that hold content, in order.
+
+    An attached message is one of them, not a tree to walk into: its own
+    files belong to it, not to the message it is attached to.
+    """
+    if part.is_multipart() and part.get_content_maintype() != "message":
+        for subpart in part.iter_parts():
+            yield from _leaves(subpart)
+    else:
+        yield part
+
+
+def _filename(part):
+    return _text(part.get_filename() or "").strip()
+
+
+def _attachment(part, is_inline=False):
+    """The fields of the MailAttachment `part` makes, or None for a part
+    without content of its own."""
+    payload = part.get_payload(decode=True)
+    # Empty bytes are a valid zero-byte attachment; None is no payload at all.
+    if payload is None:
+        return None
+    content_type = part.get_content_type()
+    filename = _filename(part)
+    if not filename:
+        filename = f"attachment.{content_type.split('/')[-1]}"
+    return {
+        "filename": filename,
+        "content_type": content_type,
+        "data": payload,
+        "content_id": _header(part, "Content-ID").strip().strip("<>"),
+        "is_inline": is_inline,
+    }
+
+
+# The parts that hold a whole message (RFC 2046, and RFC 6532 for UTF-8).
+ATTACHED_MESSAGE_TYPES = ("message/rfc822", "message/global")
+
+# Writes an attached message back as it came, no header refolded or encoded.
+_EML_POLICY = email.policy.default.clone(
+    refold_source="none", utf8=True, linesep="\r\n"
+)
+
+
+def _attached_message(part):
+    """An attached message as the ``.eml`` file of its own bytes."""
+    data = part.get_payload(0).as_bytes(policy=_EML_POLICY)
+    encoding = _header(part, "Content-Transfer-Encoding").strip().lower()
+    if encoding in ("base64", "quoted-printable"):
+        # RFC 2046 forbids it and some servers send it anyway: the parser
+        # then read the encoded text as the message.
+        carrier = email.message.EmailMessage()
+        carrier["Content-Transfer-Encoding"] = encoding
+        carrier.set_payload(data.decode("ascii", "surrogateescape"))
+        data = carrier.get_payload(decode=True)
+    filename = _filename(part)
+    if not filename:
+        headers = BytesHeaderParser(policy=email.policy.default).parsebytes(data)
+        # A path separator would put the stored blob in a folder of its own.
+        subject = " ".join(_header(headers, "Subject").split())
+        filename = subject.replace("/", "-").replace("\\", "-")[:200] or "message"
+    if not filename.lower().endswith(".eml"):
+        filename += ".eml"
+    return {
+        "filename": filename,
+        "content_type": part.get_content_type(),
+        "data": data,
+    }
+
+
+def _invitation(part):
+    """A text/calendar part as the ``invite.ics`` the calendar reads."""
+    ics = _decoded(part)
+    if not ics:
+        return None
+    return {
+        "filename": "invite.ics",
+        "content_type": "text/calendar",
+        "data": ics.encode("utf-8"),
+    }
 
 
 @transaction.atomic
-def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
+def _parse_message(raw_email, account, folder, uid, flags, known_uids=None):
     """Parse a raw email and save it as a MailMessage.
+
+    ``flags`` are the IMAP flags the message carries, as text.
 
     ``known_uids`` is the set of IMAP UIDs already present in this folder,
     preloaded by the sync loop for its whole FETCH batch; membership then
@@ -146,98 +326,86 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
     elif MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
         return None
 
-    msg = email.message_from_bytes(raw_email)
+    msg = email.message_from_bytes(raw_email, policy=email.policy.default)
 
     # Headers
-    subject = _decode_header(msg.get("Subject", ""))
-    from_addr = _parse_address(msg.get("From", ""))
-
+    senders = _addresses(msg, "From")
+    from_addr = senders[0] if senders else {"name": "", "email": ""}
     # Fallback for sent folder: server auto-copy may strip the From header
-    if not from_addr.get("email") and folder.folder_type == "sent":
+    if not from_addr["email"] and folder.folder_type == "sent":
         from_addr = {"name": account.display_name, "email": account.email}
-    to_addrs = _parse_address_list(msg.get_all("To") or [])
-    cc_addrs = _parse_address_list(msg.get_all("Cc") or [])
-    bcc_addrs = _parse_address_list(msg.get_all("Bcc") or [])
-    reply_to = msg.get("Reply-To", "")
-    message_id = msg.get("Message-ID", "")
-    in_reply_to = msg.get("In-Reply-To", "")
     # Folded across lines by most MUAs; collapse to single-space separated ids.
-    references = " ".join(msg.get("References", "").split())
-
-    # Date
-    date_str = msg.get("Date")
-    date = None
-    if date_str:
-        try:
-            parsed = email.utils.parsedate_to_datetime(date_str)
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=UTC)
-            date = parsed
-        except Exception:
-            # Malformed Date header: leave date as None and fall back
-            # to the current time below.
-            pass
-    if date is None:
-        date = datetime.now(UTC)
+    references = " ".join(_header(msg, "References").split())
 
     # Body
-    body_text = ""
-    body_html = ""
+    text_part = _body_part(msg, "plain")
+    html_part = _body_part(msg, "html")
+    # More than one part when a mail program split the body around a file
+    # placed in it.
+    text_parts = [_decoded(text_part)]
+    html_parts = [_decoded(html_part)]
+
     attachments_data = []
+    invitations = []
+    for part in _leaves(msg):
+        if part is text_part or part is html_part:
+            continue
+        content_type = part.get_content_type()
+        if content_type in ATTACHED_MESSAGE_TYPES:
+            attachment = _attached_message(part)
+        elif part.get_content_disposition() == "attachment":
+            attachment = _attachment(part)
+        elif content_type == "text/calendar":
+            attachment = _invitation(part)
+            if attachment is not None:
+                invitations.append(attachment)
+        elif _header(part, "Content-ID"):
+            attachment = _attachment(part, is_inline=True)
+        elif _filename(part):
+            attachment = _attachment(part)
+        elif content_type == "text/plain":
+            text_parts.append(_decoded(part))
+            continue
+        elif content_type == "text/html":
+            html_parts.append(_decoded(part))
+            continue
+        else:
+            continue
+        if attachment is not None:
+            attachments_data.append(attachment)
 
-    has_calendar_event = False
-
-    if msg.is_multipart():
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            content_disposition = str(part.get("Content-Disposition", ""))
-
-            if "attachment" in content_disposition:
-                _collect_attachment(part, attachments_data)
-            elif content_type == "text/calendar":
-                payload = part.get_payload(decode=True)
-                if payload:
-                    charset = part.get_content_charset() or "utf-8"
-                    ics_content = payload.decode(charset, errors="replace")
-                    attachments_data.append(
-                        {
-                            "filename": "invite.ics",
-                            "content_type": "text/calendar",
-                            "data": ics_content.encode("utf-8"),
-                        }
-                    )
-                    has_calendar_event = True
-            elif content_type == "text/plain" and not body_text:
-                payload = part.get_payload(decode=True)
-                if payload:
-                    charset = part.get_content_charset() or "utf-8"
-                    body_text = payload.decode(charset, errors="replace")
-            elif content_type == "text/html" and not body_html:
-                payload = part.get_payload(decode=True)
-                if payload:
-                    charset = part.get_content_charset() or "utf-8"
-                    body_html = payload.decode(charset, errors="replace")
-            elif part.get("Content-ID"):
-                # Inline attachment
-                _collect_attachment(part, attachments_data, is_inline=True)
-    else:
-        content_type = msg.get_content_type()
-        payload = msg.get_payload(decode=True)
-        if payload:
-            charset = msg.get_content_charset() or "utf-8"
-            decoded = payload.decode(charset, errors="replace")
-            if content_type == "text/html":
-                body_html = decoded
-            else:
-                body_text = decoded
-
-    # Sanitise HTML
-    if body_html:
-        body_html = nh3.clean(
-            body_html,
-            tags=NH3_ALLOWED_TAGS,
-            attributes=NH3_ALLOWED_ATTRIBUTES,
+    # Saved once the message they belong to is.
+    attachments = [
+        MailAttachment(
+            filename=data["filename"][:255],
+            content_type=data["content_type"][:255],
+            size=len(data["data"]),
+            content=ContentFile(data["data"], name=data["filename"]),
+            content_id=data.get("content_id", "")[:255],
+            is_inline=data.get("is_inline", False),
         )
+        for data in attachments_data
+    ]
+    listed = [
+        attachment
+        for attachment, data in zip(attachments, attachments_data, strict=True)
+        if not any(data is invitation for invitation in invitations)
+    ]
+
+    body_text = "\n".join(text for text in text_parts if text)
+    inline_images = InlineImages(attachments)
+    body_html = sanitize_mail_html(
+        "\n".join(html for html in html_parts if html),
+        attribute_filter=inline_images.note,
+    )
+    if not body_text:
+        body_text = html_to_text(body_html)
+    # What the user calls an attachment: a file the message lists under its
+    # body. Not a picture the body shows, nor the invitation the calendar
+    # already reads.
+    has_attachments = any(
+        attachment.uuid not in inline_images.embedded for attachment in listed
+    )
 
     # Snippet from text body
     snippet = ""
@@ -245,47 +413,38 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
         snippet = body_text[:300].replace("\n", " ").strip()
 
     # Flags
-    is_read = "\\Seen" in flags_str
+    is_read = SEEN in flags
     # Messages in Sent/Drafts folders are always "read" (user wrote them)
     if folder.folder_type in ("sent", "drafts"):
         is_read = True
-    is_starred = "\\Flagged" in flags_str
-    is_draft = "\\Draft" in flags_str
 
     mail_msg = MailMessage.objects.create(
         account=account,
         folder=folder,
-        message_id=message_id[:512],
+        message_id=_header(msg, "Message-ID").strip()[:512],
         imap_uid=uid,
-        in_reply_to=in_reply_to[:512],
+        in_reply_to=_header(msg, "In-Reply-To").strip()[:512],
         references=references,
-        subject=subject[:1000],
+        subject=_header(msg, "Subject")[:1000],
         **sender_columns(from_addr),
-        to_addresses=to_addrs,
-        cc_addresses=cc_addrs,
-        bcc_addresses=bcc_addrs,
-        reply_to=reply_to[:255],
-        date=date,
+        to_addresses=_addresses(msg, "To"),
+        cc_addresses=_addresses(msg, "Cc"),
+        bcc_addresses=_addresses(msg, "Bcc"),
+        reply_to=_header(msg, "Reply-To")[:255],
+        date=_date(msg),
         snippet=snippet,
         body_text=body_text,
         body_html=body_html,
         is_read=is_read,
-        is_starred=is_starred,
-        is_draft=is_draft,
-        has_attachments=bool(attachments_data),
-        has_calendar_event=has_calendar_event,
+        is_starred=FLAGGED in flags,
+        is_answered=ANSWERED in flags,
+        is_draft=DRAFT in flags,
+        has_attachments=has_attachments,
+        has_calendar_event=bool(invitations),
     )
 
-    # Save attachments
-    for att_data in attachments_data:
-        MailAttachment.objects.create(
-            message=mail_msg,
-            filename=att_data["filename"][:255],
-            content_type=att_data["content_type"][:255],
-            size=len(att_data["data"]),
-            content=ContentFile(att_data["data"], name=att_data["filename"]),
-            content_id=att_data.get("content_id", "")[:255],
-            is_inline=att_data.get("is_inline", False),
-        )
+    for attachment in attachments:
+        attachment.message = mail_msg
+        attachment.save()
 
     return mail_msg

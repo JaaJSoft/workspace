@@ -18,8 +18,8 @@ folder it sits in. The tabs above the timeline switch between the user's own
 photos, those shared with them, a group's folder, or all of them.
 
 - **Adding photos**: *Import* in the header, or a drop anywhere on the
-  timeline, uploads to the import folder (`Pictures` by default, changed in
-  the Preferences). The same panel gives the folder's WebDAV address, for a
+  timeline, uploads to the import folder (`Pictures` by default, named in
+  the user's language, changed in the Preferences). The same panel gives the folder's WebDAV address, for a
   phone backup app such as PhotoSync or FolderSync.
 - **Capture dates** come from EXIF for a photo and from the container for a
   video. Without them, a date in the file name stands in
@@ -94,7 +94,9 @@ corrected.
 - **Similar photos**, in a photo's menu, lists near-duplicates first (a burst,
   a re-export), then the photos that merely look alike.
 - **Automatic tags** label photos with what they show (dog, beach, snow...)
-  as ordinary file tags the user can remove. Users can turn them off in the
+  as ordinary file tags the user can remove, rename or recolour. Each is
+  created in its owner's language and stays that owner's tag for that subject
+  through a rename or a language change. Users can turn them off in the
   Preferences.
 
 Videos take part through their key frames: a result opens the video at the

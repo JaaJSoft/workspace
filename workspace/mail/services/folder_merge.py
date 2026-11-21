@@ -96,7 +96,7 @@ def unmerge_folder(folder):
     folder.alias_of = None
     # Back to what its own name says. Keeping the inherited type would put a
     # second trash-typed folder next to the real Trash.
-    folder.folder_type = _detect_folder_type(folder.name, "")
+    folder.folder_type = _detect_folder_type(folder.name, frozenset())
     folder.save(update_fields=["alias_of", "folder_type", "is_hidden", "updated_at"])
     return folder
 

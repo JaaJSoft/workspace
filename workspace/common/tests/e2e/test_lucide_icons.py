@@ -244,8 +244,14 @@ class ObserverScopeTests(PlaywrightTestCase):
         )
 
     def change(self, script, drawn):
+        """Run ``script``, wait for ``drawn`` to hold, count the svgs replaced.
+
+        ``drawn`` is a JS predicate only the observer's redraw can satisfy:
+        the redraw runs on the next animation frame, so a condition the
+        change itself already meets lets the count run before it.
+        """
         self.page.evaluate(script)
-        self.page.wait_for_selector(drawn, state="attached")
+        self.page.wait_for_function(drawn)
         return self.page.evaluate(
             "() => window.__drawn.filter((svg) => !document.contains(svg)).length"
         )
@@ -257,7 +263,7 @@ class ObserverScopeTests(PlaywrightTestCase):
               row.innerHTML = '<i data-lucide="bell"></i> C';
               document.getElementById('list').appendChild(row);
             }""",
-            '#list svg[data-lucide="bell"]',
+            """() => document.querySelector('#list svg[data-lucide="bell"]')""",
         )
         self.assertEqual(replaced, 0)
 
@@ -268,14 +274,19 @@ class ObserverScopeTests(PlaywrightTestCase):
               icon.setAttribute('data-lucide', 'inbox');
               document.body.appendChild(icon);
             }""",
-            'body > svg[data-lucide="inbox"]',
+            """() => document.querySelector('body > svg[data-lucide="inbox"]')""",
         )
         self.assertEqual(replaced, 0)
 
     def test_an_icon_renamed_in_place_leaves_its_neighbours_alone(self):
         replaced = self.change(
-            "() => document.getElementById('toggle').setAttribute('data-lucide', 'chevron-right')",
-            'svg[data-lucide="chevron-right"]',
+            """() => {
+              window.__renamed = document.getElementById('toggle');
+              window.__renamed.setAttribute('data-lucide', 'chevron-right');
+            }""",
+            # The renamed svg matches svg[data-lucide="chevron-right"] before
+            # any redraw: only its leaving the document proves one ran.
+            "() => !document.contains(window.__renamed)",
         )
         # The renamed svg itself is the one node that had to go.
         self.assertEqual(replaced, 1)

@@ -1,15 +1,15 @@
 """SMTP service for sending emails."""
 
 import base64
+import email.policy
 import io
 import logging
+import re
 import smtplib
 import tempfile
 import uuid
 from email.generator import BytesGenerator
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
 from workspace.common.logging import scrub
@@ -80,6 +80,10 @@ _SEND_CHUNK = 64 * 1024
 
 _CRLF = b"\r\n"
 
+# CRLF line endings, and bodies encoded down to 7 bits: not every server on
+# the way announces 8BITMIME.
+_POLICY = email.policy.SMTP.clone(cte_type="7bit")
+
 
 def _build_mime(
     account,
@@ -97,16 +101,17 @@ def _build_mime(
 ):
     """Assemble the MIME message. See build_draft_message for the parameters.
 
-    Attachments are not read here: each part carries a unique placeholder
-    line instead of its payload, and the returned dict maps that line to the
-    attachment for `_write_mime` to stream in its place.
+    Attachments are not read here: each part carries a placeholder instead
+    of its payload, and the returned dict maps the line that placeholder
+    makes in the serialized message to the attachment, for `_write_mime` to
+    stream in its place.
     """
     to = to or []
     cc = cc or []
     bcc = bcc or []
     attachments = attachments or []
 
-    msg = MIMEMultipart("mixed")
+    msg = EmailMessage(policy=_POLICY)
     msg["From"] = formataddr((account.display_name, account.email))
     msg["To"] = ", ".join(to)
     msg["Subject"] = subject
@@ -123,26 +128,62 @@ def _build_mime(
     if references:
         msg["References"] = references
 
-    # Body: multipart/alternative with text + html
-    body_part = MIMEMultipart("alternative")
     if body_text:
-        body_part.attach(MIMEText(body_text, "plain", "utf-8"))
-    if body_html:
-        body_part.attach(MIMEText(body_html, "html", "utf-8"))
-    elif body_text:
-        body_part.attach(MIMEText(f"<pre>{body_text}</pre>", "html", "utf-8"))
-    msg.attach(body_part)
+        msg.set_content(body_text)
+        msg.add_alternative(body_html or f"<pre>{body_text}</pre>", subtype="html")
+    else:
+        msg.set_content(body_html, subtype="html")
 
     placeholders = {}
     for attachment in attachments:
-        part = MIMEApplication(b"", Name=attachment.name)
-        part["Content-Disposition"] = f'attachment; filename="{attachment.name}"'
-        placeholder = f"attachment-{uuid.uuid4().hex}"
-        part.set_payload(placeholder)
-        placeholders[placeholder.encode("ascii")] = attachment
-        msg.attach(part)
+        # Short enough for its base64 to be a single line of the message.
+        placeholder = uuid.uuid4().hex.encode("ascii")
+        maintype, subtype = _content_type(attachment)
+        # The name goes in both headers, as mail programs write it: some
+        # read only the Content-Type one. Outside ASCII both are encoded
+        # per RFC 2231.
+        msg.add_attachment(
+            placeholder,
+            maintype=maintype,
+            subtype=subtype,
+            filename=attachment.name,
+            params={"name": attachment.name},
+        )
+        placeholders[base64.b64encode(placeholder)] = attachment
 
     return msg, placeholders
+
+
+_MIME_TOKEN = re.compile(r"[a-z0-9!#$&^_.+-]+")
+
+
+def _content_type(attachment):
+    """The ``(maintype, subtype)`` an attachment goes out with.
+
+    What its source says of it when it says something: the `content_type`
+    of an upload, or the one the caller set from a Files node's type. A
+    browser that does not know sends nothing or octet-stream, and the name
+    then tells more.
+    """
+    declared = getattr(attachment, "content_type", None)
+    if not isinstance(declared, str):
+        declared = ""
+    declared = declared.partition(";")[0].strip().lower()
+    maintype, _slash, subtype = declared.partition("/")
+    if (
+        not _MIME_TOKEN.fullmatch(maintype)
+        or not _MIME_TOKEN.fullmatch(subtype)
+        or (maintype, subtype) == ("application", "octet-stream")
+    ):
+        from workspace.files.services.detection import detect_from_name
+
+        guessed = detect_from_name(attachment.name).mime_type
+        maintype, _slash, subtype = guessed.partition("/")
+    # A multipart or message part has a structure of its own and cannot be
+    # base64: a file of that type travels as plain bytes.
+    if maintype in ("multipart", "message") or not subtype:
+        return "application", "octet-stream"
+    return maintype, subtype
 
 
 def _write_mime(fp, msg, placeholders):
@@ -153,9 +194,7 @@ def _write_mime(fp, msg, placeholders):
     variants is written once and the variants carved out of the output.
     """
     skeleton = io.BytesIO()
-    BytesGenerator(
-        skeleton, mangle_from_=False, policy=msg.policy.clone(linesep="\r\n")
-    ).flatten(msg)
+    BytesGenerator(skeleton, mangle_from_=False).flatten(msg)
     for line in skeleton.getvalue().splitlines(keepends=True):
         attachment = placeholders.get(line.rstrip(_CRLF))
         if attachment is None:
@@ -314,10 +353,8 @@ def send_email(
     file = tempfile.TemporaryFile()
     try:
         if bcc:
-            file.write(
-                msg.policy.clone(linesep="\r\n").fold_binary("Bcc", ", ".join(bcc))
-            )
-        message = SentMessage(file, msg["Message-ID"], outgoing_start=file.tell())
+            file.write(msg.policy.fold_binary("Bcc", ", ".join(bcc)))
+        message = SentMessage(file, str(msg["Message-ID"]), outgoing_start=file.tell())
         _write_mime(file, msg, placeholders)
 
         server = connect_smtp(account)

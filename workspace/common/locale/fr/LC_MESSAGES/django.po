@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 11:15+0000\n"
+"POT-Creation-Date: 2026-11-21 09:48+0000\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -270,10 +270,33 @@ msgstr "Actualiser"
 msgid "Tile size"
 msgstr "Taille des vignettes"
 
-#: templates/ui/partials/user_chip.html
+#: templates/ui/partials/group_chip.html templates/ui/partials/user_chip.html
 #, python-format
 msgid "Remove %%(name)s"
 msgstr "Retirer %%(name)s"
+
+#: url_guard.py
+msgid "The URL has no host."
+msgstr "L’URL n’a pas d’hôte."
+
+#: url_guard.py
+msgid "Only http:// and https:// URLs are supported."
+msgstr "Seules les URL http:// et https:// sont prises en charge."
+
+#: url_guard.py
+#, python-format
+msgid "'%(host)s' could not be resolved."
+msgstr "« %(host)s » n’a pas pu être résolu."
+
+#: url_guard.py
+#, python-format
+msgid "'%(host)s' points to an address this server will not contact."
+msgstr "« %(host)s » pointe vers une adresse que ce serveur ne contactera pas."
+
+#: url_guard.py
+#, python-format
+msgid "'%(host)s' is on a private network."
+msgstr "« %(host)s » est sur un réseau privé."
 
 #: vocabulary.py
 #, python-format

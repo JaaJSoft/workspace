@@ -1,10 +1,13 @@
 import logging
+import re
 
 from django.db import transaction
 from django.db.models import Count, Prefetch
+from django.http import HttpResponse
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
-from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -12,6 +15,7 @@ from rest_framework.views import APIView
 from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.stored_content import protect_stored_content
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import mark_sources_read
 
@@ -30,6 +34,8 @@ from ..serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+EML_CONTENT_TYPE = "message/rfc822"
 
 
 @extend_schema(tags=["Mail - Messages"])
@@ -277,10 +283,15 @@ class MailBatchActionView(APIView):
             deleted_at__isnull=True,
         ).select_related("account", "folder")
 
+        from ..services.imap_connection import shared_connections
+        from ..services.imap_sync import forget_remote_state
         from ..services.triage import (
             TRASHED,
+            archive_message,
             flag_operations,
+            mark_not_spam,
             move_to_folder,
+            report_spam,
             trash_message,
         )
 
@@ -312,68 +323,101 @@ class MailBatchActionView(APIView):
             "unstar": flags["unstarred"],
         }
 
+        # Each resolves its own folder per message: a selection of the
+        # unified inbox spans accounts, each with its Archive and its Spam.
+        filing = {
+            "archive": archive_message,
+            "spam": report_spam,
+            "not_spam": mark_not_spam,
+        }
+
         processed = 0
         synced = True
+        refused_folders = set()
         affected_folders = set()
         to_bulk_update = []
         bulk_update_fields = set()
-        for msg in messages:
-            affected_folders.add(msg.folder_id)
-            try:
-                if action == "delete":
-                    try:
-                        # refresh=False: the counters are recomputed once for
-                        # the whole batch below.
-                        outcome = trash_message(msg, refresh=False)
-                    except Exception as e:
-                        logger.warning(
-                            "IMAP move to trash failed for message %s: %s",
-                            msg.uuid,
-                            scrub(e),
-                        )
-                        continue
-                    if outcome == TRASHED:
+        # One connection per account for the whole batch, opened by the first
+        # message that needs it.
+        with shared_connections():
+            for msg in messages:
+                affected_folders.add(msg.folder_id)
+                try:
+                    if action == "delete":
+                        try:
+                            # refresh=False: the counters are recomputed once for
+                            # the whole batch below.
+                            outcome = trash_message(msg, refresh=False)
+                        except Exception as e:
+                            logger.warning(
+                                "IMAP move to trash failed for message %s: %s",
+                                msg.uuid,
+                                scrub(e),
+                            )
+                            continue
+                        if outcome == TRASHED:
+                            affected_folders.add(msg.folder_id)
+                    elif action == "move" and target_folder:
+                        if target_folder.account_id != msg.account_id:
+                            continue
+                        # Already in this logical folder: an IMAP COPY + EXPUNGE
+                        # here would be a real server round trip for a move the
+                        # user sees as "it is already there".
+                        if canonical_folder_id(msg.folder) == target_folder.pk:
+                            continue
+                        try:
+                            # refresh=False: the counters are recomputed once for
+                            # the whole batch below.
+                            move_to_folder(msg, target_folder, refresh=False)
+                        except Exception as e:
+                            logger.warning(
+                                "IMAP move failed for message %s: %s",
+                                msg.uuid,
+                                scrub(e),
+                            )
+                            continue
+                        # Use .pk to match msg.folder_id added above. refresh_folders_counts_bulk
+                        # filters via folder_id__in, so a UUID would never match.
+                        affected_folders.add(target_folder.pk)
+                    elif action in filing:
+                        try:
+                            filed = filing[action](msg, refresh=False)
+                        except Exception as e:
+                            logger.warning(
+                                "IMAP %s failed for message %s: %s",
+                                scrub(action),
+                                msg.uuid,
+                                scrub(e),
+                            )
+                            continue
+                        if not filed:
+                            continue
+                        # The folder the row now points at, or its source
+                        # again when it was retired instead.
                         affected_folders.add(msg.folder_id)
-                elif action == "move" and target_folder:
-                    if target_folder.account_id != msg.account_id:
-                        continue
-                    # Already in this logical folder: an IMAP COPY + EXPUNGE
-                    # here would be a real server round trip for a move the
-                    # user sees as "it is already there".
-                    if canonical_folder_id(msg.folder) == target_folder.pk:
-                        continue
-                    try:
-                        # refresh=False: the counters are recomputed once for
-                        # the whole batch below.
-                        move_to_folder(msg, target_folder, refresh=False)
-                    except Exception as e:
-                        logger.warning(
-                            "IMAP move failed for message %s: %s", msg.uuid, scrub(e)
-                        )
-                        continue
-                    # Use .pk to match msg.folder_id added above. refresh_folders_counts_bulk
-                    # filters via folder_id__in, so a UUID would never match.
-                    affected_folders.add(target_folder.pk)
-                elif action in action_map:
-                    imap_fn, field, value = action_map[action]
-                    setattr(msg, field, value)
-                    bulk_update_fields.add(field)
-                    to_bulk_update.append(msg)
-                    try:
-                        imap_fn(msg.account, msg)
-                    except Exception as e:
-                        synced = False
-                        logger.warning(
-                            "IMAP %s failed for message %s: %s",
-                            scrub(action),
-                            msg.uuid,
-                            scrub(e),
-                        )
-                processed += 1
-            except Exception:
-                logger.warning(
-                    "Batch action '%s' failed for message %s", scrub(action), msg.uuid
-                )
+                    elif action in action_map:
+                        imap_fn, field, value = action_map[action]
+                        setattr(msg, field, value)
+                        bulk_update_fields.add(field)
+                        to_bulk_update.append(msg)
+                        try:
+                            imap_fn(msg.account, msg)
+                        except Exception as e:
+                            synced = False
+                            refused_folders.add(msg.folder_id)
+                            logger.warning(
+                                "IMAP %s failed for message %s: %s",
+                                scrub(action),
+                                msg.uuid,
+                                scrub(e),
+                            )
+                    processed += 1
+                except Exception:
+                    logger.warning(
+                        "Batch action '%s' failed for message %s",
+                        scrub(action),
+                        msg.uuid,
+                    )
 
         from ..services.counts import refresh_folders_counts_bulk
         from ..services.label_counts import refresh_labels_for_messages
@@ -383,6 +427,7 @@ class MailBatchActionView(APIView):
                 MailMessage.objects.bulk_update(
                     to_bulk_update, list(bulk_update_fields)
                 )
+                forget_remote_state(refused_folders)
 
             # Refresh counts for all affected folders in a single batch:
             # 1 aggregate + 1 bulk_update instead of 2N queries.
@@ -397,3 +442,94 @@ class MailBatchActionView(APIView):
         if action in action_map:
             return Response({"processed": processed, "synced": synced})
         return Response({"processed": processed})
+
+
+def _owned_message(request, uuid):
+    return (
+        MailMessage.objects.select_related("account", "folder")
+        .filter(
+            uuid=uuid,
+            account_id__in=user_account_ids(request.user),
+            deleted_at__isnull=True,
+        )
+        .first()
+    )
+
+
+def _fetch_original(message, headers_only):
+    """The server's copy of `message`, or the error Response to send instead."""
+    from ..services.imap_messages import fetch_original
+
+    try:
+        return fetch_original(message.account, message, headers_only=headers_only)
+    except LookupError:
+        return Response(
+            {"detail": _("The server no longer has this message")},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        logger.warning(
+            "IMAP fetch of the original failed for message %s: %s",
+            message.uuid,
+            scrub(e),
+        )
+        return Response(
+            {"detail": _("Failed to fetch the message from the server")},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+
+# What a file name may not hold on Windows, macOS or Linux.
+_FILENAME_UNSAFE = re.compile(r'[\x00-\x1f\x7f<>:"/\\|?*]+')
+
+
+def eml_filename(subject):
+    stem = " ".join(_FILENAME_UNSAFE.sub(" ", subject or "").split())
+    stem = stem.strip(".")[:100].strip()
+    return f"{stem or 'message'}.eml"
+
+
+@extend_schema(tags=["Mail - Messages"])
+class MailMessageOriginalView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Download the original message as .eml",
+        responses={(200, "message/rfc822"): bytes},
+    )
+    def get(self, request, uuid):
+        msg = _owned_message(request, uuid)
+        if msg is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        raw = _fetch_original(msg, headers_only=False)
+        if isinstance(raw, Response):
+            return raw
+        response = HttpResponse(raw, content_type=EML_CONTENT_TYPE)
+        response["Content-Disposition"] = content_disposition_header(
+            True, eml_filename(msg.subject)
+        )
+        response["Cache-Control"] = "private, no-store"
+        return protect_stored_content(response, EML_CONTENT_TYPE)
+
+
+@extend_schema(tags=["Mail - Messages"])
+class MailMessageHeadersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get the message's headers as the server stores them",
+        responses=inline_serializer(
+            "MailMessageHeaders", fields={"headers": serializers.CharField()}
+        ),
+    )
+    def get(self, request, uuid):
+        msg = _owned_message(request, uuid)
+        if msg is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        raw = _fetch_original(msg, headers_only=True)
+        if isinstance(raw, Response):
+            return raw
+        return Response(
+            {"headers": raw.decode("utf-8", errors="replace").rstrip("\r\n")},
+            headers={"Cache-Control": "private, no-store"},
+        )

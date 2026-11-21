@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.utils.translation import pgettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
-from workspace.files.models import File
+from workspace.files.models import File, Tag
 
 
 class MediaItem(models.Model):
@@ -607,6 +607,33 @@ class PhotoEmbedding(models.Model):
 
     def __str__(self):
         return f"PhotoEmbedding: {self.file_id}"
+
+
+class ClassicTagMapping(models.Model):
+    """The tag of an owner that automatic tagging places for one classic tag
+    (services/tag_vocabulary.py), whatever it is called now: created in the
+    owner's language, it stays the one tag of that classic tag through a
+    rename or a language change. Deleting the tag drops the mapping, and the
+    next photo showing it creates a new one."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    # ClassicTag.label: the Open Images label, never translated.
+    label = models.CharField(max_length=100)
+    # Not unique: an owner may rename two classic tags' tags to one name.
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="+")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "label"], name="classic_tag_mapping_per_owner"
+            ),
+        ]
+
+    def __str__(self):
+        return f"ClassicTagMapping: {self.label}"
 
 
 class AppearanceAnalysis(models.Model):

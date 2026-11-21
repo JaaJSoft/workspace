@@ -81,7 +81,7 @@ class EndToEndICSTest(APITestCase):
         from workspace.mail.services.imap_parse import _parse_message
 
         raw = _build_raw_email()
-        mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags_str="")
+        mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags=())
 
         # Verify email was flagged
         self.assertTrue(mail_msg.has_calendar_event)

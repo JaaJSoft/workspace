@@ -1,8 +1,9 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
+from django.utils.translation import gettext
 
 from workspace.common.datetimes import local_date_range
-from workspace.core.activity_registry import ActivityProvider
+from workspace.core.activity_registry import ActivityProvider, UsageHeadline
 
 
 class FilesActivityProvider(ActivityProvider):
@@ -158,3 +159,6 @@ class FilesActivityProvider(ActivityProvider):
         qs = qs.filter(self._file_visibility_filter(user_id, viewer_id))
 
         return {"total_files": qs.count()}
+
+    def get_headline(self, stats):
+        return UsageHeadline(stats["total_files"], gettext("Files"))

@@ -1,6 +1,6 @@
-"""Shared Event-creation primitives used by both ICS processing and
-LLM extraction. Centralises the routing-to-invitation-calendar logic
-and the Event-row creation so the two source paths stay in sync.
+"""Events that come from a mail: the invitation calendar of the account
+that received it, shared by ICS invitations and LLM extraction, and the
+Event-row creation of the extraction path.
 """
 
 from django.db import transaction
@@ -44,9 +44,8 @@ def create_event_from_payload(
     tz-aware), end (datetime or None), all_day (bool), location (str),
     description (str).
 
-    source_message: required. The mail that produced this event (ICS
-    attachment OR LLM extraction). Its account determines which
-    invitation calendar hosts the event.
+    source_message: required. The mail that produced this event. Its
+    account determines which invitation calendar hosts the event.
 
     source: optional Event.Source value. Empty string leaves the model
     default (MANUAL). Callers set this to ICS or LLM as appropriate.

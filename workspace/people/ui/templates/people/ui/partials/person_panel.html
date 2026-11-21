@@ -396,12 +396,7 @@
         <form @submit.prevent="confirmMove()" class="space-y-3">
           <label class="fieldset w-full">
             <div class="fieldset-legend"><span>{% translate "Address book" %}</span></div>
-            <select name="scope" class="select select-sm w-full" x-model="movePick">
-              <option value="mine">{% translate "My contacts" %}</option>
-              <template x-for="group in groups" :key="group.id">
-                <option :value="'group:' + group.id" x-text="group.name"></option>
-              </template>
-            </select>
+            {% include "people/ui/partials/address_book_select.html" with model_expr="movePick" %}
           </label>
           <div class="modal-action">
             <button

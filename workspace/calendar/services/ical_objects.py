@@ -5,6 +5,11 @@ event, or a series master with its exception rows, as one VCALENDAR whose
 VEVENTs share a UID (RFC 4791 4.1). The ICS feed renders every object of a
 calendar into a single VCALENDAR the same way.
 
+Every reader of iCalendar text goes through here: ``parse_object`` for a
+CalDAV PUT, which must hold exactly one object, and ``read_calendar`` for a
+subscribed feed or an emailed invitation, which hold any number. Both produce
+the same objects; what to write from them is each caller's policy.
+
 Fidelity is the point. A client compares what it PUT with what it GETs, and
 anything the server drops is gone from the phone on the next sync. So two
 kinds of lines are stored as the client sent them and re-emitted verbatim:
@@ -19,16 +24,22 @@ icalendar still does the semantic reading (dates, zones, text unescaping).
 """
 
 import functools
+import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import icalendar
+import x_wr_timezone
+from icalendar.timezone.tzid import tzid_from_tzinfo
+
+from workspace.common.logging import scrub
 
 from .ics_builder import add_event_times
-from .ics_common import is_all_day, parse_dt_prop
-from .timezones import event_timezone, normalize_all_day
+from .timezones import event_timezone, normalize_all_day, zone_from_tzid
+
+logger = logging.getLogger(__name__)
 
 PRODID = "-//Workspace//Calendar//EN"
 
@@ -50,6 +61,8 @@ _CONSUMED = frozenset(
     }
 )
 _RECURRENCE = frozenset({"RRULE", "RDATE", "EXDATE", "EXRULE"})
+# Components that only ever sit at the top of a body, never inside another.
+_TOP_LEVEL = frozenset({"VCALENDAR", "VEVENT", "VTODO", "VJOURNAL", "VTIMEZONE"})
 
 _NAME_RE = re.compile(r"[A-Za-z0-9-]+")
 _TZID_RE = re.compile(r';TZID=(?:"([^"]*)"|([^;:]*))', re.IGNORECASE)
@@ -59,6 +72,8 @@ _UNFOLD_RE = re.compile(r"\r?\n[ \t]")
 _MAX_TEXT = 255
 # The width of Event.ical_uid.
 _MAX_UID = 512
+# The width of Event.external_organizer.
+_MAX_EMAIL = 254
 
 # RFC 5545 3.1: content lines SHOULD NOT exceed 75 octets.
 _FOLD_OCTETS = 75
@@ -259,12 +274,14 @@ def _tzids(line):
 
 @dataclass
 class ParsedEvent:
-    """One VEVENT of a PUT body, mapped onto Event columns."""
+    """One VEVENT, mapped onto Event columns."""
 
     title: str
     description: str
     location: str
-    start: datetime
+    # None only out of a lenient read: an iTIP CANCEL may name its event by UID
+    # (and RECURRENCE-ID) alone.
+    start: datetime | None
     end: datetime | None
     all_day: bool
     timezone: str
@@ -273,13 +290,35 @@ class ParsedEvent:
     recurrence_id: datetime | None = None
     rule: str = ""
     extra: str = ""
+    # The email of ORGANIZER, which stays in *extra* as the client wrote it.
+    organizer: str = ""
+    # The raw RECURRENCE-ID line, for an occurrence stored as a plain event.
+    recurrence_line: str = ""
 
 
 @dataclass
 class ParsedObject:
+    """The VEVENTs sharing a UID: a series master (or single event) and its
+    exceptions. *master* is None when the body only holds occurrences of a
+    series it does not carry, as an invitation to a single date does."""
+
     uid: str
-    master: ParsedEvent
+    master: ParsedEvent | None
     overrides: list[ParsedEvent] = field(default_factory=list)
+
+
+@dataclass
+class ParsedCalendar:
+    """Every object of a VCALENDAR, in the order they first appear.
+
+    *unreadable* holds the UIDs of the events that could not be read: the
+    text still lists them, so a reader that keeps what it already has must
+    not take them for events that are gone.
+    """
+
+    method: str
+    objects: list[ParsedObject]
+    unreadable: set[str] = field(default_factory=set)
 
 
 def parse_object(data, default_tz=UTC):
@@ -288,30 +327,12 @@ def parse_object(data, default_tz=UTC):
     *default_tz* resolves floating times: "local time of the observer", and
     the calendar's owner is the closest observer there is.
     """
-    if isinstance(data, bytes):
-        try:
-            data = data.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise InvalidObject("The body is not UTF-8.") from exc
-
-    raw_blocks = _raw_vevents(_UNFOLD_RE.sub("", data).splitlines())
-    try:
-        calendar = icalendar.Calendar.from_ical(data)
-    except ValueError, IndexError, KeyError, TypeError:
-        raise InvalidObject("The body is not an iCalendar object.") from None
-    vevents = [c for c in calendar.subcomponents if c.name == "VEVENT"]
-    if not vevents:
+    _method, parsed, _unreadable = _read(data, default_tz, strict=True)
+    if not parsed:
         raise InvalidObject(
             "The object holds no event.", "supported-calendar-component"
         )
-    if len(vevents) != len(raw_blocks):
-        raise InvalidObject("The events could not be read.")
-
-    parsed = [
-        _parse_vevent(vevent, raw, default_tz)
-        for vevent, raw in zip(vevents, raw_blocks, strict=True)
-    ]
-    uids = {uid for uid, _event, _rid_line in parsed}
+    uids = {uid for uid, _event in parsed}
     if any(len(uid) > _MAX_UID for uid in uids):
         raise InvalidObject("The UID is too long.", "valid-calendar-object-resource")
     if len(uids) != 1 or "" in uids:
@@ -319,36 +340,192 @@ def parse_object(data, default_tz=UTC):
             "Every event of an object must carry the same UID.",
             "valid-calendar-object-resource",
         )
-
-    masters = [event for _uid, event, _line in parsed if event.recurrence_id is None]
-    overrides = [
-        event for _uid, event, _line in parsed if event.recurrence_id is not None
-    ]
+    masters = [event for _uid, event in parsed if event.recurrence_id is None]
     if len(masters) > 1:
         raise InvalidObject(
             "An object holds at most one series.", "valid-calendar-object-resource"
         )
-    if not masters:
-        if len(overrides) != 1:
-            raise InvalidObject(
-                "Occurrences without their series are not supported.",
-                "valid-calendar-object-resource",
-            )
-        # One occurrence of somebody else's series (an invitation to a single
-        # date): stored as a plain event, with its RECURRENCE-ID kept as an
-        # extra line so it goes back to the client as it came.
-        master = overrides.pop()
-        master.extra = "\n".join([parsed[0][2], *_lines(master.extra)])
-        master.recurrence_id = None
-        masters = [master]
-    return ParsedObject(uid=uids.pop(), master=masters[0], overrides=overrides)
+    (obj,) = _group(parsed)
+    if obj.master is None and len(obj.overrides) != 1:
+        raise InvalidObject(
+            "Occurrences without their series are not supported.",
+            "valid-calendar-object-resource",
+        )
+    return standalone(obj)
 
 
-def _raw_vevents(lines):
+def read_calendar(data, default_tz=UTC):
+    """Read a whole VCALENDAR - a feed, an invitation - into its objects.
+
+    Lenient where ``parse_object`` is strict, because one broken event must
+    not cost the rest of a feed: components other than VEVENT are skipped, and
+    so is a VEVENT without a UID or with a value icalendar cannot read. A
+    VEVENT without DTSTART is kept with ``start=None``; each caller decides
+    whether it needs one. Raises InvalidObject only when the text is not an
+    iCalendar object at all.
+    """
+    method, parsed, unreadable = _read(data, default_tz, strict=False)
+    return ParsedCalendar(method=method, objects=_group(parsed), unreadable=unreadable)
+
+
+def standalone(obj):
+    """*obj*, with an occurrence of a series it does not hold made a plain event.
+
+    One occurrence of somebody else's series (an invitation to a single date)
+    is stored as a single event, its RECURRENCE-ID kept as an extra line so it
+    goes back to the client as it came. Of several such occurrences, the
+    earliest is kept: one UID is one row.
+    """
+    if obj.master is not None or not obj.overrides:
+        return obj
+    first = min(obj.overrides, key=lambda event: event.recurrence_id)
+    master = replace(
+        first,
+        recurrence_id=None,
+        recurrence_line="",
+        extra="\n".join([first.recurrence_line, *_lines(first.extra)]),
+    )
+    return ParsedObject(uid=obj.uid, master=master)
+
+
+def without_components(obj, name):
+    """*obj* with every *name* component (``VALARM``) dropped from its events."""
+
+    def strip(event):
+        kept, depth = [], 0
+        for line in _lines(event.extra):
+            prop = _property_name(line)
+            value = line.split(":", 1)[1].strip().upper() if ":" in line else ""
+            if not depth and prop == "BEGIN" and value == name:
+                depth = 1
+            elif depth:
+                depth += {"BEGIN": 1, "END": -1}.get(prop, 0)
+            else:
+                kept.append(line)
+        return replace(event, extra="\n".join(kept))
+
+    return replace(
+        obj,
+        master=strip(obj.master) if obj.master is not None else None,
+        overrides=[strip(override) for override in obj.overrides],
+    )
+
+
+def standalone_recurrence_id(extra, default_tz=UTC):
+    """The occurrence a plain event stands for, as ``standalone`` kept it.
+
+    The instant of the RECURRENCE-ID line in *extra*, or None for an event that
+    is not one occurrence of somebody else's series.
+    """
+    line = next(
+        (line for line in _lines(extra) if _property_name(line) == "RECURRENCE-ID"),
+        None,
+    )
+    if line is None:
+        return None
+    try:
+        vevent = icalendar.Event.from_ical(f"BEGIN:VEVENT\r\n{line}\r\nEND:VEVENT\r\n")
+        instant, _ = _instant(vevent.RECURRENCE_ID, default_tz)
+    except ValueError, TypeError, KeyError, IndexError:
+        return None
+    return instant
+
+
+def is_dated(obj):
+    """Whether every event of *obj* has a start."""
+    return all(
+        event.start is not None for event in [obj.master, *obj.overrides] if event
+    )
+
+
+def dated(obj):
+    """*obj* without its undated occurrences, or None when its master is undated."""
+    if obj.master is None or obj.master.start is None:
+        return None
+    return replace(obj, overrides=[o for o in obj.overrides if o.start is not None])
+
+
+def _read(data, default_tz, strict):
+    """``(METHOD, [(uid, ParsedEvent)], unreadable UIDs)`` for *data*'s VEVENTs."""
+    if isinstance(data, bytes):
+        try:
+            data = data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            if strict:
+                raise InvalidObject("The body is not UTF-8.") from exc
+            data = data.decode("utf-8", errors="replace")
+
+    raw_blocks = _raw_vevents(_UNFOLD_RE.sub("", data).splitlines(), strict)
+    try:
+        calendar = icalendar.Calendar.from_ical(data)
+    except ValueError, IndexError, KeyError, TypeError:
+        raise InvalidObject("The body is not an iCalendar object.") from None
+    calendar = _with_declared_zone(calendar)
+    vevents = [c for c in calendar.subcomponents if c.name == "VEVENT"]
+    if len(vevents) != len(raw_blocks):
+        raise InvalidObject("The events could not be read.")
+
+    parsed, unreadable = [], set()
+    for vevent, raw in zip(vevents, raw_blocks, strict=True):
+        try:
+            uid, event = _parse_vevent(vevent, raw, default_tz, strict)
+        except InvalidObject:
+            if strict:
+                raise
+            uid = str(vevent.get("UID", "")).strip()
+            logger.info("Skipped an unreadable event: %s", scrub(uid))
+            if uid:
+                unreadable.add(uid)
+            continue
+        if not strict and (not uid or len(uid) > _MAX_UID):
+            logger.info("Skipped an event without a usable UID")
+            continue
+        parsed.append((uid, event))
+    return str(calendar.get("METHOD", "")).strip().upper(), parsed, unreadable
+
+
+def _with_declared_zone(calendar):
+    """*calendar* with its X-WR-TIMEZONE applied to UTC and floating times.
+
+    Google and others publish UTC times plus that calendar-wide zone, which no
+    RFC defines: read as plain UTC, a weekly 09:00 drifts by an hour across
+    every daylight-saving switch.
+    """
+    try:
+        return x_wr_timezone.to_standard(calendar)
+    except ZoneInfoNotFoundError, ValueError:
+        return calendar
+
+
+def _group(parsed):
+    """Gather ``(uid, event)`` pairs into objects, in order of first appearance.
+
+    A repeated master or occurrence keeps its first copy, as a feed that lists
+    one twice still means one event.
+    """
+    objects = {}
+    for uid, event in parsed:
+        obj = objects.setdefault(uid, ParsedObject(uid=uid, master=None))
+        if event.recurrence_id is None:
+            if obj.master is None:
+                obj.master = event
+        elif all(o.recurrence_id != event.recurrence_id for o in obj.overrides):
+            obj.overrides.append(event)
+    return list(objects.values())
+
+
+def _raw_vevents(lines, strict):
     """The content lines of each top-level VEVENT, BEGIN/END excluded.
 
-    Only VEVENT and VTIMEZONE may sit in the VCALENDAR: a VTODO in an event
-    calendar would be accepted and then silently dropped.
+    In a strict read only VEVENT and VTIMEZONE may sit in the VCALENDAR: a
+    VTODO in an event calendar would be accepted and then silently dropped.
+    A lenient read skips them.
+
+    Every END must close the component its BEGIN opened, and no calendar,
+    event or zone may open inside another component: the nested lines are
+    stored and re-emitted verbatim, so an ``END:VEVENT`` hidden in an alarm
+    would close the event early wherever it is served, and whoever sent it
+    could append events of their own to the calendar.
     """
     blocks = []
     stack = []
@@ -359,13 +536,15 @@ def _raw_vevents(lines):
         name = _property_name(line)
         value = line.split(":", 1)[1].strip().upper() if ":" in line else ""
         if name == "BEGIN":
-            if len(stack) == 1 and value not in ("VEVENT", "VTIMEZONE"):
+            if strict and len(stack) == 1 and value not in ("VEVENT", "VTIMEZONE"):
                 raise InvalidObject(
                     f"{value} components are not supported here.",
                     "supported-calendar-component",
                 )
             if not stack and value != "VCALENDAR":
                 raise InvalidObject("The body is not a VCALENDAR.")
+            if len(stack) >= 2 and value in _TOP_LEVEL:
+                raise InvalidObject(f"{value} cannot be nested here.")
             if len(stack) == 1 and value == "VEVENT":
                 current = []
                 blocks.append(current)
@@ -373,7 +552,7 @@ def _raw_vevents(lines):
                 continue
             stack.append(value)
         elif name == "END":
-            if not stack:
+            if not stack or stack[-1] != value:
                 raise InvalidObject("Unbalanced END line.")
             stack.pop()
             if len(stack) == 1 and value == "VEVENT":
@@ -386,31 +565,30 @@ def _raw_vevents(lines):
     return blocks
 
 
-def _parse_vevent(vevent, raw, default_tz):
-    """``(uid, ParsedEvent, raw RECURRENCE-ID line)`` for one VEVENT."""
+def _parse_vevent(vevent, raw, default_tz, strict):
+    """``(uid, ParsedEvent)`` for one VEVENT."""
     try:
-        uid = str(vevent.get("UID", "")).strip()
-        dtstart = vevent.get("DTSTART")
-        if dtstart is None:
+        uid = str(vevent.uid or "").strip()
+        dtstart = vevent.DTSTART
+        if dtstart is None and strict:
             raise InvalidObject(
                 "An event needs a DTSTART.", "valid-calendar-object-resource"
             )
-        start, tzid = parse_dt_prop(dtstart, default_tz)
-        all_day = is_all_day(dtstart)
-        if vevent.get("DTEND") is not None:
-            end, _ = parse_dt_prop(vevent.get("DTEND"), default_tz)
-        elif vevent.get("DURATION") is not None:
-            end = start + vevent.get("DURATION").dt
+        start, tzid = _instant(dtstart, default_tz)
+        all_day = dtstart is not None and not isinstance(dtstart, datetime)
+        if vevent.DTEND is not None:
+            end, _ = _instant(vevent.DTEND, default_tz)
+        elif vevent.DURATION is not None and start is not None:
+            end = start + vevent.DURATION
         else:
             end = None
-        recurrence_id = None
-        if vevent.get("RECURRENCE-ID") is not None:
-            recurrence_id, _ = parse_dt_prop(vevent.get("RECURRENCE-ID"), default_tz)
-        sequence = int(vevent.get("SEQUENCE", 0))
-        cancelled = str(vevent.get("STATUS", "")).upper() == "CANCELLED"
-        title = str(vevent.get("SUMMARY", ""))
-        description = str(vevent.get("DESCRIPTION", ""))
-        location = str(vevent.get("LOCATION", ""))
+        recurrence_id, _ = _instant(vevent.RECURRENCE_ID, default_tz)
+        sequence = vevent.sequence
+        cancelled = str(vevent.status or "").upper() == "CANCELLED"
+        title = str(vevent.summary or "")
+        description = str(vevent.description or "")
+        location = str(vevent.location or "")
+        organizer = vevent.organizer.email if vevent.organizer else ""
     except InvalidObject:
         raise
     except ValueError, TypeError, AttributeError:
@@ -455,5 +633,28 @@ def _parse_vevent(vevent, raw, default_tz):
         recurrence_id=recurrence_id,
         rule="\n".join(rule),
         extra="\n".join(extra),
+        organizer=organizer[:_MAX_EMAIL],
+        recurrence_line=rid_line,
     )
-    return uid, event, rid_line
+    return uid, event
+
+
+def _instant(value, default_tz):
+    """``(aware UTC datetime, IANA zone name)`` for a DATE or DATE-TIME value.
+
+    A DATE is a day label: UTC midnight, no zone. A floating DATE-TIME is "local
+    time of the observer", read in *default_tz*. The zone name is "" for UTC
+    and for a zone nothing names, which leaves the event on the UTC path.
+    """
+    if value is None:
+        return None, ""
+    if not isinstance(value, datetime):
+        return datetime(value.year, value.month, value.day, tzinfo=UTC), ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=default_tz)
+    return value.astimezone(UTC), _zone_name(value.tzinfo)
+
+
+def _zone_name(tzinfo):
+    zone = zone_from_tzid(getattr(tzinfo, "key", None) or tzid_from_tzinfo(tzinfo))
+    return "" if zone is None or zone.key == "UTC" else zone.key

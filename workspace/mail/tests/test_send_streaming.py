@@ -1,14 +1,14 @@
 """Sending a message never holds its attachments in memory.
 
 Sending runs inside the request, on a web worker every other request
-shares: a message built, serialized and handed to smtplib and imaplib as
+shares: a message built, serialized and handed to the SMTP and IMAP clients as
 whole bytes objects weighed several times its attachments, enough for a
 few hundred MB of files to get the worker killed.
 """
 
 import io
 import tracemalloc
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -16,6 +16,7 @@ from django.test import TestCase
 from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder
 from workspace.mail.services.sending import deliver_email
+from workspace.mail.tests.imap_fake import FakeImapClient, fake_imap
 from workspace.mail.tests.smtp_recorder import RecordingSMTP
 
 User = get_user_model()
@@ -41,14 +42,12 @@ class StreamedSendTests(TestCase):
     def test_send_and_archive_stream_the_attachment(self):
         server = RecordingSMTP(keep_data=False)
         literal_sizes = []
-        imap = MagicMock()
-        imap.uid.return_value = ("OK", [b""])
 
-        def append(*args):
-            literal_sizes.append(len(imap.literal))
+        def append(client, *args):
+            # Measured, not read: copying the literal is what must not happen.
+            literal_sizes.append(len(client.literal))
             return "OK", [b""]
 
-        imap._simple_command.side_effect = append
         attachment = io.BytesIO(PAYLOAD)
         attachment.name = "clip.mp4"
 
@@ -56,11 +55,11 @@ class StreamedSendTests(TestCase):
         self.addCleanup(tracemalloc.stop)
         with (
             patch("workspace.mail.services.smtp.connect_smtp", return_value=server),
-            patch(
-                "workspace.mail.services.imap_messages.connect_imap", return_value=imap
-            ),
+            fake_imap() as imap,
+            patch.object(FakeImapClient, "_simple_command", append),
             patch.object(mail_tasks.sync_folder, "delay"),
         ):
+            imap.mailbox("Sent")
             delivery = deliver_email(
                 self.account,
                 to=["bob@example.com"],

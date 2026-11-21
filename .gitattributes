@@ -8,3 +8,14 @@ workspace/common/static/css/app.css -text
 # Shell scripts run inside the Linux image whatever the host they were checked
 # out on, and CRLF line endings break them (run.sh is the image's command).
 *.sh text eol=lf
+
+# Mail fixtures hold raw 8-bit bytes and CRLF line endings: any conversion
+# makes them another message than the one the parser tests describe.
+workspace/mail/tests/corpus/*.eml -text
+
+# Mounted into a Linux container whatever the host it was checked out on.
+workspace/mail/tests/live/*.conf text eol=lf
+
+# iCalendar fixtures are exports kept as their producers wrote them, CRLF line
+# endings and folded lines included.
+workspace/calendar/tests/ics/*.ics -text

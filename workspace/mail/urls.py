@@ -11,6 +11,7 @@ from .views import (
     messages,
     oauth2,
     rules,
+    trusted_senders,
 )
 
 urlpatterns = [
@@ -131,6 +132,16 @@ urlpatterns = [
         name="mail-message-labels",
     ),
     path(
+        "api/v1/mail/messages/<uuid:uuid>/original",
+        messages.MailMessageOriginalView.as_view(),
+        name="mail-message-original",
+    ),
+    path(
+        "api/v1/mail/messages/<uuid:uuid>/headers",
+        messages.MailMessageHeadersView.as_view(),
+        name="mail-message-headers",
+    ),
+    path(
         "api/v1/mail/messages/<uuid:uuid>",
         messages.MailMessageDetailView.as_view(),
         name="mail-message-detail",
@@ -149,6 +160,11 @@ urlpatterns = [
         "api/v1/mail/attachments/<uuid:uuid>/save-to-files",
         attachments.MailAttachmentSaveToFilesView.as_view(),
         name="mail-attachment-save-to-files",
+    ),
+    path(
+        "api/v1/mail/trusted-senders",
+        trusted_senders.MailTrustedSenderView.as_view(),
+        name="mail-trusted-senders",
     ),
     path(
         "api/v1/mail/oauth2/providers",

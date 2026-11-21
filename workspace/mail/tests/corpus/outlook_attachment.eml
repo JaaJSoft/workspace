@@ -1,0 +1,48 @@
+From: Jean Dupont <jean.dupont@contoso.example>
+To: "pierre@example.com" <pierre@example.com>
+Subject: Budget 2027
+Thread-Topic: Budget 2027
+Thread-Index: AdxNt1mQ0V5S2J0mQ7m8z4lK1b3c9A==
+Date: Wed, 4 Nov 2026 09:15:00 +0000
+Message-ID: <AM0PR83MB0211B5E3@AM0PR83MB0211.EURPRD83.prod.outlook.com>
+X-MS-Has-Attach: yes
+Content-Type: multipart/mixed;
+	boundary="_004_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_"
+MIME-Version: 1.0
+
+--_004_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_
+Content-Type: multipart/alternative;
+	boundary="_000_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_"
+
+--_000_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+Hello,
+
+Please find the budget attached.
+
+Jean
+
+--_000_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_
+Content-Type: text/html; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+<html><body><p>Hello,</p><p>Please find the budget attached.</p><p>Jean</p>=
+</body></html>
+
+--_000_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_--
+
+--_004_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;
+	name="=?iso-8859-1?Q?Budget_pr=E9visionnel_2027.xlsx?="
+Content-Description: =?iso-8859-1?Q?Budget_pr=E9visionnel_2027.xlsx?=
+Content-Disposition: attachment;
+	filename="=?iso-8859-1?Q?Budget_pr=E9visionnel_2027.xlsx?="; size=24;
+	creation-date="Wed, 04 Nov 2026 09:14:20 GMT";
+	modification-date="Wed, 04 Nov 2026 09:14:20 GMT"
+Content-Transfer-Encoding: base64
+
+UEtceDAzXHgwNCBub3QgYSByZWFsIHNoZWV0
+
+--_004_AM0PR83MB0211B5E3AM0PR83MB0211EURPRD83prodoutlookcom_--

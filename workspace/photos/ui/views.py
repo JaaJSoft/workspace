@@ -636,7 +636,9 @@ def _render_page(request, template, context):
     if swap:
         context["photos_shell"] = "photos/ui/swap.html"
     else:
-        context["import_folder"] = import_folder_data(import_folder(request.user))
+        context["import_folder"] = import_folder_data(
+            request.user, import_folder(request.user)
+        )
         context["library_extensions"] = library_extensions()
         context["photos_prefs"] = display_preferences(request.user)
         context["sensitive_blur_choices"] = sensitive_blur_choices()

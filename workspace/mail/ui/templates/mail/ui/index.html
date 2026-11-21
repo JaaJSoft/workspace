@@ -157,6 +157,7 @@
 
   <!-- Move-messages-to-a-folder dialog (right-click / bulk toolbar) -->
   {% include "mail/ui/partials/move_dialog.html" %}
+  {% include "mail/ui/partials/headers_dialog.html" %}
 
   <!-- Account context menu -->
   {% include "ui/partials/context_menu_panel.html" with items="mail/ui/partials/account_context_menu.html" open="accountCtx.open" close="accountCtx.open = false" x="accountCtx.x" y="accountCtx.y" width="w-44" id="account-context-menu" %}
@@ -741,6 +742,7 @@
   <script src="{% static 'mail/ui/js/mail_accounts.js' %}"></script>
   <script src="{% static 'mail/ui/js/mail_folders.js' %}"></script>
   <script src="{% static 'mail/ui/js/mail_messages.js' %}"></script>
+  <script src="{% static 'mail/ui/js/mail_body_frame.js' %}"></script>
   <script src="{% static 'mail/ui/js/mail_signature.js' %}"></script>
   <script src="{% static 'mail/ui/js/mail_compose.js' %}"></script>
   <script src="{% static 'mail/ui/js/mail_labels.js' %}"></script>

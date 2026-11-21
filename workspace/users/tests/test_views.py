@@ -279,6 +279,18 @@ class UserAvatarRetrieveTests(UserTestMixin, APITestCase):
         resp = self.client.get(self._url(inactive.pk))
         self.assertEqual(resp.status_code, 404)
 
+    def test_bot_without_avatar_gets_the_default_bot_picture(self):
+        from workspace.ai.models import BotProfile
+
+        bot = User.objects.create_user(username="helper-bot")
+        BotProfile.objects.create(user=bot)
+
+        resp = self.client.get(self._url(bot.pk))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "image/svg+xml")
+        self.assertIn(b"<svg", resp.content)
+
 
 # ── UserAvatarUploadView ────────────────────────────────────────
 

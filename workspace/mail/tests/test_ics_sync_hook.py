@@ -1,12 +1,42 @@
-from unittest.mock import MagicMock, patch
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.services.imap_sync import FETCH_BATCH_SIZE, sync_folder_messages
+from workspace.mail.tests.imap_fake import FakeImapServer, fake_imap
 
 User = get_user_model()
+
+ICS_CONTENT = """\
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+DTSTART:20260301T100000Z
+DTEND:20260301T110000Z
+SUMMARY:Team Meeting
+ORGANIZER:mailto:organizer@example.com
+ATTENDEE:mailto:bob@test.com
+END:VEVENT
+END:VCALENDAR"""
+
+
+def _invitation(number=1):
+    """A raw email carrying a text/calendar part."""
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = "New Invite"
+    msg["From"] = "organizer@example.com"
+    msg["To"] = "bob@test.com"
+    msg["Message-ID"] = f"<invite-{number}@example.com>"
+    msg["Date"] = "Sun, 01 Mar 2026 10:00:00 +0000"
+    msg.attach(MIMEText("You have been invited to a meeting.", "plain"))
+    msg.attach(MIMEText(ICS_CONTENT, "calendar", "utf-8"))
+    return msg.as_bytes()
 
 
 class SyncCalendarHookTest(TestCase):
@@ -35,82 +65,49 @@ class SyncCalendarHookTest(TestCase):
             uid_validity=1,
             last_sync_uid=0,
         )
+        self.server = FakeImapServer()
+        self.server.mailbox("INBOX").uidvalidity = self.folder.uid_validity
 
-    @patch("workspace.mail.services.imap_sync.connect_imap")
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
-    def test_sync_skips_ics_processor_when_no_new_messages(
-        self, mock_process, mock_connect
-    ):
+    def test_sync_skips_ics_processor_when_no_new_messages(self, mock_process):
         """Pre-existing ICS messages are NOT re-processed on every sync.
 
         Calendar reprocessing must be scoped to messages actually parsed in
         the current sync pass, otherwise every sync pays O(all_cal_messages).
         """
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
+        uid = self.server.deliver("INBOX", raw=_invitation())
         MailMessage.objects.create(
             account=self.account,
             folder=self.folder,
             message_id="<old@example.com>",
-            imap_uid=1,
+            imap_uid=uid,
             subject="Old Invite",
             date="2026-03-01T10:00:00Z",
             has_calendar_event=True,
         )
 
-        conn = MagicMock()
-        conn.uid.return_value = ("OK", [b"1"])
-        conn.select.return_value = ("OK", [b"1"])
-        mock_connect.return_value = conn
-
-        sync_folder_messages(self.account, self.folder)
+        with fake_imap(self.server):
+            sync_folder_messages(self.account, self.folder)
 
         # No new UIDs parsed in this pass → no calendar reprocessing.
         mock_process.assert_not_called()
 
     @patch("workspace.ai.tasks.mail.classify_mail_messages.delay")
     @patch("workspace.ai.client.is_ai_enabled", return_value=False)
-    @patch("workspace.mail.services.imap_sync._reconcile_folder")
-    @patch("workspace.mail.services.imap_sync._parse_message")
-    @patch("workspace.mail.services.imap_sync.connect_imap")
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
     def test_sync_calls_ics_processor_for_newly_parsed_messages(
         self,
         mock_process,
-        mock_connect,
-        mock_parse,
-        _mock_reconcile,
         _mock_ai_enabled,
         _mock_classify_delay,
     ):
         """Newly parsed ICS messages are handed to process_calendar_emails."""
-        from workspace.mail.services.imap_sync import sync_folder_messages
+        uid = self.server.deliver("INBOX", raw=_invitation())
 
-        # Pretend UID 2 is a fresh ICS email that _parse_message returns.
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<new@example.com>",
-            imap_uid=2,
-            subject="New Invite",
-            date="2026-03-01T10:00:00Z",
-            has_calendar_event=True,
-        )
-        mock_parse.return_value = new_msg
+        with fake_imap(self.server):
+            sync_folder_messages(self.account, self.folder)
 
-        conn = MagicMock()
-        # SEARCH returns one new UID; FETCH returns a (headers, body) tuple
-        # so the parse loop reaches _parse_message. Reconciliation is
-        # patched out — its IMAP details don't matter here.
-        conn.uid.side_effect = [
-            ("OK", [b"2"]),
-            ("OK", [(b"2 (UID 2 FLAGS ())", b"fake raw email"), b")"]),
-        ]
-        conn.select.return_value = ("OK", [b"1"])
-        mock_connect.return_value = conn
-
-        sync_folder_messages(self.account, self.folder)
-
+        new_msg = MailMessage.objects.get(folder=self.folder, imap_uid=uid)
         mock_process.assert_called_once()
         processed = list(mock_process.call_args[0][0])
         self.assertEqual(len(processed), 1)
@@ -118,58 +115,21 @@ class SyncCalendarHookTest(TestCase):
 
     @patch("workspace.ai.tasks.mail.classify_mail_messages.delay")
     @patch("workspace.ai.client.is_ai_enabled", return_value=False)
-    @patch("workspace.mail.services.imap_sync._reconcile_folder")
-    @patch("workspace.mail.services.imap_sync._parse_message")
-    @patch("workspace.mail.services.imap_sync.connect_imap")
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
     def test_sync_hands_over_more_new_messages_than_a_statement_binds(
         self,
         mock_process,
-        mock_connect,
-        mock_parse,
-        _mock_reconcile,
         _mock_ai_enabled,
         _mock_classify_delay,
     ):
-        from workspace.mail.services.imap_sync import (
-            FETCH_BATCH_SIZE,
-            sync_folder_messages,
-        )
-
         # Above a fetch batch: its existence probe binds one UID each.
         limit = FETCH_BATCH_SIZE + 10
-        uids = range(2, limit + 12)
-        new_messages = {
-            message.imap_uid: message
-            for message in MailMessage.objects.bulk_create(
-                MailMessage(
-                    account=self.account,
-                    folder=self.folder,
-                    imap_uid=uid,
-                    has_calendar_event=True,
-                )
-                for uid in uids
-            )
-        }
-        mock_parse.side_effect = lambda raw, account, folder, uid, flags, known_uids: (
-            new_messages[uid]
-        )
+        count = limit + 10
+        for number in range(count):
+            self.server.deliver("INBOX", raw=_invitation(number))
 
-        def uid_command(command, *args):
-            if command == "SEARCH":
-                return "OK", [" ".join(str(uid) for uid in uids).encode()]
-            return "OK", [
-                (f"{uid} (UID {uid} FLAGS ())".encode(), b"raw email")
-                for uid in args[0].split(",")
-            ]
-
-        conn = MagicMock()
-        conn.uid.side_effect = uid_command
-        conn.select.return_value = ("OK", [b"1"])
-        mock_connect.return_value = conn
-
-        with sqlite_parameter_limit(limit):
+        with fake_imap(self.server), sqlite_parameter_limit(limit):
             sync_folder_messages(self.account, self.folder)
 
         mock_process.assert_called_once()
-        self.assertEqual(mock_process.call_args[0][0].count(), len(uids))
+        self.assertEqual(mock_process.call_args[0][0].count(), count)

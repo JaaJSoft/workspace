@@ -17,7 +17,7 @@ from workspace.common.task_locks import task_lock
 from workspace.notifications.services.notifications import notify
 from workspace.users.services.settings import get_user_language
 
-from ..errors import ImportsError
+from ..errors import REPORTED_ERRORS, ImportsError
 from ..importers.base import ImportContext, JobFailed, Outcome, importer_registry
 from ..models import ImportConnection, ImportJob, ImportJobItem
 from . import progress
@@ -243,7 +243,7 @@ def _run_claimed(job) -> Outcome:
         except SoftTimeLimitExceeded:
             # One entry overran the slice; the next delivery resumes it.
             outcome = Outcome.PAUSED
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             _finish(job, ImportJob.Status.FAILED, error=exc.user_message)
             return Outcome.FAILED
         except Exception:

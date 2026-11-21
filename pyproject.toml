@@ -41,10 +41,15 @@ dependencies = [
     "rawpy>=0.28.0",
     "cairosvg>=2.9.1",
     # mail
+    # IMAP client (pure Python): parsed responses, modified UTF-7 folder names
+    "imapclient>=4.3.0",
     "cryptography>=50.0.2",
     "nh3>=0.3.7",
     "python-dateutil>=2.9",
     "icalendar>=7.3.0",
+    # calendar: feeds that publish UTC times plus an X-WR-TIMEZONE (LGPL-3.0+,
+    # installed unmodified from PyPI and never vendored)
+    "x-wr-timezone>=2.0.1",
     # people: vCard import/export, phone normalisation
     "vobject>=0.9.9",
     # QR codes (pure Python, no dependencies): a contact as a scannable card
@@ -122,7 +127,7 @@ dev = [
     # Fake data generation for scripts/seed_demo.py (dev/demo seeding only).
     # End-to-end / UI tests. Playwright is only needed when E2E=1 is set;
     # otherwise the E2E test cases are skipped (see workspace/common/tests/e2e/).
-    "playwright>=1.64.1",
+    "playwright>=1.65.2",
     # Real OpenID Connect provider (RS256 + JWKS + discovery) booted in-process
     # by the OIDC login E2E test, so the SSO flow is exercised end to end.
     "oidc-provider-mock>=0.4.8",

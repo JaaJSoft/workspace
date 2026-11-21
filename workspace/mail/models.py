@@ -45,12 +45,15 @@ class MailAccount(models.Model):
     username = models.CharField(max_length=255)
     password_encrypted = models.BinaryField(null=True, blank=True)
 
-    # OAuth2 (prepared for future use)
+    # OAuth2 sign-in: Google, Microsoft or the generic provider
     oauth2_provider = models.CharField(max_length=50, blank=True, default="")
     oauth2_data_encrypted = models.BinaryField(null=True, blank=True)
 
     # IMAP folder hierarchy
     imap_delimiter = models.CharField(max_length=5, default="/")
+    # The server lists an all-mail mailbox (``\All``, Gmail's All Mail), which
+    # the sync skips: there, a message taken out of the Inbox is archived.
+    archives_in_all_mail = models.BooleanField(default=False, editable=False)
 
     # Sync state
     is_active = models.BooleanField(default=True)
@@ -153,6 +156,12 @@ class MailFolder(models.Model):
     message_count = models.IntegerField(default=0)
     unread_count = models.IntegerField(default=0)
     last_sync_uid = models.BigIntegerField(default=0)
+    # What the server said of the mailbox when the last complete sync pass
+    # selected it (imap_sync.remote_state); None when it cannot be trusted.
+    remote_state = models.JSONField(null=True, blank=True, editable=False)
+    # Counts the times remote_state was declared untrustworthy. A sync pass
+    # stores the state it read only if nobody did so while it ran.
+    remote_state_version = models.PositiveIntegerField(default=0, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -253,6 +262,7 @@ class MailMessage(models.Model):
 
     is_read = models.BooleanField(default=False)
     is_starred = models.BooleanField(default=False)
+    is_answered = models.BooleanField(default=False)
     is_draft = models.BooleanField(default=False)
     has_attachments = models.BooleanField(default=False)
     has_calendar_event = models.BooleanField(default=False)
@@ -474,3 +484,31 @@ class MailRuleLog(models.Model):
 
     def __str__(self):
         return f"log {self.uuid} (rule={self.rule_name_snapshot or 'deleted'})"
+
+
+class MailTrustedSender(models.Model):
+    """A sender whose messages load their remote images without asking.
+
+    Remote images are blocked by default because loading one tells the sender
+    when, and from which address, the message was read.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mail_trusted_senders",
+    )
+    # Stored lowercased: the same sender writes its address in any case.
+    email = models.CharField(max_length=254)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "email"], name="mail_trusted_sender_unique"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.owner_id} trusts {self.email}"

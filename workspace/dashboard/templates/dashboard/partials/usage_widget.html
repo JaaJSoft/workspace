@@ -1,111 +1,61 @@
-{% load i18n %}
-<div class="space-y-1">
+{% load i18n l10n %}
+<div class="text-left">
   <div
-    class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2 flex items-center gap-1.5"
+    class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-3"
   >
     {% translate "Workspace usage" %}
   </div>
 
-  <a
-    href="/files"
-    class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-13 hover:bg-base-200 transition-colors group"
-  >
-    <div class="rounded-lg bg-primary/10 p-2 shrink-0">
-      <i data-lucide="hard-drive" class="w-4 h-4 text-primary"></i>
+  <div class="rounded-xl bg-base-200/70 p-3">
+    <div class="flex items-center gap-2">
+      <i
+        data-lucide="hard-drive"
+        class="w-4 h-4 text-base-content/60 shrink-0"
+      ></i>
+      <span class="text-sm font-medium flex-1">{% translate "Storage" %}</span>
+      <span class="text-xs text-base-content/60 tabular-nums whitespace-nowrap">
+        {% if storage_quota is not None %}{{ storage_usage|filesizeformat }} / {{ storage_quota|filesizeformat }}{% else %}{% blocktranslate trimmed with size=storage_usage|filesizeformat %}{{ size }} used{% endblocktranslate %}{% endif %}
+      </span>
     </div>
-    <div class="flex-1 min-w-0">
-      <div
-        class="text-sm font-medium group-hover:text-primary transition-colors"
-      >
-        {% translate "Files" %}
-      </div>
-      <div class="w-full bg-base-300 rounded-full h-1.5 mt-1">
+    {% if storage_quota is not None %}
+      <div class="w-full bg-base-300 rounded-full h-1.5 mt-2.5 overflow-hidden">
         <div
-          class="{% if storage_percent >= 100 %}bg-error{% elif storage_percent >= 90 %}bg-warning{% else %}bg-primary{% endif %} rounded-full h-1.5 transition-all duration-700"
+          class="{% if storage_percent >= 100 %}bg-error{% elif storage_percent >= 90 %}bg-warning{% else %}bg-primary{% endif %} h-full rounded-full transition-all duration-700"
           x-ref="storageBar"
           style="width: 0%"
         ></div>
       </div>
-      <div class="text-xs text-base-content/50 mt-0.5">
-        {% if storage_quota is not None %}{{ storage_usage|filesizeformat }} / {{ storage_quota|filesizeformat }}{% else %}{% blocktranslate trimmed with size=storage_usage|filesizeformat %}{{ size }} used{% endblocktranslate %}{% endif %}
-      </div>
-    </div>
-    <div
-      class="font-semibold text-sm shrink-0"
-      x-ref="countFiles"
-      data-target="{{ usage_stats.files.total_files|default:"0" }}"
-    >
-      0
-    </div>
-  </a>
+    {% endif %}
+  </div>
 
-  <a
-    href="/chat"
-    class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-13 hover:bg-base-200 transition-colors group"
-  >
-    <div class="rounded-lg bg-info/10 p-2 shrink-0">
-      <i data-lucide="message-circle" class="w-4 h-4 text-info"></i>
-    </div>
-    <div class="flex-1 min-w-0">
-      <div class="text-sm font-medium group-hover:text-info transition-colors">{% translate "Messages" %}</div>
-    </div>
-    <div
-      class="font-semibold text-sm shrink-0"
-      x-ref="countMessages"
-      data-target="{{ usage_stats.chat.total_messages|default:"0" }}"
-    >
-      0
-    </div>
-  </a>
-
-  <a
-    href="/mail"
-    class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-13 hover:bg-base-200 transition-colors group"
-  >
-    <div class="rounded-lg bg-warning/10 p-2 shrink-0">
-      <i data-lucide="mail" class="w-4 h-4 text-warning"></i>
-    </div>
-    <div class="flex-1 min-w-0">
-      <div
-        class="text-sm font-medium group-hover:text-warning transition-colors"
+  <div class="grid grid-cols-2 gap-2 mt-2">
+    {% for row in usage_rows %}
+      <a
+        href="{{ row.url }}"
+        class="module-{{ row.color }} group rounded-xl border border-base-300 p-3 hover:border-module/40 hover:bg-module/5 transition-colors"
       >
-        {% translate "Mail" %}
-      </div>
-      {% if usage_stats.mail.unread_messages %}
-        <div class="text-xs text-base-content/50">
-          {% blocktranslate trimmed count counter=usage_stats.mail.unread_messages %}
-            {{ counter }} unread
-          {% plural %}
-            {{ counter }} unread
-          {% endblocktranslate %}
+        <div class="flex items-start justify-between gap-2">
+          <span class="rounded-lg bg-module/15 p-1.5 shrink-0">
+            <i data-lucide="{{ row.icon }}" class="w-4 h-4 text-module"></i>
+          </span>
+          {% if row.detail %}
+            <span
+              class="badge badge-xs border-0 bg-module text-module-content font-medium whitespace-nowrap"
+            >{{ row.detail }}</span>
+          {% endif %}
         </div>
-      {% endif %}
-    </div>
-    <div
-      class="font-semibold text-sm shrink-0"
-      x-ref="countMail"
-      data-target="{{ usage_stats.mail.total_messages|default:"0" }}"
-    >
-      0
-    </div>
-  </a>
-
-  <a
-    href="/calendar"
-    class="flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 min-h-13 hover:bg-base-200 transition-colors group"
-  >
-    <div class="rounded-lg bg-accent/10 p-2 shrink-0">
-      <i data-lucide="calendar" class="w-4 h-4 text-accent"></i>
-    </div>
-    <div class="flex-1 min-w-0">
-      <div class="text-sm font-medium group-hover:text-accent transition-colors">{% translate "Events" %}</div>
-    </div>
-    <div
-      class="font-semibold text-sm shrink-0"
-      x-ref="countEvents"
-      data-target="{{ usage_stats.calendar.total_events|default:"0" }}"
-    >
-      0
-    </div>
-  </a>
+        <div
+          class="mt-2 text-xl font-semibold leading-tight tabular-nums"
+          data-usage-count="{{ row.count|unlocalize }}"
+        >
+          0
+        </div>
+        <div
+          class="text-xs text-base-content/60 truncate group-hover:text-module transition-colors"
+        >
+          {{ row.label }}
+        </div>
+      </a>
+    {% endfor %}
+  </div>
 </div>

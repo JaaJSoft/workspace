@@ -79,6 +79,12 @@ and reserved addresses are always refused, private networks unless
 connected to, which defeats DNS rebinding. Redirects are never followed and
 the `HTTP_PROXY`/`HTTPS_PROXY` variables are ignored. A host in
 `IMPORTS_ALLOWED_HOSTS` bypasses all of this: list only servers you would
-connect to yourself. Mail account autodiscovery goes through the same guard.
+connect to yourself.
+
+The same guard (`workspace/common/url_guard.py`) covers every other server-side
+fetch of a URL a user chose: mail account autodiscovery, external calendar
+feeds, the AI assistant's web reading, chat link previews and Web Push
+endpoints. Those refuse private networks whatever the two settings above say;
+the settings only open them for imports.
 
 The API is documented in the [Swagger UI](/schema/swagger-ui/).

@@ -14,12 +14,16 @@ from .models import (
     MailRule,
     MailRuleLog,
 )
+from .services.imap_parse import sanitize_mail_html
+from .services.inline_images import InlineImages
+from .services.remote_images import has_remote_images
 from .services.rules.schema import (
     SchemaError,
     parse_actions,
     parse_conditions,
     validate_tree_limits,
 )
+from .services.trusted_senders import is_trusted_sender
 
 # escape=True so raw HTML in the AI summary is escaped instead of executed when
 # the rendered string is injected via Alpine x-html. mistune.html() uses escape=False.
@@ -48,6 +52,7 @@ class MailAccountSerializer(serializers.ModelSerializer):
             "is_active",
             "last_sync_at",
             "last_sync_error",
+            "archives_in_all_mail",
             "created_at",
             "updated_at",
         ]
@@ -220,6 +225,7 @@ class MailMessageListSerializer(serializers.ModelSerializer):
             "snippet",
             "is_read",
             "is_starred",
+            "is_answered",
             "is_draft",
             "has_attachments",
             "has_calendar_event",
@@ -278,16 +284,55 @@ class MailExtractionSerializer(serializers.ModelSerializer):
         return None
 
 
+class MailTrustedSenderSerializer(serializers.Serializer):
+    email = serializers.CharField(max_length=254)
+
+
 class MailMessageDetailSerializer(serializers.ModelSerializer):
-    attachments = MailAttachmentSerializer(many=True, read_only=True)
+    # Each with ``embedded``: whether the body shows it as a picture.
+    attachments = serializers.SerializerMethodField()
     labels = serializers.SerializerMethodField()
     ai_summary_html = serializers.SerializerMethodField()
     extractions = serializers.SerializerMethodField()
     # Same {name, email} API contract as the list serializer.
     from_address = serializers.SerializerMethodField()
+    # Cleaned again on the way out, so a body stored before the allow-list
+    # last changed, or written by the composer, renders under today's rules.
+    body_html = serializers.SerializerMethodField()
+    has_remote_images = serializers.SerializerMethodField()
+    sender_trusted = serializers.SerializerMethodField()
 
     def get_from_address(self, obj):
         return {"name": obj.from_name, "email": obj.from_email}
+
+    def _rendered_body(self, obj):
+        """The body to display, its cid: pictures pointing at their parts.
+
+        Memoized on the instance: the body and the attachment list both read it.
+        """
+        if not hasattr(obj, "_rendered_body"):
+            inline_images = InlineImages(obj.attachments.all())
+            html = sanitize_mail_html(
+                obj.body_html, attribute_filter=inline_images.resolve
+            )
+            obj._rendered_body = (html, inline_images.embedded)
+        return obj._rendered_body
+
+    def get_body_html(self, obj):
+        return self._rendered_body(obj)[0]
+
+    def get_attachments(self, obj):
+        embedded = {str(uuid) for uuid in self._rendered_body(obj)[1]}
+        return [
+            {**data, "embedded": data["uuid"] in embedded}
+            for data in MailAttachmentSerializer(obj.attachments.all(), many=True).data
+        ]
+
+    def get_has_remote_images(self, obj):
+        return has_remote_images(obj.body_html)
+
+    def get_sender_trusted(self, obj):
+        return is_trusted_sender(obj.account.owner_id, obj.from_email)
 
     class Meta:
         model = MailMessage
@@ -307,8 +352,11 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             "snippet",
             "body_text",
             "body_html",
+            "has_remote_images",
+            "sender_trusted",
             "is_read",
             "is_starred",
+            "is_answered",
             "is_draft",
             "has_attachments",
             "has_calendar_event",
@@ -371,6 +419,12 @@ class SendEmailSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    # Attachments of stored messages (a forward carries the original's).
+    attachment_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+    )
     # UUID of the message being replied to. The In-Reply-To / References
     # headers are derived from it server-side; `reply_to` above is the
     # unrelated Reply-To header.
@@ -402,6 +456,11 @@ class DraftSaveSerializer(serializers.Serializer):
     reply_message_id = serializers.UUIDField(
         required=False, allow_null=True, default=None
     )
+    attachment_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+    )
 
 
 class MailLabelAssignSerializer(serializers.Serializer):
@@ -414,7 +473,17 @@ class MailLabelAssignSerializer(serializers.Serializer):
 class BatchActionSerializer(serializers.Serializer):
     message_ids = serializers.ListField(child=serializers.UUIDField(), min_length=1)
     action = serializers.ChoiceField(
-        choices=["mark_read", "mark_unread", "star", "unstar", "delete", "move"]
+        choices=[
+            "mark_read",
+            "mark_unread",
+            "star",
+            "unstar",
+            "delete",
+            "move",
+            "archive",
+            "spam",
+            "not_spam",
+        ]
     )
     target_folder_id = serializers.UUIDField(required=False)
 

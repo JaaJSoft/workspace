@@ -13,9 +13,12 @@ import threading
 
 from django.core.wsgi import get_wsgi_application
 
+from workspace.core.checks import refuse_in_memory_broker
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
 
 _django_app = get_wsgi_application()
+refuse_in_memory_broker()
 
 _webdav_app = None
 _webdav_lock = threading.Lock()

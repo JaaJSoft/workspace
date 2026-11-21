@@ -1,0 +1,42 @@
+From: Lucie Bernard <lucie.bernard@gmail.example>
+To: pierre@example.com
+Subject: Fwd: Facture 2026-114
+Date: Mon, 16 Nov 2026 08:00:00 +0100
+Message-ID: <fwd-114@mail.gmail.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_fwd_114"
+
+--=_fwd_114
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Pour info, la facture est dans le message joint.
+
+--=_fwd_114
+Content-Type: message/rfc822; name="Facture 2026-114.eml"
+Content-Disposition: attachment; filename="Facture 2026-114.eml"
+
+From: Compta <compta@fournisseur.example>
+To: lucie.bernard@gmail.example
+Subject: Facture 2026-114
+Date: Fri, 13 Nov 2026 17:45:00 +0100
+Message-ID: <facture-114@fournisseur.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_inner_114"
+
+--=_inner_114
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Veuillez trouver la facture ci-jointe.
+
+--=_inner_114
+Content-Type: application/pdf; name="facture-114.pdf"
+Content-Disposition: attachment; filename="facture-114.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyA+PgplbmRvYmoKdHJhaWxlcgo8PCAv
+Um9vdCAxIDAgUiA+PgolJUVPRgo=
+--=_inner_114--
+
+--=_fwd_114--

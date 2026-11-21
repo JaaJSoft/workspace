@@ -4,9 +4,10 @@ import logging
 
 from django.db import transaction
 from django.utils import timezone as dj_timezone
+from imapclient.exceptions import IMAPClientError
 
-from workspace.mail.services.imap_connection import connect_imap
-from workspace.mail.services.imap_mailbox import _display_name, _quote_mailbox
+from workspace.mail.services.imap_connection import imap_session
+from workspace.mail.services.imap_mailbox import _display_name, _text, encode_name
 
 logger = logging.getLogger(__name__)
 
@@ -14,28 +15,18 @@ logger = logging.getLogger(__name__)
 def create_folder(account, folder_name, parent_name=""):
     """Create an IMAP folder. Returns the created MailFolder.
 
-    If parent_name is provided, the folder is created as a subfolder:
+    `folder_name` is the name as the user typed it. If `parent_name` (the
+    parent's stored name) is provided, the folder is created under it:
     ``parent_name + delimiter + folder_name``.
     """
     from ..models import MailFolder
 
+    full_name = encode_name(folder_name)
     if parent_name:
-        full_name = f"{parent_name}{account.imap_delimiter}{folder_name}"
-    else:
-        full_name = folder_name
+        full_name = f"{parent_name}{account.imap_delimiter}{full_name}"
 
-    conn = connect_imap(account)
-    try:
-        status, data = conn.create(_quote_mailbox(full_name))
-        if status != "OK":
-            raise Exception(f"IMAP CREATE failed: {data}")
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+    with imap_session(account) as client:
+        client.create_folder(full_name)
 
     folder = MailFolder.objects.create(
         account=account,
@@ -46,94 +37,105 @@ def create_folder(account, folder_name, parent_name=""):
     return folder
 
 
+ARCHIVE_NAME = "Archive"
+
+
+def create_archive_folder(account):
+    """Create the account's Archive mailbox, for an account that has none.
+
+    It goes under the personal namespace prefix (``INBOX.`` on Courier and
+    Cyrus, which refuse a mailbox outside it). A CREATE refused because the
+    mailbox already exists - a concurrent archive got there first - is not
+    an error; the row is then taken or made for it.
+    """
+    from ..models import MailFolder
+
+    with imap_session(account) as client:
+        name = _personal_prefix(client) + ARCHIVE_NAME
+        try:
+            client.create_folder(name)
+        except IMAPClientError:
+            listed = {_text(entry[2]) for entry in client.list_folders()}
+            if name not in listed:
+                raise
+
+    folder, _created = MailFolder.objects.get_or_create(
+        account=account,
+        name=name,
+        defaults={
+            "display_name": _display_name(name),
+            "folder_type": MailFolder.FolderType.ARCHIVE,
+        },
+    )
+    return folder
+
+
+def _personal_prefix(client):
+    if not client.has_capability("NAMESPACE"):
+        return ""
+    personal = client.namespace().personal
+    if not personal:
+        return ""
+    return _text(personal[0][0])
+
+
 def delete_folder(account, folder):
     """Delete an IMAP folder and its local messages."""
-    conn = connect_imap(account)
-    try:
-        # Close the folder first if selected, then delete
-        status, data = conn.delete(_quote_mailbox(folder.name))
-        if status != "OK":
-            raise Exception(f"IMAP DELETE failed: {data}")
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+    with imap_session(account) as client:
+        client.delete_folder(folder.name)
 
     folder.delete()
 
 
-def rename_folder(account, folder, new_name):
-    """Rename an IMAP folder."""
-    conn = connect_imap(account)
-    try:
-        status, data = conn.rename(
-            _quote_mailbox(folder.name), _quote_mailbox(new_name)
-        )
-        if status != "OK":
-            raise Exception(f"IMAP RENAME failed: {data}")
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+def rename_folder(account, folder, new_display_name):
+    """Give an IMAP folder another name, where it is.
 
-    folder.name = new_name
-    folder.display_name = _display_name(new_name)
-    folder.save(update_fields=["name", "display_name", "updated_at"])
-    return folder
+    `new_display_name` is the name as the user typed it: a nested folder
+    keeps its parent path, so Parent/Old becomes Parent/New and not New at
+    the root.
+    """
+    delimiter = account.imap_delimiter or "/"
+    parent_path, separator, _leaf = folder.name.rpartition(delimiter)
+    new_name = f"{parent_path}{separator}{encode_name(new_display_name)}"
+    return _rename(account, folder, new_name)
 
 
 def move_folder(account, folder, new_parent_name):
-    """Move an IMAP folder under a new parent (or to root).
+    """Move an IMAP folder under a new parent (or to root)."""
+    delimiter = account.imap_delimiter or "/"
+    leaf = folder.name.rsplit(delimiter, 1)[-1]
+    if new_parent_name:
+        new_name = f"{new_parent_name}{delimiter}{leaf}"
+    else:
+        new_name = leaf
+    return _rename(account, folder, new_name)
 
-    Uses IMAP RENAME to change the folder's full path. Also updates all
-    child folders in the DB whose ``name`` starts with the old prefix.
+
+def _rename(account, folder, new_name):
+    """RENAME `folder` to the stored name `new_name`, subfolders included.
+
+    The server renames the whole subtree with the one command, so every row
+    whose name starts with the old path follows: left behind, the next
+    folder sync would take the new paths for new folders and the old rows
+    for deleted ones, and import their messages again as strangers.
     """
     from ..models import MailFolder
 
     delimiter = account.imap_delimiter or "/"
     old_name = folder.name
-
-    # Use the wire-encoded leaf from folder.name, not folder.display_name:
-    # display_name is Unicode-decoded (mUTF-7 -> Unicode) for the UI, while
-    # IMAP RENAME must receive the original mUTF-7 wire form.
-    leaf = old_name.rsplit(delimiter, 1)[-1]
-    if new_parent_name:
-        new_name = f"{new_parent_name}{delimiter}{leaf}"
-    else:
-        new_name = leaf
-
     if new_name == old_name:
         return folder
 
-    conn = connect_imap(account)
-    try:
-        st, data = conn.rename(_quote_mailbox(old_name), _quote_mailbox(new_name))
-        if st != "OK":
-            raise Exception(f"IMAP RENAME failed: {data}")
-    finally:
-        try:
-            conn.logout()
-        except Exception:
-            # Best-effort cleanup: a logout failure on an already-broken
-            # connection isn't actionable.
-            pass
+    with imap_session(account) as client:
+        client.rename_folder(old_name, new_name)
 
-    # Update this folder and children in DB
     with transaction.atomic():
         folder.name = new_name
         folder.display_name = _display_name(new_name)
         folder.save(update_fields=["name", "display_name", "updated_at"])
 
-        # Update child folders: any folder whose name starts with old_name + delimiter.
-        # One UPDATE via bulk_update instead of N saves. Since each child gets a
-        # distinct new name (path rewrite), we can't collapse to a single
-        # QuerySet.update() - load, mutate in Python, then bulk_update.
+        # Each child gets a distinct new name (path rewrite), so this cannot
+        # be a single QuerySet.update(): load, mutate, then bulk_update.
         old_prefix = old_name + delimiter
         children = list(
             MailFolder.objects.filter(account=account, name__startswith=old_prefix)

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -6,9 +6,20 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.services.imap_sync import sync_folder_messages
+from workspace.mail.tests.imap_fake import fake_imap
+from workspace.notifications.models import Notification
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
+
+
+def _sync_one_new_message(account, folder):
+    """Sync `folder` with one message waiting on the server; returns its row."""
+    with fake_imap() as server:
+        uid = server.deliver(folder.name, uid=folder.last_sync_uid + 1)
+        sync_folder_messages(account, folder)
+    return MailMessage.objects.get(folder=folder, imap_uid=uid)
 
 
 class SyncRulesHookTests(TestCase):
@@ -27,47 +38,20 @@ class SyncRulesHookTests(TestCase):
             folder_type="inbox",
         )
 
-    def _mock_imap_conn(self):
-        conn = MagicMock()
-        conn.uid.side_effect = [
-            ("OK", [b"2"]),
-            ("OK", [(b"2 (UID 2 FLAGS ())", b"fake"), b")"]),
-        ]
-        conn.select.return_value = ("OK", [b"1"])
-        return conn
-
     @patch("workspace.mail.services.rules.engine.run_rules_for_messages")
     @patch("workspace.ai.services.dispatch.dispatch")
     @patch("workspace.users.services.settings.get_setting", return_value=True)
     @patch("workspace.ai.client.is_ai_enabled", return_value=True)
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
-    @patch("workspace.mail.services.imap_sync._reconcile_folder")
-    @patch("workspace.mail.services.imap_sync._parse_message")
-    @patch("workspace.mail.services.imap_sync.connect_imap")
     def test_rules_invoked_for_new_inbox_message(
         self,
-        mock_conn,
-        mock_parse,
-        _mock_recon,
         _mock_proc,
         _mock_ai,
         _mock_setting,
         _mock_dispatch,
         mock_rules,
     ):
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<a@x>",
-            imap_uid=2,
-            subject="S",
-        )
-        mock_parse.return_value = new_msg
-        mock_conn.return_value = self._mock_imap_conn()
-
-        sync_folder_messages(self.account, self.folder)
+        new_msg = _sync_one_new_message(self.account, self.folder)
 
         mock_rules.assert_called_once()
         args, _ = mock_rules.call_args
@@ -79,37 +63,22 @@ class SyncRulesHookTests(TestCase):
     @patch("workspace.users.services.settings.get_setting", return_value=True)
     @patch("workspace.ai.client.is_ai_enabled", return_value=True)
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
-    @patch("workspace.mail.services.imap_sync._reconcile_folder")
-    @patch("workspace.mail.services.imap_sync._parse_message")
-    @patch("workspace.mail.services.imap_sync.connect_imap")
     def test_rules_not_invoked_for_sent_folder(
         self,
-        mock_conn,
-        mock_parse,
-        _mock_recon,
         _mock_proc,
         _mock_ai,
         _mock_setting,
         _mock_dispatch,
         mock_rules,
     ):
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
         sent = MailFolder.objects.create(
             account=self.account,
             name="Sent",
             folder_type="sent",
         )
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=sent,
-            message_id="<a@x>",
-            imap_uid=2,
-            subject="S",
-        )
-        mock_parse.return_value = new_msg
-        mock_conn.return_value = self._mock_imap_conn()
-        sync_folder_messages(self.account, sent)
+
+        _sync_one_new_message(self.account, sent)
+
         mock_rules.assert_not_called()
 
     @patch(
@@ -120,14 +89,8 @@ class SyncRulesHookTests(TestCase):
     @patch("workspace.users.services.settings.get_setting", return_value=True)
     @patch("workspace.ai.client.is_ai_enabled", return_value=True)
     @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
-    @patch("workspace.mail.services.imap_sync._reconcile_folder")
-    @patch("workspace.mail.services.imap_sync._parse_message")
-    @patch("workspace.mail.services.imap_sync.connect_imap")
     def test_rules_exception_does_not_break_sync(
         self,
-        mock_conn,
-        mock_parse,
-        _mock_recon,
         _mock_proc,
         _mock_ai,
         _mock_setting,
@@ -136,21 +99,9 @@ class SyncRulesHookTests(TestCase):
     ):
         """A misbehaving rule must never abort the sync - the AI dispatch
         and the rest of the sync pipeline still run."""
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<a@x>",
-            imap_uid=2,
-            subject="S",
-        )
-        mock_parse.return_value = new_msg
-        mock_conn.return_value = self._mock_imap_conn()
-
         with self.assertLogs("workspace.mail.services.imap_sync", level="ERROR"):
             # No exception propagates.
-            sync_folder_messages(self.account, self.folder)
+            _sync_one_new_message(self.account, self.folder)
 
         # AI dispatch still ran for the new message.
         self.assertTrue(mock_dispatch.called)
@@ -184,95 +135,45 @@ class NotifyRunsAfterRulesTests(TestCase):
         self.enterContext(
             patch("workspace.notifications.tasks.send_push_notification.delay")
         )
+        self.enterContext(patch("workspace.ai.services.dispatch.dispatch"))
+        self.enterContext(patch("workspace.ai.client.is_ai_enabled", return_value=True))
+        self.enterContext(
+            patch("workspace.calendar.services.ics_processor.process_calendar_emails")
+        )
 
     def tearDown(self):
         cache.clear()
 
-    def _mock_imap_conn(self):
-        conn = MagicMock()
-        conn.uid.side_effect = [
-            ("OK", [b"2"]),
-            ("OK", [(b"2 (UID 2 FLAGS ())", b"fake"), b")"]),
-        ]
-        conn.select.return_value = ("OK", [b"1"])
-        return conn
+    def _sync_with_rule(self, rule):
+        with patch(
+            "workspace.mail.services.rules.engine.run_rules_for_messages",
+            side_effect=rule,
+        ):
+            return _sync_one_new_message(self.account, self.folder)
 
-    @patch("workspace.ai.services.dispatch.dispatch")
-    @patch("workspace.ai.client.is_ai_enabled", return_value=True)
-    @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
-    @patch("workspace.mail.services.imap_sync._reconcile_folder")
-    @patch("workspace.mail.services.imap_sync._parse_message")
-    @patch("workspace.mail.services.imap_sync.connect_imap")
-    def test_a_rule_deleted_message_is_not_notified(
-        self,
-        mock_conn,
-        mock_parse,
-        _mock_recon,
-        _mock_proc,
-        _mock_ai,
-        _mock_dispatch,
-    ):
-        from workspace.mail.services.imap_sync import sync_folder_messages
-        from workspace.notifications.models import Notification
+    def test_a_message_no_rule_touches_is_notified(self):
+        """The control of the two tests below: without it they would pass on
+        a sync that never notifies at all."""
+        new_msg = self._sync_with_rule(lambda account, message_uuids: None)
 
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<a@x>",
-            imap_uid=2,
-            subject="S",
-        )
-        mock_parse.return_value = new_msg
-        mock_conn.return_value = self._mock_imap_conn()
+        self.assertEqual(Notification.objects.filter(mail_message=new_msg).count(), 1)
 
+    def test_a_rule_deleted_message_is_not_notified(self):
         def delete_it(account, message_uuids):
             MailMessage.objects.filter(uuid__in=message_uuids).update(
                 deleted_at=timezone.now()
             )
 
-        with patch(
-            "workspace.mail.services.rules.engine.run_rules_for_messages",
-            side_effect=delete_it,
-        ):
-            sync_folder_messages(self.account, self.folder)
+        new_msg = self._sync_with_rule(delete_it)
 
+        self.assertIsNotNone(new_msg.deleted_at)
         self.assertEqual(Notification.objects.count(), 0)
 
-    @patch("workspace.ai.services.dispatch.dispatch")
-    @patch("workspace.ai.client.is_ai_enabled", return_value=True)
-    @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
-    @patch("workspace.mail.services.imap_sync._reconcile_folder")
-    @patch("workspace.mail.services.imap_sync._parse_message")
-    @patch("workspace.mail.services.imap_sync.connect_imap")
-    def test_a_rule_marked_read_message_is_not_notified(
-        self,
-        mock_conn,
-        mock_parse,
-        _mock_recon,
-        _mock_proc,
-        _mock_ai,
-        _mock_dispatch,
-    ):
-        from workspace.mail.services.imap_sync import sync_folder_messages
-        from workspace.notifications.models import Notification
-
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<a@x>",
-            imap_uid=2,
-            subject="S",
-        )
-        mock_parse.return_value = new_msg
-        mock_conn.return_value = self._mock_imap_conn()
-
+    def test_a_rule_marked_read_message_is_not_notified(self):
         def mark_read_it(account, message_uuids):
             MailMessage.objects.filter(uuid__in=message_uuids).update(is_read=True)
 
-        with patch(
-            "workspace.mail.services.rules.engine.run_rules_for_messages",
-            side_effect=mark_read_it,
-        ):
-            sync_folder_messages(self.account, self.folder)
+        new_msg = self._sync_with_rule(mark_read_it)
 
+        self.assertTrue(new_msg.is_read)
         self.assertEqual(Notification.objects.count(), 0)

@@ -1,11 +1,13 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from imapclient.exceptions import IMAPClientError
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
 
@@ -419,6 +421,123 @@ class MailFolderRenameTests(MailTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class MailFolderNamesOnTheServerTests(MailTestMixin, APITestCase):
+    """The create and rename endpoints, down to the mailbox the server holds."""
+
+    list_url = "/api/v1/mail/folders"
+
+    def setUp(self):
+        super().setUp()
+        self.server = self.enterContext(fake_imap())
+        self.server.mailbox("MyFolder")
+        self.client.force_authenticate(self.user)
+
+    def _url(self, folder):
+        return f"/api/v1/mail/folders/{folder.uuid}"
+
+    def _nested(self, name, display_name):
+        self.server.mailbox(name)
+        return MailFolder.objects.create(
+            account=self.account,
+            name=name,
+            display_name=display_name,
+            folder_type="other",
+        )
+
+    def test_create_sends_the_typed_name_in_modified_utf7(self):
+        resp = self.client.post(
+            self.list_url,
+            {"account_id": str(self.account.uuid), "name": "Réunions & co"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data["name"], "R&AOk-unions &- co")
+        self.assertEqual(resp.data["display_name"], "Réunions & co")
+        self.assertIn("R&AOk-unions &- co", self.server.mailboxes)
+
+    def test_create_under_a_parent_with_a_non_ascii_name(self):
+        self._nested("R&AOk-unions", "Réunions")
+
+        resp = self.client.post(
+            self.list_url,
+            {
+                "account_id": str(self.account.uuid),
+                "name": "Été",
+                "parent_name": "R&AOk-unions",
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data["display_name"], "Été")
+        self.assertIn("R&AOk-unions/&AMk-t&AOk-", self.server.mailboxes)
+
+    def test_create_refused_by_the_server_leaves_no_row(self):
+        resp = self.client.post(
+            self.list_url,
+            {"account_id": str(self.account.uuid), "name": "MyFolder"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(
+            MailFolder.objects.filter(account=self.account, name="MyFolder").count(), 1
+        )
+
+    def test_rename_sends_the_typed_name_in_modified_utf7(self):
+        resp = self.client.patch(
+            self._url(self.custom), {"display_name": "Réunions & co"}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["name"], "R&AOk-unions &- co")
+        self.assertEqual(resp.data["display_name"], "Réunions & co")
+        self.assertIn("R&AOk-unions &- co", self.server.mailboxes)
+        self.assertNotIn("MyFolder", self.server.mailboxes)
+
+    def test_rename_to_the_name_it_already_shows_sends_nothing(self):
+        folder = self._nested("R&AOk-unions", "Réunions")
+
+        resp = self.client.patch(
+            self._url(folder), {"display_name": "Réunions"}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.server.commands, [])
+
+    def test_rename_of_a_nested_folder_keeps_its_parent_and_its_subfolders(self):
+        self._nested("Parent", "Parent")
+        folder = self._nested("Parent/Old", "Old")
+        child = self._nested("Parent/Old/Child", "Child")
+
+        resp = self.client.patch(
+            self._url(folder), {"display_name": "New"}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["name"], "Parent/New")
+        self.assertEqual(resp.data["display_name"], "New")
+        self.assertIn("Parent/New", self.server.mailboxes)
+        self.assertIn("Parent/New/Child", self.server.mailboxes)
+        child.refresh_from_db()
+        self.assertEqual(child.name, "Parent/New/Child")
+        self.assertEqual(child.display_name, "Child")
+
+    def test_rename_refused_by_the_server_changes_nothing(self):
+        self.server.fail("rename")
+
+        resp = self.client.patch(
+            self._url(self.custom), {"display_name": "Refused"}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.custom.refresh_from_db()
+        self.assertEqual(self.custom.name, "MyFolder")
+        self.assertEqual(self.custom.display_name, "MyFolder")
+        self.assertIn("MyFolder", self.server.mailboxes)
 
 
 # ---------- Folder Move ----------
@@ -850,52 +969,72 @@ class MailFolderMarkReadTests(MailTestMixin, APITestCase):
 class MarkUidsReadImapTests(MailTestMixin, TestCase):
     """The IMAP half of mark-all-read."""
 
-    def _conn(self, store_status="OK"):
-        conn = MagicMock()
-        conn.select.return_value = ("OK", [b"3"])
-        conn.uid.return_value = (store_status, [b"done"])
-        return conn
+    def setUp(self):
+        super().setUp()
+        self.server = self.enterContext(fake_imap())
 
     def test_stores_seen_on_the_given_uids_of_the_folder(self):
         from workspace.mail.services.imap_messages import mark_uids_read
 
-        conn = self._conn()
-        with patch(
-            "workspace.mail.services.imap_messages.connect_imap", return_value=conn
-        ):
-            mark_uids_read(self.account, self.inbox, [7, 3])
+        for uid in (3, 5, 7):
+            self.server.deliver("INBOX", uid=uid)
+        self.server.deliver("Sent", uid=3)
 
-        conn.select.assert_called_once_with('"INBOX"')
-        conn.uid.assert_called_once_with("STORE", "3,7", "+FLAGS.SILENT", "(\\Seen)")
+        mark_uids_read(self.account, self.inbox, [7, 3])
+
+        self.assertEqual(self.server.flags("INBOX", 3), {r"\Seen"})
+        self.assertEqual(self.server.flags("INBOX", 5), set())
+        self.assertEqual(self.server.flags("INBOX", 7), {r"\Seen"})
+        self.assertEqual(self.server.flags("Sent", 3), set())
+        self.assertEqual(
+            self.server.named("add_flags"), [("add_flags", [3, 7], [r"\Seen"])]
+        )
 
     def test_splits_large_folders_into_bounded_commands(self):
         from workspace.mail.services.imap_messages import (
-            STORE_BATCH_SIZE,
+            UID_BATCH_SIZE,
             mark_uids_read,
         )
 
-        conn = self._conn()
-        with patch(
-            "workspace.mail.services.imap_messages.connect_imap", return_value=conn
-        ):
-            mark_uids_read(self.account, self.inbox, range(1, STORE_BATCH_SIZE + 2))
+        mark_uids_read(self.account, self.inbox, range(1, UID_BATCH_SIZE + 2))
 
-        self.assertEqual(conn.uid.call_count, 2)
-        self.assertEqual(conn.uid.call_args.args[1], str(STORE_BATCH_SIZE + 1))
+        first, second = self.server.named("add_flags")
+        self.assertEqual(first[1], list(range(1, UID_BATCH_SIZE + 1)))
+        self.assertEqual(second[1], [UID_BATCH_SIZE + 1])
+        self.assertEqual(len(self.server.named("select")), 1)
 
     def test_a_refused_store_raises(self):
         from workspace.mail.services.imap_messages import mark_uids_read
 
-        conn = self._conn(store_status="NO")
-        with (
-            patch(
-                "workspace.mail.services.imap_messages.connect_imap",
-                return_value=conn,
-            ),
-            self.assertRaises(Exception),
-        ):
+        self.server.deliver("INBOX", uid=1)
+        self.server.fail("add_flags")
+
+        with self.assertRaises(IMAPClientError):
             mark_uids_read(self.account, self.inbox, [1])
-        conn.logout.assert_called_once()
+
+        self.assertEqual(self.server.flags("INBOX", 1), set())
+        (connection,) = self.server.connections
+        self.assertTrue(connection.closed)
+
+    def test_a_refused_store_reports_the_folder_unsynced(self):
+        from workspace.mail.services.triage import mark_folder_read
+
+        self.server.deliver("INBOX", uid=1)
+        message = MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=1
+        )
+        MailFolder.objects.filter(pk=self.inbox.pk).update(
+            remote_state={"highestmodseq": 2}
+        )
+        self.server.fail("add_flags")
+
+        self.assertEqual(mark_folder_read(self.inbox), (1, False))
+
+        message.refresh_from_db()
+        self.inbox.refresh_from_db()
+        self.assertTrue(message.is_read)
+        # The next sync has to read the mailbox to put the flag right.
+        self.assertIsNone(self.inbox.remote_state)
 
 
 class MailFolderAiClassifyTests(MailTestMixin, APITestCase):

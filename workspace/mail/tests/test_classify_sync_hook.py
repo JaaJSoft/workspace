@@ -1,11 +1,13 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.ai.models import AITask
-from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.models import MailAccount, MailFolder
+from workspace.mail.services.imap_sync import sync_folder_messages
+from workspace.mail.tests.imap_fake import fake_imap
 
 User = get_user_model()
 
@@ -30,30 +32,9 @@ class SyncClassifyExclusionTests(TestCase):
         cache.clear()
 
     def _run_sync(self):
-        new_msg = MailMessage.objects.create(
-            account=self.account,
-            folder=self.folder,
-            message_id="<n@x>",
-            imap_uid=2,
-            subject="S",
-            date="2026-05-14T10:00:00Z",
-        )
-
-        conn = MagicMock()
-        conn.uid.side_effect = [
-            ("OK", [b"2"]),
-            ("OK", [(b"2 (UID 2 FLAGS ())", b"fake"), b")"]),
-        ]
-        conn.select.return_value = ("OK", [b"1"])
-
-        from workspace.mail.services.imap_sync import sync_folder_messages
-
+        """Sync one new message; returns the AI dispatch mock."""
         with (
-            patch("workspace.mail.services.imap_sync.connect_imap", return_value=conn),
-            patch(
-                "workspace.mail.services.imap_sync._parse_message", return_value=new_msg
-            ),
-            patch("workspace.mail.services.imap_sync._reconcile_folder"),
+            fake_imap() as server,
             patch("workspace.calendar.services.ics_processor.process_calendar_emails"),
             patch("workspace.ai.client.is_ai_enabled", return_value=True),
             # Patch the call site (imap_sync imports this name locally from
@@ -66,6 +47,7 @@ class SyncClassifyExclusionTests(TestCase):
             ),
             patch("workspace.ai.services.dispatch.dispatch") as mock_dispatch,
         ):
+            server.deliver("INBOX")
             sync_folder_messages(self.account, self.folder)
             return mock_dispatch
 

@@ -8,6 +8,7 @@ from workspace.calendar.services.ical_objects import (
     InvalidObject,
     _fold,
     parse_object,
+    read_calendar,
     render_calendar,
     render_object,
 )
@@ -172,6 +173,38 @@ class ParseObjectTests(SimpleTestCase):
         for body in (b"\xff\xfe", "hello", _ics()):
             with self.subTest(body=body), self.assertRaises(InvalidObject):
                 parse_object(body)
+
+    def test_an_end_closing_another_component_is_refused(self):
+        # Stored verbatim, the END:VEVENT inside the alarm would close the
+        # event wherever it is served, and the next lines would be events.
+        smuggled = [
+            "UID:x",
+            "DTSTART:20261005T090000Z",
+            "BEGIN:VALARM",
+            "TRIGGER:-PT15M",
+            "END:VEVENT",
+            "BEGIN:VEVENT",
+            "UID:smuggled",
+            "DTSTART:20261005T090000Z",
+            "END:VALARM",
+        ]
+        for read in (parse_object, read_calendar):
+            with self.subTest(read.__name__), self.assertRaises(InvalidObject):
+                read(_ics(smuggled))
+
+    def test_an_event_inside_an_alarm_is_refused(self):
+        nested = [
+            "UID:x",
+            "DTSTART:20261005T090000Z",
+            "BEGIN:VALARM",
+            "BEGIN:VEVENT",
+            "UID:smuggled",
+            "END:VEVENT",
+            "END:VALARM",
+        ]
+        for read in (parse_object, read_calendar):
+            with self.subTest(read.__name__), self.assertRaises(InvalidObject):
+                read(_ics(nested))
 
 
 class RenderObjectTests(SimpleTestCase):

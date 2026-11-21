@@ -23,6 +23,7 @@ function mailApp() {
     selectedFolder: null,
     selectedMessage: null,
     messageDetail: null,
+    imagesShownFor: null,  // uuid of the message whose images the user showed
     selectedMessages: [],
     expandedAccounts: {},
 
@@ -133,6 +134,9 @@ function mailApp() {
     moveMsgUuids: [],
     moveCount: 0,
 
+    // Show headers dialog: the raw header block, fetched from the server
+    headersDialog: { loading: false, text: '', error: '', subject: '' },
+
     // AI features
     aiSummarizing: false,
     aiSummary: null,
@@ -154,6 +158,7 @@ function mailApp() {
     ...mailAccountsMixin(),
     ...mailFoldersMixin(),
     ...mailMessagesMixin(),
+    ...mailBodyFrameMixin(),
     ...mailComposeMixin(),
     ...mailLabelsMixin(),
     ...mailAiMixin(),
@@ -318,6 +323,22 @@ function mailApp() {
         case '#':
           if (this.messageDetail) { e.preventDefault(); this.deleteMessage(this.messageDetail); }
           break;
+        case 'e': {
+          const ids = this._keyboardFileTargets(m => this.canArchive(m));
+          if (ids.length) { e.preventDefault(); this.fileMessages('archive', ids); }
+          break;
+        }
+        case '!': {
+          // Report spam, or Not spam on what is in Spam already.
+          const ref = this.messageDetail
+            || this.messages.find(m => this.selectedMessages.includes(m.uuid));
+          const action = ref && this.canMarkNotSpam(ref) ? 'not_spam' : 'spam';
+          const allowed = action === 'not_spam'
+            ? m => this.canMarkNotSpam(m) : m => this.canReportSpam(m);
+          const ids = this._keyboardFileTargets(allowed);
+          if (ids.length) { e.preventDefault(); this.fileMessages(action, ids); }
+          break;
+        }
         case 'Escape':
           if (this.selectedMessage) this.closeMessage();
           break;
@@ -493,6 +514,8 @@ function _defaultCompose() {
   return {
     account_id: '', to: [], cc: [], bcc: [],
     subject: '', body: '', is_reply: false, reply_message_id: null,
+    // Attachments of a stored message, sent by uuid (a forward's originals).
+    mail_attachments: [],
     sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
     _saveTimer: null, _sigBlock: '',

@@ -16,6 +16,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from ...models import MailMessage, MailRule, MailRuleLog
+from ..imap_connection import shared_connections
 from .actions import apply_action
 from .conditions import evaluate_node
 from .schema import (
@@ -109,34 +110,35 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
     log_rows: list[MailRuleLog] = []
     match_counts: dict = {}
     now = timezone.now()
-    for message in messages:
-        matched_rules: list[MailRule] = []
-        for rule, node, actions in parsed_rules:
-            if node is None or not _matches(rule, node, message):
-                continue
-            if actions is None:
-                # Conditions matched but actions could not be parsed -
-                # skip stats and log so the rule doesn't appear to have
-                # fired when it actually did nothing.
-                continue
-            audit, short_circuit = _apply(actions, message)
-            matched_rules.append(rule)
-            log_rows.append(
-                MailRuleLog(
-                    rule=rule,
-                    rule_name_snapshot=rule.name,
-                    message=message,
-                    actions_applied=audit,
+    with shared_connections():
+        for message in messages:
+            matched_rules: list[MailRule] = []
+            for rule, node, actions in parsed_rules:
+                if node is None or not _matches(rule, node, message):
+                    continue
+                if actions is None:
+                    # Conditions matched but actions could not be parsed -
+                    # skip stats and log so the rule doesn't appear to have
+                    # fired when it actually did nothing.
+                    continue
+                audit, short_circuit = _apply(actions, message)
+                matched_rules.append(rule)
+                log_rows.append(
+                    MailRuleLog(
+                        rule=rule,
+                        rule_name_snapshot=rule.name,
+                        message=message,
+                        actions_applied=audit,
+                    )
                 )
-            )
-            if short_circuit:
-                break
-            if rule.stop_processing:
-                break
-        if matched_rules:
-            summary[str(message.uuid)] = [str(r.uuid) for r in matched_rules]
-            for rule in matched_rules:
-                match_counts[rule.pk] = match_counts.get(rule.pk, 0) + 1
+                if short_circuit:
+                    break
+                if rule.stop_processing:
+                    break
+            if matched_rules:
+                summary[str(message.uuid)] = [str(r.uuid) for r in matched_rules]
+                for rule in matched_rules:
+                    match_counts[rule.pk] = match_counts.get(rule.pk, 0) + 1
 
     if log_rows:
         try:
@@ -204,26 +206,27 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
     imap_failed = 0
     matched_pks: list = []
     log_rows: list[MailRuleLog] = []
-    for message in messages:
-        if node is None or not _matches(rule, node, message):
-            continue
-        matched += 1
-        if dry_run:
-            continue
-        if actions is None:
-            continue
-        audit, _short_circuit = _apply(actions, message)
-        applied += 1
-        imap_failed += _count_imap_failures(audit)
-        matched_pks.append(message.pk)
-        log_rows.append(
-            MailRuleLog(
-                rule=rule,
-                rule_name_snapshot=rule.name,
-                message=message,
-                actions_applied=audit,
+    with shared_connections():
+        for message in messages:
+            if node is None or not _matches(rule, node, message):
+                continue
+            matched += 1
+            if dry_run:
+                continue
+            if actions is None:
+                continue
+            audit, _short_circuit = _apply(actions, message)
+            applied += 1
+            imap_failed += _count_imap_failures(audit)
+            matched_pks.append(message.pk)
+            log_rows.append(
+                MailRuleLog(
+                    rule=rule,
+                    rule_name_snapshot=rule.name,
+                    message=message,
+                    actions_applied=audit,
+                )
             )
-        )
 
     if log_rows:
         try:

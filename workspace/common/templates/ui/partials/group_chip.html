@@ -1,0 +1,39 @@
+{% comment %}
+Removable group chip
+====================
+The group counterpart of user_chip.html, for "selected groups" lists
+(chat group pickers, project group access). Rendered inside an Alpine
+`<template x-for>`, so the parameters below are Alpine expression
+fragments evaluated in the caller's loop scope (not Django values).
+
+Params:
+  - name_expr:            expression for the group name (e.g. "group.name")
+  - remove_expr:          optional - expression run on remove (e.g. "removeGroup(group)").
+                          Omit for a read-only chip without a cross.
+  - remove_show_expr:     optional - expression gating the cross's visibility (x-show)
+  - remove_disabled_expr: optional - expression disabling the cross (e.g. "busy")
+{% endcomment %}
+{% load i18n %}
+<span
+  class="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100 py-0.5 pl-0.5 pr-1"
+>
+  <span
+    class="w-6 h-6 rounded-full bg-base-300 flex items-center justify-center shrink-0"
+  >
+    <i data-lucide="users" class="w-3.5 h-3.5 opacity-70"></i>
+  </span>
+  <span class="text-xs" x-text="{{ name_expr }}"></span>
+  {% if remove_expr %}
+    {% translate "Remove %(name)s" as remove_label %}
+    <button
+      type="button"
+      class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
+      {% if remove_show_expr %} x-show="{{ remove_show_expr }}" x-cloak{% endif %}
+      {% if remove_disabled_expr %} :disabled="{{ remove_disabled_expr }}"{% endif %}
+      @click.stop="{{ remove_expr }}"
+      :aria-label="interpolate('{{ remove_label|escapejs }}', { name: {{ name_expr }} }, true)"
+    >
+      <i data-lucide="x" class="w-3 h-3"></i>
+    </button>
+  {% endif %}
+</span>

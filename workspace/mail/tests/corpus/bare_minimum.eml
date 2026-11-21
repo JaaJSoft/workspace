@@ -1,0 +1,5 @@
+From: cron@server.example.net
+To: root
+Subject: Cron <root@server> /usr/local/bin/backup
+
+backup: 3 volumes saved

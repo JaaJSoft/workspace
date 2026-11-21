@@ -14,6 +14,7 @@ from workspace.common.text import caseless
 
 from ..models import File, canonical_name
 from . import bucket_usage
+from .folder_dates import touch_folders
 from .storage_ops import blob_held_elsewhere, unique_copy_name
 
 logger = logging.getLogger(__name__)
@@ -160,6 +161,7 @@ def _insert(node, content):
             )
         with name_claim(node.owner, node.parent, node.name):
             node.save()
+        touch_folders(node.parent_id)
         if isinstance(content, _Staged):
             _place(field.storage, content, node)
         elif content is not None:

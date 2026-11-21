@@ -39,6 +39,7 @@ window.mailComposeMixin = function mailComposeMixin() {
             this.compose.is_reply = saved.is_reply || false;
             this.compose.reply_message_id = saved.reply_message_id || null;
             this.compose._sigBlock = saved._sigBlock || '';
+            this.compose.mail_attachments = saved.mail_attachments || [];
             if (saved.account_id) this.compose.account_id = saved.account_id;
             if (saved.cc?.length || saved.bcc?.length) this.showCcBcc = true;
             restored = true;
@@ -120,7 +121,15 @@ window.mailComposeMixin = function mailComposeMixin() {
       });
     },
 
-    forwardMessage(msg) {
+    // A list row carries neither the body nor the attachments: forwarding
+    // one from the context menu loads the message first.
+    async forwardMessage(msg) {
+      if (!Array.isArray(msg.attachments)) {
+        try {
+          const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
+          if (res.ok) msg = await res.json();
+        } catch (e) {}
+      }
       const subject = msg.subject?.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject || ''}`;
       this.showCompose({
         subject,
@@ -129,7 +138,12 @@ window.mailComposeMixin = function mailComposeMixin() {
         }, true) + `\n\n${msg.body_text || msg.snippet || ''}`,
         account_id: msg.account_id,
         is_reply: true,
+        mail_attachments: _forwardedAttachments(msg),
       });
+    },
+
+    removeMailAttachment(idx) {
+      this.compose.mail_attachments.splice(idx, 1);
     },
 
     // ----- Tag input helpers -----
@@ -309,8 +323,11 @@ window.mailComposeMixin = function mailComposeMixin() {
         return;
       }
 
-      this.compose.sending = true;
-      this.compose.error = '';
+      // The dialog stays usable while the send is pending: what follows the
+      // await acts on this composer, never on one opened in the meantime.
+      const sent = this.compose;
+      sent.sending = true;
+      sent.error = '';
 
       const formData = new FormData();
       formData.append('account_id', this.compose.account_id);
@@ -325,6 +342,7 @@ window.mailComposeMixin = function mailComposeMixin() {
       for (const addr of this.compose.cc) formData.append('cc', addr);
       for (const addr of this.compose.bcc) formData.append('bcc', addr);
       this.appendAttachmentsTo(formData, 'attachments', 'file_uuids');
+      for (const a of this.compose.mail_attachments) formData.append('attachment_uuids', a.uuid);
 
       try {
         const res = await this._fetch('/api/v1/mail/messages/send', {
@@ -333,25 +351,34 @@ window.mailComposeMixin = function mailComposeMixin() {
         });
 
         if (res.ok) {
-          if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
-          const draftId = this.compose.draft_id;
-          this._clearLocalStorageDraft();
-          document.getElementById('mail-compose-dialog').close();
-          this.compose = _defaultCompose();
-          this.clearAttachments();
+          if (sent._saveTimer) clearTimeout(sent._saveTimer);
+          // From the server, not the composer: a parent of another account
+          // than the sender's is not answered.
+          const { answered_message_id: answered } = await res.json().catch(() => ({}));
+          if (answered) {
+            const listMsg = this.messages.find(m => m.uuid === answered);
+            if (listMsg) listMsg.is_answered = true;
+            if (this.messageDetail?.uuid === answered) this.messageDetail.is_answered = true;
+          }
+          if (this.compose === sent) {
+            this._clearLocalStorageDraft();
+            document.getElementById('mail-compose-dialog').close();
+            this.compose = _defaultCompose();
+            this.clearAttachments();
+          }
           // Delete the draft after sending
-          if (draftId) this._deleteDraft(draftId);
+          if (sent.draft_id) this._deleteDraft(sent.draft_id);
         } else {
           const data = await res.json().catch(() => ({}));
-          this.compose.error = data.detail || data.error || gettext('Failed to send email');
+          sent.error = data.detail || data.error || gettext('Failed to send email');
         }
       } catch (e) {
         // Network failure (offline, DNS, CORS, abort) - fetch rejects without
         // ever touching res.ok. Without this catch, sending=true would stick
         // and lock the dialog spinner indefinitely.
-        this.compose.error = gettext('Failed to send email');
+        sent.error = gettext('Failed to send email');
       } finally {
-        this.compose.sending = false;
+        sent.sending = false;
       }
     },
 
@@ -382,6 +409,7 @@ window.mailComposeMixin = function mailComposeMixin() {
         subject: this.compose.subject,
         body_text: this.compose.body,
         body_html: htmlBody,
+        attachment_uuids: this.compose.mail_attachments.map(a => a.uuid),
       };
       if (this.compose.draft_id) payload.draft_id = this.compose.draft_id;
       if (this.compose.reply_message_id) payload.reply_message_id = this.compose.reply_message_id;
@@ -421,6 +449,7 @@ window.mailComposeMixin = function mailComposeMixin() {
           is_reply: this.compose.is_reply,
           reply_message_id: this.compose.reply_message_id,
           _sigBlock: this.compose._sigBlock,
+          mail_attachments: this.compose.mail_attachments,
           saved_at: Date.now(),
         };
         localStorage.setItem('mail_compose_draft', JSON.stringify(data));
@@ -469,3 +498,12 @@ window.mailComposeMixin = function mailComposeMixin() {
     },
   };
 };
+
+// What a forward carries over: every attachment of the original except the
+// pictures its body displays, which the forwarded text does not show and
+// would otherwise arrive as stray files.
+function _forwardedAttachments(msg) {
+  return (msg.attachments || [])
+    .filter(a => !a.embedded)
+    .map(a => ({ uuid: a.uuid, filename: a.filename, size: a.size }));
+}

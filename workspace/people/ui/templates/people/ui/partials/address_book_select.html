@@ -1,0 +1,26 @@
+{% comment %}
+Address book picker
+===================
+A <select> over the books a contact can live in: "mine" for the caller's
+personal book, "group:<id>" for each of the `groups` in the enclosing Alpine
+scope (SCOPE_GROUP_PREFIX in people/serializers.py reads that format back).
+
+Params (Alpine expression fragments written by the including template):
+  - model_expr:    the x-model target (e.g. "personForm.scope")
+  - disabled_expr: optional - expression bound to :disabled
+  - aria_label:    optional - accessible name when no <label> wraps the select
+  - width_class:   optional - width classes (default "w-full")
+{% endcomment %}
+{% load i18n %}
+<select
+  name="scope"
+  class="select select-sm {{ width_class|default:"w-full" }}"
+  x-model="{{ model_expr }}"
+  {% if disabled_expr %}:disabled="{{ disabled_expr }}"{% endif %}
+  {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
+>
+  <option value="mine">{% translate "My contacts" %}</option>
+  <template x-for="group in groups" :key="group.id">
+    <option :value="'group:' + group.id" x-text="group.name"></option>
+  </template>
+</select>

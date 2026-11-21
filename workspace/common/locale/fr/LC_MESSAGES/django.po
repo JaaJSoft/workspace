@@ -270,7 +270,7 @@ msgstr "Actualiser"
 msgid "Tile size"
 msgstr "Taille des vignettes"
 
-#: templates/ui/partials/user_chip.html
+#: templates/ui/partials/group_chip.html templates/ui/partials/user_chip.html
 #, python-format
 msgid "Remove %%(name)s"
 msgstr "Retirer %%(name)s"

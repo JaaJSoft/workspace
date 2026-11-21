@@ -976,11 +976,6 @@ msgid "To"
 msgstr "À"
 
 #: ui/templates/chat/ui/partials/new_conversation_dialog.html
-msgctxt "remove item"
-msgid "Remove"
-msgstr "Retirer"
-
-#: ui/templates/chat/ui/partials/new_conversation_dialog.html
 msgid "Group name"
 msgstr "Nom du groupe"
 

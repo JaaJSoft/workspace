@@ -169,21 +169,11 @@
           {% endif %}
           <div class="flex flex-wrap gap-2" x-show="items.length">
             <template x-for="group in items" :key="group.id">
-              <span class="badge badge-outline badge-lg gap-1 bg-base-100">
-                <i data-lucide="users" class="w-3 h-3 opacity-60"></i>
-                <span x-text="group.name"></span>
-                {% if writable %}
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-xs btn-square text-error"
-                    aria-label="{% translate "Detach group" %}"
-                    :disabled="busy"
-                    @click="removeGroup(group)"
-                  >
-                    <i data-lucide="x" class="w-3 h-3"></i>
-                  </button>
-                {% endif %}
-              </span>
+              {% if writable %}
+                {% include "ui/partials/group_chip.html" with name_expr="group.name" remove_expr="removeGroup(group)" remove_disabled_expr="busy" %}
+              {% else %}
+                {% include "ui/partials/group_chip.html" with name_expr="group.name" %}
+              {% endif %}
             </template>
           </div>
           <p class="text-sm text-base-content/60" x-show="!items.length">{% translate "No groups attached." %}</p>

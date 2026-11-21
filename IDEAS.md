@@ -19,7 +19,7 @@ This file is the forward-looking roadmap and idea backlog, sorted by priority. S
 
 | Priority | Structural projects | Quick wins alongside |
 |---|---|---|
-| **P0 - Now** | Clean-up release: the open problems #1618-#1624 and the Mail data issues (#1504, #1505, #1513, #1514), housekeeping | Mail and Calendar fixes from the module backlogs |
+| **P0 - Now** | Clean-up release: the open problems #1618-#1626 and the Mail data issues (#1504, #1505, #1513, #1514), housekeeping | Mail and Calendar fixes from the module backlogs |
 | **P1 - Next** | Instance email; sign-in hardening; backup and restore; real-time v2; split Celery queues | Calendar reminders and drag & drop, Mail send queue, Projects "My work" |
 | **P2 - Then** | Team spaces (spaces on groups, chat channels, group calendars, folder sharing, guests); file versions | Photos memories and Live Photos, Notes knowledge pack |
 | **P3 - Later** | Event journal (audit log, automations, webhooks); AI à la carte and MCP; migrations and account export | Module backlogs below |
@@ -399,7 +399,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Rich editor** - the chat's Milkdown composer, HTML signatures, pasted images (M)
 - [ ] **Identities and aliases** - several From addresses per account, picked from the address a message was sent to (M)
 - [ ] **One-click unsubscribe** (RFC 8058) and a Subscriptions view (S/M)
-- [ ] **Remote images blocked by default** - "show images", trusted senders, an image proxy (M)
+- [ ] **Remote images blocked by default** - "show images", trusted senders, an image proxy; builds on the isolated rendering of #1626 (M)
 - [ ] **Mail to task, mail to event**, by hand (S/M)
 - [ ] **Templates and AI-suggested replies** (S/M)
 - [ ] **Accounts pre-configured by the admin**, created at first SSO sign-in - #924 (M)
@@ -700,7 +700,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Widget registry** - each module publishes its widgets (fragment URL, size, default, preferences). The dashboard becomes a grid to hide, reorder and then drag, and stops importing four modules directly (M/L)
 - [ ] **Resume** - the last opened files, notes and books, with their position. Needs open tracking in Files - #1489 (M)
 - [ ] **Memories and birthdays** - #1167 (S/M)
-- [ ] **Links to other services**, Homarr style, with an optional status check (S/M)
+- [ ] **Links to other services**, Homarr style, with an optional status check through the shared URL guard (#1625) (S/M)
 - [ ] **AI morning brief** at local time (M)
 - [ ] **Important unread mail** (S)
 - [ ] **Unified pins and favorites** across files, conversations and projects (M)

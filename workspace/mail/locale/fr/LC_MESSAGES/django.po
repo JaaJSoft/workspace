@@ -670,6 +670,30 @@ msgstr "Événement suggéré"
 msgid "View in calendar"
 msgstr "Voir dans le calendrier"
 
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Remote images are hidden to protect your privacy."
+msgstr "Les images distantes sont masquées pour protéger votre vie privée."
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Show images"
+msgstr "Afficher les images"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Always show from this sender"
+msgstr "Toujours afficher pour cet expéditeur"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Images from this sender are always shown."
+msgstr "Les images de cet expéditeur sont toujours affichées."
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Stop showing them"
+msgstr "Ne plus les afficher"
+
+#: ui/templates/mail/ui/partials/message_detail.html
+msgid "Message body"
+msgstr "Corps du message"
+
 #: ui/templates/mail/ui/partials/message_list.html
 msgctxt "mail sender"
 msgid "Unknown"

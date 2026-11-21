@@ -408,10 +408,42 @@
       </template>
 
       <template x-if="messageDetail.body_html">
-        <div
-          class="mail-body prose prose-sm max-w-none"
-          x-html="messageDetail.body_html"
-        ></div>
+        <div>
+          <div
+            x-show="messageDetail.has_remote_images && !mailImagesAllowed()"
+            class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-lg border border-base-300 bg-base-200/60 text-sm"
+          >
+            <i data-lucide="image-off" class="w-4 h-4 shrink-0 text-base-content/60"></i>
+            <span class="flex-1 min-w-48 text-base-content/80">{% translate "Remote images are hidden to protect your privacy." %}</span>
+            <div class="flex flex-wrap gap-1">
+              <button type="button" class="btn btn-xs btn-ghost" @click="showMailImages()">
+                {% translate "Show images" %}
+              </button>
+              <button type="button" class="btn btn-xs btn-ghost" @click="trustMailSender()">
+                {% translate "Always show from this sender" %}
+              </button>
+            </div>
+          </div>
+          <div
+            x-show="messageDetail.has_remote_images && messageDetail.sender_trusted"
+            class="mb-3 flex flex-wrap items-center gap-x-2 text-xs text-base-content/60"
+          >
+            <span>{% translate "Images from this sender are always shown." %}</span>
+            <button type="button" class="link link-hover" @click="distrustMailSender()">
+              {% translate "Stop showing them" %}
+            </button>
+          </div>
+          <iframe
+            class="mail-body-frame block w-full h-0 border-0"
+            title="{% translate "Message body" %}"
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            referrerpolicy="no-referrer"
+            x-init="watchMailBody($el)"
+            x-effect="renderMailBody($el)"
+            @load="fitMailBody($el)"
+            @mail-theme-change="renderMailBody($el)"
+          ></iframe>
+        </div>
       </template>
       <template x-if="!messageDetail.body_html && messageDetail.body_text">
         <pre

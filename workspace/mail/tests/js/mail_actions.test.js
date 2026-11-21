@@ -36,6 +36,7 @@ function makeApp() {
       'workspace/mail/ui/static/mail/ui/js/mail_accounts.js',
       'workspace/mail/ui/static/mail/ui/js/mail_folders.js',
       'workspace/mail/ui/static/mail/ui/js/mail_messages.js',
+      'workspace/mail/ui/static/mail/ui/js/mail_body_frame.js',
       'workspace/mail/ui/static/mail/ui/js/mail_compose.js',
       'workspace/mail/ui/static/mail/ui/js/mail_labels.js',
       'workspace/mail/ui/static/mail/ui/js/mail_ai.js',

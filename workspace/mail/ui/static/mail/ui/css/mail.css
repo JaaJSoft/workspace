@@ -1,43 +1,5 @@
 /* Mail module styles */
 
-/* Email body container — isolate rendered HTML from the rest of the page */
-.mail-body {
-  line-height: 1.6;
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
-
-.mail-body img {
-  max-width: 100%;
-  height: auto;
-}
-
-.mail-body table {
-  border-collapse: collapse;
-  max-width: 100%;
-}
-
-.mail-body td,
-.mail-body th {
-  padding: 4px 8px;
-}
-
-.mail-body a {
-  color: var(--module);
-  text-decoration: underline;
-}
-
-.mail-body a:hover {
-  opacity: 0.8;
-}
-
-.mail-body blockquote {
-  border-left: 3px solid color-mix(in oklab, var(--module) 40%, transparent);
-  padding-left: 1rem;
-  margin-left: 0;
-  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
-}
-
 /* Plain text body */
 .mail-body-text {
   line-height: 1.6;

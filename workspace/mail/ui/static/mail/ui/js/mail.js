@@ -23,6 +23,7 @@ function mailApp() {
     selectedFolder: null,
     selectedMessage: null,
     messageDetail: null,
+    imagesShownFor: null,  // uuid of the message whose images the user showed
     selectedMessages: [],
     expandedAccounts: {},
 
@@ -154,6 +155,7 @@ function mailApp() {
     ...mailAccountsMixin(),
     ...mailFoldersMixin(),
     ...mailMessagesMixin(),
+    ...mailBodyFrameMixin(),
     ...mailComposeMixin(),
     ...mailLabelsMixin(),
     ...mailAiMixin(),

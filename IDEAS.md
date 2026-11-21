@@ -120,19 +120,22 @@ A space is that team made visible. Chat channels, a shared drive and boards in o
 
 ### AI à la carte - P1 (fixes) to P3
 
-The chat is meant to become a real agent, with a harness in the spirit of Claude Code. The runner, the concurrent dispatcher, the observers and the policies of `ai/harness/` are the base it grows from.
+The chat is meant to become a real agent, with a harness in the spirit of Claude Code.
 
-- [ ] **Agent harness** - the pieces an agent needs beyond a tool loop (L):
+**Decision:** the agent runtime is built on Pydantic AI (MIT) rather than grown by hand from `ai/harness/`. The library carries the generic machinery: providers, toolsets, tool search, approvals, hooks, history processing and MCP. Workspace keeps what is its own: the tools and their access checks, the confirmation flow, Celery, SSE streaming, run records, goals and memory.
+
+- [ ] **Bots on Pydantic AI** - a spike measured by the evaluation bench (#795), then the model layer (which fixes #1645), then the loop - #1796 (L)
+- [ ] **Agent harness** - the pieces an agent needs beyond a tool loop, on the primitives of #1796 (L):
   - tools loaded on demand: the context holds their names, and a search tool loads a definition when the task needs it (#797);
   - skills: instruction packs that enter the context with their tools or their task, instead of one system prompt that carries everything (#796);
   - subagents that work in a context of their own and report back, for research or bulk work (#803);
   - context managed by tokens: a budget per model, and compaction of older turns;
   - a plan the user can follow in the conversation;
   - permission levels per kind of tool (read, write, send), on top of bound confirmations (#852);
-  - hooks before and after a tool call, on the existing observers and policies.
+  - hooks before and after a tool call, replacing today's observers and policies.
 - [ ] **Per-bot tool sets** - every bot receives all 56 tools today, roughly 12k tokens resent on every model call (estimate). Sets per module bound what a bot may use, and the search tool loads them. After #1622 - #797 (M/L)
 - [ ] **System prompt built from the tools a bot actually has**, then split into skills - #796 (S, then M)
-- [ ] **Provider layer** - a `Provider` model (OpenAI-compatible, Anthropic, Ollama; URL, encrypted key, context window, prices), small, reading and vision roles per provider, native adapters with prompt caching (L)
+- [ ] **Providers configured in the app** - a `Provider` model (type, URL, encrypted key, context window, prices), and small, reading and vision roles per provider, on the Pydantic AI models of #1796 (M)
 - [ ] **MCP server** - expose the tool registry to external AI clients with personal API tokens (M). Then an MCP client for servers the admin declares (M/L)
 - [ ] **Knowledge bases** - attach a folder or notes to a bot. Hybrid full-text + vector search on `common/vectors`, with answers that cite their sources (L)
 - [ ] **Usage, costs and quotas** - covers:
@@ -392,16 +395,10 @@ Personal videos stay in Photos and Files, where the work is making them play eve
 
 **Big projects**
 
-- [ ] **IMAP sync v2 on maintained libraries** - IMAPClient for the protocol, the standard library's modern email API for parsing and composing - #1774:
-  - one connection per pass, CONDSTORE/QRESYNC to skip unchanged folders;
-  - MOVE and UID EXPUNGE;
-  - a cadence per folder.
-
-  (L)
 - [ ] **Stable message identity** - labels, AI summary and extractions follow a message by Message-ID when it moves outside Workspace or UIDVALIDITY resets - #1504, #1505 (M/L)
 - [ ] **Data lifecycle** - purge messages marked deleted, delete attachment files no row points to, and delete an account in a task instead of the request (M)
 - [ ] **Attachments on demand** - fetch BODYSTRUCTURE and text parts at sync, and attachments when opened (L)
-- [ ] **JMAP backend** (Stalwart, Fastmail) behind a backend interface, after sync v2 (L, later)
+- [ ] **JMAP backend** (Stalwart, Fastmail) behind a backend interface, next to the IMAPClient one (L, later)
 - [ ] **Encryption** - first show whether a message is signed or encrypted (S/MIME, PGP/MIME), then OpenPGP.js as a file of its own (LGPL) (L, low priority)
 
 **Technical**
@@ -428,8 +425,7 @@ Personal videos stay in Photos and Files, where the work is making them play eve
 
 **Big projects**
 
-- [ ] **One iCalendar reader** for CalDAV objects, subscribed feeds and emailed invitations, with the same fidelity everywhere; fixes #1623 - #1775 (M)
-- [ ] **iTIP and attendees overhaul** - one attendee model mapped to ATTENDEE and ORGANIZER in CalDAV and ICS, and the full organizer flow. After #1775 and the reply fixes in #1657 and #1660 (L)
+- [ ] **iTIP and attendees overhaul** - one attendee model mapped to ATTENDEE and ORGANIZER in CalDAV and ICS, and the full organizer flow, on the single iCalendar reader (#1775). After the reply fixes in #1657 and #1660 (L)
 - [ ] **Sharing and availability foundation** - per-calendar rights, group calendars, free/busy. Booking pages plug into it (L)
 - [ ] **FullCalendar 7** - with `calendar_events.js` split and drag and drop on. Evaluate EventCalendar (MIT) if rooms come in - #1102 (M/L)
 

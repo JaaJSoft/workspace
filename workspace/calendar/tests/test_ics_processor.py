@@ -367,6 +367,15 @@ class InvitationMatchingTest(ICSProcessorMixin, TestCase):
         )
         self.assertFalse(Event.objects.filter(ical_uid=self.UID).exists())
 
+    def test_request_organized_by_the_account_creates_nothing(self, mock_notify, _):
+        # The user invited people from a phone calendar and was copied.
+        self._receive(
+            ICS_REQUEST.replace("mailto:alice@example.com", "mailto:Bob@Test.com"),
+            uid=1,
+        )
+        self.assertFalse(Event.objects.filter(ical_uid=self.UID).exists())
+        mock_notify.assert_not_called()
+
     def test_cancel_from_another_organizer_is_ignored(self, *_mocks):
         self._receive(ICS_REQUEST, uid=1)
         self._receive(ICS_CANCEL.replace("alice@example.com", "mallory@evil.test"), 2)

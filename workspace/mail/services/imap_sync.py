@@ -471,11 +471,10 @@ def _after_import(account, folder, new_message_uuids, was_initial_sync):
     except Exception:
         logger.exception("Failed to send mail notifications for %s", scrub(folder.name))
 
-    # Dispatch AI classification / extraction for new messages
-    # (skip sent/drafts). Classify and extract are gated by independent
-    # per-user toggles AND wrapped in independent try/except blocks so a
-    # failure dispatching one never prevents the other.
-    if new_message_uuids and folder.folder_type not in ("sent", "drafts"):
+    # Classify and extract are gated by independent per-user toggles AND
+    # wrapped in independent try/except blocks so a failure dispatching one
+    # never prevents the other.
+    if new_message_uuids and folder.receives_new_mail:
         try:
             from workspace.ai.client import is_ai_enabled
             from workspace.mail.services.ai_settings import (
@@ -536,8 +535,9 @@ def _after_import(account, folder, new_message_uuids, was_initial_sync):
     # Scoping on new_message_uuids avoids re-parsing every old ICS
     # email on every sync (has_calendar_event is set once at parse
     # time and never flipped later, so old messages never need a
-    # second pass).
-    if new_message_uuids:
+    # second pass). An invitation in Spam is calendar spam, and the copy in
+    # Sent of one the user sent from another client is not theirs to accept.
+    if new_message_uuids and folder.receives_new_mail:
         from ..models import MailMessage as _MailMsg
 
         cal_messages = _MailMsg.objects.filter(

@@ -185,6 +185,27 @@ class MailFolder(models.Model):
     def __str__(self):
         return f"{self.account.email} / {self.display_name}"
 
+    @property
+    def receives_new_mail(self):
+        """Whether a message that appears here is mail arriving for the user.
+
+        Sent and Drafts hold what the user wrote; Spam holds what the server
+        rejected and Trash what someone threw away, where a move by another
+        client also shows up under a new UID. None of it is news, nor input
+        for the classifier or the calendar.
+        """
+        return self.folder_type not in _NOT_RECEIVING_FOLDER_TYPES
+
+
+_NOT_RECEIVING_FOLDER_TYPES = frozenset(
+    {
+        MailFolder.FolderType.SENT,
+        MailFolder.FolderType.DRAFTS,
+        MailFolder.FolderType.TRASH,
+        MailFolder.FolderType.SPAM,
+    }
+)
+
 
 class MailLabel(models.Model):
     """User-defined label that can be applied to mail messages."""

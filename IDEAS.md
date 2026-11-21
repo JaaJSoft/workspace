@@ -26,7 +26,7 @@ This file is the forward-looking roadmap, sorted by priority: the structural pro
 | **P1 - Next** | Instance email; sign-in hardening; backup and restore; real-time v2; split Celery queues | Calendar reminders, Mail send queue, Projects "My work" |
 | **P2 - Then** | Team spaces (spaces on groups, chat channels, group calendars, folder sharing, guests); file versions | Photos memories and Live Photos, Notes knowledge pack |
 | **P3 - Later** | Event journal (audit log, automations, webhooks); AI à la carte and MCP; migrations and account export | Module backlogs below |
-| **Someday** | Bookmarks, RSS/Feeds, native desktop integration, JMAP, end-to-end encrypted mail | |
+| **Someday** | Music & Audio, Bookmarks, RSS/Feeds, native desktop integration, JMAP, end-to-end encrypted mail; far off, a video library | |
 
 ---
 
@@ -179,6 +179,33 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] Save an article to Notes or Bookmarks
 - [ ] Later: OPML import and export, full-content extraction, a digest by email
 
+### Music & Audio - Someday
+
+A library over the music already in Files, the way Photos is one over pictures. There is nothing to import, a group folder makes a family library, and a playlist can be shared by link.
+
+- [ ] **Library** - tags read with ffprobe, already in the media pipeline: title, artist, album, track and disc numbers, year, cover art, MusicBrainz ids. `mutagen` is GPL and excluded by the licence policy; `tinytag` (MIT) is the fallback. A `Track` 1:1 on `File`, albums and artists derived from the tags, and the library scopes of Photos (L)
+- [ ] **Views and player** - covers:
+  - albums as a grid of covers, artists, tracks, recently played;
+  - playlists that are personal, of a group, or shared by public link;
+  - a queue, shuffle and repeat, and Media Session controls on the lock screen and headsets.
+
+  (M)
+- [ ] **Playback across modules** - every module is a full page, so leaving Music stops the sound. Start with a player in a window of its own, before changing how the app navigates (M)
+- [ ] **Subsonic API** - the OpenSubsonic subset (browse, stream, cover art, playlists, stars, scrobble), authenticated with API tokens. It brings mature mobile and desktop apps, with offline listening, gapless playback, CarPlay and Android Auto (M)
+- [ ] **Later:**
+  - on-the-fly Opus transcoding for mobile data (optional on a Pi);
+  - ListenBrainz scrobbling and synced lyrics (LRC);
+  - AI tools;
+  - podcasts (with RSS / Feeds) and audiobooks, on the same playback engine with resume positions.
+
+### Video library - Someday, far off
+
+Movies and series as a media library, the way Jellyfin or Plex do it. That is a whole product (metadata scraping, adaptive transcoding, TV clients), heavy on CPU, and Jellyfin already does it well.
+
+Personal videos stay in Photos and Files, where the work is making them play everywhere (see Photos) and the viewer's subtitles (see Files). Until a video library makes sense:
+
+- [ ] Document a Jellyfin container that reads the same volume read-only (local storage only), and link it from the dashboard
+
 ---
 
 ## Module backlogs
@@ -243,6 +270,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **AI write tools** - create, move, share, file an attachment. Auto-tag documents into existing tags (images are already tagged by Photos) - #544 (M)
 - [ ] **Compress to ZIP on the server**, as a background operation (S/M)
 - [ ] **Save from a URL** (S/M)
+- [ ] **Subtitles and chapters** in the video viewer - `.srt` and `.vtt` files next to the video (S/M)
 
 **Big projects**
 

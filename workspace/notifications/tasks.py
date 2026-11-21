@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import logging
+from concurrent.futures import ThreadPoolExecutor, wait
 
 import orjson
 from celery import shared_task
@@ -18,7 +19,11 @@ from workspace.users.services.presence import is_active
 logger = logging.getLogger(__name__)
 
 PUSH_COOLDOWN_SECONDS = 60
-PUSH_TIMEOUT_SECONDS = 10
+PUSH_TIMEOUT_SECONDS = 10  # per connect and per read, not for the whole send
+# What the task waits for all devices together, below its soft time limit; a
+# send still running then is left to its own timeouts.
+PUSH_DEADLINE_SECONDS = 20
+MAX_CONCURRENT_PUSHES = 8
 ACTIVE_RETRY_DELAY_SECONDS = 60
 RETENTION_DAYS = 90
 _SOURCE_ID_ATTRS = tuple(f"{name}_id" for name in SOURCE_FIELD_NAMES)
@@ -184,56 +189,90 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
         "Topic": _push_topic(notif),
     }
 
+    def send(subscription_info):
+        with GuardedPushSession() as session:
+            webpush(
+                subscription_info=subscription_info,
+                data=payload,
+                vapid_private_key=signer,
+                # pywebpush fills `aud` and `exp` into the dict it is handed
+                # and only ever revises `exp`. Passing the settings dict itself
+                # would pin every later push to the first endpoint's origin,
+                # which the other push services reject.
+                vapid_claims=dict(vapid_claims),
+                ttl=PUSH_TTL_SECONDS,
+                headers=headers,
+                requests_session=session,
+                timeout=PUSH_TIMEOUT_SECONDS,
+            )
+
     delivered = 0
-    for sub in subscriptions:
+    try:
+        # The pool threads only talk HTTP: the database, the cache and the
+        # logs stay on this thread. Shutting down without waiting is what
+        # keeps a stalled send from holding the task past the deadline.
+        pool = ThreadPoolExecutor(
+            max_workers=min(len(subscriptions), MAX_CONCURRENT_PUSHES),
+            thread_name_prefix="webpush",
+        )
         try:
-            with GuardedPushSession() as session:
-                webpush(
-                    subscription_info={
+            futures = {
+                sub: pool.submit(
+                    send,
+                    {
                         "endpoint": sub.endpoint,
                         "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
                     },
-                    data=payload,
-                    vapid_private_key=signer,
-                    # pywebpush fills `aud` and `exp` into the dict it is
-                    # handed and only ever revises `exp`. Passing the settings
-                    # dict itself would pin every later push to the first
-                    # endpoint's origin, which the other push services reject.
-                    vapid_claims=dict(vapid_claims),
-                    ttl=PUSH_TTL_SECONDS,
-                    headers=headers,
-                    requests_session=session,
-                    timeout=PUSH_TIMEOUT_SECONDS,
                 )
-            delivered += 1
-        except UnsafeUrl as e:
-            # Kept: "could not be resolved" is a refusal too, and a DNS outage
-            # must not drop every subscription.
-            logger.warning(
-                "Push refused for %s: %s", scrub(sub.endpoint[:60]), e.user_message
-            )
-        except WebPushException as e:
-            status_code = (
-                getattr(e.response, "status_code", None)
-                if hasattr(e, "response")
-                else None
-            )
-            if status_code in (404, 410):
-                sub.delete()
-                logger.info(
-                    "Deleted expired push subscription %s", scrub(sub.endpoint[:60])
+                for sub in subscriptions
+            }
+            done, _ = wait(futures.values(), timeout=PUSH_DEADLINE_SECONDS)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+        for sub, future in futures.items():
+            if future not in done:
+                logger.warning(
+                    "Push to %s did not complete within %ss",
+                    scrub(sub.endpoint[:60]),
+                    PUSH_DEADLINE_SECONDS,
+                )
+                continue
+            try:
+                future.result()
+            except UnsafeUrl as e:
+                # Kept: "could not be resolved" is a refusal too, and a DNS
+                # outage must not drop every subscription.
+                logger.warning(
+                    "Push refused for %s: %s", scrub(sub.endpoint[:60]), e.user_message
+                )
+            except WebPushException as e:
+                status_code = getattr(e.response, "status_code", None)
+                if status_code in (404, 410):
+                    sub.delete()
+                    logger.info(
+                        "Deleted expired push subscription %s",
+                        scrub(sub.endpoint[:60]),
+                    )
+                else:
+                    # The message carries the push service's response body.
+                    logger.warning(
+                        "Push failed for %s: %s",
+                        scrub(sub.endpoint[:60]),
+                        scrub(str(e)[:300]),
+                    )
+            except Exception:
+                logger.exception(
+                    "Unexpected error sending push to %s", scrub(sub.endpoint[:60])
                 )
             else:
-                logger.warning("Push failed for %s: %s", scrub(sub.endpoint[:60]), e)
-        except Exception:
-            logger.exception(
-                "Unexpected error sending push to %s", scrub(sub.endpoint[:60])
-            )
-
-    if cooldown_key and delivered == 0:
-        # Nothing went out: re-arm the window so the next notification for
-        # this source is not throttled by an attempt that delivered nothing.
-        cache.delete(cooldown_key)
+                delivered += 1
+    finally:
+        if cooldown_key and delivered == 0:
+            # Nothing went out: re-arm the window so the next notification for
+            # this source is not throttled by an attempt that delivered
+            # nothing. In a finally so a time limit hit mid-run releases it too.
+            cache.delete(cooldown_key)
 
 
 @shared_task(

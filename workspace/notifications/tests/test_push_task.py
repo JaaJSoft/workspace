@@ -1,3 +1,5 @@
+import threading
+import time
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -457,3 +459,126 @@ class PushServiceHeadersTests(TestCase):
         first = self._send()["Topic"]
         second = self._send()["Topic"]
         self.assertNotEqual(first, second)
+
+
+HANG_SECONDS = 5
+
+
+@override_settings(**FAKE_VAPID_SETTINGS)
+@patch("workspace.notifications.tasks.PUSH_DEADLINE_SECONDS", 0.5)
+@patch("workspace.notifications.tasks.is_active", return_value=False)
+class StalledPushServiceTests(TestCase):
+    """A push service that accepts the connection and never answers."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="stalluser", password="pass")
+        self.conv = Conversation.objects.create(created_by=self.user)
+        self.stalled = PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://stalled.example.com/sub",
+            p256dh="p256dh-stalled",
+            auth="auth-stalled",
+        )
+        self.release = threading.Event()
+        self.addCleanup(self.release.set)
+        self.delivered_to = []
+
+    def tearDown(self):
+        cache.clear()
+
+    def _webpush(self, subscription_info, **kwargs):
+        endpoint = subscription_info["endpoint"]
+        if endpoint == self.stalled.endpoint:
+            # Stands in for the read timeout that ends the send eventually.
+            self.release.wait(HANG_SECONDS)
+            raise TimeoutError("push service did not answer")
+        self.delivered_to.append(endpoint)
+
+    def _send(self):
+        from workspace.notifications.tasks import send_push_notification
+
+        notif = Notification.objects.create(
+            recipient=self.user,
+            origin="chat",
+            icon="",
+            title="t",
+            conversation=self.conv,
+        )
+        started = time.monotonic()
+        with patch("pywebpush.webpush", side_effect=self._webpush):
+            send_push_notification(str(notif.uuid))
+        return time.monotonic() - started
+
+    def test_other_devices_get_the_push_and_the_task_ends_on_time(self, _):
+        others = [
+            PushSubscription.objects.create(
+                user=self.user,
+                endpoint=f"https://push.example.com/stall/{n}",
+                p256dh=f"p256dh-{n}",
+                auth=f"auth-{n}",
+            )
+            for n in range(3)
+        ]
+        with self.assertLogs("workspace.notifications.tasks", "WARNING") as logs:
+            elapsed = self._send()
+
+        self.assertLess(elapsed, HANG_SECONDS)
+        self.assertCountEqual(self.delivered_to, [sub.endpoint for sub in others])
+        self.assertIn("stalled.example.com", "\n".join(logs.output))
+        # A partial delivery keeps the cooldown.
+        self.release.set()
+        self.delivered_to.clear()
+        self._send()
+        self.assertEqual(self.delivered_to, [])
+
+    def test_a_stalled_only_device_releases_the_cooldown(self, _):
+        with self.assertLogs("workspace.notifications.tasks", "WARNING"):
+            elapsed = self._send()
+        self.assertLess(elapsed, HANG_SECONDS)
+
+        self.release.set()
+        working = PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://push.example.com/stall/ok",
+            p256dh="p256dh-ok",
+            auth="auth-ok",
+        )
+        self._send()
+        self.assertEqual(self.delivered_to, [working.endpoint])
+
+
+@override_settings(**FAKE_VAPID_SETTINGS)
+@patch("workspace.notifications.tasks.is_active", return_value=False)
+class PushFailureLogTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="loguser", password="pass")
+        PushSubscription.objects.create(
+            user=self.user,
+            endpoint="https://push.example.com/log/1",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("pywebpush.webpush")
+    def test_response_body_cannot_forge_a_log_line(self, mock_webpush, _):
+        from pywebpush import WebPushException
+
+        from workspace.notifications.tasks import send_push_notification
+
+        response = MagicMock(status_code=500, text="oops\r\nCRITICAL forged line")
+        mock_webpush.side_effect = WebPushException("Push failed", response=response)
+        notif = Notification.objects.create(
+            recipient=self.user, origin="test", title="t"
+        )
+        with self.assertLogs("workspace.notifications.tasks", "WARNING") as logs:
+            send_push_notification(str(notif.uuid))
+
+        (message,) = [r.getMessage() for r in logs.records]
+        self.assertIn("forged line", message)
+        self.assertNotIn("\n", message)
+        self.assertNotIn("\r", message)

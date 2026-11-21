@@ -2,7 +2,7 @@
 
 Your workspace, all in one place.
 
-This file is the forward-looking roadmap and idea backlog, sorted by priority. Shipped work is recorded in [CHANGELOG.md](CHANGELOG.md), and problems to fix now live in the issue tracker. Items here get checked off and pruned as they ship.
+This file is the forward-looking roadmap and idea backlog, sorted by priority. Shipped work is recorded in [CHANGELOG.md](CHANGELOG.md). Bugs live in the issue tracker (type Bug), not here. Items here get checked off and pruned as they ship.
 
 **Positioning:** a self-hosted productivity suite for solo users and small teams. Every module must work great for one person and get richer with more users. From a Raspberry Pi to a Kubernetes cluster.
 
@@ -13,7 +13,7 @@ This file is the forward-looking roadmap and idea backlog, sorted by priority. S
   - **S:** a contained change in one module, with no new model and no design decision.
   - **M:** a feature or a refactor within one module, with model or API changes, new UI and their tests.
   - **L:** a new subsystem, a change across several modules, a data or format migration, or a design decision to settle first.
-- **Issues:** `#123` is the issue that tracks an item.
+- **Issues:** `#123` is the issue that tracks an item. Every quick win has one.
 - **Source:** the file was rewritten from a full audit of every module against v0.45.0 (November 2026).
 
 ---
@@ -22,8 +22,8 @@ This file is the forward-looking roadmap and idea backlog, sorted by priority. S
 
 | Priority | Structural projects | Quick wins alongside |
 |---|---|---|
-| **P0 - Now** | Clean-up release: the open problems #1618-#1626 and the Mail data issues (#1504, #1505, #1513, #1514), housekeeping | Mail and Calendar fixes from the module backlogs |
-| **P1 - Next** | Instance email; sign-in hardening; backup and restore; real-time v2; split Celery queues | Calendar reminders and drag & drop, Mail send queue, Projects "My work" |
+| **P0 - Now** | Clean-up release: the open bugs, starting with #1618-#1626 and the Mail data issues (#1504, #1505, #1513, #1514), and housekeeping | The quick wins of the module backlogs |
+| **P1 - Next** | Instance email; sign-in hardening; backup and restore; real-time v2; split Celery queues | Calendar drag & drop (#1665) and reminders, Mail send queue, Projects "My work" |
 | **P2 - Then** | Team spaces (spaces on groups, chat channels, group calendars, folder sharing, guests); file versions | Photos memories and Live Photos, Notes knowledge pack |
 | **P3 - Later** | Event journal (audit log, automations, webhooks); AI à la carte and MCP; migrations and account export | Module backlogs below |
 | **Someday** | Bookmarks, RSS/Feeds, native desktop integration, JMAP, end-to-end encrypted mail | |
@@ -55,15 +55,13 @@ The instance sends no email of its own: calendar invitations go out through the 
 - [ ] **Invitations and guest accounts** - single-use invitation links, then a guest role with restricted visibility. Today every account can list every user and group - #952, #915 (M/L)
 - [ ] **SCIM 2.0 and complete OIDC** - provisioning and deprovisioning, staff from IdP groups, an OIDC-only mode. LDAP comes through the IdP rather than natively - #918 (M)
 - [ ] **Offboarding** - deactivating an account revokes its tokens, sessions and public links, and hands its files, projects and calendars to someone else (M)
-- [ ] **Dedicated, rotatable encryption key** - stored mail and import credentials are encrypted with a key derived from `SECRET_KEY`. Add `ENCRYPTION_KEYS` with MultiFernet and a re-encryption command (S/M)
-- [ ] **Clear-Site-Data on logout** - clears the service worker caches and the IndexedDB of shared files (S)
-- [ ] **Session purge** - without Redis, sessions live in the database and nothing runs `clearsessions` (S)
+- [ ] **Dedicated, rotatable encryption key** for stored credentials - #1724 (S/M)
 
 ### Self-hosting and operations - P1
 
 - [ ] **Backup and restore** - `manage.py backup|restore` (a `VACUUM INTO` snapshot, a blob manifest, retention), a nightly task and a "last backup" card in the admin. Document Litestream or restic for continuous backups (M)
 - [ ] **All-in-one mode for a NAS or a Pi** - `PROCESS_TYPE=all`, with `SECRET_KEY` and VAPID keys generated on first start and kept in the volume, and a documented memory profile. The base of the Synology package (PR #1475); see #1619 (M)
-- [ ] **Split Celery queues** - interactive, heavy and ml. With one queue, a long photo analysis can hold every worker while a bot reply waits. A single-process `ml` worker on a Pi (S/M)
+- [ ] **Split Celery queues** - interactive, heavy and ml. With one queue, a long photo analysis can hold every worker while a bot reply waits (see #1628). A single-process `ml` worker on a Pi (S/M)
 - [ ] **Health console** - covers:
   - worker and beat heartbeats, queue length, free disk, pending migrations;
   - configuration warnings (no Redis, `NUM_PROXIES`, VAPID, default secret key);
@@ -72,20 +70,19 @@ The instance sends no email of its own: calendar invitations go out through the 
   Each module declares its own health cards (M)
 - [ ] **Module policies per instance and per group** - turn Mail off, reserve Vault to a group. Generalizes the preview visibility rule (M)
 - [ ] **Instance settings in the database** - AI, module visibility, default language and theme, limits. The environment keeps priority and keeps the secrets (M/L)
-- [ ] **Admin inside the app** - users, groups, quotas, module policies, health and backups, translated and delegable. The Django admin stays for raw data but stops exposing private content (chat message bodies and mail subjects are searchable there today) (L)
+- [ ] **Admin inside the app** - users, groups, quotas, module policies, health and backups, translated and delegable. The Django admin stays for raw data, without private content (#1672) (L)
 - [ ] **Structured JSON logs** - with request ids propagated to tasks - #553 (S/M)
-- [ ] **Celery metrics on `/metrics`** - a shared multiprocess directory or a dedicated port, plus a Grafana dashboard and alert rules (S/M)
-- [ ] **Non-blocking SQLite maintenance** - incremental auto-vacuum instead of a weekly `VACUUM` that takes the write lock and doubles disk usage (S)
-- [ ] **Instance default language** - plus `Accept-Language` on anonymous pages (S)
+- [ ] **Non-blocking SQLite maintenance** - incremental auto-vacuum and `VACUUM INTO` snapshots - #1720 (S)
+- [ ] **Instance default language** - plus the browser's language before sign-in - #1677 (S)
 
 ### Real-time v2 - P1
 
 Every open tab runs its own SSE stream, and every event makes each stream re-poll its providers. That is fine for a few people, and it is the wall for chat channels and live boards.
 
 - [ ] **One SSE stream per browser** - shared between tabs with Web Locks + BroadcastChannel (M)
-- [ ] **Typed wake-ups** - a typing ping or an ICE candidate should not re-run the whole chat poll for every recipient (S/M)
-- [ ] **Chat event journal** - read through the core mailbox, with targeted DOM updates instead of reloading the last 50 messages. Deletions get broadcast at last (L)
-- [ ] **Call signaling, presence and typing on the core mailbox** - two tabs can consume each other's call signals today (S/M)
+- [ ] **Typed wake-ups** - a typing ping or a call signal should not re-run the whole chat poll for every recipient - #1722 (S/M)
+- [ ] **Chat event journal** - read through the core mailbox, with targeted DOM updates instead of reloading the last 50 messages. Every kind of change reaches the other members, hard deletes included (#1698 is today's gap) (L)
+- [ ] **Call signaling, presence and typing on the core mailbox** - fixes #1710 for good (S/M)
 - [ ] **Live boards and calendars** - SSE providers for Projects and Calendar (M)
 - [ ] **Mail push** - an optional IDLE service that triggers folder syncs, and a Mail SSE provider (L)
 - [ ] **Dedicated ASGI process for SSE** - later; decouples SSE from the SQLite write lock (L)
@@ -133,11 +130,11 @@ A space is that team made visible. Chat channels, a shared drive and boards in o
 - [ ] **Knowledge bases** - attach a folder or notes to a bot. Hybrid full-text + vector search on `common/vectors`, with answers that cite their sources (L)
 - [ ] **Usage, costs and quotas** - covers:
   - a run that acts for a user (`acting_for`) and a price table;
-  - daily token quotas per user or group, and a budget per goal;
+  - daily token quotas per user or group, and a budget per goal (scheduling limits: #1659);
   - an AI tab in Settings › Usage.
 
   (M/L)
-- [ ] **Agentic safety** - once a run has read external content (web, incoming mail, a shared file), every write goes through a bound confirmation. Bots' writes are logged (M)
+- [ ] **Agentic safety** - once a run has read external content (web, incoming mail, a shared file), every write goes through a bound confirmation. Bots' writes are logged. Builds on #1649 (M)
 - [ ] **Evaluation bench** - `scripts/ai_bench.py` on the model of the photo benches. Scenarios replayed against a real model on demo data, scored on tool choice, arguments, refusals and tokens - #795 (M)
 
 ### Moving in and staying - P3
@@ -159,9 +156,9 @@ A space is that team made visible. Chat channels, a shared drive and boards in o
   #755, #756, #757 (M/L)
 - [ ] **Global CSP in steps** - `object-src 'none'`, `base-uri`, `frame-ancestors` and `form-action` now. `script-src 'self' 'unsafe-eval'` once about thirty inline scripts have moved out (M)
 - [ ] **Monaco → CodeMirror 6** - Monaco 0.45 is 11 MB of the 23 MB of vendored assets and handles touch badly. CodeMirror already ships with Milkdown Crepe (M)
-- [ ] **PWA** - manifest shortcuts, a maskable icon, a text and URL share target (into Notes), an unread badge on the app icon (`navigator.setAppBadge`) (S)
+- [ ] **PWA** - manifest shortcuts, a maskable icon, an unread badge on the app icon - #1690 (S)
 - [ ] **Targeted offline** - recent notes readable offline, drafts, queued chat messages (L)
-- [ ] **Command palette and search** - accent-insensitive command matching and translatable keywords (S). Then search v2: a full results page, filters, operators (`in:mail`) and ranking across providers (M)
+- [ ] **Search v2** - a full results page, filters, operators (`in:mail`), ranking across providers, and a time budget per provider (#1708) (M)
 - [ ] **JS lint** - Biome with no-var and no-undef on `window.*` globals, plus tests for the remaining frontend rules (spread-mixin getters, string `:style` next to `x-show`) (S)
 - [ ] **Larger touch targets** for compact actions - #1558
 
@@ -206,17 +203,15 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Saved messages and forwarding** (M)
 - [ ] **Conversation export** - Markdown or JSON with attachments, plus a configurable retention (M)
 - [ ] **Search operators** `from:`, `in:` and `has:`, with attachment names in the index (S/M)
-- [ ] **Do not disturb** that holds pushes, with quiet hours (S/M)
+- [ ] **Do not disturb** that holds pushes, with quiet hours; see #1694 (S/M)
 
 **Quick wins**
 
-- [ ] **Link to a message** - a search result opens the conversation without the message, and jumping to it gives up after 20 pages (S/M)
-- [ ] **Calls that ring** - starting a call notifies nobody outside the chat page. Add a push, a global join toast, and video calls from the start (`media_kind` is always `audio`) (S/M)
-- [ ] **Membership messages** - system messages and a live refresh when members are added or removed and when a group is renamed (S/M)
-- [ ] **Mentions added by an edit** get notified (S)
-- [ ] **Group admins can delete any message** (S)
-- [ ] **Reliable unread badge** - skip muted conversations, show the count in the tab title and on the app badge. Plus "mark all read", next unread, and an unread filter (S)
-- [ ] **"Conversations" section on People cards** (S)
+- [ ] **Link to a message** - `?message=` links, a page centered on the message, "Copy link" - #1727 (S/M)
+- [ ] **Start a video call directly** - #1729 (S)
+- [ ] **Group admins can delete any message** - #1730 (S)
+- [ ] **Unread navigation** - mark everything read, jump to the next unread conversation, filter on unread - #1732 (S)
+- [ ] **Conversations with a contact on their People page** - #1737 (S)
 
 **Big projects**
 
@@ -236,15 +231,14 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Calls v2** - an optional SFU past 6 participants (LiveKit, as a separate service), persistent voice rooms, raised hands, camera and screen share together (L)
 - [ ] **Meetings with external guests** - split PR #983: guests and `participant_key` on calls first, then a meeting chat that is a regular conversation - #912 (L)
 - [ ] **Bots in group conversations** - a bot identity with its own rights, or replies only the asker sees. Same base as background research - #803 (L)
-- [ ] **Attachments stored in Files** - in the group's folder, counted in quotas and searchable (L)
+- [ ] **Attachments stored in Files** - in the group's folder, counted in quotas and searchable; see #1719 (L)
 - [ ] **Import from Slack, Mattermost, Discord and Rocket.Chat** (L)
 
 **Technical**
 
 - [ ] **Indexes for the SSE poll** - `edited_at`, reaction and link preview dates (S)
 - [ ] **Lighter conversation list** - annotate member counts instead of serializing every member, and filter `?q=` in SQL (M)
-- [ ] **Input limits** - a maximum message body length; attachment limits from settings, counted in quotas (S)
-- [ ] **Ephemeral TURN credentials** (`use-auth-secret`), with an optional coturn in Compose (S/M)
+- [ ] **Short-lived TURN credentials** - #1725 (S/M)
 - [ ] **Shared helpers** - for the 28 copies of the "not a member" check and the 7 message querysets; split `info_panel.html` (S/M)
 - [ ] **Archive rather than purge** abandoned conversations (S)
 - [ ] **Coverage** - raise the 55% floor (S)
@@ -267,18 +261,18 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Quick wins**
 
-- [ ] **"Remove from my shares"** for the recipient (S)
-- [ ] **"Shared by me / public links"** - one view to audit and revoke them all (S/M)
-- [ ] **QR code and email for public links** - #929 (S)
-- [ ] **One-click duplicate clean-up** in Storage: keep one copy, trash or shortcut the rest (S/M)
-- [ ] **Thumbnails** - PDF pages (pypdfium2), audio covers, CBZ and EPUB covers - #1490, #1523 (S each)
+- [ ] **Remove a share from "Shared with me"** - #1689 (S)
+- [ ] **Everything I shared in one place** - shares and public links, to audit and revoke - #1692 (S/M)
+- [ ] **Public links as a QR code** (#1693) and by email (#929) (S)
+- [ ] **One-click duplicate clean-up** - #1695 (S/M)
+- [ ] **Thumbnails** - PDF pages and audio covers (#1699), e-book covers (#1490, #1523) (S each)
 - [ ] **Resume where you left off** in e-books, videos, audio and PDF - #1489 (S/M)
-- [ ] **Quota alerts** at 80% and 95% (S)
-- [ ] **Recent files** - a dashboard widget, and "Recent" including files shared with you (S)
-- [ ] **Folder README** - show a folder's README.md above its listing and on public links (S)
-- [ ] **WOPI** - rename, "Save as", PDF export, and blank documents in "New" (S/M)
-- [ ] **clamd in the deployment examples** - Compose and Kubernetes - #1244 (S)
-- [ ] **Clickable path in Properties** (S)
+- [ ] **Quota alerts** at 80% and 95% - #1702 (S)
+- [ ] **Recent files on the dashboard**, shared and group files included - #1696 (S)
+- [ ] **Folder README** above the listing and on public links - #1703 (S)
+- [ ] **Office editor** - rename, save as, PDF export, blank documents - #1707 (S/M)
+- [ ] **clamd in the deployment examples** - #1244 (S)
+- [ ] **Clickable path in Properties** - #1709 (S)
 
 **Big projects**
 
@@ -296,16 +290,15 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
   2. **A Nextcloud-compatible API subset** (status.php, Login Flow v2, OCS capabilities, `remote.php/dav`, chunking v2), so the Nextcloud clients work.
 - [ ] **Mass uploads** - one request for many small files, rows created in bulk, one Celery task per file instead of two - #1519 (M/L)
 - [ ] **Folders of 10,000+ entries** - server-side paging and sorting, virtualized rendering (M/L)
-- [ ] **"Ask your files"** - chunked documents embedded with fastembed into `common/vectors`, exposed as an AI tool. Needs chunked indexing (L)
+- [ ] **"Ask your files"** - chunked documents embedded with fastembed into `common/vectors`, exposed as an AI tool. Builds on chunked indexing (#1685) (L)
 - [ ] **Folder rules** - "when a file lands in X: tag, move, notify", on `@on_file_event`. The first brick of automations (L)
 - [ ] **Image annotation** (Someday)
 
 **Technical**
 
-- [ ] **Unzip commits per entry** - and reports failures in the operation, instead of one all-or-nothing transaction under the SQLite write lock (S/M)
-- [ ] **Enqueue `process_file` directly on commit** - with a priority from the origin (bulk imports and WebDAV get low) - #1519 (S)
-- [ ] **Coalesce and expire `FileEvent` rows** - every autosave writes one (S)
-- [ ] **Full-text indexing in chunks**, instead of the first 100,000 characters only (M)
+- [ ] **Enqueue `process_file` directly on commit** - with a priority from the origin - #1519, #1731 (S)
+- [ ] **Coalesce and expire `FileEvent` rows** - the autosave part is #1718 (S)
+- [ ] **Full-text indexing in chunks**, instead of the first 100,000 characters only - #1685 (M)
 - [ ] **Split the largest files** - `ui/views.py` (1,487 lines), `FileSerializer` (645 lines), `table.js`, `browser.js` (M)
 - [ ] **Invert the Files → Notes dependency** - journal rules are coded in Files; Notes should register a rename guard instead (S)
 - [ ] **Coverage** - raise the 65% floor (S)
@@ -323,14 +316,13 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Journal and agenda** - today's events on top of the daily note, and a date picker (S/M)
 - [ ] **Tasks in notes** - collect `- [ ]` items across notes, and turn one into a Projects task (M)
 - [ ] **AI tools** - create a note, append to the journal, summarize (S/M)
-- [ ] **Clean publishing** - a note shared by public link shows no embeds today (M)
+- [ ] **Embeds on public links** - #1715 (M)
 
 **Quick wins**
 
-- [ ] **Lighter autosave** - coalesce autosave events, and skip type detection and the processors on every autosave of a `.md` (S)
-- [ ] **Palette search across group and shared notes** - today it covers personal notes only (S)
-- [ ] **First line of each note in the non-compact list**, precomputed with the index (S/M)
-- [ ] **Go to a journal date** (S)
+- [ ] **Lighter autosave** - #1718 (S)
+- [ ] **First line of each note in the list** - #1723 (S/M)
+- [ ] **Go to a journal date** - #1721 (S)
 
 **Big projects**
 
@@ -353,23 +345,22 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Memories** - "on this day" in previous years, at the top of the timeline and as a dashboard widget. One picture per burst; no hidden, sensitive or screenshot photos - #1167 (M)
 - [ ] **Live Photos and Motion Photos** - pair the photo with its clip, hide the companion video and play it on long press. Skip the clip in the models (M)
 - [ ] **Offline places** - local reverse geocoding (GeoNames cities500, licence to check). Gives a place in the viewer, a Places page, search by city and trip memories (M)
-- [ ] **Combined search** - description search ignores person, tag, favorites, type and period today. Filter first, then rank, and save the query as a smart album - #1283 (M)
+- [ ] **Combined search** - description search does not combine with person, tag, favorites, type or period. Filter first, then rank, and save the query as a smart album - #1283 (M)
 - [ ] **Library clean-up** - exact copies and bursts: keep the best (resolution, size, sharpness) and trash the rest at once (M)
 - [ ] **Contributing album by link** - guests drop photos without an account, on the capped upload mode of Files share links. Then album comments and reactions (M)
-- [ ] **AI tools** - Photos is the only module without them: search photos, create an album, add to an album (M)
+- [ ] **AI tools** - Photos has none: search photos (see #1668), create an album, add to an album (M)
 - [ ] **More non-destructive edits** - exposure, contrast, saturation, temperature, straighten (M)
 - [ ] **Learned tags as suggestions to confirm** - in a review like People's. The bench finds one photo in ten at 90% precision, too few to apply alone - #1299 (M)
 - [ ] **Maps without leaking browsing** - a caching tile proxy, or local PMTiles (M)
 
 **Quick wins**
 
-- [ ] **Translated names** - auto tags and the import folder named in the owner's language ("Dog" and "Pictures" are hard-coded) (S)
-- [ ] **Phone shares go to Photos** - route images and videos shared from a phone to Photos (S)
-- [ ] **Phone backup set up in 30 seconds** - a QR code of the WebDAV address and a "create a token" button (S)
-- [ ] **"Recently added" view** (S)
-- [ ] **Tag and share a selection** - album + link in one gesture (S)
-- [ ] **Ages on photos**, from a contact's birthday (S)
-- [ ] **Hide screenshots and documents** from the timeline (S)
+- [ ] **Phone shares go to Photos** - #1629 (S)
+- [ ] **Phone backup set up from a QR code and a ready-made token** - #1630 (S)
+- [ ] **"Recently added" view** - #1631 (S)
+- [ ] **Tag a selection, and share it as an album in one step** - #1632 (S)
+- [ ] **Ages on photos**, from a contact's birthday - #1633 (S)
+- [ ] **Screenshots and documents kept out of the timeline** - #1634 (S)
 - [ ] **#1169 (PR #1412) and #1489** (S)
 
 **Big projects**
@@ -384,7 +375,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Technical**
 
-- [ ] **A dedicated `ml` queue and a single-process worker** - each process loads its own models (about 2.5 GB with SigLIP 2), and a search can wait behind a video analysis and time out (M)
+- [ ] **A dedicated `ml` queue and a single-process worker** - each process loads its own models (about 2.5 GB with SigLIP 2), and searches time out behind video analyses (#1628) (M)
 - [ ] **One decode per photo** instead of four (faces, silhouettes, embeddings, sensitivity) (M)
 - [ ] **int8 models**, measured with the benches, and a published Raspberry Pi profile (M)
 - [ ] **ML dependencies as an optional `ml` extra**, with a slimmer image (M)
@@ -409,30 +400,12 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **History on demand** - only the last 200 messages of each folder are fetched today. Add "load older" and a low-priority backfill (M)
 - [ ] **Out-of-office and server-side rules** through ManageSieve (L)
 
-**Quick wins** (mostly fixes)
+**Quick wins**
 
-- [ ] **Replies use Reply-To**, which is ignored today (S)
-- [ ] **Plain text escaped** - it is sent as HTML without escaping, so `<` and `&` reach recipients altered (S)
-- [ ] **IMAP responses checked** - check `NO` responses, and use UID EXPUNGE instead of a folder-wide expunge - #1513, #1514 (S)
-- [ ] **Flags reconciled by UID ranges** - past roughly 8-10k messages, the command line exceeds Dovecot's 64 KB limit and flags stop syncing silently (S)
-- [ ] **Robust import:**
-  - an unknown charset blocks a message forever;
-  - inline attachments without a Content-ID are dropped;
-  - `has_attachments` counts logos.
-
-  (S)
-- [ ] **HTML-only messages** - resolve `cid:` images, and derive text from HTML-only messages for preview, search, quoting and forwarding (S)
-- [ ] **Less noise:**
-  - skip Spam and Trash for notifications, AI and invitation import;
-  - skip Gmail's virtual folders;
-  - no LLM pass over 200 × N messages when an account is added.
-
-  (S)
-- [ ] **Folders with accents** - there is no modified UTF-7 encoder, so creating "Réunions" fails (S)
-- [ ] **Everyday actions** - Archive (E), report spam, resume a draft from the Drafts folder, forward with attachments, download .eml, show headers (S)
-- [ ] **Clean sending** - report partial recipient refusals; send attachments with their MIME types and RFC 2231 file names (S)
-- [ ] **Search across folders with operators** (`from:`, `has:attachment`, `before:`, `label:`, `is:unread`) (S/M)
-- [ ] **`\Answered`** - set it on send and read it at sync (S)
+- [ ] **Archive, Report spam, Download .eml and Show headers** - #1767 (S)
+- [ ] **Resume a draft from the Drafts folder** - #1768 (S)
+- [ ] **Search every folder, with operators** - #1769 (S/M)
+- [ ] **Answered messages tracked with `\Answered`** - #1770 (S)
 
 **Big projects**
 
@@ -452,10 +425,10 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 - [ ] **Indexed correspondents table** - replaces two 500-message scans per keystroke, and serves People (M)
 - [ ] **Cursor pagination** instead of OFFSET + count (S/M)
-- [ ] **FETCH batches sized by RFC822.SIZE** - a batch of 50 can approach 1 GB in memory (S)
+- [ ] **FETCH batches bounded by message size** - #1763 (S)
 - [ ] **Grouped IMAP actions** for rules and bulk actions (S/M)
-- [ ] **Draft autosave outside the request** (S)
-- [ ] **One reply and forward logic** - the JS and Python versions already diverge (S)
+- [ ] **Drafts saved outside the request** - #1764 (S)
+- [ ] **One reply and forward logic** - #1765 (S)
 - [ ] **Labels at user level** instead of per account (M)
 - [ ] **An `imap-live` CI job** against Dovecot or GreenMail (M)
 - [ ] **Split and cover** - split `ai_tools.py` (843 lines) and `mail_folders.js`, and raise the 55% coverage floor (S)
@@ -477,20 +450,19 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Quick wins**
 
-- [ ] **Drag to move and resize events** - the grid runs `editable: false`, while the "this / following / all" choice already exists (S/M)
-- [ ] **Full recurrence in the form** - weekdays, "2nd Tuesday", N occurrences; the server understands all of RFC 5545 (S/M)
-- [ ] **Feed health** - show `last_error`, back off after failures, honor `sync_interval` (900 s is hard-coded), cap the size, accept `webcal://` (S)
-- [ ] **"Maybe" as an answer** - it is turned into a decline today (S)
-- [ ] **iTIP replies from the address actually invited**, through the Mail sending path (S)
-- [ ] **Default calendar preference** - for quick create, polls and the AI (S)
-- [ ] **Morning summary time and opt-out** (S)
-- [ ] **Richer event menu** - duplicate, change calendar, download .ics, email guests, clickable location (S)
-- [ ] **Import an .ics file** into a calendar (S)
-- [ ] **Work week view and working hours**, and FullCalendar 6.1.22 (S)
+- [ ] **Drag to move and resize events** - #1665 (S/M)
+- [ ] **Full recurrence in the picker** - weekdays, monthly patterns, an occurrence count - #1666 (S/M)
+- [ ] **Feed health** - show sync errors, back off from failing feeds, accept `webcal://` - #1650 (S)
+- [ ] **"Maybe" as an answer** - #1662 (S)
+- [ ] **Default calendar for new events** - #1655 (S)
+- [ ] **Morning summary time and opt-out** - #1669 (S)
+- [ ] **Richer event menu** - duplicate, move, download, email the guests - #1671 (S)
+- [ ] **Import an .ics file** - #1674 (S)
+- [ ] **Work week view and working hours** - #1675, and FullCalendar 6.1.22 (#1500) (S)
 
 **Big projects**
 
-- [ ] **iTIP and attendees overhaul** - one attendee model mapped to ATTENDEE and ORGANIZER in CalDAV and ICS, and the full organizer flow. After the parser fix in #1623 (L)
+- [ ] **iTIP and attendees overhaul** - one attendee model mapped to ATTENDEE and ORGANIZER in CalDAV and ICS, and the full organizer flow. After the fixes in #1623, #1657 and #1660 (L)
 - [ ] **Sharing and availability foundation** - per-calendar rights, group calendars, free/busy. Booking pages plug into it (L)
 - [ ] **FullCalendar 7** - with `calendar_events.js` split and drag and drop on. Evaluate EventCalendar (MIT) if rooms come in - #1102 (M/L)
 
@@ -520,16 +492,15 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Quick wins**
 
-- [ ] **Complete a task in one click** - on rows, on cards and in the "My tasks" widget, read-only today (S)
-- [ ] **WIP limits** per column (S)
-- [ ] **Keyboard shortcuts** - C, J/K, A/P/L/S, X (S/M)
-- [ ] **Clickable `WR-42` references** in descriptions and comments, then in chat and notes (S)
-- [ ] **Due dates from the calendar** - change them there, and show a task with a start and a due date as a bar (S/M)
-- [ ] **Checklist item → linked task** (S)
-- [ ] **Field-level activity** - old and new value for priority, due date and title (S)
-- [ ] **Missing filters** - sprint, no due date, overdue, blocked, followed (S)
-- [ ] **Search comments and checklists** (S/M)
-- [ ] **Due-date fix from the AI tool** - it moves a due date without settling the overdue notification (S)
+- [ ] **Complete a task in one click** - #1638 (S)
+- [ ] **WIP limits** per column - #1639 (S)
+- [ ] **Keyboard shortcuts** - #1640 (S/M)
+- [ ] **Clickable `WR-42` references** - #1641 (S)
+- [ ] **Reschedule from the calendar**, dated tasks drawn as bars - #1643 (S/M)
+- [ ] **Checklist item → linked task** - #1644 (S)
+- [ ] **Field-level activity** - #1646 (S)
+- [ ] **Missing filters** - sprint, no due date, overdue, blocked, followed - #1648 (S)
+- [ ] **Search comments and checklists** - #1651 (S/M)
 
 **Big projects**
 
@@ -543,11 +514,11 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Technical**
 
-- [ ] **One task update service** - the update logic lives in the viewset, and the AI tool rewrites part of it. Prerequisite of mail to task, recurrence, automations, #463 and #729 (M)
+- [ ] **One task update service** - the update logic lives in the viewset, and the AI tool rewrites part of it (#1635). Prerequisite of mail to task, recurrence, automations, #463 and #729 (M)
 - [ ] **Split the largest files** - `views/viewsets.py` (1,350 lines), `board.js` (2,181), `settings.js`, `settings.html`, `task_panel.html` (M)
 - [ ] **Sparse positions** - a reorder rewrites every shifted task today (M)
-- [ ] **Bounded due reminders** - every overdue task of the instance is reloaded each hour (S)
-- [ ] **Past 500 tasks** - load more per column, or virtualize (`TASK_RENDER_LIMIT`) (M)
+- [ ] **Bounded due reminders** - #1637 (S)
+- [ ] **Past 500 tasks** - load more per column, or virtualize, instead of asking to narrow the filters; the timeline also counts undated tasks in the cap (#1636) (M)
 - [ ] **Cached reports**, instead of replaying the whole log on each visit (M)
 - [ ] **e2e tests** for drag and drop (asserting the negotiated effects), sprints and bulk edit; then raise the 85% floor (S/M)
 - [ ] **External id on tasks, and outgoing webhooks** (S/M)
@@ -567,11 +538,10 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Quick wins**
 
-- [ ] **Communication actions** - write, call, open on a map, message the linked account, invite to an event (S)
-- [ ] **Translated book name** - "My contacts" shows in English on phones (S)
-- [ ] **"Copy to my contacts"** from a group book (S)
-- [ ] **Stored vCard fields exposed** - those kept in `extra_properties` (URL, nickname, social profiles, dates) (S)
-- [ ] **Sort by recent and frequent** (S)
+- [ ] **Write to, call, map, message or invite a contact** from their card - #1680 (S)
+- [ ] **"Copy to my contacts"** from a group book - #1683 (S)
+- [ ] **Stored vCard fields shown** - website, nickname, social profiles, other dates - #1686 (S)
+- [ ] **Sort by recently added and most contacted** - #1688 (S)
 
 **Big projects**
 
@@ -580,7 +550,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Technical**
 
-- [ ] **Paginated list** - paginate or virtualize it: 5,000 contacts render 5,000 rows on every keystroke today (S/M)
+- [ ] **Paginated contact list** - #1691 (S/M)
 - [ ] **Normalized address index**, for the mail card, invitees, duplicates and history (M)
 - [ ] **Split `people.js`** (844 lines), and share the DAV skeleton with Calendar (S)
 
@@ -596,18 +566,14 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **AI in the Notes editor**, then in Projects (split a task, summarize a thread) (S/M)
 - [ ] **Richer recurrences for scheduled messages** - working days, "first Monday", on the calendar RRULE (S/M)
 - [ ] **One-click approval** - an Approve / Decline card runs the pinned action without going back through the model - #852 (M)
-- [ ] **Manageable memory** - a global page, a cap and sorting; every memory is injected today (S/M)
+- [ ] **Manageable memory** - a global page and sorting, on top of the cap of #1663 (S/M)
 - [ ] **Client-rendered pages**, through an optional rendering service - #810 (M)
 
 **Quick wins**
 
 - [ ] **Bound confirmations for calendar writes** - #852 (S)
 - [ ] **Page cache and robots.txt** - cache pages between `part=` calls, and honor robots.txt - #800, #801 (S)
-- [ ] **`search_photos` tool**, on the existing description search (S)
-- [ ] **Configurable reply length** - `max_completion_tokens` for reasoning models (S)
-- [ ] **Consumption guards** - throttles on the AI views, and a cap on scheduled messages per conversation (S)
-- [ ] **Tool results wrapped as untrusted content** in the chat loop, as the mail and editor prompts already do (S)
-- [ ] **`?bot_id=abc` returns a 500** on the memories endpoint (S)
+- [ ] **Find photos by what they show** (`search_photos` tool) - #1668 (S)
 
 **Big projects:** per-bot tool sets, the provider layer, the MCP server and client, knowledge bases, usage and quotas, agentic safety and the evaluation bench (see AI à la carte); event-triggered agents (see Event journal).
 
@@ -615,7 +581,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 - [ ] **Split `tools.py` and untangle ai and chat** - `tools.py` (1,530 lines) becomes a package per provider. The goals, schedules and bots views move back from `chat/views/`, since ai and chat import each other both ways (M)
 - [ ] **Context budget in tokens**, instead of 30 messages (M)
-- [ ] **`UserMemory` on a UUID key** (S)
+- [ ] **`UserMemory` on a UUID key** - #1654 (S)
 - [ ] **Run recording setting** (`AI_RECORD`: off / errors / full) - run records hold excerpts of the mails and files read, visible to admins for 90 days. Users see their own runs (S/M)
 - [ ] **Bot tests** - node tests for `bot.js`, a bot e2e test, and a higher floor than 55% (S/M)
 
@@ -634,25 +600,24 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Password health report** - weak, reused, breached (opt-in k-anonymity check), no 2FA, `http://`; computed after unlock (M)
 - [ ] **Scan a TOTP QR code** from the camera or an image (S/M)
 - [ ] **Password history** per entry (M)
-- [ ] **Regenerate the recovery key** (S/M)
+- [ ] **Regenerate the recovery key** - #1687 (S/M)
 - [ ] **Unlock with a passkey** (WebAuthn PRF) (L)
 - [ ] **Secure send** - a limited-use link, with the key in the URL fragment and an expiry (M)
 - [ ] **Emergency access** (L)
 
 **Quick wins**
 
-- [ ] **Secure note type** (S)
-- [ ] **Grace period before locking a hidden tab** - today every return to the tab costs a multi-second Argon2 derivation (S)
-- [ ] **Self-service "start over"**, with re-authentication (S)
-- [ ] **Empty the trash after N days** (S)
-- [ ] **Data endpoints throttled** (#990), folder and tag actions in the registry (#989), export guidance (#1038) (S/M)
-- [ ] **`last_used_at`** - serialized but never written (S)
+- [ ] **Secure note type** - #1679 (S)
+- [ ] **Grace period before a hidden tab locks** - #1676 (S)
+- [ ] **Self-service "start over"** - #1681 (S)
+- [ ] **Empty the trash after N days** - #1684 (S)
+- [ ] **Data endpoints throttled** (#990), **folder and tag actions in the registry** (#989), **export guidance** (#1038) (S/M)
 
 **Big projects**
 
 - [ ] **Out of preview, as one batch** - PR #1353 together with (M/L):
   - restore and import;
-  - the French interface (#1546) and compare-and-swap writes;
+  - the French interface (#1546) and conflict-safe writes (#1673);
   - #989 and #990;
   - a threat model and a decision on custom fields.
 - [ ] **Sharing and key rotation** - #1189 (L)
@@ -662,7 +627,6 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Technical**
 
-- [ ] **Compare-and-swap on entry writes** - two devices overwrite each other without a 409 today (S/M)
 - [ ] **Batch write endpoint**, atomic and throttled (M)
 - [ ] **Custom fields decided before they are exposed** - the label sits in clear and ASCII-only in `field_id`; an opaque id changes the format (M)
 - [ ] **Sync API** - `?since=` or ETag, and paginated entries (M)
@@ -683,9 +647,7 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Quick wins**
 
-- [ ] **`?limit=abc` or a negative limit returns a 500** (S)
-- [ ] **Keyset pagination** on (`created_at`, `uuid`) - rows created in the same instant can be skipped today (S)
-- [ ] **Retention as a setting**, and a cap on unread rows (S)
+- [ ] **Retention as a setting, and a bound on the unread backlog** - #1747 (S)
 
 **Big projects**
 
@@ -696,21 +658,21 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 - [ ] **A `kind` field now**, for the digest and filters (S)
 - [ ] **Centralized multilingual rendering** - three implementations split recipients by language today (S/M)
-- [ ] **One push task per device**, or parallel sends (S)
+- [ ] **Push sends that a slow push service cannot hold up** - #1748 (S)
 
 ### Dashboard
 
 - [ ] **Widget registry** - each module publishes its widgets (fragment URL, size, default, preferences). The dashboard becomes a grid to hide, reorder and then drag, and stops importing four modules directly (M/L)
 - [ ] **Resume** - the last opened files, notes and books, with their position. Needs open tracking in Files - #1489 (M)
 - [ ] **Memories and birthdays** - #1167 (S/M)
+- [ ] **Recent files** - #1696 (S, see Files)
 - [ ] **Links to other services**, Homarr style, with an optional status check through the shared URL guard (#1625) (S/M)
 - [ ] **AI morning brief** at local time (M)
-- [ ] **Important unread mail** (S)
+- [ ] **Important unread mail** - #1758 (S)
 - [ ] **Unified pins and favorites** across files, conversations and projects (M)
-- [ ] **Weather** - use the configured time zone instead of the browser clock, with the unit as a preference (S)
-- [ ] **Inline JS moved out** - the greeting, weather, usage and preferences scripts go to static files, with node tests (S)
-- [ ] **Tomorrow's agenda** in the evening, when today is empty (S)
-- [ ] **Usage widget** iterating over the stats providers (S)
+- [ ] **Inline scripts moved to a static file**, with node tests - #1753 (S)
+- [ ] **Tomorrow's agenda** in the evening, when today has nothing left - #1754 (S)
+- [ ] **Usage popover built from the stats providers** - #1756 (S)
 
 ### Imports
 
@@ -729,12 +691,12 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Quick wins**
 
-- [ ] **Nextcloud Login Flow v2**, instead of a hand-made app password (S/M)
-- [ ] **WebDAV presets** - ownCloud/oCIS, Seafile, Synology, kDrive, Koofr, pCloud (S)
-- [ ] **A group folder as destination** - contacts already allow it (M)
-- [ ] **Pre-flight check** - file count, size, fit in quota (S/M)
-- [ ] **CSV export of a job's errors** (S)
-- [ ] **Scheduled re-sync** during a transition (S/M)
+- [ ] **Nextcloud Login Flow v2** - #1733 (S/M)
+- [ ] **WebDAV presets** for common services - #1734 (S)
+- [ ] **A group folder as destination** - #1736 (M)
+- [ ] **Pre-flight check** - what an import holds, and whether it fits - #1739 (S/M)
+- [ ] **CSV export of what an import could not bring over** - #1741 (S)
+- [ ] **Scheduled re-runs** during a migration - #1743 (S/M)
 
 **Big projects**
 
@@ -742,22 +704,19 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 
 **Technical**
 
-- [ ] **Stable Nextcloud ids** (`oc:fileid`) - a remote rename re-imports a duplicate today (M)
 - [ ] **Parallel transfers** - several readers, one writer (M)
-- [ ] **Resume a file mid-way** (HTTP Range), instead of giving up on one larger than a slice (M)
-- [ ] **Imported files processed at low priority** (S)
+- [ ] **Imported files processed at low priority** - #1731 (S)
 - [ ] **Batched progress writes** (S)
-- [ ] **Final job statistics overwritten** by a late duplicate delivery - #1509 (S)
 
 ### Users
 
-- [ ] **Settings schema registry** - each module declares its keys (type, default, choices), replacing the chain of `if`s that accepts any JSON for an unlisted key. Opens settings export and instance defaults (M)
+- [ ] **Settings schema registry** - each module declares its keys (type, default, choices); closes #1667 and opens settings export and instance defaults (M)
 - [ ] **Structured profile** - title, team, phone, working hours and pronouns as typed fields, reused by the user card, People and calendar availability (M)
-- [ ] **Richer status** - message, emoji, expiry, quiet hours. "Busy" should hold pushes; it is display-only today (S/M)
+- [ ] **Richer status** - message, emoji, expiry, quiet hours; "Busy" holding pushes is #1694 (S/M)
 - [ ] **Directory and "My groups"** - accounts and groups with status, title, members and each group's resources. The user-side entry to team spaces (M)
-- [ ] **Activation and reset links generated by the admin**, until instance email ships (S)
+- [ ] **Activation and reset links generated by the admin**, until instance email ships - #1697 (S)
 - [ ] **Verified email and sign-in by email** - after #925 (M)
-- [ ] **Activity profile privacy and filters** - hide the heatmap and the feed from other accounts; filter by person or project (S)
+- [ ] **Activity privacy and filters** - hide one's activity from other accounts (#1700); filter the feed by person and project (#1705) (S)
 - [ ] **Generated password** when changing the account password - #987 (S)
 - [ ] **Account data in a 1:1 `UserAccount`** (verified email, MFA, profile) rather than swapping `AUTH_USER_MODEL`. Split `users/views.py` (971 lines) along the way (M)
 - [ ] **Invert the `users` dependencies** - it imports `files` and `ai`; a registry of settings tabs replaces that (S/M)
@@ -768,10 +727,9 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - [ ] **Django 6.2 LTS** (April 2027), as a stabilization target (S)
 - [ ] **Task locks atomic on every cache backend** - #1516 (S)
 - [ ] **Consistent API v1** - three error shapes today (`detail`, `errors`, `error`) and about 80 untranslated messages. Move to RFC 9457 with `gettext`, then a client generated from OpenAPI (M)
-- [ ] **CI targeted per module** - a dependency graph (`common`, `core` and `users` reach everything), `--parallel` on the large modules, grouped Dependabot updates, and no double run on push + pull_request (M)
+- [ ] **CI targeted per module** - a dependency graph, where `common`, `core` and `users` reach everything; no double runs and grouped Dependabot updates (#1717) (M)
 - [ ] **Coverage floors** - core and notes are at 45%; chat, mail and ai at 55%; files at 65%. Measure, then raise (S each)
-- [ ] **`faker` out of the runtime dependencies** - only `scripts/seed_demo.py` uses it (S)
-- [ ] **Search instrumentation** - providers run sequentially, without metrics. Add a histogram and a time budget per provider (S)
+- [ ] **`faker` out of the runtime dependencies** - #1711 (S)
 
 **Files to split** (lines, excluding tests):
 
@@ -796,6 +754,9 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
 - **Zulip-style topics - no.** Threads and forum channels cover the need without redoing the message flow.
 - **Bitwarden API compatibility - no.** It would keep a second copy of every entry under a weaker scheme. Interoperability goes through Bitwarden JSON import and export.
 - **Nested subtasks - no.** Checklists cover them, and a checklist item can become a linked task.
+- **Muted conversations in the chat unread total - kept.** The "Nothing" level silences notifications only, as documented on `ConversationMember.NotificationLevel`.
+- **The 500-task render cap - kept**, with its "narrow the filters" notice; paging past it is a Projects technical item.
+- **`--parallel` for the files, photos and projects suites - not now.** The vault e2e job bounds the CI run, so it would not shorten it.
 - **Shared dashboards, custom KPIs, report export - dropped.** Reports live in Projects.
 - **Deal pipeline and custom fields in People - dropped.** Out of scope for solo users and small teams.
 - **Time tracking - on real demand only.**
@@ -818,6 +779,5 @@ A feed reader with Celery sync, reusing the feed parser of the AI tools (`ai/ser
   Close #103: the Vault supersedes it.
 - [ ] **Pending dependency updates** - cropperjs 2 (#1499, a major), FullCalendar 6.1.22 (#1500, #1501), luxon (#976), prosemirror-view (#1219)
 - [ ] **Leftovers of #554** - #1546 (Vault), the admin labels and the API messages
-- [ ] **README** - Django 6.0 → 6.1, the LDAP mention (none exists), the `ModuleInfo(display_name=...)` example
-- [ ] **Mail README** - the line that contradicts "move to trash" (#1607), and the duplicate "Administration" section
+- [ ] **Stale docs** - the README (#1714) and the Mail docs (#1766)
 - [ ] **Keep this file honest** - re-audit it against the codebase when preparing each release

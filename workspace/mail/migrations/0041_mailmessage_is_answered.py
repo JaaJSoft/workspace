@@ -15,7 +15,7 @@ def read_every_flag_again(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("mail", "0039_folder_remote_state"),
+        ("mail", "0040_mailaccount_archives_in_all_mail"),
     ]
 
     operations = [

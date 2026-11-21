@@ -126,6 +126,16 @@
           </button>
           <button
             type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            x-show="canArchive(messageDetail)"
+            @click="fileMessages('archive', [messageDetail.uuid])"
+            :disabled="actionInProgress"
+            title="{% translate "Archive (E)" %}"
+          >
+            <i data-lucide="archive" class="w-4 h-4"></i>
+          </button>
+          <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square text-error"
             @click="deleteMessage(messageDetail)"
             :disabled="actionInProgress"
@@ -174,16 +184,50 @@
               <span x-show="aiSummarizing" class="loading loading-spinner loading-xs"></span>
             </button>
           {% endif %}
-          <!-- Mobile overflow menu -->
-          <div class="dropdown dropdown-end lg:hidden">
-            <label tabindex="0" class="btn btn-ghost btn-xs btn-square">
+          <!-- Overflow menu: the actions the toolbar has no room for, plus the
+               desktop-only ones on mobile -->
+          <div class="dropdown dropdown-end">
+            <label
+              tabindex="0"
+              class="btn btn-ghost btn-xs btn-square"
+              title="{% translate "More actions" %}"
+              aria-label="{% translate "More actions" %}"
+            >
               <i data-lucide="more-vertical" class="w-4 h-4"></i>
             </label>
             <ul
               tabindex="0"
-              class="dropdown-content z-1 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-48 p-1"
+              class="dropdown-content z-1 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-52 p-1"
             >
+              <li x-show="canReportSpam(messageDetail)">
+                <button
+                  type="button"
+                  @click="fileMessages('spam', [messageDetail.uuid])"
+                  :disabled="actionInProgress"
+                >
+                  <i data-lucide="shield-alert" class="w-4 h-4"></i> {% translate "Report spam" %}
+                </button>
+              </li>
+              <li x-show="canMarkNotSpam(messageDetail)">
+                <button
+                  type="button"
+                  @click="fileMessages('not_spam', [messageDetail.uuid])"
+                  :disabled="actionInProgress"
+                >
+                  <i data-lucide="shield-check" class="w-4 h-4"></i> {% translate "Not spam" %}
+                </button>
+              </li>
               <li>
+                <button type="button" @click="showHeaders(messageDetail)">
+                  <i data-lucide="file-code" class="w-4 h-4"></i> {% translate "Show headers" %}
+                </button>
+              </li>
+              <li>
+                <a :href="originalUrl(messageDetail)" download>
+                  <i data-lucide="download" class="w-4 h-4"></i> {% translate "Download .eml" %}
+                </a>
+              </li>
+              <li class="lg:hidden">
                 <button
                   type="button"
                   @click="toggleRead(messageDetail)"
@@ -198,18 +242,18 @@
                   ></span>
                 </button>
               </li>
-              <li>
+              <li class="lg:hidden">
                 <button type="button" @click="replyAll(messageDetail)">
                   <i data-lucide="reply-all" class="w-4 h-4"></i> {% translate "Reply all" %}
                 </button>
               </li>
-              <li>
+              <li class="lg:hidden">
                 <button type="button" @click="forwardMessage(messageDetail)">
                   <i data-lucide="forward" class="w-4 h-4"></i> {% translate "Forward" %}
                 </button>
               </li>
               {% if ai_enabled %}
-                <li>
+                <li class="lg:hidden">
                   <button
                     type="button"
                     @click="summarizeMessage(messageDetail)"

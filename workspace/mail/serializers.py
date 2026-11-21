@@ -52,6 +52,7 @@ class MailAccountSerializer(serializers.ModelSerializer):
             "is_active",
             "last_sync_at",
             "last_sync_error",
+            "archives_in_all_mail",
             "created_at",
             "updated_at",
         ]
@@ -472,7 +473,17 @@ class MailLabelAssignSerializer(serializers.Serializer):
 class BatchActionSerializer(serializers.Serializer):
     message_ids = serializers.ListField(child=serializers.UUIDField(), min_length=1)
     action = serializers.ChoiceField(
-        choices=["mark_read", "mark_unread", "star", "unstar", "delete", "move"]
+        choices=[
+            "mark_read",
+            "mark_unread",
+            "star",
+            "unstar",
+            "delete",
+            "move",
+            "archive",
+            "spam",
+            "not_spam",
+        ]
     )
     target_folder_id = serializers.UUIDField(required=False)
 

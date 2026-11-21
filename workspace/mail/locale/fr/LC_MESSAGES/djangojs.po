@@ -470,3 +470,19 @@ msgstr "JSON non valide"
 #: ui/static/mail/ui/js/mail_rules_form.js
 msgid "Network error - please retry."
 msgstr "Erreur réseau - veuillez réessayer."
+
+#: ui/static/mail/ui/js/mail_messages.js
+msgid "Some messages could not be moved."
+msgstr "Certains messages n’ont pas pu être déplacés."
+
+#: ui/static/mail/ui/js/mail_messages.js
+msgid "Failed to load the headers."
+msgstr "Impossible de charger les en-têtes."
+
+#: ui/static/mail/ui/js/mail_messages.js
+msgid "Headers copied"
+msgstr "En-têtes copiés"
+
+#: ui/static/mail/ui/js/mail_messages.js
+msgid "Could not copy the headers."
+msgstr "Impossible de copier les en-têtes."

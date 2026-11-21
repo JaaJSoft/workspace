@@ -51,6 +51,9 @@ class MailAccount(models.Model):
 
     # IMAP folder hierarchy
     imap_delimiter = models.CharField(max_length=5, default="/")
+    # The server lists an all-mail mailbox (``\All``, Gmail's All Mail), which
+    # the sync skips: there, a message taken out of the Inbox is archived.
+    archives_in_all_mail = models.BooleanField(default=False, editable=False)
 
     # Sync state
     is_active = models.BooleanField(default=True)

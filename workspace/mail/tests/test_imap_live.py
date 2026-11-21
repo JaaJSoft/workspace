@@ -51,15 +51,22 @@ from workspace.mail.services.imap_folders import (
     move_folder,
     rename_folder,
 )
-from workspace.mail.services.imap_messages import append_to_sent, delete_draft
+from workspace.mail.services.imap_messages import (
+    append_to_sent,
+    delete_draft,
+    fetch_original,
+)
 from workspace.mail.services.imap_sync import sync_account, sync_folder_messages
 from workspace.mail.services.sending import deliver_email
 from workspace.mail.services.smtp import SentMessage
 from workspace.mail.services.triage import (
     EXPUNGED,
     TRASHED,
+    archive_message,
     mark_folder_read,
+    mark_not_spam,
     move_to_folder,
+    report_spam,
     set_flag,
     trash_message,
 )
@@ -468,6 +475,56 @@ class TriageCases:
         self.assertEqual(self.remote_uids("Trash"), [])
         message.refresh_from_db()
         self.assertIsNotNone(message.deleted_at)
+
+    def test_an_account_without_archive_gets_one_on_the_first_archive(self):
+        uid = self.deliver("INBOX", "Archive me")
+        self.sync()
+        message = self.message("INBOX", uid)
+
+        self.assertTrue(archive_message(message))
+
+        self.assertEqual(self.remote_uids("INBOX"), [])
+        self.assertEqual(self.remote_subjects("Archive"), ["Archive me"])
+        message.refresh_from_db()
+        self.assertEqual(message.folder, self.folder("Archive"))
+        self.assertEqual(message.folder.folder_type, "archive")
+
+        self.sync()
+        self.assertEqual(self.stored_uids("Archive"), [message.imap_uid])
+        self.assertEqual(self.folder("Archive").folder_type, "archive")
+
+    def test_spam_goes_to_junk_and_back(self):
+        uid = self.deliver("INBOX", "Buy now")
+        self.sync()
+        message = self.message("INBOX", uid)
+
+        self.assertTrue(report_spam(message))
+
+        self.assertEqual(self.remote_uids("INBOX"), [])
+        self.assertEqual(self.remote_subjects("Junk"), ["Buy now"])
+        message.refresh_from_db()
+        self.assertEqual(message.folder, self.folder("Junk"))
+
+        self.assertTrue(mark_not_spam(message))
+
+        self.assertEqual(self.remote_uids("Junk"), [])
+        self.assertEqual(self.remote_subjects("INBOX"), ["Buy now"])
+        message.refresh_from_db()
+        self.assertEqual(message.folder, self.folder("INBOX"))
+
+    def test_the_original_comes_from_the_server_and_leaves_it_unread(self):
+        uid = self.deliver("INBOX", "Original", body="Every byte.")
+        self.sync()
+        message = self.message("INBOX", uid)
+
+        raw = fetch_original(self.account, message)
+        headers = fetch_original(self.account, message, headers_only=True)
+
+        self.assertEqual(raw, self.remote_fetch("INBOX", "BODY.PEEK[]")[uid][b"BODY[]"])
+        self.assertTrue(raw.startswith(headers))
+        self.assertIn(b"Subject: Original", headers)
+        self.assertNotIn(b"Every byte.", headers)
+        self.assertEqual(self.remote_flags("INBOX")[uid], set())
 
     def test_a_draft_is_saved_replaced_and_deleted(self):
         self.sync()

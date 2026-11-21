@@ -7,6 +7,7 @@ Rows of the message context menu. The panel around them is
 {% translate "Star" context "verb" as star_label %}
 {% translate "Mark unread" as mark_unread_label %}
 {% translate "Mark read" as mark_read_label %}
+{% translate "Archive" context "verb" as archive_label %}
 <ul class="menu menu-sm p-0 w-full">
   {% include "ui/partials/context_menu_item.html" with icon="reply" label=_("Reply") click="msgCtxAction('reply')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="reply-all" label=_("Reply all") click="msgCtxAction('reply_all')" only %}
@@ -21,6 +22,9 @@ Rows of the message context menu. The panel around them is
   {% endwith %}
 
   <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with show="canArchive(msgCtx.msg)" icon="archive" label=archive_label click="msgCtxAction('archive')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="canReportSpam(msgCtx.msg)" icon="shield-alert" label=_("Report spam") click="msgCtxAction('spam')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="canMarkNotSpam(msgCtx.msg)" icon="shield-check" label=_("Not spam") click="msgCtxAction('not_spam')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="folder-input" label=_("Move to...") click="msgCtxAction('move')" only %}
   {% include "ui/partials/context_menu_item.html" with show="msgCtx.msg && msgCtx.msg.from_address && msgCtx.msg.from_address.email" icon="filter" label=_("Create filter") aria_label=_("Create filter from sender") click="msgCtxAction('create_rule_from_sender')" only %}
 
@@ -49,6 +53,10 @@ Rows of the message context menu. The panel around them is
       </button>
     </li>
   </template>
+
+  <hr class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with icon="file-code" label=_("Show headers") click="msgCtxAction('headers')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="download" label=_("Download .eml") href_expr="msgCtx.msg ? originalUrl(msgCtx.msg) : '#'" download_expr="''" click="msgCtx.open = false" only %}
 
   <hr class="my-1 border-base-300" />
   {% include "ui/partials/context_menu_item.html" with icon="trash-2" label=_("Delete") tone="error" click="msgCtxAction('delete')" only %}

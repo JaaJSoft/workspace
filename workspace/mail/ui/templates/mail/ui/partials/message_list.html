@@ -126,7 +126,7 @@
   x-cloak
 >
   <span
-    class="text-base-content/60 mr-1"
+    class="text-base-content/60 mr-1 shrink-0 whitespace-nowrap"
     x-text="countLabel('selected', selectedMessages.length)"
   ></span>
   <span
@@ -136,7 +136,7 @@
   ></span>
   <button
     type="button"
-    class="btn btn-ghost btn-xs"
+    class="btn btn-ghost btn-xs btn-square"
     @click="batchAction('mark_read')"
     :disabled="batchInProgress"
     title="{% translate "Mark read" %}"
@@ -145,7 +145,7 @@
   </button>
   <button
     type="button"
-    class="btn btn-ghost btn-xs"
+    class="btn btn-ghost btn-xs btn-square"
     @click="batchAction('mark_unread')"
     :disabled="batchInProgress"
     title="{% translate "Mark unread" %}"
@@ -154,7 +154,7 @@
   </button>
   <button
     type="button"
-    class="btn btn-ghost btn-xs"
+    class="btn btn-ghost btn-xs btn-square"
     @click="batchAction('star')"
     :disabled="batchInProgress"
     title="{% translate "Star" %}"
@@ -163,7 +163,37 @@
   </button>
   <button
     type="button"
-    class="btn btn-ghost btn-xs"
+    class="btn btn-ghost btn-xs btn-square"
+    x-show="selectedFileable('canArchive').length"
+    @click="fileMessages('archive', selectedFileable('canArchive'))"
+    :disabled="batchInProgress"
+    title="{% translate "Archive (E)" %}"
+  >
+    <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+  </button>
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square"
+    x-show="selectedFileable('canReportSpam').length"
+    @click="fileMessages('spam', selectedFileable('canReportSpam'))"
+    :disabled="batchInProgress"
+    title="{% translate "Report spam" %}"
+  >
+    <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+  </button>
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square"
+    x-show="selectedFileable('canMarkNotSpam').length"
+    @click="fileMessages('not_spam', selectedFileable('canMarkNotSpam'))"
+    :disabled="batchInProgress"
+    title="{% translate "Not spam" %}"
+  >
+    <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+  </button>
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square"
     :disabled="batchInProgress"
     title="{% translate "Move to" %}"
     @click="_showMoveDialog([...selectedMessages])"
@@ -172,7 +202,7 @@
   </button>
   <button
     type="button"
-    class="btn btn-ghost btn-xs text-error"
+    class="btn btn-ghost btn-xs btn-square text-error"
     @click="batchAction('delete')"
     :disabled="batchInProgress"
     title="{% translate "Delete" %}"

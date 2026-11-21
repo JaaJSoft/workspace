@@ -35,17 +35,29 @@ sidebar lists each account's folders and labels.
 - **Search** looks through the open folder or label by subject, sender and
   body, ignoring case and accents, best matches first. The *Unread*, *Starred*
   and *Attachments* filters narrow the list.
-- **Select** several messages to mark them read or unread, star, move or
-  delete them in one go. Dragging messages onto a folder moves them; onto a
+- **Select** several messages to mark them read or unread, star, archive,
+  report as spam, move or delete them in one go. Dragging messages onto a folder moves them; onto a
   label, applies it.
 - In a message, hovering a sender or recipient shows a **contact card**: the
   whole contact when the address is in the user's People address book, an
   *Add to contacts* button when it is not, and *Send email* either way.
 - **Attachments** download, or go straight into Files with *Save to Files*.
+- **Archive** files a message into the account's Archive folder. An account
+  without one gets an *Archive* folder on the server the first time. On Gmail,
+  which keeps every message in *All Mail*, archiving takes the message out of
+  the Inbox, so it is only offered there.
+- **Report spam** moves a message into the account's Spam folder, and **Not
+  spam** moves it from there back to the Inbox. The server's own filter learns
+  from these moves where it is set up to.
+- **Show headers** and **Download .eml** fetch the message from the server as
+  it stores it: every header, to see where a suspicious message really came
+  from, or the whole original with its attachments, to keep or pass on.
 - **Delete** removes the message from the server; it is not moved to the
   Trash first.
 - **Keyboard**: `J`/`K` next and previous, `C` compose, `R` reply, `A` reply
-  all, `F` forward, `S` star, `U` read/unread, `#` delete, `?` the full list.
+  all, `F` forward, `S` star, `U` read/unread, `E` archive, `!` spam or not
+  spam, `#` delete, `?` the full list. `E` and `!` act on the selection when
+  no message is open.
 
 The **Preferences** set the list density, the number of preview lines, whether
 labels show in the list and whether deleting asks first.

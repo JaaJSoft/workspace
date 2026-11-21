@@ -222,6 +222,110 @@ def move_to_folder(message, target, refresh=True):
     return source_id
 
 
+def archive_message(message, refresh=True):
+    """File `message` into the account's Archive. True when it went.
+
+    An account without an Archive folder gets one on the server, except
+    where the server keeps every message in an all-mail mailbox (Gmail's
+    All Mail, which the sync skips): there archiving is taking the message
+    out of the Inbox, and a message in any other folder has nothing to be
+    archived out of. False, with nothing touched, for a message that has
+    nowhere to go - already archived, in Trash, Spam or Drafts.
+
+    Raises whatever the IMAP layer raises, having written nothing locally
+    (the `move_to_folder` invariant).
+    """
+    from ..models import MailFolder
+    from ..queries import canonical_folder_id, special_folder
+    from .imap_folders import create_archive_folder
+
+    types = MailFolder.FolderType
+    source_type = message.folder.folder_type
+    if source_type in (types.ARCHIVE, types.TRASH, types.SPAM, types.DRAFTS):
+        return False
+    account = message.account
+    archive = special_folder(account, types.ARCHIVE)
+    if archive is None and account.archives_in_all_mail:
+        if source_type != types.INBOX:
+            return False
+        _take_out_of_folder(message, refresh)
+        return True
+    if archive is None:
+        archive = create_archive_folder(account)
+    if canonical_folder_id(message.folder) == archive.pk:
+        return False
+    move_to_folder(message, archive, refresh=refresh)
+    return True
+
+
+def report_spam(message, refresh=True):
+    """Move `message` into the account's Spam folder. True when it went.
+
+    False, with nothing touched, on an account without one and for a
+    message that is spam already, trashed, a draft or sent by the user.
+    """
+    from ..models import MailFolder
+
+    types = MailFolder.FolderType
+    if message.folder.folder_type in (
+        types.SPAM,
+        types.TRASH,
+        types.DRAFTS,
+        types.SENT,
+    ):
+        return False
+    return _move_to_special_folder(message, types.SPAM, refresh)
+
+
+def mark_not_spam(message, refresh=True):
+    """Move `message` out of Spam, back into the Inbox. True when it went."""
+    from ..models import MailFolder
+
+    types = MailFolder.FolderType
+    if message.folder.folder_type != types.SPAM:
+        return False
+    return _move_to_special_folder(message, types.INBOX, refresh)
+
+
+def _move_to_special_folder(message, folder_type, refresh):
+    from ..queries import canonical_folder_id, special_folder
+
+    target = special_folder(message.account, folder_type)
+    if target is None or canonical_folder_id(message.folder) == target.pk:
+        return False
+    move_to_folder(message, target, refresh=refresh)
+    return True
+
+
+def _take_out_of_folder(message, refresh):
+    """Expunge `message` from its mailbox, then retire its row.
+
+    Server first, as in `move_to_folder`: a refused expunge raises with the
+    row untouched. Only for a server that keeps the message elsewhere.
+    """
+    from ..models import MailMessage
+    from .imap_messages import delete_message
+    from .notifications import settle_message_notifications
+
+    delete_message(message.account, message)
+
+    now = timezone.now()
+    with transaction.atomic():
+        retired = MailMessage.objects.filter(
+            pk=message.pk,
+            folder_id=message.folder_id,
+            imap_uid=message.imap_uid,
+            deleted_at__isnull=True,
+        ).update(deleted_at=now, updated_at=now)
+        if retired:
+            message.deleted_at = now
+            message.updated_at = now
+            settle_message_notifications(message.account.owner, [message.pk])
+            refresh_message_label_counts(message)
+        if refresh:
+            refresh_folder_counts(message.folder)
+
+
 TRASHED = "trashed"
 EXPUNGED = "expunged"
 

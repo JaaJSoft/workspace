@@ -1,9 +1,11 @@
 import base64
 import hashlib
 import logging
+import uuid
 
 import orjson
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.core.cache import cache
 
@@ -18,7 +20,12 @@ from workspace.users.services.presence import is_active
 logger = logging.getLogger(__name__)
 
 PUSH_COOLDOWN_SECONDS = 60
-PUSH_TIMEOUT_SECONDS = 10
+PUSH_TIMEOUT_SECONDS = 10  # per connect and per read, not for the whole send
+# A send runs as a task of its own so one device's push service cannot hold up
+# another's. The soft limit ends a send the per-read timeout never trips (a
+# server answering a byte at a time); the hard limit kills one that ignores it.
+PUSH_SEND_SOFT_TIME_LIMIT = 15
+PUSH_SEND_TIME_LIMIT = 20
 ACTIVE_RETRY_DELAY_SECONDS = 60
 RETENTION_DAYS = 90
 _SOURCE_ID_ATTRS = tuple(f"{name}_id" for name in SOURCE_FIELD_NAMES)
@@ -112,10 +119,6 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
         )
         return
 
-    # pywebpush pulls in aiohttp; the web process imports this module to
-    # queue the task and never sends a push itself.
-    from pywebpush import WebPushException, webpush
-
     from workspace.notifications.models import PushSubscription
 
     try:
@@ -150,11 +153,11 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
         return
 
     try:
-        signer = load_vapid_key(private_key)
+        load_vapid_key(private_key)
     except VapidKeyError as e:
         # Reported once for the whole run: an unusable key fails every
-        # subscription identically, and the per-subscription handler below
-        # would bury the cause under one traceback per device.
+        # subscription identically, and each send would bury the cause under
+        # one traceback per device.
         logger.error("Push skipped: %s", e)
         return
 
@@ -178,62 +181,122 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
             "origin": notif.origin,
             "tag": _notification_tag(notif),
         }
-    )
+    ).decode()
     headers = {
         "Urgency": PUSH_URGENCY[notif.priority],
         "Topic": _push_topic(notif),
     }
 
-    delivered = 0
+    run_id = None
+    if cooldown_key:
+        run_id = uuid.uuid4().hex
+        cache.set(
+            _run_key(run_id, "pending"), len(subscriptions), PUSH_COOLDOWN_SECONDS
+        )
     for sub in subscriptions:
-        try:
-            with GuardedPushSession() as session:
-                webpush(
-                    subscription_info={
-                        "endpoint": sub.endpoint,
-                        "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                    },
-                    data=payload,
-                    vapid_private_key=signer,
-                    # pywebpush fills `aud` and `exp` into the dict it is
-                    # handed and only ever revises `exp`. Passing the settings
-                    # dict itself would pin every later push to the first
-                    # endpoint's origin, which the other push services reject.
-                    vapid_claims=dict(vapid_claims),
-                    ttl=PUSH_TTL_SECONDS,
-                    headers=headers,
-                    requests_session=session,
-                    timeout=PUSH_TIMEOUT_SECONDS,
-                )
-            delivered += 1
-        except UnsafeUrl as e:
-            # Kept: "could not be resolved" is a refusal too, and a DNS outage
-            # must not drop every subscription.
-            logger.warning(
-                "Push refused for %s: %s", scrub(sub.endpoint[:60]), e.user_message
-            )
-        except WebPushException as e:
-            status_code = (
-                getattr(e.response, "status_code", None)
-                if hasattr(e, "response")
-                else None
-            )
-            if status_code in (404, 410):
-                sub.delete()
-                logger.info(
-                    "Deleted expired push subscription %s", scrub(sub.endpoint[:60])
-                )
-            else:
-                logger.warning("Push failed for %s: %s", scrub(sub.endpoint[:60]), e)
-        except Exception:
-            logger.exception(
-                "Unexpected error sending push to %s", scrub(sub.endpoint[:60])
-            )
+        deliver_push.apply_async(
+            (str(sub.pk), payload, headers),
+            {"cooldown_key": cooldown_key, "run_id": run_id},
+        )
 
-    if cooldown_key and delivered == 0:
-        # Nothing went out: re-arm the window so the next notification for
-        # this source is not throttled by an attempt that delivered nothing.
+
+@shared_task(
+    name="notifications.deliver_push",
+    priority=INTERACTIVE_PRIORITY,
+    ignore_result=True,
+    soft_time_limit=PUSH_SEND_SOFT_TIME_LIMIT,
+    time_limit=PUSH_SEND_TIME_LIMIT,
+)
+def deliver_push(
+    subscription_uuid: str,
+    payload: str,
+    headers: dict,
+    cooldown_key: str | None = None,
+    run_id: str | None = None,
+):
+    """Send one push to one of the recipient's subscriptions."""
+    delivered = False
+    try:
+        delivered = _send_to_subscription(subscription_uuid, payload, headers)
+    finally:
+        if run_id:
+            _settle_cooldown(run_id, cooldown_key, delivered)
+
+
+def _send_to_subscription(subscription_uuid, payload, headers):
+    """Whether the push service accepted the message."""
+    # pywebpush pulls in aiohttp; the web process imports this module to
+    # queue the task and never sends a push itself.
+    from pywebpush import WebPushException, webpush
+
+    from workspace.notifications.models import PushSubscription
+
+    sub = PushSubscription.objects.filter(pk=subscription_uuid).first()
+    if sub is None:
+        return False
+    endpoint = scrub(sub.endpoint[:60])
+    try:
+        with GuardedPushSession() as session:
+            webpush(
+                subscription_info={
+                    "endpoint": sub.endpoint,
+                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                },
+                data=payload,
+                vapid_private_key=load_vapid_key(settings.WEBPUSH_VAPID_PRIVATE_KEY),
+                # pywebpush fills `aud` and `exp` into the dict it is handed
+                # and only ever revises `exp`: never hand it the settings dict.
+                vapid_claims=dict(settings.WEBPUSH_VAPID_CLAIMS),
+                ttl=PUSH_TTL_SECONDS,
+                headers=headers,
+                requests_session=session,
+                timeout=PUSH_TIMEOUT_SECONDS,
+            )
+    except SoftTimeLimitExceeded:
+        logger.warning("Push to %s timed out", endpoint)
+    except UnsafeUrl as e:
+        # Kept: "could not be resolved" is a refusal too, and a DNS outage
+        # must not drop every subscription.
+        logger.warning("Push refused for %s: %s", endpoint, e.user_message)
+    except WebPushException as e:
+        if getattr(e.response, "status_code", None) in (404, 410):
+            sub.delete()
+            logger.info("Deleted expired push subscription %s", endpoint)
+        else:
+            # The message carries the push service's response body.
+            logger.warning("Push failed for %s: %s", endpoint, scrub(str(e)[:300]))
+    except Exception:
+        logger.exception("Unexpected error sending push to %s", endpoint)
+    else:
+        return True
+    return False
+
+
+def _run_key(run_id, name):
+    return f"push:run:{run_id}:{name}"
+
+
+def _settle_cooldown(run_id, cooldown_key, delivered):
+    """Release the source cooldown once every send of the run has finished
+    and none of them delivered, so a run that reached no device does not
+    throttle the next notification. A partial delivery keeps it.
+
+    A send killed by its hard time limit never reports: the cooldown then
+    lasts its full window, which is all it costs.
+    """
+    if delivered:
+        # Written before the count goes down, so the send that brings it to
+        # zero sees it.
+        cache.set(_run_key(run_id, "delivered"), 1, PUSH_COOLDOWN_SECONDS)
+    try:
+        left = cache.decr(_run_key(run_id, "pending"))
+    except ValueError:
+        return  # the count expired, and the cooldown along with it
+    if left > 0:
+        return
+    if not cache.get(_run_key(run_id, "delivered")):
         cache.delete(cooldown_key)
+    cache.delete_many([_run_key(run_id, "pending"), _run_key(run_id, "delivered")])
 
 
 @shared_task(

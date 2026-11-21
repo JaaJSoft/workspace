@@ -37,6 +37,8 @@ from icalendar.prop import vDDDLists, vRecur
 
 from workspace.common.logging import scrub
 
+from .timezones import zone_from_tzid
+
 logger = logging.getLogger(__name__)
 
 # Occurrences to walk before abandoning an exact last-occurrence search. A
@@ -161,21 +163,13 @@ def _single(parts, key, default=None):
 
 def _zone_or_utc(tzid):
     """Resolve a TZID parameter to a zone, or UTC when missing/unrecognised."""
-    if not tzid:
-        return UTC
-    try:
-        return ZoneInfo(tzid)
-    except ZoneInfoNotFoundError, ValueError:
-        return UTC
+    return zone_from_tzid(tzid) or UTC
 
 
 def _zone_from_name(name):
     """Resolve an IANA zone name to a ZoneInfo, or None for the legacy UTC path.
 
-    Mirrors ``timezones.event_timezone``'s contract but takes a bare name, so
-    both ``apply_rule`` (which holds an ``Event``) and ``derive_into_defaults``
-    (which holds only an ``update_or_create`` payload dict) resolve the same
-    way instead of each growing their own copy of this.
+    ``timezones.event_timezone``'s contract, for a bare name.
     """
     if not name or name == "UTC":
         return None
@@ -862,22 +856,3 @@ def apply_rule(event, rule_text):
         )
     else:
         event.recurrence_until = None
-
-
-def derive_into_defaults(defaults):
-    """Apply the same derivation to an ``update_or_create`` defaults dict.
-
-    ``ics_sync`` upserts rows without ever holding an instance, so it cannot
-    call ``apply_rule``. Keeping this here rather than inline at the call site
-    is what lets the structural test insist the derived columns are only ever
-    assigned in this module.
-    """
-    rule = defaults.get("recurrence_rule", "")
-    start, end = defaults.get("start"), defaults.get("end")
-    duration = (end - start) if start and end else None
-    zone = _zone_from_name(defaults.get("timezone"))
-    recurring = bool(start) and parse(rule, start, zone) is not None
-    defaults["is_recurring"] = recurring
-    defaults["recurrence_until"] = (
-        last_occurrence_end(rule, start, duration, zone) if recurring else None
-    )

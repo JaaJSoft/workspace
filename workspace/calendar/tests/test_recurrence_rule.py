@@ -454,43 +454,6 @@ class ApplyRuleTests(SimpleTestCase):
         self.assertTrue(event.is_recurring)
 
 
-class DeriveIntoDefaultsTests(SimpleTestCase):
-    def test_matches_apply_rule_for_an_equivalent_zoned_series(self):
-        # Spans the 2026 US spring-forward (Mar 8): a computation that
-        # ignored the zone would disagree with a zone-aware one by exactly
-        # one hour, which is what pins the two functions to the same answer.
-        start = datetime(2026, 3, 7, 15, tzinfo=UTC)
-        end = datetime(2026, 3, 7, 16, tzinfo=UTC)
-        rule = "RRULE:FREQ=DAILY;COUNT=3"
-
-        event = _StubEvent(start=start, end=end, timezone="America/New_York")
-        rr.apply_rule(event, rule)
-
-        defaults = {
-            "recurrence_rule": rule,
-            "start": start,
-            "end": end,
-            "timezone": "America/New_York",
-        }
-        rr.derive_into_defaults(defaults)
-
-        self.assertEqual(defaults["is_recurring"], event.is_recurring)
-        self.assertEqual(defaults["recurrence_until"], event.recurrence_until)
-        self.assertEqual(
-            defaults["recurrence_until"], datetime(2026, 3, 9, 15, tzinfo=UTC)
-        )
-
-    def test_complex_rule_still_marks_the_row_recurring(self):
-        defaults = {
-            "recurrence_rule": "RRULE:FREQ=MONTHLY;BYDAY=2TU",
-            "start": datetime(2026, 1, 6, 10, tzinfo=UTC),
-            "end": None,
-            "timezone": "",
-        }
-        rr.derive_into_defaults(defaults)
-        self.assertTrue(defaults["is_recurring"])
-
-
 class LazyFailureTests(SimpleTestCase):
     """A rruleset that only breaks on iteration must break inside parse().
 
@@ -657,18 +620,6 @@ class UnparseableRuleWriteTests(SimpleTestCase):
         self.assertEqual(event.recurrence_rule, "total garbage")
         self.assertFalse(event.is_recurring)
         self.assertIsNone(event.recurrence_until)
-
-    def test_derive_into_defaults_refuses_the_same(self):
-        defaults = {
-            "recurrence_rule": "total garbage",
-            "start": datetime(2026, 1, 6, 10, tzinfo=UTC),
-            "end": None,
-            "timezone": "",
-        }
-        with self.assertLogs("workspace.calendar.services.recurrence_rule", "WARNING"):
-            rr.derive_into_defaults(defaults)
-        self.assertFalse(defaults["is_recurring"])
-        self.assertIsNone(defaults["recurrence_until"])
 
 
 class NonPositiveIntervalTests(SimpleTestCase):

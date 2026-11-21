@@ -16,6 +16,7 @@ from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.utils import timezone as dj_timezone
+from icalendar.timezone.windows_to_olson import WINDOWS_TO_OLSON
 
 
 def normalize_all_day(dt):
@@ -46,6 +47,33 @@ def event_timezone(event):
         return ZoneInfo(name)
     except ZoneInfoNotFoundError, KeyError, ValueError:
         return None
+
+
+def zone_from_tzid(tzid):
+    """The IANA zone an iCalendar TZID names, or None when it names none.
+
+    Not every client writes IANA names: Outlook and Exchange write Windows IDs
+    ("Romance Standard Time", mapped by icalendar's table), libical and older
+    Thunderbird prefix the name with a vendor path
+    ("/mozilla.org/20050126_1/Europe/Paris"). icalendar's own ``tzp.timezone``
+    knows both, but answers from a cache that parsing a calendar fills with
+    that calendar's VTIMEZONE, which carries no IANA key.
+    """
+    if not tzid:
+        return None
+    name = tzid.strip("/")
+    parts = name.split("/")
+    candidates = [name, WINDOWS_TO_OLSON.get(name)]
+    candidates += ["/".join(parts[start:]) for start in range(1, len(parts))]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return ZoneInfo(candidate)
+        except ZoneInfoNotFoundError, ValueError, OSError:
+            # OSError: on a system zoneinfo, "Europe" names a directory.
+            continue
+    return None
 
 
 def current_timezone_name():

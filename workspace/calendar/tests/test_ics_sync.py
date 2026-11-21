@@ -1,13 +1,12 @@
 from unittest.mock import patch
 
-import icalendar
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.calendar.models import Calendar
 from workspace.calendar.models_external import ExternalCalendar
+from workspace.calendar.services.ical_objects import read_calendar
 from workspace.calendar.services.ics_sync import (
-    _recurrence_lines,
     clear_sync_errors,
     external_calendars_with_errors,
     queue_external_calendar_syncs,
@@ -66,7 +65,7 @@ class RecurrenceLinesTests(TestCase):
     longer one.
     """
 
-    def _vevent(self, *lines):
+    def _rule(self, *lines):
         ics = "\r\n".join(
             [
                 "BEGIN:VCALENDAR",
@@ -78,29 +77,26 @@ class RecurrenceLinesTests(TestCase):
                 "END:VCALENDAR",
             ]
         )
-        calendar = icalendar.Calendar.from_ical(ics)
-        return next(c for c in calendar.walk() if c.name == "VEVENT")
+        (obj,) = read_calendar(ics).objects
+        return obj.master.rule
 
     def test_tzid_parameter_survives_the_import(self):
-        vevent = self._vevent(
-            "RRULE:FREQ=WEEKLY",
-            "RDATE;TZID=America/New_York:20260501T090000",
-        )
         self.assertEqual(
-            _recurrence_lines(vevent),
+            self._rule(
+                "RRULE:FREQ=WEEKLY",
+                "RDATE;TZID=America/New_York:20260501T090000",
+            ),
             "RRULE:FREQ=WEEKLY\nRDATE;TZID=America/New_York:20260501T090000",
         )
 
     def test_value_date_parameter_survives_the_import(self):
-        vevent = self._vevent("RRULE:FREQ=WEEKLY", "RDATE;VALUE=DATE:20260601")
         self.assertEqual(
-            _recurrence_lines(vevent),
+            self._rule("RRULE:FREQ=WEEKLY", "RDATE;VALUE=DATE:20260601"),
             "RRULE:FREQ=WEEKLY\nRDATE;VALUE=DATE:20260601",
         )
 
     def test_a_parameterless_rdate_gains_no_semicolon(self):
-        vevent = self._vevent("RRULE:FREQ=WEEKLY", "RDATE:20260501T090000Z")
         self.assertEqual(
-            _recurrence_lines(vevent),
+            self._rule("RRULE:FREQ=WEEKLY", "RDATE:20260501T090000Z"),
             "RRULE:FREQ=WEEKLY\nRDATE:20260501T090000Z",
         )

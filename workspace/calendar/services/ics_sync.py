@@ -3,19 +3,16 @@
 import logging
 
 import httpx2
-import icalendar
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from workspace.calendar.models import Event
-from workspace.calendar.services.ics_common import (
-    extract_email,
-    is_all_day,
-    parse_dt_prop,
+from workspace.calendar.services.calendar_objects import (
+    object_unchanged,
+    save_object,
 )
-from workspace.calendar.services.recurrence_rule import derive_into_defaults
-from workspace.calendar.services.timezones import normalize_all_day
+from workspace.calendar.services.ical_objects import dated, read_calendar, standalone
 from workspace.common.url_guard import (
     ResponseTooLarge,
     UnsafeUrl,
@@ -34,11 +31,12 @@ MAX_FEED_REDIRECTS = 5
 
 @transaction.atomic
 def sync_external_calendar(external_calendar):
-    """Fetch an ICS feed and sync events into the linked Calendar.
+    """Fetch an ICS feed and sync its objects into the linked Calendar.
 
     - Uses ETag/If-None-Match to skip unchanged feeds.
-    - Upserts events by ical_uid (create or update).
-    - Deletes events whose ical_uid is no longer in the feed.
+    - Writes each object - a series and its exceptions, or a single event -
+      keyed by UID, and leaves an object the feed did not change untouched.
+    - Deletes the objects whose UID is no longer in the feed.
     """
     ics_text = _fetch_feed(external_calendar)
 
@@ -48,56 +46,40 @@ def sync_external_calendar(external_calendar):
         external_calendar.save(update_fields=["last_synced_at"])
         return
 
-    cal = icalendar.Calendar.from_ical(ics_text)
     calendar = external_calendar.calendar
-    owner = calendar.owner
     # Floating (naive) feed times mean "local time of the observer": the
     # closest observer we have is the calendar owner.
-    owner_tz = get_user_timezone(owner)
+    feed = read_calendar(ics_text, get_user_timezone(calendar.owner))
 
-    # Pre-load existing rows keyed by ical_uid so we can short-circuit
-    # no-op syncs: feeds that don't support ETag/If-None-Match return
-    # 200 on every poll, and without this check ``update_or_create``
-    # would rewrite every row (and advance ``updated_at``) every 15 min
-    # even when the upstream content is unchanged.
+    # Feeds that don't support ETag/If-None-Match return 200 on every poll:
+    # without comparing first, every row would be rewritten (and its
+    # ``updated_at`` advanced) every 15 minutes with nothing changed upstream.
     existing_by_uid = {
-        e.ical_uid: e
-        for e in Event.objects.filter(
-            calendar=calendar,
-            ical_uid__isnull=False,
-        ).exclude(ical_uid="")
+        master.ical_uid: master
+        for master in Event.objects.filter(
+            calendar=calendar, recurrence_parent__isnull=True, ical_uid__isnull=False
+        )
+        .exclude(ical_uid="")
+        .prefetch_related("exceptions")
     }
 
     seen_uids = set()
-
-    for component in cal.walk():
-        if component.name != "VEVENT":
+    for obj in feed.objects:
+        obj = dated(standalone(obj))
+        if obj is None:
             continue
+        seen_uids.add(obj.uid)
+        organizer = obj.master.organizer
+        master = existing_by_uid.get(obj.uid)
+        if master is None:
+            _create_object(calendar, obj, organizer)
+        elif not object_unchanged(master, obj, external_organizer=organizer):
+            save_object(master, obj, external_organizer=organizer)
 
-        uid = str(component.get("UID", ""))
-        if not uid:
-            continue
-        seen_uids.add(uid)
-
-        defaults = _vevent_to_defaults(component, owner, owner_tz)
-        derive_into_defaults(defaults)
-        existing = existing_by_uid.get(uid)
-        if existing is not None and _matches_defaults(existing, defaults):
-            continue
-
-        # update_or_create + the partial UniqueConstraint on (calendar,
-        # ical_uid) is atomic under concurrent sync runs: the loser of an
-        # INSERT race transparently falls back to UPDATE instead of
-        # raising IntegrityError or creating a duplicate row.
-        Event.objects.update_or_create(
-            calendar=calendar,
-            ical_uid=uid,
-            defaults=defaults,
-        )
-
-    # Remove events that disappeared from the feed
+    # Remove the objects that disappeared from the feed, exceptions included.
     Event.objects.filter(
         calendar=calendar,
+        recurrence_parent__isnull=True,
         ical_uid__isnull=False,
     ).exclude(
         ical_uid__in=seen_uids,
@@ -108,6 +90,20 @@ def sync_external_calendar(external_calendar):
     external_calendar.last_synced_at = timezone.now()
     external_calendar.last_error = ""
     external_calendar.save(update_fields=["last_synced_at", "last_etag", "last_error"])
+
+
+def _create_object(calendar, obj, organizer):
+    master = Event(calendar=calendar, owner=calendar.owner, ical_uid=obj.uid)
+    try:
+        with transaction.atomic():
+            save_object(master, obj, external_organizer=organizer)
+    except IntegrityError:
+        # A concurrent sync of the same feed inserted this UID first (the
+        # unique constraint on calendar and UID): write over its row instead.
+        master = Event.objects.get(
+            calendar=calendar, ical_uid=obj.uid, recurrence_parent__isnull=True
+        )
+        save_object(master, obj, external_organizer=organizer)
 
 
 def _fetch_feed(external_calendar):
@@ -166,76 +162,6 @@ def sync_error_message(exc):
     if isinstance(exc, ValueError):
         return _("The feed is not a valid iCalendar file.")
     return _("Unexpected error, see the server logs.")
-
-
-def _matches_defaults(existing, defaults):
-    """Return True if every default field on ``existing`` already matches.
-
-    ``defaults`` contains the ``owner`` User instance; compare via its pk
-    against ``existing.owner_id`` so we don't trigger a lazy FK lookup.
-    """
-    for key, value in defaults.items():
-        if key == "owner":
-            if existing.owner_id != value.pk:
-                return False
-        elif getattr(existing, key) != value:
-            return False
-    return True
-
-
-def _vevent_to_defaults(vevent, owner, owner_tz=None):
-    """Convert a VEVENT component to a dict of Event field defaults."""
-    dtstart_prop = vevent.get("DTSTART")
-    dtend_prop = vevent.get("DTEND")
-
-    start, tzid = parse_dt_prop(dtstart_prop, owner_tz)
-    end, _end_tzid = parse_dt_prop(dtend_prop, owner_tz)
-    all_day = is_all_day(dtstart_prop)
-    if all_day:
-        start = normalize_all_day(start)
-        end = normalize_all_day(end)
-        tzid = ""
-
-    return {
-        "title": str(vevent.get("SUMMARY", "")),
-        "description": str(vevent.get("DESCRIPTION", "")),
-        "location": str(vevent.get("LOCATION", "")),
-        "start": start,
-        "end": end,
-        "all_day": all_day,
-        "timezone": tzid,
-        "ical_sequence": int(vevent.get("SEQUENCE", 0)),
-        "owner": owner,
-        "external_organizer": extract_email(vevent.get("ORGANIZER")),
-        "recurrence_rule": _recurrence_lines(vevent),
-    }
-
-
-def _recurrence_lines(vevent):
-    """Return the VEVENT's recurrence lines as the feed wrote them.
-
-    Storing the rule rather than a summary of it is the point: flattening
-    COUNT into a date and dropping BY parts is what turned an imported
-    "second Tuesday of the month" into a plain "monthly".
-
-    icalendar returns a bare value for a property that appears once and a
-    list when it repeats, so both shapes have to be handled.
-
-    The property parameters are part of the value, not decoration: without the
-    TZID an RDATE's wall-clock time is read in the wrong zone, and without
-    VALUE=DATE a bare date is not a date any more. Re-emitting them keeps the
-    stored text the text the feed sent.
-    """
-    lines = []
-    for name in ("RRULE", "RDATE", "EXDATE"):
-        value = vevent.get(name)
-        if value is None:
-            continue
-        for item in value if isinstance(value, list) else [value]:
-            params = item.params.to_ical().decode()
-            prefix = f"{name};{params}" if params else name
-            lines.append(f"{prefix}:{item.to_ical().decode()}")
-    return "\n".join(lines)
 
 
 def external_calendars_with_errors():

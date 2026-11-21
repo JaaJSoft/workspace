@@ -1,7 +1,6 @@
 """A subscribed feed is read object by object: a series keeps its exceptions."""
 
 from datetime import UTC, datetime
-from unittest import expectedFailure
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -77,7 +76,6 @@ class FeedTestCase(TestCase):
 
 
 class FeedSeriesTests(FeedTestCase):
-    @expectedFailure  # #1623: the moved occurrence overwrites its series
     def test_a_moved_occurrence_keeps_its_series(self):
         self._sync(_feed(SERIES, MOVED))
 
@@ -90,13 +88,11 @@ class FeedSeriesTests(FeedTestCase):
         self.assertEqual(moved.title, "Weekly sync (moved)")
         self.assertEqual(occurrence_starts(self.calendar), OCCURRENCES)
 
-    @expectedFailure  # #1623: the order of the VEVENTs decides which row wins
     def test_the_order_of_the_events_does_not_matter(self):
         self._sync(_feed(MOVED, SERIES))
 
         self.assertEqual(occurrence_starts(self.calendar), OCCURRENCES)
 
-    @expectedFailure  # #1623: there is no exception row to drop
     def test_an_occurrence_the_feed_no_longer_moves_goes_back_to_the_series(self):
         self._sync(_feed(SERIES, MOVED))
         self.assertEqual(
@@ -108,7 +104,6 @@ class FeedSeriesTests(FeedTestCase):
         self.assertFalse(master.exceptions.exists())
         self.assertIn(MOVED_FROM, occurrence_starts(self.calendar))
 
-    @expectedFailure  # #1623: the series is a single event after the first sync
     def test_an_unchanged_feed_writes_nothing(self):
         self._sync(_feed(SERIES, MOVED))
         before = {e.uuid: e.updated_at for e in Event.objects.all()}
@@ -128,7 +123,6 @@ class FeedSeriesTests(FeedTestCase):
             ["other@example.com"],
         )
 
-    @expectedFailure  # #1623: an occurrence on its own replaces nothing yet
     def test_an_occurrence_without_its_series_is_a_single_event(self):
         self._sync(_feed(MOVED))
 
@@ -163,7 +157,6 @@ class FeedValueTests(FeedTestCase):
         self.assertEqual(event.end, datetime(2026, 8, 6, tzinfo=UTC))
         self.assertEqual(event.timezone, "")
 
-    @expectedFailure  # #1775: X-WR-TIMEZONE is ignored, the series recurs in UTC
     def test_x_wr_timezone_names_the_zone_a_utc_series_recurs_in(self):
         self._sync(
             _feed(
@@ -189,7 +182,6 @@ class FeedValueTests(FeedTestCase):
             ],
         )
 
-    @expectedFailure  # #1775: feed events drop every line without a column
     def test_alarms_attendees_and_x_properties_are_kept(self):
         self._sync(
             _feed(
@@ -260,23 +252,18 @@ class FeedExportTests(FeedTestCase):
         self._sync(export(producer))
         self.assertEqual(before, {e.uuid: e.updated_at for e in Event.objects.all()})
 
-    @expectedFailure  # #1623
     def test_google(self):
         self._check("google")
 
-    @expectedFailure  # #1623, and the Windows zone ID resolves to nothing
     def test_outlook(self):
         self._check("outlook")
 
-    @expectedFailure  # #1623
     def test_icloud(self):
         self._check("icloud")
 
-    @expectedFailure  # #1623
     def test_nextcloud(self):
         self._check("nextcloud")
 
-    @expectedFailure  # #1623
     def test_thunderbird(self):
         self._check("thunderbird")
 

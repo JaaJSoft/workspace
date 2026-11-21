@@ -24,6 +24,7 @@ from ..queries import (
     canonical_folder,
     canonical_folder_id,
     folder_group_ids,
+    reachable_message,
     user_account_ids,
 )
 from ..serializers import (
@@ -444,18 +445,6 @@ class MailBatchActionView(APIView):
         return Response({"processed": processed})
 
 
-def _owned_message(request, uuid):
-    return (
-        MailMessage.objects.select_related("account", "folder")
-        .filter(
-            uuid=uuid,
-            account_id__in=user_account_ids(request.user),
-            deleted_at__isnull=True,
-        )
-        .first()
-    )
-
-
 def _fetch_original(message, headers_only):
     """The server's copy of `message`, or the error Response to send instead."""
     from ..services.imap_messages import fetch_original
@@ -498,7 +487,7 @@ class MailMessageOriginalView(APIView):
         responses={(200, "message/rfc822"): bytes},
     )
     def get(self, request, uuid):
-        msg = _owned_message(request, uuid)
+        msg = reachable_message(request.user, uuid)
         if msg is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         raw = _fetch_original(msg, headers_only=False)
@@ -523,7 +512,7 @@ class MailMessageHeadersView(APIView):
         ),
     )
     def get(self, request, uuid):
-        msg = _owned_message(request, uuid)
+        msg = reachable_message(request.user, uuid)
         if msg is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         raw = _fetch_original(msg, headers_only=True)

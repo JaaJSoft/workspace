@@ -3,7 +3,7 @@ import logging
 from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext as _
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,7 +13,9 @@ from workspace.common.closing import close_all
 from workspace.common.logging import scrub
 
 from ..models import MailAccount, MailMessage
+from ..queries import reachable_message
 from ..serializers import (
+    ComposePrefillSerializer,
     DraftSaveSerializer,
     MailMessageDetailSerializer,
     SendEmailSerializer,
@@ -248,3 +250,42 @@ class MailDraftView(APIView):
 
         refresh_folder_counts(msg.folder)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+COMPOSE_MODES = ("reply", "reply_all", "forward")
+
+
+@extend_schema(tags=["Mail - Messages"])
+class MailComposePrefillView(APIView):
+    """What the compose dialog opens with to answer or forward a message."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Prefill a reply, a reply to all or a forward",
+        parameters=[
+            OpenApiParameter("mode", enum=COMPOSE_MODES, required=True),
+        ],
+        responses=ComposePrefillSerializer,
+    )
+    def get(self, request, uuid):
+        from ..services.compose import build_forward, build_reply
+
+        mode = request.query_params.get("mode")
+        if mode not in COMPOSE_MODES:
+            return Response(
+                {"detail": _("Unknown compose mode")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        message = reachable_message(request.user, uuid)
+        if message is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if mode == "forward":
+            prefill = build_forward(message, request.user)
+        else:
+            prefill = build_reply(message, request.user, reply_all=mode == "reply_all")
+        return Response(
+            ComposePrefillSerializer(prefill).data,
+            headers={"Cache-Control": "private, no-store"},
+        )

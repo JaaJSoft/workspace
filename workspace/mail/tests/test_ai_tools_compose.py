@@ -267,8 +267,22 @@ class ReplyToEmailTests(MailComposeToolsTestCase):
         self.assertIn(b"To: alice@example.com", raw)
         body = plain_body(raw)
         self.assertTrue(body.startswith("Yes, Friday works."))
-        self.assertIn("On 2026-03-04 09:15, Alice wrote:", body)
+        self.assertIn("On Wednesday, March 4, 2026, 09:15, Alice wrote:", body)
         self.assertIn("> Are we still on for Friday?", body)
+
+    def test_reply_carries_the_account_signature_above_the_quote(self):
+        self.account.signature = "Me, from accounting"
+        self.account.save(update_fields=["signature"])
+        with patch(
+            "workspace.mail.services.imap_messages.save_draft",
+            return_value=self._draft_row(),
+        ) as save:
+            self._call(
+                self.tools.reply_to_email,
+                ReplyToEmailParams(uuid=self.parent.uuid, body="Yes."),
+            )
+        body = plain_body(save.call_args.args[1]).replace("\r\n", "\n")
+        self.assertTrue(body.startswith("Yes.\n-- \nMe, from accounting\n\n\n---\nOn "))
 
     def test_reply_all_widens_the_recipients(self):
         with patch(

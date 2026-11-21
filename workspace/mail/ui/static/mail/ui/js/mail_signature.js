@@ -1,7 +1,7 @@
 // Pure helper for inserting / swapping a plain-text email signature inside the
 // compose textarea body. No DOM access - unit-tested via node --test.
 window.mailSignature = (function () {
-  // Quote marker produced by replyTo / replyAll / forwardMessage in mail_compose.js.
+  // Opens the quote of a reply or a forward: QUOTE_MARKER in mail/services/compose.py.
   var QUOTE_MARKER = '\n\n---\n';
 
   function buildBlock(signature) {

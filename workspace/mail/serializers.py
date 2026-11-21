@@ -201,6 +201,25 @@ class MailAttachmentSerializer(serializers.ModelSerializer):
         fields = ["uuid", "filename", "content_type", "size", "content_id", "is_inline"]
 
 
+class _ComposeAttachmentSerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    filename = serializers.CharField()
+    size = serializers.IntegerField()
+
+
+class ComposePrefillSerializer(serializers.Serializer):
+    """A `services.compose.Prefill`, as the compose dialog opens it."""
+
+    account_id = serializers.UUIDField(source="account.uuid")
+    to = serializers.ListField(child=serializers.CharField())
+    cc = serializers.ListField(child=serializers.CharField())
+    subject = serializers.CharField()
+    body_text = serializers.CharField(trim_whitespace=False)
+    signature_block = serializers.CharField(trim_whitespace=False)
+    reply_message_id = serializers.UUIDField(allow_null=True)
+    attachments = _ComposeAttachmentSerializer(many=True)
+
+
 class MailMessageListSerializer(serializers.ModelSerializer):
     attachments_count = serializers.IntegerField(read_only=True)
     labels = serializers.SerializerMethodField()

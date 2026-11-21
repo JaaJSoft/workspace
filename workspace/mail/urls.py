@@ -137,6 +137,11 @@ urlpatterns = [
         name="mail-message-original",
     ),
     path(
+        "api/v1/mail/messages/<uuid:uuid>/compose",
+        compose.MailComposePrefillView.as_view(),
+        name="mail-message-compose",
+    ),
+    path(
         "api/v1/mail/messages/<uuid:uuid>/headers",
         messages.MailMessageHeadersView.as_view(),
         name="mail-message-headers",

@@ -16,6 +16,7 @@ so SNI and the certificate check are those of the URL.
 """
 
 import socket
+import time
 from dataclasses import dataclass
 from ipaddress import ip_address
 from urllib.parse import urlparse
@@ -100,8 +101,15 @@ def check_resolved_url(url: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> Non
         _vetted_addresses(host, policy)
 
 
-def guarded_transport(policy: NetworkPolicy = PUBLIC_INTERNET) -> httpx2.HTTPTransport:
+def guarded_transport(
+    policy: NetworkPolicy = PUBLIC_INTERNET, deadline: float | None = None
+) -> httpx2.HTTPTransport:
     """An HTTP transport that only connects to addresses *policy* accepts.
+
+    *deadline*, a ``time.monotonic()`` instant, bounds every request as a
+    whole: httpx's timeouts apply to each read on its own, so a server sending
+    a byte at a time never trips them. Past it, a connect, read or write raises
+    httpx's timeout error. Name resolution is not covered.
 
     A client given an explicit transport ignores the proxy environment
     variables: a proxy would resolve the name itself, out of the guard's reach.
@@ -109,7 +117,7 @@ def guarded_transport(policy: NetworkPolicy = PUBLIC_INTERNET) -> httpx2.HTTPTra
     transport = httpx2.HTTPTransport()
     # httpx2 has no parameter for it; the pool reads this attribute each time
     # it opens a connection. test_url_guard fails if an upgrade moves it.
-    transport._pool._network_backend = _GuardedBackend(policy)
+    transport._pool._network_backend = _GuardedBackend(policy, deadline)
     return transport
 
 
@@ -129,31 +137,71 @@ def read_capped(response: httpx2.Response, max_bytes: int) -> bytes:
 
 
 class _GuardedBackend(httpcore2.SyncBackend):
-    def __init__(self, policy):
+    def __init__(self, policy, deadline=None):
         super().__init__()
         self._policy = policy
+        self._deadline = deadline
 
     def connect_tcp(
         self, host, port, timeout=None, local_address=None, socket_options=None
     ):
         if host.lower() in self._policy.allowed_hosts:
-            return super().connect_tcp(
-                host, port, timeout, local_address, socket_options
-            )
+            return self._dial(host, port, timeout, local_address, socket_options)
         # Every answer is vetted before the first is dialed, then they are
         # tried in the resolver's order, as socket.create_connection would;
         # the last one's failure is the one raised.
         *others, last = _vetted_addresses(host, self._policy)
         for address in others:
             try:
-                return super().connect_tcp(
+                return self._dial(
                     str(address), port, timeout, local_address, socket_options
                 )
             except httpcore2.ConnectError, httpcore2.ConnectTimeout:
                 continue
-        return super().connect_tcp(
-            str(last), port, timeout, local_address, socket_options
-        )
+        return self._dial(str(last), port, timeout, local_address, socket_options)
+
+    def _dial(self, host, port, timeout, local_address, socket_options):
+        if self._deadline is None:
+            return super().connect_tcp(
+                host, port, timeout, local_address, socket_options
+            )
+        timeout = _time_left(self._deadline, timeout, httpcore2.ConnectTimeout)
+        stream = super().connect_tcp(host, port, timeout, local_address, socket_options)
+        return _DeadlineStream(stream, self._deadline)
+
+
+class _DeadlineStream(httpcore2.NetworkStream):
+    """Caps the timeout of each operation at what is left before the deadline."""
+
+    def __init__(self, stream, deadline):
+        self._stream = stream
+        self._deadline = deadline
+
+    def read(self, max_bytes, timeout=None):
+        timeout = _time_left(self._deadline, timeout, httpcore2.ReadTimeout)
+        return self._stream.read(max_bytes, timeout)
+
+    def write(self, buffer, timeout=None):
+        timeout = _time_left(self._deadline, timeout, httpcore2.WriteTimeout)
+        return self._stream.write(buffer, timeout)
+
+    def close(self):
+        self._stream.close()
+
+    def start_tls(self, ssl_context, server_hostname=None, timeout=None):
+        timeout = _time_left(self._deadline, timeout, httpcore2.ConnectTimeout)
+        stream = self._stream.start_tls(ssl_context, server_hostname, timeout)
+        return _DeadlineStream(stream, self._deadline)
+
+    def get_extra_info(self, info):
+        return self._stream.get_extra_info(info)
+
+
+def _time_left(deadline, timeout, error):
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise error("The request ran past its deadline")
+    return left if timeout is None else min(timeout, left)
 
 
 def _vetted_addresses(host, policy):

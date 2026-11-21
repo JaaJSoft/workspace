@@ -1,6 +1,8 @@
 """Push delivery through the URL guard: real pywebpush, real signing, the
 real HTTP client, with only DNS and TCP replaced."""
 
+import threading
+import time
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -63,3 +65,24 @@ class GuardedPushDeliveryTests(TestCase):
         )
         net = self._send({"push.example.org": [[PUBLIC]]}, response=redirect)
         self.assertEqual(net.dialed, [(PUBLIC, 443)])
+
+    @patch("workspace.notifications.tasks.PUSH_DEADLINE_SECONDS", 0.5)
+    def test_a_trickling_push_service_leaves_no_send_running(self):
+        # One byte every 50 ms: no per-read timeout fires, so without a
+        # deadline on the whole POST the send would outlive the task.
+        from workspace.notifications.tasks import send_push_notification
+
+        started = time.monotonic()
+        with (
+            FakeNetwork({"push.example.org": [[PUBLIC]]}, trickle=0.05),
+            self.assertLogs("workspace.notifications.tasks", "WARNING") as logs,
+        ):
+            send_push_notification(str(self.notif.uuid))
+            for thread in threading.enumerate():
+                if thread.name.startswith("webpush"):
+                    thread.join(timeout=0.5)
+                    self.assertFalse(thread.is_alive())
+
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertIn("timed out", "\n".join(logs.output))
+        self.assertTrue(PushSubscription.objects.filter(pk=self.sub.pk).exists())

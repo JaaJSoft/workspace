@@ -1,8 +1,10 @@
 import base64
 import hashlib
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, wait
 
+import httpx2
 import orjson
 from celery import shared_task
 from django.conf import settings
@@ -20,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 PUSH_COOLDOWN_SECONDS = 60
 PUSH_TIMEOUT_SECONDS = 10  # per connect and per read, not for the whole send
-# What the task waits for all devices together, below its soft time limit; a
-# send still running then is left to its own timeouts.
+# Every send of a run, queued ones included, ends by then: below the soft time
+# limit, and no thread outlives the task on a server that answers slowly.
 PUSH_DEADLINE_SECONDS = 20
 MAX_CONCURRENT_PUSHES = 8
 ACTIVE_RETRY_DELAY_SECONDS = 60
@@ -189,8 +191,10 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
         "Topic": _push_topic(notif),
     }
 
+    deadline = time.monotonic() + PUSH_DEADLINE_SECONDS
+
     def send(subscription_info):
-        with GuardedPushSession() as session:
+        with GuardedPushSession(deadline=deadline) as session:
             webpush(
                 subscription_info=subscription_info,
                 data=payload,
@@ -209,8 +213,7 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
     delivered = 0
     try:
         # The pool threads only talk HTTP: the database, the cache and the
-        # logs stay on this thread. Shutting down without waiting is what
-        # keeps a stalled send from holding the task past the deadline.
+        # logs stay on this thread.
         pool = ThreadPoolExecutor(
             max_workers=min(len(subscriptions), MAX_CONCURRENT_PUSHES),
             thread_name_prefix="webpush",
@@ -226,7 +229,8 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
                 )
                 for sub in subscriptions
             }
-            done, _ = wait(futures.values(), timeout=PUSH_DEADLINE_SECONDS)
+            # A second of grace lets a send cut off at the deadline report it.
+            done, _ = wait(futures.values(), timeout=PUSH_DEADLINE_SECONDS + 1)
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
 
@@ -246,6 +250,8 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
                 logger.warning(
                     "Push refused for %s: %s", scrub(sub.endpoint[:60]), e.user_message
                 )
+            except httpx2.TimeoutException:
+                logger.warning("Push to %s timed out", scrub(sub.endpoint[:60]))
             except WebPushException as e:
                 status_code = getattr(e.response, "status_code", None)
                 if status_code in (404, 410):

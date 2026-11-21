@@ -36,11 +36,13 @@ class GuardedPushSession:
     same POST through a guarded httpx client instead. Redirects are not
     followed: the encrypted payload and the VAPID signature are for the
     endpoint's origin, and a push service has no reason to redirect.
+
+    *deadline*, a ``time.monotonic()`` instant, ends the POST wherever it is.
     """
 
-    def __init__(self):
+    def __init__(self, deadline: float | None = None):
         self._client = httpx2.Client(
-            transport=guarded_transport(), follow_redirects=False
+            transport=guarded_transport(deadline=deadline), follow_redirects=False
         )
 
     def __enter__(self):

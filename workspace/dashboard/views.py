@@ -24,6 +24,7 @@ from workspace.projects.queries import assigned_open_tasks
 from workspace.users.services.settings import get_module_settings, get_setting
 
 from .services.modules import dashboard_modules
+from .services.preferences import TEMPERATURE_UNITS, temperature_unit
 
 ACTIVITY_LIMIT = 10
 MY_TASKS_LIMIT = 5
@@ -96,6 +97,8 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
         "my_tasks_available": my_tasks_available,
         "show_my_tasks": my_tasks_available
         and dashboard_settings.get("show_my_tasks", True),
+        "temperature_unit": temperature_unit(dashboard_settings),
+        "temperature_units": TEMPERATURE_UNITS.items(),
         "usage_rows": get_usage_headlines(user),
         "storage_usage": storage_usage,
         "storage_quota": storage_quota,

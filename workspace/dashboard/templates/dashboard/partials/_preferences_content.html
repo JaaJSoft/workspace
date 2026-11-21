@@ -55,6 +55,22 @@
     </label>
   {% endif %}
 
+  <label class="flex items-center justify-between gap-4">
+    <div>
+      <div class="font-medium text-sm">{% translate "Temperature" %}</div>
+      <div class="text-xs text-base-content/60">{% translate "Unit of the weather next to the date." %}</div>
+    </div>
+    <select
+      class="select select-sm w-auto"
+      x-model="temperatureUnit"
+      @change="setTemperatureUnit()"
+    >
+      {% for value, symbol in temperature_units %}
+        <option value="{{ value }}">{{ symbol }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
   <div class="pt-3 border-t border-base-300">
     <div class="font-medium text-sm">{% translate "Apps" %}</div>
     <div class="text-xs text-base-content/60 mb-3">{% translate "Choose which apps appear on your dashboard." %}</div>

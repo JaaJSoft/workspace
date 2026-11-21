@@ -1,5 +1,6 @@
 """Emailed invitations (iTIP, RFC 5546) written into the invitation calendar.
 
+Events keep their attendees and X- properties, but not the sender's alarms.
 The METHOD of the message decides the write:
 
 - ``REQUEST`` creates the object, or updates it when its SEQUENCE is newer.
@@ -28,6 +29,7 @@ from workspace.calendar.services.ical_objects import (
     dated,
     read_calendar,
     standalone,
+    without_components,
 )
 from workspace.common.logging import scrub
 from workspace.notifications.services.notifications import notify
@@ -59,7 +61,11 @@ def process_calendar_email(mail_message):
         )
         return
     for obj in calendar.objects:
-        handler(obj, mail_message)
+        # Anyone can mail an invitation, and an alarm would put their reminder
+        # on the user's devices (a sound fetched from their URL, an email to
+        # addresses they chose): the organizer's alarms are not the attendee's,
+        # which is how Thunderbird and Apple Calendar read invitations too.
+        handler(without_components(obj, "VALARM"), mail_message)
 
 
 def process_calendar_emails(messages):

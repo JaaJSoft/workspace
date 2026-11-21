@@ -265,7 +265,9 @@ class InvitationValueTests(InvitationTestCase):
         self.assertEqual(event.start, datetime(2026, 8, 5, tzinfo=UTC))
         self.assertEqual(event.end, datetime(2026, 8, 6, tzinfo=UTC))
 
-    def test_alarms_attendees_and_x_properties_are_kept(self):
+    def test_attendees_and_x_properties_are_kept_but_not_the_sender_s_alarms(
+        self,
+    ):
         self._receive(
             _itip(
                 "REQUEST",
@@ -276,9 +278,11 @@ class InvitationValueTests(InvitationTestCase):
                     "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:bob@test.com",
                     "X-MICROSOFT-CDO-BUSYSTATUS:BUSY",
                     "BEGIN:VALARM",
-                    "ACTION:DISPLAY",
+                    "ACTION:AUDIO",
+                    "ATTACH:https://sender.example/ping.mp3",
                     "TRIGGER:-PT15M",
                     "END:VALARM",
+                    "CATEGORIES:Work",
                 ],
             )
         )
@@ -290,12 +294,33 @@ class InvitationValueTests(InvitationTestCase):
                 ORGANIZER,
                 "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:bob@test.com",
                 "X-MICROSOFT-CDO-BUSYSTATUS:BUSY",
-                "BEGIN:VALARM",
-                "ACTION:DISPLAY",
-                "TRIGGER:-PT15M",
-                "END:VALARM",
+                "CATEGORIES:Work",
             ],
         )
+
+    def test_an_end_closing_another_component_creates_nothing(self):
+        # Kept verbatim, the END:VEVENT inside the alarm would close the event
+        # wherever it is served, and the sender's next lines would be events.
+        self._receive(
+            _itip(
+                "REQUEST",
+                [
+                    f"UID:{UID}",
+                    ORGANIZER,
+                    "DTSTART:20260401T100000Z",
+                    "BEGIN:VALARM",
+                    "TRIGGER:-PT15M",
+                    "END:VEVENT",
+                    "BEGIN:VEVENT",
+                    "UID:smuggled@evil.test",
+                    "DTSTART:20260401T100000Z",
+                    "SUMMARY:Smuggled",
+                    "END:VALARM",
+                ],
+            )
+        )
+
+        self.assertFalse(Event.objects.exists())
 
 
 class InvitationExportTests(InvitationTestCase):
@@ -309,7 +334,8 @@ class InvitationExportTests(InvitationTestCase):
         self.assertEqual(series.ical_uid, SERIES_UID[producer])
         self.assertEqual(series.timezone, "Europe/Paris")
         self.assertEqual(series.external_organizer, "alice@example.com")
-        self.assertIn("BEGIN:VALARM", series.ical_extra)
+        self.assertIn("ATTENDEE", series.ical_extra)
+        self.assertNotIn("VALARM", series.ical_extra)
         (moved,) = series.exceptions.all()
         self.assertEqual(moved.original_start, MOVED_FROM)
         self.assertEqual(occurrence_starts(self._calendar()), OCCURRENCES)

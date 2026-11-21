@@ -61,6 +61,8 @@ _CONSUMED = frozenset(
     }
 )
 _RECURRENCE = frozenset({"RRULE", "RDATE", "EXDATE", "EXRULE"})
+# Components that only ever sit at the top of a body, never inside another.
+_TOP_LEVEL = frozenset({"VCALENDAR", "VEVENT", "VTODO", "VJOURNAL", "VTIMEZONE"})
 
 _NAME_RE = re.compile(r"[A-Za-z0-9-]+")
 _TZID_RE = re.compile(r';TZID=(?:"([^"]*)"|([^;:]*))', re.IGNORECASE)
@@ -380,6 +382,29 @@ def standalone(obj):
     return ParsedObject(uid=obj.uid, master=master)
 
 
+def without_components(obj, name):
+    """*obj* with every *name* component (``VALARM``) dropped from its events."""
+
+    def strip(event):
+        kept, depth = [], 0
+        for line in _lines(event.extra):
+            prop = _property_name(line)
+            value = line.split(":", 1)[1].strip().upper() if ":" in line else ""
+            if not depth and prop == "BEGIN" and value == name:
+                depth = 1
+            elif depth:
+                depth += {"BEGIN": 1, "END": -1}.get(prop, 0)
+            else:
+                kept.append(line)
+        return replace(event, extra="\n".join(kept))
+
+    return replace(
+        obj,
+        master=strip(obj.master) if obj.master is not None else None,
+        overrides=[strip(override) for override in obj.overrides],
+    )
+
+
 def dated(obj):
     """*obj* without its undated occurrences, or None when its master is undated."""
     if obj.master is None or obj.master.start is None:
@@ -459,6 +484,12 @@ def _raw_vevents(lines, strict):
     In a strict read only VEVENT and VTIMEZONE may sit in the VCALENDAR: a
     VTODO in an event calendar would be accepted and then silently dropped.
     A lenient read skips them.
+
+    Every END must close the component its BEGIN opened, and no calendar,
+    event or zone may open inside another component: the nested lines are
+    stored and re-emitted verbatim, so an ``END:VEVENT`` hidden in an alarm
+    would close the event early wherever it is served, and whoever sent it
+    could append events of their own to the calendar.
     """
     blocks = []
     stack = []
@@ -476,6 +507,8 @@ def _raw_vevents(lines, strict):
                 )
             if not stack and value != "VCALENDAR":
                 raise InvalidObject("The body is not a VCALENDAR.")
+            if len(stack) >= 2 and value in _TOP_LEVEL:
+                raise InvalidObject(f"{value} cannot be nested here.")
             if len(stack) == 1 and value == "VEVENT":
                 current = []
                 blocks.append(current)
@@ -483,7 +516,7 @@ def _raw_vevents(lines, strict):
                 continue
             stack.append(value)
         elif name == "END":
-            if not stack:
+            if not stack or stack[-1] != value:
                 raise InvalidObject("Unbalanced END line.")
             stack.pop()
             if len(stack) == 1 and value == "VEVENT":

@@ -132,6 +132,16 @@ urlpatterns = [
         name="mail-message-labels",
     ),
     path(
+        "api/v1/mail/messages/<uuid:uuid>/original",
+        messages.MailMessageOriginalView.as_view(),
+        name="mail-message-original",
+    ),
+    path(
+        "api/v1/mail/messages/<uuid:uuid>/headers",
+        messages.MailMessageHeadersView.as_view(),
+        name="mail-message-headers",
+    ),
+    path(
         "api/v1/mail/messages/<uuid:uuid>",
         messages.MailMessageDetailView.as_view(),
         name="mail-message-detail",

@@ -76,6 +76,23 @@ def mark_uids_read(account, folder, uids):
             client.add_flags(batch, [SEEN], silent=True)
 
 
+def fetch_original(account, message, headers_only=False):
+    """The message as the server stores it: every byte, or its header block.
+
+    Neither is kept locally - the sync stores what it parsed out - so this
+    asks the server each time. PEEK, so reading it leaves the message unread.
+    Raises LookupError when the server no longer holds the UID.
+    """
+    section = "BODY.PEEK[HEADER]" if headers_only else "BODY.PEEK[]"
+    with imap_session(account) as client:
+        client.select_folder(message.folder.name, readonly=True)
+        item = client.fetch([message.imap_uid], [section]).get(message.imap_uid)
+    key = b"BODY[HEADER]" if headers_only else b"BODY[]"
+    if not item or item.get(key) is None:
+        raise LookupError(message.imap_uid)
+    return bytes(item[key])
+
+
 def delete_message(account, message):
     """Remove a message from the IMAP server for good."""
     with imap_session(account) as client:

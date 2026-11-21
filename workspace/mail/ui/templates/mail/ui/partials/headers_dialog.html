@@ -1,0 +1,39 @@
+{% comment %}
+Show headers dialog (message toolbar overflow menu or right-click -> Show
+headers): the header block as the server stores it, fetched on open by
+showHeaders(). State lives on mailApp in headersDialog.
+{% endcomment %}
+{% load i18n %}
+<dialog id="mail-headers-dialog" class="modal">
+  <div class="modal-box max-w-3xl">
+    {% include "ui/partials/dialog_header.html" with icon="file-code" title=_("Message headers") subtitle_expr="headersDialog.subject" close_form=True only %}
+    <div x-show="headersDialog.loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-md text-module"></span>
+    </div>
+    <template x-if="headersDialog.error">
+      <inline-alert type="error"><span x-text="headersDialog.error"></span></inline-alert>
+    </template>
+    <pre
+      x-show="!headersDialog.loading && !headersDialog.error"
+      class="max-h-[60vh] overflow-auto rounded-lg border border-base-300 bg-base-200 p-3 text-xs leading-relaxed whitespace-pre-wrap break-all font-mono"
+      x-text="headersDialog.text"
+    ></pre>
+    <div class="modal-action">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        :disabled="headersDialog.loading || !headersDialog.text"
+        @click="copyHeaders()"
+      >
+        <i data-lucide="copy" class="w-4 h-4"></i>
+        {% translate "Copy" %}
+      </button>
+      <form method="dialog">
+        <button type="submit" class="btn btn-module btn-sm">{% translate "Close" %}</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">{% translate "close" %}</button>
+  </form>
+</dialog>

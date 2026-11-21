@@ -4,9 +4,10 @@ import logging
 
 from django.db import transaction
 from django.utils import timezone as dj_timezone
+from imapclient.exceptions import IMAPClientError
 
 from workspace.mail.services.imap_connection import imap_session
-from workspace.mail.services.imap_mailbox import _display_name, encode_name
+from workspace.mail.services.imap_mailbox import _display_name, _text, encode_name
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,48 @@ def create_folder(account, folder_name, parent_name=""):
         folder_type="other",
     )
     return folder
+
+
+ARCHIVE_NAME = "Archive"
+
+
+def create_archive_folder(account):
+    """Create the account's Archive mailbox, for an account that has none.
+
+    It goes under the personal namespace prefix (``INBOX.`` on Courier and
+    Cyrus, which refuse a mailbox outside it). A CREATE refused because the
+    mailbox already exists - a concurrent archive got there first - is not
+    an error; the row is then taken or made for it.
+    """
+    from ..models import MailFolder
+
+    with imap_session(account) as client:
+        name = _personal_prefix(client) + ARCHIVE_NAME
+        try:
+            client.create_folder(name)
+        except IMAPClientError:
+            listed = {_text(entry[2]) for entry in client.list_folders()}
+            if name not in listed:
+                raise
+
+    folder, _created = MailFolder.objects.get_or_create(
+        account=account,
+        name=name,
+        defaults={
+            "display_name": _display_name(name),
+            "folder_type": MailFolder.FolderType.ARCHIVE,
+        },
+    )
+    return folder
+
+
+def _personal_prefix(client):
+    if not client.has_capability("NAMESPACE"):
+        return ""
+    personal = client.namespace().personal
+    if not personal:
+        return ""
+    return _text(personal[0][0])
 
 
 def delete_folder(account, folder):

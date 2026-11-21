@@ -119,6 +119,23 @@ msgid "Tomorrow · %(date)s"
 msgstr "Demain · %(date)s"
 
 #: ui/static/calendar/ui/js/calendar_events.js
+msgctxt "agenda time column"
+msgid "All day"
+msgstr "Journée"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Until %(date)s"
+msgstr "Jusqu’au %(date)s"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Awaiting your reply"
+msgstr "En attente de votre réponse"
+
+#: ui/static/calendar/ui/js/calendar_events.js
+msgid "Declined"
+msgstr "Refusé"
+
+#: ui/static/calendar/ui/js/calendar_events.js
 msgid "End date cannot be before start date."
 msgstr "La date de fin ne peut pas être antérieure à la date de début."
 

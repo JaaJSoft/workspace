@@ -909,6 +909,7 @@ Reading a binary format (image and video containers, EXIF, TIFF directories, JPE
 - When a library covers most of the need, take its output and adapt the last mile (the RAW plugin copies LibRaw's `DateTime` into `DateTimeOriginal`), rather than parsing the file a second time to fill the gap.
 - When no library fits, stop and ask before writing a parser. If one is agreed, it caps what it reads (size, iterations), is tested against real files, and exists once - a JS twin of a Python parser is the same mistake twice.
 - A test fixture may build a format by hand (a minimal DNG in `files/tests/rasters.py`), provided the real library accepts it: that is the check that the fixture is the format and not an imitation of it.
+- Mail follows the same rule for its protocol and its format: IMAP goes through IMAPClient (`mail/services/imap_connection.py`), messages are read and built with the standard library's modern email API (`email.policy.default`), never with raw `imaplib`, `email.mime` or `email.header`. `mail/tests/test_protocol_libraries.py` fails on such an import. A change to the IMAP services is checked against real servers with `mail/tests/test_imap_live.py` (its docstring has the `docker run` line), and a change to message parsing against the corpus in `mail/tests/corpus/`: the unit tests run on an in-memory server (`mail/tests/imap_fake.py`) that only the live suite holds to the protocol.
 
 ### Stored blobs - go through `BlobStorage`, never a filesystem path
 

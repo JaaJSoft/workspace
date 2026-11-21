@@ -5,28 +5,33 @@ Simple single-node deployment using Docker Compose and SQLite.
 ## Architecture
 
 ```
-┌──────────────┐  ┌───────────────┐  ┌──────────────┐
-│     web      │  │ celery-worker │  │ celery-beat  │
-│   gunicorn   │  │  background   │  │  scheduler   │
-│    :8000     │  │    tasks      │  │              │
-└──────┬───────┘  └──────┬────────┘  └──────┬───────┘
-       │                 │                  │
-       └─────────────────┼──────────────────┘
-                         │
-                    volume: data/
-                  (SQLite + user files)
+┌──────────────┐  ┌───────────────┐  ┌──────────────┐  ┌──────────────┐
+│     web      │  │ celery-worker │  │ celery-beat  │  │   migrate    │
+│   gunicorn   │  │  background   │  │  scheduler   │  │  (one-shot)  │
+│    :8000     │  │    tasks      │  │              │  │              │
+└──────┬───────┘  └──────┬────────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                  │                 │
+       ├─────────────────┼──────────────────┼─────────────────┤
+       │                 │                  │                 │
+┌──────┴─────────────────┴──────────────────┴──┐   volume: workspace-data
+│          redis   (cache, sessions,           │   (SQLite + user files)
+│           queue of background tasks)         │
+└──────────────────────────────────────────────┘   volume: redis-data
 ```
 
-| Service           | Role                             |
-|-------------------|----------------------------------|
-| **web**           | Django/Gunicorn HTTP server      |
-| **celery-worker** | Celery worker (background tasks) |
-| **celery-beat**   | Celery beat (task scheduler)     |
+| Service           | Role                                                        |
+|-------------------|-------------------------------------------------------------|
+| **web**           | Django/Gunicorn HTTP server                                 |
+| **celery-worker** | Celery worker: runs every background task                   |
+| **celery-beat**   | Celery beat: sends the periodic tasks to the worker         |
+| **migrate**       | Applies the migrations, then exits. The three services above only start once it succeeded |
+| **redis**         | Redis: cache, sessions, and the queue tasks travel through from `web` and `celery-beat` to `celery-worker` |
+
+Each service of the app runs the same image with the same environment, shared through the `x-workspace` block at the top of the file, and differs only by `PROCESS_TYPE`.
 
 ## Prerequisites
 
 - Docker and Docker Compose v2+
-- Access to the built image or the Dockerfile at repository root
 
 ## Deploy
 
@@ -34,15 +39,16 @@ Simple single-node deployment using Docker Compose and SQLite.
 # 1. Copy docker-compose.yml to your server
 #    Optionally create a .env file next to it
 
-# 2. Build and start
+# 2. Start: the migrate service brings the database up to date first
 docker compose up -d
 
-# 3. Run migrations
-docker compose exec web python manage.py migrate
-
-# 4. Create an admin user
+# 3. Create an admin user
 docker compose exec web python manage.py createsuperuser
 ```
+
+Upgrading is `docker compose pull && docker compose up -d`: `migrate` runs again before the new version starts.
+
+The image is `ghcr.io/jaajsoft/workspace:latest`, the last release. Set `WORKSPACE_IMAGE` to a release tag (`ghcr.io/jaajsoft/workspace:0.45.0`) to upgrade only when you choose, or to an image you built yourself (`docker build -t workspace .` at the repository root, then `WORKSPACE_IMAGE=workspace`).
 
 ## Configuration
 
@@ -50,6 +56,7 @@ All settings are configurable via environment variables or a `.env` file next to
 
 | Variable               | Default                          | Description                               |
 |------------------------|----------------------------------|-------------------------------------------|
+| `WORKSPACE_IMAGE`      | `ghcr.io/jaajsoft/workspace:latest` | Image every app service runs           |
 | `SECRET_KEY`           | `change-me-to-a-real-secret-key` | Django secret key. **Must be changed.**   |
 | `ALLOWED_HOSTS`        | `*`                              | Comma-separated list of allowed hostnames |
 | `CSRF_TRUSTED_ORIGINS` | *(empty)*                        | Comma-separated list of trusted origins   |
@@ -128,10 +135,13 @@ AI_IMAGE_MODEL=dall-e-3
 
 ## Storage
 
-A single Docker volume (`workspace-data`) is mounted at `/app/data` across all services and contains:
+The `workspace-data` volume is mounted at `/app/data` in every app service and contains:
 
 - The SQLite database (`db.sqlite3`)
 - User-uploaded files and media
+- The scheduler's record of when each periodic task last ran (`celerybeat-schedule`)
+
+The `redis-data` volume holds Redis's append-only file, so the tasks still waiting for the worker survive a restart. Losing it costs no data: the cache refills and users sign in again.
 
 ## Reverse Proxy
 
@@ -179,4 +189,3 @@ Notes:
 ## Limitations
 
 - **SQLite** is not designed for high-concurrency writes. WAL mode is enabled for better concurrent read performance, but for heavy workloads consider switching to PostgreSQL.
-- **No Redis**: Celery uses in-memory broker (`memory://`), which means task state is lost on restart. For production, add a Redis service and set `REDIS_URL`.

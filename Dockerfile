@@ -116,6 +116,12 @@ RUN chown appuser:appuser /app
 # directory created by root cannot be read by appuser at runtime.
 USER appuser
 
+# Where the deployments mount their data volume. A fresh Docker volume takes
+# the owner of the directory it is mounted on, so it has to exist here, owned
+# by appuser: Docker would otherwise create it as root, and the app could not
+# write its database or its files.
+RUN mkdir /app/data
+
 # Face detection weights baked in by the face-models stage, if any. The
 # directory is outside the /app/data volume, which would hide it. Without
 # FACE_MODELS the variable stays empty and the weights download on first use

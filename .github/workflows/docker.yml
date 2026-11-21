@@ -1,8 +1,8 @@
 name: Docker
 
-# Only paths that end up in the image (see .dockerignore) or drive the build
-# trigger a run. GitHub doesn't apply path filters to tag pushes, so releases
-# always build.
+# Only paths that end up in the image (see .dockerignore), drive the build or
+# are smoke-tested against it (the reference Compose file) trigger a run.
+# GitHub doesn't apply path filters to tag pushes, so releases always build.
 on:
   push:
     branches: [main]
@@ -12,6 +12,7 @@ on:
       - '!**.md'
       - 'CHANGELOG.md'
       - '!docs/**'
+      - 'docs/deployments/docker-compose/docker-compose.yml'
       - '!LICENSE'
       - '!.github/**'
       - '.github/workflows/docker.yml'
@@ -24,6 +25,7 @@ on:
       - '!**.md'
       - 'CHANGELOG.md'
       - '!docs/**'
+      - 'docs/deployments/docker-compose/docker-compose.yml'
       - '!LICENSE'
       - '!.github/**'
       - '.github/workflows/docker.yml'
@@ -79,6 +81,17 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U workspace"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      # The broker every smoke-tested process shares: with DEBUG off they
+      # refuse to start on the in-memory one.
+      redis:
+        image: mirror.gcr.io/library/redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -192,11 +205,12 @@ jobs:
 
       - name: Run image against PostgreSQL and smoke HTTP endpoints
         run: |
-          # --network host lets the container reach the postgres service
-          # mapped on the runner at 127.0.0.1:5432, AND lets the runner
+          # --network host lets the container reach the postgres and redis
+          # services mapped on the runner at 127.0.0.1, AND lets the runner
           # curl the gunicorn process at 127.0.0.1:8000.
           docker run -d --name workspace-smoke --network host \
             -e DATABASE_URL=postgres://workspace:workspace@127.0.0.1:5432/workspace \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
             -e DEBUG=False \
             -e ALLOWED_HOSTS=127.0.0.1,localhost \
             -e SECRET_KEY=smoke-test-key-not-secret \
@@ -229,20 +243,26 @@ jobs:
           # The worker gets a CPU limit below the runner's core count: Celery's
           # own default would fork one child per core of the host, and the
           # pool must be sized from the limit instead.
-          docker run -d --name workspace-worker --cpus 1 \
+          docker run -d --name workspace-worker --cpus 1 --network host \
             -e PROCESS_TYPE=worker \
+            -e DATABASE_URL=postgres://workspace:workspace@127.0.0.1:5432/workspace \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
             -e DEBUG=False \
             -e SECRET_KEY=smoke-test-key-not-secret \
             workspace:ci
-          docker run -d --name workspace-beat \
+          docker run -d --name workspace-beat --network host \
             -e PROCESS_TYPE=beat \
+            -e DATABASE_URL=postgres://workspace:workspace@127.0.0.1:5432/workspace \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
             -e DEBUG=False \
             -e SECRET_KEY=smoke-test-key-not-secret \
             workspace:ci
           # A single-node deployment runs the scheduler inside its one worker.
-          docker run -d --name workspace-worker-beat --cpus 1 \
+          docker run -d --name workspace-worker-beat --cpus 1 --network host \
             -e PROCESS_TYPE=worker \
             -e CELERY_WORKER_BEAT=1 \
+            -e DATABASE_URL=postgres://workspace:workspace@127.0.0.1:5432/workspace \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
             -e DEBUG=False \
             -e SECRET_KEY=smoke-test-key-not-secret \
             workspace:ci
@@ -275,6 +295,77 @@ jobs:
           if logged workspace-worker 'beat: Starting'; then
             echo "The worker without CELERY_WORKER_BEAT started a scheduler" >&2; exit 1
           fi
+
+      # On the in-memory broker every task is dropped, each process holding a
+      # queue of its own: the three must say so and stop, not run idle.
+      - name: Refuse to start on the in-memory broker
+        run: |
+          for process in web worker beat; do
+            status=0
+            out=$(timeout 90 docker run --rm \
+              -e PROCESS_TYPE="$process" \
+              -e DEBUG=False \
+              -e ALLOWED_HOSTS=127.0.0.1,localhost \
+              -e SECRET_KEY=smoke-test-key-not-secret \
+              workspace:ci 2>&1) || status=$?
+            if [ "$status" -eq 0 ] || [ "$status" -eq 124 ]; then
+              echo "$out"; echo "PROCESS_TYPE=$process ran on the in-memory broker" >&2; exit 1
+            fi
+            grep -q 'core.E001' <<< "$out" \
+              || { echo "$out"; echo "PROCESS_TYPE=$process stopped without saying why" >&2; exit 1; }
+            echo "PROCESS_TYPE=$process refused to start (exit $status)"
+          done
+
+      # The file the Docker Compose guide hands out, run as is on the image
+      # built above: what an operator gets from `docker compose up`.
+      - name: Run the reference Docker Compose deployment
+        env:
+          WORKSPACE_IMAGE: workspace:ci
+          SECRET_KEY: smoke-test-key-not-secret
+          ALLOWED_HOSTS: 127.0.0.1,localhost
+          COMPOSE_FILE: docs/deployments/docker-compose/docker-compose.yml
+          COMPOSE_PROJECT_NAME: workspace-compose
+        run: |
+          # Docker Hub's anonymous rate limit fails shared runners: the same
+          # image comes from the mirror, under the name the file asks for.
+          redis=$(docker compose config --images | grep redis)
+          docker pull -q "mirror.gcr.io/library/$redis"
+          docker tag "mirror.gcr.io/library/$redis" "$redis"
+
+          docker compose up -d
+          trap 'docker compose ps -a; docker compose logs --no-color || true
+                docker compose down -v >/dev/null 2>&1 || true' EXIT
+
+          for i in $(seq 1 120); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8000/health/startup; then
+              echo "Compose deployment ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/health/ready | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'
+
+          # Sent from the web container, run by the worker, its result read
+          # back through Redis: the round trip of every task a request sends.
+          docker compose exec -T web python manage.py shell -c '
+          from workspace.celery import app
+          result = app.send_task("core.db_maintenance", kwargs={"skip_vacuum": True, "skip_integrity_check": True})
+          print("Task result:", result.get(timeout=60))
+          '
+
+          # An interval entry first fires one interval after the scheduler starts.
+          scheduled_ran() {
+            docker compose logs --no-color celery-worker 2>&1 \
+              | grep -q 'ai.dispatch_scheduled_messages\[.*\] succeeded'
+          }
+          for i in $(seq 1 120); do
+            if scheduled_ran; then
+              echo "The worker ran a task sent by the scheduler after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          scheduled_ran || { echo "No task from the scheduler reached the worker" >&2; exit 1; }
 
       - name: Log in to GitHub Container Registry
         if: env.SHOULD_PUSH == 'true'

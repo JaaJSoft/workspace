@@ -7,7 +7,9 @@ import time
 
 from celery import Celery
 from celery.signals import (
+    beat_init,
     celeryd_after_setup,
+    celeryd_init,
     task_failure,
     task_postrun,
     task_prerun,
@@ -24,6 +26,22 @@ logger = logging.getLogger(__name__)
 app = Celery("workspace")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+
+
+@celeryd_init.connect
+@beat_init.connect
+def _refuse_in_memory_broker(**kwargs):
+    """A worker or a scheduler on the in-memory broker would never see a task
+    from another process. Celery logs and swallows any Exception a signal
+    handler raises, so the refusal has to be a SystemExit."""
+    from django.core.exceptions import ImproperlyConfigured
+
+    from workspace.core.checks import refuse_in_memory_broker
+
+    try:
+        refuse_in_memory_broker()
+    except ImproperlyConfigured as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 @celeryd_after_setup.connect

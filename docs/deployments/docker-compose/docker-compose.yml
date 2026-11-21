@@ -1,151 +1,133 @@
+# Every Workspace service runs the same image with the same environment; only
+# PROCESS_TYPE (or the command, for migrate) tells them apart.
+x-workspace: &workspace
+  # A release tag (ghcr.io/jaajsoft/workspace:0.45.0) keeps upgrades deliberate.
+  # Self-built: `docker build -t workspace .` at the repository root, then
+  # WORKSPACE_IMAGE=workspace.
+  image: ${WORKSPACE_IMAGE:-ghcr.io/jaajsoft/workspace:latest}
+  volumes:
+    - workspace-data:/app/data
+  restart: unless-stopped
+  depends_on:
+    redis:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+  environment: &workspace-env
+    DEBUG: "0"
+    SECRET_KEY: ${SECRET_KEY:-change-me-to-a-real-secret-key}
+    ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+    CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+    USE_X_FORWARDED_HOST: ${USE_X_FORWARDED_HOST:-}
+    USE_X_FORWARDED_PORT: ${USE_X_FORWARDED_PORT:-}
+    DATABASE_URL: sqlite:////app/data/db.sqlite3
+    MEDIA_ROOT: /app/data
+    # Cache, sessions and the queue every background task goes through
+    REDIS_URL: redis://redis:6379
+    GUNICORN_WORKERS: ${GUNICORN_WORKERS:-}
+    # Every `celery worker` option reads CELERY_WORKER_<OPTION>: list here the
+    # ones you set (see "Processes" in docs/deployments/README.md)
+    CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-}
+    CELERY_WORKER_MAX_MEMORY_PER_CHILD: ${CELERY_WORKER_MAX_MEMORY_PER_CHILD:-}
+    CELERY_BEAT_SCHEDULE_FILENAME: /app/data/celerybeat-schedule
+    WEBPUSH_VAPID_PRIVATE_KEY: ${WEBPUSH_VAPID_PRIVATE_KEY:-}
+    WEBPUSH_VAPID_PUBLIC_KEY: ${WEBPUSH_VAPID_PUBLIC_KEY:-}
+    WEBPUSH_VAPID_MAILTO: ${WEBPUSH_VAPID_MAILTO:-}
+    # Prometheus /metrics - endpoint stays closed until both are set
+    METRICS_USER: ${METRICS_USER:-}
+    METRICS_PASSWORD: ${METRICS_PASSWORD:-}
+    # OAuth2 Mail Providers (optional)
+    OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
+    OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
+    OAUTH_MICROSOFT_CLIENT_ID: ${OAUTH_MICROSOFT_CLIENT_ID:-}
+    OAUTH_MICROSOFT_CLIENT_SECRET: ${OAUTH_MICROSOFT_CLIENT_SECRET:-}
+    # Generic OAuth2 provider (optional, for custom providers)
+    OAUTH_GENERIC_CLIENT_ID: ${OAUTH_GENERIC_CLIENT_ID:-}
+    OAUTH_GENERIC_CLIENT_SECRET: ${OAUTH_GENERIC_CLIENT_SECRET:-}
+    OAUTH_GENERIC_NAME: ${OAUTH_GENERIC_NAME:-}
+    OAUTH_GENERIC_AUTH_URL: ${OAUTH_GENERIC_AUTH_URL:-}
+    OAUTH_GENERIC_TOKEN_URL: ${OAUTH_GENERIC_TOKEN_URL:-}
+    OAUTH_GENERIC_USERINFO_URL: ${OAUTH_GENERIC_USERINFO_URL:-}
+    OAUTH_GENERIC_SCOPES: ${OAUTH_GENERIC_SCOPES:-}
+    OAUTH_GENERIC_IMAP_HOST: ${OAUTH_GENERIC_IMAP_HOST:-}
+    OAUTH_GENERIC_SMTP_HOST: ${OAUTH_GENERIC_SMTP_HOST:-}
+    # Bytes of attachments per outgoing email
+    MAIL_MAX_ATTACHMENTS_SIZE: ${MAIL_MAX_ATTACHMENTS_SIZE:-26214400}
+    # OIDC login / SSO (optional). Run `manage.py oidc_discover <issuer>`
+    # to get the four OIDC_OP_* endpoints. Redirect URI: <origin>/oidc/callback
+    OIDC_RP_CLIENT_ID: ${OIDC_RP_CLIENT_ID:-}
+    OIDC_RP_CLIENT_SECRET: ${OIDC_RP_CLIENT_SECRET:-}
+    OIDC_OP_AUTHORIZATION_ENDPOINT: ${OIDC_OP_AUTHORIZATION_ENDPOINT:-}
+    OIDC_OP_TOKEN_ENDPOINT: ${OIDC_OP_TOKEN_ENDPOINT:-}
+    OIDC_OP_USER_ENDPOINT: ${OIDC_OP_USER_ENDPOINT:-}
+    OIDC_OP_JWKS_ENDPOINT: ${OIDC_OP_JWKS_ENDPOINT:-}
+    OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-OpenID}
+    OIDC_RP_SIGN_ALGO: ${OIDC_RP_SIGN_ALGO:-RS256}
+    OIDC_RP_SCOPES: ${OIDC_RP_SCOPES:-openid email profile}
+    OIDC_ALLOWED_DOMAINS: ${OIDC_ALLOWED_DOMAINS:-}
+    OIDC_REQUIRE_EMAIL_VERIFIED: ${OIDC_REQUIRE_EMAIL_VERIFIED:-}
+    OIDC_USERNAME_CLAIM: ${OIDC_USERNAME_CLAIM:-preferred_username}
+    OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-}
+    OIDC_GROUPS_ALLOWED: ${OIDC_GROUPS_ALLOWED:-}
+    # AI (optional)
+    AI_API_KEY: ${AI_API_KEY:-}
+    AI_BASE_URL: ${AI_BASE_URL:-}
+    AI_MODEL: ${AI_MODEL:-gpt-5}
+    AI_MAX_TOKENS: ${AI_MAX_TOKENS:-2048}
+    AI_CHAT_CONTEXT_SIZE: ${AI_CHAT_CONTEXT_SIZE:-30}
+    AI_IMAGE_MODEL: ${AI_IMAGE_MODEL:-dall-e-3}
+    AI_IMAGE_BASE_URL: ${AI_IMAGE_BASE_URL:-}
+    SEARXNG_URL: ${SEARXNG_URL:-}
+    # Office documents (optional) - in-browser view/edit via a WOPI editor
+    WOPI_DISCOVERY_URL: ${WOPI_DISCOVERY_URL:-}
+    WOPI_HOST_URL: ${WOPI_HOST_URL:-}
+
 services:
   web:
-    build: .
+    <<: *workspace
+    environment:
+      <<: *workspace-env
+      PROCESS_TYPE: web
     ports:
       - "8000:8000"
-    environment:
-      - PROCESS_TYPE=web
-      - DEBUG=0
-      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
-      - USE_X_FORWARDED_HOST=${USE_X_FORWARDED_HOST:-}
-      - USE_X_FORWARDED_PORT=${USE_X_FORWARDED_PORT:-}
-      - DATABASE_URL=sqlite:////app/data/db.sqlite3
-      - MEDIA_ROOT=/app/data
-      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-}
-      - WEBPUSH_VAPID_PRIVATE_KEY=${WEBPUSH_VAPID_PRIVATE_KEY:-}
-      - WEBPUSH_VAPID_PUBLIC_KEY=${WEBPUSH_VAPID_PUBLIC_KEY:-}
-      - WEBPUSH_VAPID_MAILTO=${WEBPUSH_VAPID_MAILTO:-}
-      # Prometheus /metrics — endpoint stays closed until both are set
-      - METRICS_USER=${METRICS_USER:-}
-      - METRICS_PASSWORD=${METRICS_PASSWORD:-}
-      # OAuth2 Mail Providers (optional)
-      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
-      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
-      - OAUTH_MICROSOFT_CLIENT_ID=${OAUTH_MICROSOFT_CLIENT_ID:-}
-      - OAUTH_MICROSOFT_CLIENT_SECRET=${OAUTH_MICROSOFT_CLIENT_SECRET:-}
-      # Generic OAuth2 provider (optional, for custom providers)
-      - OAUTH_GENERIC_CLIENT_ID=${OAUTH_GENERIC_CLIENT_ID:-}
-      - OAUTH_GENERIC_CLIENT_SECRET=${OAUTH_GENERIC_CLIENT_SECRET:-}
-      - OAUTH_GENERIC_NAME=${OAUTH_GENERIC_NAME:-}
-      - OAUTH_GENERIC_AUTH_URL=${OAUTH_GENERIC_AUTH_URL:-}
-      - OAUTH_GENERIC_TOKEN_URL=${OAUTH_GENERIC_TOKEN_URL:-}
-      - OAUTH_GENERIC_USERINFO_URL=${OAUTH_GENERIC_USERINFO_URL:-}
-      - OAUTH_GENERIC_SCOPES=${OAUTH_GENERIC_SCOPES:-}
-      - OAUTH_GENERIC_IMAP_HOST=${OAUTH_GENERIC_IMAP_HOST:-}
-      - OAUTH_GENERIC_SMTP_HOST=${OAUTH_GENERIC_SMTP_HOST:-}
-      # Bytes of attachments per outgoing email
-      - MAIL_MAX_ATTACHMENTS_SIZE=${MAIL_MAX_ATTACHMENTS_SIZE:-26214400}
-      # OIDC login / SSO (optional). Run `manage.py oidc_discover <issuer>`
-      # to get the four OIDC_OP_* endpoints. Redirect URI: <origin>/oidc/callback
-      - OIDC_RP_CLIENT_ID=${OIDC_RP_CLIENT_ID:-}
-      - OIDC_RP_CLIENT_SECRET=${OIDC_RP_CLIENT_SECRET:-}
-      - OIDC_OP_AUTHORIZATION_ENDPOINT=${OIDC_OP_AUTHORIZATION_ENDPOINT:-}
-      - OIDC_OP_TOKEN_ENDPOINT=${OIDC_OP_TOKEN_ENDPOINT:-}
-      - OIDC_OP_USER_ENDPOINT=${OIDC_OP_USER_ENDPOINT:-}
-      - OIDC_OP_JWKS_ENDPOINT=${OIDC_OP_JWKS_ENDPOINT:-}
-      - OIDC_PROVIDER_NAME=${OIDC_PROVIDER_NAME:-OpenID}
-      - OIDC_RP_SIGN_ALGO=${OIDC_RP_SIGN_ALGO:-RS256}
-      - OIDC_RP_SCOPES=${OIDC_RP_SCOPES:-openid email profile}
-      - OIDC_ALLOWED_DOMAINS=${OIDC_ALLOWED_DOMAINS:-}
-      - OIDC_REQUIRE_EMAIL_VERIFIED=${OIDC_REQUIRE_EMAIL_VERIFIED:-}
-      - OIDC_USERNAME_CLAIM=${OIDC_USERNAME_CLAIM:-preferred_username}
-      - OIDC_GROUPS_CLAIM=${OIDC_GROUPS_CLAIM:-}
-      - OIDC_GROUPS_ALLOWED=${OIDC_GROUPS_ALLOWED:-}
-      # AI (optional)
-      - AI_API_KEY=${AI_API_KEY:-}
-      - AI_BASE_URL=${AI_BASE_URL:-}
-      - AI_MODEL=${AI_MODEL:-gpt-5}
-      - AI_MAX_TOKENS=${AI_MAX_TOKENS:-2048}
-      - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-30}
-      - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
-      - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
-      - SEARXNG_URL=${SEARXNG_URL:-}
-      # Office documents (optional) — in-browser view/edit via a WOPI editor
-      - WOPI_DISCOVERY_URL=${WOPI_DISCOVERY_URL:-}
-      - WOPI_HOST_URL=${WOPI_HOST_URL:-}
-    volumes:
-      - workspace-data:/app/data
-    restart: unless-stopped
 
   celery-worker:
-    build: .
+    <<: *workspace
     environment:
-      - PROCESS_TYPE=worker
-      # Every `celery worker` option reads CELERY_WORKER_<OPTION>: list here the
-      # ones you set (see "Processes" in docs/deployments/README.md)
-      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-}
-      - CELERY_WORKER_MAX_MEMORY_PER_CHILD=${CELERY_WORKER_MAX_MEMORY_PER_CHILD:-}
-      - DEBUG=0
-      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
-      - DATABASE_URL=sqlite:////app/data/db.sqlite3
-      - MEDIA_ROOT=/app/data
-      - WEBPUSH_VAPID_PRIVATE_KEY=${WEBPUSH_VAPID_PRIVATE_KEY:-}
-      - WEBPUSH_VAPID_PUBLIC_KEY=${WEBPUSH_VAPID_PUBLIC_KEY:-}
-      - WEBPUSH_VAPID_MAILTO=${WEBPUSH_VAPID_MAILTO:-}
-      # OAuth2 Mail Providers (optional)
-      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
-      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
-      - OAUTH_MICROSOFT_CLIENT_ID=${OAUTH_MICROSOFT_CLIENT_ID:-}
-      - OAUTH_MICROSOFT_CLIENT_SECRET=${OAUTH_MICROSOFT_CLIENT_SECRET:-}
-      # Generic OAuth2 provider (optional, for custom providers)
-      - OAUTH_GENERIC_CLIENT_ID=${OAUTH_GENERIC_CLIENT_ID:-}
-      - OAUTH_GENERIC_CLIENT_SECRET=${OAUTH_GENERIC_CLIENT_SECRET:-}
-      - OAUTH_GENERIC_NAME=${OAUTH_GENERIC_NAME:-}
-      - OAUTH_GENERIC_AUTH_URL=${OAUTH_GENERIC_AUTH_URL:-}
-      - OAUTH_GENERIC_TOKEN_URL=${OAUTH_GENERIC_TOKEN_URL:-}
-      - OAUTH_GENERIC_USERINFO_URL=${OAUTH_GENERIC_USERINFO_URL:-}
-      - OAUTH_GENERIC_SCOPES=${OAUTH_GENERIC_SCOPES:-}
-      - OAUTH_GENERIC_IMAP_HOST=${OAUTH_GENERIC_IMAP_HOST:-}
-      - OAUTH_GENERIC_SMTP_HOST=${OAUTH_GENERIC_SMTP_HOST:-}
-      # OIDC login / SSO (optional). Run `manage.py oidc_discover <issuer>`
-      # to get the four OIDC_OP_* endpoints. Redirect URI: <origin>/oidc/callback
-      - OIDC_RP_CLIENT_ID=${OIDC_RP_CLIENT_ID:-}
-      - OIDC_RP_CLIENT_SECRET=${OIDC_RP_CLIENT_SECRET:-}
-      - OIDC_OP_AUTHORIZATION_ENDPOINT=${OIDC_OP_AUTHORIZATION_ENDPOINT:-}
-      - OIDC_OP_TOKEN_ENDPOINT=${OIDC_OP_TOKEN_ENDPOINT:-}
-      - OIDC_OP_USER_ENDPOINT=${OIDC_OP_USER_ENDPOINT:-}
-      - OIDC_OP_JWKS_ENDPOINT=${OIDC_OP_JWKS_ENDPOINT:-}
-      - OIDC_PROVIDER_NAME=${OIDC_PROVIDER_NAME:-OpenID}
-      - OIDC_RP_SIGN_ALGO=${OIDC_RP_SIGN_ALGO:-RS256}
-      - OIDC_RP_SCOPES=${OIDC_RP_SCOPES:-openid email profile}
-      - OIDC_ALLOWED_DOMAINS=${OIDC_ALLOWED_DOMAINS:-}
-      - OIDC_REQUIRE_EMAIL_VERIFIED=${OIDC_REQUIRE_EMAIL_VERIFIED:-}
-      - OIDC_USERNAME_CLAIM=${OIDC_USERNAME_CLAIM:-preferred_username}
-      - OIDC_GROUPS_CLAIM=${OIDC_GROUPS_CLAIM:-}
-      - OIDC_GROUPS_ALLOWED=${OIDC_GROUPS_ALLOWED:-}
-      # AI (optional)
-      - AI_API_KEY=${AI_API_KEY:-}
-      - AI_BASE_URL=${AI_BASE_URL:-}
-      - AI_MODEL=${AI_MODEL:-gpt-5}
-      - AI_MAX_TOKENS=${AI_MAX_TOKENS:-2048}
-      - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-30}
-      - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
-      - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
-      - SEARXNG_URL=${SEARXNG_URL:-}
-    volumes:
-      - workspace-data:/app/data
-    restart: unless-stopped
-    depends_on:
-      - web
+      <<: *workspace-env
+      PROCESS_TYPE: worker
 
   celery-beat:
-    build: .
+    <<: *workspace
     environment:
-      - PROCESS_TYPE=beat
-      - CELERY_BEAT_SCHEDULE_FILENAME=/app/data/celerybeat-schedule
-      - DEBUG=0
-      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
-      - DATABASE_URL=sqlite:////app/data/db.sqlite3
-      - MEDIA_ROOT=/app/data
-    volumes:
-      - workspace-data:/app/data
-    restart: unless-stopped
-    depends_on:
-      - web
+      <<: *workspace-env
+      PROCESS_TYPE: beat
 
-  # Web search (optional) — set SEARXNG_URL=http://searxng:8080 to enable
+  # Applies the migrations, then exits; the services above wait for it to
+  # succeed, so a release never serves a schema it has not migrated yet.
+  migrate:
+    <<: *workspace
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Holds the task queue, so its data stays on a volume with the append-only
+  # file on: a restart keeps the tasks still waiting for the worker.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Web search (optional) - set SEARXNG_URL=http://searxng:8080 to enable
   # All SearXNG config lives in ./searxng/settings.yml
   # searxng:
   #   image: searxng/searxng:latest
@@ -153,7 +135,7 @@ services:
   #     - ./searxng:/etc/searxng
   #   restart: unless-stopped
 
-  # Office documents (optional) — in-browser view/edit of DOCX/XLSX/PPTX
+  # Office documents (optional) - in-browser view/edit of DOCX/XLSX/PPTX
   # through Collabora CODE (any WOPI editor works; see the README section).
   # The browser loads the editor in an iframe, so Collabora must also be
   # published through your reverse proxy on its own hostname with TLS.
@@ -173,3 +155,4 @@ services:
 
 volumes:
   workspace-data:
+  redis-data:

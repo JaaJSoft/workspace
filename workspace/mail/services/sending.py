@@ -37,6 +37,7 @@ def deliver_email(
 
     `reply_message_id` is the UUID of the message being answered, resolved
     against `account` for the threading headers - see `threads.reply_headers`.
+    Once the reply is out, that message is marked answered, here and on IMAP.
 
     Raises whatever the SMTP layer raises: a message that did not go out is
     a failure the caller has to see. A Sent copy that did not land is not -
@@ -44,9 +45,10 @@ def deliver_email(
     the next folder sync usually picks it up anyway.
     """
     from .smtp import send_email
-    from .threads import reply_headers
+    from .threads import parent_headers, reply_parent
 
-    in_reply_to, references = reply_headers(account, reply_message_id)
+    parent = reply_parent(account, reply_message_id)
+    in_reply_to, references = parent_headers(parent)
 
     with send_email(
         account=account,
@@ -61,7 +63,28 @@ def deliver_email(
         in_reply_to=in_reply_to,
         references=references,
     ) as sent:
-        return Delivery(archived=_archive(account, sent))
+        delivery = Delivery(archived=_archive(account, sent))
+    if parent is not None:
+        _mark_answered(parent)
+    return delivery
+
+
+def _mark_answered(parent):
+    """Flag `parent` answered. Never raises: the reply is already out, and
+    a send reported as failed would be sent a second time."""
+    from .triage import set_flag
+
+    try:
+        # A refused STORE keeps the local flag and makes the next sync
+        # read the folder, which puts it right.
+        set_flag(parent, "answered")
+    except Exception as exc:
+        logger.warning(
+            "Failed to mark message %s answered for %s: %s",
+            parent.uuid,
+            scrub(parent.account.email),
+            scrub(str(exc)),
+        )
 
 
 def _archive(account, sent):

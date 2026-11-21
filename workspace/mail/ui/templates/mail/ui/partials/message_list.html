@@ -297,6 +297,13 @@
           x-show="msg.is_starred"
           :class="msg.is_starred ? 'text-warning fill-warning' : 'text-base-content/20'"
         ></i>
+        <span
+          class="inline-flex"
+          x-show="msg.is_answered"
+          title="{% translate "Replied" %}"
+        >
+          <i data-lucide="reply" class="w-3 h-3 text-base-content/40"></i>
+        </span>
         <i
           data-lucide="paperclip"
           class="w-3 h-3 text-base-content/30"

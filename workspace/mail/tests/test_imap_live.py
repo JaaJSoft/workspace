@@ -41,6 +41,7 @@ from django.test import TestCase
 from imapclient import IMAPClient
 
 from workspace.common.booleans import is_truthy
+from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.drafts import save_composed_draft
 from workspace.mail.services.imap_connection import connect_imap, test_imap_connection
@@ -52,6 +53,8 @@ from workspace.mail.services.imap_folders import (
 )
 from workspace.mail.services.imap_messages import append_to_sent, delete_draft
 from workspace.mail.services.imap_sync import sync_account, sync_folder_messages
+from workspace.mail.services.sending import deliver_email
+from workspace.mail.services.smtp import SentMessage
 from workspace.mail.services.triage import (
     EXPUNGED,
     TRASHED,
@@ -74,6 +77,7 @@ LARGE_FOLDER = 13_000
 
 SEEN = b"\\Seen"
 FLAGGED = b"\\Flagged"
+ANSWERED = b"\\Answered"
 DELETED = b"\\Deleted"
 DRAFT = b"\\Draft"
 
@@ -237,17 +241,20 @@ class SyncCases:
         plain = self.deliver("INBOX", "Plain")
         read = self.deliver("INBOX", "Read", flags=[SEEN])
         starred = self.deliver("INBOX", "Starred", flags=[FLAGGED])
+        answered = self.deliver("INBOX", "Answered", flags=[SEEN, ANSWERED])
 
         self.sync()
 
-        self.assertEqual(self.stored_uids("INBOX"), [plain, read, starred])
+        self.assertEqual(self.stored_uids("INBOX"), [plain, read, starred, answered])
         self.assertEqual(self.message("INBOX", plain).subject, "Plain")
         self.assertFalse(self.message("INBOX", plain).is_read)
+        self.assertFalse(self.message("INBOX", plain).is_answered)
         self.assertTrue(self.message("INBOX", read).is_read)
         self.assertTrue(self.message("INBOX", starred).is_starred)
+        self.assertTrue(self.message("INBOX", answered).is_answered)
         inbox = self.folder("INBOX")
-        self.assertEqual((inbox.message_count, inbox.unread_count), (3, 2))
-        self.assertEqual(inbox.last_sync_uid, starred)
+        self.assertEqual((inbox.message_count, inbox.unread_count), (4, 2))
+        self.assertEqual(inbox.last_sync_uid, answered)
 
     def test_reading_a_message_leaves_it_unread_on_the_server(self):
         uid = self.deliver("INBOX", "Untouched")
@@ -270,20 +277,23 @@ class SyncCases:
 
     def test_flags_set_by_another_client_come_in(self):
         uid = self.deliver("INBOX", "Flagged elsewhere")
-        other = self.deliver("INBOX", "Read here", flags=[SEEN, FLAGGED])
+        other = self.deliver("INBOX", "Read here", flags=[SEEN, FLAGGED, ANSWERED])
         self.sync()
 
         self.flag_remotely("INBOX", uid, SEEN)
         self.flag_remotely("INBOX", uid, FLAGGED)
-        self.remote.remove_flags([other], [SEEN, FLAGGED])
+        self.flag_remotely("INBOX", uid, ANSWERED)
+        self.remote.remove_flags([other], [SEEN, FLAGGED, ANSWERED])
         self.sync()
 
         message = self.message("INBOX", uid)
         self.assertTrue(message.is_read)
         self.assertTrue(message.is_starred)
+        self.assertTrue(message.is_answered)
         message = self.message("INBOX", other)
         self.assertFalse(message.is_read)
         self.assertFalse(message.is_starred)
+        self.assertFalse(message.is_answered)
         self.assertEqual(self.folder("INBOX").unread_count, 1)
 
     def test_a_message_deleted_by_another_client_goes_away(self):
@@ -364,6 +374,31 @@ class TriageCases:
         self.assertTrue(set_flag(message, "unread"))
         self.assertTrue(set_flag(message, "unstarred"))
         self.assertEqual(self.remote_flags("INBOX"), {uid: set()})
+
+    def test_a_reply_sent_here_marks_its_parent_answered_on_the_server(self):
+        uid = self.deliver("INBOX", "Answer me", flags=[SEEN])
+        self.sync()
+        parent = self.message("INBOX", uid)
+
+        reply = tempfile.TemporaryFile()
+        reply.write(b"Message-ID: <re@example.com>\r\nSubject: Re\r\n\r\nOK\r\n")
+        with (
+            patch(
+                "workspace.mail.services.smtp.send_email",
+                return_value=SentMessage(reply, "<re@example.com>", outgoing_start=0),
+            ),
+            patch.object(mail_tasks.sync_folder, "delay"),
+        ):
+            deliver_email(
+                self.account,
+                to=["bob@example.com"],
+                subject="Re: Answer me",
+                reply_message_id=parent.uuid,
+            )
+
+        self.assertEqual(self.remote_flags("INBOX"), {uid: {SEEN, ANSWERED}})
+        parent.refresh_from_db()
+        self.assertTrue(parent.is_answered)
 
     def test_marking_a_folder_read_flags_every_message(self):
         uids = [self.deliver("INBOX", f"Unread {n}") for n in range(3)]

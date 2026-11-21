@@ -25,6 +25,7 @@ UID_BATCH_SIZE = 500
 
 SEEN = "\\Seen"
 FLAGGED = "\\Flagged"
+ANSWERED = "\\Answered"
 DELETED = "\\Deleted"
 DRAFT = "\\Draft"
 
@@ -47,6 +48,11 @@ def star_message(account, message):
 def unstar_message(account, message):
     """Unstar a message on the IMAP server."""
     _set_flag(account, message, FLAGGED, False)
+
+
+def mark_answered(account, message):
+    """Mark a message as answered on the IMAP server."""
+    _set_flag(account, message, ANSWERED, True)
 
 
 def _set_flag(account, message, flag, add):

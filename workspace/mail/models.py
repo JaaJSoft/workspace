@@ -259,6 +259,7 @@ class MailMessage(models.Model):
 
     is_read = models.BooleanField(default=False)
     is_starred = models.BooleanField(default=False)
+    is_answered = models.BooleanField(default=False)
     is_draft = models.BooleanField(default=False)
     has_attachments = models.BooleanField(default=False)
     has_calendar_event = models.BooleanField(default=False)

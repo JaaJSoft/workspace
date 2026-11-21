@@ -47,6 +47,23 @@ def get_thread(message: MailMessage, max_depth: int = 20) -> list[MailMessage]:
     return chain
 
 
+def reply_parent(account, parent_uuid) -> MailMessage | None:
+    """The live message of `account` that `parent_uuid` names, or None.
+
+    The UUID comes from a client: a message of another account or a deleted
+    one is no parent at all.
+    """
+    if not parent_uuid:
+        return None
+    return (
+        MailMessage.objects.filter(
+            account=account, uuid=parent_uuid, deleted_at__isnull=True
+        )
+        .select_related("account", "folder")
+        .first()
+    )
+
+
 def reply_headers(account, parent_uuid) -> tuple[str, str]:
     """Return the (In-Reply-To, References) pair for a reply to `parent_uuid`.
 
@@ -58,12 +75,12 @@ def reply_headers(account, parent_uuid) -> tuple[str, str]:
     account or is deleted, or it carries no Message-ID: an unthreaded reply
     beats one anchored to an id we cannot vouch for.
     """
-    if not parent_uuid:
-        return "", ""
+    return parent_headers(reply_parent(account, parent_uuid))
 
-    parent = MailMessage.objects.filter(
-        account=account, uuid=parent_uuid, deleted_at__isnull=True
-    ).first()
+
+def parent_headers(parent) -> tuple[str, str]:
+    """The (In-Reply-To, References) pair of a reply to `parent`, a message
+    `reply_parent` resolved, or ("", "") - see `reply_headers`."""
     if parent is None or not parent.message_id:
         return "", ""
 

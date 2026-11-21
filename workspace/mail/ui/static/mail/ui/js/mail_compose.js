@@ -335,6 +335,12 @@ window.mailComposeMixin = function mailComposeMixin() {
         if (res.ok) {
           if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
           const draftId = this.compose.draft_id;
+          const repliedTo = this.compose.reply_message_id;
+          if (repliedTo) {
+            const listMsg = this.messages.find(m => m.uuid === repliedTo);
+            if (listMsg) listMsg.is_answered = true;
+            if (this.messageDetail?.uuid === repliedTo) this.messageDetail.is_answered = true;
+          }
           this._clearLocalStorageDraft();
           document.getElementById('mail-compose-dialog').close();
           this.compose = _defaultCompose();

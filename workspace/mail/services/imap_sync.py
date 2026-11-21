@@ -17,7 +17,12 @@ from workspace.mail.services.imap_mailbox import (
     _display_name,
     list_folders,
 )
-from workspace.mail.services.imap_messages import FLAGGED, SEEN, UID_BATCH_SIZE
+from workspace.mail.services.imap_messages import (
+    ANSWERED,
+    FLAGGED,
+    SEEN,
+    UID_BATCH_SIZE,
+)
 from workspace.mail.services.imap_parse import _parse_message
 
 logger = logging.getLogger(__name__)
@@ -618,15 +623,18 @@ def _reconcile_folder(client, folder, local_uids, remote_uids, changed_since=Non
         folder=folder,
         imap_uid__in=remote_flags,
         deleted_at__isnull=True,
-    ).values_list("imap_uid", "is_read", "is_starred")
+    ).values_list("imap_uid", "is_read", "is_starred", "is_answered")
 
     need_read = set()
     need_unread = set()
     need_starred = set()
     need_unstarred = set()
-    for uid, is_read, is_starred in local_state:
+    need_answered = set()
+    need_unanswered = set()
+    for uid, is_read, is_starred, is_answered in local_state:
         should_read = SEEN in remote_flags[uid]
         should_star = FLAGGED in remote_flags[uid]
+        should_answer = ANSWERED in remote_flags[uid]
         if should_read and not is_read:
             need_read.add(uid)
         elif not should_read and is_read:
@@ -635,6 +643,10 @@ def _reconcile_folder(client, folder, local_uids, remote_uids, changed_since=Non
             need_starred.add(uid)
         elif not should_star and is_starred:
             need_unstarred.add(uid)
+        if should_answer and not is_answered:
+            need_answered.add(uid)
+        elif not should_answer and is_answered:
+            need_unanswered.add(uid)
 
     base = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
 
@@ -660,6 +672,10 @@ def _reconcile_folder(client, folder, local_uids, remote_uids, changed_since=Non
         base.filter(imap_uid__in=need_starred).update(is_starred=True)
     if need_unstarred:
         base.filter(imap_uid__in=need_unstarred).update(is_starred=False)
+    if need_answered:
+        base.filter(imap_uid__in=need_answered).update(is_answered=True)
+    if need_unanswered:
+        base.filter(imap_uid__in=need_unanswered).update(is_answered=False)
 
     if affected_message_ids:
         from .label_counts import refresh_labels_for_messages

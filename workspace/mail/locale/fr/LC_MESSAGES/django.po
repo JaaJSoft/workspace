@@ -521,6 +521,11 @@ msgstr "Nouveau message"
 msgid "Reply all"
 msgstr "Répondre à tous"
 
+#: ui/templates/mail/ui/partials/message_detail.html
+#: ui/templates/mail/ui/partials/message_list.html
+msgid "Replied"
+msgstr "Répondu"
+
 #: ui/templates/mail/ui/partials/help_dialog.html
 msgid "Star / unstar message"
 msgstr "Activer / désactiver le suivi du message"

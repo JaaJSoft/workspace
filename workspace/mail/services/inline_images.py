@@ -25,7 +25,8 @@ class InlineImages:
     ``resolve`` is an nh3 ``attribute_filter``. An image source becomes the
     attachment's download URL, and any other ``cid:`` reference (an unknown
     id, a link) is dropped. The attachments it resolved end up in
-    ``embedded``, by UUID.
+    ``embedded``, by UUID. ``note`` fills ``embedded`` the same way and leaves
+    every reference as it is.
     """
 
     def __init__(self, attachments):
@@ -48,3 +49,7 @@ class InlineImages:
             return None
         self.embedded.add(attachment.uuid)
         return reverse("mail-attachment-download", kwargs={"uuid": attachment.uuid})
+
+    def note(self, tag, attr, value):
+        self.resolve(tag, attr, value)
+        return value

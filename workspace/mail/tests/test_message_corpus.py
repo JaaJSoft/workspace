@@ -11,6 +11,8 @@ hold whatever parses the message. A case marked as an expected failure is a
 known bug, named in its reason: fixing it turns the mark into an error.
 """
 
+import email
+import email.policy
 import itertools
 import unittest
 from datetime import UTC, datetime, timedelta, timezone
@@ -105,7 +107,6 @@ class MessageCorpusTests(TestCase):
         )
         self.assertIn("<div>Voici le devis révisé.</div>", message.body_html)
 
-    @known_bug("#1749: an inline file without a Content-ID is dropped.")
     def test_apple_mail_inline_file_is_an_attachment(self):
         message = self.parse("apple_mail_inline_pdf.eml")
 
@@ -114,6 +115,12 @@ class MessageCorpusTests(TestCase):
             [("Devis salle.pdf", "application/pdf", "", False)],
         )
         self.assertTrue(message.has_attachments)
+
+    def test_apple_mail_body_continues_after_the_inline_file(self):
+        message = self.parse("apple_mail_inline_pdf.eml")
+
+        self.assertIn("<div>Voici le devis révisé.</div>", message.body_html)
+        self.assertIn("<div>Bien à toi,</div><div>Amélie</div>", message.body_html)
 
     # -- Outlook ------------------------------------------------------------
 
@@ -214,7 +221,6 @@ class MessageCorpusTests(TestCase):
             with self.subTest(name):
                 self.assertIn(reference, self.parse(name).body_html)
 
-    @known_bug("#1749: a picture the body displays counts as an attachment.")
     def test_embedded_pictures_are_not_attachments(self):
         for name in ("gmail_pasted_screenshot.eml", "outlook_signature_logo.eml"):
             with self.subTest(name):
@@ -427,11 +433,20 @@ class MessageCorpusTests(TestCase):
         )
         self.assertTrue(message.has_attachments)
 
-    @known_bug("#1749: an attached message is dropped, and its own files hoisted.")
     def test_forwarded_message_is_kept_as_a_file(self):
         message = self.parse("forwarded_as_attachment.eml")
 
         self.assertEqual(
             self.attachments(message),
             [("Facture 2026-114.eml", "message/rfc822", "", False)],
+        )
+        with message.attachments.get().content.open("rb") as content:
+            attached = email.message_from_bytes(
+                content.read(), policy=email.policy.default
+            )
+        self.assertEqual(attached["Subject"], "Facture 2026-114")
+        self.assertEqual(attached["Message-ID"], "<facture-114@fournisseur.example>")
+        self.assertEqual(
+            [part.get_filename() for part in attached.iter_attachments()],
+            ["facture-114.pdf"],
         )

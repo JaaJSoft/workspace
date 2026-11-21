@@ -1,9 +1,11 @@
 """Reading a message off the wire into a MailMessage."""
 
 import email
+import email.message
 import email.policy
 import logging
 from datetime import UTC, datetime
+from email.parser import BytesHeaderParser
 from email.utils import getaddresses, parsedate_to_datetime
 
 import nh3
@@ -15,6 +17,7 @@ from workspace.common.logging import scrub
 from .addresses import sender_columns
 from .html_text import html_to_text
 from .imap_messages import DRAFT, FLAGGED, SEEN
+from .inline_images import InlineImages
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +85,12 @@ NH3_SET_ATTRIBUTES = {"a": {"target": "_blank"}}
 NH3_URL_SCHEMES = nh3.ALLOWED_URL_SCHEMES | {"cid"}
 
 
-def sanitize_mail_html(html, inline_images=None):
+def sanitize_mail_html(html, attribute_filter=None):
     """Clean an email's HTML body down to what the message frame renders.
 
     nh3 also gives every link ``rel="noopener noreferrer"``. ``cid:``
-    references are kept as they are, unless ``inline_images`` (an
-    ``InlineImages`` of the message) is given to resolve them.
+    references are kept as they are, unless ``attribute_filter`` (a method
+    of the message's ``InlineImages``) rewrites them.
     """
     if not html:
         return ""
@@ -97,7 +100,7 @@ def sanitize_mail_html(html, inline_images=None):
         attributes=NH3_ALLOWED_ATTRIBUTES,
         set_tag_attribute_values=NH3_SET_ATTRIBUTES,
         url_schemes=NH3_URL_SCHEMES,
-        attribute_filter=inline_images.resolve if inline_images is not None else None,
+        attribute_filter=attribute_filter,
     )
 
 
@@ -219,6 +222,23 @@ def _decoded(part):
     return _text(text)
 
 
+def _leaves(part):
+    """The parts of `part` that hold content, in order.
+
+    An attached message is one of them, not a tree to walk into: its own
+    files belong to it, not to the message it is attached to.
+    """
+    if part.is_multipart() and part.get_content_maintype() != "message":
+        for subpart in part.iter_parts():
+            yield from _leaves(subpart)
+    else:
+        yield part
+
+
+def _filename(part):
+    return _text(part.get_filename() or "").strip()
+
+
 def _attachment(part, is_inline=False):
     """The fields of the MailAttachment `part` makes, or None for a part
     without content of its own."""
@@ -227,7 +247,7 @@ def _attachment(part, is_inline=False):
     if payload is None:
         return None
     content_type = part.get_content_type()
-    filename = _text(part.get_filename() or "").strip()
+    filename = _filename(part)
     if not filename:
         filename = f"attachment.{content_type.split('/')[-1]}"
     return {
@@ -236,6 +256,41 @@ def _attachment(part, is_inline=False):
         "data": payload,
         "content_id": _header(part, "Content-ID").strip().strip("<>"),
         "is_inline": is_inline,
+    }
+
+
+# The parts that hold a whole message (RFC 2046, and RFC 6532 for UTF-8).
+ATTACHED_MESSAGE_TYPES = ("message/rfc822", "message/global")
+
+# Writes an attached message back as it came, no header refolded or encoded.
+_EML_POLICY = email.policy.default.clone(
+    refold_source="none", utf8=True, linesep="\r\n"
+)
+
+
+def _attached_message(part):
+    """An attached message as the ``.eml`` file of its own bytes."""
+    data = part.get_payload(0).as_bytes(policy=_EML_POLICY)
+    encoding = _header(part, "Content-Transfer-Encoding").strip().lower()
+    if encoding in ("base64", "quoted-printable"):
+        # RFC 2046 forbids it and some servers send it anyway: the parser
+        # then read the encoded text as the message.
+        carrier = email.message.EmailMessage()
+        carrier["Content-Transfer-Encoding"] = encoding
+        carrier.set_payload(data.decode("ascii", "surrogateescape"))
+        data = carrier.get_payload(decode=True)
+    filename = _filename(part)
+    if not filename:
+        headers = BytesHeaderParser(policy=email.policy.default).parsebytes(data)
+        # A path separator would put the stored blob in a folder of its own.
+        subject = " ".join(_header(headers, "Subject").split())
+        filename = subject.replace("/", "-").replace("\\", "-")[:200] or "message"
+    if not filename.lower().endswith(".eml"):
+        filename += ".eml"
+    return {
+        "filename": filename,
+        "content_type": part.get_content_type(),
+        "data": data,
     }
 
 
@@ -285,30 +340,72 @@ def _parse_message(raw_email, account, folder, uid, flags, known_uids=None):
     # Body
     text_part = _body_part(msg, "plain")
     html_part = _body_part(msg, "html")
-    body_text = _decoded(text_part)
-    body_html = _decoded(html_part)
+    # More than one part when a mail program split the body around a file
+    # placed in it.
+    text_parts = [_decoded(text_part)]
+    html_parts = [_decoded(html_part)]
 
     attachments_data = []
-    has_calendar_event = False
-    if msg.is_multipart():
-        for part in msg.walk():
-            if part.is_multipart() or part is text_part or part is html_part:
-                continue
-            if part.get_content_disposition() == "attachment":
-                attachment = _attachment(part)
-            elif part.get_content_type() == "text/calendar":
-                attachment = _invitation(part)
-                has_calendar_event = has_calendar_event or attachment is not None
-            elif _header(part, "Content-ID"):
-                attachment = _attachment(part, is_inline=True)
-            else:
-                continue
+    invitations = []
+    for part in _leaves(msg):
+        if part is text_part or part is html_part:
+            continue
+        content_type = part.get_content_type()
+        if content_type in ATTACHED_MESSAGE_TYPES:
+            attachment = _attached_message(part)
+        elif part.get_content_disposition() == "attachment":
+            attachment = _attachment(part)
+        elif content_type == "text/calendar":
+            attachment = _invitation(part)
             if attachment is not None:
-                attachments_data.append(attachment)
+                invitations.append(attachment)
+        elif _header(part, "Content-ID"):
+            attachment = _attachment(part, is_inline=True)
+        elif _filename(part):
+            attachment = _attachment(part)
+        elif content_type == "text/plain":
+            text_parts.append(_decoded(part))
+            continue
+        elif content_type == "text/html":
+            html_parts.append(_decoded(part))
+            continue
+        else:
+            continue
+        if attachment is not None:
+            attachments_data.append(attachment)
 
-    body_html = sanitize_mail_html(body_html)
+    # Saved once the message they belong to is.
+    attachments = [
+        MailAttachment(
+            filename=data["filename"][:255],
+            content_type=data["content_type"][:255],
+            size=len(data["data"]),
+            content=ContentFile(data["data"], name=data["filename"]),
+            content_id=data.get("content_id", "")[:255],
+            is_inline=data.get("is_inline", False),
+        )
+        for data in attachments_data
+    ]
+    listed = [
+        attachment
+        for attachment, data in zip(attachments, attachments_data, strict=True)
+        if not any(data is invitation for invitation in invitations)
+    ]
+
+    body_text = "\n".join(text for text in text_parts if text)
+    inline_images = InlineImages(attachments)
+    body_html = sanitize_mail_html(
+        "\n".join(html for html in html_parts if html),
+        attribute_filter=inline_images.note,
+    )
     if not body_text:
         body_text = html_to_text(body_html)
+    # What the user calls an attachment: a file the message lists under its
+    # body. Not a picture the body shows, nor the invitation the calendar
+    # already reads.
+    has_attachments = any(
+        attachment.uuid not in inline_images.embedded for attachment in listed
+    )
 
     # Snippet from text body
     snippet = ""
@@ -341,20 +438,12 @@ def _parse_message(raw_email, account, folder, uid, flags, known_uids=None):
         is_read=is_read,
         is_starred=FLAGGED in flags,
         is_draft=DRAFT in flags,
-        has_attachments=bool(attachments_data),
-        has_calendar_event=has_calendar_event,
+        has_attachments=has_attachments,
+        has_calendar_event=bool(invitations),
     )
 
-    # Save attachments
-    for att_data in attachments_data:
-        MailAttachment.objects.create(
-            message=mail_msg,
-            filename=att_data["filename"][:255],
-            content_type=att_data["content_type"][:255],
-            size=len(att_data["data"]),
-            content=ContentFile(att_data["data"], name=att_data["filename"]),
-            content_id=att_data.get("content_id", "")[:255],
-            is_inline=att_data.get("is_inline", False),
-        )
+    for attachment in attachments:
+        attachment.message = mail_msg
+        attachment.save()
 
     return mail_msg

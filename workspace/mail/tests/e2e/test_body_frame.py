@@ -11,12 +11,14 @@ from __future__ import annotations
 import base64
 import re
 
+from django.core.files.base import ContentFile
 from django.utils import timezone
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.mail.models import (
     MailAccount,
+    MailAttachment,
     MailFolder,
     MailMessage,
     MailTrustedSender,
@@ -36,6 +38,7 @@ OVERLAY_BODY = (
     f'<img src="{TRACKER}" alt="pixel">'
     "</div>"
 )
+EMBEDDED_SHOWN = "Pictures sent with the message itself are shown."
 PIXEL = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 )
@@ -55,6 +58,7 @@ class MailBodyFrameTests(PlaywrightTestCase):
         inbox = MailFolder.objects.create(
             account=account, name="INBOX", display_name="Inbox", folder_type="inbox"
         )
+        self.account, self.inbox = account, inbox
         self.message = MailMessage.objects.create(
             account=account,
             folder=inbox,
@@ -157,6 +161,13 @@ class MailBodyFrameTests(PlaywrightTestCase):
         self._open()
         self.page.wait_for_timeout(300)
         self.assertEqual(self.tracker_hits, [])
+        expect(self.page.get_by_text("Remote images hidden")).to_be_visible()
+        # Nothing in this message is sent with it, so the why says nothing of it.
+        self.page.get_by_role("button", name="Why are images hidden?").click()
+        expect(
+            self.page.get_by_text("Loading them would tell the sender")
+        ).to_be_visible()
+        expect(self.page.get_by_text(EMBEDDED_SHOWN)).to_be_hidden()
 
         self.page.get_by_role("button", name="Show images").click()
 
@@ -166,6 +177,7 @@ class MailBodyFrameTests(PlaywrightTestCase):
 
     def test_a_trusted_sender_shows_images_on_the_next_open(self):
         self._open()
+        self.page.get_by_role("button", name="More actions").click()
         self.page.get_by_role("button", name="Always show from this sender").click()
         expect(
             self.page.get_by_text("Images from this sender are always shown.")
@@ -197,3 +209,50 @@ class MailBodyFrameTests(PlaywrightTestCase):
         self.assertTrue(popup.evaluate("window.opener === null"))
         # The app's own tab stays where it was.
         self.assertIn(f"message={self.message.uuid}", self.page.url)
+
+    def test_an_embedded_picture_shows_without_asking(self):
+        message = MailMessage.objects.create(
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=2,
+            subject="Logo inside",
+            from_email="news@example.com",
+            date=timezone.now(),
+            is_read=True,
+            body_html=(
+                '<p>Our new logo:</p><img src="cid:logo@example.com" alt="Logo">'
+                f'<img src="{TRACKER}" alt="pixel">'
+            ),
+        )
+        for filename, content_id in (
+            ("logo.png", "logo@example.com"),
+            ("terms.png", ""),
+        ):
+            MailAttachment.objects.create(
+                message=message,
+                filename=filename,
+                content_type="image/png",
+                size=len(PIXEL),
+                content=ContentFile(PIXEL, name=filename),
+                content_id=content_id,
+                is_inline=bool(content_id),
+            )
+
+        self.page.goto(f"{self.live_server_url}/mail?message={message.uuid}")
+        self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
+
+        logo = self.page.frame_locator("iframe.mail-body-frame").get_by_alt_text("Logo")
+        expect(logo).to_be_visible()
+        self.page.wait_for_function(
+            "() => document.querySelector('iframe.mail-body-frame')"
+            ".contentDocument.querySelector('img[alt=Logo]')?.naturalWidth === 1"
+        )
+        # The tracker next to it still waits for consent, and the notice says
+        # which images it is about.
+        expect(self.page.get_by_role("button", name="Show images")).to_be_visible()
+        self.page.get_by_role("button", name="Why are images hidden?").click()
+        expect(self.page.get_by_text(EMBEDDED_SHOWN)).to_be_visible()
+        self.assertEqual(self.tracker_hits, [])
+        # The picture shown in the body is not listed again as a file.
+        expect(self.page.get_by_role("link", name="terms.png")).to_be_visible()
+        expect(self.page.get_by_role("link", name="logo.png")).to_have_count(0)

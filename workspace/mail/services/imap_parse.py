@@ -11,6 +11,7 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 
 from .addresses import sender_columns
+from .html_text import html_to_text
 
 # HTML sanitisation whitelist
 NH3_ALLOWED_TAGS = {
@@ -71,11 +72,17 @@ NH3_ALLOWED_ATTRIBUTES = {
 # frame itself would load the linked page in the middle of the app.
 NH3_SET_ATTRIBUTES = {"a": {"target": "_blank"}}
 
+# cid: points at a part of the message itself (RFC 2392). The stored body keeps
+# it; services/inline_images resolves it on read.
+NH3_URL_SCHEMES = nh3.ALLOWED_URL_SCHEMES | {"cid"}
 
-def sanitize_mail_html(html):
+
+def sanitize_mail_html(html, inline_images=None):
     """Clean an email's HTML body down to what the message frame renders.
 
-    nh3 also gives every link ``rel="noopener noreferrer"``.
+    nh3 also gives every link ``rel="noopener noreferrer"``. ``cid:``
+    references are kept as they are, unless ``inline_images`` (an
+    ``InlineImages`` of the message) is given to resolve them.
     """
     if not html:
         return ""
@@ -84,6 +91,8 @@ def sanitize_mail_html(html):
         tags=NH3_ALLOWED_TAGS,
         attributes=NH3_ALLOWED_ATTRIBUTES,
         set_tag_attribute_values=NH3_SET_ATTRIBUTES,
+        url_schemes=NH3_URL_SCHEMES,
+        attribute_filter=inline_images.resolve if inline_images is not None else None,
     )
 
 
@@ -253,6 +262,8 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
                 body_text = decoded
 
     body_html = sanitize_mail_html(body_html)
+    if not body_text:
+        body_text = html_to_text(body_html)
 
     # Snippet from text body
     snippet = ""

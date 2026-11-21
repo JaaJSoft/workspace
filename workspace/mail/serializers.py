@@ -310,7 +310,9 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
         """
         if not hasattr(obj, "_rendered_body"):
             inline_images = InlineImages(obj.attachments.all())
-            html = sanitize_mail_html(obj.body_html, inline_images=inline_images)
+            html = sanitize_mail_html(
+                obj.body_html, attribute_filter=inline_images.resolve
+            )
             obj._rendered_body = (html, inline_images.embedded)
         return obj._rendered_body
 

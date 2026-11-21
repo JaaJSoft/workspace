@@ -15,8 +15,7 @@ This directory contains deployment configurations for Workspace.
 
 ```bash
 cd docker-compose/
-docker compose up -d
-docker compose exec web python manage.py migrate
+docker compose up -d        # migrates the database before anything else starts
 docker compose exec web python manage.py createsuperuser
 ```
 
@@ -37,7 +36,7 @@ kubectl apply -f ingress.yaml
 - **SECRET_KEY**: Always change the default secret key before deploying.
 - **Static files**: Collected at image build time via `collectstatic` and served by WhiteNoise.
 - **Metrics**: `/metrics` requires HTTP Basic credentials and answers `401` until `METRICS_USER` and `METRICS_PASSWORD` are both set. See [Monitoring with Prometheus](../guides/monitoring.md).
-- **Vault algorithm retirement**: `manage.py migrate` refuses to run (check `vault.E001`) when the vault's algorithm manifest drops an id that stored rows still use; see [Retiring an algorithm](../vault/CRYPTO.md#retiring-an-algorithm). Under Kubernetes the migration initContainer fails and stops the rollout. Under Docker Compose `migrate` runs after the new container is already serving, so the check raises the alarm but cannot prevent the deploy. `--skip-checks` bypasses it everywhere.
+- **Vault algorithm retirement**: `manage.py migrate` refuses to run (check `vault.E001`) when the vault's algorithm manifest drops an id that stored rows still use; see [Retiring an algorithm](../vault/CRYPTO.md#retiring-an-algorithm). Under Kubernetes the migration initContainer fails and stops the rollout, and under Docker Compose the `migrate` service fails and the new version never starts. `--skip-checks` bypasses it everywhere.
 
 ## Processes
 
@@ -50,6 +49,8 @@ Every container runs the same image and the same command, `run.sh`. `PROCESS_TYP
 | `beat`          | The Celery scheduler            | exactly one             |
 
 A single-node deployment can do without the `beat` container: `CELERY_WORKER_BEAT=1` runs the scheduler inside the worker. Set it on one worker only, or every periodic task runs once per worker.
+
+Tasks travel from `web` and `beat` to the workers through Redis, at `REDIS_URL`, which every process must reach. Without it, Celery falls back to a queue held in memory by each process, so nothing one of them sends ever reaches another. That only works with `DEBUG` on, where each task runs inline in the process that sends it. With `DEBUG` off, the three processes refuse to start and `manage.py check` reports `core.E001`.
 
 ### Web
 

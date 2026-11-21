@@ -218,7 +218,7 @@ The most common variables are listed below. For the full, annotated list - inclu
 | `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins              | *(none)*                     |
 | `DATABASE_URL`         | Database connection string                        | `sqlite:///db.sqlite3`       |
 | `DB_POOL_MAX_SIZE`     | PostgreSQL connections per process ([sizing](docs/deployments/README.md#database-connections)) | `4` |
-| `REDIS_URL`            | Redis URL for cache and sessions                  | *(none, in-memory fallback)* |
+| `REDIS_URL`            | Redis URL for cache, sessions and background tasks. Required with `DEBUG` off | *(none, in-memory fallback)* |
 | `PROCESS_TYPE`         | What the image runs: `web`, `worker` or `beat`    | `web`                        |
 | `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                    | `2`                          |
 | `CELERY_WORKER_CONCURRENCY` | Celery worker processes                      | *(one per CPU the container may use)* |

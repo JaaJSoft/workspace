@@ -657,18 +657,7 @@
             class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors text-left"
             @click="startBotConversation(bot)"
           >
-            <div class="avatar" :class="{ 'placeholder': !bot.avatar_url }">
-              <template x-if="bot.avatar_url">
-                <div class="w-10 rounded-full">
-                  <img :src="bot.avatar_url" alt="" :alt="bot.display_name" />
-                </div>
-              </template>
-              <template x-if="!bot.avatar_url">
-                <div class="bg-secondary text-secondary-content w-10 rounded-full">
-                  <i data-lucide="bot" class="w-5 h-5"></i>
-                </div>
-              </template>
-            </div>
+            <user-avatar :user-id="bot.user_id" :username="bot.display_name" size="md"></user-avatar>
             <div class="flex-1 min-w-0">
               <div class="font-medium text-sm" x-text="bot.display_name"></div>
               <div

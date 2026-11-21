@@ -301,7 +301,7 @@ class UserAvatarRetrieveView(CacheControlMixin, APIView):
 
     @extend_schema(
         summary="Get user avatar",
-        description="Serve the avatar image for a given user. Returns 404 if no avatar exists.",
+        description="Serve the avatar image for a given user. A bot without one gets the default bot picture; anyone else gets 404.",
         responses={
             200: OpenApiResponse(description="Avatar image (WebP)"),
             304: OpenApiResponse(description="Not modified"),
@@ -309,11 +309,18 @@ class UserAvatarRetrieveView(CacheControlMixin, APIView):
         },
     )
     def get(self, request, user_id):
-        if not User.objects.filter(pk=user_id, is_active=True).exists():
+        user = (
+            User.objects.filter(pk=user_id, is_active=True)
+            .values("bot_profile")
+            .first()
+        )
+        if user is None:
             return HttpResponse(status=404)
         path = avatar_service.get_avatar_path(user_id)
         if not default_storage.exists(path):
-            return HttpResponse(status=404)
+            if user["bot_profile"] is None:
+                return HttpResponse(status=404)
+            return self._default_bot_avatar()
 
         etag = avatar_service.get_avatar_etag(user_id)
         if etag:
@@ -328,6 +335,12 @@ class UserAvatarRetrieveView(CacheControlMixin, APIView):
         if etag:
             response["ETag"] = f'"{etag}"'
         return response
+
+    def _default_bot_avatar(self):
+        # ConditionalGetMiddleware derives the ETag from the body and answers 304.
+        return HttpResponse(
+            avatar_service.BOT_AVATAR_PATH.read_bytes(), content_type="image/svg+xml"
+        )
 
 
 @extend_schema(tags=["Users"])

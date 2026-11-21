@@ -8,28 +8,40 @@
 {% block main_layout_class %}{% endblock %}
 
 {% block content %}
-  <div class="py-6 space-y-8">
+  <div class="pb-6 sm:pt-6 space-y-8">
 
-    {# ── Hero ── #}
-    <section class="text-center space-y-1 relative">
-      {% with name=user.first_name|default:user.username %}
-        {# The greeting depends on the hour in the user's timezone, so the browser picks it; x-text writes text, never markup. #}
-        <h1
-          class="text-3xl font-semibold text-base-content"
-          x-data
-          x-text="dashboardGreeting('{{ name|escapejs }}')"
-        >
-          {% blocktranslate trimmed %}
-            Welcome back, {{ name }}.
-          {% endblocktranslate %}
-        </h1>
-      {% endwith %}
-      <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
-        <span x-text="label"></span>
-      </p>
+    {% comment %}
+      Hero. From sm up, the empty first column mirrors the tools column so the
+      greeting stays centered on the page while the tools keep a track of their
+      own; below sm the tools take a row above the greeting.
+    {% endcomment %}
+    <section
+      class="max-w-4xl mx-auto w-full grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-start gap-x-4 gap-y-1"
+    >
+      <div class="hidden sm:block"></div>
 
-      {# ── Top-right controls: dashboard settings + usage ── #}
-      <div class="absolute right-0 top-0 flex items-center gap-1">
+      <div class="order-2 sm:order-none text-center space-y-1 min-w-0">
+        {% with name=user.first_name|default:user.username %}
+          {# The greeting depends on the hour in the user's timezone, so the browser picks it; x-text writes text, never markup. #}
+          <h1
+            class="text-2xl sm:text-3xl font-semibold text-base-content break-words"
+            x-data
+            x-text="dashboardGreeting('{{ name|escapejs }}')"
+          >
+            {% blocktranslate trimmed %}
+              Welcome back, {{ name }}.
+            {% endblocktranslate %}
+          </h1>
+        {% endwith %}
+        <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
+          <span x-text="label"></span>
+        </p>
+      </div>
+
+      {# ── Controls: usage + dashboard settings ── #}
+      <div
+        class="order-1 sm:order-none flex items-center justify-end gap-1 -mr-2"
+      >
         {# ── Usage popover ── #}
         <div
           class="relative"
@@ -40,6 +52,8 @@
             type="button"
             @click="toggle()"
             class="btn btn-ghost btn-sm btn-square"
+            :class="open && 'btn-active'"
+            aria-label="{% translate 'Workspace usage' %}"
             title="{% translate 'Workspace usage' %}"
           >
             <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
@@ -48,7 +62,7 @@
             x-show="open"
             x-cloak
             x-transition.opacity
-            class="absolute right-0 top-full mt-2 z-50 w-80 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+            class="absolute right-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-2rem)] bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
           >
             {% include "dashboard/partials/usage_widget.html" %}
           </div>
@@ -68,7 +82,7 @@
           </button>
           <div
             tabindex="0"
-            class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1 text-left"
+            class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 max-w-[calc(100vw-2rem)] mt-2 mr-2 text-left"
           >
             <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
               <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>

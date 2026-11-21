@@ -1,7 +1,6 @@
 """An emailed invitation is read object by object, and its METHOD decides the write."""
 
 from datetime import UTC, datetime
-from unittest import expectedFailure
 from unittest.mock import patch
 
 from django.core.cache import cache
@@ -88,7 +87,6 @@ class InvitationTestCase(ICSProcessorMixin, TestCase):
 
 
 class RecurringInvitationTests(InvitationTestCase):
-    @expectedFailure  # #1623: the invitation is imported as one event
     def test_a_recurring_invitation_is_a_series(self):
         self._receive(_itip("REQUEST", SERIES, MOVED))
 
@@ -100,7 +98,6 @@ class RecurringInvitationTests(InvitationTestCase):
         self.assertEqual(moved.start, MOVED_TO)
         self.assertEqual(occurrence_starts(self._calendar()), OCCURRENCES)
 
-    @expectedFailure  # #1623: an occurrence update rewrites the whole event
     def test_an_update_of_one_occurrence_leaves_the_series_alone(self):
         self._receive(_itip("REQUEST", SERIES))
         self._receive(_itip("REQUEST", MOVED))
@@ -112,7 +109,6 @@ class RecurringInvitationTests(InvitationTestCase):
         self.assertEqual(moved.start, MOVED_TO)
         self.assertEqual(occurrence_starts(self._calendar()), OCCURRENCES)
 
-    @expectedFailure  # #1623: a later full REQUEST has no exceptions to replace
     def test_a_newer_request_replaces_the_series_and_its_exceptions(self):
         self._receive(_itip("REQUEST", SERIES, MOVED))
         self.assertEqual(
@@ -130,7 +126,6 @@ class RecurringInvitationTests(InvitationTestCase):
         self.assertEqual(master.title, "Weekly sync v2")
         self.assertFalse(master.exceptions.exists())
 
-    @expectedFailure  # #1623: an older REQUEST must not revive a moved occurrence
     def test_an_older_request_changes_nothing(self):
         self._receive(_itip("REQUEST", SERIES, MOVED))
         self._receive(_itip("REQUEST", SERIES))
@@ -148,7 +143,6 @@ class RecurringInvitationTests(InvitationTestCase):
 
 
 class CancelTests(InvitationTestCase):
-    @expectedFailure  # #1623: cancelling one occurrence cancels the series
     def test_cancelling_one_occurrence_cancels_that_occurrence_only(self):
         self._receive(_itip("REQUEST", SERIES))
         self._receive(
@@ -172,7 +166,6 @@ class CancelTests(InvitationTestCase):
         self.assertIn(datetime(2026, 3, 2, 8, tzinfo=UTC), starts)
         self.assertIn(datetime(2026, 3, 30, 7, tzinfo=UTC), starts)
 
-    @expectedFailure  # #1623: there is no exception row to cancel
     def test_cancelling_a_moved_occurrence_cancels_its_exception(self):
         self._receive(_itip("REQUEST", SERIES, MOVED))
         self._receive(
@@ -201,7 +194,6 @@ class CancelTests(InvitationTestCase):
 
 
 class MethodTests(InvitationTestCase):
-    @expectedFailure  # #1623: every method but CANCEL is read as a REQUEST
     def test_a_reply_never_creates_an_event(self):
         self._receive(
             _itip(
@@ -218,7 +210,6 @@ class MethodTests(InvitationTestCase):
 
         self.assertFalse(Event.objects.exists())
 
-    @expectedFailure  # #1623: every method but CANCEL is read as a REQUEST
     def test_a_reply_leaves_an_existing_invitation_alone(self):
         self._receive(_itip("REQUEST", SERIES))
         self._receive(
@@ -239,7 +230,6 @@ class MethodTests(InvitationTestCase):
         self.assertEqual(master.title, "Weekly sync")
         self.assertEqual(master.ical_sequence, 0)
 
-    @expectedFailure  # #1623: every method but CANCEL is read as a REQUEST
     def test_other_methods_are_ignored(self):
         for method in ("PUBLISH", "COUNTER", "REFRESH", "ADD"):
             with self.subTest(method):
@@ -275,7 +265,6 @@ class InvitationValueTests(InvitationTestCase):
         self.assertEqual(event.start, datetime(2026, 8, 5, tzinfo=UTC))
         self.assertEqual(event.end, datetime(2026, 8, 6, tzinfo=UTC))
 
-    @expectedFailure  # #1775: invitations drop every line without a column
     def test_alarms_attendees_and_x_properties_are_kept(self):
         self._receive(
             _itip(
@@ -325,23 +314,18 @@ class InvitationExportTests(InvitationTestCase):
         self.assertEqual(moved.original_start, MOVED_FROM)
         self.assertEqual(occurrence_starts(self._calendar()), OCCURRENCES)
 
-    @expectedFailure  # #1623
     def test_google(self):
         self._check("google")
 
-    @expectedFailure  # #1623
     def test_outlook(self):
         self._check("outlook")
 
-    @expectedFailure  # #1623
     def test_icloud(self):
         self._check("icloud")
 
-    @expectedFailure  # #1623
     def test_nextcloud(self):
         self._check("nextcloud")
 
-    @expectedFailure  # #1623
     def test_thunderbird(self):
         self._check("thunderbird")
 

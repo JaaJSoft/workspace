@@ -15,7 +15,7 @@ from workspace.files.models import File, FileTag, Tag
 from workspace.files.services import tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.processors import get_processor
-from workspace.photos.models import PhotoEmbedding
+from workspace.photos.models import ClassicTagMapping, PhotoEmbedding
 from workspace.photos.services import auto_tags, photo_embeddings
 from workspace.photos.services.auto_tags import pending_auto_tags_qs, refresh_auto_tags
 from workspace.photos.services.embedding.fake import FakeEmbeddingBackend
@@ -46,6 +46,19 @@ _COLOUR_VOCABULARY = (
     ClassicTag("Red", "Red", "flame"),
     ClassicTag("Blue", "Blue", "droplet"),
 )
+
+
+class _RedClassicTag(ClassicTag):
+    """A classic tag the fake backend sees in a red photo, under a name the
+    catalog translates."""
+
+    @property
+    def text(self):
+        return "red"
+
+
+_DOG = _RedClassicTag("Dog", "Dog", "dog")
+
 # Between the fake backend's video (0.05) and photo (0.1) thresholds of red.
 _PALE_RED = (170, 0, 0)
 
@@ -249,6 +262,74 @@ class ClassicTagTests(AutoTagTestCase):
 
         self.assertIsNotNone(row.embedding)
         self.assertIn(red, pending_auto_tags_qs())
+
+
+@embeddings_on
+@patch.object(auto_tags, "CLASSIC_TAGS", (_DOG,))
+class TagLanguageTests(AutoTagTestCase):
+    def _dog_tags(self):
+        return list(Tag.objects.filter(owner=self.user).values_list("name", flat=True))
+
+    def test_a_french_owners_tag_is_named_in_french(self):
+        set_setting(self.user, "core", "language", "fr")
+
+        photo = library_photo(self.user, "dog.jpg", RED)
+
+        self.assertEqual(_tags(photo), {("Chien", FileTag.Source.AUTO)})
+        self.assertEqual(Tag.objects.get(owner=self.user).icon, "dog")
+
+    def test_an_english_owners_tag_keeps_its_english_name(self):
+        photo = library_photo(self.user, "dog.jpg", RED)
+
+        self.assertEqual(_tags(photo), {("Dog", FileTag.Source.AUTO)})
+
+    def test_a_language_change_adds_no_second_tag(self):
+        set_setting(self.user, "core", "language", "fr")
+        library_photo(self.user, "first.jpg", RED)
+        set_setting(self.user, "core", "language", "en")
+
+        second = library_photo(self.user, "second.jpg", RED)
+
+        self.assertEqual(_tags(second), {("Chien", FileTag.Source.AUTO)})
+        self.assertEqual(self._dog_tags(), ["Chien"])
+
+    def test_a_tag_placed_before_in_english_is_kept_after_switching_to_french(self):
+        library_photo(self.user, "first.jpg", RED)
+        set_setting(self.user, "core", "language", "fr")
+
+        second = library_photo(self.user, "second.jpg", RED)
+
+        self.assertEqual(_tags(second), {("Dog", FileTag.Source.AUTO)})
+        self.assertEqual(self._dog_tags(), ["Dog"])
+
+    def test_a_renamed_tag_stays_the_classic_tags_tag(self):
+        library_photo(self.user, "first.jpg", RED)
+        Tag.objects.filter(owner=self.user).update(name="Rex")
+
+        second = library_photo(self.user, "second.jpg", RED)
+
+        self.assertEqual(_tags(second), {("Rex", FileTag.Source.AUTO)})
+        self.assertEqual(self._dog_tags(), ["Rex"])
+
+    def test_a_deleted_tag_is_created_again_on_the_next_photo(self):
+        library_photo(self.user, "first.jpg", RED)
+        Tag.objects.filter(owner=self.user).delete()
+        set_setting(self.user, "core", "language", "fr")
+
+        second = library_photo(self.user, "second.jpg", RED)
+
+        self.assertEqual(_tags(second), {("Chien", FileTag.Source.AUTO)})
+        self.assertEqual(ClassicTagMapping.objects.get(owner=self.user).label, "Dog")
+
+    def test_each_owner_has_a_tag_of_their_own(self):
+        bob = User.objects.create_user(username="bob", password="p")
+        set_setting(bob, "core", "language", "fr")
+        library_photo(self.user, "mine.jpg", RED)
+
+        theirs = library_photo(bob, "theirs.jpg", RED)
+
+        self.assertEqual(_tags(theirs), {("Chien", FileTag.Source.AUTO)})
+        self.assertEqual(self._dog_tags(), ["Dog"])
 
 
 class VocabularyTests(TestCase):

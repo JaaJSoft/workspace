@@ -1,22 +1,34 @@
 """The folder photos imported from the Photos page land in.
 
 Stored as a folder uuid in the `photos` / `import_folder` user setting. Until
-the user picks one, imports go to a root folder named "Pictures", created on
-the first import (never on a page view: a user who never imports should not
-find a folder they did not ask for).
+the user picks one, imports go to a root folder named "Pictures" in their
+language, created on the first import (never on a page view: a user who never
+imports should not find a folder they did not ask for).
 """
 
 from django.db import transaction
+from django.utils import translation
+from django.utils.translation import gettext, gettext_noop
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs, user_group_files_qs
 from workspace.files.services import tree
-from workspace.users.services.settings import get_setting, set_setting
+from workspace.users.services.settings import (
+    get_setting,
+    get_user_language,
+    set_setting,
+)
 
 MODULE = "photos"
 IMPORT_FOLDER = "import_folder"
-DEFAULT_NAME = "Pictures"
+DEFAULT_NAME = gettext_noop("Pictures")
+
+
+def default_name(user):
+    """The default folder's name, in *user*'s language."""
+    with translation.override(get_user_language(user)):
+        return gettext(DEFAULT_NAME)
 
 
 def _writable_folders(user):
@@ -37,7 +49,11 @@ def writable_folder(user, folder_uuid):
 def _default_folder(user):
     return (
         user_files_qs(user)
-        .filter(node_type=File.NodeType.FOLDER, parent__isnull=True, name=DEFAULT_NAME)
+        .filter(
+            node_type=File.NodeType.FOLDER,
+            parent__isnull=True,
+            name=default_name(user),
+        )
         .first()
     )
 
@@ -58,17 +74,19 @@ def ensure_import_folder(user):
     folder = import_folder(user)
     if folder is None:
         folder = tree.create_folder(
-            user, DEFAULT_NAME, icon="image", color="primary", acting_user=user
+            user, default_name(user), icon="image", color="primary", acting_user=user
         )
     if get_setting(user, MODULE, IMPORT_FOLDER) != str(folder.uuid):
         set_setting(user, MODULE, IMPORT_FOLDER, str(folder.uuid))
     return folder
 
 
-def import_folder_data(folder):
-    """What the page shows of the import folder; None is the default one, not created yet."""
+def import_folder_data(user, folder):
+    """What the page shows of *user*'s import folder; None is the default one,
+    not created yet."""
     if folder is None:
-        return {"uuid": None, "name": DEFAULT_NAME, "path": DEFAULT_NAME, "group": None}
+        name = default_name(user)
+        return {"uuid": None, "name": name, "path": name, "group": None}
     return {
         "uuid": str(folder.uuid),
         "name": folder.name,

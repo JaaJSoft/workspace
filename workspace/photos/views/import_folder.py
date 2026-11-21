@@ -39,7 +39,7 @@ class ImportFolderView(APIView):
         responses={200: OpenApiTypes.OBJECT},
     )
     def get(self, request):
-        return Response(import_folder_data(import_folder(request.user)))
+        return Response(import_folder_data(request.user, import_folder(request.user)))
 
     @extend_schema(
         summary="Resolve the import folder for an upload",
@@ -48,7 +48,9 @@ class ImportFolderView(APIView):
         responses={200: OpenApiTypes.OBJECT},
     )
     def post(self, request):
-        return Response(import_folder_data(ensure_import_folder(request.user)))
+        return Response(
+            import_folder_data(request.user, ensure_import_folder(request.user))
+        )
 
     @extend_schema(
         summary="Choose the import folder",
@@ -72,7 +74,7 @@ class ImportFolderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         choose_import_folder(request.user, folder)
-        return Response(import_folder_data(folder))
+        return Response(import_folder_data(request.user, folder))
 
 
 @extend_schema(tags=["Photos - Import"])

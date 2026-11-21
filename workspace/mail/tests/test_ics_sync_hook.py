@@ -133,3 +133,30 @@ class SyncCalendarHookTest(TestCase):
 
         mock_process.assert_called_once()
         self.assertEqual(mock_process.call_args[0][0].count(), count)
+
+    @patch("workspace.ai.client.is_ai_enabled", return_value=False)
+    @patch("workspace.calendar.services.ics_processor.process_calendar_emails")
+    def test_sync_imports_no_invitation_from_folders_that_receive_no_new_mail(
+        self, mock_process, _mock_ai_enabled
+    ):
+        # Spam would put calendar spam in the calendar; Sent holds the copy of
+        # an invitation the user sent from another client.
+        for folder_type in ("sent", "drafts", "spam", "trash"):
+            with self.subTest(folder_type=folder_type):
+                folder = MailFolder.objects.create(
+                    account=self.account,
+                    name=folder_type,
+                    display_name=folder_type,
+                    folder_type=folder_type,
+                )
+                self.server.deliver(folder_type, raw=_invitation())
+
+                with fake_imap(self.server):
+                    sync_folder_messages(self.account, folder)
+
+                self.assertTrue(
+                    MailMessage.objects.filter(
+                        folder=folder, has_calendar_event=True
+                    ).exists()
+                )
+                mock_process.assert_not_called()

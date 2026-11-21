@@ -140,6 +140,11 @@ def _handle_request(obj, mail_message):
         # without one could never be matched by a later update or cancel.
         logger.info("Ignored invitation %s: no organizer", scrub(obj.uid))
         return
+    if organizer.casefold() == mail_message.account.email.casefold():
+        # The user organizes it from another client (a phone calendar, Outlook)
+        # and was copied: an event of theirs, not an invitation to answer.
+        logger.info("Ignored invitation %s: organized by the account", scrub(obj.uid))
+        return
 
     existing = _invitation_events(obj.uid, user, organizer)
     if not existing:

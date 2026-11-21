@@ -75,30 +75,37 @@ class ImapSessionTests(TestCase):
             with imap_session(self.account) as second:
                 self.assertIs(second, first)
 
+    def _block_cut_short_by(self, error):
+        """Run a block that `error` interrupts, and return its connection."""
+        client = None
+        try:
+            with imap_session(self.account) as client:
+                raise error
+        except type(error):
+            pass
+        return client
+
+    def assert_dropped_by(self, error):
+        with shared_connections():
+            first = self._block_cut_short_by(error)
+            self.assertTrue(first.closed)
+            with imap_session(self.account) as second:
+                self.assertIsNot(second, first)
+
     def test_a_lost_connection_is_dropped(self):
         for error in (
             IMAPClientAbortError("socket error: EOF"),
             TimeoutError("timed out"),
         ):
-            with self.subTest(error=error), shared_connections():
-                with self.assertRaises(type(error)):
-                    with imap_session(self.account) as first:
-                        raise error
-                self.assertTrue(first.closed)
-                with imap_session(self.account) as second:
-                    self.assertIsNot(second, first)
+            with self.subTest(error=error):
+                self.assert_dropped_by(error)
 
     def test_an_error_that_may_have_cut_a_command_short_drops_the_connection(self):
         """A time limit falls anywhere, in the middle of a FETCH as well:
         the answer still on its way would be read as the next command's."""
         for error in (TimeLimit(), KeyboardInterrupt()):
-            with self.subTest(error=error), shared_connections():
-                with self.assertRaises(type(error)):
-                    with imap_session(self.account) as first:
-                        raise error
-                self.assertTrue(first.closed)
-                with imap_session(self.account) as second:
-                    self.assertIsNot(second, first)
+            with self.subTest(error=error):
+                self.assert_dropped_by(error)
 
     def test_a_connection_that_could_not_be_opened_is_tried_again(self):
         with shared_connections():

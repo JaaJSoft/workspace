@@ -138,14 +138,14 @@ test('a restored localStorage draft keeps its parent message', () => {
   assert.equal(app._getLocalStorageDraft().reply_message_id, 'parent-uuid');
 });
 
-// A send the server accepted, answered once the test calls `resolve(body)`.
+// A send left pending until the test calls `answer(body, ok)`.
 function makeSendingInstance() {
   const app = makeInstance();
   let resolve;
   app._fetch = (url, options) => {
     app.requests.push({ url, options });
     return new Promise((r) => {
-      resolve = (body) => r({ ok: true, json: () => Promise.resolve(body) });
+      resolve = (body, ok = true) => r({ ok, json: () => Promise.resolve(body) });
     });
   };
   app.messages = [
@@ -156,8 +156,53 @@ function makeSendingInstance() {
   app.compose.account_id = 'acct-1';
   app.compose.to = ['bob@example.com'];
   app.compose.reply_message_id = 'parent-a';
-  return { app, answer: (body) => resolve(body) };
+  return { app, answer: (body, ok) => resolve(body, ok) };
 }
+
+// Discarded while the send was pending, then a new message started.
+function replaceComposer(app) {
+  app.compose = {
+    ..._defaultCompose(),
+    to: ['carol@example.com'],
+    subject: 'Another message',
+    body: 'half written',
+  };
+  return app.compose;
+}
+
+test('a send that lands leaves alone the composer opened meanwhile', async () => {
+  const { app, answer } = makeSendingInstance();
+  const sentComposer = app.compose;
+  sentComposer.draft_id = 'draft-of-the-sent-message';
+  const deleted = [];
+  app._deleteDraft = (id) => deleted.push(id);
+
+  const sending = app.sendEmail();
+  const next = replaceComposer(app);
+  answer({ status: 'sent', answered_message_id: null });
+  await sending;
+
+  assert.equal(app.compose, next, 'the composer opened during the send was reset');
+  assert.deepEqual(
+    [next.subject, next.body, Array.from(next.to)],
+    ['Another message', 'half written', ['carol@example.com']],
+  );
+  assert.deepEqual(deleted, ['draft-of-the-sent-message']);
+  assert.equal(sentComposer.sending, false);
+});
+
+test('a send that fails reports on its own composer, not the one opened meanwhile', async () => {
+  const { app, answer } = makeSendingInstance();
+  const sentComposer = app.compose;
+
+  const sending = app.sendEmail();
+  const next = replaceComposer(app);
+  answer({ detail: 'Account not found' }, false);
+  await sending;
+
+  assert.equal(next.error, '');
+  assert.equal(sentComposer.error, 'Account not found');
+});
 
 test('the message marked answered is the one the server names', async () => {
   const { app, answer } = makeSendingInstance();

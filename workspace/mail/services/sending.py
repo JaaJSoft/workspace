@@ -69,6 +69,9 @@ def deliver_email(
         references=references,
     ) as sent:
         archived = _archive(account, sent)
+    if parent is not None:
+        # Read again: moved during the send, it has another folder and UID.
+        parent = reply_parent(account, parent.uuid)
     answered = parent.uuid if parent is not None and _mark_answered(parent) else None
     return Delivery(archived=archived, answered=answered)
 

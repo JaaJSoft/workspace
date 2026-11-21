@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
@@ -332,6 +333,45 @@ class ReplyMarksItsParentAnsweredTests(TestCase):
         # The next sync reads the folder in full and puts the row right.
         self.inbox.refresh_from_db()
         self.assertIsNone(self.inbox.remote_state)
+
+    def test_a_parent_moved_during_the_send_is_marked_where_it_now_is(self):
+        archive = MailFolder.objects.create(
+            account=self.account,
+            name="Archive",
+            display_name="Archive",
+            folder_type="archive",
+        )
+
+        def archived_while_sending(**kwargs):
+            new_uid = self.server.deliver("Archive", flags=[r"\Seen"])
+            self.server.remove("INBOX", self.parent.imap_uid)
+            MailMessage.objects.filter(pk=self.parent.pk).update(
+                folder=archive, imap_uid=new_uid
+            )
+            return sent_message()
+
+        delivery = self._reply(self.parent.uuid, side_effect=archived_while_sending)
+
+        self.parent.refresh_from_db()
+        self.assertEqual(delivery.answered, self.parent.uuid)
+        self.assertEqual(self.parent.folder, archive)
+        self.assertTrue(self.parent.is_answered)
+        self.assertEqual(
+            self.server.flags("Archive", self.parent.imap_uid),
+            {r"\Seen", r"\Answered"},
+        )
+
+    def test_a_parent_deleted_during_the_send_is_left_alone(self):
+        def deleted_while_sending(**kwargs):
+            MailMessage.objects.filter(pk=self.parent.pk).update(
+                deleted_at=timezone.now()
+            )
+            return sent_message()
+
+        delivery = self._reply(self.parent.uuid, side_effect=deleted_while_sending)
+
+        self.assertIsNone(delivery.answered)
+        self.assertEqual(self.server.named("add_flags"), [])
 
     def test_a_reply_that_did_not_go_out_marks_nothing(self):
         with self.assertRaises(OSError):

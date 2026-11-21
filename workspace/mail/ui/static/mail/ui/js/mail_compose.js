@@ -323,8 +323,11 @@ window.mailComposeMixin = function mailComposeMixin() {
         return;
       }
 
-      this.compose.sending = true;
-      this.compose.error = '';
+      // The dialog stays usable while the send is pending: what follows the
+      // await acts on this composer, never on one opened in the meantime.
+      const sent = this.compose;
+      sent.sending = true;
+      sent.error = '';
 
       const formData = new FormData();
       formData.append('account_id', this.compose.account_id);
@@ -348,33 +351,34 @@ window.mailComposeMixin = function mailComposeMixin() {
         });
 
         if (res.ok) {
-          if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
-          const draftId = this.compose.draft_id;
-          // From the server, not compose state: the dialog may have moved on to
-          // another message meanwhile, and a parent of another account is not answered.
+          if (sent._saveTimer) clearTimeout(sent._saveTimer);
+          // From the server, not the composer: a parent of another account
+          // than the sender's is not answered.
           const { answered_message_id: answered } = await res.json().catch(() => ({}));
           if (answered) {
             const listMsg = this.messages.find(m => m.uuid === answered);
             if (listMsg) listMsg.is_answered = true;
             if (this.messageDetail?.uuid === answered) this.messageDetail.is_answered = true;
           }
-          this._clearLocalStorageDraft();
-          document.getElementById('mail-compose-dialog').close();
-          this.compose = _defaultCompose();
-          this.clearAttachments();
+          if (this.compose === sent) {
+            this._clearLocalStorageDraft();
+            document.getElementById('mail-compose-dialog').close();
+            this.compose = _defaultCompose();
+            this.clearAttachments();
+          }
           // Delete the draft after sending
-          if (draftId) this._deleteDraft(draftId);
+          if (sent.draft_id) this._deleteDraft(sent.draft_id);
         } else {
           const data = await res.json().catch(() => ({}));
-          this.compose.error = data.detail || data.error || gettext('Failed to send email');
+          sent.error = data.detail || data.error || gettext('Failed to send email');
         }
       } catch (e) {
         // Network failure (offline, DNS, CORS, abort) - fetch rejects without
         // ever touching res.ok. Without this catch, sending=true would stick
         // and lock the dialog spinner indefinitely.
-        this.compose.error = gettext('Failed to send email');
+        sent.error = gettext('Failed to send email');
       } finally {
-        this.compose.sending = false;
+        sent.sending = false;
       }
     },
 

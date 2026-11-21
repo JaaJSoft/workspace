@@ -9,7 +9,9 @@ from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from workspace.common.dav.auth import clear_auth_cache
+from workspace.common.tests.network import FakeNetwork, http_response
 from workspace.common.tests.wsgi import served_in_test
+from workspace.common.url_guard import UnsafeUrl
 from workspace.files.services import tree
 from workspace.imports.models import ImportConnection
 from workspace.imports.providers.base import (
@@ -27,9 +29,6 @@ from workspace.imports.providers.webdav import (
     build_client,
 )
 from workspace.imports.services.connections import create_connection
-from workspace.imports.services.url_guard import UnsafeUrl
-
-from .network import FakeNetwork, http_response
 
 User = get_user_model()
 

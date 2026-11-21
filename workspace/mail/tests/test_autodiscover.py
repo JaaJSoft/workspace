@@ -2,10 +2,10 @@ from unittest import mock
 
 import httpx2
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
-from workspace.imports.tests.network import FakeNetwork, http_response
+from workspace.common.tests.network import FakeNetwork, http_response
 from workspace.mail.services import autodiscover
 from workspace.mail.services.autodiscover import MailServer, MailServers, discover
 
@@ -290,7 +290,6 @@ class ServerSelectionTests(SimpleTestCase):
         self.assertEqual(servers.imap.host, "imap.ok.example")
 
 
-@override_settings(IMPORTS_ALLOW_PRIVATE_NETWORKS=False, IMPORTS_ALLOWED_HOSTS=[])
 class PrivateNetworkGuardTests(SimpleTestCase):
     """The real client and guard, with only DNS and TCP replaced."""
 

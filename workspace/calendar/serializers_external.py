@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from workspace.common.url_guard import UnsafeUrl, check_remote_url
+
 from .models_external import ExternalCalendar
 
 
@@ -7,6 +9,15 @@ class ExternalCalendarCreateSerializer(serializers.Serializer):
     url = serializers.URLField(max_length=2048)
     name = serializers.CharField(max_length=255)
     color = serializers.CharField(max_length=30, required=False, default="primary")
+
+    def validate_url(self, value):
+        # A host name is only resolved when the feed is fetched; this refuses
+        # what is off limits without a lookup (an internal address typed in).
+        try:
+            check_remote_url(value)
+        except UnsafeUrl as exc:
+            raise serializers.ValidationError(exc.user_message) from None
+        return value
 
 
 class ExternalCalendarUpdateSerializer(serializers.Serializer):

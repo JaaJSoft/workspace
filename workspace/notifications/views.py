@@ -9,12 +9,14 @@ from rest_framework.views import APIView
 
 from workspace.common.cache import invalidate_tags
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.url_guard import UnsafeUrl
 from workspace.common.uuids import parse_uuid_or_none
 
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 from .services.notifications import _user_tag, get_unread_count
 from .services.push_subscriptions import save_push_subscription
+from .services.push_transport import check_push_endpoint
 
 
 @extend_schema(tags=["Notifications"])
@@ -173,6 +175,13 @@ class PushSubscribeView(APIView):
             return Response(
                 {"error": "Missing required fields: endpoint, keys.p256dh, keys.auth"},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            check_push_endpoint(endpoint)
+        except UnsafeUrl as exc:
+            return Response(
+                {"error": exc.user_message}, status=status.HTTP_400_BAD_REQUEST
             )
 
         if not save_push_subscription(request.user, endpoint, p256dh, auth):

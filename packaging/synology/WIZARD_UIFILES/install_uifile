@@ -1,0 +1,56 @@
+[
+    {
+        "step_title": "Administrator account",
+        "items": [
+            {
+                "desc": "Workspace creates this account on its first start. Sign in with it, then create the other users from the administration."
+            },
+            {
+                "type": "textfield",
+                "subitems": [
+                    {
+                        "key": "wizard_admin_username",
+                        "desc": "Username",
+                        "defaultValue": "admin",
+                        "validator": {
+                            "allowBlank": false,
+                            "regex": {
+                                "expr": "/^[\\w.@+-]{1,150}$/",
+                                "errorText": "Letters, digits and @ . + - _ only"
+                            }
+                        }
+                    },
+                    {
+                        "key": "wizard_admin_email",
+                        "desc": "Email",
+                        "validator": {
+                            "allowBlank": false,
+                            "vtype": "email"
+                        }
+                    }
+                ]
+            },
+            {
+                "type": "password",
+                "subitems": [
+                    {
+                        "key": "wizard_admin_password",
+                        "desc": "Password",
+                        "validator": {
+                            "allowBlank": false,
+                            "minLength": 8
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "step_title": "Data and settings",
+        "items": [
+            {
+                "desc": "Workspace keeps its database and every user file in the <b>workspace</b> shared folder, which it creates. Its settings are in <b>workspace/workspace.env</b>: edit that file, then restart the package. Once installed, Workspace answers on port <b>__PORT__</b> of the NAS. The first start downloads the container images and can take a few minutes."
+            }
+        ]
+    }
+]

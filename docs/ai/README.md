@@ -183,8 +183,9 @@ What differs on `pydantic_ai`:
 
 - The request is written by the library for the backend it talks to.
   OpenAI's reasoning models, `gpt-5` included, refuse the `max_tokens` the
-  native loop sends; here they are sent `max_completion_tokens`, and so is
-  any other endpoint.
+  native loop sends; here OpenAI is sent `max_completion_tokens`, and an
+  endpoint set with `AI_BASE_URL` still gets `max_tokens`, the one name all
+  of them read.
 - An image a tool returns reaches the model as an image in a message of its
   own, not inside the tool result, which OpenAI refuses.
 - It only covers the bots. Titles, summaries, mail and the editor still go

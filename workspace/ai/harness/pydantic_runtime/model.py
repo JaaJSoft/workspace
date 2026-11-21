@@ -24,6 +24,7 @@ async def open_model(name: str | None):
     """
     from openai import AsyncOpenAI
     from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.profiles.openai import OpenAIModelProfile
     from pydantic_ai.providers.openai import OpenAIProvider
     from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
@@ -35,10 +36,16 @@ async def open_model(name: str | None):
         timeout=settings.AI_TIMEOUT,
         max_retries=settings.AI_MAX_RETRIES,
     )
-    # OpenAI's own parameters and model profiles only hold for OpenAI: any
-    # other base URL is a service that merely speaks its protocol.
+    # Anything but OpenAI gets the reply cap as `max_tokens`: Ollama ignores
+    # `max_completion_tokens` without a word and answers uncapped.
     if settings.AI_BASE_URL:
-        provider = OpenAICompatibleProvider("openai-compatible", openai_client=client)
+        provider = OpenAICompatibleProvider(
+            "openai-compatible",
+            openai_client=client,
+            profile=OpenAIModelProfile(
+                openai_chat_supports_max_completion_tokens=False
+            ),
+        )
     else:
         provider = OpenAIProvider(openai_client=client)
     try:

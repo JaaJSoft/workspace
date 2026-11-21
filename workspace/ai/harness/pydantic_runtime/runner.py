@@ -30,13 +30,11 @@ from workspace.ai.services.llm import build_tool_content, extract_text_tool_call
 from .messages import to_model_messages, to_model_response
 from .tool_calls import build_function_toolset, on_task_thread
 
-# The first run of a process would otherwise print the library's banner
-# into the worker's log.
+# Printed into the worker's log on the first run of a process otherwise.
 pydantic_ai.BANNER_ENABLED = False
 
-# The library gives up on a tool the model keeps calling wrongly, and fails
-# the run. A reply here is bounded by its rounds and by the repeat guard,
-# and a wrong call is one more thing the model reads and recovers from.
+# The library fails a run whose model keeps calling a tool wrongly. Here the
+# rounds and the repeat guard bound a reply, and a wrong call is read back.
 _UNBOUNDED_RETRIES = 1_000_000
 
 
@@ -94,8 +92,7 @@ class PydanticAIRunner:
         self._model_settings = model_settings
         self._observers = list(observers)
         self.context = context if context is not None else {}
-        # The conversation a tool-less answer is asked on: everything up to,
-        # and excluding, the reply the run ended on.
+        # What a tool-less answer is asked on: all but the reply the run ended on.
         self._history = []
 
     def run(self, messages: list[dict]) -> RunResult:
@@ -164,10 +161,8 @@ class PydanticAIRunner:
                     record.reply(response)
                     return response, StopReason.ANSWERED
                 if rounds == self._max_rounds:
-                    # This reply is another tool call that will never run,
-                    # so returning it hands the caller a reply with no text:
-                    # re-ask without tools to turn what was gathered into an
-                    # answer.
+                    # A call that will never run is no answer: ask for one
+                    # without tools, from what was gathered.
                     record.reply(response, round_cap_reached=True)
                     response = await self._answer(model)
                     record.reply(response)
@@ -182,16 +177,14 @@ class PydanticAIRunner:
                 for outcome in outcomes:
                     record.tool_result(outcome, build_tool_content(outcome.result))
                 self._history = [*agent_run.all_messages(), node.request]
-                # Read once more at the round's end, so a cancellation that
-                # lands during the tools does not buy one more model call.
+                # A cancellation during the tools buys no further model call.
                 if self._tool_calls.round_cancelled or await on_task_thread(
                     self._tool_calls.is_cancelled
                 ):
                     record.flag(cancelled=True)
                     return response, StopReason.CANCELLED
                 if all(outcome.refused for outcome in outcomes):
-                    # Let the model answer from what it already gathered
-                    # instead of spending the remaining rounds.
+                    # Answer from what was gathered, not the rounds left.
                     record.flag(repeat_loop_stopped=True)
                     response = await self._answer(model)
                     record.reply(response)

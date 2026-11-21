@@ -40,8 +40,7 @@ from workspace.users.services.settings import get_user_language
 
 logger = logging.getLogger(__name__)
 
-# What a call reads when the run was cancelled before its turn came. The
-# run ends on it, so no model ever does.
+# Stands in for the result of a call a cancellation kept from running.
 _CANCELLED = "not executed: the reply was cancelled"
 
 _NO_PARAMETERS = {"type": "object", "properties": {}}
@@ -190,8 +189,7 @@ class ToolCalls:
                 # The refusal is what the model reads in place of a result.
                 outcome.refusal = outcome.result = refusal
             planned.append(outcome)
-        # A call with no neighbour to run beside stays on the task thread:
-        # a pool thread would buy nothing and cost a database connection.
+        # Alone, a call stays on the task thread: no connection to open.
         for together, group in groupby(
             planned, key=lambda outcome: outcome.call.name in self._concurrent_names
         ):
@@ -215,8 +213,7 @@ class ToolCalls:
         if outcome.refused:
             return outcome.refusal
         async with self._slots if outcome.off_thread else nullcontext():
-            # Read here, not when the round was planned: by the time a call
-            # gets its slot the ones before it may have run for minutes.
+            # Read as the call gets its turn: the ones before ran for a while.
             if await on_task_thread(self.is_cancelled):
                 outcome.cancelled = True
                 return _CANCELLED

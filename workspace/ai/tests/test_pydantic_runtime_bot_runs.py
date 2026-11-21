@@ -228,6 +228,9 @@ class OpenModelTests(SimpleTestCase):
         self.assertEqual(request.url.host, "ollama.test")
         self.assertEqual(request.headers["authorization"], "Bearer test-key")
         self.assertEqual(body["model"], "gemma")
+        # Ollama answers uncapped when the cap comes under OpenAI's new name.
+        self.assertEqual(body["max_tokens"], 321)
+        self.assertNotIn("max_completion_tokens", body)
 
     @override_settings(AI_API_KEY="")
     def test_no_key_is_no_backend(self):

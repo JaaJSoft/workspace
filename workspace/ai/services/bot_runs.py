@@ -65,8 +65,7 @@ def build_bot_runner(
         store_max_chars=settings.AI_TOOL_RESULT_STORE_MAX_CHARS,
     )
     if settings.AI_AGENT_RUNTIME == PYDANTIC_AI_RUNTIME:
-        # Imported here: the library is heavy, and a web worker imports this
-        # module through the task modules without ever running a bot.
+        # Imported here: a web worker loads this module and never runs a bot.
         from workspace.ai.harness.pydantic_runtime.model import (
             model_settings,
             open_model,

@@ -22,6 +22,68 @@ from ..serializers import (
 logger = logging.getLogger(__name__)
 
 
+class AttachmentRefused(Exception):
+    """An attachment of the request cannot go out; the message is not built."""
+
+    def __init__(self, detail):
+        super().__init__(detail)
+        self.detail = detail
+
+    def response(self):
+        return Response({"detail": self.detail}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _outgoing_attachments(user, uploads=(), file_uuids=(), attachment_uuids=()):
+    """The attachments of an outgoing message, and the handles to close after.
+
+    `file_uuids` name Files nodes, `attachment_uuids` the attachments of the
+    user's stored messages. Either list is all-or-nothing: one identifier the
+    user cannot reach refuses the message with the answer an unknown one
+    gets. Raises AttachmentRefused, with every opened handle closed.
+    """
+    from workspace.files.queries import resolve_accessible_files
+
+    from ..queries import resolve_reachable_attachments
+
+    ws_files = resolve_accessible_files(user, file_uuids)
+    if ws_files is None:
+        raise AttachmentRefused(
+            _("One or more workspace files not found or not accessible.")
+        )
+    mail_attachments = resolve_reachable_attachments(user, attachment_uuids)
+    if mail_attachments is None:
+        raise AttachmentRefused(_("One or more attachments not found."))
+
+    sources = [
+        (ws_file.name, ws_file.mime_type, ws_file.content) for ws_file in ws_files
+    ] + [(item.filename, item.content_type, item.content) for item in mail_attachments]
+    total_size = (
+        sum(upload.size for upload in uploads)
+        + sum(ws_file.size or 0 for ws_file in ws_files)
+        + sum(item.size or 0 for item in mail_attachments)
+    )
+    if total_size > settings.MAIL_MAX_ATTACHMENTS_SIZE:
+        limit_mb = settings.MAIL_MAX_ATTACHMENTS_SIZE / (1024 * 1024)
+        raise AttachmentRefused(
+            _("Attachments are limited to %(limit)s MB per email.")
+            % {"limit": f"{limit_mb:g}"}
+        )
+
+    handles = []
+    for name, content_type, content in sources:
+        try:
+            handle = content.open("rb")
+        except FileNotFoundError, OSError:
+            close_all(handles)
+            raise AttachmentRefused(
+                _('File "%(name)s" content is unavailable.') % {"name": name}
+            ) from None
+        handle.name = name
+        handle.content_type = content_type
+        handles.append(handle)
+    return [*uploads, *handles], handles
+
+
 @extend_schema(tags=["Mail - Messages"])
 class MailSendView(APIView):
     permission_classes = [IsAuthenticated]
@@ -42,54 +104,15 @@ class MailSendView(APIView):
 
         from ..services.sending import deliver_email
 
-        attachments = list(request.FILES.getlist("attachments", []))
-
-        file_uuids = d.get("file_uuids", [])
-        ws_files = []
-        if file_uuids:
-            from workspace.files.queries import resolve_accessible_files
-
-            ws_files = resolve_accessible_files(request.user, file_uuids)
-            if ws_files is None:
-                return Response(
-                    {
-                        "detail": _(
-                            "One or more workspace files not found or not accessible."
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        total_size = sum(upload.size for upload in attachments) + sum(
-            ws_file.size or 0 for ws_file in ws_files
-        )
-        if total_size > settings.MAIL_MAX_ATTACHMENTS_SIZE:
-            limit_mb = settings.MAIL_MAX_ATTACHMENTS_SIZE / (1024 * 1024)
-            return Response(
-                {
-                    "detail": _("Attachments are limited to %(limit)s MB per email.")
-                    % {"limit": f"{limit_mb:g}"}
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+        try:
+            attachments, handles = _outgoing_attachments(
+                request.user,
+                uploads=request.FILES.getlist("attachments", []),
+                file_uuids=d["file_uuids"],
+                attachment_uuids=d["attachment_uuids"],
             )
-
-        ws_file_handles = []
-        for ws_file in ws_files:
-            try:
-                handle = ws_file.content.open("rb")
-                handle.name = ws_file.name
-                handle.content_type = ws_file.mime_type
-                ws_file_handles.append(handle)
-                attachments.append(handle)
-            except FileNotFoundError, OSError:
-                close_all(ws_file_handles)
-                return Response(
-                    {
-                        "detail": _('File "%(name)s" content is unavailable.')
-                        % {"name": ws_file.name}
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        except AttachmentRefused as refusal:
+            return refusal.response()
 
         try:
             # A Sent copy that did not land is not a failed send: deliver_email
@@ -120,7 +143,7 @@ class MailSendView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         finally:
-            close_all(ws_file_handles)
+            close_all(handles)
 
 
 @extend_schema(tags=["Mail - Messages"])
@@ -144,6 +167,13 @@ class MailDraftView(APIView):
         from ..services.drafts import save_composed_draft
 
         try:
+            attachments, handles = _outgoing_attachments(
+                request.user, attachment_uuids=d["attachment_uuids"]
+            )
+        except AttachmentRefused as refusal:
+            return refusal.response()
+
+        try:
             mail_msg = save_composed_draft(
                 account,
                 to=d.get("to"),
@@ -153,6 +183,7 @@ class MailDraftView(APIView):
                 cc=d.get("cc"),
                 bcc=d.get("bcc"),
                 reply_to=d.get("reply_to"),
+                attachments=attachments,
                 reply_message_id=d.get("reply_message_id"),
                 replace_draft_uuid=d.get("draft_id"),
             )
@@ -174,6 +205,8 @@ class MailDraftView(APIView):
                 {"detail": _("Failed to save draft")},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+        finally:
+            close_all(handles)
 
     @extend_schema(summary="Delete a draft email")
     def delete(self, request, uuid=None):

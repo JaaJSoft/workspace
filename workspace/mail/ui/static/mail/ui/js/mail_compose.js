@@ -39,6 +39,7 @@ window.mailComposeMixin = function mailComposeMixin() {
             this.compose.is_reply = saved.is_reply || false;
             this.compose.reply_message_id = saved.reply_message_id || null;
             this.compose._sigBlock = saved._sigBlock || '';
+            this.compose.mail_attachments = saved.mail_attachments || [];
             if (saved.account_id) this.compose.account_id = saved.account_id;
             if (saved.cc?.length || saved.bcc?.length) this.showCcBcc = true;
             restored = true;
@@ -120,7 +121,15 @@ window.mailComposeMixin = function mailComposeMixin() {
       });
     },
 
-    forwardMessage(msg) {
+    // A list row carries neither the body nor the attachments: forwarding
+    // one from the context menu loads the message first.
+    async forwardMessage(msg) {
+      if (!Array.isArray(msg.attachments)) {
+        try {
+          const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
+          if (res.ok) msg = await res.json();
+        } catch (e) {}
+      }
       const subject = msg.subject?.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject || ''}`;
       this.showCompose({
         subject,
@@ -129,7 +138,12 @@ window.mailComposeMixin = function mailComposeMixin() {
         }, true) + `\n\n${msg.body_text || msg.snippet || ''}`,
         account_id: msg.account_id,
         is_reply: true,
+        mail_attachments: _forwardedAttachments(msg),
       });
+    },
+
+    removeMailAttachment(idx) {
+      this.compose.mail_attachments.splice(idx, 1);
     },
 
     // ----- Tag input helpers -----
@@ -325,6 +339,7 @@ window.mailComposeMixin = function mailComposeMixin() {
       for (const addr of this.compose.cc) formData.append('cc', addr);
       for (const addr of this.compose.bcc) formData.append('bcc', addr);
       this.appendAttachmentsTo(formData, 'attachments', 'file_uuids');
+      for (const a of this.compose.mail_attachments) formData.append('attachment_uuids', a.uuid);
 
       try {
         const res = await this._fetch('/api/v1/mail/messages/send', {
@@ -382,6 +397,7 @@ window.mailComposeMixin = function mailComposeMixin() {
         subject: this.compose.subject,
         body_text: this.compose.body,
         body_html: htmlBody,
+        attachment_uuids: this.compose.mail_attachments.map(a => a.uuid),
       };
       if (this.compose.draft_id) payload.draft_id = this.compose.draft_id;
       if (this.compose.reply_message_id) payload.reply_message_id = this.compose.reply_message_id;
@@ -421,6 +437,7 @@ window.mailComposeMixin = function mailComposeMixin() {
           is_reply: this.compose.is_reply,
           reply_message_id: this.compose.reply_message_id,
           _sigBlock: this.compose._sigBlock,
+          mail_attachments: this.compose.mail_attachments,
           saved_at: Date.now(),
         };
         localStorage.setItem('mail_compose_draft', JSON.stringify(data));
@@ -469,3 +486,12 @@ window.mailComposeMixin = function mailComposeMixin() {
     },
   };
 };
+
+// What a forward carries over: every attachment of the original except the
+// pictures its body displays, which the forwarded text does not show and
+// would otherwise arrive as stray files.
+function _forwardedAttachments(msg) {
+  return (msg.attachments || [])
+    .filter(a => !a.embedded)
+    .map(a => ({ uuid: a.uuid, filename: a.filename, size: a.size }));
+}

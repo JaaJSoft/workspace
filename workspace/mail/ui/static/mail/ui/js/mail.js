@@ -495,6 +495,8 @@ function _defaultCompose() {
   return {
     account_id: '', to: [], cc: [], bcc: [],
     subject: '', body: '', is_reply: false, reply_message_id: null,
+    // Attachments of a stored message, sent by uuid (a forward's originals).
+    mail_attachments: [],
     sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
     _saveTimer: null, _sigBlock: '',

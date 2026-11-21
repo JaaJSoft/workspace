@@ -16,7 +16,7 @@ function _defaultCompose() {
   return {
     account_id: '', to: [], cc: [], bcc: [],
     subject: '', body: '', is_reply: false, reply_message_id: null,
-    attachments: [], picked_files: [], sending: false, error: '',
+    mail_attachments: [], sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
     _saveTimer: null, _sigBlock: '',
   };

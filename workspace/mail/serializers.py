@@ -416,6 +416,12 @@ class SendEmailSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    # Attachments of stored messages (a forward carries the original's).
+    attachment_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+    )
     # UUID of the message being replied to. The In-Reply-To / References
     # headers are derived from it server-side; `reply_to` above is the
     # unrelated Reply-To header.
@@ -446,6 +452,11 @@ class DraftSaveSerializer(serializers.Serializer):
     )
     reply_message_id = serializers.UUIDField(
         required=False, allow_null=True, default=None
+    )
+    attachment_uuids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
     )
 
 

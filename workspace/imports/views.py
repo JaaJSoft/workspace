@@ -4,7 +4,7 @@ from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .errors import ImportsError
+from .errors import REPORTED_ERRORS
 from .providers.base import KIND_CONTACTS
 from .providers.registry import provider_registry
 from .queries import user_connections_qs, user_jobs_qs
@@ -23,7 +23,7 @@ from .services import connections as connections_service
 from .services import jobs as jobs_service
 
 
-def _bad_remote(exc: ImportsError):
+def _bad_remote(exc):
     return Response({"detail": exc.user_message}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -52,7 +52,7 @@ class ConnectionListView(APIView):
             connection = connections_service.create_connection(
                 request.user, **ser.validated_data
             )
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             return _bad_remote(exc)
         return Response(
             ConnectionSerializer(connection).data, status=status.HTTP_201_CREATED
@@ -86,7 +86,7 @@ class ConnectionDetailView(_ConnectionView):
             connection = connections_service.update_connection(
                 connection, **ser.validated_data
             )
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             return _bad_remote(exc)
         return Response(ConnectionSerializer(connection).data)
 
@@ -113,7 +113,7 @@ class ConnectionTestView(_ConnectionView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         try:
             connection = connections_service.test_connection(connection)
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             return _bad_remote(exc)
         return Response(ConnectionSerializer(connection).data)
 
@@ -138,7 +138,7 @@ class ConnectionBrowseView(_ConnectionView):
                 path = ""
             else:
                 entries = connections_service.browse_files(connection, path)
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             return _bad_remote(exc)
         return Response(
             {"kind": kind, "path": path, "entries": [e.as_dict() for e in entries]}
@@ -191,7 +191,7 @@ class JobListView(APIView):
             return Response(
                 {"detail": exc.user_message}, status=status.HTTP_409_CONFLICT
             )
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             return _bad_remote(exc)
         return Response(JobSerializer(job).data, status=status.HTTP_201_CREATED)
 
@@ -248,7 +248,7 @@ class JobCancelView(_JobView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         try:
             job = jobs_service.cancel_job(job)
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             return _bad_remote(exc)
         return Response(JobSerializer(job).data)
 
@@ -268,6 +268,6 @@ class JobRetryView(_JobView):
             return Response(
                 {"detail": exc.user_message}, status=status.HTTP_409_CONFLICT
             )
-        except ImportsError as exc:
+        except REPORTED_ERRORS as exc:
             return _bad_remote(exc)
         return Response(JobSerializer(new_job).data, status=status.HTTP_201_CREATED)

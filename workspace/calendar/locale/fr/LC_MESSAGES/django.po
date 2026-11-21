@@ -132,6 +132,36 @@ msgstr "Modification : %(title)s"
 msgid "The event has been updated"
 msgstr "L’événement a été modifié"
 
+#: services/ics_sync.py
+#, python-format
+msgid "The feed is larger than %(size)d MB."
+msgstr "Le flux dépasse %(size)d Mo."
+
+#: services/ics_sync.py
+#, python-format
+msgid "The feed server answered with HTTP status %(status)d."
+msgstr "Le serveur du flux a répondu avec le statut HTTP %(status)d."
+
+#: services/ics_sync.py
+msgid "The feed redirects too many times."
+msgstr "Le flux redirige trop de fois."
+
+#: services/ics_sync.py
+msgid "The feed server did not answer in time."
+msgstr "Le serveur du flux n’a pas répondu à temps."
+
+#: services/ics_sync.py
+msgid "The feed server could not be reached."
+msgstr "Le serveur du flux est injoignable."
+
+#: services/ics_sync.py
+msgid "The feed is not a valid iCalendar file."
+msgstr "Le flux n’est pas un fichier iCalendar valide."
+
+#: services/ics_sync.py
+msgid "Unexpected error, see the server logs."
+msgstr "Erreur inattendue, consultez les journaux du serveur."
+
 #: services/invitations.py
 #, python-format
 msgid "%(user)s accepted \"%(title)s\""

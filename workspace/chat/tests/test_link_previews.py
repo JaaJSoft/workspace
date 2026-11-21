@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from rest_framework.test import APITestCase
 
 from workspace.chat.models import (
@@ -13,6 +13,8 @@ from workspace.chat.models import (
 )
 from workspace.chat.serializers import MessageSerializer
 from workspace.chat.services.link_preview import extract_urls, fetch_opengraph
+from workspace.common.tests.network import FakeNetwork, http_response
+from workspace.common.url_guard import ResponseTooLarge, UnsafeUrl
 
 User = get_user_model()
 
@@ -109,6 +111,50 @@ class FetchOpengraphTests(TestCase):
         meta = fetch_opengraph("https://example.com")
         for key in ("title", "description", "image", "site_name"):
             self.assertIsInstance(meta[key], str)
+
+
+class LinkPreviewUrlGuardTests(SimpleTestCase):
+    """The real HTTP client and guard, with only DNS and TCP replaced."""
+
+    PUBLIC = "93.184.216.34"
+    PAGE = b'<html><head><meta property="og:title" content="Hi"></head></html>'
+
+    def test_a_name_resolving_to_a_private_address_is_never_dialed(self):
+        with FakeNetwork(
+            {"redis": [["172.18.0.5"]]},
+            response=http_response(200, self.PAGE, "text/html"),
+        ) as net:
+            with self.assertRaises(UnsafeUrl):
+                fetch_opengraph("http://redis:6379/")
+        self.assertEqual(net.dialed, [])
+
+    def test_a_redirect_to_an_internal_address_is_not_followed(self):
+        redirect = (
+            b"HTTP/1.1 302 Found\r\nLocation: http://10.0.0.9/admin\r\n"
+            b"Content-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        with FakeNetwork({"example.com": [[self.PUBLIC]]}, response=redirect) as net:
+            with self.assertRaises(UnsafeUrl):
+                fetch_opengraph("https://example.com/")
+        self.assertEqual(net.dialed, [(self.PUBLIC, 443)])
+
+    def test_an_oversized_page_is_refused(self):
+        with (
+            patch("workspace.chat.services.link_preview.MAX_PAGE_BYTES", 16),
+            FakeNetwork(
+                {"example.com": [[self.PUBLIC]]},
+                response=http_response(200, self.PAGE, "text/html"),
+            ),
+            self.assertRaises(ResponseTooLarge),
+        ):
+            fetch_opengraph("https://example.com/")
+
+    def test_a_public_page_is_previewed(self):
+        with FakeNetwork(
+            {"example.com": [[self.PUBLIC]]},
+            response=http_response(200, self.PAGE, "text/html"),
+        ):
+            self.assertEqual(fetch_opengraph("https://example.com/")["title"], "Hi")
 
 
 class FetchLinkPreviewsTaskTests(TestCase):

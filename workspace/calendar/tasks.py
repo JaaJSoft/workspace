@@ -89,10 +89,14 @@ def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
     the feed. Calls without a token (manual ``sync`` button, direct
     test calls) skip the CAS.
     """
-    from django.utils import timezone
+    from django.utils import timezone, translation
 
     from workspace.calendar.models_external import ExternalCalendar
-    from workspace.calendar.services.ics_sync import sync_external_calendar
+    from workspace.calendar.services.ics_sync import (
+        sync_error_message,
+        sync_external_calendar,
+    )
+    from workspace.users.services.settings import get_user_language
 
     try:
         ext = ExternalCalendar.objects.select_related("calendar").get(
@@ -120,7 +124,8 @@ def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
     try:
         sync_external_calendar(ext)
     except Exception as exc:
-        ext.last_error = str(exc)
+        with translation.override(get_user_language(ext.calendar.owner)):
+            ext.last_error = sync_error_message(exc)
         ext.save(update_fields=["last_error"])
         raise
 

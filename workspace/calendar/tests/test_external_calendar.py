@@ -11,7 +11,9 @@ from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.recurrence import occurrences_in_range
 from workspace.calendar.services.ics_sync import sync_external_calendar
 from workspace.common.task_priority import INTERACTIVE_PRIORITY
+from workspace.common.tests.network import FakeNetwork, http_response
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
+from workspace.common.url_guard import UnsafeUrl
 
 User = get_user_model()
 
@@ -158,18 +160,24 @@ def _feed_of(uids):
 def _mock_response(text, status_code=200, etag=""):
     resp = MagicMock()
     resp.status_code = status_code
-    resp.text = text
+    resp.iter_bytes.return_value = [text.encode()]
+    resp.encoding = "utf-8"
     resp.headers = {"ETag": etag} if etag else {}
     resp.raise_for_status = MagicMock()
     return resp
 
 
+def _serve(client, response):
+    """Make the mocked client's next streamed request answer *response*."""
+    client.stream.return_value.__enter__.return_value = response
+
+
 def _mock_httpx(mock_httpx, response):
-    """Configure mock_httpx.Client to return the given response."""
+    """Configure mock_httpx.Client to stream the given response."""
     mock_client = MagicMock()
     mock_client.__enter__ = lambda s: s
     mock_client.__exit__ = MagicMock(return_value=False)
-    mock_client.get.return_value = response
+    _serve(mock_client, response)
     mock_httpx.Client.return_value = mock_client
     return mock_client
 
@@ -252,7 +260,7 @@ class SyncExternalCalendarTests(TestCase):
         sync_external_calendar(self.ext)
 
         # Second sync with updated title
-        client.get.return_value = _mock_response(ICS_FEED_UPDATED)
+        _serve(client, _mock_response(ICS_FEED_UPDATED))
         self.ext.last_etag = ""
         self.ext.save()
         sync_external_calendar(self.ext)
@@ -269,7 +277,7 @@ class SyncExternalCalendarTests(TestCase):
         sync_external_calendar(self.ext)
         self.assertEqual(Event.objects.filter(calendar=self.calendar).count(), 2)
 
-        client.get.return_value = _mock_response(ICS_FEED_REMOVED)
+        _serve(client, _mock_response(ICS_FEED_REMOVED))
         self.ext.last_etag = ""
         self.ext.save()
         sync_external_calendar(self.ext)
@@ -472,7 +480,7 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(len(before), 2)
 
         # Same feed body, no ETag → server returns 200 again.
-        client.get.return_value = _mock_response(ICS_FEED)
+        _serve(client, _mock_response(ICS_FEED))
         self.ext.refresh_from_db()
         sync_external_calendar(self.ext)
 
@@ -491,7 +499,7 @@ class SyncExternalCalendarTests(TestCase):
         client = _mock_httpx(mock_httpx, _mock_response(_feed_of(uids)))
         sync_external_calendar(self.ext)
 
-        client.get.return_value = _mock_response(_feed_of(uids[1:]))
+        _serve(client, _mock_response(_feed_of(uids[1:])))
         with sqlite_parameter_limit(parameter_limit):
             sync_external_calendar(self.ext)
 
@@ -557,7 +565,7 @@ class SyncTaskTests(TestCase):
             sync_external_calendar_task(str(self.ext.uuid))
 
         self.ext.refresh_from_db()
-        self.assertIn("Network error", self.ext.last_error)
+        self.assertEqual(self.ext.last_error, "Unexpected error, see the server logs.")
 
     @patch("workspace.calendar.tasks.sync_external_calendar_task")
     def test_dispatcher_does_not_double_enqueue_on_back_to_back_runs(self, mock_task):
@@ -864,3 +872,120 @@ class EventCardExternalTests(TestCase):
         resp = self.client.get(f"/calendar/events/{event.pk}/card")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"card_user", resp.content)  # owner username rendered
+
+
+# ─── Server-side request forgery ───────────────────────────
+
+PUBLIC = "93.184.216.34"
+
+
+def _redirect_to(location):
+    return (
+        "HTTP/1.1 302 Found\r\n"
+        f"Location: {location}\r\n"
+        "Content-Length: 0\r\nConnection: close\r\n\r\n"
+    ).encode()
+
+
+class FeedUrlGuardTests(TestCase):
+    """The real HTTP client and guard, with only DNS and TCP replaced."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ssrf", password="pass123")
+        self.calendar = Calendar.objects.create(name="Feed", owner=self.user)
+        self.ext = ExternalCalendar.objects.create(
+            calendar=self.calendar, url="https://feeds.example.org/cal.ics"
+        )
+
+    def _sync(self, answers, response):
+        from workspace.calendar.tasks import sync_external_calendar_task
+
+        with FakeNetwork(answers, response=response) as net:
+            with self.assertRaises(UnsafeUrl):
+                sync_external_calendar_task(str(self.ext.uuid))
+        self.ext.refresh_from_db()
+        return net
+
+    def test_a_name_resolving_to_a_private_address_is_never_dialed(self):
+        # The name of another Compose service, say.
+        net = self._sync(
+            {"feeds.example.org": [["172.18.0.4"]]},
+            http_response(200, ICS_FEED.encode(), "text/calendar"),
+        )
+        self.assertEqual(net.dialed, [])
+        self.assertIn("private network", self.ext.last_error)
+        self.assertFalse(Event.objects.filter(calendar=self.calendar).exists())
+
+    def test_a_redirect_to_an_internal_address_is_not_followed(self):
+        answers = {"feeds.example.org": [[PUBLIC]], "redis": [["10.0.0.7"]]}
+        net = self._sync(answers, _redirect_to("http://redis:6379/"))
+        self.assertEqual(net.dialed, [(PUBLIC, 443)])
+        self.assertIn("private network", self.ext.last_error)
+
+    def test_a_literal_private_address_is_refused_before_any_lookup(self):
+        self.ext.url = "http://169.254.169.254/latest/meta-data/"
+        self.ext.save(update_fields=["url"])
+        net = self._sync({}, http_response(200, b"secret", "text/plain"))
+        self.assertEqual((net.lookups, net.dialed), ([], []))
+
+    def test_the_remote_answer_never_reaches_last_error(self):
+        from workspace.calendar.tasks import sync_external_calendar_task
+
+        body = b"redis_version:7.2.4 internal detail"
+        with FakeNetwork(
+            {"feeds.example.org": [[PUBLIC]]},
+            response=http_response(500, body, "text/plain"),
+        ):
+            with self.assertRaises(Exception):
+                sync_external_calendar_task(str(self.ext.uuid))
+        self.ext.refresh_from_db()
+        self.assertEqual(
+            self.ext.last_error, "The feed server answered with HTTP status 500."
+        )
+
+    def test_a_feed_past_the_size_cap_is_refused(self):
+        from workspace.calendar.tasks import sync_external_calendar_task
+
+        with (
+            patch("workspace.calendar.services.ics_sync.MAX_FEED_BYTES", 64),
+            FakeNetwork(
+                {"feeds.example.org": [[PUBLIC]]},
+                response=http_response(200, ICS_FEED.encode(), "text/calendar"),
+            ),
+            self.assertRaises(Exception),
+        ):
+            sync_external_calendar_task(str(self.ext.uuid))
+        self.ext.refresh_from_db()
+        self.assertIn("larger than", self.ext.last_error)
+        self.assertFalse(Event.objects.filter(calendar=self.calendar).exists())
+
+    def test_a_public_feed_still_syncs(self):
+        with FakeNetwork(
+            {"feeds.example.org": [[PUBLIC]]},
+            response=http_response(200, ICS_FEED.encode(), "text/calendar"),
+        ) as net:
+            sync_external_calendar(self.ext)
+        self.assertEqual(net.dialed, [(PUBLIC, 443)])
+        self.assertEqual(Event.objects.filter(calendar=self.calendar).count(), 2)
+
+
+class FeedSubscriptionUrlTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sub", password="pass123")
+        self.client.force_authenticate(self.user)
+
+    def test_an_internal_address_is_refused_at_subscription(self):
+        for url in (
+            "http://127.0.0.1:6379/",
+            "http://localhost:8000/admin/",
+            "http://10.0.0.5/feed.ics",
+        ):
+            with self.subTest(url=url):
+                resp = self.client.post(
+                    "/api/v1/external-calendars",
+                    {"url": url, "name": "Internal"},
+                    format="json",
+                )
+                self.assertEqual(resp.status_code, 400)
+                self.assertIn("url", resp.json())
+        self.assertFalse(ExternalCalendar.objects.exists())

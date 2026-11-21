@@ -7,13 +7,16 @@ from django.core.cache import cache
 
 from workspace.common.logging import scrub
 from workspace.common.task_priority import BACKGROUND_PRIORITY, INTERACTIVE_PRIORITY
+from workspace.common.url_guard import UnsafeUrl
 from workspace.notifications.models import SOURCE_FIELD_NAMES
+from workspace.notifications.services.push_transport import GuardedPushSession
 from workspace.notifications.services.vapid import VapidKeyError, load_vapid_key
 from workspace.users.services.presence import is_active
 
 logger = logging.getLogger(__name__)
 
 PUSH_COOLDOWN_SECONDS = 60
+PUSH_TIMEOUT_SECONDS = 10
 ACTIVE_RETRY_DELAY_SECONDS = 60
 RETENTION_DAYS = 90
 _SOURCE_ID_ATTRS = tuple(f"{name}_id" for name in SOURCE_FIELD_NAMES)
@@ -148,20 +151,29 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
     delivered = 0
     for sub in subscriptions:
         try:
-            webpush(
-                subscription_info={
-                    "endpoint": sub.endpoint,
-                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                },
-                data=payload,
-                vapid_private_key=signer,
-                # pywebpush fills `aud` and `exp` into the dict it is handed
-                # and only ever revises `exp`. Passing the settings dict itself
-                # would pin every later push to the first endpoint's origin,
-                # which the other push services reject.
-                vapid_claims=dict(vapid_claims),
-            )
+            with GuardedPushSession() as session:
+                webpush(
+                    subscription_info={
+                        "endpoint": sub.endpoint,
+                        "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                    },
+                    data=payload,
+                    vapid_private_key=signer,
+                    # pywebpush fills `aud` and `exp` into the dict it is
+                    # handed and only ever revises `exp`. Passing the settings
+                    # dict itself would pin every later push to the first
+                    # endpoint's origin, which the other push services reject.
+                    vapid_claims=dict(vapid_claims),
+                    requests_session=session,
+                    timeout=PUSH_TIMEOUT_SECONDS,
+                )
             delivered += 1
+        except UnsafeUrl as e:
+            # Kept: "could not be resolved" is a refusal too, and a DNS outage
+            # must not drop every subscription.
+            logger.warning(
+                "Push refused for %s: %s", scrub(sub.endpoint[:60]), e.user_message
+            )
         except WebPushException as e:
             status_code = (
                 getattr(e.response, "status_code", None)

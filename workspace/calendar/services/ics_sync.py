@@ -6,6 +6,7 @@ import httpx2
 import icalendar
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from workspace.calendar.models import Event
 from workspace.calendar.services.ics_common import (
@@ -15,9 +16,20 @@ from workspace.calendar.services.ics_common import (
 )
 from workspace.calendar.services.recurrence_rule import derive_into_defaults
 from workspace.calendar.services.timezones import normalize_all_day
+from workspace.common.url_guard import (
+    ResponseTooLarge,
+    UnsafeUrl,
+    check_remote_url,
+    guarded_transport,
+    read_capped,
+)
 from workspace.users.services.settings import get_user_timezone
 
 logger = logging.getLogger(__name__)
+
+# A feed holding years of a busy calendar stays well under this.
+MAX_FEED_BYTES = 20 * 1024 * 1024
+MAX_FEED_REDIRECTS = 5
 
 
 @transaction.atomic
@@ -99,20 +111,61 @@ def sync_external_calendar(external_calendar):
 
 
 def _fetch_feed(external_calendar):
-    """Fetch the ICS feed, returning the text or None on 304."""
+    """Fetch the ICS feed, returning the text or None on 304.
+
+    The URL is the user's, so the connection only goes to a public address,
+    on every redirect hop too, and the body is capped.
+    """
+    check_remote_url(external_calendar.url)
     headers = {}
     if external_calendar.last_etag:
         headers["If-None-Match"] = external_calendar.last_etag
 
-    with httpx2.Client(timeout=30, follow_redirects=True) as client:
-        resp = client.get(external_calendar.url, headers=headers)
+    with (
+        httpx2.Client(
+            transport=guarded_transport(),
+            timeout=30,
+            follow_redirects=True,
+            max_redirects=MAX_FEED_REDIRECTS,
+        ) as client,
+        client.stream("GET", external_calendar.url, headers=headers) as resp,
+    ):
+        if resp.status_code == 304:
+            return None
+        resp.raise_for_status()
+        body = read_capped(resp, MAX_FEED_BYTES)
+        encoding = resp.encoding or "utf-8"
 
-    if resp.status_code == 304:
-        return None
-
-    resp.raise_for_status()
     external_calendar.last_etag = resp.headers.get("ETag", "")
-    return resp.text
+    return body.decode(encoding, errors="replace")
+
+
+def sync_error_message(exc):
+    """What ``last_error`` shows the owner for a failed sync.
+
+    Built from the kind of failure, never from the exception's text: that
+    text quotes the remote's answer and the addresses tried, which is what a
+    probe of the server's network would read back through the API.
+    """
+    if isinstance(exc, UnsafeUrl):
+        return exc.user_message
+    if isinstance(exc, ResponseTooLarge):
+        return _("The feed is larger than %(size)d MB.") % {
+            "size": exc.max_bytes // (1024 * 1024)
+        }
+    if isinstance(exc, httpx2.HTTPStatusError):
+        return _("The feed server answered with HTTP status %(status)d.") % {
+            "status": exc.response.status_code
+        }
+    if isinstance(exc, httpx2.TooManyRedirects):
+        return _("The feed redirects too many times.")
+    if isinstance(exc, httpx2.TimeoutException):
+        return _("The feed server did not answer in time.")
+    if isinstance(exc, httpx2.HTTPError):
+        return _("The feed server could not be reached.")
+    if isinstance(exc, ValueError):
+        return _("The feed is not a valid iCalendar file.")
+    return _("Unexpected error, see the server logs.")
 
 
 def _matches_defaults(existing, defaults):

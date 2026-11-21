@@ -17,7 +17,7 @@ from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
 
-from ..errors import ImportsError
+from ..errors import REPORTED_ERRORS
 from .base import ProviderError, RemoteAddressBook, RemoteCard
 from .webdav import (
     DAV,
@@ -159,12 +159,12 @@ class CardDavSource:
                     data += chunk
                     if len(data) > _MAX_PHOTO_BYTES:
                         return None
-        except ValueError:
-            return None
-        except (ImportsError, httpx2.HTTPError) as exc:
+        except (*REPORTED_ERRORS, httpx2.HTTPError) as exc:
             logger.info(
                 "Contact photo %s skipped: %s", scrub(url[:200]), scrub(str(exc))
             )
+            return None
+        except ValueError:
             return None
         return bytes(data), match.group(1)
 

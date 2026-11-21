@@ -18,8 +18,9 @@ from django.conf import settings
 from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
+from workspace.common.url_guard import guarded_transport
 
-from ..services.url_guard import guarded_transport
+from ..services.network_policy import imports_network_policy
 from .base import (
     KIND_FILES,
     AuthenticationFailed,
@@ -66,7 +67,7 @@ def build_client(
         timeout=settings.IMPORTS_HTTP_TIMEOUT,
         follow_redirects=False,
         headers={"User-Agent": _USER_AGENT, "Accept-Encoding": "identity"},
-        transport=transport or guarded_transport(),
+        transport=transport or guarded_transport(imports_network_policy()),
         **kwargs,
     )
 

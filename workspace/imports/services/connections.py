@@ -11,12 +11,13 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from workspace.common.logging import scrub
+from workspace.common.url_guard import check_remote_url
 
-from ..errors import ImportsError
+from ..errors import REPORTED_ERRORS, ImportsError
 from ..models import ImportConnection, ImportJob
 from ..providers.base import KIND_CONTACTS
 from ..providers.registry import provider_registry
-from .url_guard import check_remote_url
+from .network_policy import imports_network_policy
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def create_connection(owner, *, provider, label, base_url, username, secret):
         username=username,
     )
     connection.set_secret(secret)
-    check_remote_url(connection.base_url)
+    check_remote_url(connection.base_url, imports_network_policy())
     connection.capabilities = prov.test_connection(connection)
     connection.last_checked_at = timezone.now()
     connection.save()
@@ -83,7 +84,7 @@ def update_connection(
         connection.base_url = prov.normalize_base_url(
             base_url or connection.base_url, connection.username
         )
-        check_remote_url(connection.base_url)
+        check_remote_url(connection.base_url, imports_network_policy())
         connection.capabilities = prov.test_connection(connection)
         connection.last_checked_at = timezone.now()
         connection.last_error = ""
@@ -97,7 +98,7 @@ def test_connection(connection):
     prov = get_available_provider(connection.provider)
     try:
         connection.capabilities = prov.test_connection(connection)
-    except ImportsError as exc:
+    except REPORTED_ERRORS as exc:
         connection.last_error = exc.user_message
         connection.last_checked_at = timezone.now()
         connection.save(update_fields=["last_error", "last_checked_at", "updated_at"])

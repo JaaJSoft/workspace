@@ -1,10 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
+from workspace.common.url_guard import UnsafeUrl
 from workspace.imports.models import ImportConnection
 from workspace.imports.providers.base import AuthenticationFailed, RemoteAddressBook
 from workspace.imports.services import connections as svc
-from workspace.imports.services.url_guard import UnsafeUrl
 
 from .fakes import fake_provider
 

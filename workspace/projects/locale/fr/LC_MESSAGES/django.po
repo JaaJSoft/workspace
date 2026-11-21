@@ -1501,7 +1501,7 @@ msgstr ""
 "axe temporel. Donnez une date de début à une tâche pour l’afficher sous "
 "forme de barre ; zoomez par semaine, mois ou trimestre."
 
-#: ui/templates/projects/ui/partials/help_dialog.html
+#: activity.py ui/templates/projects/ui/partials/help_dialog.html
 msgid "Tasks"
 msgstr "Tâches"
 

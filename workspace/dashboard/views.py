@@ -10,7 +10,7 @@ from workspace.core.services.activity import (
     annotate_time_ago,
     get_recent_events,
     get_sources,
-    get_usage_stats,
+    get_usage_headlines,
 )
 from workspace.core.services.module_visibility import (
     is_module_slug_visible,
@@ -79,6 +79,14 @@ def _activity_shell_context(user, source=None):
     }
 
 
+def _usage_rows(user):
+    """The usage popover's rows; the files row also carries the storage gauge."""
+    rows = get_usage_headlines(user)
+    for row in rows:
+        row["storage_gauge"] = row["slug"] == "files"
+    return rows
+
+
 def _build_dashboard_context(user, include_activity=True, activity_source=None):
     dashboard_settings = get_module_settings(user, "dashboard")
     modules, dashboard_apps = dashboard_modules(user)
@@ -96,7 +104,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
         "my_tasks_available": my_tasks_available,
         "show_my_tasks": my_tasks_available
         and dashboard_settings.get("show_my_tasks", True),
-        "usage_stats": get_usage_stats(user.id),
+        "usage_rows": _usage_rows(user),
         "storage_usage": storage_usage,
         "storage_quota": storage_quota,
         "storage_percent": usage_percent(storage_usage, storage_quota),

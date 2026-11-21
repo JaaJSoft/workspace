@@ -124,11 +124,3 @@ msgstr "Aucune tâche ouverte ne vous est assignée."
 #: templates/dashboard/partials/upcoming_events.html
 msgid "No upcoming events today."
 msgstr "Aucun événement à venir aujourd’hui."
-
-#: templates/dashboard/partials/usage_widget.html
-#, python-format
-msgid "%(counter)s unread"
-msgid_plural "%(counter)s unread"
-msgstr[0] "%(counter)s non lu"
-msgstr[1] "%(counter)s non lus"
-msgstr[2] "%(counter)s non lus"

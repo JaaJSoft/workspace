@@ -9,7 +9,7 @@ from workspace.common.cache import cached
 from workspace.common.dates import time_ago
 from workspace.core.activity_registry import activity_registry, module_color
 
-from .module_visibility import hidden_module_slugs
+from .module_visibility import hidden_module_slugs, visible_modules
 
 # Usage stats are aggregate counts (file totals, message counts, ...) that
 # change slowly and are purely informational. The dashboard and profile views
@@ -67,6 +67,32 @@ def get_visible_usage_stats(user_id, *, viewer_id=None, visible_to):
     allowed = allowed_activity_sources(visible_to)
     stats = get_usage_stats(user_id, viewer_id=viewer_id)
     return {slug: value for slug, value in stats.items() if slug in allowed}
+
+
+def get_usage_headlines(user):
+    """The usage popover's rows for *user*, in module order.
+
+    One row per visible module whose provider publishes a headline, carrying
+    the module's link, icon and color.
+    """
+    stats = get_visible_usage_stats(user.id, visible_to=user)
+    rows = []
+    for module in visible_modules(user):
+        headline = activity_registry.get_headline(module.slug, stats.get(module.slug))
+        if headline is None:
+            continue
+        rows.append(
+            {
+                "slug": module.slug,
+                "url": module.url,
+                "icon": module.icon,
+                "color": module.color,
+                "count": headline.count,
+                "label": headline.label,
+                "detail": headline.detail,
+            }
+        )
+    return rows
 
 
 def _daily_counts_key(

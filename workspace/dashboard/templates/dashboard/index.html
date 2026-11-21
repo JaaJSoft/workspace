@@ -292,12 +292,9 @@
           }
         },
         _animateCounts() {
-          const refs = ['countFiles', 'countMessages', 'countMail', 'countEvents'];
           const duration = 600;
-          for (let i = 0; i < refs.length; i++) {
-            const el = this.$refs[refs[i]];
-            if (!el) continue;
-            const target = parseInt(el.dataset.target) || 0;
+          for (const el of this.$root.querySelectorAll('[data-usage-count]')) {
+            const target = parseInt(el.dataset.usageCount) || 0;
             if (target === 0) {
               el.textContent = '0';
               continue;

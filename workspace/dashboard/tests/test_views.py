@@ -37,6 +37,88 @@ def _mod(slug, active=True, preview=False, show_on_dashboard=True):
     )
 
 
+class UsagePopoverTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="usageuser", password="pw")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _render(self):
+        from django.template.loader import render_to_string
+
+        context = _build_dashboard_context(self.user, include_activity=False)
+        return context["usage_rows"], render_to_string(
+            "dashboard/partials/usage_widget.html", context
+        )
+
+    def test_every_visible_headline_is_rendered(self):
+        rows, page = self._render()
+
+        self.assertTrue(rows)
+        self.assertEqual(page.count("data-usage-count="), len(rows))
+        for row in rows:
+            self.assertIn(f'href="{row["url"]}"', page)
+            self.assertIn(f'data-lucide="{row["icon"]}"', page)
+            self.assertIn(f"module-{row['color']}", page)
+            self.assertIn(row["label"], page)
+            self.assertIn(f'data-usage-count="{row["count"]}"', page)
+
+    def test_notes_and_projects_publish_a_row(self):
+        rows, _ = self._render()
+        self.assertLessEqual({"notes", "projects"}, {row["slug"] for row in rows})
+
+    def test_rows_follow_module_order(self):
+        rows, _ = self._render()
+        order = {m.slug: m.order for m in registry.get_all()}
+        self.assertEqual(
+            [row["slug"] for row in rows],
+            sorted((row["slug"] for row in rows), key=order.__getitem__),
+        )
+
+    def test_provider_without_headline_is_not_rendered(self):
+        with patch(
+            "workspace.notes.activity.NotesActivityProvider.get_headline",
+            return_value=None,
+        ):
+            rows, page = self._render()
+
+        self.assertNotIn("notes", [row["slug"] for row in rows])
+        self.assertNotIn('href="/notes"', page)
+        self.assertEqual(page.count("data-usage-count="), len(rows))
+
+    def test_hidden_preview_module_is_left_out(self):
+        hidden = replace(registry.get("notes"), preview=True)
+        with (
+            override_settings(PREVIEW_VISIBILITY="none"),
+            patch.dict(registry._modules, {"notes": hidden}),
+        ):
+            rows, page = self._render()
+
+        self.assertNotIn("notes", [row["slug"] for row in rows])
+        self.assertNotIn('href="/notes"', page)
+
+    def test_only_the_files_row_carries_the_storage_gauge(self):
+        rows, page = self._render()
+
+        self.assertEqual(
+            [row["slug"] for row in rows if row["storage_gauge"]], ["files"]
+        )
+        self.assertEqual(page.count('x-ref="storageBar"'), 1)
+
+    @patch("workspace.core.services.activity.get_usage_stats")
+    def test_mail_row_shows_the_unread_count(self, mock_stats):
+        mock_stats.return_value = {
+            "mail": {"total_messages": 9, "unread_messages": 2, "total_accounts": 1}
+        }
+        rows, page = self._render()
+
+        self.assertEqual([row["slug"] for row in rows], ["mail"])
+        self.assertIn("2 unread", page)
+        self.assertIn('data-usage-count="9"', page)
+
+
 # ── _build_dashboard_context ────────────────────────────────────
 
 
@@ -132,12 +214,12 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.services.modules.visible_modules")
     @patch("workspace.dashboard.services.modules.get_unread_badges")
-    def test_context_includes_usage_stats(self, mock_badges, mock_visible):
+    def test_context_includes_usage_rows(self, mock_badges, mock_visible):
         mock_visible.return_value = []
         mock_badges.return_value = {}
 
         context = _build_dashboard_context(self.user)
-        self.assertIn("usage_stats", context)
+        self.assertIn("usage_rows", context)
 
     @patch("workspace.dashboard.services.modules.visible_modules")
     @patch("workspace.dashboard.services.modules.get_unread_badges")
@@ -686,7 +768,7 @@ class IndexViewTests(TestCase):
 
     @patch("workspace.dashboard.views._build_dashboard_context")
     def test_returns_200_for_authenticated_user(self, mock_ctx):
-        mock_ctx.return_value = {"modules": [], "usage_stats": {}}
+        mock_ctx.return_value = {"modules": [], "usage_rows": []}
         self.client.login(username="viewuser", password="pass123")
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
@@ -1307,11 +1389,13 @@ class DashboardFrenchTests(TestCase):
         self.assertContains(resp, "Bonjour, %(name)s.")
         self.assertContains(resp, "Bonsoir, %(name)s.")
 
-    @patch("workspace.dashboard.views.get_usage_stats")
+    @patch("workspace.core.services.activity.get_usage_stats")
     def test_unread_count_uses_the_french_plural(self, mock_stats):
         # French catalogs carry three plural forms: 0 and 1, exact millions,
         # and everything else, so a count of 3 reads the third one.
-        mock_stats.return_value = {"mail": {"unread_messages": 3}}
+        mock_stats.return_value = {
+            "mail": {"total_messages": 5, "unread_messages": 3, "total_accounts": 1}
+        }
         resp = self.client.get("/")
         self.assertContains(resp, "3 non lus")
 

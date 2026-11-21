@@ -278,6 +278,7 @@ class MailBatchActionView(APIView):
         ).select_related("account", "folder")
 
         from ..services.imap_connection import shared_connections
+        from ..services.imap_sync import forget_remote_state
         from ..services.triage import (
             TRASHED,
             flag_operations,
@@ -315,6 +316,7 @@ class MailBatchActionView(APIView):
 
         processed = 0
         synced = True
+        refused_folders = set()
         affected_folders = set()
         to_bulk_update = []
         bulk_update_fields = set()
@@ -369,6 +371,7 @@ class MailBatchActionView(APIView):
                             imap_fn(msg.account, msg)
                         except Exception as e:
                             synced = False
+                            refused_folders.add(msg.folder_id)
                             logger.warning(
                                 "IMAP %s failed for message %s: %s",
                                 scrub(action),
@@ -391,6 +394,7 @@ class MailBatchActionView(APIView):
                 MailMessage.objects.bulk_update(
                     to_bulk_update, list(bulk_update_fields)
                 )
+                forget_remote_state(refused_folders)
 
             # Refresh counts for all affected folders in a single batch:
             # 1 aggregate + 1 bulk_update instead of 2N queries.

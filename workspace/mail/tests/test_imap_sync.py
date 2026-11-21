@@ -4,15 +4,18 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import OperationalError
 from django.test import TestCase
 from django.utils import timezone
 from imapclient.exceptions import IMAPClientError
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.services import imap_sync
 from workspace.mail.services.folder_merge import promote_alias
 from workspace.mail.services.imap_sync import (
     FULL_READ_INTERVAL,
     accounts_with_sync_errors,
+    forget_remote_state,
     queue_account_syncs,
     sync_folder_messages,
     sync_folders,
@@ -384,7 +387,9 @@ class UnchangedMailboxTests(InboxTestCase):
         self.assertEqual(_flag_reads(commands), [("fetch", [uid], ["FLAGS"], None)])
         self.assertTrue(self._message(uid).is_starred)
 
-    def test_a_flag_set_by_another_client_is_the_only_one_the_server_sends(self):
+    def test_a_flag_set_by_another_client_is_the_only_one_read(self):
+        """One SEARCH names what moved since the last pass, whatever the
+        size of the folder, and only that is fetched."""
         with fake_imap() as server:
             untouched = server.deliver("INBOX")
             read_elsewhere = server.deliver("INBOX")
@@ -393,23 +398,39 @@ class UnchangedMailboxTests(InboxTestCase):
             known_modseq = self.folder.remote_state["highestmodseq"]
             server.set_flags("INBOX", read_elsewhere, r"\Seen")
 
-            with fetch_answers() as answers:
-                self._sync()
+            self._sync()
 
+        commands = server.commands[first_pass:]
         self.assertEqual(
-            _flag_reads(server.commands[first_pass:]),
+            [command for command in commands if command[0] == "search"],
             [
-                (
-                    "fetch",
-                    [untouched, read_elsewhere],
-                    ["FLAGS"],
-                    [f"CHANGEDSINCE {known_modseq}"],
-                )
+                ("search", ["UID", f"{untouched}:*"]),
+                ("search", ["UID", f"{untouched}:*", "MODSEQ", known_modseq + 1]),
             ],
         )
-        self.assertEqual([set(answer) for answer in answers], [{read_elsewhere}])
+        self.assertEqual(
+            _flag_reads(commands), [("fetch", [read_elsewhere], ["FLAGS"], None)]
+        )
         self.assertTrue(self._message(read_elsewhere).is_read)
         self.assertFalse(self._message(untouched).is_read)
+
+    def test_a_large_folder_with_nothing_changed_costs_two_searches(self):
+        with (
+            fake_imap() as server,
+            patch("workspace.mail.services.imap_sync.UID_BATCH_SIZE", 3),
+        ):
+            for _ in range(8):
+                server.deliver("INBOX")
+            self._sync()
+            first_pass = len(server.commands)
+            # Something moved, but no flag of a stored message.
+            server.deliver("INBOX")
+
+            self._sync()
+
+        commands = [command[0] for command in server.commands[first_pass:]]
+        self.assertEqual(commands.count("search"), 2)
+        self.assertEqual(_flag_reads(server.commands[first_pass:]), [])
 
     def test_a_message_delivered_since_the_last_pass_is_imported(self):
         with fake_imap() as server:
@@ -434,12 +455,132 @@ class UnchangedMailboxTests(InboxTestCase):
         self.assertIsNone(self._message(kept).deleted_at)
 
 
+class OtherWritersTests(InboxTestCase):
+    """A pass is not alone: a request saves a draft, flags a message or
+    files one while it runs, and what the pass read a moment ago no longer
+    describes the folder."""
+
+    def test_a_message_stored_while_the_pass_runs_is_not_taken_for_deleted(self):
+        """The server's list of UIDs is from before the message: missing
+        from it, the message must not be hidden - for good, since its row
+        keeps the next pass from importing it again."""
+        search = FakeImapClient.search
+        stored = []
+
+        def search_then_a_draft_is_saved(client, criteria="ALL"):
+            answer = search(client, criteria)
+            if not stored:
+                stored.append(client.server.deliver("INBOX", subject="Draft"))
+                MailMessage.objects.create(
+                    account=self.account, folder=self.folder, imap_uid=stored[0]
+                )
+            return answer
+
+        with fake_imap() as server:
+            known = server.deliver("INBOX")
+            self._sync()
+            server.set_flags("INBOX", known, r"\Seen")
+
+            with patch.object(FakeImapClient, "search", search_then_a_draft_is_saved):
+                self._sync()
+            self.assertIsNone(self._message(stored[0]).deleted_at)
+
+            self._sync()
+
+        self.assertIsNone(self._message(stored[0]).deleted_at)
+        self.assertTrue(self._message(known).is_read)
+
+    def test_a_message_that_could_not_be_stored_is_fetched_again(self):
+        """Its failure must not be covered by a stored state: the folder
+        would then be skipped, unchanged, with the message still missing."""
+        parse = imap_sync._parse_message
+        failures = [OperationalError("database is locked")]
+
+        def parse_or_fail(raw, account, folder, uid, flags, known_uids=None):
+            if uid == late and failures:
+                raise failures.pop()
+            return parse(raw, account, folder, uid, flags, known_uids=known_uids)
+
+        with (
+            fake_imap() as server,
+            patch.object(imap_sync, "_parse_message", parse_or_fail),
+        ):
+            first = server.deliver("INBOX")
+            self._sync()
+            state = self.folder.remote_state
+            late = server.deliver("INBOX", subject="Late")
+
+            self._sync()
+            self.assertFalse(
+                MailMessage.objects.filter(folder=self.folder, imap_uid=late).exists()
+            )
+            self.assertEqual(
+                MailFolder.objects.get(pk=self.folder.pk).remote_state, state
+            )
+            self.assertEqual(self.folder.last_sync_uid, first)
+
+            self._sync()
+
+        self.assertEqual(self._message(late).subject, "Late")
+
+    def _forgotten_during_the_pass(self):
+        """A pass during which a flag the server refused is kept on a row."""
+        fetch = FakeImapClient.fetch
+        forgotten = []
+
+        def fetch_then_a_flag_is_refused(client, messages, data, modifiers=None):
+            answer = fetch(client, messages, data, modifiers)
+            if not forgotten:
+                forget_remote_state([self.folder.pk])
+                forgotten.append(True)
+            return answer
+
+        with patch.object(FakeImapClient, "fetch", fetch_then_a_flag_is_refused):
+            self._sync()
+        self.assertTrue(forgotten)
+
+    def test_a_state_forgotten_during_a_first_pass_stays_forgotten(self):
+        with fake_imap() as server:
+            server.deliver("INBOX")
+
+            self._forgotten_during_the_pass()
+
+        self.assertIsNone(MailFolder.objects.get(pk=self.folder.pk).remote_state)
+
+    def test_a_state_forgotten_during_a_later_pass_stays_forgotten(self):
+        with fake_imap() as server:
+            server.deliver("INBOX")
+            self._sync()
+            self.assertIsNotNone(self.folder.remote_state)
+            server.deliver("INBOX")
+
+            self._forgotten_during_the_pass()
+
+        self.assertIsNone(MailFolder.objects.get(pk=self.folder.pk).remote_state)
+
+    def test_a_state_forgotten_since_the_folder_was_loaded_is_not_used(self):
+        """An account pass loads its folders once and reaches the last one
+        minutes later: what that copy remembers may have been forgotten."""
+        with fake_imap() as server:
+            uid = server.deliver("INBOX", flags=[r"\Seen"])
+            self._sync()
+            loaded_earlier = MailFolder.objects.get(pk=self.folder.pk)
+            MailMessage.objects.filter(folder=self.folder).update(is_read=False)
+            forget_remote_state([self.folder.pk])
+
+            sync_folder_messages(self.account, loaded_earlier)
+
+        self.assertTrue(self._message(uid).is_read)
+        self.assertIsNotNone(MailFolder.objects.get(pk=self.folder.pk).remote_state)
+
+
 class FlagReadBatchingTests(InboxTestCase):
     """Regression for #1744: one FETCH naming every UID of a large folder is
     a longer command than a server accepts."""
 
     def test_the_flags_of_a_large_folder_are_read_in_several_commands(self):
-        with fake_imap() as server:
+        # Without CONDSTORE every flag is read on every pass.
+        with fake_imap(capabilities=BARE) as server:
             uids = [server.deliver("INBOX") for _ in range(8)]
             self._sync()
             first_pass = len(server.commands)

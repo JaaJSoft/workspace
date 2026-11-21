@@ -5,13 +5,13 @@ from datetime import timedelta
 from itertools import batched
 
 from django.db import IntegrityError, transaction
-from django.db.models import Min
+from django.db.models import F
 from django.utils import timezone as dj_timezone
 from django.utils.dateparse import parse_datetime
-from imapclient.exceptions import IMAPClientAbortError, IMAPClientError
+from imapclient.exceptions import IMAPClientError
 
 from workspace.common.logging import scrub
-from workspace.mail.services.imap_connection import imap_session
+from workspace.mail.services.imap_connection import ConnectionLost, imap_session
 from workspace.mail.services.imap_mailbox import (
     _detect_folder_type,
     _display_name,
@@ -142,23 +142,35 @@ def _trusted_state(folder):
     return known
 
 
-def forget_remote_state(folder):
-    """Make the next pass read `folder` in full.
+def forget_remote_state(folder_ids):
+    """Make the next pass read these folders in full.
 
     For whoever leaves a row saying something the server may not: a flag
     kept here although the server refused it is put right by the next pass,
     which has to look at the mailbox for that.
+
+    Call it once the row is written, in the same transaction when there is
+    one. Earlier, a pass could start, read the row before it changes, and
+    store a state that vouches for it. The version tells a pass already
+    running that what it read is no longer enough (see `_store_state`).
     """
-    type(folder).objects.filter(pk=folder.pk).update(remote_state=None)
-    folder.remote_state = None
+    from ..models import MailFolder
+
+    MailFolder.objects.filter(pk__in=folder_ids).update(
+        remote_state=None, remote_state_version=F("remote_state_version") + 1
+    )
 
 
 def sync_folder_messages(account, folder):
     """Incrementally sync messages for one folder."""
     with imap_session(account) as client:
+        # Read before anything is asked of the server, and not left to the
+        # caller's copy, which a whole account pass may have loaded minutes
+        # ago: a state forgotten since then is one this pass must not use.
+        folder.refresh_from_db(fields=["remote_state", "remote_state_version"])
         try:
             selected = client.select_folder(folder.name, readonly=True)
-        except IMAPClientAbortError:
+        except ConnectionLost:
             raise
         except IMAPClientError as e:
             logger.warning(
@@ -227,8 +239,20 @@ def _read_mailbox(client, account, folder, selected, state, known):
     # would always say "not initial", because the cursor advances below.
     was_initial_sync = folder.last_sync_uid == 0
 
+    # The stored messages, read before the server is asked what it holds
+    # and never after. A message stored while the pass runs (a draft saved,
+    # a concurrent pass importing) would otherwise be missing from an answer
+    # that predates it, be taken for deleted, and stay hidden for good: the
+    # next pass finds its row and does not import it again.
+    local_uids = set(
+        MailMessage.objects.filter(folder=folder, deleted_at__isnull=True).values_list(
+            "imap_uid", flat=True
+        )
+    )
+
     new_message_uuids = []
     error = None
+    complete = True
     try:
         if was_initial_sync:
             remote_uids = sorted(client.search("ALL"))
@@ -237,17 +261,15 @@ def _read_mailbox(client, account, folder, selected, state, known):
             # One SEARCH for both questions: which messages are new, and
             # which of the stored ones are still there. Its command line is
             # the same length whatever the size of the folder.
-            oldest = MailMessage.objects.filter(
-                folder=folder, deleted_at__isnull=True
-            ).aggregate(oldest=Min("imap_uid"))["oldest"]
             first_new = folder.last_sync_uid + 1
-            remote_uids = sorted(
-                client.search(["UID", f"{min(oldest or first_new, first_new)}:*"])
-            )
+            oldest = min(min(local_uids, default=first_new), first_new)
+            remote_uids = sorted(client.search(["UID", f"{oldest}:*"]))
             new_uids = [uid for uid in remote_uids if uid > folder.last_sync_uid]
 
         for batch in _fetch_batches(client, new_uids):
-            new_message_uuids += _import_batch(client, account, folder, batch)
+            imported, stored_all = _import_batch(client, account, folder, batch)
+            new_message_uuids += imported
+            complete = complete and stored_all
             # Saved batch by batch: a pass that dies further on (a worker
             # killed for its memory, a connection lost) resumes here instead
             # of downloading everything again. Not on a first pass, which
@@ -257,7 +279,9 @@ def _read_mailbox(client, account, folder, selected, state, known):
                 folder.save(update_fields=["last_sync_uid", "updated_at"])
 
         # Reconciliation: detect messages deleted/moved by other clients
-        _reconcile_folder(client, folder, remote_uids, changed_since=known_modseq)
+        _reconcile_folder(
+            client, folder, local_uids, remote_uids, changed_since=known_modseq
+        )
     except Exception as e:
         logger.exception("Sync of %s cut short", scrub(folder.name))
         error = e
@@ -266,23 +290,46 @@ def _read_mailbox(client, account, folder, selected, state, known):
 
     _update_folder_counts(folder)
 
-    if error is None:
+    # A message that could not be stored (a locked database, a storage
+    # error on an attachment) is fetched again by the next pass, as long as
+    # there is one: a stored state would let the folder be skipped with the
+    # message still missing.
+    if error is None and complete:
         new_state = None
         if state is not None:
             # CHANGEDSINCE read part of the flags: the last full read stays
             # the one it was.
             read_at = known["read_at"] if known_modseq else dj_timezone.now()
             new_state = {**state, "read_at": str(read_at)}
-        if new_state != folder.remote_state:
-            folder.remote_state = new_state
-            folder.save(update_fields=["remote_state", "updated_at"])
+        _store_state(folder, new_state)
 
     return was_initial_sync, new_message_uuids, error
 
 
+def _store_state(folder, state):
+    """Remember `state` as what the pass that just ended left `folder` in,
+    unless the state was forgotten while it ran.
+
+    Whoever forgot it changed a row this pass may have read too early to
+    put right. Writing the state all the same would vouch for that row.
+    """
+    if state == folder.remote_state:
+        return
+    stored = (
+        type(folder)
+        .objects.filter(pk=folder.pk, remote_state_version=folder.remote_state_version)
+        .update(remote_state=state, updated_at=dj_timezone.now())
+    )
+    if stored:
+        folder.remote_state = state
+
+
 def _import_batch(client, account, folder, batch):
     """Fetch and store the messages `batch` names, moving the folder's
-    cursor (unsaved) past the last one stored. Returns their UUIDs."""
+    cursor (unsaved) past the last one stored.
+
+    Returns their UUIDs, and whether every message fetched was stored.
+    """
     from ..models import MailMessage
 
     fetched = client.fetch(batch, ["FLAGS", "BODY.PEEK[]"])
@@ -297,6 +344,7 @@ def _import_batch(client, account, folder, batch):
     )
 
     new_message_uuids = []
+    stored_all = True
     max_uid = folder.last_sync_uid
     for uid in batch:
         data = fetched.get(uid)
@@ -329,18 +377,20 @@ def _import_batch(client, account, folder, batch):
             if MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
                 max_uid = max(max_uid, uid)
             else:
+                stored_all = False
                 logger.exception(
                     "Failed to parse message UID %d in %s",
                     uid,
                     scrub(folder.name),
                 )
         except Exception:
+            stored_all = False
             logger.exception(
                 "Failed to parse message UID %d in %s", uid, scrub(folder.name)
             )
 
     folder.last_sync_uid = max(folder.last_sync_uid, max_uid)
-    return new_message_uuids
+    return new_message_uuids, stored_all
 
 
 def _flags(fetched):
@@ -494,24 +544,20 @@ def _after_import(account, folder, new_message_uuids, was_initial_sync):
             process_calendar_emails(cal_messages)
 
 
-def _reconcile_folder(client, folder, remote_uids, changed_since=None):
+def _reconcile_folder(client, folder, local_uids, remote_uids, changed_since=None):
     """Remove local messages whose UIDs no longer exist on the IMAP server.
 
     Also updates flags (read/starred) for messages that still exist.
 
-    `remote_uids` are the UIDs the server holds, at least from the oldest
-    stored one up. `changed_since` is the HIGHESTMODSEQ the folder had when
-    its flags were last read in full: with it the server only answers for
-    the messages whose flags moved since (CONDSTORE), and the others keep
-    the flags they have here.
+    `local_uids` are the UIDs stored for the folder, as they were before
+    the server was asked for `remote_uids`: the UIDs it holds, at least
+    from the oldest stored one up. `changed_since` is the HIGHESTMODSEQ the
+    folder had when its flags were last read in full: with it only the
+    messages whose flags moved since are read (CONDSTORE), and the others
+    keep the flags they have here.
     """
     from ..models import MailMessage
 
-    local_msgs = MailMessage.objects.filter(
-        folder=folder,
-        deleted_at__isnull=True,
-    ).values_list("imap_uid", flat=True)
-    local_uids = set(local_msgs)
     if not local_uids:
         return
     remote_uids = set(remote_uids)
@@ -549,12 +595,19 @@ def _reconcile_folder(client, folder, remote_uids, changed_since=None):
     if not present:
         return
 
+    if changed_since:
+        # One SEARCH names the messages whose flags moved, whatever the size
+        # of the folder: usually a handful, often none.
+        changed = client.search(
+            ["UID", f"{min(present)}:*", "MODSEQ", changed_since + 1]
+        )
+        present &= set(changed)
+
     # In commands of bounded length: one naming every UID of a large folder
     # is longer than a server accepts.
-    modifiers = [f"CHANGEDSINCE {changed_since}"] if changed_since else None
     remote_flags = {}
     for batch in batched(sorted(present), UID_BATCH_SIZE, strict=False):
-        for uid, data in client.fetch(batch, ["FLAGS"], modifiers).items():
+        for uid, data in client.fetch(batch, ["FLAGS"]).items():
             if b"FLAGS" in data:
                 remote_flags[uid] = _flags(data)
     if not remote_flags:

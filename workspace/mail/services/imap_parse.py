@@ -4,6 +4,7 @@ import email
 import email.policy
 import logging
 from datetime import UTC, datetime
+from email.utils import getaddresses, parsedate_to_datetime
 
 import nh3
 from django.core.files.base import ContentFile
@@ -149,7 +150,16 @@ def _addresses(msg, name):
     """
     result = []
     for header in _headers(msg, name):
-        for address in getattr(header, "addresses", ()):
+        if isinstance(header, str):
+            # The plain text `_headers` falls back on: read by the older,
+            # simpler parser, which takes what it finds.
+            result += [
+                {"name": _text(display_name), "email": _text(address)}
+                for display_name, address in getaddresses([header])
+                if address
+            ]
+            continue
+        for address in header.addresses:
             # Without a domain the address is whatever stood there, taken as
             # written: `addr_spec` would quote it.
             spec = address.addr_spec if address.domain else address.username
@@ -163,7 +173,14 @@ def _addresses(msg, name):
 def _date(msg):
     """When the message says it was written, else now."""
     headers = _headers(msg, "Date")
-    parsed = getattr(headers[0], "datetime", None) if headers else None
+    parsed = None
+    if headers and isinstance(headers[0], str):
+        try:
+            parsed = parsedate_to_datetime(headers[0])
+        except ValueError:
+            parsed = None
+    elif headers:
+        parsed = headers[0].datetime
     if parsed is None:
         return datetime.now(UTC)
     if parsed.tzinfo is None:

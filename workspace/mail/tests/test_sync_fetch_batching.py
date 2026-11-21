@@ -103,7 +103,7 @@ class SyncFetchBatchingTests(SyncFetchBatchingMixin, TestCase):
 
         self.assertEqual(
             [command[2] for command in server.named("fetch")],
-            [["FLAGS", "BODY.PEEK[]"], ["FLAGS"]],
+            [["FLAGS", "BODY.PEEK[]"]],
         )
         self.assertEqual(self._stored_uids(), [uid])
 

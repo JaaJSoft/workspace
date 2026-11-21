@@ -66,6 +66,11 @@ class _IMAPHandler(socketserver.StreamRequestHandler):
             elif command in (b"SELECT", b"EXAMINE"):
                 self.wfile.write(b"* 0 EXISTS\r\n" + tag + b" OK done\r\n")
             elif command == b"UID":
+                # The Message-ID of the SEARCH arrives as a literal.
+                size = int(re.search(rb"\{(\d+)\}\r\n$", line).group(1))
+                self.wfile.write(b"+ Ready\r\n")
+                server.searched = self.rfile.read(size)
+                self.rfile.readline()
                 self.wfile.write(b"* SEARCH\r\n" + tag + b" OK done\r\n")
             elif command == b"APPEND":
                 server.append_command = line
@@ -148,4 +153,5 @@ class SendOverTheWireTests(TestCase):
         archived = message_from_bytes(imap_server.literal)
         self.assertEqual(archived["Bcc"], "carol@example.com")
         self.assertEqual(archived["Message-ID"], outgoing["Message-ID"])
+        self.assertEqual(imap_server.searched.decode(), outgoing["Message-ID"])
         self.assertTrue(imap_server.literal.endswith(smtp_server.data))

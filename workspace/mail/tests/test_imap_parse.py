@@ -1,6 +1,6 @@
 """Tests for _parse_message in workspace.mail.services.imap_parse."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from email.message import EmailMessage
 from unittest.mock import patch
 
@@ -221,6 +221,40 @@ class HostileMessageTests(ImapParseTests):
         self.assertEqual(msg.subject, "Still here")
         self.assertEqual(msg.from_email, "alice@example.com")
         self.assertEqual(msg.body_text, "Body\r\n")
+
+    def test_addresses_and_date_survive_a_parser_that_chokes_on_them(self):
+        raw = (
+            b"From: Alice Martin <alice@example.com>\r\n"
+            b"To: bob@example.com,\r\n Carol <carol@example.com>\r\n"
+            b"Cc: undisclosed-recipients:;\r\n"
+            b"Date: Thu, 14 May 2026 10:00:00 +0200\r\n"
+            b"\r\nBody\r\n"
+        )
+        get_all = EmailMessage.get_all
+
+        def choke_on_structured_headers(message, name, failobj=None):
+            if name in ("From", "To", "Cc", "Date"):
+                raise IndexError("list index out of range")
+            return get_all(message, name, failobj)
+
+        with patch.object(EmailMessage, "get_all", choke_on_structured_headers):
+            msg = self._parse(raw)
+
+        self.assertEqual(
+            (msg.from_name, msg.from_email), ("Alice Martin", "alice@example.com")
+        )
+        self.assertEqual(
+            msg.to_addresses,
+            [
+                {"name": "", "email": "bob@example.com"},
+                {"name": "Carol", "email": "carol@example.com"},
+            ],
+        )
+        self.assertEqual(msg.cc_addresses, [])
+        self.assertEqual(
+            msg.date,
+            datetime(2026, 5, 14, 10, tzinfo=timezone(timedelta(hours=2))),
+        )
 
     def test_flags_set_the_message_state(self):
         raw = b"From: a@example.com\r\n\r\nHi\r\n"

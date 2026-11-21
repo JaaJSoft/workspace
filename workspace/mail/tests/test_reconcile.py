@@ -65,9 +65,23 @@ class ReconcileFolderMixin:
         return conn
 
 
-def _reconcile(conn, folder):
+def _stored_uids(folder):
+    return set(
+        MailMessage.objects.filter(folder=folder, deleted_at__isnull=True).values_list(
+            "imap_uid", flat=True
+        )
+    )
+
+
+def _reconcile(conn, folder, changed_since=None):
     """Reconcile `folder` with everything the selected mailbox holds."""
-    _reconcile_folder(conn, folder, conn.search("ALL"))
+    _reconcile_folder(
+        conn,
+        folder,
+        _stored_uids(folder),
+        conn.search("ALL"),
+        changed_since=changed_since,
+    )
 
 
 class ReconcileSoftDeleteTests(ReconcileFolderMixin, TestCase):
@@ -344,10 +358,15 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         before = conn.selected.highestmodseq
         conn.server.set_flags(self.folder.name, 200, r"\Seen", r"\Flagged")
 
-        _reconcile_folder(conn, self.folder, conn.search("ALL"), changed_since=before)
+        _reconcile(conn, self.folder, changed_since=before)
 
+        # One SEARCH names what moved, and only that is read.
+        self.assertEqual(
+            conn.server.named("search")[-1],
+            ("search", ["UID", "100:*", "MODSEQ", before + 1]),
+        )
         (fetch,) = conn.server.named("fetch")
-        self.assertEqual(fetch[3], [f"CHANGEDSINCE {before}"])
+        self.assertEqual(fetch[1], [200])
         unchanged = MailMessage.objects.get(imap_uid=100, folder=self.folder)
         self.assertTrue(unchanged.is_read)
         self.assertTrue(unchanged.is_starred)

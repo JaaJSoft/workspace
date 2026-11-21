@@ -1,16 +1,17 @@
 """IMAP per-message operations: flags, delete, move, drafts, sent."""
 
-import contextlib
 import logging
 from email import policy
 from email.parser import BytesHeaderParser
 from itertools import batched
 
 from django.utils import timezone as dj_timezone
-from imapclient.exceptions import IMAPClientAbortError, IMAPClientError
+from imapclient.exceptions import IMAPClientError
+from imapclient.imapclient import literal
 
 from workspace.common.logging import scrub
 from workspace.mail.services.imap_connection import (
+    ConnectionLost,
     append_file,
     imap_session,
     last_response_code,
@@ -52,9 +53,10 @@ def _set_flag(account, message, flag, add):
     """Add or remove an IMAP flag on a message.
 
     Raises when the server refuses the SELECT or the STORE: a caller told
-    nothing would believe the flag reached the server.
+    nothing would believe the flag reached the server. One that keeps the
+    flag on its row all the same owes the sync a `forget_remote_state`.
     """
-    with _flags_written(message.folder), imap_session(account) as client:
+    with imap_session(account) as client:
         client.select_folder(message.folder.name)
         if add:
             client.add_flags([message.imap_uid], [flag], silent=True)
@@ -65,29 +67,13 @@ def _set_flag(account, message, flag, add):
 def mark_uids_read(account, folder, uids):
     """Set ``\\Seen`` on the messages of `folder` carrying these IMAP UIDs.
 
-    Raises when the server refuses the SELECT or a STORE.
+    Raises when the server refuses the SELECT or a STORE, with the same
+    debt to the sync as `_set_flag`.
     """
-    with _flags_written(folder), imap_session(account) as client:
+    with imap_session(account) as client:
         client.select_folder(folder.name)
         for batch in batched(sorted(uids), UID_BATCH_SIZE, strict=False):
             client.add_flags(batch, [SEEN], silent=True)
-
-
-@contextlib.contextmanager
-def _flags_written(folder):
-    """Around a flag change the caller applies to its rows whatever happens.
-
-    When the server did not take it, the rows and the mailbox disagree
-    without the mailbox having changed, and the sync would go on skipping a
-    folder it has every reason to believe untouched.
-    """
-    try:
-        yield
-    except Exception:
-        from workspace.mail.services.imap_sync import forget_remote_state
-
-        forget_remote_state(folder)
-        raise
 
 
 def delete_message(account, message):
@@ -139,7 +125,7 @@ def move_message(account, message, target_folder):
             _expunge(client, uid)
         if copied_uid is None:
             copied_uid = _find_copy(
-                client, target_folder.name, message.message_id, uid_next
+                account, target_folder.name, message.message_id, uid_next
             )
         return copied_uid
 
@@ -148,7 +134,11 @@ def _uid_next(client, mailbox):
     """The UID the next message landing in `mailbox` will get, or None."""
     try:
         return client.folder_status(mailbox, ["UIDNEXT"]).get(b"UIDNEXT")
-    except IMAPClientError, OSError:
+    except ConnectionLost:
+        # Nothing has moved yet: the move fails as it would on any dead
+        # connection, and the session drops this one.
+        raise
+    except IMAPClientError:
         return None
 
 
@@ -164,34 +154,51 @@ def _copied_uid(client, source_uid):
     return None
 
 
-def _find_copy(client, mailbox, message_id, uid_next):
+def _find_copy(account, mailbox, message_id, uid_next):
     """The UID of the one message at or past `uid_next` carrying `message_id`.
 
     The copy just made is the only message that can have both. Anything else
     - no Message-ID to look for, no UIDNEXT to bound the search, two hits -
     answers None rather than guess: a wrong UID would point later flags and
     deletes at another message.
+
+    A lookup that fails answers None too: the message has moved by now, and
+    an error here would report a move that happened as one that did not.
     """
     message_id = message_id.strip()
-    # The header came off the wire: a CR or LF in it would end the SEARCH
-    # line and start a command of the sender's choosing.
-    if (
-        not message_id
-        or not uid_next
-        or not message_id.isascii()
-        or not message_id.isprintable()
-    ):
+    if not message_id or not uid_next or not _searchable(message_id):
         return None
     try:
-        client.select_folder(mailbox, readonly=True)
-        found = client.search(
-            ["UID", f"{uid_next}:*", "HEADER", "Message-ID", message_id]
-        )
+        # A block of its own, so that a connection dying under the lookup is
+        # dropped by the session before the error is swallowed here.
+        with imap_session(account) as client:
+            client.select_folder(mailbox, readonly=True)
+            found = client.search(
+                ["UID", f"{uid_next}:*", "HEADER", "Message-ID", _astring(message_id)]
+            )
     except IMAPClientError, OSError:
         return None
     # "n:*" always matches the highest UID, even when it is below n.
     found = [uid for uid in found if uid >= uid_next]
     return found[0] if len(found) == 1 else None
+
+
+def _astring(value):
+    """`value` as a SEARCH argument no server can read as anything else.
+
+    IMAPClient quotes an argument only when it holds a space, a quote or a
+    backslash. A Message-ID comes off the wire and may hold what an atom
+    cannot: ``x{20}`` announces a literal the server then waits for, and a
+    ``%``, ``*`` or ``]`` is answered BAD. Sent as a literal, the bytes are
+    counted and never interpreted.
+    """
+    return literal(value.encode("ascii"))
+
+
+def _searchable(message_id):
+    """Whether a Message-ID can be looked for at all: a SEARCH without a
+    charset takes ASCII, and no header holds a control character."""
+    return message_id.isascii() and message_id.isprintable()
 
 
 def append_to_sent(account, message_file, msg_id):
@@ -214,7 +221,11 @@ def append_to_sent(account, message_file, msg_id):
 
     with imap_session(account) as client:
         client.select_folder(sent_folder.name, readonly=True)
-        if msg_id and client.search(["HEADER", "Message-ID", msg_id]):
+        if (
+            msg_id
+            and _searchable(msg_id)
+            and client.search(["HEADER", "Message-ID", _astring(msg_id)])
+        ):
             logger.info(
                 "Message already in Sent for %s (auto-copied by server)",
                 scrub(account.email),
@@ -267,7 +278,7 @@ def save_draft(account, raw_message_bytes, old_uid=None):
                 flags=[DRAFT, SEEN],
                 msg_time=dj_timezone.now(),
             )
-        except IMAPClientAbortError:
+        except ConnectionLost:
             raise
         except IMAPClientError as e:
             logger.warning(

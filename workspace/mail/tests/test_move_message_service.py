@@ -9,10 +9,12 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from imapclient.exceptions import IMAPClientError
+from imapclient.exceptions import IMAPClientAbortError, IMAPClientError
+from imapclient.imapclient import literal
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.services.imap_messages import move_message
+from workspace.mail.services.imap_connection import shared_connections
+from workspace.mail.services.imap_messages import mark_read, move_message
 from workspace.mail.tests.imap_fake import BARE, FULL, FakeImapClient, fake_imap
 
 User = get_user_model()
@@ -153,8 +155,63 @@ class MoveMessageTests(TestCase):
         self.assertEqual(move_message(self.account, self.msg, self.archive), COPY_UID)
         self.assertEqual(
             server.named("search"),
-            [("search", ["UID", f"{COPY_UID}:*", "HEADER", "Message-ID", MESSAGE_ID])],
+            [
+                (
+                    "search",
+                    [
+                        "UID",
+                        f"{COPY_UID}:*",
+                        "HEADER",
+                        "Message-ID",
+                        MESSAGE_ID.encode(),
+                    ],
+                )
+            ],
         )
+
+    def test_a_message_id_no_atom_may_hold_is_still_found(self):
+        """Sent bare, ``x{20}`` announces a literal the server then waits
+        for, and ``%``, ``*`` or ``]`` are answered BAD."""
+        for message_id in ("<x{20}@example.com>", "<50%*off]@example.com>", "<(a)@b>"):
+            with self.subTest(message_id):
+                self.msg.message_id = message_id
+                server = self._server(capabilities=BARE, message_id=message_id)
+
+                self.assertEqual(
+                    move_message(self.account, self.msg, self.archive), COPY_UID
+                )
+                (search,) = server.named("search")
+                self.assertIsInstance(search[1][-1], literal)
+
+    def test_a_connection_lost_before_the_move_is_dropped_and_raised(self):
+        self.msg.message_id = MESSAGE_ID
+        server = self._server(message_id=MESSAGE_ID)
+        server.fail("status", IMAPClientAbortError("socket error: EOF"))
+
+        with shared_connections():
+            with self.assertRaises(IMAPClientAbortError):
+                move_message(self.account, self.msg, self.archive)
+            server.recover("status")
+            # The next operation gets a connection of its own, not the dead one.
+            move_message(self.account, self.msg, self.archive)
+
+        self.assertEqual(len(server.connections), 2)
+        self.assertTrue(server.connections[0].closed)
+
+    def test_a_connection_lost_looking_for_the_copy_is_dropped_not_raised(self):
+        """The message has moved by then: the lookup answers None, and the
+        next operation of the block must not inherit the dead connection."""
+        self.msg.message_id = MESSAGE_ID
+        server = self._server(capabilities=BARE, message_id=MESSAGE_ID)
+        server.fail("search", IMAPClientAbortError("socket error: EOF"))
+
+        with shared_connections():
+            self.assertIsNone(move_message(self.account, self.msg, self.archive))
+            mark_read(self.account, self.msg)
+
+        self.assertEqual(len(server.connections), 2)
+        self.assertTrue(server.connections[0].closed)
+        self.assertEqual(len(server.named("add_flags")), 2)
 
     def test_an_older_copy_below_uidnext_is_not_taken(self):
         """``100:*`` matches the highest UID even when it is below 100."""

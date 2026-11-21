@@ -17,10 +17,9 @@ MAIL = Path(__file__).resolve().parents[1]
 
 # imaplib: the wire protocol, without a parser for its answers.
 # email.mime, email.header: the legacy way to build a message and to decode
-# its headers. email.utils' address parsers: the header registry does it.
+# its headers.
 FORBIDDEN_MODULES = ("imaplib", "email.mime", "email.header")
 FORBIDDEN_NAMES = {
-    "email.utils": {"parseaddr", "getaddresses", "parsedate_to_datetime"},
     "email": {"message_from_string"},
 }
 

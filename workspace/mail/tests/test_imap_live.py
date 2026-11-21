@@ -401,6 +401,21 @@ class TriageCases:
             1,
         )
 
+    def test_a_message_id_no_atom_may_hold_does_not_stall_the_move(self):
+        """Sent bare in the SEARCH that looks for the copy, ``{20}`` announces
+        a literal the server waits for until the connection times out."""
+        self.remote.create_folder("Archive")
+        uid = self.deliver("INBOX", "Odd id", message_id="<x{20}%*]@example.com>")
+        self.sync()
+        message = self.message("INBOX", uid)
+
+        move_to_folder(message, self.folder("Archive"))
+
+        message.refresh_from_db()
+        self.assertEqual(message.folder, self.folder("Archive"))
+        self.assertIsNone(message.deleted_at)
+        self.assertEqual(self.remote_uids("Archive"), [message.imap_uid])
+
     def test_a_deleted_message_goes_to_trash_then_away(self):
         uid = self.deliver("INBOX", "Delete me")
         self.sync()

@@ -150,6 +150,29 @@ class BatchActionOnTheServerTests(TwoMessageBatchMixin, TestCase):
             MailMessage.objects.filter(folder=self.inbox, is_starred=False).exists()
         )
 
+    def test_a_refused_flag_makes_the_sync_read_the_folder(self):
+        """The rows say read and the mailbox does not, without the mailbox
+        having changed: taken for untouched, the folder would be skipped."""
+        type(self.inbox).objects.filter(pk=self.inbox.pk).update(
+            remote_state={"highestmodseq": 7}
+        )
+        self.server.fail("add_flags", times=1)
+
+        self._post("mark_read")
+
+        self.inbox.refresh_from_db()
+        self.assertIsNone(self.inbox.remote_state)
+        self.assertEqual(self.inbox.remote_state_version, 1)
+
+    def test_flags_the_server_took_keep_the_remote_state(self):
+        state = {"highestmodseq": 7}
+        type(self.inbox).objects.filter(pk=self.inbox.pk).update(remote_state=state)
+
+        self._post("mark_read")
+
+        self.inbox.refresh_from_db()
+        self.assertEqual(self.inbox.remote_state, state)
+
     def test_one_store_answered_no_reports_unsynced(self):
         self.server.fail("add_flags", times=1)
 

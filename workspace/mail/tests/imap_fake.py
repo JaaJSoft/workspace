@@ -22,6 +22,11 @@ import email.policy
 from unittest.mock import patch
 
 from imapclient.exceptions import CapabilityError, IMAPClientError
+from imapclient.imapclient import literal
+
+# What IMAPClient leaves unquoted in a SEARCH argument although no atom may
+# hold it (RFC 3501, atom-specials).
+_NOT_IN_AN_ATOM = set("(){%*]")
 
 FULL = frozenset({"IMAP4REV1", "ENABLE", "MOVE", "UIDPLUS", "CONDSTORE", "IDLE"})
 # A server with none of the extensions the services look for.
@@ -278,11 +283,20 @@ class FakeImapClient:
                 found = [uid for uid in found if low <= uid <= high]
             elif token == "HEADER":
                 name, value = next(tokens), next(tokens)
+                if not isinstance(value, literal) and set(value) & _NOT_IN_AN_ATOM:
+                    # IMAPClient sends such a value bare, and a real server
+                    # reads it as something else: the start of a literal, a
+                    # wildcard, the end of a list.
+                    raise IMAPClientError(f"SEARCH command error: BAD {value!r}")
+                value = value.decode() if isinstance(value, bytes) else value
                 found = [
                     uid
                     for uid in found
                     if value.lower() in _header(box.messages[uid].raw, name).lower()
                 ]
+            elif token == "MODSEQ":
+                modseq = int(next(tokens))
+                found = [uid for uid in found if box.messages[uid].modseq >= modseq]
             else:
                 raise NotImplementedError(f"search criterion {token!r}")
         return found
@@ -417,7 +431,12 @@ class FakeImapClient:
 
 
 def _header(raw, name):
-    return str(email.message_from_bytes(raw, policy=email.policy.default).get(name, ""))
+    """The header as it was written: a server matches the text, whatever a
+    parser would make of it."""
+    message = email.message_from_bytes(raw, policy=email.policy.default)
+    return " ".join(
+        str(value) for key, value in message.raw_items() if key.lower() == name.lower()
+    )
 
 
 @contextlib.contextmanager

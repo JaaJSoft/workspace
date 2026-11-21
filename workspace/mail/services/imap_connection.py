@@ -122,8 +122,12 @@ def imap_session(account):
 
     Two consequences for the code inside. The selected mailbox is whatever
     the last user of the connection left: select before every command that
-    needs one. And a connection that dies is dropped, so the next block
-    opens a fresh one rather than failing like the one before it.
+    needs one. And the connection only outlives an error known to leave the
+    conversation in order, a command the server refused. Anything else may
+    have cut a command short (a lost connection, a task's time limit
+    falling in the middle of a FETCH), with an answer still on its way that
+    the next command would take for its own: the connection is dropped, and
+    the next block opens a fresh one.
     """
     with shared_connections() as sessions:
         session = sessions.setdefault(account.pk, _Session())
@@ -131,8 +135,11 @@ def imap_session(account):
             session.client = connect_imap(account)
         try:
             yield session.client
-        except ConnectionLost:
-            if session.client is not None:
+        except BaseException as error:
+            refused = isinstance(error, IMAPClientError) and not isinstance(
+                error, ConnectionLost
+            )
+            if not refused and session.client is not None:
                 _close(session.client, logout=False)
                 session.client = None
             raise

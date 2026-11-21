@@ -2,24 +2,42 @@
 # package ecosystems to update and where the package manifests are located.
 # Please see the documentation for all configuration options:
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Version updates are weekly and grouped: each bump PR runs the whole test
+# pipeline, then again on main once merged, and every merge that touches a
+# lockfile rebases (and reruns) the other open bumps. For uv, Actions and
+# Docker, the minor and patch updates of the week share one PR and each major
+# gets a PR of its own, since a major is the one that may need code changes.
+# Groups only apply to version updates (applies-to defaults to
+# version-updates), so security updates still arrive one by one, as soon as
+# the advisory is published.
 
 version: 2
 updates:
-  - package-ecosystem: "uv" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "uv"
+    directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     versioning-strategy: increase
+    groups:
+      python:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "github-actions"
     directory: "/" # Workflows under .github/workflows
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    groups:
+      github-actions:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "docker"
     directory: "/" # Dockerfile location
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    groups:
+      docker:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/scripts/frontend" # Vendored Alpine, Milkdown and Tailwind builds

@@ -168,6 +168,17 @@ class NotificationDetailTests(NotifViewMixin, APITestCase):
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(Notification.objects.filter(pk=notif.pk).exists())
 
+    def test_deleting_an_unread_notification_lowers_the_unread_count(self):
+        from django.core.cache import cache
+
+        from workspace.notifications.services.notifications import get_unread_count
+
+        self.addCleanup(cache.clear)
+        notif = self._make_notif()
+        self.assertEqual(get_unread_count(self.alice), 1)
+        self.client.delete(self._url(notif.pk))
+        self.assertEqual(get_unread_count(self.alice), 0)
+
     def test_delete_nonexistent_returns_404(self):
         import uuid
 

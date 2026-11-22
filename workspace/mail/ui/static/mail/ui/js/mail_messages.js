@@ -53,17 +53,45 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       // quickly could let the late Inbox response overwrite Sent's messages.
       const token = ++this._messagesRequestId;
       const isCurrent = () => token === this._messagesRequestId;
+      // Refetches every page scrolled through, applied only once all answered.
+      const pagesLoaded = Math.max(1, this.currentPage);
       this.loadingMessages = true;
       try {
-        const res = await this._fetch(this._buildMessagesUrl());
-        if (!isCurrent()) return;
-        if (res.ok) {
+        const rows = [];
+        const seen = new Set();
+        let kept = 0;
+        let last = null;
+        for (let page = 1; page <= pagesLoaded; page++) {
+          let res;
+          try {
+            res = await this._fetch(this._buildMessagesUrl(page));
+          } catch (e) {
+            if (!kept) throw e;
+            break;
+          }
+          if (!isCurrent()) return;
+          // A page that fails ends the list there: loadMoreMessages asks
+          // for it again on the next scroll.
+          if (!res.ok) break;
           const data = await res.json();
           if (!isCurrent()) return;
-          this.messages = data.results;
-          this.totalMessages = data.count;
-          this.hasMoreMessages = data.count > this.currentPage * data.page_size;
+          if (page > 1 && !data.results.length) break;
+          // A message arriving between two pages pushes the last row of one
+          // to the top of the next.
+          for (const msg of data.results) {
+            if (seen.has(msg.uuid)) continue;
+            seen.add(msg.uuid);
+            rows.push(msg);
+          }
+          kept = page;
+          last = data;
+          if (data.results.length < data.page_size) break;
         }
+        if (!kept) return;
+        this.messages = rows;
+        this.currentPage = kept;
+        this.totalMessages = last.count;
+        this.hasMoreMessages = last.count > kept * last.page_size;
       } finally {
         // Always clear the spinner, even on early return / network throw.
         // Gated on isCurrent so a stale closure doesn't reset a flag the

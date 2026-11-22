@@ -10,6 +10,7 @@ exactly like one that does not exist.
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -294,7 +295,9 @@ class MessageListApiTests(APITestCase):
         )
         self.assertEqual(response["X-Has-More"], "false")
 
-    def test_without_a_limit_every_message_comes_back(self):
-        response = self.get()
-        self.assertEqual(len(response.data), 12)
-        self.assertNotIn("X-Has-More", response)
+    def test_without_a_limit_one_page_comes_back(self):
+        # A conversation has no size limit: the default page bounds the answer.
+        with patch("workspace.chat.views.messages.PAGE_SIZE", 5):
+            response = self.get()
+        self.assertEqual(len(response.data), 5)
+        self.assertEqual(response["X-Has-More"], "true")

@@ -35,6 +35,7 @@ from ..serializers import (
 from ..services.conversations import get_active_membership, user_conversation_ids
 from ..services.deletion import soft_delete_message
 from ..services.editing import edit_message
+from ..services.message_lists import PAGE_SIZE
 from ..services.notifications import notify_conversation_members
 from ..services.posting import post_message
 from ..services.rendering import render_message_body
@@ -55,8 +56,8 @@ class MessageListView(CacheControlMixin, APIView):
     @extend_schema(
         summary="List messages in a conversation",
         description=(
-            "Newest first. Paged by ?limit and ?offset when ?limit is given; "
-            "the X-Has-More header says whether older messages follow."
+            "Newest first, paged by ?limit (50 when absent) and ?offset; the "
+            "X-Has-More header says whether older messages follow."
         ),
         parameters=[
             OpenApiParameter(name="limit", type=int, required=False),
@@ -98,9 +99,9 @@ class MessageListView(CacheControlMixin, APIView):
         )
 
         paginator = OptInLimitOffsetPagination()
+        # A conversation has no size limit: never serialize all of it.
+        paginator.default_limit = PAGE_SIZE
         page = paginator.paginate_queryset(messages, request, view=self)
-        if page is None:
-            return Response(MessageSerializer(messages, many=True).data)
         return paginator.get_paginated_response(MessageSerializer(page, many=True).data)
 
     @extend_schema(

@@ -109,6 +109,8 @@ window.calendarApp = function calendarApp() {
       nextAfter: null,
       nextAfterId: null,
       loading: false,
+      // A stream reconnection reloading the list in place (refreshAgenda).
+      refreshing: false,
       initialLoaded: false,
       seenIds: new Set(),
     },
@@ -270,7 +272,7 @@ window.calendarApp = function calendarApp() {
 
     resync() {
       if (this.calendar) this.calendar.refetchEvents();
-      this.refetchAgenda();
+      this.refreshAgenda();
     },
 
     // ── View controls ───────────────────────────────────────

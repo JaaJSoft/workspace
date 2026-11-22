@@ -25,10 +25,10 @@ localStorage: { getItem: () => null, setItem: () => {} },
     calendarPollsMixin: () => ({}),
   });
 
-  const calls = { refetchEvents: 0, refetchAgenda: 0 };
+  const calls = { refetchEvents: 0, refreshAgenda: 0 };
   const app = ctx.calendarApp();
   app.calendar = { refetchEvents() { calls.refetchEvents++; } };
-  app.refetchAgenda = () => { calls.refetchAgenda++; };
+  app.refreshAgenda = () => { calls.refreshAgenda++; };
   return { app, calls };
 }
 
@@ -38,7 +38,7 @@ test('resync refetches the grid and the agenda', () => {
   app.resync();
 
   assert.equal(calls.refetchEvents, 1);
-  assert.equal(calls.refetchAgenda, 1);
+  assert.equal(calls.refreshAgenda, 1);
 });
 
 test('resync still refreshes the agenda before FullCalendar has mounted', () => {
@@ -47,5 +47,5 @@ test('resync still refreshes the agenda before FullCalendar has mounted', () => 
   app.calendar = null;
 
   assert.doesNotThrow(() => app.resync());
-  assert.equal(calls.refetchAgenda, 1);
+  assert.equal(calls.refreshAgenda, 1);
 });

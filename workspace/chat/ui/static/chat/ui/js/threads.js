@@ -174,8 +174,9 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid, focusUuid = null) {
     },
 
     // The panel-only repaint, without the chat:refresh-messages echo above.
-    // Used by the chat:refresh-thread listener: a reaction or pin toggled in the main
-    // flow already repainted the flow, so echoing back would fetch it twice.
+    // Used by the chat:refresh-thread and sse:reconnect listeners: a reaction
+    // or pin toggled in the main flow already repainted the flow, and so does
+    // a reconnection, so echoing back would fetch it twice.
     refreshPanelOnly() { return messages._refreshCurrentMessages.call(this); },
 
     // No-op on purpose: the panel's _refreshCurrentMessages already tells the

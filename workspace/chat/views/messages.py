@@ -32,7 +32,7 @@ from ..serializers import (
     MessageSerializer,
     ReactionToggleSerializer,
 )
-from ..services.conversations import get_active_membership
+from ..services.conversations import get_active_membership, user_conversation_ids
 from ..services.deletion import soft_delete_message
 from ..services.editing import edit_message
 from ..services.notifications import notify_conversation_members
@@ -528,19 +528,13 @@ class ReactionToggleView(APIView):
         try:
             message = Message.objects.select_related("conversation").get(
                 uuid=message_id,
+                conversation_id__in=user_conversation_ids(request.user),
                 deleted_at__isnull=True,
             )
         except Message.DoesNotExist:
             return Response(
                 {"detail": gettext("Message not found.")},
                 status=status.HTTP_404_NOT_FOUND,
-            )
-
-        membership = get_active_membership(request.user, message.conversation_id)
-        if not membership:
-            return Response(
-                {"detail": gettext("Not a member of this conversation.")},
-                status=status.HTTP_403_FORBIDDEN,
             )
 
         emoji = serializer.validated_data["emoji"]

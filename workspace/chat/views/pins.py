@@ -12,7 +12,7 @@ from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import Message, PinnedConversation, PinnedMessage
 from ..serializers import PinnedMessageSerializer
-from ..services.conversations import get_active_membership
+from ..services.conversations import get_active_membership, user_conversation_ids
 from ..services.notifications import notify_conversation_members
 
 logger = logging.getLogger(__name__)
@@ -114,28 +114,31 @@ class ConversationPinReorderView(APIView):
         return Response({"status": "ok"})
 
 
+def _member_message(user, message_id):
+    """The message if *user* is an active member of its conversation, else None."""
+    return (
+        Message.objects.select_related("conversation")
+        .filter(uuid=message_id, conversation_id__in=user_conversation_ids(user))
+        .first()
+    )
+
+
+def _message_not_found():
+    return Response(
+        {"detail": gettext("Message not found.")},
+        status=status.HTTP_404_NOT_FOUND,
+    )
+
+
 @extend_schema(tags=["Chat - Messages"])
 class MessagePinToggleView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Pin a message")
     def post(self, request, message_id):
-        try:
-            message = Message.objects.select_related("conversation").get(
-                uuid=message_id
-            )
-        except Message.DoesNotExist:
-            return Response(
-                {"detail": gettext("Message not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        membership = get_active_membership(request.user, message.conversation_id)
-        if not membership:
-            return Response(
-                {"detail": gettext("Not a member of this conversation.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        message = _member_message(request.user, message_id)
+        if message is None:
+            return _message_not_found()
 
         if message.deleted_at:
             return Response(
@@ -161,22 +164,9 @@ class MessagePinToggleView(APIView):
 
     @extend_schema(summary="Unpin a message")
     def delete(self, request, message_id):
-        try:
-            message = Message.objects.select_related("conversation").get(
-                uuid=message_id
-            )
-        except Message.DoesNotExist:
-            return Response(
-                {"detail": gettext("Message not found.")},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        membership = get_active_membership(request.user, message.conversation_id)
-        if not membership:
-            return Response(
-                {"detail": gettext("Not a member of this conversation.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        message = _member_message(request.user, message_id)
+        if message is None:
+            return _message_not_found()
 
         deleted, _ = PinnedMessage.objects.filter(
             conversation=message.conversation,

@@ -14,7 +14,7 @@ from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import MessageAttachment
-from ..services.conversations import get_active_membership
+from ..services.conversations import get_active_membership, user_conversation_ids
 
 logger = logging.getLogger(__name__)
 
@@ -114,22 +114,13 @@ class AttachmentSaveToFilesView(APIView):
 
         try:
             attachment = MessageAttachment.objects.select_related("message").get(
-                uuid=attachment_id
+                uuid=attachment_id,
+                message__conversation_id__in=user_conversation_ids(request.user),
             )
         except MessageAttachment.DoesNotExist:
             return Response(
                 {"detail": gettext("Attachment not found.")},
                 status=status.HTTP_404_NOT_FOUND,
-            )
-
-        membership = get_active_membership(
-            request.user,
-            attachment.message.conversation_id,
-        )
-        if not membership:
-            return Response(
-                {"detail": gettext("Not a member of this conversation.")},
-                status=status.HTTP_403_FORBIDDEN,
             )
 
         from workspace.files.models import File

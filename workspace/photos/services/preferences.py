@@ -36,8 +36,6 @@ TILE_SHAPES = (SQUARE, ORIGINAL)
 # The ``?type=`` token for photos and videos together: needed in a URL only
 # when the user's default is one kind, since no ``?type=`` means the default.
 ALL_TYPES = "all"
-MEDIA_TYPE_CHOICES = (ALL_TYPES, *MediaItem.MediaType.values)
-
 SCOPE_CHOICES = (MINE, ALL, SHARED)
 GROUP_SCOPE_PREFIX = "group:"
 

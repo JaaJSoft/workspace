@@ -638,12 +638,6 @@ class File(models.Model):
             return False
         return self.lock_expires_at and self.lock_expires_at > timezone.now()
 
-    def lock_holder_username(self):
-        """Return the username of the lock holder, or None."""
-        if self.is_locked() and self.locked_by:
-            return self.locked_by.username
-        return None
-
     def _descendant_filter(self, *, include_self=True):
         """This node's subtree, within its own tree only."""
         own = models.Q(pk=self.pk)

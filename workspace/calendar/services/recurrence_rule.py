@@ -454,18 +454,6 @@ def last_occurrence_end(rule_text, dtstart, duration=None, tz=None):
     return last.astimezone(UTC)
 
 
-def from_simple(frequency, interval=1, until=None):
-    """Compose rule text from the web picker's three fields."""
-    if not frequency:
-        return ""
-    parts = [f"FREQ={_SIMPLE_FREQ_INVERSE[frequency]}"]
-    if interval and int(interval) > 1:
-        parts.append(f"INTERVAL={int(interval)}")
-    if until:
-        parts.append(f"UNTIL={_ical_utc(until)}")
-    return "RRULE:" + ";".join(parts)
-
-
 def to_simple(rule_text):
     """Picker-shaped view of *rule_text*, or None when it cannot be expressed.
 

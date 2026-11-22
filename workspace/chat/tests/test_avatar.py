@@ -16,7 +16,6 @@ from workspace.chat.services.avatar import (
     delete_group_avatar,
     get_group_avatar_etag,
     get_group_avatar_path,
-    has_group_avatar,
     process_and_save_group_avatar,
 )
 from workspace.chat.services.conversations import default_group_title
@@ -149,11 +148,6 @@ class GroupAvatarServiceTests(TestCase):
             title="Team",
             created_by=cls.owner,
         )
-
-    def test_has_group_avatar_reflects_flag(self):
-        self.assertFalse(has_group_avatar(self.conversation))
-        self.conversation.has_avatar = True
-        self.assertTrue(has_group_avatar(self.conversation))
 
     def test_process_and_save_group_avatar(self):
         dummy_bytes = b"webp-bytes"

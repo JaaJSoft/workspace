@@ -58,20 +58,6 @@ class ActivityRegistryTests(TestCase):
         with self.assertRaises(ValueError):
             self.registry.register(info)
 
-    def test_get_provider_returns_instance(self):
-        info = ActivityProviderInfo(
-            slug="files",
-            label="Files",
-            icon="hard-drive",
-            provider_cls=StubProvider,
-        )
-        self.registry.register(info)
-        provider = self.registry.get_provider("files")
-        self.assertIsInstance(provider, StubProvider)
-
-    def test_get_provider_unknown_returns_none(self):
-        self.assertIsNone(self.registry.get_provider("unknown"))
-
     def test_get_daily_counts_aggregates(self):
         class ProviderA(StubProvider):
             def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):

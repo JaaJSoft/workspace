@@ -185,11 +185,3 @@ def get_module_settings(user, module: str) -> dict[str, Any]:
     return {
         s.key: s.value for s in UserSetting.objects.filter(user=user, module=module)
     }
-
-
-def get_all_settings(user) -> list[dict]:
-    """Return every setting for *user* as a list of dicts."""
-    return [
-        {"module": s.module, "key": s.key, "value": s.value}
-        for s in UserSetting.objects.filter(user=user)
-    ]

@@ -1,6 +1,5 @@
 import re
 
-import orjson
 from django import template
 from django.utils.html import conditional_escape, format_html_join
 from django.utils.safestring import mark_safe
@@ -83,16 +82,6 @@ def thumbnail_srcset(url):
         else f"{url}{separator}size={size} {size}w"
         for size in THUMBNAIL_SIZES
     )
-
-
-@register.filter
-def to_json(value):
-    """Serialize a value to JSON for use in HTML attributes.
-
-    Output is auto-escaped by Django (" becomes &quot;), which the
-    browser decodes before JavaScript reads dataset.* attributes.
-    """
-    return orjson.dumps(value).decode()
 
 
 @register.filter(needs_autoescape=True)

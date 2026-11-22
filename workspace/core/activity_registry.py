@@ -111,12 +111,6 @@ class ActivityRegistry:
     def get_all(self) -> dict[str, ActivityProviderInfo]:
         return dict(self._providers)
 
-    def get_provider(self, slug: str) -> ActivityProvider | None:
-        info = self._providers.get(slug)
-        if info is None:
-            return None
-        return info.provider_cls()
-
     def get_daily_counts(
         self,
         user_id: int | None,

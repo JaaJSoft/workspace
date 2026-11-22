@@ -40,7 +40,8 @@ KEEPALIVE = ":\n\n"
 TIMEOUT_MS = 15000
 POLL_MS = 50
 
-UNREAD = "Alpine.store('notifications').unread"
+# Undefined rather than an error on a page where Alpine has not started yet.
+UNREAD = "window.Alpine?.store('notifications')?.unread"
 
 COUNT_RECONNECTS = """() => {
   window.__reconnects = 0;

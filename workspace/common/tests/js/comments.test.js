@@ -263,3 +263,17 @@ test('handleMentionKeydown ignores ctrl+enter and inactive state', async () => {
   assert.equal(prevented, 0);
   assert.equal(comp.newBody, '@');
 });
+
+test('hasDraft holds a comment being written or edited', () => {
+  const { comp } = make();
+  assert.equal(comp.hasDraft(), false);
+  comp.newBody = '   ';
+  assert.equal(comp.hasDraft(), false);
+  comp.newBody = 'A comment in progress';
+  assert.equal(comp.hasDraft(), true);
+  comp.newBody = '';
+  comp.startEdit({ uuid: 'c1', body: 'old' });
+  assert.equal(comp.hasDraft(), true);
+  comp.cancelEdit();
+  assert.equal(comp.hasDraft(), false);
+});

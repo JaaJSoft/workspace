@@ -162,6 +162,16 @@ function taskFilterUrl(href, filters) {
 // Swap targets that replace #task-collection, see collectionLoading.
 const COLLECTION_SWAP_TARGETS = ['task-collection', 'project-content'];
 
+// A component holding text a swap would discard says so with hasDraft().
+// Read through Alpine's scope, so an effect calling this tracks every draft.
+function regionHasDraft(root) {
+  if (!root) return false;
+  return [root, ...root.querySelectorAll('[x-data]')].some((el) => {
+    const scope = window.Alpine.$data(el);
+    return typeof scope.hasDraft === 'function' && scope.hasDraft();
+  });
+}
+
 function emptyTaskForm() {
   return {
     title: '',
@@ -387,6 +397,10 @@ function projectBoard(config) {
     formError: '',
     panelTaskUuid: config.initialTask || null,
     _panelGeneration: 0,
+    // Task saves in flight; each one reloads the panel when it lands.
+    _panelSaves: 0,
+    // Re-syncs held back by a draft, by region id (see resync()).
+    _heldResyncs: {},
     filters: emptyTaskFilters(),
     // Filter changes only swap #task-collection, but view navigations and
     // SSE refreshes still swap the whole content, filter bar included; the
@@ -436,7 +450,7 @@ function projectBoard(config) {
 
       // Catch up on board changes made elsewhere while the stream was down
       // (resumed tab, or a bfcache restore after a mobile back).
-      window.addEventListener('sse:reconnect', () => this.refresh());
+      window.addEventListener('sse:reconnect', () => this.resync());
 
       // alpine-ajax marks every swap target aria-busy for the life of its
       // request. Listening on the document, that attribute is what tells a
@@ -681,6 +695,45 @@ function projectBoard(config) {
       // change the open task's panel content: reload it alongside so its
       // status, activity and metadata stay in sync with the cards.
       if (this.panelTaskUuid) this._loadPanel(this.panelTaskUuid);
+    },
+
+    // A swap rebuilds every component of the region it replaces, and a
+    // re-sync is not something the user asked for: a region holding typed
+    // text is left alone until that text is saved, sent or abandoned.
+    resync() {
+      this._resyncRegion('project-content', () => this.refreshContent());
+      if (!this.panelTaskUuid) return;
+      this._resyncRegion('task-panel', () => {
+        // A save in flight reloads the panel itself once it lands.
+        if (this.panelTaskUuid && !this._panelSaves) {
+          this._loadPanel(this.panelTaskUuid);
+        }
+      });
+    },
+
+    _resyncRegion(id, reload) {
+      const root = document.getElementById(id);
+      const held = this._heldResyncs[id];
+      // Still held on the same element: its re-sync covers this one too.
+      if (held && held.root === root) return;
+      if (held) window.Alpine.release(held.watcher);
+      delete this._heldResyncs[id];
+      if (!regionHasDraft(root)) {
+        reload();
+        return;
+      }
+      // An effect re-runs whenever a hasDraft() it read changes. A region
+      // swapped meanwhile is fresh already and never triggers it again.
+      const watcher = window.Alpine.effect(() => {
+        if (regionHasDraft(root)) return;
+        queueMicrotask(() => {
+          window.Alpine.release(watcher);
+          if (this._heldResyncs[id]?.watcher !== watcher) return;
+          delete this._heldResyncs[id];
+          if (root.isConnected) reload();
+        });
+      });
+      this._heldResyncs[id] = { root, watcher };
     },
 
     applyFilters() {
@@ -1280,6 +1333,7 @@ function projectBoard(config) {
     },
 
     async patchTask(uuid, patch) {
+      this._panelSaves++;
       try {
         const resp = await fetch(config.apiBase + '/tasks/' + uuid, {
           method: 'PATCH',
@@ -1300,6 +1354,7 @@ function projectBoard(config) {
         // board cards and reloads whatever panel is open now (nothing if
         // the user closed it meanwhile). If the task vanished, _loadPanel
         // closes the panel (task-deleted-while-open case).
+        this._panelSaves--;
         this.refresh();
       }
     },
@@ -1525,6 +1580,7 @@ function taskPanel() {
     linkSaving: false,
     _linkSearchGeneration: 0,
     sectionsOpen: {},
+    _savedEstimate: '',
     _commentCount: 0,
     _activityCount: 0,
 
@@ -1573,6 +1629,7 @@ function taskPanel() {
         const freshEpics = JSON.parse(epicsEl.textContent);
         this.epics.splice(0, this.epics.length, ...freshEpics);
       }
+      this._savedEstimate = String(this.data.estimate ?? '');
       this._commentCount = Number(this.$el.dataset.commentCount || 0);
       this._activityCount = Number(this.$el.dataset.activityCount || 0);
       // panelSections lives on the board shell (Alpine scope chain), so the
@@ -1605,6 +1662,18 @@ function taskPanel() {
 
     toggleSection(name) {
       this.sectionsOpen[name] = !this.sectionsOpen[name];
+    },
+
+    // What a panel reload would throw away (see projectBoard.resync).
+    hasDraft() {
+      return (
+        this.editing !== null ||
+        this.editingSubtask !== null ||
+        this.newSubtask.trim() !== '' ||
+        this.linkQuery.trim() !== '' ||
+        this.pendingFileLinks.length > 0 ||
+        String(this.data.estimate ?? '') !== this._savedEstimate
+      );
     },
 
     assigneeName(id) {
@@ -2119,6 +2188,7 @@ window.projectBoardHelpers = {
   taskFilterUrl: taskFilterUrl,
   pickLabelColor: pickLabelColor,
   bulkActionIntersection: bulkActionIntersection,
+  regionHasDraft: regionHasDraft,
 };
 
 // --- Per-task watch state (the eye in the task panel header) ---

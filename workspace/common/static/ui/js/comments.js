@@ -28,6 +28,11 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
       await this.loadComments();
     },
 
+    // Text a re-render of the thread would throw away.
+    hasDraft() {
+      return this.newBody.trim() !== '' || this.editingId !== null;
+    },
+
     _url(commentUuid) {
       return commentUuid ? `${this.listUrl}/${commentUuid}` : this.listUrl;
     },

@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.46.0 - Mail & Today
+
+### Highlights
+
+Mail grows up: archive, report spam, forward with attachments and see at a glance which messages you answered, with deleted mail now kept in the Trash. The dashboard opens on a single Today list of everything that needs you today.
+
+### Mail
+
+- **Deleted messages go to the Trash** on your mail server, as the confirmation promised, instead of being erased for good. A message is only deleted permanently from the Trash itself.
+- Archive a message (E), report it as spam or mark it as not spam (!), download it as an .eml file or look at its headers, for one message or a whole selection.
+- Replying marks the original as answered, here and in your other mail apps. A reply arrow shows in the list and a "Replied" mark next to the date, and messages you answered from your phone come in marked too.
+- Forwarding a message carries its attachments: they open in the composer, where you can remove any you don't want to pass on.
+- **Remote images are blocked until you allow them**, for one message or for every message from a sender. Loading them told the sender when and where you read their mail. Messages also show in a sealed frame, so an email can no longer restyle the app or draw a fake sign-in screen over it.
+- Pictures embedded in an email (logos, screenshots pasted into Outlook or Gmail) show inside the message instead of being listed as attachments, and messages sent as HTML only get a preview line, are found by their words and are quoted on reply.
+- Every attachment is imported, including files Apple Mail places in the body and forwarded messages, and the paperclip and the Attachments filter no longer flag newsletters or invitations that have none.
+- New messages in Spam or Trash no longer notify you, and invitations are no longer picked up from Spam, Trash, Sent or Drafts, so a meeting you sent from your phone no longer comes back as one to accept.
+- Folders with accented names can be created and renamed, messages in unusual character sets are imported, very large folders keep their read and starred marks in step, and sent attachments keep their type and their non-English file names.
+- Reply all from the context menu keeps every Cc recipient and quotes the whole message.
+
+### Dashboard
+
+- A new **Today** card lists what needs you today in one place: overdue and urgent tasks and urgent mail first, then today's events, tasks due today, starred mail and unanswered invitations. Quick filters narrow it to the urgent items or to one app. It replaces the event strip and the My Tasks list.
+- The usage popover shows a tile for every module you use, Notes and Projects included, with a cleaner layout.
+- The weather icon switches to night at sunset where the forecast is, not at fixed hours, and a new preference shows temperatures in Celsius or Fahrenheit.
+
+### Calendar
+
+- The agenda view is redesigned as a dated schedule list: a date column, start and end times and a detail line on each row, easier to read in both themes.
+- Subscribed calendars and emailed invitations keep a recurring series whole when one occurrence is moved or cancelled, and cancelling a single occurrence by email cancels only that one. Events from feeds and invitations also keep their attendees.
+
+### Files
+
+- A folder's Modified date now changes when something is added, removed, renamed or moved inside it, like a folder on your computer, so sync clients notice the change.
+- When a file can't be shown in the page (a PDF on Android, a video the browser can't play, a document the editor can't reach), a clear card shows the file with Open and Download buttons, instead of a blank grey frame.
+
+### Notifications
+
+- Notifications reach a phone that was asleep or offline when they were sent, instead of being dropped.
+- A slow push service no longer delays notifications to your other devices.
+
+### Security
+
+- Links, calendar feeds and web pages the server fetches for you can no longer be used to reach services inside the server's own network, and chat no longer reveals whether a message from another conversation exists.
+
+### Fixes
+
+- Signing in to a mail account through a custom single sign-on provider now works.
+- Automatic photo tags and the default import folder are named in your language.
+- AI bots without a picture get the same default avatar everywhere instead of an off-center icon.
+- On a phone, the dashboard's buttons no longer cover your name in the greeting.
+- Load more in the notification list no longer shows the same notifications twice.
+
 ## 0.45.0 - Workspace in French
 
 ### Highlights

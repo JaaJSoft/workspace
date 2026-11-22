@@ -4,6 +4,7 @@ import logging
 
 from celery import shared_task
 
+from workspace.common.logging import scrub
 from workspace.common.task_priority import (
     BACKGROUND_PRIORITY,
     INTERACTIVE_PRIORITY,
@@ -92,7 +93,9 @@ def fetch_link_previews(message_uuid: str, urls: list[str]):
             )
             created_any = True
         except Exception:
-            logger.info("fetch_link_previews: failed to fetch %s", url, exc_info=True)
+            logger.info(
+                "fetch_link_previews: failed to fetch %s", scrub(url), exc_info=True
+            )
             preview.fetch_failed = True
             preview.save()
 

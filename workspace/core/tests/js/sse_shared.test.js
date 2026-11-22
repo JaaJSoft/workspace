@@ -680,7 +680,7 @@ test('a stream that opens again re-syncs every tab', async () => {
   const stream = browser.worker().stream();
   stream.open();
 
-  // EventSource reconnecting on its own, as it does every ten minutes.
+  // EventSource reconnecting on its own, as it does every half hour.
   stream.open();
   await settle();
 
@@ -777,7 +777,7 @@ test('a connection that came back wipes the slate', async () => {
   await openTabs(browser, 1);
   const stream = browser.worker().stream();
 
-  // The server ends every stream after ten minutes: an error, then an opening.
+  // The server ends every stream after half an hour: an error, then an opening.
   for (let i = 0; i < 12; i += 1) {
     stream.stumble();
     stream.open();

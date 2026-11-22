@@ -55,6 +55,11 @@ class SSEProvider(ABC):
         Named in every id the stream sends, before the provider has sent
         anything too: a page resumes from the id of the last event it applied,
         whichever provider that was.
+
+        A stream that ends on purpose names it last, and the page then opens
+        the next one without re-syncing: handed back, the place must leave
+        nothing unsent. A provider started from one is polled as after a
+        notification before its initial events are asked for.
         """
         return None
 

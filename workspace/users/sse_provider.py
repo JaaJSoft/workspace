@@ -22,6 +22,9 @@ class PresenceSSEProvider(SSEProvider):
         self._last_check = 0
 
     def get_initial_events(self):
+        # Pages only send their ids again when they re-sync, which a stream
+        # that follows another one on purpose does not ask of them.
+        presence_stream.keep_watching(self.user.id)
         self._watched = presence_stream.watched_user_ids(self.user.id)
         self._sent = presence_stream.statuses_of(self._watched)
         self._last_check = time.monotonic()

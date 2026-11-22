@@ -20,9 +20,8 @@ class AIStreamSSEProvider(SSEProvider):
     under way. ``get_initial_events`` queries once per connection, to hand a
     fresh page the state it could not have witnessed.
 
-    Events carry no SSE id on purpose: Last-Event-Id is shared by all
-    providers on the stream and the chat provider resolves it as a message
-    UUID for replay; steps are fire-and-forget and need no replay.
+    Events carry no SSE id on purpose: steps are fire-and-forget, and a
+    stream that starts is handed the ones still under way.
     """
 
     def __init__(self, user, last_event_id):

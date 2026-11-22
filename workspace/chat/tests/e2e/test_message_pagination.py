@@ -159,8 +159,8 @@ class MessagePaginationTests(PlaywrightTestCase):
         )
 
     def test_a_stream_reconnection_keeps_the_older_pages_and_the_message_read(self):
-        """The stream script dispatches sse:reconnect on every reopening (at
-        least every ten minutes). Its refresh replaced a list grown upwards
+        """The stream script dispatches sse:reconnect each time the stream
+        comes back after being lost. Its refresh replaced a list grown upwards
         with the latest page, dropping the older messages being read."""
         self._open_conversation()
         flow = self.page.locator("#messages-container")

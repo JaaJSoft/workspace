@@ -16,8 +16,8 @@ class SSELastEventIDCrossConversationTests(ChatTestMixin, TestCase):
 
     A foreign message UUID used to leak its ``created_at`` into ``self._since``,
     which then suppressed replay of the user's own messages older than that
-    timestamp - a cross-conversation timing oracle. The fix scopes the lookup
-    to ``self._member_conv_ids`` so a foreign UUID falls back to ``timezone.now()``.
+    timestamp - a cross-conversation timing oracle. A message id is no longer
+    a place to resume from at all: it falls back to ``timezone.now()``.
     """
 
     def test_foreign_last_event_id_falls_back_to_now(self):

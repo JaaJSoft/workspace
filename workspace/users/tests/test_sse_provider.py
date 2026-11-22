@@ -39,6 +39,21 @@ class PresenceSSEProviderTests(PresenceStreamResetMixin, TestCase):
     def _elapse(provider):
         provider._last_check -= POLL_INTERVAL + 1
 
+    def test_a_stream_that_starts_keeps_the_watch_list_alive(self):
+        """Pages send their ids again only when they re-sync, which a stream
+        that follows another on purpose does not ask of them: left to its
+        hour, the list would lapse under a tab that stays open."""
+        presence_stream.watch(self.user.id, [101])
+
+        with mock.patch.object(
+            presence_stream, "cache", wraps=presence_stream.cache
+        ) as cache:
+            self._connect()
+
+        cache.touch.assert_called_once_with(
+            presence_stream._watch_key(self.user.id), presence_stream.WATCH_TTL
+        )
+
     def test_snapshot_carries_only_watched_users(self):
         presence_stream.watch(self.user.id, [101, 104])
         self.instance = {

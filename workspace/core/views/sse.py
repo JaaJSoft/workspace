@@ -50,10 +50,17 @@ SSE_PUBSUB_MESSAGES = safe_counter(
     "several for one provider counting once",
 )
 
-# Force a periodic reconnect so workers/providers cycle and stale state clears.
-# Aligned with the nginx ingress proxy-read-timeout (600s); the browser
-# auto-reconnects via EventSource and resumes from Last-Event-Id.
+# A stream is ended on purpose now and then. The request that follows goes
+# through the middlewares again, so a session that ended, an account disabled
+# or a module hidden stops being served, and its providers start with an empty
+# memory. The page is not made to re-sync for it: the stream ends by naming
+# where each provider stands (_rotation), and the next one resumes there.
+# Aligned with the nginx ingress proxy-read-timeout (600s).
 _MAX_CONNECTION_SECONDS = 600
+
+# What a provider is polled with when nothing notified it and it has to look
+# all the same: any value but None reads as a notification.
+_DIRTY = "dirty"
 
 # Upper bound on an incoming Last-Event-Id before it is ignored outright.
 _MAX_CURSOR_CHARS = 512
@@ -284,6 +291,40 @@ def _poll_provider(slug, provider, cache_value, user_id, cursors):
         )
 
 
+def _catch_up(providers, resumed, user_id, cursors):
+    """Yield what the providers handed a place have not sent from there.
+
+    Whatever was notified between the stream this one follows and its own
+    subscription woke nobody. The providers that keep a place and were handed
+    one are polled as after a notification, ahead of the initial events, which
+    then describe the state all of it leaves.
+    """
+    for slug, provider in providers.items():
+        # An id some event carried is in the cursor too, and is no place.
+        if slug in resumed and provider.resume_point() is not None:
+            yield from _poll_provider(slug, provider, _DIRTY, user_id, cursors)
+
+
+def _rotation(providers, cursors):
+    """What a stream ends with once its budget is spent.
+
+    An event of its own kind, whose id names where every provider stands by
+    now. The page opens the next stream from it at once and tells nobody
+    (sse.js): what this one left unsent is sent by the next (_catch_up), so
+    there is nothing to re-sync.
+    """
+    for slug, provider in providers.items():
+        resume_point = provider.resume_point()
+        if resume_point is not None:
+            cursors[slug] = resume_point
+    lines = ["event: rotate"]
+    if cursors:
+        lines.append(f"id: {encode_stream_cursor(cursors)}")
+    # A browser dispatches no event that carries no data.
+    lines.extend(["data: {}", "", ""])
+    return "\n".join(lines)
+
+
 def _event_stream(request):
     """Router: use Redis Pub/Sub when available, fall back to cache polling."""
     hub = get_hub()
@@ -298,6 +339,7 @@ def _event_stream_pubsub(request, hub):
     user = request.user
     user_id = user.id
     cursors = _incoming_cursors(request)
+    resumed = set(cursors)
 
     providers = _init_providers(user, cursors)
 
@@ -306,6 +348,7 @@ def _event_stream_pubsub(request, hub):
     subscription = hub.subscribe(user_id)
     SSE_CONNECTIONS.inc()
     try:
+        yield from _catch_up(providers, resumed, user_id, cursors)
         yield from _emit_initial_events(providers, user_id, cursors)
 
         start_time = time.monotonic()
@@ -314,6 +357,7 @@ def _event_stream_pubsub(request, hub):
         while True:
             if time.monotonic() - start_time > _MAX_CONNECTION_SECONDS:
                 SSE_FORCED_RECONNECTS.labels(transport="pubsub").inc()
+                yield _rotation(providers, cursors)
                 return
 
             # A stream spends most of its life waiting here: its database
@@ -351,6 +395,7 @@ def _event_stream_polling(request):
     user = request.user
     user_id = user.id
     cursors = _incoming_cursors(request)
+    resumed = set(cursors)
 
     providers = _init_providers(user, cursors)
 
@@ -360,6 +405,7 @@ def _event_stream_polling(request):
     last_check = time.time()
     last_keepalive = time.time()
 
+    yield from _catch_up(providers, resumed, user_id, cursors)
     yield from _emit_initial_events(providers, user_id, cursors)
 
     SSE_CONNECTIONS.inc()
@@ -368,6 +414,7 @@ def _event_stream_polling(request):
             elapsed = time.time() - start_time
             if elapsed > _MAX_CONNECTION_SECONDS:
                 SSE_FORCED_RECONNECTS.labels(transport="polling").inc()
+                yield _rotation(providers, cursors)
                 return
 
             now = time.time()

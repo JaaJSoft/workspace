@@ -48,6 +48,9 @@
     // The first opening is silent when the page has just rendered: listeners
     // that re-fetch on a reopening would do so for nothing.
     let firstOpening = !start.late;
+    // So is the one that follows a rotation: the server ended the stream on
+    // purpose and said where it stood, so nothing was missed.
+    let rotating = false;
 
     function close() {
       clearTimeout(retryTimer);
@@ -65,10 +68,21 @@
         if (e.lastEventId) lastEventId = e.lastEventId;
         onEvent(lastEventId, JSON.parse(e.data));
       });
+      // The stream has run its time (ten minutes). The next one is opened
+      // here, from where this one says it stood, rather than by the browser:
+      // it would wait first, and nobody would know the opening from one that
+      // follows a failure.
+      opened.addEventListener('rotate', function (e) {
+        if (source !== opened) return;
+        if (e.lastEventId) lastEventId = e.lastEventId;
+        connect();
+        rotating = true;
+      });
       opened.onerror = function () {
         if (source !== opened) return;
         // Whatever opens after a failure opens late.
         firstOpening = false;
+        rotating = false;
         // CLOSED: an answer the browser never retries after, which is anything
         // but a 200 event stream - a 502 while the server restarts, for one.
         // Otherwise it reconnects on its own, until that failed too often.
@@ -81,8 +95,9 @@
       opened.onopen = function () {
         errorCount = 0;
         retryDelay = RETRY_MIN_MS;
-        if (!firstOpening) onReopen();
+        if (!firstOpening && !rotating) onReopen();
         firstOpening = false;
+        rotating = false;
       };
     }
 

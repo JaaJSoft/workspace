@@ -1,11 +1,10 @@
 import logging
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.db.models import Prefetch
 from django.utils import timezone
 
-from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.sse_registry import SSEProvider
 
 from .models import (
@@ -22,6 +21,27 @@ from .services.conversations import get_unread_counts, user_conversation_ids
 
 logger = logging.getLogger(__name__)
 
+# A row is stamped before its transaction commits, so a poll looks this far
+# back from where it stands.
+_IN_FLIGHT = timedelta(seconds=5)
+# How far before the last look of the stream it follows a resumed stream looks
+# for messages at most: with none sent for long, a conversation joined since
+# would otherwise hand over its history as new messages.
+_RESUME_REACH = timedelta(minutes=1)
+# Messages sent by one poll at most, oldest first.
+_MESSAGE_BATCH = 50
+
+
+def _parse_resume_point(raw):
+    """``(since, polled_at)`` out of a resume point, None out of anything else."""
+    try:
+        since, polled_at = (datetime.fromisoformat(part) for part in raw.split("|"))
+    except AttributeError, TypeError, ValueError:
+        return None
+    if since.tzinfo is None or polled_at.tzinfo is None:
+        return None
+    return since, polled_at
+
 
 class ChatSSEProvider(SSEProvider):
     def __init__(self, user, last_event_id):
@@ -29,25 +49,16 @@ class ChatSSEProvider(SSEProvider):
 
         self._member_conv_ids = set(user_conversation_ids(user))
 
-        # Determine "since" timestamp. A malformed Last-Event-ID header
-        # (non-UUID) must not crash the SSE stream with a ValidationError
-        # -> 500: fall back to "now" just like an unknown UUID does.
-        # Scope the lookup to this user's member conversations so a foreign
-        # message UUID cannot leak its created_at into self._since (which
-        # would suppress replay of the user's own messages older than that
-        # timestamp - a cross-conversation timing oracle).
-        last_event_uuid = parse_uuid_or_none(last_event_id) if last_event_id else None
-        if last_event_uuid is not None:
-            msg = (
-                Message.objects.filter(
-                    uuid=last_event_uuid, conversation_id__in=self._member_conv_ids
-                )
-                .only("created_at")
-                .first()
-            )
-            self._since = msg.created_at if msg is not None else timezone.now()
-        else:
-            self._since = timezone.now()
+        # Where the stream this one follows stood (resume_point). Anything
+        # else, a malformed id included, starts from now. Neither date is
+        # taken ahead of the clock: nothing written until then would be sent.
+        now = timezone.now()
+        since, polled_at = _parse_resume_point(last_event_id) or (now, now)
+        # When the database was last looked at and held nothing more to send.
+        self._polled_at = min(polled_at, now)
+        self._resumed_at = self._polled_at
+        # Messages are sent from the last one sent on.
+        self._since = min(max(since, self._polled_at - _RESUME_REACH), now)
 
         self._conv_titles = self._current_titles()
         self._seen_message_ids = set()
@@ -58,8 +69,11 @@ class ChatSSEProvider(SSEProvider):
         self._seen_link_preview_ids = set()
         self._seen_interaction_keys = set()
         self._last_unread_push = 0
-        self._last_read_check = timezone.now()
+        self._last_read_check = self._polled_at
         self._last_typing_state = {}
+
+    def resume_point(self):
+        return f"{self._since.isoformat()}|{self._polled_at.isoformat()}"
 
     def _current_titles(self):
         return dict(
@@ -97,6 +111,10 @@ class ChatSSEProvider(SSEProvider):
         # Only query for new events if dirty flag changed
         if cache_value is None:
             return events
+
+        # Taken before the queries: what commits while they run is looked for
+        # again by whoever resumes from here.
+        looked_at = timezone.now()
 
         # Push updated unread counts (at most every 5 seconds)
         now = time.time()
@@ -153,8 +171,12 @@ class ChatSSEProvider(SSEProvider):
                 "attachments",
                 "link_previews__preview",
             )
-            .order_by("created_at")[:50]
+            .order_by("created_at")[:_MESSAGE_BATCH]
         )
+        if len(new_messages) < _MESSAGE_BATCH:
+            # A full batch leaves messages behind, and a stream resumed from
+            # this look would step over them.
+            self._polled_at = looked_at
         for msg in new_messages:
             self._seen_message_ids.add(msg.uuid)
             data = {
@@ -162,15 +184,21 @@ class ChatSSEProvider(SSEProvider):
                 "conversation_id": str(msg.conversation_id),
                 "message": MessageSerializer(msg).data,
             }
-            events.append(("message", data, str(msg.uuid)))
             self._since = max(self._since, msg.created_at)
+            # Its id is where the stream stands once it is sent.
+            events.append(("message", data, self.resume_point()))
+
+        # Changes are looked for from the last message on, as messages are,
+        # but never from before the stream this one follows last looked: it
+        # sent those already.
+        changes_since = max(self._since, self._resumed_at) - _IN_FLIGHT
 
         # Edited messages
         edited_messages = (
             Message.objects.filter(
                 conversation_id__in=self._member_conv_ids,
                 edited_at__isnull=False,
-                edited_at__gt=self._since - timedelta(seconds=5),
+                edited_at__gt=changes_since,
             )
             .exclude(author_id=user_id)
             .select_related("author")
@@ -196,7 +224,7 @@ class ChatSSEProvider(SSEProvider):
             MessageInteraction.objects.filter(
                 message__conversation_id__in=self._member_conv_ids,
                 interacted_at__isnull=False,
-                interacted_at__gt=self._since - timedelta(seconds=5),
+                interacted_at__gt=changes_since,
             )
             .exclude(interacted_by_id=user_id)
             .select_related("message", "interacted_by")
@@ -220,7 +248,7 @@ class ChatSSEProvider(SSEProvider):
             Message.objects.filter(
                 conversation_id__in=self._member_conv_ids,
                 deleted_at__isnull=False,
-                deleted_at__gt=self._since - timedelta(seconds=5),
+                deleted_at__gt=changes_since,
             )
             .exclude(author_id=user_id)
             .order_by("deleted_at")[:50]
@@ -241,7 +269,7 @@ class ChatSSEProvider(SSEProvider):
         new_reactions = (
             Reaction.objects.filter(
                 message__conversation_id__in=self._member_conv_ids,
-                created_at__gt=self._since - timedelta(seconds=5),
+                created_at__gt=changes_since,
             )
             .exclude(user_id=user_id)
             .exclude(uuid__in=self._seen_reaction_ids)
@@ -267,7 +295,7 @@ class ChatSSEProvider(SSEProvider):
         new_pins = (
             PinnedMessage.objects.filter(
                 conversation_id__in=self._member_conv_ids,
-                created_at__gt=self._since - timedelta(seconds=5),
+                created_at__gt=changes_since,
             )
             .exclude(pinned_by_id=user_id)
             .exclude(uuid__in=self._seen_pin_ids)
@@ -291,7 +319,7 @@ class ChatSSEProvider(SSEProvider):
         new_link_previews = (
             MessageLinkPreview.objects.filter(
                 message__conversation_id__in=self._member_conv_ids,
-                created_at__gt=self._since - timedelta(seconds=5),
+                created_at__gt=changes_since,
             )
             .exclude(uuid__in=self._seen_link_preview_ids)
             .values_list("message__conversation_id", flat=True)
@@ -302,7 +330,7 @@ class ChatSSEProvider(SSEProvider):
             recent_lp_ids = set(
                 MessageLinkPreview.objects.filter(
                     message__conversation_id__in=lp_conv_ids,
-                    created_at__gt=self._since - timedelta(seconds=5),
+                    created_at__gt=changes_since,
                 ).values_list("uuid", flat=True)
             )
             self._seen_link_preview_ids |= recent_lp_ids

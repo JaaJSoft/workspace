@@ -1,11 +1,12 @@
 """Tests for workspace.core.sse global SSE stream generators.
 
 Validates that both the Pub/Sub and polling generators honor the
-_MAX_CONNECTION_SECONDS budget — they must return cleanly so the browser
-can auto-reconnect, and the finally blocks must run (pubsub cleanup,
-Prometheus gauge decrement).
+_MAX_CONNECTION_SECONDS budget - they must end by saying where they stand, so
+the page opens the next stream there, and the finally blocks must run (pubsub
+cleanup, Prometheus gauge decrement).
 """
 
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -27,6 +28,24 @@ User = get_user_model()
 def _sample(name, labels=None):
     """Return the current value of a Prometheus sample, or 0 if missing."""
     return REGISTRY.get_sample_value(name, labels or {}) or 0.0
+
+
+# What a stream ends with when no provider keeps a place.
+BARE_ROTATION = "event: rotate\ndata: {}\n\n"
+TRANSPORTS = ("pubsub", "polling")
+
+
+def _placeless():
+    """A provider that keeps no place, as most do."""
+    provider = MagicMock()
+    provider.resume_point.return_value = None
+    provider.get_initial_events.return_value = []
+    provider.poll.return_value = []
+    return provider
+
+
+def _event_id(chunk):
+    return next(line[4:] for line in chunk.split("\n") if line.startswith("id: "))
 
 
 def _fake_hub(*notifications):
@@ -55,7 +74,7 @@ class StreamMaxDurationTests(TestCase):
             chunks = list(sse._event_stream_polling(self.request))
 
         # No providers -> no initial events; budget exhausted -> exit before any keepalive/poll.
-        self.assertEqual(chunks, [])
+        self.assertEqual(chunks, [BARE_ROTATION])
 
     def test_pubsub_stream_returns_and_cleans_up_when_max_duration_reached(self):
         hub = _fake_hub()
@@ -66,7 +85,7 @@ class StreamMaxDurationTests(TestCase):
         ):
             chunks = list(sse._event_stream_pubsub(self.request, hub))
 
-        self.assertEqual(chunks, [])
+        self.assertEqual(chunks, [BARE_ROTATION])
         # finally block must run: the subscription is closed as it was opened.
         hub.subscribe.assert_called_once_with(self.user.id)
         hub.subscribe.return_value.close.assert_called_once()
@@ -80,7 +99,7 @@ class StreamMaxDurationTests(TestCase):
         hub.subscribe.side_effect = lambda user_id: (
             order.append("subscribe") or subscription
         )
-        provider = MagicMock()
+        provider = _placeless()
         provider.get_initial_events.side_effect = lambda: order.append("initial") or []
 
         with (
@@ -162,8 +181,7 @@ class MetricsTests(TestCase):
 
     def test_pubsub_stream_increments_pubsub_messages_on_real_message(self):
         # One notification, then nothing; budget cuts the loop on the 2nd iter.
-        provider = MagicMock()
-        provider.poll.return_value = []
+        provider = _placeless()
         hub = _fake_hub({"chat": True})
 
         before = _sample("sse_pubsub_messages_total")
@@ -188,8 +206,7 @@ class MetricsTests(TestCase):
         self.assertIsNotNone(provider.poll.call_args.args[0])
 
     def test_pubsub_stream_polls_a_clean_wake_up_like_a_timer_tick(self):
-        provider = MagicMock()
-        provider.poll.return_value = []
+        provider = _placeless()
         times = iter([0.0, 0.0, 999.0, 999.0, 999.0])
         with (
             patch.object(sse, "_MAX_CONNECTION_SECONDS", 1),
@@ -269,6 +286,123 @@ class StreamDatabaseConnectionTests(TestCase):
             list(sse._event_stream_polling(self.request))
 
         self.assertEqual(calls, ["release", "wait"])
+
+
+class StreamRotationTests(TestCase):
+    """A stream that has run its time is followed by another without the page
+    re-syncing anything: the first ends by naming where every provider stands,
+    and the second, opened from there, sends what the first left unsent."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="sse-rotation", password="p")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _stream(self, transport, *, providers=None, cursors=None):
+        """What a stream writes when its time is up as soon as it starts.
+
+        With the registered providers unless handed others. ``cursors`` is the
+        place the page says it stands at.
+        """
+        query = {"last_event_id": sse.encode_stream_cursor(cursors)} if cursors else {}
+        request = RequestFactory().get("/api/v1/stream", query)
+        request.user = self.user
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(sse, "_MAX_CONNECTION_SECONDS", -1))
+            stack.enter_context(patch("workspace.core.views.sse.time.sleep"))
+            if providers is not None:
+                stack.enter_context(
+                    patch.object(sse, "_init_providers", return_value=providers)
+                )
+            if transport == "pubsub":
+                return list(sse._event_stream_pubsub(request, _fake_hub()))
+            return list(sse._event_stream_polling(request))
+
+    def test_a_stream_out_of_time_ends_by_naming_where_its_providers_stand(self):
+        """With the registered providers: one that learns to keep a place is
+        named like the others."""
+        for transport in TRANSPORTS:
+            with self.subTest(transport=transport):
+                last = self._stream(transport)[-1]
+
+                self.assertTrue(last.startswith("event: rotate\n"))
+                named = sse.decode_stream_cursor(_event_id(last))
+                self.assertLessEqual({"files", "chat"}, set(named))
+                self.assertNotIn("notifications", named)
+
+    def test_the_rotation_names_where_each_provider_stands_by_then(self):
+        moved = MagicMock()
+        moved.resume_point.return_value = "12"
+        # "ai" was left by an event that carried an id: its provider keeps no
+        # place, and what the page holds for it is not to be lost.
+        cursors = {"files": "7", "ai": "task-1"}
+
+        frame = sse._rotation({"files": moved, "notifications": _placeless()}, cursors)
+
+        self.assertEqual(
+            sse.decode_stream_cursor(_event_id(frame)), {"files": "12", "ai": "task-1"}
+        )
+
+    def test_the_rotation_carries_data(self):
+        """A browser dispatches no event that has none."""
+        self.assertEqual(sse._rotation({}, {}), BARE_ROTATION)
+
+    def test_a_provider_handed_a_place_is_polled_ahead_of_its_initial_events(self):
+        """Nobody was subscribed between the two streams: what was notified
+        then is only found by looking."""
+        for transport in TRANSPORTS:
+            with self.subTest(transport=transport):
+                resumed = _placeless()
+                resumed.resume_point.return_value = "somewhere"
+                # Named in the cursor by an event that carried an id.
+                named = _placeless()
+                other = _placeless()
+
+                self._stream(
+                    transport,
+                    providers={"chat": resumed, "ai": named, "notifications": other},
+                    cursors={"chat": "somewhere", "ai": "task-1"},
+                )
+
+                asked = [
+                    call[0]
+                    for call in resumed.method_calls
+                    if call[0] != "resume_point"
+                ]
+                self.assertEqual(asked, ["poll", "get_initial_events"])
+                # As after a notification, not as on a timer tick.
+                self.assertIsNotNone(resumed.poll.call_args.args[0])
+                named.poll.assert_not_called()
+                other.poll.assert_not_called()
+
+    def test_a_stream_that_follows_none_looks_for_nothing(self):
+        """A page that has just rendered reflects all there was to find."""
+        for transport in TRANSPORTS:
+            with self.subTest(transport=transport):
+                provider = _placeless()
+                provider.resume_point.return_value = "somewhere"
+
+                chunks = self._stream(transport, providers={"chat": provider})
+
+                self.assertEqual(len(chunks), 1, "nothing but the rotation")
+                provider.poll.assert_not_called()
+
+    def test_what_was_queued_between_two_streams_is_sent_by_the_second_once(self):
+        for transport in TRANSPORTS:
+            with self.subTest(transport=transport):
+                first = self._stream(transport)
+                push_user_event("files", self.user.id, {"type": "lock_released"})
+                second = self._stream(
+                    transport, cursors=sse.decode_stream_cursor(_event_id(first[-1]))
+                )
+
+                def released(chunks):
+                    names = [payload.get("event") for payload in _payloads(chunks)]
+                    return names.count("files.lock_released")
+
+                self.assertEqual((released(first), released(second)), (0, 1))
 
 
 class StreamConstantTests(TestCase):

@@ -110,6 +110,13 @@ function eventSourceFor(owner) {
       this.listeners.sse({ data: JSON.stringify(payload), lastEventId: this.lastEventId });
     }
 
+    /** The server ends the stream on purpose, saying where it stood. */
+    rotate(id) {
+      this._alive();
+      if (id) this.lastEventId = id;
+      this.listeners.rotate({ data: '{}', lastEventId: this.lastEventId });
+    }
+
     /** A connection lost: the browser reconnects on its own. */
     stumble() {
       this._alive();

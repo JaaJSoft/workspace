@@ -29,8 +29,8 @@ INSTANCE_STATUSES_TTL = 5  # seconds
 # Oldest ids drop out first: a long-lived session keeps following what it
 # displayed recently, not everything it ever came across.
 WATCH_LIMIT = 1000
-# Refreshed on every write; the page re-sends its ids on each stream reconnect
-# (at most every 10 minutes), so an open tab never lets it lapse.
+# Refreshed on every write and by every stream that starts, which one does at
+# least every ten minutes: an open tab never lets it lapse.
 WATCH_TTL = 3600  # seconds
 # Upper bound on one request, so a single call stays a bounded lookup.
 MAX_IDS_PER_REQUEST = 500
@@ -126,6 +126,11 @@ def watch(user_id: int, user_ids: list[int]) -> bool:
     merged = [uid for uid in current if uid not in added] + list(added)
     cache.set(key, merged[-WATCH_LIMIT:], WATCH_TTL)
     return not added.keys() <= set(current)
+
+
+def keep_watching(user_id: int) -> None:
+    """Push back the expiry of *user_id*'s watch list: a stream follows it."""
+    cache.touch(_watch_key(user_id), WATCH_TTL)
 
 
 def watched_user_ids(user_id: int) -> set[int]:

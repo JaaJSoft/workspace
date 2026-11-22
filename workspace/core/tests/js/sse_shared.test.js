@@ -680,12 +680,88 @@ test('a stream that opens again re-syncs every tab', async () => {
   const stream = browser.worker().stream();
   stream.open();
 
-  // EventSource reconnecting on its own, as it does every ten minutes.
+  // EventSource reconnecting on its own, after a connection it lost.
   stream.open();
   await settle();
 
   assert.deepStrictEqual(first.types(), ['sse:reconnect']);
   assert.deepStrictEqual(second.types(), ['sse:reconnect']);
+});
+
+// -- a stream the server ends on purpose ---------------------------------------
+
+test('a stream the server rotates is opened again at once, where it said it stood, and no tab is told', async () => {
+  const browser = new FakeBrowser();
+  const [first, second] = await openTabs(browser, 2);
+  const worker = browser.worker();
+  const ended = worker.stream();
+  ended.open();
+  ended.deliver(OPERATION, 'cursor-7');
+  await settle();
+  first.events.length = 0;
+  second.events.length = 0;
+
+  // Its ten minutes are up: it names where every provider stands, and ends.
+  ended.rotate('cursor-9');
+  assert.equal(ended.closed, true, 'the browser is not left to reconnect in its own time');
+  assert.equal(worker.sources.length, 2);
+  assert.equal(worker.stream().url, from(STREAM, 'cursor-9'));
+
+  worker.stream().open();
+  worker.stream().deliver(COUNT_5);
+  await settle();
+  assert.deepStrictEqual(first.types(), ['sse:notifications.count'], 'nothing was missed: nothing to re-sync');
+  assert.deepStrictEqual(second.types(), ['sse:notifications.count']);
+});
+
+test('only the opening that follows a rotation is silent', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().open();
+  worker.stream().rotate('cursor-9');
+  worker.stream().open();
+  await settle();
+  assert.deepStrictEqual(tab.types(), []);
+
+  // This time the connection is lost, and the browser gets it back.
+  worker.stream().stumble();
+  worker.stream().open();
+  await settle();
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
+});
+
+test('a rotation the next stream does not come out of is announced once one opens', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().open();
+  worker.stream().rotate('cursor-9');
+
+  // The session ended meanwhile, or the server went away.
+  worker.stream().fail();
+  worker.timers.advance(RETRY_MIN_MS);
+  assert.equal(worker.stream().url, from(STREAM, 'cursor-9'));
+  worker.stream().open();
+  await settle();
+
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect'], 'events were missed while it was closed');
+});
+
+test('a tab that joins after a rotation stands where the rotation left the stream', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().open();
+  worker.stream().rotate('cursor-9');
+  worker.stream().open();
+  const [tab] = await openTabs(browser, 1);
+
+  tab.setAside();
+  tab.bringBack();
+  await settle();
+
+  assert.equal(tab.lastFetch(), from(SNAPSHOT, 'cursor-9'));
 });
 
 test('a stream the browser gave up on is opened again where it stopped', async () => {
@@ -777,7 +853,7 @@ test('a connection that came back wipes the slate', async () => {
   await openTabs(browser, 1);
   const stream = browser.worker().stream();
 
-  // The server ends every stream after ten minutes: an error, then an opening.
+  // A connection lost and found again, time after time.
   for (let i = 0; i < 12; i += 1) {
     stream.stumble();
     stream.open();
@@ -1391,6 +1467,19 @@ test('a stream of its own is opened again when the browser gave up on it', async
   tab.timers.advance(RETRY_MIN_MS);
 
   assert.equal(tab.sources.length, 2);
+});
+
+test('a stream of its own is rotated the same way', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { sharedWorker: false });
+  tab.stream().open();
+
+  tab.stream().rotate('cursor-9');
+  assert.equal(tab.sources.length, 2);
+  assert.equal(tab.stream().url, from(STREAM, 'cursor-9'));
+
+  tab.stream().open();
+  assert.deepStrictEqual(tab.types(), []);
 });
 
 test('a stream of its own that closed waits for the page to be shown', async () => {

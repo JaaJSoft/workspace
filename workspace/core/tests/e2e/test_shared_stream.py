@@ -94,8 +94,13 @@ class Connection:
             self.outbox.put(chunk)
 
     def end(self):
-        """The server ends the stream, as it does every ten minutes."""
+        """The stream ends without a word: the server went away."""
         self.outbox.put(None)
+
+    def rotate(self, cursors):
+        """The server ends the stream on purpose, as it does every ten minutes."""
+        self.send(sse._rotation({}, cursors))
+        self.end()
 
 
 class StreamStandIn:
@@ -248,6 +253,27 @@ class SharedStreamTests(PlaywrightTestCase):
         self._wait_unread(first, 7)
         self._wait_unread(second, 7)
         self.assertEqual(len(self.stream.connections), 1)
+        self.assertEqual(second.evaluate(RECONNECTS), 0)
+
+    def test_a_stream_the_server_rotates_is_followed_without_a_re_sync(self):
+        first = self._first_tab()
+        second = self._next_tab()
+        for page in (first, second):
+            page.evaluate(COUNT_RECONNECTS)
+        stream = self._connection(1, first)
+        stood = {"files": "9"}
+
+        stream.rotate(stood)
+
+        following = self._connection(2, first)
+        self.assertTrue(following.from_worker)
+        self.assertIn(
+            f"last_event_id={sse.encode_stream_cursor(stood)}", following.path
+        )
+        following.send(_unread(7))
+        self._wait_unread(first, 7)
+        self._wait_unread(second, 7)
+        self.assertEqual(first.evaluate(RECONNECTS), 0)
         self.assertEqual(second.evaluate(RECONNECTS), 0)
 
     def test_a_lone_tab_that_navigates_gets_its_stream_from_the_worker_again(self):

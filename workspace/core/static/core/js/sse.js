@@ -235,8 +235,19 @@
   }
 
   // The stream was opened again, or this page changed streams: pushes may
-  // have been missed meanwhile - let listeners re-sync.
+  // have been missed meanwhile - let listeners re-sync. Every tab hears the
+  // shared stream reopen at the same instant, and a re-sync is a burst of
+  // requests: a hidden page waits to be shown, and re-syncs once however many
+  // times the stream reopened meanwhile. It keeps applying the events
+  // themselves, so what it rings and counts stays current.
+  let resyncOwed = false;
+
   function announceReconnect() {
+    if (document.hidden) {
+      resyncOwed = true;
+      return;
+    }
+    resyncOwed = false;
     emit('sse:reconnect');
   }
 
@@ -394,8 +405,14 @@
   // Reconnect SSE when the page becomes visible again (mobile resume)
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) return;
-    if (sharing) check();
-    else if (stream.isClosed()) stream.reopen();
+    if (sharing) {
+      check();
+    } else if (stream.isClosed()) {
+      // The opening announces itself, and settles a re-sync owed with it.
+      stream.reopen();
+      return;
+    }
+    if (resyncOwed) announceReconnect();
   });
 
   // A bfcache restore (mobile back/forward) resumes a frozen page: no script

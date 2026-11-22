@@ -864,6 +864,103 @@ test('a stream that is open is left alone when a page is shown', async () => {
   assert.equal(browser.worker().sources.length, 1);
 });
 
+// -- a hidden page ------------------------------------------------------------
+
+// Every tab hears the shared stream reopen at the same instant, and a re-sync
+// is a burst of requests: one held for each hidden tab would be a burst for
+// nobody to see.
+
+test('a hidden page re-syncs once shown, however many times the stream opened meanwhile', async () => {
+  const browser = new FakeBrowser();
+  const [shown, hidden] = await openTabs(browser, 2);
+  hidden.hide();
+  const stream = browser.worker().stream();
+  stream.open();
+
+  stream.open();
+  stream.open();
+  await settle();
+  assert.deepStrictEqual(shown.types(), ['sse:reconnect', 'sse:reconnect']);
+  assert.deepStrictEqual(hidden.types(), []);
+
+  hidden.show();
+  await settle();
+  assert.deepStrictEqual(hidden.types(), ['sse:reconnect']);
+
+  hidden.hide();
+  hidden.show();
+  await settle();
+  assert.deepStrictEqual(hidden.types(), ['sse:reconnect'], 'nothing was missed since');
+});
+
+test('a hidden page keeps applying the events while its re-sync waits', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { hidden: true });
+  const stream = browser.worker().stream();
+  stream.open();
+
+  stream.open();
+  stream.deliver(COUNT_4, 'cursor-7');
+  await settle();
+
+  assert.deepStrictEqual(tab.types(), ['sse:notifications.count']);
+});
+
+test('a page shown with nothing missed does not re-sync', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { hidden: true });
+  browser.worker().stream().open();
+
+  tab.show();
+  await settle();
+
+  assert.deepStrictEqual(tab.types(), []);
+});
+
+test('a page resumed while still hidden re-syncs once shown', async () => {
+  const browser = new FakeBrowser();
+  const [, away] = await openTabs(browser, 2, { hidden: true });
+  browser.worker().stream().open();
+
+  away.documentHandlers.freeze();
+  await settle();
+  away.documentHandlers.resume();
+  await settle();
+  assert.deepStrictEqual(away.types(), []);
+
+  away.show();
+  await settle();
+  assert.deepStrictEqual(away.types(), ['sse:reconnect']);
+});
+
+test('a hidden page with a stream of its own re-syncs once shown', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { sharedWorker: false, hidden: true });
+  tab.stream().open();
+
+  tab.stream().open();
+  tab.stream().open();
+  assert.deepStrictEqual(tab.types(), []);
+
+  tab.show();
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
+});
+
+test('a hidden page whose own stream closed re-syncs once, when it opens again', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { sharedWorker: false, hidden: true });
+  tab.stream().open();
+  tab.stream().open();
+  tab.stream().fail();
+
+  tab.show();
+  assert.equal(tab.sources.length, 2);
+  assert.deepStrictEqual(tab.types(), [], 'what it would fetch is what the stream brings');
+
+  tab.stream().open();
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
+});
+
 // -- tabs coming and going ----------------------------------------------------
 
 test('a tab that goes costs the others nothing', async () => {

@@ -1107,7 +1107,8 @@ window.fileBrowser = function fileBrowser() {
 
       // Catch up on changes made elsewhere while the stream was down
       // (resumed tab, or a bfcache restore after a mobile back). The listing
-      // is server-rendered, so re-render it rather than patching state.
+      // is server-rendered, so re-render it rather than patching state; the
+      // selection and the filters outlive the re-render (table.js).
       window.addEventListener('sse:reconnect', () => {
         this.loadTags();
         this.refreshFolderBrowser();

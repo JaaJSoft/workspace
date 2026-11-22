@@ -392,6 +392,4 @@ document.addEventListener('alpine:init', function () {
       return arr;
     },
   });
-
-  Alpine.store('push').init();
 });

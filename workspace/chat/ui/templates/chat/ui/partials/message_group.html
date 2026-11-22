@@ -130,7 +130,7 @@
         {% endwith %}
 
         {% if msg.edited_at %}
-          <span class="text-[0.65rem] opacity-50 italic ml-1">{% translate "(edited)" %}</span>
+          <span class="text-[0.65rem] opacity-50 italic ml-1 edited-indicator">{% translate "(edited)" %}</span>
         {% endif %}
         {% if msg.uuid in pinned_message_ids %}
           <span
@@ -142,7 +142,7 @@
         {% endif %}
 
         {# Retry button for bot error messages #}
-        {% if not is_own and msg.body|slice:":1" == "⚠" %}
+        {% if is_bot and msg.body|slice:":1" == "⚠" %}
           <button
             type="button"
             data-part="after-bubble"

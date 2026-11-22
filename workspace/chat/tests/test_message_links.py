@@ -301,3 +301,40 @@ class MessageListApiTests(APITestCase):
             response = self.get()
         self.assertEqual(len(response.data), 5)
         self.assertEqual(response["X-Has-More"], "true")
+
+
+class MessageMarkersTests(TestCase):
+    """What the server-rendered list marks on a message for the page's scripts."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="alice", password="pw")
+        cls.bob = User.objects.create_user(username="bob", password="pw")
+        cls.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, title="Team", created_by=cls.alice
+        )
+        for user in (cls.alice, cls.bob):
+            ConversationMember.objects.create(conversation=cls.conv, user=user)
+
+    def setUp(self):
+        self.client.force_login(self.alice)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _html(self):
+        return self.client.get(f"/chat/{self.conv.uuid}/messages").content.decode()
+
+    def test_an_edited_message_carries_the_marker_the_live_updates_look_for(self):
+        # messages.js and sse.js append "(edited)" unless .edited-indicator is
+        # already there: without the hook an edited message shows it twice.
+        Message.objects.create(
+            conversation=self.conv, author=self.bob, body="hi", edited_at=BASE
+        )
+        self.assertEqual(self._html().count("edited-indicator"), 1)
+
+    def test_only_a_bot_error_offers_a_retry(self):
+        Message.objects.create(
+            conversation=self.conv, author=self.bob, body="\u26a0 careful with this"
+        )
+        self.assertNotIn("retryBotResponse", self._html())

@@ -9,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.common.task_priority import LOW_PRIORITY, NORMAL_PRIORITY
 from workspace.files.models import File, FileEvent, FileScan, ProcessingFailure
 from workspace.files.services import processors as registry
 from workspace.files.services import trash, tree
@@ -386,19 +387,19 @@ class PipelineDispatchTests(PipelineTestCase):
         f = self._upload()
         event = FileEvent(file=f, action=FileEvent.Action.CREATED)
 
-        with patch.object(process_file, "delay") as delay:
-            queue_pipeline_for_event(event)
+        with patch.object(process_file, "apply_async") as apply_async:
+            queue_pipeline_for_event(event, LOW_PRIORITY)
 
-        delay.assert_called_once_with(str(f.pk))
+        apply_async.assert_called_once_with((str(f.pk),), priority=LOW_PRIORITY)
 
     def test_a_folder_queues_nothing(self):
         folder = tree.create_folder(owner=self.user, name="docs")
         event = FileEvent(file=folder, action=FileEvent.Action.CREATED)
 
-        with patch.object(process_file, "delay") as delay:
-            queue_pipeline_for_event(event)
+        with patch.object(process_file, "apply_async") as apply_async:
+            queue_pipeline_for_event(event, NORMAL_PRIORITY)
 
-        delay.assert_not_called()
+        apply_async.assert_not_called()
 
     def test_a_committed_upload_runs_the_whole_pipeline(self):
         self._processor("any")

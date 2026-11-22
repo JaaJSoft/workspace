@@ -57,9 +57,11 @@ def _forget_photo(file_obj):
 
 
 @on_file_event(FileEvent.Action.MOVED)
-def follow_moved_photo(event):
+def follow_moved_photo(event, priority=None):
     """A photo moved into a group folder, or given to another owner, leaves
     its owner's face library.
+
+    Its tasks keep their own priority: a move is never part of a bulk job.
 
     A folder's move is one event for the whole subtree, so the photos under
     it are looked up here. Those that become readable are left to the hourly
@@ -86,7 +88,7 @@ def follow_moved_photo(event):
 
 
 @on_file_event(FileEvent.Action.RENAMED)
-def follow_renamed_photo(event):
+def follow_renamed_photo(event, priority=None):
     """A photo or a video dated by its name follows the new one."""
     if is_media_candidate(event.file):
         redate_from_name(event.file)

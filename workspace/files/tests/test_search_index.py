@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 
 from workspace.common.documents import extraction
 from workspace.common.search import apply_fulltext, fts5_available
+from workspace.common.task_priority import NORMAL_PRIORITY
 from workspace.common.tests.office_fixtures import make_docx
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File, FileEvent, SearchIndexState
@@ -319,23 +320,31 @@ class EventHandlerTests(TestCase):
         )
 
         event = FileEvent.objects.create(file=self.file, actor=self.user, action=action)
-        with mock.patch("workspace.files.tasks.index_search_document.delay") as delay:
-            index_search_document_for_event(event)
-        return delay
+        with mock.patch(
+            "workspace.files.tasks.index_search_document.apply_async"
+        ) as apply_async:
+            index_search_document_for_event(event, NORMAL_PRIORITY)
+        return apply_async
 
     def test_content_replaced_queues_a_reindex(self):
-        delay = self._run(FileEvent.Action.CONTENT_REPLACED)
-        delay.assert_called_once_with(str(self.file.pk), False)
+        apply_async = self._run(FileEvent.Action.CONTENT_REPLACED)
+        apply_async.assert_called_once_with(
+            (str(self.file.pk), False), priority=NORMAL_PRIORITY
+        )
 
     def test_rename_queues_a_reindex(self):
-        delay = self._run(FileEvent.Action.RENAMED)
-        delay.assert_called_once_with(str(self.file.pk), False)
+        apply_async = self._run(FileEvent.Action.RENAMED)
+        apply_async.assert_called_once_with(
+            (str(self.file.pk), False), priority=NORMAL_PRIORITY
+        )
 
     def test_create_also_covers_descendants(self):
         # A copied folder records one CREATED event for its root; the copied
         # subtree would otherwise stay unindexed.
-        delay = self._run(FileEvent.Action.CREATED)
-        delay.assert_called_once_with(str(self.file.pk), True)
+        apply_async = self._run(FileEvent.Action.CREATED)
+        apply_async.assert_called_once_with(
+            (str(self.file.pk), True), priority=NORMAL_PRIORITY
+        )
 
 
 class IndexTaskTests(_FtsTestCase):

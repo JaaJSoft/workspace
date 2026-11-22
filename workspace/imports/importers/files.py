@@ -434,7 +434,7 @@ class FilesImporter(Importer):
         )
         if existing is not None:
             return existing
-        folder = tree.create_folder(ctx.owner, name, parent)
+        folder = tree.create_folder(ctx.owner, name, parent, bulk=True)
         ctx.stat("folders")
         return folder
 
@@ -474,6 +474,7 @@ class FilesImporter(Importer):
                         name=name,
                         mime_type=mime_type or None,
                         acting_user=ctx.owner,
+                        bulk=True,
                     )
                 else:
                     file_obj = tree.create_file(
@@ -482,6 +483,7 @@ class FilesImporter(Importer):
                         parent,
                         content=content,
                         mime_type=mime_type or None,
+                        bulk=True,
                     )
                     if entry.modified_at is not None:
                         # Keep the source's modification date on a brand-new

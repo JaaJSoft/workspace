@@ -89,6 +89,7 @@ def update_content(
     acting_user=None,
     expected_hash=None,
     check_quota=True,
+    bulk=False,
 ):
     """Replace a file's content, updating size, MIME type and hash.
 
@@ -117,7 +118,7 @@ def update_content(
     other writers. The lock is not theirs to opt out of.
 
     ``check_quota=False`` is for a caller that has already checked the
-    bucket itself, as for ``tree.create_file``.
+    bucket itself, and ``bulk`` for a bulk job, as for ``tree.create_file``.
     """
     if check_quota:
         check_write_allowed(
@@ -187,7 +188,7 @@ def update_content(
     clear_failures(file_obj)
     if file_obj.size:
         FILES_UPLOAD_BYTES.inc(file_obj.size)
-    record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
+    record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED, bulk=bulk)
     return file_obj
 
 

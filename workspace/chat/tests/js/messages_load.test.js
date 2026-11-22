@@ -429,9 +429,44 @@ test('a merge outside a refresh takes no anchor', () => {
 test('a refresh at the present reloads the last page', async () => {
   const { app, calls } = buildApp();
   app.hasNewerMessages = false;
-  app._visibleMessage = () => { throw new Error('not needed at the present'); };
+  app._visibleMessage = () => { throw new Error('not needed at the end of the list'); };
   await app._refreshCurrentMessages();
   assert.equal(calls[0].url, '/chat/c1/messages?limit=50');
+});
+
+test('a refresh at the end keeps as many rows as older pages brought in', async () => {
+  // The reader follows the end: the latest rows, as many as were on screen.
+  const { app, calls } = buildApp();
+  app._windowStart = 20;
+  app._windowEnd = 120;
+  app._visibleMessage = () => { throw new Error('not needed at the end of the list'); };
+  await app._refreshCurrentMessages();
+  assert.equal(calls[0].url, '/chat/c1/messages?limit=100');
+});
+
+test('a refresh while reading older pages keeps them and the message read', async () => {
+  // Regression: the list grew upwards from the present, so it was not
+  // "away" and the refresh asked for the latest page alone, dropping the
+  // older pages and the message being read with them.
+  const { app, calls } = buildApp({
+    ajax: async (url, options) => {
+      calls.push({ url, options });
+      app._vetoStaleMerge(mergeEvent({ 'data-conversation-uuid': 'c1' }));
+      return [{}];
+    },
+  });
+  Object.assign(app.$refs.messagesContainer, { scrollTop: 0, scrollHeight: 5000, clientHeight: 600 });
+  app._windowStart = 20;
+  app._windowEnd = 120;
+  app._visibleMessage = () => ({ uuid: 'm69', offset: 4 });
+  const restored = [];
+  app._restoreVisibleMessage = (anchor) => restored.push(anchor.uuid);
+
+  await app._refreshCurrentMessages();
+
+  // Room for a page of messages that arrived meanwhile below the rows.
+  assert.equal(calls[0].url, '/chat/c1/messages?offset=20&limit=150');
+  assert.deepStrictEqual(restored, ['m69']);
 });
 
 test('messageLink names the conversation and the message', () => {

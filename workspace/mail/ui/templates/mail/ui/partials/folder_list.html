@@ -79,6 +79,7 @@
 
     <!-- Folders (expanded — hierarchical tree) -->
     <div
+      class="flex flex-col gap-0.5"
       x-show="expandedAccounts[account.uuid] && !sidebarCollapsed()"
       x-collapse
     >
@@ -152,7 +153,7 @@
     <template
       x-if="labels[account.uuid]?.length && expandedAccounts[account.uuid] && !sidebarCollapsed()"
     >
-      <div>
+      <div class="flex flex-col gap-0.5">
         <div
           class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
         >
@@ -214,7 +215,7 @@
     </template>
 
     <!-- Folders (collapsed: icons only with tooltip) -->
-    <div x-show="sidebarCollapsed()" x-cloak>
+    <div class="flex flex-col gap-0.5" x-show="sidebarCollapsed()" x-cloak>
       <template
         x-for="folder in getFolders(account.uuid)"
         :key="'c-' + folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')"

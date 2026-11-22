@@ -1,7 +1,9 @@
+import base64
 import inspect
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime
 from importlib import import_module
 from types import SimpleNamespace
@@ -11,13 +13,17 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase, override_settings
+from pydantic_ai import RunContext
+from pydantic_ai.messages import ToolReturn
 
-from workspace.ai.harness.model import ToolCall
 from workspace.ai.models import BotProfile, UserMemory
+from workspace.ai.prompts.base import prompt
+from workspace.ai.services.bot_runs import run_bot
 from workspace.ai.tool_registry import (
+    ToolDeps,
+    ToolError,
     ToolProvider,
     ToolRegistry,
-    parse_tool_failure,
     tool,
     tool_registry,
 )
@@ -25,14 +31,16 @@ from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.common.search import fts5_available
 
+from .agents import call, reply, run_tool, scripted, tool_context
+
 User = get_user_model()
 
 
 class ChatToolDefinitionTests(TestCase):
     def test_tools_are_registered(self):
-        definitions = tool_registry.get_definitions()
-        self.assertIsInstance(definitions, list)
-        names = [t["function"]["name"] for t in definitions]
+        tools = tool_registry.get_all()
+        self.assertIsInstance(tools, list)
+        names = [registered.name for registered in tools]
         self.assertIn("save_memory", names)
         self.assertIn("delete_memory", names)
         self.assertIn("search_messages", names)
@@ -86,7 +94,7 @@ class BadgeLabelTests(TestCase):
 
         class Provider(ToolProvider):
             @tool(badge_label="Waited")
-            def wait(self, args, user, bot, conversation_id, context):
+            def wait(self, ctx: RunContext[ToolDeps]) -> str:
                 """Wait."""
 
         registry.register_provider(Provider())
@@ -100,7 +108,7 @@ class BadgeDetailTests(TestCase):
 
         class Provider(ToolProvider):
             @tool(detail_key=key)
-            def run(self, args, user, bot, conversation_id, context):
+            def run(self, ctx: RunContext[ToolDeps]) -> str:
                 """Run."""
 
         registry.register_provider(Provider())
@@ -125,7 +133,7 @@ class DescribeCallTests(TestCase):
 
         class Provider(ToolProvider):
             @tool(detail_key="url")
-            def read(self, args, user, bot, conversation_id, context):
+            def read(self, ctx: RunContext[ToolDeps]) -> str:
                 """Read."""
 
         registry.register_provider(Provider())
@@ -163,13 +171,13 @@ class ExecuteToolCallTests(TestCase):
         BotProfile.objects.create(user=self.bot_user)
 
     def test_save_memory_creates(self):
-        tool_call = ToolCall(
-            id="call_1",
-            name="save_memory",
-            arguments=json.dumps({"key": "name", "content": "Pierre"}),
+        # The arguments as a model sends them: JSON text.
+        result = run_tool(
+            "save_memory",
+            json.dumps({"key": "name", "content": "Pierre"}),
+            user=self.user,
+            bot=self.bot_user,
         )
-
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn("Saved", result)
         mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key="name")
@@ -180,13 +188,12 @@ class ExecuteToolCallTests(TestCase):
             user=self.user, bot=self.bot_user, key="name", content="Pierre"
         )
 
-        tool_call = ToolCall(
-            id="call_2",
-            name="save_memory",
-            arguments=json.dumps({"key": "name", "content": "Paul"}),
+        run_tool(
+            "save_memory",
+            {"key": "name", "content": "Paul"},
+            user=self.user,
+            bot=self.bot_user,
         )
-
-        tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key="name")
         self.assertEqual(mem.content, "Paul")
@@ -196,11 +203,9 @@ class ExecuteToolCallTests(TestCase):
             user=self.user, bot=self.bot_user, key="name", content="Pierre"
         )
 
-        tool_call = ToolCall(
-            id="call_3", name="delete_memory", arguments=json.dumps({"key": "name"})
+        result = run_tool(
+            "delete_memory", {"key": "name"}, user=self.user, bot=self.bot_user
         )
-
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn("Deleted", result)
         self.assertFalse(
@@ -210,22 +215,29 @@ class ExecuteToolCallTests(TestCase):
         )
 
     def test_delete_memory_not_found(self):
-        tool_call = ToolCall(
-            id="call_4",
-            name="delete_memory",
-            arguments=json.dumps({"key": "nonexistent"}),
+        result = run_tool(
+            "delete_memory", {"key": "nonexistent"}, user=self.user, bot=self.bot_user
         )
-
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn("not found", result.lower())
 
     def test_unknown_tool(self):
-        tool_call = ToolCall(id="call_5", name="unknown_tool", arguments="{}")
+        self.assertNotIn("unknown_tool", tool_registry.names())
 
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
+        with scripted(reply("", call("unknown_tool", {}, "call_5")), reply("done")):
+            run = run_bot(
+                self.bot_user.bot_profile,
+                self.user,
+                self.bot_user,
+                None,
+                prompt("be helpful", "go"),
+            )
 
-        self.assertIn("unknown_tool", parse_tool_failure(result)["reason"])
+        # The model is told which name it got wrong, and the reply goes on.
+        (result,) = run.tool_data[0]["results"]
+        self.assertEqual(result["outcome"], "failed")
+        self.assertIn("unknown_tool", result["content"])
+        self.assertEqual(run.output, "done")
 
     def test_search_messages(self):
         conv = Conversation.objects.create(created_by=self.user)
@@ -236,14 +248,12 @@ class ExecuteToolCallTests(TestCase):
         )
         Message.objects.create(conversation=conv, author=self.user, body="Nothing here")
 
-        tool_call = ToolCall(
-            id="call_6",
-            name="search_messages",
-            arguments=json.dumps({"query": "world"}),
-        )
-
-        result = tool_registry.execute(
-            tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk)
+        result = run_tool(
+            "search_messages",
+            {"query": "world"},
+            user=self.user,
+            bot=self.bot_user,
+            conversation_id=str(conv.pk),
         )
 
         self.assertIn("Hello world", result)
@@ -262,14 +272,12 @@ class ExecuteToolCallTests(TestCase):
         )
         Message.objects.create(conversation=conv, author=self.user, body="duckling")
 
-        tool_call = ToolCall(
-            id="call_6b",
-            name="search_messages",
-            arguments=json.dumps({"query": "duckling"}),
-        )
-
-        result = tool_registry.execute(
-            tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk)
+        result = run_tool(
+            "search_messages",
+            {"query": "duckling"},
+            user=self.user,
+            bot=self.bot_user,
+            conversation_id=str(conv.pk),
         )
 
         data = json.loads(result)
@@ -278,14 +286,12 @@ class ExecuteToolCallTests(TestCase):
     def test_search_messages_no_results(self):
         conv = Conversation.objects.create(created_by=self.user)
 
-        tool_call = ToolCall(
-            id="call_7",
-            name="search_messages",
-            arguments=json.dumps({"query": "nonexistent"}),
-        )
-
-        result = tool_registry.execute(
-            tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk)
+        result = run_tool(
+            "search_messages",
+            {"query": "nonexistent"},
+            user=self.user,
+            bot=self.bot_user,
+            conversation_id=str(conv.pk),
         )
 
         self.assertIn("No messages found", result)
@@ -298,13 +304,9 @@ class ExecuteToolCallTests(TestCase):
             "conditions": "Overcast",
         }
 
-        tool_call = ToolCall(
-            id="call_w1",
-            name="get_weather",
-            arguments=json.dumps({"location": "Paris"}),
+        result = run_tool(
+            "get_weather", {"location": "Paris"}, user=self.user, bot=self.bot_user
         )
-
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         data = json.loads(result)
         self.assertEqual(data["location"], "Paris, France")
@@ -315,27 +317,23 @@ class ExecuteToolCallTests(TestCase):
     def test_get_weather_not_found(self, mock_weather):
         mock_weather.return_value = None
 
-        tool_call = ToolCall(
-            id="call_w2",
-            name="get_weather",
-            arguments=json.dumps({"location": "Nowhereville"}),
+        result = run_tool(
+            "get_weather",
+            {"location": "Nowhereville"},
+            user=self.user,
+            bot=self.bot_user,
         )
-
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn("Could not find weather", result)
 
     def test_get_weather_missing_location(self):
-        tool_call = ToolCall(
-            id="call_w3", name="get_weather", arguments=json.dumps({"location": "  "})
-        )
+        with self.assertRaises(ToolError) as caught:
+            run_tool(
+                "get_weather", {"location": "  "}, user=self.user, bot=self.bot_user
+            )
 
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
-
-        self.assertEqual(
-            parse_tool_failure(result),
-            {"retryable": False, "reason": "location is required"},
-        )
+        self.assertEqual(caught.exception.reason, "location is required")
+        self.assertFalse(caught.exception.retryable)
 
     def test_get_current_user_info(self):
         self.user.first_name = "Pierre"
@@ -343,9 +341,9 @@ class ExecuteToolCallTests(TestCase):
         self.user.email = "pierre@example.com"
         self.user.save()
 
-        tool_call = ToolCall(id="call_8", name="get_current_user_info", arguments="{}")
-
-        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
+        result = run_tool(
+            "get_current_user_info", "{}", user=self.user, bot=self.bot_user
+        )
 
         data = json.loads(result)
         self.assertEqual(data["username"], "user")
@@ -369,9 +367,7 @@ class CurrentUserInfoTimezoneTests(TestCase):
         )
         user.refresh_from_db()
         set_setting(user, "core", "timezone", "Europe/Paris")
-        result = CoreToolProvider().get_current_user_info(
-            None, user=user, bot=None, conversation_id=None, context={}
-        )
+        result = CoreToolProvider().get_current_user_info(tool_context(user=user))
         self.assertIn("2026-02-01", result)
 
 
@@ -402,7 +398,13 @@ class EditImageSameTurnTests(TestCase):
             "workspace.ai.services.image.ai_edit_image", return_value=b"EDITED"
         ) as mock_edit:
             result = provider.edit_image(
-                args, self.user, self.bot_user, str(self.conv.pk), context
+                tool_context(
+                    user=self.user,
+                    bot=self.bot_user,
+                    conversation_id=str(self.conv.pk),
+                    context=context,
+                ),
+                args,
             )
         mock_edit.assert_called_once()
         self.assertEqual(mock_edit.call_args[0][0], b"TURN_IMAGE")
@@ -444,18 +446,24 @@ class GenerateImageVisionTests(TestCase):
             return_value=_fake_image_client(self.PNG_B64),
         ):
             return provider.generate_image(
-                args, self.user, self.bot_user, str(self.conv.pk), context
+                tool_context(
+                    user=self.user,
+                    bot=self.bot_user,
+                    conversation_id=str(self.conv.pk),
+                    context=context,
+                ),
+                args,
             )
 
     def test_vision_bot_gets_image_payload(self):
         BotProfile.objects.create(user=self.bot_user, supports_vision=True)
         context = {}
         result = self._generate(context)
-        parsed = json.loads(result)
-        self.assertEqual(parsed["type"], "image")
-        self.assertEqual(parsed["text"], "Image generated successfully for: a cat")
-        self.assertTrue(parsed["data"])
-        self.assertTrue(parsed["mime_type"].startswith("image/"))
+        self.assertIsInstance(result, ToolReturn)
+        self.assertEqual(result.return_value, "Image generated successfully for: a cat")
+        (image,) = result.content
+        self.assertEqual(image.data, base64.b64decode(self.PNG_B64))
+        self.assertTrue(image.media_type.startswith("image/"))
         self.assertEqual(len(context["images"]), 1)
 
     def test_non_vision_bot_gets_plain_text(self):
@@ -540,16 +548,19 @@ class ConcurrentToolFlagTests(TestCase):
 
         class Provider(ToolProvider):
             @tool()
-            def write(self, args, user, bot, conversation_id, context):
+            def write(self, ctx: RunContext[ToolDeps]) -> str:
                 """Write."""
 
             @tool(concurrent=True)
-            def read(self, args, user, bot, conversation_id, context):
+            def read(self, ctx: RunContext[ToolDeps]) -> str:
                 """Read."""
 
         registry.register_provider(Provider())
 
-        self.assertEqual(registry.concurrent_names(), frozenset({"read"}))
+        self.assertEqual(
+            {t.name: t.tool_def.sequential for t in registry.get_all()},
+            {"write": True, "read": False},
+        )
 
 
 class ImageParallelismTests(TestCase):
@@ -568,23 +579,23 @@ class ImageParallelismTests(TestCase):
 
     @override_settings(AI_IMAGE_MODEL="img-model")
     def test_a_generated_image_records_where_it_belongs_in_the_reply(self):
-        from workspace.ai.services.call_order import set_call_position
-
         context = {}
-        set_call_position(3)
+        ctx = tool_context(
+            user=self.user,
+            bot=self.bot,
+            conversation_id=str(self.conv.pk),
+            context=context,
+        )
         with patch(
             "workspace.ai.services.image.ai_generate_image", return_value=b"IMG"
         ):
             ImageToolProvider().generate_image(
+                replace(ctx, tool_call_id="call_3"),
                 GenerateImageParams(prompt="a cat"),
-                self.user,
-                self.bot,
-                str(self.conv.pk),
-                context,
             )
-        set_call_position(0)
 
-        self.assertEqual(context["images"][0]["position"], 3)
+        # The id of its call is what places it among the calls of the reply.
+        self.assertEqual(context["images"][0]["call_id"], "call_3")
 
     @override_settings(AI_IMAGE_FAILURE_BUDGET=8)
     def test_failures_landing_at_once_each_see_their_own_count(self):

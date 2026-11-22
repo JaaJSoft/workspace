@@ -4,8 +4,9 @@ import json
 import uuid as uuid_lib
 
 from pydantic import BaseModel, Field
+from pydantic_ai import RunContext
 
-from workspace.ai.tool_registry import ToolError, ToolProvider, tool
+from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 
 # Hard caps for the transcript tools. A conversation grows without bound; a
 # tool result cannot. The character budget is the one that matters — a cap on
@@ -133,14 +134,16 @@ class ChatToolProvider(ToolProvider):
         badge_label="Searched messages",
         badge_running_label="Searching messages",
         detail_key="query",
-        params=SearchMessagesParams,
         concurrent=True,
     )
-    def search_messages(self, args, user, bot, conversation_id, context):
+    def search_messages(
+        self, ctx: RunContext[ToolDeps], args: SearchMessagesParams
+    ) -> str:
         """Search chat messages across all your conversations, or within the current one. \
 Returns up to 20 matches with author, timestamp, conversation, and content. \
 Call this when the user asks about something said in chat, wants to find a message, \
 or references a past discussion."""
+        user, conversation_id = ctx.deps.user, ctx.deps.conversation_id
         query = args.query.strip()
         if not query:
             raise ToolError("query is required")
@@ -213,14 +216,16 @@ or references a past discussion."""
         badge_icon="📖",
         badge_label="Read a conversation",
         badge_running_label="Reading a conversation",
-        params=ReadConversationParams,
         concurrent=True,
     )
-    def read_conversation(self, args, user, bot, conversation_id, context):
+    def read_conversation(
+        self, ctx: RunContext[ToolDeps], args: ReadConversationParams
+    ) -> str:
         """Read the most recent messages of one of the user's conversations, in order. \
 Call this after search_messages when a single matching message is not enough to know what \
 was decided, or when the user refers to a discussion held elsewhere. Returns at most \
 50 messages, oldest first, truncated to fit a fixed size budget."""
+        user = ctx.deps.user
         from workspace.chat.services.conversations import get_active_membership
         from workspace.users.services.settings import get_user_timezone
 
@@ -252,12 +257,14 @@ was decided, or when the user refers to a discussion held elsewhere. Returns at 
         badge_icon="📝",
         badge_label="Summarized a conversation",
         badge_running_label="Summarizing a conversation",
-        params=SummarizeConversationParams,
     )
-    def summarize_conversation(self, args, user, bot, conversation_id, context):
+    def summarize_conversation(
+        self, ctx: RunContext[ToolDeps], args: SummarizeConversationParams
+    ) -> str:
         """Summarize one of the user's conversations. Call this instead of read_conversation \
 when the discussion is long and you need what it was about rather than what was literally said. \
 The summary covers the older messages only — read_conversation gives you the recent ones."""
+        user = ctx.deps.user
         from workspace.ai.models import ConversationSummary
         from workspace.ai.services.chat_summary import update_summary
         from workspace.chat.services.conversations import get_active_membership
@@ -318,14 +325,16 @@ The summary covers the older messages only — read_conversation gives you the r
         badge_label="Asked the user",
         badge_running_label="Asking the user",
         detail_key="question",
-        params=AskUserQuestionParams,
     )
-    def ask_user_question(self, args, user, bot, conversation_id, context):
+    def ask_user_question(
+        self, ctx: RunContext[ToolDeps], args: AskUserQuestionParams
+    ) -> str:
         """Ask the user a clarifying question with 2-6 suggested answers. \
 Use when you need a piece of information from the user and there's a small, \
 discrete set of likely answers. Do NOT use for open-ended questions or when \
 free-form text is clearly better. The user can click an option OR type their \
 own answer."""
+        context = ctx.deps.context
         seen = []
         for opt in args.options:
             o = opt.strip()

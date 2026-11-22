@@ -1,12 +1,13 @@
 """AI tools for the Files module."""
 
-import base64
 import json
 import uuid as uuid_mod
 
 from pydantic import BaseModel, Field
+from pydantic_ai import RunContext
+from pydantic_ai.messages import BinaryContent, ToolReturn
 
-from workspace.ai.tool_registry import ToolError, ToolProvider, tool
+from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 from workspace.files.models import File
 
 
@@ -28,14 +29,16 @@ class FilesToolProvider(ToolProvider):
         badge_label="Read file",
         badge_running_label="Reading file",
         detail_key="uuid",
-        params=ReadFileParams,
         concurrent=True,
     )
-    def read_file(self, args, user, bot, conversation_id, context):
+    def read_file(
+        self, ctx: RunContext[ToolDeps], args: ReadFileParams
+    ) -> str | ToolReturn:
         """Read the content of a file by its UUID. Returns text for text files and for documents (PDF, Word, Excel, PowerPoint, OpenDocument, rich text, ebooks), and the image itself for images. \
 Call this after finding a file via search_filenames or search_everything to get its content, \
 or when the user asks to read, open, view, or see a specific file. \
 A scan with no text layer has nothing to return, and says so."""
+        user = ctx.deps.user
         from workspace.files.models import File
         from workspace.files.queries import can_access
         from workspace.files.services.content_reading import (
@@ -56,12 +59,9 @@ A scan with no text layer has nothing to return, and says so."""
         # Try image first
         raw, mime = read_image_content(file_obj)
         if raw is not None:
-            return json.dumps(
-                {
-                    "type": "image",
-                    "mime_type": mime,
-                    "data": base64.b64encode(raw).decode(),
-                }
+            return ToolReturn(
+                return_value="Here is the image:",
+                content=[BinaryContent(data=raw, media_type=mime)],
             )
 
         # Fall back to text
@@ -78,16 +78,18 @@ A scan with no text layer has nothing to return, and says so."""
         badge_label="Searched files",
         badge_running_label="Searching files",
         detail_key="query",
-        params=SearchFilenamesParams,
         concurrent=True,
     )
-    def search_filenames(self, args, user, bot, conversation_id, context):
+    def search_filenames(
+        self, ctx: RunContext[ToolDeps], args: SearchFilenamesParams
+    ) -> str:
         """Search the files and folders you can access (yours, your groups', and those shared with you) by NAME only - it does not look inside them. \
 Returns up to 20 matches with name, type, and parent folder. \
 Call this when the user names the file they are after ("open my budget spreadsheet"). \
 When they describe what is written inside instead ("the note about the catamaran"), \
 call search_everything, which searches file contents too. \
 Use read_file with the returned UUID to get the content."""
+        user = ctx.deps.user
         query = args.query.strip()
         if not query:
             raise ToolError("query is required")

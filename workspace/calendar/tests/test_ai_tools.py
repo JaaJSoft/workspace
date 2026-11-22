@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from pydantic import ValidationError
 
+from workspace.ai.tests.agents import tool_context
 from workspace.ai.tool_registry import ToolError
 from workspace.calendar.ai_tools import (
     CalendarToolProvider,
@@ -43,9 +44,7 @@ class CalendarAiToolsTests(TestCase):
         ExternalCalendar.objects.create(
             calendar=ext, url="https://example.com/feed.ics"
         )
-        result = self.provider.list_calendars(
-            {}, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.list_calendars(tool_context(user=self.user))
         self.assertIn("Perso", result)
         self.assertNotIn("Holidays", result)
 
@@ -65,9 +64,7 @@ class CalendarAiToolsTests(TestCase):
             start=now + timedelta(days=30),
         )
         args = ListUpcomingEventsParams(days_ahead=7, limit=20)
-        result = self.provider.list_upcoming_events(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.list_upcoming_events(tool_context(user=self.user), args)
         self.assertIn("Soon", result)
         self.assertNotIn("Later", result)
 
@@ -90,9 +87,7 @@ class CalendarAiToolsTests(TestCase):
         )
         args = ListUpcomingEventsParams(days_ahead=7, limit=20)
         result = json.loads(
-            self.provider.list_upcoming_events(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.list_upcoming_events(tool_context(user=self.user), args)
         )
         self.assertEqual([e["title"] for e in result], ["Timed", "Holiday"])
         holiday = result[1]
@@ -118,9 +113,7 @@ class CalendarAiToolsTests(TestCase):
 
         args = ListUpcomingEventsParams(days_ahead=7, limit=20)
         entries = json.loads(
-            self.provider.list_upcoming_events(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.list_upcoming_events(tool_context(user=self.user), args)
         )
         by_title = {e["title"]: e for e in entries}
 
@@ -143,15 +136,11 @@ class CalendarAiToolsTests(TestCase):
             start=timezone.now() + timedelta(days=1),
         )
         args = ListUpcomingEventsParams()
-        result = self.provider.list_upcoming_events(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.list_upcoming_events(tool_context(user=self.user), args)
         self.assertNotIn("BobSecret", result)
 
     def test_list_calendars_empty(self):
-        result = self.provider.list_calendars(
-            {}, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.list_calendars(tool_context(user=self.user))
         self.assertEqual(result, "You have no calendars yet.")
 
     def test_list_upcoming_events_clamps_limit(self):
@@ -170,9 +159,7 @@ class CalendarAiToolsTests(TestCase):
         )
         # limit=0 is clamped up to 1, so exactly the soonest event is returned.
         args = ListUpcomingEventsParams(days_ahead=7, limit=0)
-        result = self.provider.list_upcoming_events(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.list_upcoming_events(tool_context(user=self.user), args)
         data = json.loads(result)
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["title"], "First")
@@ -187,9 +174,7 @@ class CalendarAiToolsTests(TestCase):
         )
         # days_ahead=0 is clamped up to 1, so an event 12h out stays in the window.
         args = ListUpcomingEventsParams(days_ahead=0, limit=20)
-        result = self.provider.list_upcoming_events(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.list_upcoming_events(tool_context(user=self.user), args)
         self.assertIn("HalfDay", result)
 
     def _future_iso(self, **delta):
@@ -202,9 +187,7 @@ class CalendarAiToolsTests(TestCase):
             start=start.isoformat(), end=(start + timedelta(hours=1)).isoformat()
         )
         payload = json.loads(
-            self.provider.check_availability(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.check_availability(tool_context(user=self.user), args)
         )
         self.assertTrue(payload["available"])
         self.assertEqual(payload["events"], [])
@@ -224,9 +207,7 @@ class CalendarAiToolsTests(TestCase):
             end=(start + timedelta(hours=1)).isoformat(),
         )
         payload = json.loads(
-            self.provider.check_availability(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.check_availability(tool_context(user=self.user), args)
         )
         self.assertFalse(payload["available"])
         self.assertEqual([e["title"] for e in payload["events"]], ["Busy"])
@@ -279,9 +260,7 @@ class CalendarAiToolsTests(TestCase):
 
         with sqlite_parameter_limit(parameter_limit):
             payload = json.loads(
-                self.provider.check_availability(
-                    args, user=self.user, bot=None, conversation_id=None, context={}
-                )
+                self.provider.check_availability(tool_context(user=self.user), args)
             )
 
         self.assertEqual(
@@ -291,25 +270,19 @@ class CalendarAiToolsTests(TestCase):
     def test_check_availability_rejects_an_unparseable_range(self):
         args = CheckAvailabilityParams(start="next tuesday", end="2026-03-21T10:00")
         with self.assertRaises(ToolError) as caught:
-            self.provider.check_availability(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.check_availability(tool_context(user=self.user), args)
         self.assertIn("could not parse start datetime", caught.exception.reason)
 
     def test_check_availability_rejects_an_inverted_range(self):
         args = CheckAvailabilityParams(start="2026-03-21T10:00", end="2026-03-21T09:00")
         with self.assertRaises(ToolError) as caught:
-            self.provider.check_availability(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.check_availability(tool_context(user=self.user), args)
         self.assertIn("end must be after start", caught.exception.reason)
 
     def test_create_event_writes_to_first_owned_calendar(self):
         Calendar.objects.create(name="Perso", owner=self.user)
         args = CreateEventParams(title="Dentist", start=self._future_iso(days=1))
-        result = self.provider.create_event(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.create_event(tool_context(user=self.user), args)
         self.assertIn("Created event", result)
         ev = Event.objects.get(title="Dentist")
         self.assertEqual(ev.owner, self.user)
@@ -318,9 +291,7 @@ class CalendarAiToolsTests(TestCase):
 
     def test_create_event_auto_creates_calendar_when_none(self):
         args = CreateEventParams(title="Solo", start=self._future_iso(days=1))
-        self.provider.create_event(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        self.provider.create_event(tool_context(user=self.user), args)
         self.assertTrue(Calendar.objects.filter(owner=self.user, name="Perso").exists())
         self.assertTrue(Event.objects.filter(title="Solo").exists())
 
@@ -331,9 +302,7 @@ class CalendarAiToolsTests(TestCase):
             start=(timezone.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M"),
         )
         with self.assertRaises(ToolError) as caught:
-            self.provider.create_event(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.create_event(tool_context(user=self.user), args)
         self.assertIn("future", caught.exception.reason)
         self.assertFalse(Event.objects.filter(title="Past").exists())
 
@@ -343,9 +312,7 @@ class CalendarAiToolsTests(TestCase):
         args = CreateEventParams(
             title="Standup", start=self._future_iso(days=1), calendar="boulot"
         )
-        self.provider.create_event(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        self.provider.create_event(tool_context(user=self.user), args)
         ev = Event.objects.get(title="Standup")
         self.assertEqual(ev.calendar.name, "Boulot")
 
@@ -353,9 +320,7 @@ class CalendarAiToolsTests(TestCase):
         Calendar.objects.create(name="Perso", owner=self.user)
         today = timezone.now().strftime("%Y-%m-%d")
         args = CreateEventParams(title="Holiday", start=today, all_day=True)
-        result = self.provider.create_event(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        result = self.provider.create_event(tool_context(user=self.user), args)
         self.assertIn("Created event", result)
         ev = Event.objects.get(title="Holiday")
         self.assertTrue(ev.all_day)
@@ -366,9 +331,7 @@ class CalendarAiToolsTests(TestCase):
             title="X", start=self._future_iso(days=1), calendar="Nope"
         )
         with self.assertRaises(ToolError) as caught:
-            self.provider.create_event(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.create_event(tool_context(user=self.user), args)
         self.assertIn("no calendar named", caught.exception.reason)
         self.assertFalse(Event.objects.filter(title="X").exists())
 
@@ -419,21 +382,13 @@ class CalendarWriteToolsTests(TestCase):
     def _update(self, context=None, **kwargs):
         args = UpdateEventParams(**kwargs)
         return self.provider.update_event(
-            args,
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context=context if context is not None else {},
+            tool_context(user=self.user, context=context), args
         )
 
     def _cancel(self, context=None, **kwargs):
         args = CancelEventParams(**kwargs)
         return self.provider.cancel_event(
-            args,
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context=context if context is not None else {},
+            tool_context(user=self.user, context=context), args
         )
 
     # -- update_event ----------------------------------------------------
@@ -700,11 +655,7 @@ class CalendarWriteToolsTests(TestCase):
     def _respond(self, context=None, **kwargs):
         args = RespondToInvitationParams(**kwargs)
         return self.provider.respond_to_invitation(
-            args,
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context=context if context is not None else {},
+            tool_context(user=self.user, context=context), args
         )
 
     def _invitation(self):
@@ -789,9 +740,7 @@ class CalendarPollToolsTests(TestCase):
         kwargs.setdefault("title", "Team lunch")
         kwargs.setdefault("slots", self._slots())
         args = CreatePollParams(**kwargs)
-        return self.provider.create_poll(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
+        return self.provider.create_poll(tool_context(user=self.user), args)
 
     def test_create_poll_stores_slots_and_invitees(self):
         result = self._create_poll(invitees=["bob"], duration_minutes=90)
@@ -835,9 +784,7 @@ class CalendarPollToolsTests(TestCase):
 
         args = GetPollResultsParams(poll_id=poll.uuid)
         payload = json.loads(
-            self.provider.get_poll_results(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.get_poll_results(tool_context(user=self.user), args)
         )
 
         self.assertEqual(payload["title"], "Team lunch")
@@ -857,9 +804,7 @@ class CalendarPollToolsTests(TestCase):
         poll = Poll.objects.get(created_by=self.user)
         args = GetPollResultsParams(poll_id=poll.uuid)
         payload = json.loads(
-            self.provider.get_poll_results(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.get_poll_results(tool_context(user=self.user), args)
         )
         self.assertEqual(payload["note"], "Nobody has voted yet.")
         self.assertNotIn("leading_slot", payload)
@@ -868,7 +813,5 @@ class CalendarPollToolsTests(TestCase):
         poll = Poll.objects.create(title="Private", created_by=self.other)
         args = GetPollResultsParams(poll_id=poll.uuid)
         with self.assertRaises(ToolError) as caught:
-            self.provider.get_poll_results(
-                args, user=self.user, bot=None, conversation_id=None, context={}
-            )
+            self.provider.get_poll_results(tool_context(user=self.user), args)
         self.assertIn("no access", caught.exception.reason)

@@ -6,12 +6,13 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
+from pydantic_ai.usage import RunUsage
 
-from workspace.ai.harness.model import ModelResponse
 from workspace.ai.models import VOICE_REF_MAX_BYTES, AITask, BotProfile
-from workspace.ai.services.responses import post_bot_message, produced_media
+from workspace.ai.services.bot_runs import BotRun, StopReason, produced_media
+from workspace.ai.services.responses import post_bot_message
 from workspace.ai.services.speech import SpeechSynthesisError, VoiceReference
-from workspace.ai.tool_registry import ToolError
+from workspace.ai.tool_registry import ToolError, ToolRegistry
 from workspace.ai.tools import SendVoiceMessageParams, VoiceToolProvider
 from workspace.chat.models import (
     Conversation,
@@ -20,6 +21,7 @@ from workspace.chat.models import (
     MessageAttachment,
 )
 
+from .agents import call, reply, tool_context
 from .test_speech import make_wav
 
 User = get_user_model()
@@ -62,11 +64,12 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
 
     def _call(self, text="Bonjour Pierre.", language="", bot=None, conv="conv-1"):
         return self.provider.send_voice_message(
+            tool_context(
+                bot=self.bot if bot is None else bot,
+                conversation_id=conv,
+                context=self.context,
+            ),
             SendVoiceMessageParams(text=text, language=language),
-            user=None,
-            bot=self.bot if bot is None else bot,
-            conversation_id=conv,
-            context=self.context,
         )
 
     def _fail(self, **kwargs):
@@ -148,21 +151,22 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
         self.assertNotIn("sent", label.lower())
         self.assertIn("recorded", label.lower())
 
-    def test_the_tool_schema_advertises_the_configured_languages(self):
-        from workspace.ai.tool_registry import _build_parameters
+    def _schema(self):
+        """The arguments the tool is offered with, registered under these settings."""
+        registry = ToolRegistry()
+        registry.register_provider(VoiceToolProvider())
+        (registered,) = registry.get_all()
+        return registered.tool_def.parameters_json_schema
 
-        schema = _build_parameters(SendVoiceMessageParams)
+    def test_the_tool_schema_advertises_the_configured_languages(self):
+        schema = self._schema()
         self.assertEqual(
             schema["properties"]["language"]["enum"],
             ["", "english", "french"],
         )
 
     def _text_description(self):
-        from workspace.ai.tool_registry import _build_parameters
-
-        return _build_parameters(SendVoiceMessageParams)["properties"]["text"][
-            "description"
-        ]
+        return self._schema()["properties"]["text"]["description"]
 
     @override_settings(AI_TTS_NONVERBAL_TAGS=["[laughter]", "[sigh]"])
     def test_the_schema_names_the_sounds_this_backend_performs(self):
@@ -185,9 +189,7 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
         # A description reaches no clone-based backend, so a parameter for
         # one would only earn a claim the bot changed voice over audio in
         # its own.
-        from workspace.ai.tool_registry import _build_parameters
-
-        schema = _build_parameters(SendVoiceMessageParams)
+        schema = self._schema()
         self.assertNotIn("voice", schema["properties"])
 
     @patch("workspace.ai.services.speech.ai_synthesize_speech")
@@ -253,16 +255,19 @@ class PostBotMessageVoiceTests(TestCase):
             task_type=AITask.TaskType.CHAT,
         )
 
-    def _post(self, voices, content=""):
-        return post_bot_message(
-            conversation=self.conv,
-            bot_user=self.bot,
-            response=ModelResponse(
-                content=content, model="test", prompt_tokens=1, completion_tokens=1
-            ),
-            tool_context={"voices": voices},
-            ai_task=self.ai_task,
+    def _post(self, voices, *rounds):
+        """Post the reply of a run that recorded *voices* over *rounds*."""
+        response = reply("")
+        run = BotRun(
+            output="",
+            response=response,
+            messages=[*rounds, response],
+            new_messages=[*rounds, response],
+            context={"voices": voices},
+            stop=StopReason.ANSWERED,
+            usage=RunUsage(),
         )
+        return post_bot_message(self.conv, self.bot, run, self.ai_task)
 
     def test_voice_message_is_attached_as_a_playable_audio(self):
         _, msg = self._post([{"data": make_wav(seconds=2.0), "text": "Bonjour."}])
@@ -279,9 +284,14 @@ class PostBotMessageVoiceTests(TestCase):
     def test_voices_are_attached_in_the_order_the_model_asked_for(self):
         _, msg = self._post(
             [
-                {"data": make_wav(seconds=2.0), "text": "second", "position": 2},
-                {"data": make_wav(seconds=1.0), "text": "first", "position": 1},
-            ]
+                {"data": make_wav(seconds=2.0), "text": "second", "call_id": "call_2"},
+                {"data": make_wav(seconds=1.0), "text": "first", "call_id": "call_1"},
+            ],
+            reply(
+                "",
+                call("send_voice_message", {"text": "first"}, "call_1"),
+                call("send_voice_message", {"text": "second"}, "call_2"),
+            ),
         )
 
         atts = list(

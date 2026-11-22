@@ -1,5 +1,4 @@
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -9,21 +8,12 @@ from django.utils import timezone
 
 from workspace.ai.models import AgentGoal, AITask, BotProfile, ScheduledMessage
 from workspace.ai.services.bot_access import run_refusal
-from workspace.ai.tests.chat_tasks import queue_chat_task
 from workspace.chat.models import Conversation, ConversationMember, Message
 
+from .agents import reply, scripted
+from .chat_tasks import queue_chat_task
+
 User = get_user_model()
-
-
-def _llm_reply(content):
-    return {
-        "content": content,
-        "tool_calls": None,
-        "message": MagicMock(content=content, tool_calls=None, to_dict=lambda: {}),
-        "model": "gpt-4o-mini",
-        "prompt_tokens": 10,
-        "completion_tokens": 5,
-    }
 
 
 class BotAccessFixture(TestCase):
@@ -116,7 +106,6 @@ class RunRefusalTests(BotAccessFixture):
         )
 
 
-@patch("workspace.ai.harness.model.call_llm")
 class ScheduledResponseAccessTests(BotAccessFixture):
     def _schedule(self):
         return ScheduledMessage.objects.create(
@@ -130,38 +119,37 @@ class ScheduledResponseAccessTests(BotAccessFixture):
             next_run_at=timezone.now() - timedelta(minutes=1),
         )
 
-    def _assert_refused_and_deactivated(self, mock_llm, reason):
+    def _assert_refused_and_deactivated(self, reason):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
 
-        mock_llm.return_value = _llm_reply("Here is the creator's private mail.")
         schedule = self._schedule()
-        result = generate_scheduled_response(str(schedule.uuid))
+        with scripted(reply("Here is the creator's private mail.")) as script:
+            result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result, {"status": "skipped", "reason": reason})
-        mock_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertFalse(self.bot_messages().exists())
         self.assertFalse(AITask.objects.filter(owner=self.bot_user).exists())
         schedule.refresh_from_db()
         self.assertFalse(schedule.is_active)
 
-    def test_creator_who_left_ends_the_schedule(self, mock_llm):
+    def test_creator_who_left_ends_the_schedule(self):
         self.leave(self.creator)
-        self._assert_refused_and_deactivated(mock_llm, "not_a_member")
+        self._assert_refused_and_deactivated("not_a_member")
 
-    def test_deactivated_creator_ends_the_schedule(self, mock_llm):
+    def test_deactivated_creator_ends_the_schedule(self):
         self.deactivate(self.creator)
-        self._assert_refused_and_deactivated(mock_llm, "user_inactive")
+        self._assert_refused_and_deactivated("user_inactive")
 
-    def test_creator_who_lost_the_bot_ends_the_schedule(self, mock_llm):
+    def test_creator_who_lost_the_bot_ends_the_schedule(self):
         self.revoke_bot(self.creator)
-        self._assert_refused_and_deactivated(mock_llm, "bot_not_accessible")
+        self._assert_refused_and_deactivated("bot_not_accessible")
 
-    def test_a_schedule_in_a_group_is_ended(self, mock_llm):
+    def test_a_schedule_in_a_group_is_ended(self):
         self.make_group()
-        self._assert_refused_and_deactivated(mock_llm, "not_a_direct_conversation")
+        self._assert_refused_and_deactivated("not_a_direct_conversation")
 
 
-@patch("workspace.ai.harness.model.call_llm")
 class AgentGoalCheckAccessTests(BotAccessFixture):
     def _goal(self):
         return AgentGoal.objects.create(
@@ -173,15 +161,15 @@ class AgentGoalCheckAccessTests(BotAccessFixture):
             next_check_at=timezone.now() - timedelta(minutes=1),
         )
 
-    def _assert_refused_and_abandoned(self, mock_llm, reason):
+    def _assert_refused_and_abandoned(self, reason):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        mock_llm.return_value = _llm_reply("Here is the creator's private mail.")
         goal = self._goal()
-        result = run_agent_goal_check(str(goal.uuid))
+        with scripted(reply("Here is the creator's private mail.")) as script:
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result, {"status": "skipped", "reason": reason})
-        mock_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
         self.assertFalse(self.bot_messages().exists())
         self.assertFalse(AITask.objects.filter(owner=self.bot_user).exists())
         goal.refresh_from_db()
@@ -189,50 +177,48 @@ class AgentGoalCheckAccessTests(BotAccessFixture):
         self.assertIsNotNone(goal.closed_at)
         self.assertTrue(goal.outcome)
 
-    def test_creator_who_left_abandons_the_goal(self, mock_llm):
+    def test_creator_who_left_abandons_the_goal(self):
         self.leave(self.creator)
-        self._assert_refused_and_abandoned(mock_llm, "not_a_member")
+        self._assert_refused_and_abandoned("not_a_member")
 
-    def test_deactivated_creator_abandons_the_goal(self, mock_llm):
+    def test_deactivated_creator_abandons_the_goal(self):
         self.deactivate(self.creator)
-        self._assert_refused_and_abandoned(mock_llm, "user_inactive")
+        self._assert_refused_and_abandoned("user_inactive")
 
-    def test_creator_who_lost_the_bot_abandons_the_goal(self, mock_llm):
+    def test_creator_who_lost_the_bot_abandons_the_goal(self):
         self.revoke_bot(self.creator)
-        self._assert_refused_and_abandoned(mock_llm, "bot_not_accessible")
+        self._assert_refused_and_abandoned("bot_not_accessible")
 
-    def test_a_goal_in_a_group_is_abandoned(self, mock_llm):
+    def test_a_goal_in_a_group_is_abandoned(self):
         self.make_group()
-        self._assert_refused_and_abandoned(mock_llm, "not_a_direct_conversation")
+        self._assert_refused_and_abandoned("not_a_direct_conversation")
 
 
-@patch("workspace.ai.harness.model.call_llm")
 class ChatResponseAccessTests(BotAccessFixture):
-    def _respond_to(self, author, mock_llm):
+    def _respond_to(self, author):
+        """The task's result, and the requests the model was sent."""
         from workspace.ai.tasks.chat import generate_chat_response
-
-        mock_llm.return_value = _llm_reply("Here is your private mail.")
 
         message = Message.objects.create(
             conversation=self.conversation, author=author, body="@privbot my mail?"
         )
-        return generate_chat_response(
-            queue_chat_task(self.conversation, message, self.bot_user)
-        )
+        with scripted(reply("Here is your private mail.")) as script:
+            result = generate_chat_response(
+                queue_chat_task(self.conversation, message, self.bot_user)
+            )
+        return result, script.requests
 
-    def test_a_group_gets_no_run_even_for_a_member_allowed_to_use_the_bot(
-        self, mock_llm
-    ):
+    def test_a_group_gets_no_run_even_for_a_member_allowed_to_use_the_bot(self):
         """In a group the tool results of the creator's mail would be shown
         to every other member."""
         self.make_group()
 
-        result = self._respond_to(self.creator, mock_llm)
+        result, requests = self._respond_to(self.creator)
 
         self.assertEqual(
             result, {"status": "skipped", "reason": "not_a_direct_conversation"}
         )
-        mock_llm.assert_not_called()
+        self.assertEqual(requests, [])
         self.assertFalse(self.bot_messages().exists())
         # Closed, or the chat would keep showing the refused reply as under way.
         self.assertEqual(
@@ -244,11 +230,11 @@ class ChatResponseAccessTests(BotAccessFixture):
             [AITask.Status.FAILED],
         )
 
-    def test_access_revoked_after_the_conversation_was_set_up(self, mock_llm):
+    def test_access_revoked_after_the_conversation_was_set_up(self):
         self.revoke_bot(self.creator)
 
-        result = self._respond_to(self.creator, mock_llm)
+        result, requests = self._respond_to(self.creator)
 
         self.assertEqual(result, {"status": "skipped", "reason": "bot_not_accessible"})
-        mock_llm.assert_not_called()
+        self.assertEqual(requests, [])
         self.assertFalse(self.bot_messages().exists())

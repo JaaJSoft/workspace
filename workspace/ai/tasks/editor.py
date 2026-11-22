@@ -5,12 +5,12 @@ import logging
 from celery import shared_task
 from django.utils.translation import gettext
 
-from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
-from workspace.ai.services.llm import (
-    call_llm,
-    sanitize_messages_for_storage,
-    serialize_response,
+from workspace.ai.services.ai_task import (
+    TaskNotPending,
+    ai_task_lifecycle,
+    record_prompt_run,
 )
+from workspace.ai.services.llm import run_prompt
 from workspace.common.logging import scrub
 from workspace.common.task_priority import INTERACTIVE_PRIORITY
 
@@ -67,22 +67,15 @@ def editor_action(self, task_id: str):
                 return {"status": "error", "error": f"Unknown action: {action}"}
 
             messages = builder()
-            result = call_llm(messages)
-            ai_task.result = result["content"]
-            ai_task.model_used = result["model"]
-            ai_task.prompt_tokens = result["prompt_tokens"]
-            ai_task.completion_tokens = result["completion_tokens"]
-            ai_task.raw_messages = {
-                "messages": sanitize_messages_for_storage(messages),
-                "response": serialize_response(result),
-            }
+            result = run_prompt(messages)
+            record_prompt_run(ai_task, result)
 
             logger.info(
                 "Editor action complete: task=%s action=%s tokens=%s+%s",
                 scrub(task_id),
                 scrub(action),
-                result["prompt_tokens"],
-                result["completion_tokens"],
+                result.usage.input_tokens,
+                result.usage.output_tokens,
             )
             return {"status": "ok", "task_id": task_id}
     except TaskNotPending:

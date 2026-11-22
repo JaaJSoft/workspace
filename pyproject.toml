@@ -83,6 +83,13 @@ dependencies = [
     "clamdpy>=0.2.0",
     # ai
     "openai>=3.51.0",
+    # Every text request goes through it: the bots' agent and the one-shot
+    # prompts (workspace/ai/services/llm.py, bot_runs.py). No extra: its
+    # OpenAI models need the openai SDK above and nothing else (the `openai`
+    # extra adds tiktoken, which only its embeddings and realtime code use),
+    # and every other provider SDK stays out until a deployment can select
+    # it. Run scripts/agent_evals.py before and after a bump.
+    "pydantic-ai-slim>=2.71.0",
     "ollama>=0.6.3",
     # web search & scraping
     "httpx2>=2.16.0",
@@ -169,6 +176,9 @@ dev = [
     # (common/tests/test_storage.py); the live S3 CI job runs the same cases
     # against a real server.
     "moto[s3]>=5.2.5",
+    # The dataset and the report of scripts/agent_evals.py. Each release pins
+    # the pydantic-ai-slim of the same number, so the two are bumped together.
+    "pydantic-evals>=2.71.0",
 ]
 
 [tool.djlint]

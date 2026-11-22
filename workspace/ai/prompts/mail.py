@@ -1,4 +1,6 @@
-from .base import sanitize_prompt_line, truncate_text
+from pydantic_ai.messages import ModelMessage
+
+from .base import prompt, sanitize_prompt_line, truncate_text
 
 # Mirrors MailLabel.name / MailLabel.description max_length. Re-applied here
 # because the label block is sent once per batch and the prompt budget is
@@ -52,20 +54,15 @@ def _format_sender_info(sender_name: str, sender_email: str) -> str:
     return f"Sender: {sender_email}"
 
 
-def build_summarize_messages(subject: str, body: str) -> list[dict]:
+def build_summarize_messages(subject: str, body: str) -> list[ModelMessage]:
     """Build messages for email summarization."""
     content = f"Subject: {subject}\n\n{truncate_text(body)}"
-    return [
-        {"role": "system", "content": SUMMARIZE_SYSTEM},
-        {
-            "role": "user",
-            "content": (
-                f"Summarize this email:\n\n"
-                f"<untrusted-content>\n{content}\n</untrusted-content>\n\n"
-                f"{INJECTION_GUARD}"
-            ),
-        },
-    ]
+    return prompt(
+        SUMMARIZE_SYSTEM,
+        f"Summarize this email:\n\n"
+        f"<untrusted-content>\n{content}\n</untrusted-content>\n\n"
+        f"{INJECTION_GUARD}",
+    )
 
 
 def build_compose_messages(
@@ -73,7 +70,7 @@ def build_compose_messages(
     context: str = "",
     sender_name: str = "",
     sender_email: str = "",
-) -> list[dict]:
+) -> list[ModelMessage]:
     """Build messages for email composition."""
     user_msg = ""
     if sender_email:
@@ -85,10 +82,7 @@ def build_compose_messages(
             f"<untrusted-content>\n{truncate_text(context)}\n</untrusted-content>"
         )
     user_msg += f"\n\n{INJECTION_GUARD}"
-    return [
-        {"role": "system", "content": COMPOSE_SYSTEM},
-        {"role": "user", "content": user_msg},
-    ]
+    return prompt(COMPOSE_SYSTEM, user_msg)
 
 
 def build_reply_messages(
@@ -97,24 +91,19 @@ def build_reply_messages(
     original_body: str,
     sender_name: str = "",
     sender_email: str = "",
-) -> list[dict]:
+) -> list[ModelMessage]:
     """Build messages for email reply generation."""
     original = f"Subject: {original_subject}\n\n{truncate_text(original_body)}"
     sender_line = ""
     if sender_email:
         sender_line = f"{_format_sender_info(sender_name, sender_email)}\n\n"
-    return [
-        {"role": "system", "content": REPLY_SYSTEM},
-        {
-            "role": "user",
-            "content": (
-                f"{sender_line}"
-                f"<untrusted-content>\n{original}\n</untrusted-content>\n\n"
-                f"Reply instructions: {instructions}\n\n"
-                f"{INJECTION_GUARD}"
-            ),
-        },
-    ]
+    return prompt(
+        REPLY_SYSTEM,
+        f"{sender_line}"
+        f"<untrusted-content>\n{original}\n</untrusted-content>\n\n"
+        f"Reply instructions: {instructions}\n\n"
+        f"{INJECTION_GUARD}",
+    )
 
 
 def _build_label_line(label: dict) -> str:
@@ -202,7 +191,9 @@ def _build_classify_line(idx: int, e: dict) -> str:
     return f"[{idx}] " + " | ".join(fields)
 
 
-def build_classify_messages(emails: list[dict], labels: list[dict]) -> list[dict]:
+def build_classify_messages(
+    emails: list[dict], labels: list[dict]
+) -> list[ModelMessage]:
     """Build messages for batch email classification.
 
     Each email dict must have: subject, from_name, from_email, snippet. It may
@@ -216,14 +207,9 @@ def build_classify_messages(emails: list[dict], labels: list[dict]) -> list[dict
         _build_classify_line(idx, e) for idx, e in enumerate(emails, 1)
     )
 
-    return [
-        {"role": "system", "content": _build_classify_system(labels)},
-        {
-            "role": "user",
-            "content": (
-                f"Classify these emails:\n\n"
-                f"<untrusted-content>\n{email_block}\n</untrusted-content>\n\n"
-                f"{INJECTION_GUARD}"
-            ),
-        },
-    ]
+    return prompt(
+        _build_classify_system(labels),
+        f"Classify these emails:\n\n"
+        f"<untrusted-content>\n{email_block}\n</untrusted-content>\n\n"
+        f"{INJECTION_GUARD}",
+    )

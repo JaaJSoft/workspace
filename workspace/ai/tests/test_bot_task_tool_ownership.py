@@ -16,6 +16,8 @@ from workspace.ai.tools import (
 )
 from workspace.chat.models import Conversation, ConversationMember
 
+from .agents import tool_context
+
 User = get_user_model()
 
 
@@ -43,13 +45,13 @@ class BotTaskToolOwnershipMixin:
         cache.clear()
 
     def _call(self, method_name, args, user):
-        return getattr(self.provider, method_name)(
-            args,
+        method = getattr(self.provider, method_name)
+        ctx = tool_context(
             user=user,
             bot=self.bot_user,
             conversation_id=str(self.conversation.uuid),
-            context={},
         )
+        return method(ctx) if args is None else method(ctx, args)
 
 
 class AgentGoalToolOwnershipTests(BotTaskToolOwnershipMixin, TestCase):

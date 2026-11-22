@@ -5,12 +5,12 @@ of the pixel window, its ai_description is replayed as text so vision
 bots keep a memory of it.
 """
 
-import base64
 import logging
 
 from celery import shared_task
 from django.conf import settings
 from django.core.cache import cache
+from pydantic_ai.messages import BinaryContent
 
 from workspace.common.logging import scrub
 from workspace.common.task_priority import LOW_PRIORITY
@@ -27,7 +27,8 @@ CAPTION_SYSTEM_PROMPT = (
 @shared_task(priority=LOW_PRIORITY)
 def generate_attachment_caption(attachment_uuid):
     """Caption one image attachment. Idempotent: no-op if already captioned."""
-    from workspace.ai.services.llm import call_llm
+    from workspace.ai.prompts.base import prompt
+    from workspace.ai.services.llm import run_prompt
     from workspace.chat.models import MessageAttachment
 
     try:
@@ -43,29 +44,18 @@ def generate_attachment_caption(attachment_uuid):
             "Caption: could not read attachment %s", scrub(str(attachment_uuid))
         )
         return
-    b64 = base64.b64encode(data).decode()
-    messages = [
-        {"role": "system", "content": CAPTION_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{att.mime_type};base64,{b64}"},
-                }
-            ],
-        },
-    ]
+    image = BinaryContent(data=data, media_type=att.mime_type)
     try:
-        result = call_llm(
-            messages,
+        # No cap of its own: a reasoning model spends its tokens thinking
+        # first, and one sized for two sentences leaves none for them.
+        result = run_prompt(
+            prompt(CAPTION_SYSTEM_PROMPT, [image]),
             model=settings.AI_VISION_MODEL or settings.AI_MODEL,
-            max_tokens=150,
         )
     except Exception:
         logger.warning("Caption generation failed for %s", scrub(str(attachment_uuid)))
         return
-    caption = (result.get("content") or "").strip()
+    caption = result.output.strip()
     if caption:
         MessageAttachment.objects.filter(uuid=att.uuid).update(ai_description=caption)
 

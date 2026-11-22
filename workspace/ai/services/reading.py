@@ -26,10 +26,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from django.conf import settings
 from pydantic import BaseModel
+from pydantic_ai import NativeOutput
 
+from workspace.ai.prompts.base import prompt
 from workspace.common.logging import scrub
 
-from .llm import call_llm_structured
+from .llm import run_prompt
 from .paging import check_part, part_count
 
 logger = logging.getLogger(__name__)
@@ -170,24 +172,21 @@ def _extract(chunk: str, query: str, model: str) -> Extraction | None:
     Returns ``None`` when the call or its result is unusable — the caller
     treats that chunk as having said nothing rather than failing the read.
     """
-    messages = [
-        {"role": "system", "content": _SYSTEM},
-        {
-            "role": "user",
-            "content": (
-                f"The reader is looking for: {query}\n\n"
-                f"--- document ---\n{chunk}\n--- end of document ---"
-            ),
-        },
-    ]
+    messages = prompt(
+        _SYSTEM,
+        f"The reader is looking for: {query}\n\n"
+        f"--- document ---\n{chunk}\n--- end of document ---",
+    )
     try:
-        parsed, _ = call_llm_structured(
-            messages, Extraction, model=model, max_tokens=EXTRACT_MAX_TOKENS
-        )
+        return run_prompt(
+            messages,
+            model=model,
+            max_tokens=EXTRACT_MAX_TOKENS,
+            output_type=NativeOutput(Extraction, strict=True),
+        ).output
     except Exception as exc:
         logger.warning("Reading a page for a query failed: %s", scrub(exc))
         return None
-    return parsed
 
 
 def _fit(text: str, max_chars: int) -> str:

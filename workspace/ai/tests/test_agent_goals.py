@@ -1,20 +1,20 @@
 import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from pydantic_ai.messages import SystemPromptPart
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.ai.harness.model import ModelResponse, RunUsage
-from workspace.ai.harness.runner import RunResult, StopReason
 from workspace.ai.models import AgentGoal, AITask, BotProfile
 from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import (
+    AgentGoalToolProvider,
     CompleteAgentGoalParams,
     CreateAgentGoalParams,
     SendUserMessageParams,
@@ -22,7 +22,14 @@ from workspace.ai.tools import (
 )
 from workspace.chat.models import Conversation, ConversationMember, Message
 
+from .agents import call, reply, scripted, tool_context
+
 User = get_user_model()
+
+
+def _system_text(part):
+    """The text of *part* when the application speaks in it, else None."""
+    return part.content if isinstance(part, SystemPromptPart) else None
 
 
 def _make_conversation(user, bot_user):
@@ -207,73 +214,29 @@ class RunAgentGoalCheckTests(TestCase):
 
     @staticmethod
     def _llm_result(content):
-        return {
-            "content": content,
-            "tool_calls": None,
-            "message": MagicMock(content=content, tool_calls=None, to_dict=lambda: {}),
-            "model": "gpt-4o-mini",
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-        }
-
-    @staticmethod
-    def _run_result(context):
-        """What a faked runner hands back: an empty final reply, discarded."""
-        return RunResult(
-            response=ModelResponse(
-                model="gpt-4o-mini", prompt_tokens=10, completion_tokens=5
-            ),
-            context=context,
-            rounds=[],
-            tool_data=None,
-            stop=StopReason.ANSWERED,
-            usage=RunUsage(prompt_tokens=10, completion_tokens=5),
-        )
+        return reply(content, input_tokens=10, output_tokens=5)
 
     @staticmethod
     def _send_message_tool_call(message):
-        import json
-        from types import SimpleNamespace
+        return call("send_user_message", {"message": message}, "call_send_1")
 
-        return SimpleNamespace(
-            id="call_send_1",
-            type="function",
-            function=SimpleNamespace(
-                name="send_user_message",
-                arguments=json.dumps({"message": message}),
-            ),
-        )
+    def _llm_tool_result(self, *tool_calls):
+        return reply("", *tool_calls, input_tokens=10, output_tokens=5)
 
-    def _llm_tool_result(self, tool_call):
-        from types import SimpleNamespace
-
-        msg = SimpleNamespace(
-            role="assistant", content="", tool_calls=[tool_call], to_dict=lambda: {}
-        )
-        return {
-            "content": "",
-            "tool_calls": [tool_call],
-            "message": msg,
-            "model": "gpt-4o-mini",
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-        }
-
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_message_sent_via_tool_is_posted(self, mock_llm):
+    def test_message_sent_via_tool_is_posted(self):
         # End-to-end through the real tool registry: the model calls
         # send_user_message, then produces a final summary that must be
         # discarded in favour of the queued message.
         tc = self._send_message_tool_call("Found something interesting!")
-        mock_llm.side_effect = [
-            self._llm_tool_result(tc),
-            self._llm_result("Routine summary of what I did (discard me)."),
-        ]
         goal = self._goal()
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid))
+        with scripted(
+            self._llm_tool_result(tc),
+            self._llm_result("Routine summary of what I did (discard me)."),
+        ):
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result["status"], "ok")
         bot_msg = Message.objects.filter(
@@ -293,18 +256,17 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertEqual(task.task_type, AITask.TaskType.AGENT)
         self.assertEqual(task.status, AITask.Status.COMPLETED)
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_final_text_without_tool_call_is_discarded(self, mock_llm):
+    def test_final_text_without_tool_call_is_discarded(self):
         # Silence is the default: plain text at the end of a check-in never
         # reaches the user, even when the model wrote a chatty update.
-        mock_llm.return_value = self._llm_result(
-            "I checked everything and here is a long update!"
-        )
         goal = self._goal()
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid))
+        with scripted(
+            self._llm_result("I checked everything and here is a long update!")
+        ):
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["reason"], "silent")
@@ -319,78 +281,79 @@ class RunAgentGoalCheckTests(TestCase):
         goal.refresh_from_db()
         self.assertEqual(goal.check_count, 1)
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_skips_non_active_goal(self, mock_llm):
+    def test_skips_non_active_goal(self):
         goal = self._goal(status=AgentGoal.Status.PAUSED)
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid))
+        with scripted(self._llm_result("Hello")) as script:
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "not_active")
-        mock_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_goal_not_found(self, mock_llm):
+    def test_goal_not_found(self):
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(uuid.uuid4()))
+        with scripted(self._llm_result("Hello")) as script:
+            result = run_agent_goal_check(str(uuid.uuid4()))
 
         self.assertEqual(result["status"], "error")
-        mock_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_duplicate_delivery_skipped_by_cas(self, mock_llm):
-        mock_llm.return_value = self._llm_result("Hello")
+    def test_duplicate_delivery_skipped_by_cas(self):
         goal = self._goal()
         stale_token = (timezone.now() - timedelta(hours=2)).isoformat()
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid), claim_token=stale_token)
+        with scripted(self._llm_result("Hello")) as script:
+            result = run_agent_goal_check(str(goal.uuid), claim_token=stale_token)
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "already_claimed")
-        mock_llm.assert_not_called()
+        self.assertEqual(script.requests, [])
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_empty_response_stays_silent(self, mock_llm):
+    def test_empty_response_stays_silent(self):
         # No retry in agent context: an empty response is just a silent
         # check-in, not a failure to compensate for.
-        mock_llm.return_value = self._llm_result("")
         goal = self._goal()
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid))
+        with scripted(self._llm_result(""), repeat=True) as script:
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["reason"], "silent")
-        mock_llm.assert_called_once()
+        self.assertEqual(len(script.requests), 1)
         self.assertFalse(
             Message.objects.filter(
                 conversation=self.conversation, author=self.bot_user
             ).exists()
         )
 
-    @patch("workspace.ai.tasks.agent_goals.build_bot_runner")
-    def test_user_pausing_goal_mid_run_suppresses_message(self, mock_build):
+    def test_user_pausing_goal_mid_run_suppresses_message(self):
+        from workspace.ai.services.bot_runs import run_bot
+
         goal = self._goal()
 
-        def pause_then_reply(messages):
+        def run_then_pause(*args, **kwargs):
             # Simulates the user pausing the goal from the UI while the LLM
             # run (which queued a message) was in flight.
+            run = run_bot(*args, **kwargs)
             AgentGoal.objects.filter(pk=goal.pk).update(status=AgentGoal.Status.PAUSED)
-            context = mock_build.call_args.kwargs["context"]
-            context["agent_messages"] = ["You should really see this update!"]
-            return self._run_result(context)
-
-        mock_build.return_value.run.side_effect = pause_then_reply
+            return run
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid))
+        tc = self._send_message_tool_call("You should really see this update!")
+        with (
+            scripted(self._llm_tool_result(tc), self._llm_result("Done.")),
+            patch("workspace.ai.tasks.agent_goals.run_bot", side_effect=run_then_pause),
+        ):
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "goal_closed_by_user")
@@ -402,45 +365,50 @@ class RunAgentGoalCheckTests(TestCase):
         task = AITask.objects.get(owner=self.bot_user)
         self.assertEqual(task.result, "[SUPPRESSED]")
 
-    @patch("workspace.ai.tasks.agent_goals.build_bot_runner")
-    def test_agent_closing_goal_itself_still_posts_message(self, mock_build):
+    def test_agent_closing_goal_itself_still_posts_message(self):
         goal = self._goal()
-
-        def close_and_reply(messages):
-            # Simulates the agent calling complete_agent_goal and
-            # send_user_message during its own run: the tools close the goal,
-            # flag the context and queue the wrap-up.
-            AgentGoal.objects.filter(pk=goal.pk).update(
-                status=AgentGoal.Status.COMPLETED, outcome="Done."
-            )
-            context = mock_build.call_args.kwargs["context"]
-            context["agent_goal_changed"] = True
-            context["agent_messages"] = ["Mission accomplished — here is the wrap-up."]
-            return self._run_result(context)
-
-        mock_build.return_value.run.side_effect = close_and_reply
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid))
+        # The agent calls complete_agent_goal and send_user_message during
+        # its own run: the tools close the goal, flag the context and queue
+        # the wrap-up.
+        with scripted(
+            self._llm_tool_result(
+                call(
+                    "complete_agent_goal",
+                    {"goal_id": str(goal.uuid), "outcome": "Done."},
+                    "call_close_1",
+                ),
+                self._send_message_tool_call(
+                    "Mission accomplished: here is the wrap-up."
+                ),
+            ),
+            self._llm_result("Closed the goal."),
+        ):
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result["status"], "ok")
+        goal.refresh_from_db()
+        self.assertEqual(goal.status, AgentGoal.Status.COMPLETED)
         bot_msg = Message.objects.filter(
             conversation=self.conversation, author=self.bot_user
         ).first()
         self.assertIsNotNone(bot_msg)
         self.assertIn("Mission accomplished", bot_msg.body)
 
-    @patch("workspace.ai.tasks.agent_goals.build_bot_runner")
-    def test_failed_checkin_posts_no_error_message(self, mock_build):
+    def test_failed_checkin_posts_no_error_message(self):
         # The silent-default contract holds on failure too: the user never
         # asked for this run, so a crash must not surface as a chat message.
-        mock_build.return_value.run.side_effect = RuntimeError("LLM unavailable")
         goal = self._goal()
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        result = run_agent_goal_check(str(goal.uuid))
+        with patch(
+            "workspace.ai.services.llm.get_model",
+            side_effect=RuntimeError("LLM unavailable"),
+        ):
+            result = run_agent_goal_check(str(goal.uuid))
 
         self.assertEqual(result["status"], "error")
         self.assertFalse(
@@ -452,25 +420,23 @@ class RunAgentGoalCheckTests(TestCase):
         self.assertEqual(task.status, AITask.Status.FAILED)
         self.assertIn("LLM unavailable", task.error)
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_goal_instruction_injected_in_system_prompt(self, mock_llm):
-        mock_llm.return_value = self._llm_result("[SILENT]")
+    def test_goal_instruction_injected_in_system_prompt(self):
         goal = self._goal(notes="Previous findings: nothing yet.")
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        run_agent_goal_check(str(goal.uuid))
+        with scripted(self._llm_result("[SILENT]")) as script:
+            run_agent_goal_check(str(goal.uuid))
 
-        messages = mock_llm.call_args.args[0]
-        system_content = messages[0]["content"]
+        system_prompt = script.sent[0].parts[0]
+        self.assertIsInstance(system_prompt, SystemPromptPart)
+        system_content = system_prompt.content
         self.assertIn("Autonomous goal check-in", system_content)
         self.assertIn(str(goal.uuid), system_content)
         self.assertIn("Research a topic over time.", system_content)
         self.assertIn("Previous findings: nothing yet.", system_content)
 
-    @patch("workspace.ai.harness.model.call_llm")
-    def test_checkin_tells_the_model_nobody_wrote_to_it(self, mock_llm):
-        mock_llm.return_value = self._llm_result("[SILENT]")
+    def test_checkin_tells_the_model_nobody_wrote_to_it(self):
         goal = self._goal()
         Message.objects.create(
             conversation=self.conversation, author=self.bot_user, body="Progress?"
@@ -478,12 +444,13 @@ class RunAgentGoalCheckTests(TestCase):
 
         from workspace.ai.tasks.agent_goals import run_agent_goal_check
 
-        run_agent_goal_check(str(goal.uuid))
+        with scripted(self._llm_result("[SILENT]")) as script:
+            run_agent_goal_check(str(goal.uuid))
 
-        last = mock_llm.call_args.args[0][-1]
-        self.assertEqual(last["role"], "system")
-        self.assertIn("own initiative", last["content"])
-        self.assertIn("The last message in the conversation is yours", last["content"])
+        last = _system_text(script.sent[-1].parts[-1])
+        self.assertIsNotNone(last)
+        self.assertIn("own initiative", last)
+        self.assertIn("The last message in the conversation is yours", last)
 
 
 # ---------------------------------------------------------------------------
@@ -793,13 +760,13 @@ class AgentGoalToolTests(TestCase):
 
     def _call(self, method_name, args=None):
         method = getattr(self.provider, method_name)
-        return method(
-            args,
+        ctx = tool_context(
             user=self.user,
             bot=self.bot_user,
             conversation_id=self.conv_id,
             context=self.context,
         )
+        return method(ctx) if args is None else method(ctx, args)
 
     def _goal(self, **kwargs):
         defaults = {
@@ -909,12 +876,12 @@ class AgentGoalToolTests(TestCase):
     # -- list ----------------------------------------------------------------
 
     def test_list_goals_empty(self):
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn("No active goals", result)
 
     def test_list_goals(self):
         self._goal(notes="Working notes here.")
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn("Existing goal", result)
         self.assertIn("Working notes here.", result)
 
@@ -924,7 +891,7 @@ class AgentGoalToolTests(TestCase):
             constraints="Budget under 900 euros.",
             reporting="Only for visits worth booking.",
         )
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn("Lease signed.", result)
         self.assertIn("Budget under 900 euros.", result)
         self.assertIn("Only for visits worth booking.", result)
@@ -936,7 +903,7 @@ class AgentGoalToolTests(TestCase):
             outcome="Lease signed in June.",
             closed_at=timezone.now() - timedelta(days=7),
         )
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn("Finished goal", result)
         self.assertIn("completed", result)
         self.assertIn("closed", result)
@@ -950,7 +917,7 @@ class AgentGoalToolTests(TestCase):
             outcome="Done.",
             closed_at=timezone.now() - timedelta(days=2),
         )
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn("No active goals", result)
         self.assertIn("Finished goal", result)
 
@@ -963,7 +930,7 @@ class AgentGoalToolTests(TestCase):
             - AgentGoal.CLOSED_RECALL_WINDOW
             - timedelta(days=1),
         )
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertNotIn("Ancient goal", result)
 
     def test_list_goals_caps_the_closed_section(self):
@@ -974,7 +941,7 @@ class AgentGoalToolTests(TestCase):
                 outcome="Done.",
                 closed_at=timezone.now() - timedelta(days=i + 1),
             )
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn(f"Closed recently ({AgentGoal.CLOSED_RECALL_LIMIT})", result)
         # Ordered newest-first, so the oldest ones fall off the end.
         self.assertIn("Closed 0", result)
@@ -993,18 +960,18 @@ class AgentGoalToolTests(TestCase):
             outcome="Done.",
             closed_at=timezone.now() - timedelta(days=1),
         )
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertNotIn("Elsewhere goal", result)
 
     def test_list_goals_flags_an_overdue_deadline(self):
         self._goal(title="Late goal", deadline=timezone.now() - timedelta(days=3))
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn("Late goal", result)
         self.assertIn("OVERDUE", result)
 
     def test_list_goals_leaves_a_future_deadline_unflagged(self):
         self._goal(title="On time goal", deadline=timezone.now() + timedelta(days=3))
-        result = self._call("list_agent_goals", {})
+        result = self._call("list_agent_goals")
         self.assertIn("deadline", result)
         self.assertNotIn("OVERDUE", result)
 
@@ -1187,18 +1154,16 @@ class AgentGoalToolTests(TestCase):
 
 
 class AgentGoalPromptTests(TestCase):
-    def test_system_prompt_includes_autonomous_goals_section(self):
-        from workspace.ai.prompts.chat import build_chat_messages
+    """What a bot is told about goals travels with the goal tools."""
 
-        messages = build_chat_messages("You are a bot.", [])
-        self.assertIn("## Autonomous goals", messages[0]["content"])
-        self.assertIn("create_agent_goal", messages[0]["content"])
-        self.assertIn("send_user_message", messages[0]["content"])
+    def test_the_goal_tools_come_with_their_section(self):
+        content = AgentGoalToolProvider.instructions
+        self.assertIn("## Autonomous goals", content)
+        self.assertIn("create_agent_goal", content)
+        self.assertIn("send_user_message", content)
 
-    def test_system_prompt_mentions_the_mission_brief(self):
-        from workspace.ai.prompts.chat import build_chat_messages
-
-        content = build_chat_messages("You are a bot.", [])[0]["content"]
+    def test_the_section_mentions_the_mission_brief(self):
+        content = AgentGoalToolProvider.instructions
         self.assertIn("success_criteria", content)
         self.assertIn("constraints", content)
         self.assertIn("reporting", content)

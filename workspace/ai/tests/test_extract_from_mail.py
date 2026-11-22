@@ -1,6 +1,6 @@
+import json
 import uuid
 from datetime import UTC, datetime, time, timedelta
-from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
@@ -9,6 +9,8 @@ from django.test import TestCase, override_settings
 from django.utils import timezone as dj_tz
 
 from workspace.ai.models import AITask
+from workspace.ai.services import llm
+from workspace.ai.tasks.calendar import extract_from_mail_messages
 from workspace.calendar.models import Event
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import (
@@ -19,20 +21,19 @@ from workspace.mail.models import (
 )
 from workspace.users.services.settings import set_setting
 
+from . import agents
+
 User = get_user_model()
 
 
-def _llm_payload(events):
-    """Mirror call_llm()'s return shape, with events as a JSON string."""
-    import json
-
-    return {
-        "content": json.dumps({"events": events}),
-        "tool_calls": [],
-        "model": "test-model",
-        "prompt_tokens": 100,
-        "completion_tokens": 20,
-    }
+def _reporting(events):
+    """A model that reads *events* in every mail it is given."""
+    return agents.scripted(
+        agents.reply(
+            json.dumps({"events": events}), input_tokens=100, output_tokens=20
+        ),
+        repeat=True,
+    )
 
 
 class ExtractFromMailTests(TestCase):
@@ -67,26 +68,22 @@ class ExtractFromMailTests(TestCase):
             input_data={"message_uuids": [str(self.message.uuid)]},
         )
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_creates_event_and_extraction_on_high_confidence(self, mock_llm):
+    def test_creates_event_and_extraction_on_high_confidence(self):
         future = (dj_tz.now() + timedelta(days=1)).isoformat()
-        mock_llm.return_value = _llm_payload(
-            [
-                {
-                    "title": "Train Paris-Lyon",
-                    "start": future,
-                    "end": None,
-                    "all_day": False,
-                    "location": "Gare de Lyon",
-                    "description": "",
-                    "confidence": "high",
-                    "reasoning": "ticket",
-                }
-            ]
-        )
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        extract_from_mail_messages(str(self.ai_task.uuid))
+        events = [
+            {
+                "title": "Train Paris-Lyon",
+                "start": future,
+                "end": None,
+                "all_day": False,
+                "location": "Gare de Lyon",
+                "description": "",
+                "confidence": "high",
+                "reasoning": "ticket",
+            }
+        ]
+        with _reporting(events):
+            extract_from_mail_messages(str(self.ai_task.uuid))
 
         self.assertEqual(MailExtraction.objects.count(), 1)
         ex = MailExtraction.objects.first()
@@ -95,79 +92,66 @@ class ExtractFromMailTests(TestCase):
         self.assertIsNotNone(ex.target)
         self.assertEqual(ex.target.source, "llm")
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_takes_more_messages_than_a_statement_binds(self, mock_llm):
-        mock_llm.return_value = _llm_payload([])
+    def test_takes_more_messages_than_a_statement_binds(self):
         limit = 50
         message_uuids = [str(uuid.uuid4()) for _ in range(limit * 2)]
         message_uuids.append(str(self.message.uuid))
         self.ai_task.input_data = {"message_uuids": message_uuids}
         self.ai_task.save(update_fields=["input_data"])
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        with sqlite_parameter_limit(limit):
+        with sqlite_parameter_limit(limit), _reporting([]) as script:
             extract_from_mail_messages(str(self.ai_task.uuid))
 
-        mock_llm.assert_called_once()
+        self.assertEqual(len(script.requests), 1)
         self.ai_task.refresh_from_db()
         self.assertEqual(self.ai_task.status, AITask.Status.COMPLETED)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_drops_medium_confidence(self, mock_llm):
+    def test_drops_medium_confidence(self):
         future = (dj_tz.now() + timedelta(days=1)).isoformat()
-        mock_llm.return_value = _llm_payload(
-            [
-                {
-                    "title": "Maybe coffee",
-                    "start": future,
-                    "end": None,
-                    "all_day": False,
-                    "location": "",
-                    "description": "",
-                    "confidence": "medium",
-                    "reasoning": "vague",
-                }
-            ]
-        )
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        extract_from_mail_messages(str(self.ai_task.uuid))
+        events = [
+            {
+                "title": "Maybe coffee",
+                "start": future,
+                "end": None,
+                "all_day": False,
+                "location": "",
+                "description": "",
+                "confidence": "medium",
+                "reasoning": "vague",
+            }
+        ]
+        with _reporting(events):
+            extract_from_mail_messages(str(self.ai_task.uuid))
 
         self.assertEqual(MailExtraction.objects.count(), 0)
         self.assertEqual(Event.objects.count(), 0)
 
-    def _extract(self, mock_llm, **event):
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
+    def _extract(self, **event):
+        events = [
+            {
+                "title": "Train",
+                "end": None,
+                "all_day": False,
+                "location": "",
+                "description": "",
+                "confidence": "high",
+                "reasoning": "ticket",
+                **event,
+            }
+        ]
+        with _reporting(events):
+            extract_from_mail_messages(str(self.ai_task.uuid))
 
-        mock_llm.return_value = _llm_payload(
-            [
-                {
-                    "title": "Train",
-                    "end": None,
-                    "all_day": False,
-                    "location": "",
-                    "description": "",
-                    "confidence": "high",
-                    "reasoning": "ticket",
-                    **event,
-                }
-            ]
-        )
-        extract_from_mail_messages(str(self.ai_task.uuid))
-
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_offsetless_time_is_the_owners_wall_clock(self, mock_llm):
+    def test_offsetless_time_is_the_owners_wall_clock(self):
         set_setting(self.user, "core", "timezone", "Europe/Paris")
         self.addCleanup(cache.clear)
         local = (dj_tz.now() + timedelta(days=2)).astimezone(ZoneInfo("Europe/Paris"))
         wall_clock = local.replace(hour=8, minute=0, second=0, microsecond=0)
 
-        self._extract(mock_llm, start=wall_clock.replace(tzinfo=None).isoformat())
+        self._extract(start=wall_clock.replace(tzinfo=None).isoformat())
 
         self.assertEqual(Event.objects.get().start, wall_clock)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_todays_all_day_event_is_not_past(self, mock_llm):
+    def test_todays_all_day_event_is_not_past(self):
         set_setting(self.user, "core", "timezone", "Europe/Paris")
         self.addCleanup(cache.clear)
         paris = ZoneInfo("Europe/Paris")
@@ -175,114 +159,90 @@ class ExtractFromMailTests(TestCase):
         # Local midnight, already behind "now" for most of the day.
         midnight = datetime.combine(today, time.min, tzinfo=paris)
 
-        self._extract(mock_llm, start=midnight.isoformat(), all_day=True)
+        self._extract(start=midnight.isoformat(), all_day=True)
 
         self.assertEqual(
             Event.objects.get().start, datetime.combine(today, time.min, tzinfo=UTC)
         )
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_drops_past_events(self, mock_llm):
+    def test_drops_past_events(self):
         past = (dj_tz.now() - timedelta(days=1)).isoformat()
-        mock_llm.return_value = _llm_payload(
-            [
-                {
-                    "title": "Yesterday RDV",
-                    "start": past,
-                    "end": None,
-                    "all_day": False,
-                    "location": "",
-                    "description": "",
-                    "confidence": "high",
-                    "reasoning": "old",
-                }
-            ]
-        )
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        extract_from_mail_messages(str(self.ai_task.uuid))
+        events = [
+            {
+                "title": "Yesterday RDV",
+                "start": past,
+                "end": None,
+                "all_day": False,
+                "location": "",
+                "description": "",
+                "confidence": "high",
+                "reasoning": "old",
+            }
+        ]
+        with _reporting(events):
+            extract_from_mail_messages(str(self.ai_task.uuid))
 
         self.assertEqual(MailExtraction.objects.count(), 0)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_empty_array_creates_nothing(self, mock_llm):
-        mock_llm.return_value = _llm_payload([])
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        extract_from_mail_messages(str(self.ai_task.uuid))
+    def test_empty_array_creates_nothing(self):
+        with _reporting([]):
+            extract_from_mail_messages(str(self.ai_task.uuid))
 
         self.assertEqual(MailExtraction.objects.count(), 0)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_multi_event_creates_multiple_rows(self, mock_llm):
+    def test_multi_event_creates_multiple_rows(self):
         f1 = (dj_tz.now() + timedelta(days=1)).isoformat()
         f2 = (dj_tz.now() + timedelta(days=2)).isoformat()
-        mock_llm.return_value = _llm_payload(
-            [
-                {
-                    "title": "A",
-                    "start": f1,
-                    "end": None,
-                    "all_day": False,
-                    "location": "",
-                    "description": "",
-                    "confidence": "high",
-                    "reasoning": "r1",
-                },
-                {
-                    "title": "B",
-                    "start": f2,
-                    "end": None,
-                    "all_day": False,
-                    "location": "",
-                    "description": "",
-                    "confidence": "high",
-                    "reasoning": "r2",
-                },
-            ]
-        )
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        extract_from_mail_messages(str(self.ai_task.uuid))
+        events = [
+            {
+                "title": "A",
+                "start": f1,
+                "end": None,
+                "all_day": False,
+                "location": "",
+                "description": "",
+                "confidence": "high",
+                "reasoning": "r1",
+            },
+            {
+                "title": "B",
+                "start": f2,
+                "end": None,
+                "all_day": False,
+                "location": "",
+                "description": "",
+                "confidence": "high",
+                "reasoning": "r2",
+            },
+        ]
+        with _reporting(events):
+            extract_from_mail_messages(str(self.ai_task.uuid))
 
         self.assertEqual(
             MailExtraction.objects.filter(mail_message=self.message).count(), 2
         )
 
-    @patch("workspace.ai.services.llm.call_llm")
     @override_settings(AI_EXTRACT_MODEL="custom-extract-model", AI_MODEL="other")
-    def test_uses_ai_extract_model_when_configured(self, mock_llm):
+    def test_uses_ai_extract_model_when_configured(self):
         """AI_EXTRACT_MODEL takes precedence over AI_MODEL when set."""
-        mock_llm.return_value = _llm_payload([])
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
+        with _reporting([]):
+            extract_from_mail_messages(str(self.ai_task.uuid))
+            # scripted() stands in for get_model: its call names the model asked.
+            llm.get_model.assert_called_once_with("custom-extract-model")
 
-        extract_from_mail_messages(str(self.ai_task.uuid))
-
-        self.assertEqual(mock_llm.call_args.kwargs.get("model"), "custom-extract-model")
-
-    @patch("workspace.ai.services.llm.call_llm")
     @override_settings(AI_EXTRACT_MODEL="", AI_MODEL="fallback-model")
-    def test_falls_back_to_ai_model_when_extract_model_empty(self, mock_llm):
+    def test_falls_back_to_ai_model_when_extract_model_empty(self):
         """Empty AI_EXTRACT_MODEL falls through to AI_MODEL (backward compat)."""
-        mock_llm.return_value = _llm_payload([])
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
+        with _reporting([]):
+            extract_from_mail_messages(str(self.ai_task.uuid))
+            llm.get_model.assert_called_once_with("fallback-model")
 
-        extract_from_mail_messages(str(self.ai_task.uuid))
+    def test_malformed_json_skips_message_without_crashing(self):
+        # An answer that is not the schema is asked for once more, then given up on.
+        with agents.scripted(agents.reply("not json at all"), repeat=True) as script:
+            extract_from_mail_messages(str(self.ai_task.uuid))
 
-        self.assertEqual(mock_llm.call_args.kwargs.get("model"), "fallback-model")
-
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_malformed_json_skips_message_without_crashing(self, mock_llm):
-        mock_llm.return_value = {
-            "content": "not json at all",
-            "tool_calls": [],
-            "model": "test",
-            "prompt_tokens": 1,
-            "completion_tokens": 1,
-        }
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        extract_from_mail_messages(str(self.ai_task.uuid))
+        self.assertEqual(len(script.requests), 2)
 
         self.assertEqual(MailExtraction.objects.count(), 0)
         self.ai_task.refresh_from_db()
@@ -338,42 +298,35 @@ class ExtractDeduplicationTests(TestCase):
             from_email="doc@x.com",
         )
 
-    def _extract(self, message, mock_llm, events):
-        from workspace.ai.tasks.calendar import extract_from_mail_messages
-
-        mock_llm.return_value = _llm_payload(events)
+    def _extract(self, message, events):
         task = AITask.objects.create(
             owner=self.user,
             task_type=AITask.TaskType.EXTRACT,
             input_data={"message_uuids": [str(message.uuid)]},
         )
-        extract_from_mail_messages(str(task.uuid))
+        with _reporting(events):
+            extract_from_mail_messages(str(task.uuid))
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_reply_renaming_the_same_event_reuses_it(self, mock_llm):
+    def test_reply_renaming_the_same_event_reuses_it(self):
         reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
 
-        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
-        self._extract(
-            reply, mock_llm, [_event("Dental appointment - Dr Martin", self.start)]
-        )
+        self._extract(self.first, [_event("Dentist", self.start)])
+        self._extract(reply, [_event("Dental appointment - Dr Martin", self.start)])
 
         event = Event.objects.get()
         self.assertEqual(event.title, "Dentist")
         reply_extraction = MailExtraction.objects.get(mail_message=reply)
         self.assertEqual(reply_extraction.target_object_id, event.uuid)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_unthreaded_reminder_reuses_the_event(self, mock_llm):
+    def test_unthreaded_reminder_reuses_the_event(self):
         reminder = self._message(2, "<reminder@x>", "Reminder: your appointment")
 
-        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
-        self._extract(reminder, mock_llm, [_event("Appointment", self.start)])
+        self._extract(self.first, [_event("Dentist", self.start)])
+        self._extract(reminder, [_event("Appointment", self.start)])
 
         self.assertEqual(Event.objects.count(), 1)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_event_from_an_invitation_is_not_extracted_again(self, mock_llm):
+    def test_event_from_an_invitation_is_not_extracted_again(self):
         from workspace.calendar.services.event_creation import (
             create_event_from_payload,
         )
@@ -386,7 +339,7 @@ class ExtractDeduplicationTests(TestCase):
             ical_uid="uid-1",
         )
 
-        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        self._extract(self.first, [_event("Dentist", self.start)])
 
         ics_event = Event.objects.get()
         self.assertTrue(
@@ -395,8 +348,7 @@ class ExtractDeduplicationTests(TestCase):
             ).exists()
         )
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_all_day_invitation_matches_a_local_midnight_west_of_utc(self, mock_llm):
+    def test_all_day_invitation_matches_a_local_midnight_west_of_utc(self):
         from workspace.calendar.services.event_creation import (
             create_event_from_payload,
         )
@@ -418,60 +370,51 @@ class ExtractDeduplicationTests(TestCase):
             day, time.min, tzinfo=ZoneInfo("America/New_York")
         )
 
-        self._extract(
-            self.first, mock_llm, [_event("Offsite", new_york_midnight, all_day=True)]
-        )
+        self._extract(self.first, [_event("Offsite", new_york_midnight, all_day=True)])
 
         self.assertEqual(Event.objects.count(), 1)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_event_the_user_deleted_is_not_recreated_by_a_reply(self, mock_llm):
+    def test_event_the_user_deleted_is_not_recreated_by_a_reply(self):
         reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
 
-        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        self._extract(self.first, [_event("Dentist", self.start)])
         Event.objects.all().delete()
-        self._extract(reply, mock_llm, [_event("Dentist appointment", self.start)])
+        self._extract(reply, [_event("Dentist appointment", self.start)])
 
         self.assertEqual(Event.objects.count(), 0)
         self.assertFalse(MailExtraction.objects.filter(mail_message=reply).exists())
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_all_day_event_on_the_same_day_is_reused(self, mock_llm):
+    def test_all_day_event_on_the_same_day_is_reused(self):
         reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
         midnight = self.start.replace(hour=0, minute=0, second=0)
 
-        self._extract(self.first, mock_llm, [_event("Trip", midnight, all_day=True)])
+        self._extract(self.first, [_event("Trip", midnight, all_day=True)])
         self._extract(
             reply,
-            mock_llm,
             [_event("Holiday trip", midnight + timedelta(hours=2), all_day=True)],
         )
 
         self.assertEqual(Event.objects.count(), 1)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_rerun_on_the_same_message_adds_no_extraction(self, mock_llm):
-        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
-        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+    def test_rerun_on_the_same_message_adds_no_extraction(self):
+        self._extract(self.first, [_event("Dentist", self.start)])
+        self._extract(self.first, [_event("Dentist", self.start)])
 
         self.assertEqual(Event.objects.count(), 1)
         self.assertEqual(MailExtraction.objects.count(), 1)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_event_at_another_time_is_still_created(self, mock_llm):
+    def test_event_at_another_time_is_still_created(self):
         reply = self._message(2, "<b@x>", "Re: Dentist", in_reply_to="<a@x>")
 
-        self._extract(self.first, mock_llm, [_event("Dentist", self.start)])
+        self._extract(self.first, [_event("Dentist", self.start)])
         self._extract(
             reply,
-            mock_llm,
             [_event("Follow-up visit", self.start + timedelta(days=7))],
         )
 
         self.assertEqual(Event.objects.count(), 2)
 
-    @patch("workspace.ai.services.llm.call_llm")
-    def test_all_day_event_is_stored_on_the_day_the_mail_names(self, mock_llm):
+    def test_all_day_event_is_stored_on_the_day_the_mail_names(self):
         """All-day events live at UTC midnight of their day: a local midnight
         east of UTC is the previous UTC day, and would show a day early."""
         day = (self.start + timedelta(days=1)).date()
@@ -481,7 +424,6 @@ class ExtractDeduplicationTests(TestCase):
 
         self._extract(
             self.first,
-            mock_llm,
             [
                 {
                     **_event("Trip", paris_midnight, all_day=True),

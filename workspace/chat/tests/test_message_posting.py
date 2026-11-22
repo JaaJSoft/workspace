@@ -12,9 +12,11 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient, APITestCase
 
-from workspace.ai.harness.model import ModelResponse
 from workspace.ai.models import AITask, BotProfile
+from workspace.ai.prompts.base import prompt
+from workspace.ai.services.bot_runs import run_bot
 from workspace.ai.services.responses import post_bot_message
+from workspace.ai.tests.agents import reply, scripted
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
@@ -240,14 +242,19 @@ class BotReplyTests(MessagePostingMixin, TestCase):
         )
 
     def _reply(self, content="here you go"):
+        with scripted(reply(content, input_tokens=1, output_tokens=1)):
+            run = run_bot(
+                self.bot.bot_profile,
+                self.author,
+                self.bot,
+                self.conv.uuid,
+                prompt("You are a bot.", "hello"),
+            )
         with self.captureOnCommitCallbacks(execute=True):
             return post_bot_message(
                 conversation=self.conv,
                 bot_user=self.bot,
-                response=ModelResponse(
-                    content=content, model="test", prompt_tokens=1, completion_tokens=1
-                ),
-                tool_context={},
+                run=run,
                 ai_task=self.ai_task,
             )
 

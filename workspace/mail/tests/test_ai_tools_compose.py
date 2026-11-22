@@ -13,6 +13,7 @@ from workspace.ai.services.confirmation import (
     consume_bound_confirmation,
     request_bound_confirmation,
 )
+from workspace.ai.tests.agents import tool_context
 from workspace.mail.ai_tools import (
     SEND_ACTION,
     DraftEmailParams,
@@ -98,13 +99,7 @@ class MailComposeToolsTestCase(TestCase):
         )
 
     def _call(self, tool, params, bot=None):
-        return tool(
-            params,
-            user=self.user,
-            bot=bot,
-            conversation_id=None,
-            context={},
-        )
+        return tool(tool_context(user=self.user, bot=bot), params)
 
 
 class DraftEmailTests(MailComposeToolsTestCase):
@@ -328,11 +323,13 @@ class SendEmailTests(MailComposeToolsTestCase):
 
     def _send(self, params, bot, context, conversation_id=CONVERSATION):
         return self.tools.send_email(
+            tool_context(
+                user=self.user,
+                bot=bot,
+                conversation_id=conversation_id,
+                context=context,
+            ),
             params,
-            user=self.user,
-            bot=bot,
-            conversation_id=conversation_id,
-            context=context,
         )
 
     def test_a_bot_without_the_capability_cannot_send(self):

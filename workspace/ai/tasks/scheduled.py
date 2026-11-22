@@ -7,22 +7,13 @@ from django.utils import timezone
 
 from workspace.ai.services.ai_task import close_task
 from workspace.ai.services.bot_access import run_refusal
-from workspace.ai.services.bot_runs import build_bot_runner
+from workspace.ai.services.bot_runs import produced_media, run_bot
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import (
     build_conversation_history,
     unprompted_run_note,
 )
-from workspace.ai.services.llm import (
-    clean_llm_content,
-    sanitize_messages_for_storage,
-)
-from workspace.ai.services.responses import (
-    handle_generation_error,
-    post_bot_message,
-    produced_media,
-    run_usage_fields,
-)
+from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 from workspace.common.task_priority import NORMAL_PRIORITY
@@ -189,49 +180,32 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
     )
 
     try:
-        initial_messages = sanitize_messages_for_storage(list(messages))
-
-        runner = build_bot_runner(
-            bot_profile, human_user, bot_user, str(conversation.pk)
+        # Nobody is waiting for this message: one the model left empty is
+        # dropped, not asked for again.
+        run = run_bot(
+            bot_profile,
+            human_user,
+            bot_user,
+            str(conversation.pk),
+            messages,
+            expects_answer=False,
         )
-        run = runner.run(messages)
 
-        # Auto-retry once if the model returned an empty response.
-        # Only the final completion is retried (no tools): rerunning
-        # the whole loop would re-execute side-effectful tools and
-        # discard the first pass's context / tool_data.
-        body_preview = clean_llm_content(run.response.content)
-        if not body_preview and not produced_media(run.context):
-            logger.warning(
-                "Empty scheduled response, retrying once: schedule=%s",
-                scrub(schedule_id),
+        if not run.output and not produced_media(run.context):
+            close_task(
+                ai_task, AITask.Status.COMPLETED, result="[EMPTY]", **run.task_fields()
             )
-            run = runner.retry_final(messages, run)
-            body_preview = clean_llm_content(run.response.content)
-            if not body_preview and not produced_media(run.context):
-                close_task(
-                    ai_task,
-                    AITask.Status.COMPLETED,
-                    result="[EMPTY]",
-                    **run_usage_fields(run.response, run.usage),
-                )
-                logger.warning(
-                    "Scheduled response empty after retry: schedule=%s",
-                    scrub(schedule_id),
-                )
-                return {"status": "skipped", "reason": "empty_response"}
-
-        raw_messages = {"messages": initial_messages, "rounds": run.rounds}
+            logger.warning("Scheduled response empty: schedule=%s", scrub(schedule_id))
+            return {"status": "skipped", "reason": "empty_response"}
 
         # Let the bot skip if it judges the message is no longer relevant.
-        body = clean_llm_content(run.response.content)
-        if body == "[SKIP]":
+        if run.output == "[SKIP]":
             close_task(
                 ai_task,
                 AITask.Status.COMPLETED,
                 result="[SKIP]",
-                raw_messages=raw_messages,
-                **run_usage_fields(run.response, run.usage),
+                raw_messages=run.raw_messages,
+                **run.task_fields(),
             )
             logger.info(
                 "Scheduled response skipped (bot judged irrelevant): schedule=%s",
@@ -239,16 +213,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             )
             return {"status": "skipped", "reason": "bot_judged_irrelevant"}
 
-        posted = post_bot_message(
-            conversation,
-            bot_user,
-            run.response,
-            run.context,
-            ai_task,
-            raw_messages,
-            tool_data=run.tool_data,
-            usage=run.usage,
-        )
+        posted = post_bot_message(conversation, bot_user, run, ai_task)
         if posted is None:
             logger.info("Scheduled response cancelled: schedule=%s", scrub(schedule_id))
             return {"status": "cancelled"}
@@ -260,8 +225,8 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             "Scheduled response generated: schedule=%s conversation=%s tokens=%s+%s",
             scrub(schedule_id),
             scrub(conversation.pk),
-            run.usage.prompt_tokens,
-            run.usage.completion_tokens,
+            run.usage.input_tokens,
+            run.usage.output_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 

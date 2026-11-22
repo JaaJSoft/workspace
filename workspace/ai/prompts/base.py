@@ -1,5 +1,28 @@
 from django.utils import timezone
 from django.utils.translation import get_language_info
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    SystemPromptPart,
+    UserPromptPart,
+)
+
+
+def prompt(system: str, user) -> list[ModelMessage]:
+    """A system prompt and one user message, as the conversation a model is sent."""
+    return [ModelRequest(parts=[SystemPromptPart(system), UserPromptPart(user)])]
+
+
+def send(messages: list[ModelMessage], *parts) -> None:
+    """Add *parts* to what the model is sent before its next turn.
+
+    Everything a model reads between two of its own turns is one request,
+    whoever wrote it: a system line, the user, the result of a tool.
+    """
+    if messages and isinstance(messages[-1], ModelRequest):
+        messages[-1].parts.extend(parts)
+    else:
+        messages.append(ModelRequest(parts=list(parts)))
 
 
 def truncate_text(text: str, max_chars: int = 8000) -> str:

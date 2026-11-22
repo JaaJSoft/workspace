@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 
-from workspace.ai.client import get_ai_client, get_image_client, is_ai_enabled
+from workspace.ai.client import get_image_client, is_ai_enabled
 from workspace.ai.services.image import VALID_SIZES, ai_edit_image
 
 # ── client.py ───────────────────────────────────────────────────
@@ -16,24 +16,6 @@ class IsAiEnabledTests(TestCase):
     @override_settings(AI_API_KEY="")
     def test_disabled_when_key_empty(self):
         self.assertFalse(is_ai_enabled())
-
-
-class GetAiClientTests(TestCase):
-    @override_settings(
-        AI_API_KEY="", AI_BASE_URL="http://localhost", AI_TIMEOUT=30, AI_MAX_RETRIES=2
-    )
-    def test_returns_none_when_no_key(self):
-        self.assertIsNone(get_ai_client())
-
-    @override_settings(
-        AI_API_KEY="sk-test",
-        AI_BASE_URL="http://localhost",
-        AI_TIMEOUT=30,
-        AI_MAX_RETRIES=2,
-    )
-    def test_returns_client_when_key_set(self):
-        client = get_ai_client()
-        self.assertIsNotNone(client)
 
 
 class GetImageClientTests(TestCase):

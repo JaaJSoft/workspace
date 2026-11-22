@@ -2,8 +2,26 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
+from pydantic_ai.messages import SystemPromptPart, UserPromptPart
 
 from workspace.ai.prompts.calendar import build_event_extraction_messages
+
+
+def _prompt_parts(messages):
+    """The system and user parts of a one-shot prompt: one request, the two in order."""
+    (request,) = messages
+    system, user = request.parts
+    assert isinstance(system, SystemPromptPart)
+    assert isinstance(user, UserPromptPart)
+    return system, user
+
+
+def system_text(messages):
+    return _prompt_parts(messages)[0].content
+
+
+def user_text(messages):
+    return _prompt_parts(messages)[1].content
 
 
 class BuildEventExtractionMessagesTests(TestCase):
@@ -20,12 +38,14 @@ class BuildEventExtractionMessagesTests(TestCase):
         messages = build_event_extraction_messages(
             [self._msg("Hi", "Meet at 3pm tomorrow.")]
         )
-        self.assertEqual(messages[0]["role"], "system")
-        self.assertEqual(messages[1]["role"], "user")
+        (request,) = messages
+        self.assertEqual(
+            [type(part) for part in request.parts], [SystemPromptPart, UserPromptPart]
+        )
 
     def test_system_message_rejects_vague_proposals(self):
         messages = build_event_extraction_messages([self._msg("Hi", "x")])
-        system = messages[0]["content"].lower()
+        system = system_text(messages).lower()
         self.assertIn("confirmed", system)
         self.assertIn("reject", system)
 
@@ -33,18 +53,18 @@ class BuildEventExtractionMessagesTests(TestCase):
         m1 = self._msg("Plan", "On se voit ?")
         m2 = self._msg("Re: Plan", "Oui mardi 14h")
         messages = build_event_extraction_messages([m1, m2])
-        content = messages[1]["content"]
+        content = user_text(messages)
         self.assertLess(content.index("On se voit"), content.index("Oui mardi"))
 
     def test_user_message_wraps_body_in_untrusted_tags(self):
         messages = build_event_extraction_messages([self._msg("Hi", "body")])
-        self.assertIn("<untrusted-content>", messages[1]["content"])
-        self.assertIn("</untrusted-content>", messages[1]["content"])
+        self.assertIn("<untrusted-content>", user_text(messages))
+        self.assertIn("</untrusted-content>", user_text(messages))
 
     def test_long_bodies_are_truncated(self):
         long_body = "x" * 10000
         messages = build_event_extraction_messages([self._msg("Hi", long_body)])
-        self.assertLess(len(messages[1]["content"]), 8000)
+        self.assertLess(len(user_text(messages)), 8000)
 
     @patch("workspace.ai.prompts.calendar.timezone.now")
     def test_user_message_includes_message_date_as_anchor(self, mock_now):
@@ -55,7 +75,7 @@ class BuildEventExtractionMessagesTests(TestCase):
         mock_now.return_value = datetime(2026, 5, 15, 12, 0, tzinfo=UTC)
         # _msg date is 2026-05-14 09:00 UTC.
         messages = build_event_extraction_messages([self._msg("Hi", "body")])
-        self.assertIn("2026-05-14", messages[1]["content"])
+        self.assertIn("2026-05-14", user_text(messages))
 
     @patch("workspace.ai.prompts.calendar.timezone.now")
     def test_user_message_renders_date_in_user_timezone(self, mock_now):
@@ -70,7 +90,7 @@ class BuildEventExtractionMessagesTests(TestCase):
             [self._msg("Hi", "body")],
             user_tz=ZoneInfo("Europe/Paris"),
         )
-        content = messages[1]["content"]
+        content = user_text(messages)
         self.assertIn("2026-05-14 11:00", content)
         self.assertIn("Europe/Paris", content)
         self.assertIn("interpret it in Europe/Paris", content)
@@ -86,9 +106,7 @@ class BuildEventExtractionMessagesTests(TestCase):
             [late, self._msg("Re: Hi", "ok")], user_tz=ZoneInfo("Europe/Paris")
         )
 
-        self.assertIn(
-            "[Message 1 | 2026-05-15T01:30:00+02:00 |", messages[1]["content"]
-        )
+        self.assertIn("[Message 1 | 2026-05-15T01:30:00+02:00 |", user_text(messages))
 
     @patch("workspace.ai.prompts.calendar.timezone.now")
     def test_relative_time_anchors_on_most_recent_message_date(self, mock_now):
@@ -111,7 +129,7 @@ class BuildEventExtractionMessagesTests(TestCase):
         messages = build_event_extraction_messages(
             [msg], user_tz=ZoneInfo("Europe/Paris")
         )
-        content = messages[1]["content"]
+        content = user_text(messages)
         # The anchor in the prompt must be the email's date...
         self.assertIn("2026-03-01", content)
         # ...and critically NOT today's date.
@@ -128,7 +146,7 @@ class BuildEventExtractionMessagesTests(TestCase):
         m2 = self._msg("Re: Plan", "Ok demain 8h ?")
         m2.date = datetime(2026, 4, 20, 14, 0, tzinfo=UTC)
         messages = build_event_extraction_messages([m1, m2])
-        content = messages[1]["content"]
+        content = user_text(messages)
         self.assertIn("2026-04-20", content)
         self.assertNotIn("2026-05-17", content)
 
@@ -141,4 +159,4 @@ class BuildEventExtractionMessagesTests(TestCase):
         msg = self._msg("Hi", "body")
         msg.date = None
         messages = build_event_extraction_messages([msg])
-        self.assertIn("2026-05-17 10:00", messages[1]["content"])
+        self.assertIn("2026-05-17 10:00", user_text(messages))

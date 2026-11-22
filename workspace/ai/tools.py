@@ -1,6 +1,5 @@
 """Core AI chat tools (memory, workspace search, avatar, image generation)."""
 
-import base64
 import json
 import logging
 import threading
@@ -11,6 +10,8 @@ from typing import Literal
 from django.conf import settings
 from django.utils import timezone
 from pydantic import BaseModel, Field, field_validator
+from pydantic_ai import RunContext
+from pydantic_ai.messages import BinaryContent, ToolReturn
 
 from workspace.common.datetimes import parse_local_datetime
 from workspace.common.limits import clamp_limit
@@ -18,8 +19,7 @@ from workspace.common.logging import scrub
 
 from .models import UserMemory
 from .services.agent_goals import close_goal, update_open_goal
-from .services.call_order import call_position
-from .tool_registry import ToolError, ToolProvider, tool
+from .tool_registry import ToolDeps, ToolError, ToolProvider, tool
 
 logger = logging.getLogger(__name__)
 
@@ -352,13 +352,9 @@ def _image_tool_payload(image_data, text):
 
     detection = detect_from_bytes(image_data)
     mime = detection.mime_type if detection.group == "image" else "image/png"
-    return json.dumps(
-        {
-            "type": "image",
-            "mime_type": mime,
-            "data": base64.b64encode(image_data).decode(),
-            "text": text,
-        }
+    return ToolReturn(
+        return_value=text,
+        content=[BinaryContent(data=image_data, media_type=mime)],
     )
 
 
@@ -411,15 +407,30 @@ def _image_failure(tool_name, prompt, exc, context):
 
 
 class CoreToolProvider(ToolProvider):
+    instructions = (
+        "## Memory\n"
+        "You have a persistent memory system. Actively use the save_memory tool "
+        "to remember important facts about the user as they come up in "
+        "conversation. Do not ask for permission - just save anything useful.\n"
+        "Save things like: their name, role, projects they work on, technical "
+        "preferences, languages they speak, tools they use, recurring topics, "
+        "personal details they share, opinions, and anything that would help "
+        "you be more helpful in future conversations.\n"
+        "Use short, descriptive keys (e.g. 'role', 'preferred_language', "
+        "'current_project'). Update existing memories when information changes.\n"
+        "Use your memories naturally, as if you always knew the information."
+    )
+
     @tool(
         badge_icon="👤",
         badge_label="Looked up profile",
         badge_running_label="Looking up profile",
         concurrent=True,
     )
-    def get_current_user_info(self, args, user, bot, conversation_id, context):
+    def get_current_user_info(self, ctx: RunContext[ToolDeps]) -> str:
         """Get the profile of the user you are chatting with: username, full name, email, and join date. \
 Call this when you need to address the user by name, check their email, or answer questions about their account."""
+        user = ctx.deps.user
         if not user:
             raise ToolError("no user context")
         from workspace.users.services.settings import get_user_timezone
@@ -439,12 +450,12 @@ Call this when you need to address the user by name, check their email, or answe
         badge_label="Retained",
         badge_running_label="Retaining",
         detail_key="key",
-        params=SaveMemoryParams,
     )
-    def save_memory(self, args, user, bot, conversation_id, context):
+    def save_memory(self, ctx: RunContext[ToolDeps], args: SaveMemoryParams) -> str:
         """Persistently save a fact about the user so you can recall it in future conversations. \
 Call this proactively when the user tells you their name, preferences, projects, or any personal detail worth remembering. \
 If the key already exists it will be updated."""
+        user, bot = ctx.deps.user, ctx.deps.bot
         key = args.key.strip()[:100]
         content = args.content.strip()
         if not key or not content:
@@ -468,11 +479,11 @@ If the key already exists it will be updated."""
         badge_label="Forgot",
         badge_running_label="Forgetting",
         detail_key="key",
-        params=DeleteMemoryParams,
     )
-    def delete_memory(self, args, user, bot, conversation_id, context):
+    def delete_memory(self, ctx: RunContext[ToolDeps], args: DeleteMemoryParams) -> str:
         """Delete a previously saved memory. \
 Call this when the user explicitly asks you to forget something or when a stored fact is no longer correct."""
+        user, bot = ctx.deps.user, ctx.deps.bot
         key = args.key.strip()
         deleted, _ = UserMemory.objects.filter(user=user, bot=bot, key=key).delete()
         if deleted:
@@ -491,9 +502,10 @@ Call this when the user explicitly asks you to forget something or when a stored
         badge_running_label="Viewing own avatar",
         concurrent=True,
     )
-    def get_my_avatar(self, args, user, bot, conversation_id, context):
+    def get_my_avatar(self, ctx: RunContext[ToolDeps]) -> str | ToolReturn:
         """Retrieve your own avatar image so you can see or describe it. \
 Call this when the user asks what you look like, wants to see your avatar, or mentions your appearance."""
+        bot = ctx.deps.bot
         if not bot:
             raise ToolError("no bot context")
         from django.core.files.storage import default_storage
@@ -505,14 +517,8 @@ Call this when the user asks what you look like, wants to see your avatar, or me
         try:
             path = get_avatar_path(bot.id)
             with default_storage.open(path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode()
-            return json.dumps(
-                {
-                    "type": "image",
-                    "mime_type": "image/webp",
-                    "data": b64,
-                }
-            )
+                avatar = BinaryContent(data=f.read(), media_type="image/webp")
+            return ToolReturn(return_value="Here is your avatar:", content=[avatar])
         except Exception:
             logger.warning("Could not read avatar for bot %s", bot.id)
             raise ToolError("could not read avatar file.") from None
@@ -526,10 +532,11 @@ class SearchToolProvider(ToolProvider):
         badge_label="Searched the workspace",
         badge_running_label="Searching the workspace",
         detail_key="query",
-        params=SearchEverythingParams,
         concurrent=True,
     )
-    def search_everything(self, args, user, bot, conversation_id, context):
+    def search_everything(
+        self, ctx: RunContext[ToolDeps], args: SearchEverythingParams
+    ) -> str:
         """Search the whole workspace at once — files, notes, emails, contacts, \
 conversations, messages, events, polls, projects and tasks — and return where each match lives. \
 Call this when you don't know which module holds the answer ("what do we have on the Alpha migration", \
@@ -538,6 +545,7 @@ so you can then chain into the matching reader (read_file, read_email, read_even
 Returns at most 3 hits per source by default (5 max), so prefer the per-module search tools \
 (search_filenames, search_emails, search_events, search_messages) once you know where to look - \
 they alone support filters like unread-only, attachments or date ranges."""
+        user = ctx.deps.user
         from workspace.core.services.search import MIN_QUERY_LENGTH, search_modules
 
         query = args.query.strip()
@@ -594,15 +602,72 @@ def _no_results_message(args) -> str:
 class WebToolProvider(ToolProvider):
     """Web search and page reading. Registered only when SEARXNG_URL is set."""
 
+    instructions = (
+        "## Web research\n"
+        "You can search the web and read webpages. Use web_search proactively "
+        "when:\n"
+        "- The user asks about recent events, news, or current information\n"
+        "- You're unsure about a fact and need to verify it\n"
+        "- The user asks about something outside your training data\n"
+        "Search results are titles and snippets, never an answer on their own: "
+        "read the pages behind the ones that look relevant before you conclude.\n"
+        "Reading is iterative. One page is where the research starts, not where "
+        "it ends:\n"
+        "- Pages come back as markdown with their links intact, opening with "
+        "the page's title and publication date and closing with its links "
+        "gathered into a list. When a page points at the detail you were asked "
+        "about instead of containing it, call read_webpage again on a link from "
+        "that list. Keep going until you can answer from what you actually "
+        "read.\n"
+        "- The date in the header is what makes a source current or stale: "
+        "prefer the recent one when they disagree, and tell the user how old a "
+        "fact is when the answer turns on it.\n"
+        "- read_webpage also reads PDFs and RSS/Atom feeds. A site's feed "
+        "(often /feed, /rss.xml or /atom.xml) lists what it published lately, "
+        "with dates - one fetch instead of scraping a homepage.\n"
+        "- Before answering, check every part of the question against what the "
+        "pages said. Whatever is still missing or second-hand is your next "
+        "fetch - a plausible guess between two real facts is the one thing you "
+        "must never produce.\n"
+        "- A page that comes back empty or as a bare navigation shell is "
+        "rendered in the browser, so there is nothing to extract. Look for the "
+        "site's JSON API - often api.<domain>, or a path the page itself links "
+        "to - and read that instead.\n"
+        "- read_webpage takes an optional query. On a long reference page - a "
+        "spec, a manual, a changelog - ask for what you are after in plain "
+        "words, in any language, and you get what the page says on it, "
+        "condensed and grouped by section, plus an outline of its sections, "
+        "instead of its opening characters. It is reported, not quoted: read "
+        "the page whole when you need its exact wording, when the page is "
+        "short, or when the whole of it is the answer (summarizing, "
+        "translating).\n"
+        "- A page too long to come back at once is cut into parts, and the part "
+        "you get ends by naming the one that follows it. Read the same URL "
+        "again with part set to that number, keeping url and query as they "
+        "were, and carry on until the page ends. A query narrows a long page to "
+        "one subject; parts are how you read the whole of it. Never answer from "
+        "one part when what you need is past its cut.\n"
+        "- A fetch that fails or returns nothing usable is not an answer to "
+        "report. Try another source before telling the user you could not find "
+        "out.\n"
+        "Five to ten fetches on a question worth researching is normal and "
+        "costs the user nothing but a few seconds. Answering a research "
+        "question from a single page is the failure mode to avoid.\n"
+        "IMPORTANT: Only state facts that come from the pages you read. Do not "
+        "invent, guess, or extrapolate information that is not present in them. "
+        "If the research turns up nothing relevant, say so honestly instead of "
+        "making something up.\n"
+        "Always cite your sources by mentioning the page title or URL."
+    )
+
     @tool(
         badge_icon="🔍",
         badge_label="Searched the web",
         badge_running_label="Searching the web",
         detail_key="queries",
-        params=WebSearchParams,
         concurrent=True,
     )
-    def web_search(self, args, user, bot, conversation_id, context):
+    def web_search(self, ctx: RunContext[ToolDeps], args: WebSearchParams) -> str:
         """Search the web for current information. \
 Call this when the user asks about recent events, news, facts you're unsure about, \
 or anything that requires up-to-date information you don't have. \
@@ -638,10 +703,9 @@ read_webpage rather than answering from the snippets."""
         badge_label="Read webpage",
         badge_running_label="Reading webpage",
         detail_key="url",
-        params=ReadWebpageParams,
         concurrent=True,
     )
-    def read_webpage(self, args, user, bot, conversation_id, context):
+    def read_webpage(self, ctx: RunContext[ToolDeps], args: ReadWebpageParams) -> str:
         """Fetch a webpage and return its main content as markdown, links included. \
 Call this on any URL the user shares or that web_search returned, and call it again \
 on the links inside the result to reach details the first page only refers to. \
@@ -688,10 +752,9 @@ class WeatherToolProvider(ToolProvider):
         badge_label="Checked the weather",
         badge_running_label="Checking the weather",
         detail_key="location",
-        params=GetWeatherParams,
         concurrent=True,
     )
-    def get_weather(self, args, user, bot, conversation_id, context):
+    def get_weather(self, ctx: RunContext[ToolDeps], args: GetWeatherParams) -> str:
         """Get the current weather for a place given its name. \
 Call this when the user asks about the weather, temperature, or conditions somewhere \
 (e.g. "what's the weather in Paris?", "is it raining in Tokyo?"). \
@@ -712,22 +775,47 @@ Returns temperature, feels-like, humidity, wind, and a description of the condit
 class ImageToolProvider(ToolProvider):
     """Registered only when AI_IMAGE_MODEL is configured."""
 
+    instructions = (
+        "## Image generation\n"
+        "When the user asks you to create, draw, or generate an image, ALWAYS "
+        "call the generate_image tool immediately. When the user asks you to "
+        "modify, change, or edit an existing image, ALWAYS call the edit_image "
+        "tool immediately. Do not describe the image in text instead - actually "
+        "generate or edit it.\n"
+        "When generating images that include yourself (selfies, scenes with "
+        "you, etc.), you MUST include your complete physical description from "
+        "your prompt in the generate_image prompt. Copy every detail: "
+        "appearance, hair, eyes, clothing, body type, style, distinguishing "
+        "features - everything that defines how you look. Do not paraphrase or "
+        "shorten your description. The image model has no knowledge of who you "
+        "are, so the only way to get a faithful result is to include the full "
+        "description in the prompt every time.\n"
+        "If you are unsure of your appearance, use the get_my_avatar tool to "
+        "view your avatar before generating an image of yourself."
+    )
+
     @tool(
         badge_icon="🎨",
         badge_label="Generated image",
         badge_running_label="Generating image",
         detail_key="prompt",
-        params=GenerateImageParams,
         # The exception to "nothing that bills runs in parallel": four images
         # asked for in one breath are the longest wait in the product, and
         # each call is independent of its siblings. What it costs is that a
         # round already in flight can overshoot the failure budget.
         concurrent=True,
     )
-    def generate_image(self, args, user, bot, conversation_id, context):
+    def generate_image(
+        self, ctx: RunContext[ToolDeps], args: GenerateImageParams
+    ) -> str | ToolReturn:
         """Generate a brand-new image from a text description. \
 Call this when the user asks you to create, draw, generate, make an image from scratch, send a picture or a photo of itself, or any other image-related request. \
 Do NOT use this to modify an existing image — use edit_image instead."""
+        bot, conversation_id, context = (
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .services.image import (
             ImageGenerationError,
             ai_generate_image,
@@ -753,7 +841,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
-                "position": call_position(),
+                "call_id": ctx.tool_call_id,
             }
         )
 
@@ -767,17 +855,23 @@ Do NOT use this to modify an existing image — use edit_image instead."""
         badge_label="Edited image",
         badge_running_label="Editing image",
         detail_key="prompt",
-        params=EditImageParams,
         # Stays sequential where generate_image does not: it edits the last
         # image of the turn, so running it beside the call that produces that
         # image would pick a source by race.
     )
-    def edit_image(self, args, user, bot, conversation_id, context):
+    def edit_image(
+        self, ctx: RunContext[ToolDeps], args: EditImageParams
+    ) -> str | ToolReturn:
         """Edit an existing image from the conversation based on a text instruction. \
 Automatically uses the most recent image in the conversation as the source. \
 Call this when the user asks you to modify, change, update, transform, or edit a picture — \
 for example "make it darker", "remove the background", "add a hat". \
 Do NOT use this to create an image from scratch — use generate_image instead."""
+        bot, conversation_id, context = (
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .services.image import (
             ImageGenerationError,
             ai_edit_image,
@@ -833,7 +927,7 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                 "data": image_data,
                 "prompt": prompt,
                 "size": size,
-                "position": call_position(),
+                "call_id": ctx.tool_call_id,
             }
         )
 
@@ -846,19 +940,71 @@ Do NOT use this to create an image from scratch — use generate_image instead."
 class VoiceToolProvider(ToolProvider):
     """Registered only when AI_TTS_MODEL is configured."""
 
+    def instructions(self, bot) -> str | None:
+        """What a bot is told about its voice, when it has one to speak with."""
+        bot_profile = getattr(bot, "bot_profile", None)
+        if not (bot_profile and bot_profile.can_speak()):
+            return None
+        from .services.speech import nonverbal_tags
+
+        # A backend with no non-verbal vocabulary pronounces the tag instead
+        # of performing it, so the exception is granted only where it holds.
+        bracket_rule = (
+            "The bracketed tags send_voice_message lists are the one "
+            "exception - a laugh, a sigh, a breath - and they are "
+            "performed, not read.\n"
+            if nonverbal_tags()
+            else "Brackets are not markup here: whatever you put between them "
+            "is spoken out loud, so write none.\n"
+        )
+        return (
+            "## Your voice\n"
+            "You have a voice and can send voice messages with "
+            "send_voice_message. Call it whenever the user asks you to speak, "
+            "to send them a vocal, to read something out loud, or when hearing "
+            "it is the point - a pronunciation, a song, a greeting meant to be "
+            "warm.\n"
+            "What you say out loud and what you type are one reply, not two: "
+            "put the content in the voice message, and let the written part be "
+            "a short line or nothing at all. Repeating the spoken text in "
+            "writing makes the voice message pointless.\n"
+            "Set language to the one you are speaking. You already answer in "
+            "the user's language, so it is that one - a French line "
+            "announced as English is pronounced with an English accent.\n"
+            "Write for the ear. The text is read out letter by letter, so it "
+            "must be plain prose in the language you are speaking, correctly "
+            "accented, with no markdown, no emoji, no lists, no URLs and no "
+            "abbreviations a listener would not recognize. "
+            + bracket_rule
+            + "You have one voice and it is not yours to change: "
+            "send_voice_message takes the text and the language, nothing "
+            "else. Asked to imitate someone or to play a character, say the "
+            "line in your own voice or decline - never claim to have "
+            "changed voice.\n"
+            "Asked what your voice sounds like, send one and let them hear "
+            "it. You have never heard yourself, so any description you give "
+            "is invented."
+        )
+
     @tool(
         badge_icon="🎙️",
         badge_label="Recorded a voice message",
         badge_running_label="Recording a voice message",
         detail_key="text",
-        params=SendVoiceMessageParams,
     )
-    def send_voice_message(self, args, user, bot, conversation_id, context):
+    def send_voice_message(
+        self, ctx: RunContext[ToolDeps], args: SendVoiceMessageParams
+    ) -> str:
         """Say something out loud in your own voice, as a voice message in the conversation. \
 Call this when the user asks you to speak, to send a voice message or a vocal, to read something aloud, \
 to sing, or to say how something is pronounced. \
 The audio is attached to the reply you are writing: say the whole thing here, then keep the written \
 part of that reply to a short line or nothing at all — never repeat out loud what you also typed."""
+        bot, conversation_id, context = (
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .services.speech import (
             SpeechSynthesisError,
             ai_synthesize_speech,
@@ -909,7 +1055,7 @@ part of that reply to a short line or nothing at all — never repeat out loud w
             {
                 "data": audio,
                 "text": text,
-                "position": call_position(),
+                "call_id": ctx.tool_call_id,
             }
         )
         return f"Voice message recorded and attached to your reply: {text}"
@@ -917,6 +1063,40 @@ part of that reply to a short line or nothing at all — never repeat out loud w
 
 class AgentGoalToolProvider(ToolProvider):
     """Long-horizon autonomous goal tools for bots."""
+
+    instructions = (
+        "## Autonomous goals\n"
+        "Beyond one-off scheduled messages, you can pursue long-term goals "
+        "spanning days, weeks or months with the agent goal tools. When the "
+        "user gives you a lasting mission (track something over time, coach "
+        "them toward an objective, research a topic in depth, follow up until "
+        "something is done), call create_agent_goal instead of "
+        "schedule_message.\n"
+        "How goals work:\n"
+        "- You wake up autonomously at each check-in, without the user being "
+        "present, work on the goal with your tools, then decide yourself when "
+        "to check in next.\n"
+        "- Your private notes on the goal are your only memory between "
+        "check-ins - keep them updated with update_agent_goal at every "
+        "check-in.\n"
+        "- A goal also carries a mission brief the user owns: success_criteria "
+        "(how you know it is done), constraints (rules and preferences to "
+        "respect) and reporting (when they want to hear from you). Fill in "
+        "whatever the user already told you when creating the goal, and record "
+        "anything they add later with update_agent_goal. The brief outranks "
+        "your own notes when the two disagree; the user can edit it at any time "
+        "from the conversation panel, so re-read it at each check-in.\n"
+        "- Check-ins are silent by default: nothing you write there reaches the "
+        "user unless you explicitly call send_user_message, and most check-ins "
+        "should end without one. When creating a goal, agree with the user on "
+        "when they want to hear from you and put those contact criteria in "
+        "reporting.\n"
+        "- When the goal is achieved or becomes irrelevant, close it with "
+        "complete_agent_goal.\n"
+        "Always call list_agent_goals before creating a goal - update the "
+        "existing one instead of creating duplicates. Goal check-in times are "
+        "in the user's local timezone, like schedule times."
+    )
 
     @staticmethod
     def _open_goal(goal_id, conversation_id, bot, user):
@@ -941,15 +1121,21 @@ class AgentGoalToolProvider(ToolProvider):
         badge_label="Created goal",
         badge_running_label="Creating goal",
         detail_key="title",
-        params=CreateAgentGoalParams,
     )
-    def create_agent_goal(self, args, user, bot, conversation_id, context):
+    def create_agent_goal(
+        self, ctx: RunContext[ToolDeps], args: CreateAgentGoalParams
+    ) -> str:
         """Create a long-term autonomous goal that you will pursue across days, weeks or months. \
 Call this when the user gives you a lasting mission: track something over time, coach them toward \
 an objective, research a topic in depth, follow up until something is done. You will wake up at \
 each check-in without user interaction, work on the goal with your tools, and decide yourself \
 when to check in next and whether to message the user. \
 IMPORTANT: Always call list_agent_goals first — update the existing goal instead of creating a duplicate."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.users.services.settings import get_user_timezone
 
         from .models import AgentGoal
@@ -1047,13 +1233,18 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
         badge_running_label="Listing goals",
         concurrent=True,
     )
-    def list_agent_goals(self, args, user, bot, conversation_id, context):
+    def list_agent_goals(self, ctx: RunContext[ToolDeps]) -> str:
         """List your long-term goals in this conversation: the active and paused ones with \
 their private notes, next check-in and deadline, plus the ones closed in the last 30 days with \
 their closing date and outcome. Call this before creating a goal (to avoid duplicates or \
 re-opening something already finished) and whenever the user asks what you are working on \
 autonomously. In a group, goals another member set are listed too, but only their creator can \
 update or close them."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 
@@ -1112,13 +1303,20 @@ update or close them."""
         badge_label="Updated goal",
         badge_running_label="Updating goal",
         detail_key="notes",
-        params=UpdateAgentGoalParams,
     )
-    def update_agent_goal(self, args, user, bot, conversation_id, context):
+    def update_agent_goal(
+        self, ctx: RunContext[ToolDeps], args: UpdateAgentGoalParams
+    ) -> str:
         """Update one of your long-term goals: rewrite your private working notes, set your \
 next check-in time, change the deadline, record what the user asks of the mission (definition \
 of done, constraints, when to report), or pause/resume it. During an autonomous check-in, \
 ALWAYS call this to save your updated notes and choose your next check-in time."""
+        user, bot, conversation_id, context = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from workspace.users.services.settings import get_user_timezone
 
         from .models import AgentGoal
@@ -1206,11 +1404,18 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
         badge_label="Closed goal",
         badge_running_label="Closing goal",
         detail_key="outcome",
-        params=CompleteAgentGoalParams,
     )
-    def complete_agent_goal(self, args, user, bot, conversation_id, context):
+    def complete_agent_goal(
+        self, ctx: RunContext[ToolDeps], args: CompleteAgentGoalParams
+    ) -> str:
         """Close a long-term goal, either achieved or abandoned, with a final outcome summary. \
 Call this when the goal is reached, has become irrelevant, or the user asks you to stop pursuing it."""
+        user, bot, conversation_id, context = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+            ctx.deps.context,
+        )
         from .models import AgentGoal
 
         goal = self._open_goal(args.goal_id, conversation_id, bot, user)
@@ -1241,14 +1446,16 @@ Call this when the goal is reached, has become irrelevant, or the user asks you 
         badge_label="Messaged the user",
         badge_running_label="Messaging the user",
         detail_key="message",
-        params=SendUserMessageParams,
     )
-    def send_user_message(self, args, user, bot, conversation_id, context):
+    def send_user_message(
+        self, ctx: RunContext[ToolDeps], args: SendUserMessageParams
+    ) -> str:
         """Deliver a message to the user at the end of an autonomous goal check-in. \
 During a check-in your plain replies are DISCARDED — this tool is the only way to reach the user. \
 Call it only when you have something genuinely worth telling them (a result, an important change, \
 a deadline at risk), never for routine progress reports. \
 Outside a check-in, do not use this tool: you are already talking to the user, just write your reply."""
+        context = ctx.deps.context
         if not context.get("agent_checkin"):
             raise ToolError(
                 "you are chatting with the user right now — "
@@ -1267,18 +1474,41 @@ Outside a check-in, do not use this tool: you are already talking to the user, j
 class ScheduleToolProvider(ToolProvider):
     """Scheduled message tools for bots."""
 
+    instructions = (
+        "## Scheduling\n"
+        "You can schedule messages to contact the user later using the "
+        "schedule_message tool. Use this proactively when appropriate:\n"
+        "- When the user asks to be reminded of something\n"
+        "- When you want to follow up on a task or discussion\n"
+        "- When periodic check-ins would be helpful\n"
+        "You can also list and cancel existing schedules with list_schedules "
+        "and cancel_schedule.\n"
+        "Scheduled messages should feel like natural, spontaneous interactions. "
+        "When the user explicitly asked for a reminder, confirm briefly and "
+        "move on. Otherwise, just schedule it silently and keep chatting.\n"
+        "All schedule times are interpreted in the user's local timezone (shown "
+        "in the <context> reminder). Always use the user's local time - never "
+        "use UTC offsets in the 'at' parameter."
+    )
+
     @tool(
         badge_icon="\u23f0",
         badge_label="Scheduled message",
         badge_running_label="Scheduling message",
         detail_key="prompt",
-        params=ScheduleMessageParams,
     )
-    def schedule_message(self, args, user, bot, conversation_id, context):
+    def schedule_message(
+        self, ctx: RunContext[ToolDeps], args: ScheduleMessageParams
+    ) -> str:
         """Schedule a message to be sent later, either once at a specific time or on a recurring basis. \
 Call this when the user asks you to send a message later, set a reminder, or create a recurring message. \
 IMPORTANT: Before creating a new schedule, always call list_schedules first to check for existing \
 schedules with a similar prompt — update or cancel the old one instead of creating duplicates."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         import calendar
         from datetime import time, timedelta
 
@@ -1442,11 +1672,17 @@ schedules with a similar prompt — update or cancel the old one instead of crea
         badge_label="Cancelled schedule",
         badge_running_label="Cancelling schedule",
         detail_key="schedule_id",
-        params=CancelScheduleParams,
     )
-    def cancel_schedule(self, args, user, bot, conversation_id, context):
+    def cancel_schedule(
+        self, ctx: RunContext[ToolDeps], args: CancelScheduleParams
+    ) -> str:
         """Cancel an active scheduled message by its ID. \
 Call this when the user wants to stop or remove a previously scheduled message."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.chat.services.bot_tasks import can_manage_bot_task
 
         from .models import ScheduledMessage
@@ -1471,10 +1707,15 @@ Call this when the user wants to stop or remove a previously scheduled message."
         badge_running_label="Listing schedules",
         concurrent=True,
     )
-    def list_schedules(self, args, user, bot, conversation_id, context):
+    def list_schedules(self, ctx: RunContext[ToolDeps]) -> str:
         """List all active scheduled messages in this conversation. \
 Call this when the user wants to see what messages are scheduled or pending. \
 In a group, schedules another member set are listed too, but only their creator can cancel them."""
+        user, bot, conversation_id = (
+            ctx.deps.user,
+            ctx.deps.bot,
+            ctx.deps.conversation_id,
+        )
         from workspace.chat.services.bot_tasks import can_manage_bot_task
         from workspace.users.services.settings import get_user_timezone
 

@@ -1,427 +1,328 @@
+"""The model layer: what reaches a backend, and what comes back from it."""
+
 import json
-from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.test import SimpleTestCase, TestCase
+import httpx2
+from django.test import SimpleTestCase, override_settings
 from pydantic import BaseModel
+from pydantic_ai import NativeOutput, direct
+from pydantic_ai.exceptions import OutputTokenLimitExceeded, UnexpectedModelBehavior
+from pydantic_ai.messages import (
+    BinaryContent,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    ToolReturnPart,
+)
+from pydantic_ai.models import override_allow_model_requests
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
+from workspace.ai.prompts.base import prompt, send
 from workspace.ai.services.llm import (
-    _extract_thinking,
-    build_tool_content,
-    call_llm,
-    call_llm_structured,
-    extract_text_tool_calls,
-    reply_was_truncated,
-    serialize_response,
-    truncate_middle,
-    truncate_tool_result,
+    get_model,
+    messages_for_storage,
+    run_prompt,
+    usage_fields,
 )
 
+from .agents import call, reply, scripted
 
-class ExtractTextToolCallsTests(TestCase):
-    def test_returns_none_when_no_json(self):
-        calls, remaining = extract_text_tool_calls("just a regular reply")
-        self.assertIsNone(calls)
-        self.assertEqual(remaining, "just a regular reply")
 
-    def test_returns_none_when_json_is_not_a_tool_call(self):
-        content = 'reply with {"unrelated": "data"}'
-        calls, remaining = extract_text_tool_calls(content)
-        self.assertIsNone(calls)
-        self.assertEqual(remaining, content)
+class _Backend:
+    """Answers every HTTP request of the OpenAI client, and keeps what it was sent."""
 
-    def test_shorthand_tool_form(self):
-        content = '{"tool": "search_files", "query": "report", "limit": 5}'
-        calls, remaining = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 1)
-        name, args_json = calls[0]
-        self.assertEqual(name, "search_files")
-        # Remaining keys are re-emitted as the arguments JSON.
-        self.assertEqual(json.loads(args_json), {"query": "report", "limit": 5})
-        self.assertEqual(remaining, "")
+    def __init__(self, message=None, finish_reason="stop"):
+        self.message = message or {"role": "assistant", "content": "hello"}
+        self.finish_reason = finish_reason
+        self.requests = []
 
-    def test_openai_like_form_with_dict_arguments(self):
-        content = (
-            '{"name": "create_event", "arguments": {"title": "Lunch", "duration": 30}}'
+    @property
+    def bodies(self):
+        return [json.loads(request.content) for request in self.requests]
+
+    def __enter__(self):
+        backend = self
+
+        async def answer(transport, request):
+            backend.requests.append(request)
+            body = json.loads(request.content)
+            return httpx2.Response(
+                200,
+                request=request,
+                json={
+                    "id": "x",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": body["model"],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "finish_reason": backend.finish_reason,
+                            "message": backend.message,
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 5,
+                        "completion_tokens": 2,
+                        "total_tokens": 7,
+                    },
+                },
+            )
+
+        self._patch = patch.object(
+            httpx2.AsyncHTTPTransport, "handle_async_request", answer
         )
-        calls, remaining = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 1)
-        name, args_json = calls[0]
-        self.assertEqual(name, "create_event")
-        self.assertEqual(json.loads(args_json), {"title": "Lunch", "duration": 30})
-        self.assertEqual(remaining, "")
+        self._patch.start()
+        # The one place a test talks to a real model class: its transport is
+        # the fake above.
+        self._allowed = override_allow_model_requests(True)
+        self._allowed.__enter__()
+        return self
 
-    def test_openai_like_form_with_string_arguments(self):
-        content = '{"name": "echo", "arguments": "raw string"}'
-        calls, _ = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 1)
-        name, args_json = calls[0]
-        self.assertEqual(name, "echo")
-        # String arguments must be passed through untouched (not double-encoded).
-        self.assertEqual(args_json, "raw string")
-
-    def test_text_around_tool_call_is_returned_in_remaining(self):
-        content = 'Here you go: {"tool": "noop"} - that is all'
-        calls, remaining = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], "noop")
-        self.assertIn("Here you go:", remaining)
-        self.assertIn("that is all", remaining)
-        self.assertNotIn('{"tool"', remaining)
-
-    def test_multiple_tool_calls_in_one_message(self):
-        content = '{"tool": "a", "x": 1} and also {"name": "b", "arguments": {"y": 2}}'
-        calls, _ = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(calls[0][0], "a")
-        self.assertEqual(json.loads(calls[0][1]), {"x": 1})
-        self.assertEqual(calls[1][0], "b")
-        self.assertEqual(json.loads(calls[1][1]), {"y": 2})
-
-    def test_invalid_json_is_ignored(self):
-        content = '{not really json} but {"tool": "ok"} should still work'
-        calls, _ = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], "ok")
-
-    def test_non_dict_json_is_ignored(self):
-        content = '{"tool": "ok"}'
-        # Plain list/string JSON would also be matched by the regex; ensure only dicts are taken.
-        # Adding a list before the dict should not break parsing of the dict.
-        calls, _ = extract_text_tool_calls("[1, 2, 3] " + content)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], "ok")
-
-    def test_raw_tool_call_tags_are_stripped(self):
-        # <tool_call> wrapper tags some models emit must not block parsing.
-        content = '<tool_call>{"tool": "search", "q": "x"}</tool_call>'
-        calls, _ = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], "search")
-
-    def test_shorthand_with_no_extra_keys(self):
-        # When the shorthand form has only the "tool" key, the arguments JSON is an empty object.
-        content = '{"tool": "ping"}'
-        calls, _ = extract_text_tool_calls(content)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], "ping")
-        self.assertEqual(json.loads(calls[0][1]), {})
+    def __exit__(self, *exc):
+        self._allowed.__exit__(*exc)
+        self._patch.stop()
 
 
-class ExtractThinkingTests(SimpleTestCase):
-    def test_no_think_block_returns_empty_thinking(self):
-        thinking, cleaned = _extract_thinking("just a reply")
-        self.assertEqual(thinking, "")
-        self.assertEqual(cleaned, "just a reply")
+@override_settings(
+    AI_API_KEY="test-key", AI_MAX_TOKENS=321, AI_MAX_RETRIES=0, AI_TIMEOUT=30
+)
+class BackendRequestTests(SimpleTestCase):
+    @override_settings(AI_BASE_URL=None, AI_MODEL="gpt-5")
+    def test_openai_is_sent_the_reply_cap_under_the_name_it_accepts(self):
+        # Its reasoning models, the default one included, refuse max_tokens.
+        with _Backend() as backend:
+            result = run_prompt(prompt("be brief", "hi"))
 
-    def test_think_block_is_captured_and_stripped(self):
-        thinking, cleaned = _extract_thinking(
-            "<think>plan the answer</think>Hello there"
+        self.assertIsInstance(get_model().provider, OpenAIProvider)
+        (request,) = backend.requests
+        (body,) = backend.bodies
+        self.assertEqual(request.url.host, "api.openai.com")
+        self.assertEqual(request.headers["authorization"], "Bearer test-key")
+        self.assertEqual(body["model"], "gpt-5")
+        self.assertEqual(body["max_completion_tokens"], 321)
+        self.assertNotIn("max_tokens", body)
+        self.assertEqual(
+            body["messages"],
+            [
+                {"role": "system", "content": "be brief"},
+                {"role": "user", "content": "hi"},
+            ],
         )
-        self.assertEqual(thinking, "plan the answer")
-        self.assertEqual(cleaned, "Hello there")
+        self.assertEqual(result.output, "hello")
 
-    def test_multiple_blocks_join_with_blank_line(self):
-        thinking, cleaned = _extract_thinking(
-            "<think>first</think>mid<think>second</think>end"
-        )
-        self.assertEqual(thinking, "first\n\nsecond")
-        self.assertEqual(cleaned, "midend")
+    @override_settings(AI_BASE_URL="http://ollama.test:11434/v1/", AI_MODEL="gemma")
+    def test_another_base_url_is_a_service_that_only_speaks_the_protocol(self):
+        with _Backend() as backend:
+            run_prompt(prompt("be brief", "hi"), model="other", max_tokens=99)
 
-    def test_unclosed_tag_captures_nothing_and_keeps_content(self):
-        content = "<think>never closed... Hello"
-        thinking, cleaned = _extract_thinking(content)
-        self.assertEqual(thinking, "")
-        self.assertEqual(cleaned, content)
+        self.assertIsInstance(get_model().provider, OpenAICompatibleProvider)
+        (request,) = backend.requests
+        (body,) = backend.bodies
+        self.assertEqual(request.url.host, "ollama.test")
+        self.assertEqual(body["model"], "other")
+        # Ollama answers uncapped when the cap comes under OpenAI's new name.
+        self.assertEqual(body["max_tokens"], 99)
+        self.assertNotIn("max_completion_tokens", body)
 
-    def test_case_insensitive(self):
-        thinking, cleaned = _extract_thinking("<THINK>loud</THINK>hi")
-        self.assertEqual(thinking, "loud")
-        self.assertEqual(cleaned, "hi")
+    @override_settings(AI_BASE_URL="http://ollama.test:11434/v1/", AI_MODEL="gpt-oss")
+    def test_reasoning_is_never_sent_back_to_the_model(self):
+        # Measured on gpt-oss behind Ollama: given its own reasoning back, it
+        # wrote its next tool call into the reasoning five times out of seven.
+        thought = {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "I should look first.",
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "look", "arguments": "{}"},
+                }
+            ],
+        }
+        with _Backend(thought) as backend:
+            history = prompt("be brief", "hi")
+            first = direct.model_request_sync(get_model(), history)
+            history.append(first)
+            send(
+                history,
+                ToolReturnPart(tool_name="look", content="seen", tool_call_id="c1"),
+            )
+            direct.model_request_sync(get_model(), history)
 
-    def test_tag_spelling_variants_are_captured(self):
-        for tag in ("thought", "thoughts", "thinking", "reasoning"):
-            with self.subTest(tag=tag):
-                thinking, cleaned = _extract_thinking(
-                    f"<{tag}>weighing options</{tag}>Hello there"
+        self.assertEqual(first.thinking, "I should look first.")
+        self.assertNotIn("I should look first.", json.dumps(backend.bodies[1]))
+        (turn,) = [m for m in backend.bodies[1]["messages"] if m["role"] == "assistant"]
+        self.assertEqual(turn["tool_calls"][0]["id"], "c1")
+
+    @override_settings(AI_BASE_URL="http://lmstudio.test/v1/")
+    def test_a_model_named_after_a_vendor_is_asked_like_any_other(self):
+        # The library reads a vendor off a "vendor/model" name and takes that
+        # vendor's own API as the limit: no JSON schema, no system message
+        # past the first. Behind a compatible endpoint the name says nothing
+        # of what the endpoint can do.
+        class Payload(BaseModel):
+            n: int
+
+        conversation = prompt("count", "three")
+        send(conversation, SystemPromptPart("<context>now</context>"))
+        for name in ("Qwen/Qwen3-32B", "meta-llama/Llama-4", "anthropic/claude-x"):
+            with self.subTest(model=name):
+                with _Backend({"role": "assistant", "content": '{"n": 3}'}) as backend:
+                    result = run_prompt(
+                        conversation,
+                        model=name,
+                        output_type=NativeOutput(Payload, strict=True),
+                    )
+
+                self.assertEqual(result.output, Payload(n=3))
+                (body,) = backend.bodies
+                self.assertTrue(body["response_format"]["json_schema"]["strict"])
+                self.assertEqual(
+                    [message["role"] for message in body["messages"]],
+                    ["system", "user", "system"],
                 )
-                self.assertEqual(thinking, "weighing options")
-                self.assertEqual(cleaned, "Hello there")
+                self.assertEqual(body["max_tokens"], 321)
 
-    def test_mismatched_open_and_close_tags_are_left_alone(self):
-        content = "<think>oops</thought>Hello"
-        thinking, cleaned = _extract_thinking(content)
-        self.assertEqual(thinking, "")
-        self.assertEqual(cleaned, content)
+    @override_settings(AI_MODEL="gpt-5")
+    def test_openai_named_by_its_url_is_still_openai(self):
+        for url in ("https://api.openai.com/v1", "https://api.openai.com/v1/"):
+            with self.subTest(url=url), override_settings(AI_BASE_URL=url):
+                with _Backend() as backend:
+                    run_prompt(prompt("be brief", "hi"))
 
-    def test_mismatched_block_does_not_swallow_the_next_one(self):
-        thinking, cleaned = _extract_thinking(
-            "<think>bad</thought><think>real</think>Answer"
-        )
-        self.assertEqual(thinking, "real")
-        self.assertEqual(cleaned, "<think>bad</thought>Answer")
+                (body,) = backend.bodies
+                self.assertEqual(body["max_completion_tokens"], 321)
+                self.assertNotIn("max_tokens", body)
 
+    @override_settings(AI_BASE_URL=None, AI_MODEL="gpt-5")
+    def test_a_structured_reply_is_asked_for_as_a_strict_schema(self):
+        class Payload(BaseModel):
+            n: int
 
-def _fake_client(message, finish_reason="stop"):
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)],
-        model="test-model",
-        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2),
-    )
-    completions = SimpleNamespace(create=lambda **kwargs: response)
-    return SimpleNamespace(chat=SimpleNamespace(completions=completions))
+        with _Backend({"role": "assistant", "content": '{"n": 3}'}) as backend:
+            result = run_prompt(
+                prompt("count", "three"), output_type=NativeOutput(Payload, strict=True)
+            )
 
+        self.assertEqual(result.output, Payload(n=3))
+        schema = backend.bodies[0]["response_format"]["json_schema"]
+        self.assertTrue(schema["strict"])
+        self.assertEqual(schema["schema"]["required"], ["n"])
+        self.assertIs(schema["schema"]["additionalProperties"], False)
 
-class CallLlmThinkingTests(SimpleTestCase):
-    def _call(self, message):
-        with patch(
-            "workspace.ai.client.get_ai_client",
-            return_value=_fake_client(message),
-        ):
-            return call_llm([{"role": "user", "content": "hi"}], model="m")
-
-    def test_think_tags_populate_thinking(self):
-        msg = SimpleNamespace(content="<think>let me see</think>Hello", tool_calls=None)
-        result = self._call(msg)
-        self.assertEqual(result["thinking"], "let me see")
-        self.assertEqual(result["content"], "Hello")
-
-    def test_result_carries_the_time_spent_waiting_for_the_backend(self):
-        msg = SimpleNamespace(content="Hello", tool_calls=None)
-        with patch(
-            "workspace.ai.services.llm.time.monotonic", side_effect=[10.0, 12.5]
-        ):
-            result = self._call(msg)
-        self.assertEqual(result["duration"], 2.5)
-
-    def test_native_reasoning_content_wins_over_tags(self):
-        msg = SimpleNamespace(
-            content="<think>tag</think>Hello",
-            tool_calls=None,
-            reasoning_content="native reasoning",
-        )
-        result = self._call(msg)
-        self.assertEqual(result["thinking"], "native reasoning")
-        self.assertEqual(result["content"], "Hello")
-
-    def test_openrouter_reasoning_field_is_read(self):
-        msg = SimpleNamespace(
-            content="Hello", tool_calls=None, reasoning="or reasoning"
-        )
-        result = self._call(msg)
-        self.assertEqual(result["thinking"], "or reasoning")
-
-    def test_no_thinking_yields_empty_string(self):
-        msg = SimpleNamespace(content="Hello", tool_calls=None)
-        result = self._call(msg)
-        self.assertEqual(result["thinking"], "")
-
-    def test_blank_reasoning_content_falls_back_to_reasoning(self):
-        msg = SimpleNamespace(
-            content="Hello",
-            tool_calls=None,
-            reasoning_content="   ",
-            reasoning="or reasoning",
-        )
-        result = self._call(msg)
-        self.assertEqual(result["thinking"], "or reasoning")
-
-    def test_non_string_native_reasoning_is_ignored(self):
-        msg = SimpleNamespace(
-            content="Hello", tool_calls=None, reasoning_content={"odd": True}
-        )
-        result = self._call(msg)
-        self.assertEqual(result["thinking"], "")
-
-    def test_finish_reason_is_exposed(self):
-        msg = SimpleNamespace(content="Hello", tool_calls=None)
-        with patch(
-            "workspace.ai.client.get_ai_client",
-            return_value=_fake_client(msg, finish_reason="length"),
-        ):
-            result = call_llm([{"role": "user", "content": "hi"}], model="m")
-        self.assertEqual(result["finish_reason"], "length")
-        self.assertEqual(serialize_response(result)["finish_reason"], "length")
+    @override_settings(AI_API_KEY="")
+    def test_no_key_is_no_backend(self):
+        with self.assertRaisesMessage(RuntimeError, "AI is not configured"):
+            run_prompt(prompt("be brief", "hi"))
 
 
 class _Payload(BaseModel):
-    items: list[str]
+    answer: str
+    n: int = 0
 
 
-class CallLlmStructuredTests(SimpleTestCase):
-    def _call(self, content, finish_reason="stop"):
-        msg = SimpleNamespace(content=content, tool_calls=None)
-        with patch(
-            "workspace.ai.client.get_ai_client",
-            return_value=_fake_client(msg, finish_reason=finish_reason),
-        ):
-            return call_llm_structured(
-                [{"role": "user", "content": "hi"}], _Payload, model="m"
-            )
+class RunPromptTests(SimpleTestCase):
+    def test_a_text_reply_comes_back_with_its_cost(self):
+        with scripted(reply("Hello", input_tokens=10, output_tokens=2)) as script:
+            result = run_prompt(prompt("be brief", "hi"))
 
-    def test_truncated_reply_is_reported_as_such(self):
-        # Reasoning shares the token budget on Ollama-style backends: a model
-        # that thinks past the cap returns an empty content, which must read
-        # as "cut at the cap", not as a backend that ignored the schema.
-        with self.assertLogs("workspace.ai.services.llm", level="WARNING") as logs:
-            parsed, result = self._call("", finish_reason="length")
-        self.assertIsNone(parsed)
-        self.assertTrue(reply_was_truncated(result))
-        self.assertIn("cut at the token cap", logs.output[0])
-        self.assertIn("max_tokens=", logs.output[0])
-
-    def test_validation_failure_logs_the_start_of_the_reply(self):
-        with self.assertLogs("workspace.ai.services.llm", level="WARNING") as logs:
-            parsed, result = self._call('{"items": "nope"}')
-        self.assertIsNone(parsed)
-        self.assertFalse(reply_was_truncated(result))
-        self.assertIn("content starts", logs.output[0])
-        self.assertIn("nope", logs.output[0])
-
-    def test_valid_json_returns_validated_instance(self):
-        parsed, result = self._call('{"items": ["a", "b"]}')
-        self.assertEqual(parsed.items, ["a", "b"])
-        self.assertEqual(result["model"], "test-model")
-
-    def test_fenced_json_is_tolerated(self):
-        parsed, _ = self._call('```json\n{"items": ["a"]}\n```')
-        self.assertEqual(parsed.items, ["a"])
-
-    def test_invalid_json_returns_none_with_usage(self):
-        parsed, result = self._call("not json")
-        self.assertIsNone(parsed)
-        self.assertEqual(result["prompt_tokens"], 1)
-        self.assertEqual(result["completion_tokens"], 2)
-
-    def test_schema_mismatch_returns_none(self):
-        parsed, _ = self._call('{"items": "nope"}')
-        self.assertIsNone(parsed)
-
-    def test_think_tags_are_stripped_before_parsing(self):
-        parsed, _ = self._call('<think>hm</think>{"items": []}')
-        self.assertEqual(parsed.items, [])
-
-    def test_sends_strict_json_schema_response_format(self):
-        with patch(
-            "workspace.ai.services.llm.call_llm",
-            return_value={"content": '{"items": []}'},
-        ) as mock_call:
-            call_llm_structured([{"role": "user", "content": "hi"}], _Payload)
-        response_format = mock_call.call_args.kwargs["response_format"]
-        self.assertEqual(response_format["type"], "json_schema")
-        self.assertEqual(response_format["json_schema"]["name"], "_Payload")
-        self.assertIs(response_format["json_schema"]["strict"], True)
-        schema = response_format["json_schema"]["schema"]
-        self.assertIs(schema["additionalProperties"], False)
-        self.assertEqual(schema["required"], ["items"])
-
-    def test_strict_schema_normalizes_nested_models(self):
-        class Item(BaseModel):
-            name: str
-            note: str = ""
-            when: str | None = None
-
-        class Envelope(BaseModel):
-            entries: list[Item]
-
-        with patch(
-            "workspace.ai.services.llm.call_llm",
-            return_value={"content": '{"entries": []}'},
-        ) as mock_call:
-            call_llm_structured([{"role": "user", "content": "hi"}], Envelope)
-        schema = mock_call.call_args.kwargs["response_format"]["json_schema"]["schema"]
-        item = schema["$defs"]["Item"]
-        self.assertIs(item["additionalProperties"], False)
-        self.assertEqual(item["required"], ["name", "note", "when"])
-        self.assertNotIn("default", item["properties"]["note"])
-        self.assertNotIn("default", item["properties"]["when"])
-
-    def test_strict_schema_spares_a_property_named_default(self):
-        class Odd(BaseModel):
-            default: str = "x"
-            items: list[str] = []
-
-        with patch(
-            "workspace.ai.services.llm.call_llm",
-            return_value={"content": '{"default": "a", "items": []}'},
-        ) as mock_call:
-            call_llm_structured([{"role": "user", "content": "hi"}], Odd)
-        schema = mock_call.call_args.kwargs["response_format"]["json_schema"]["schema"]
-        self.assertIn("default", schema["properties"])
-        self.assertIn("items", schema["properties"])
-        self.assertEqual(schema["required"], ["default", "items"])
-
-
-class SerializeResponseThinkingTests(SimpleTestCase):
-    def test_thinking_included(self):
-        result = {"content": "hi", "thinking": "why not", "model": "m"}
-        self.assertEqual(serialize_response(result)["thinking"], "why not")
-
-    def test_missing_thinking_defaults_empty(self):
-        self.assertEqual(serialize_response({"content": "hi"})["thinking"], "")
-
-
-class ImagePayloadTextTests(TestCase):
-    def test_build_tool_content_uses_payload_text(self):
-        payload = json.dumps(
-            {
-                "type": "image",
-                "mime_type": "image/png",
-                "data": "QUJD",
-                "text": "Image generated successfully for: a cat",
-            }
-        )
-        content = build_tool_content(payload)
+        self.assertEqual(result.output, "Hello")
         self.assertEqual(
-            content[0],
-            {"type": "text", "text": "Image generated successfully for: a cat"},
+            usage_fields(result.response, result.usage),
+            {"model_used": "test-model", "prompt_tokens": 10, "completion_tokens": 2},
         )
-        self.assertEqual(content[1]["image_url"]["url"], "data:image/png;base64,QUJD")
+        self.assertEqual(script.tools, [])
 
-    def test_build_tool_content_falls_back_without_text(self):
-        payload = json.dumps(
-            {"type": "image", "mime_type": "image/webp", "data": "QUJD"}
-        )
-        content = build_tool_content(payload)
-        self.assertEqual(content[0], {"type": "text", "text": "Here is the image:"})
+    def test_inline_reasoning_and_leaked_artifacts_are_cut_from_the_reply(self):
+        with scripted(reply("<thought>hmm</thought>[2026-04-10 20:07] The answer")):
+            result = run_prompt(prompt("be brief", "hi"))
 
-    def test_truncate_tool_result_keeps_text(self):
-        payload = json.dumps(
-            {"type": "image", "data": "QUJD", "text": "Image edited: darker"}
-        )
+        self.assertEqual(result.output, "The answer")
+        self.assertEqual(result.response.thinking, "hmm")
+
+    def test_a_structured_reply_is_validated_into_the_schema(self):
+        with scripted(reply('{"answer": "yes", "n": 3}')):
+            result = run_prompt(prompt("s", "u"), output_type=NativeOutput(_Payload))
+
+        self.assertEqual(result.output, _Payload(answer="yes", n=3))
+
+    def test_json_wrapped_in_a_markdown_fence_is_still_read(self):
+        with scripted(reply('```json\n{"answer": "yes"}\n```')):
+            result = run_prompt(prompt("s", "u"), output_type=NativeOutput(_Payload))
+
+        self.assertEqual(result.output.answer, "yes")
+
+    def test_a_reply_that_is_not_the_schema_is_asked_again_once_then_fails(self):
+        with scripted(reply("not json"), reply('{"n": "x"}')) as script:
+            with self.assertRaises(UnexpectedModelBehavior):
+                run_prompt(prompt("s", "u"), output_type=NativeOutput(_Payload))
+
+        self.assertEqual(len(script.requests), 2)
+
+    def test_the_second_attempt_can_be_the_right_one(self):
+        with scripted(reply("not json"), reply('{"answer": "yes"}')):
+            result = run_prompt(prompt("s", "u"), output_type=NativeOutput(_Payload))
+
+        self.assertEqual(result.output.answer, "yes")
+
+    def test_a_reply_cut_at_the_token_cap_says_so(self):
+        cut = ModelResponse(parts=[TextPart('{"answer": "ye')], finish_reason="length")
+        with scripted(cut):
+            with self.assertRaises(OutputTokenLimitExceeded):
+                run_prompt(prompt("s", "u"), output_type=NativeOutput(_Payload))
+
+
+class MessagesForStorageTests(SimpleTestCase):
+    def test_a_conversation_is_kept_in_the_librarys_own_shape(self):
+        history = [*prompt("be brief", "hi"), reply("looking", call("look", {}, "c1"))]
+
+        request, response = messages_for_storage(history)
+
+        self.assertEqual(request["kind"], "request")
         self.assertEqual(
-            json.loads(truncate_tool_result(payload, 2000)),
-            {"type": "image", "data": "[stripped]", "text": "Image edited: darker"},
+            [(part["part_kind"], part["content"]) for part in request["parts"]],
+            [("system-prompt", "be brief"), ("user-prompt", "hi")],
+        )
+        self.assertEqual(response["kind"], "response")
+        self.assertEqual(response["parts"][1]["tool_name"], "look")
+
+    def test_image_bytes_are_left_out(self):
+        image = BinaryContent(data=b"\x89PNG" * 1000, media_type="image/png")
+
+        (request,) = messages_for_storage(prompt("see", ["what is this?", image]))
+
+        text, stored = request["parts"][1]["content"]
+        self.assertEqual(text, "what is this?")
+        self.assertEqual(stored["data"], "[stripped]")
+        self.assertEqual(stored["media_type"], "image/png")
+
+    @override_settings(AI_TOOL_RESULT_TASK_MAX_CHARS=300)
+    def test_a_tool_result_is_cut_to_the_records_own_budget(self):
+        # A deployment lowers it to keep less of a mail or a file for the 90
+        # days the row lives.
+        page = "HEAD" + ("p" * 5000) + "TAIL"
+        history = [
+            *prompt("s", "u"),
+            reply("", call("read_webpage", {"url": "https://a.test"}, "c1")),
+        ]
+        send(
+            history,
+            ToolReturnPart(tool_name="read_webpage", content=page, tool_call_id="c1"),
         )
 
+        stored = messages_for_storage(history)[2]["parts"][0]["content"]
 
-class TruncateMiddleTests(TestCase):
-    def test_short_text_is_untouched(self):
-        self.assertEqual(truncate_middle("hello", 100), "hello")
+        self.assertLessEqual(len(stored), 300)
+        self.assertTrue(stored.startswith("HEAD"))
+        self.assertTrue(stored.endswith("TAIL"))
 
-    def test_head_and_tail_survive_the_cut(self):
-        text = "START" + ("x" * 5000) + "CONCLUSION"
-        out = truncate_middle(text, 500)
-        self.assertLessEqual(len(out), 500)
-        self.assertTrue(out.startswith("START"))
-        self.assertTrue(out.endswith("CONCLUSION"))
-        self.assertIn("characters omitted from the middle", out)
+    def test_a_very_long_text_loses_its_tail(self):
+        (request,) = messages_for_storage(prompt("s", "x" * 60_000))
 
-    def test_hint_names_the_call_in_the_residue(self):
-        out = truncate_middle(
-            "y" * 5000, 500, hint="fetch_url(https://example.com/doc)"
-        )
-        self.assertIn("of fetch_url(https://example.com/doc)", out)
-        self.assertLessEqual(len(out), 500)
-
-    def test_budget_too_small_for_a_marker_falls_back_to_a_hard_cut(self):
-        out = truncate_middle("z" * 500, 20)
-        self.assertEqual(out, "z" * 20)
-
-    def test_tool_result_is_cut_in_the_middle_not_at_the_tail(self):
-        text = "HEAD" + ("m" * 9000) + "TAIL"
-        out = truncate_tool_result(text, 1000, hint="fetch_url(https://x.test)")
-        self.assertLessEqual(len(out), 1000)
-        self.assertTrue(out.startswith("HEAD"))
-        self.assertTrue(out.endswith("TAIL"))
-        self.assertIn("fetch_url(https://x.test)", out)
+        stored = request["parts"][1]["content"]
+        self.assertTrue(stored.endswith("… [truncated]"))
+        self.assertLess(len(stored), 51_000)

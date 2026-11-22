@@ -10,20 +10,6 @@ if TYPE_CHECKING:
     from openai import OpenAI
 
 
-def get_ai_client() -> OpenAI | None:
-    """Return a configured OpenAI client, or None if AI is not configured."""
-    if not settings.AI_API_KEY:
-        return None
-    from openai import OpenAI
-
-    return OpenAI(
-        api_key=settings.AI_API_KEY,
-        base_url=settings.AI_BASE_URL,
-        timeout=settings.AI_TIMEOUT,
-        max_retries=settings.AI_MAX_RETRIES,
-    )
-
-
 def get_image_client() -> OpenAI | None:
     """Return an OpenAI client configured for image generation.
 

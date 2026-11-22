@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.ai.tests.agents import tool_context
 from workspace.common.dav.auth import clear_auth_cache
 from workspace.common.tests.wsgi import served_in_test
 from workspace.files.models import File, FileScan
@@ -426,11 +427,7 @@ class AiEnforcementTests(APITestCase):
         from workspace.files.ai_tools import FilesToolProvider, ReadFileParams
 
         result = FilesToolProvider().read_file(
-            ReadFileParams(uuid=self.file.uuid),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.user), ReadFileParams(uuid=self.file.uuid)
         )
         self.assertEqual(result, "File is quarantined.")
 

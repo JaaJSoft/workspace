@@ -5,6 +5,7 @@ from django.db import connection
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.ai.tests.agents import tool_context
 from workspace.calendar.models import (
     Calendar,
     CalendarSubscription,
@@ -185,9 +186,7 @@ class ProviderAndToolTests(TestCase):
 
         provider = CalendarToolProvider()
         args = SearchEventsParams(query="Dock B")
-        result = provider.search_events(
-            args, user=self.alice, bot=None, conversation_id=None, context={}
-        )
+        result = provider.search_events(tool_context(user=self.alice), args)
         self.assertIn("Sprint review", result)
 
     def test_ai_tool_caps_combined_results_at_twenty(self):
@@ -205,9 +204,7 @@ class ProviderAndToolTests(TestCase):
 
         provider = CalendarToolProvider()
         args = SearchEventsParams(query="budget")
-        result = provider.search_events(
-            args, user=self.alice, bot=None, conversation_id=None, context={}
-        )
+        result = provider.search_events(tool_context(user=self.alice), args)
         data = json.loads(result)
         self.assertEqual(len(data), 20)
         self.assertTrue(all(entry["type"] == "event" for entry in data))

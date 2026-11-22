@@ -108,9 +108,22 @@ def arm_row_write_guards():
     _armed_labels.update({File._meta.label, *GUARDED_LIFECYCLE_MODELS})
 
 
+def forbid_model_requests():
+    """Make a test that reaches a real model fail instead of calling out.
+
+    A test answers the model with a scripted one (``workspace/ai/tests/agents.py``);
+    one that forgot would otherwise send its fixtures to whatever backend
+    the environment configures.
+    """
+    from pydantic_ai import models
+
+    models.ALLOW_MODEL_REQUESTS = False
+
+
 def _init_worker_with_media_root(counter, *args, **kwargs):
     _init_worker(counter, *args, **kwargs)
     arm_row_write_guards()
+    forbid_model_requests()
     # Under spawn and forkserver ``_init_worker`` has just re-imported the
     # settings from the environment, so the override has to follow it.
     worker_root = make_worker_media_root(os.environ["MEDIA_ROOT"])
@@ -135,6 +148,7 @@ class MediaRootTestRunner(DiscoverRunner):
     def setup_test_environment(self, **kwargs):
         super().setup_test_environment(**kwargs)
         arm_row_write_guards()
+        forbid_model_requests()
 
         self._media_root = tempfile.mkdtemp(prefix="workspace-test-media-")
         # Derived from MEDIA_ROOT when the settings load, so it does not

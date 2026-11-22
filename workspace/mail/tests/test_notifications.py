@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.ai.tests.agents import reply, scripted
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.mail.models import (
     MailAccount,
@@ -408,15 +409,7 @@ class ClassifyWiringTests(MailNotifyBase):
         )
         labels_json = ", ".join(f'"{name}"' for name in label_names)
         payload = f'{{"results": [{{"i": 1, "labels": [{labels_json}]}}]}}'
-        with patch(
-            "workspace.ai.services.llm.call_llm",
-            return_value={
-                "content": payload,
-                "model": "test",
-                "prompt_tokens": 1,
-                "completion_tokens": 1,
-            },
-        ):
+        with scripted(reply(payload, input_tokens=1, output_tokens=1)):
             classify_mail_messages(str(task.pk))
 
     def test_a_notifying_label_produces_a_notification(self):

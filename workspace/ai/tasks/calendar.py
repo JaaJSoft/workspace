@@ -23,11 +23,13 @@ from django.db import transaction
 from django.utils import timezone as dj_tz
 from django.utils.translation import gettext, ngettext
 from pydantic import BaseModel
+from pydantic_ai import NativeOutput
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 from workspace.ai.models import AITask
 from workspace.ai.prompts.calendar import build_event_extraction_messages
 from workspace.ai.services.ai_task import TaskNotPending, ai_task_lifecycle
-from workspace.ai.services.llm import call_llm_structured
+from workspace.ai.services.llm import run_prompt
 from workspace.calendar.models import Event
 from workspace.calendar.services.event_creation import create_event_from_payload
 from workspace.common.logging import scrub
@@ -132,18 +134,26 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
     user_tz = get_user_timezone(msg.account.owner)
     messages = build_event_extraction_messages(thread, user_tz=user_tz)
     model = settings.AI_EXTRACT_MODEL or settings.AI_MODEL
-    parsed, result = call_llm_structured(messages, ExtractedEvents, model=model)
-
-    usage = {
-        "prompt_tokens": result.get("prompt_tokens", 0) or 0,
-        "completion_tokens": result.get("completion_tokens", 0) or 0,
-        "model": result.get("model", ""),
-    }
-    if parsed is None:
-        logger.warning(
-            "Extract: unparseable LLM output for message %s", scrub(str(msg.pk))
+    try:
+        result = run_prompt(
+            messages,
+            model=model,
+            output_type=NativeOutput(ExtractedEvents, strict=True),
         )
-        return {"count": 0, **usage}
+    except UnexpectedModelBehavior as exc:
+        logger.warning(
+            "Extract: unusable LLM output for message %s: %s",
+            scrub(str(msg.pk)),
+            scrub(str(exc)[:500]),
+        )
+        return {"count": 0, "prompt_tokens": 0, "completion_tokens": 0, "model": ""}
+    parsed = result.output
+    model_used = result.response.model_name or ""
+    usage = {
+        "prompt_tokens": result.usage.input_tokens,
+        "completion_tokens": result.usage.output_tokens,
+        "model": model_used,
+    }
 
     created = 0
     now = dj_tz.now()
@@ -167,7 +177,9 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
         found, previous = _previous_event(msg, thread, extracted.all_day, start)
         if found:
             if previous is not None:
-                created += _link_extraction(msg, previous, extracted, result, event_ct)
+                created += _link_extraction(
+                    msg, previous, extracted, model_used, event_ct
+                )
             continue
 
         with transaction.atomic():
@@ -190,7 +202,7 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
                 target_content_type=event_ct,
                 target_object_id=event.uuid,
                 confidence=extracted.confidence,
-                model_used=result.get("model", ""),
+                model_used=model_used,
                 raw_output=extracted.model_dump(mode="json"),
             )
         created += 1
@@ -270,7 +282,7 @@ def _link_extraction(
     msg: MailMessage,
     event: Event,
     extracted: ExtractedEvent,
-    result: dict,
+    model_used: str,
     event_ct: ContentType,
 ) -> int:
     """Attach `msg` to an event an earlier mail produced, so the mail still
@@ -282,7 +294,7 @@ def _link_extraction(
         target_object_id=event.uuid,
         defaults={
             "confidence": extracted.confidence,
-            "model_used": result.get("model", ""),
+            "model_used": model_used,
             "raw_output": extracted.model_dump(mode="json"),
         },
     )

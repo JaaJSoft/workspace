@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.ai.tests.agents import tool_context
 from workspace.files.ai_tools import FilesToolProvider, SearchFilenamesParams
 from workspace.files.models import File, FileShare
 from workspace.users.services.settings import set_setting
@@ -32,11 +33,7 @@ class SearchFilesTimezoneTests(TestCase):
         )
         set_setting(self.user, "core", "timezone", "Europe/Paris")
         result = FilesToolProvider().search_filenames(
-            SearchFilenamesParams(query="boundary-report"),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.user), SearchFilenamesParams(query="boundary-report")
         )
         payload = json.loads(result)
         self.assertEqual(payload[0]["updated_at"], "2026-02-01 00:30")
@@ -55,11 +52,7 @@ class SearchFilenamesScopeTests(TestCase):
     def _search(self, query):
         return json.loads(
             FilesToolProvider().search_filenames(
-                SearchFilenamesParams(query=query),
-                user=self.user,
-                bot=None,
-                conversation_id=None,
-                context={},
+                tool_context(user=self.user), SearchFilenamesParams(query=query)
             )
         )
 
@@ -126,11 +119,7 @@ class SearchFilenamesScopeTests(TestCase):
         )
         self.assertEqual(
             FilesToolProvider().search_filenames(
-                SearchFilenamesParams(query="budget"),
-                user=self.user,
-                bot=None,
-                conversation_id=None,
-                context={},
+                tool_context(user=self.user), SearchFilenamesParams(query="budget")
             ),
             'No files found matching "budget".',
         )
@@ -156,11 +145,7 @@ class ReadFileToolTests(TestCase):
             content=ContentFile(payload, name=name),
         )
         return FilesToolProvider().read_file(
-            ReadFileParams(uuid=file_obj.uuid),
-            user=self.user,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.user), ReadFileParams(uuid=file_obj.uuid)
         )
 
     def test_a_document_comes_back_as_its_prose(self):

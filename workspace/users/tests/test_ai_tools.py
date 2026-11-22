@@ -13,6 +13,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.ai.tests.agents import tool_context
 from workspace.ai.tool_registry import ToolError
 from workspace.users.ai_tools import (
     CheckUserStatusParams,
@@ -48,13 +49,7 @@ class CheckUserStatusTests(TestCase):
     def _call(self, username):
         provider = UsersToolProvider()
         args = CheckUserStatusParams(username=username)
-        return provider.check_user_status(
-            args,
-            user=self.alice,
-            bot=None,
-            conversation_id=None,
-            context={},
-        )
+        return provider.check_user_status(tool_context(user=self.alice), args)
 
     def test_online_user_reports_full_name(self):
         with (
@@ -178,13 +173,7 @@ class ListOnlineUsersTests(TestCase):
     def _call(self, limit=20):
         provider = UsersToolProvider()
         args = ListOnlineUsersParams(limit=limit)
-        return provider.list_online_users(
-            args,
-            user=self.caller,
-            bot=None,
-            conversation_id=None,
-            context={},
-        )
+        return provider.list_online_users(tool_context(user=self.caller), args)
 
     def test_empty_when_no_online_users(self):
         with mock.patch(
@@ -289,11 +278,8 @@ class CheckUserStatusTimezoneTests(TestCase):
             ),
         ):
             result = UsersToolProvider().check_user_status(
+                tool_context(user=self.viewer),
                 CheckUserStatusParams(username="tztarget"),
-                user=self.viewer,
-                bot=None,
-                conversation_id=None,
-                context={},
             )
         payload = json.loads(result)
         self.assertEqual(payload["last_seen"], "2026-02-01 00:30")
@@ -320,11 +306,7 @@ class SearchUsersTests(TestCase):
 
     def _call(self, query):
         return UsersToolProvider().search_users(
-            SearchUsersParams(query=query),
-            user=self.caller,
-            bot=None,
-            conversation_id=None,
-            context={},
+            tool_context(user=self.caller), SearchUsersParams(query=query)
         )
 
     def test_returns_username_and_display_name(self):

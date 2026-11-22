@@ -52,8 +52,8 @@ class EditorActionTaskTests(TestCase):
         self.assertEqual(result["error"], "Task not found")
 
     def test_llm_failure_propagates_so_celery_marks_task_failed(self):
-        """Regression: when call_llm raises, the exception MUST propagate out
-        of editor_action. Returning an error dict instead of re-raising would
+        """Regression: when the model call raises, the exception MUST propagate
+        out of editor_action. Returning an error dict instead of re-raising would
         make Celery record the task as success in its result backend
         (``celery_tasks_total{state='success'}`` would tick) even though the
         work actually failed - breaking Flower / monitoring.
@@ -62,10 +62,14 @@ class EditorActionTaskTests(TestCase):
         re-raising, so the API surface is unchanged."""
         task = self._make_task(action="improve")
 
-        with patch("workspace.ai.tasks.editor.call_llm") as mock_call:
-            mock_call.side_effect = RuntimeError("LLM crashed")
-            with self.assertRaises(RuntimeError):
-                editor_action(str(task.uuid))
+        with (
+            patch(
+                "workspace.ai.services.llm.get_model",
+                side_effect=RuntimeError("LLM crashed"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            editor_action(str(task.uuid))
 
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.FAILED)

@@ -7,6 +7,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from workspace.ai.tests.agents import tool_context
 from workspace.mail.ai_tools import MailToolProvider, ReplyToEmailParams
 from workspace.mail.models import (
     MailAccount,
@@ -132,13 +133,10 @@ class ComposePrefillViewTests(TestCase):
             "workspace.mail.services.imap_messages.save_draft", return_value=draft
         ) as save:
             MailToolProvider().reply_to_email(
+                tool_context(user=self.user),
                 ReplyToEmailParams(
                     uuid=self.message.uuid, body="Thanks.", reply_all=True
                 ),
-                user=self.user,
-                bot=None,
-                conversation_id=None,
-                context={},
             )
         raw = save.call_args.args[1]
 

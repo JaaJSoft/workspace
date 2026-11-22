@@ -1,4 +1,3 @@
-import base64
 import logging
 from datetime import timedelta
 from itertools import pairwise
@@ -8,10 +7,19 @@ from django.conf import settings
 from django.db.models import Prefetch
 from django.utils import timezone
 from django.utils.text import Truncator
+from pydantic_ai.messages import (
+    BinaryContent,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 
 from workspace.ai.metrics import AI_HISTORY_TOOL_CHARS
-from workspace.ai.prompts.base import sanitize_prompt_line
-from workspace.ai.services.llm import truncate_tool_result
+from workspace.ai.prompts.base import sanitize_prompt_line, send
+from workspace.ai.services.reply_text import truncate_middle
 from workspace.ai.services.video import extract_video_frames
 from workspace.common.logging import scrub
 
@@ -25,6 +33,7 @@ QUOTE_LEN = 80
 
 
 class ConversationHistory(NamedTuple):
+    # The conversation as Pydantic AI messages, oldest first.
     messages: list
     summary: str
     # The Message rows the history was built from, newest first: what a
@@ -214,48 +223,51 @@ def _replay_budget(turn_age):
     return max(full >> min(turn_age, 16), settings.AI_TOOL_RESULT_REPLAY_MIN_CHARS)
 
 
+def _replay_calls(td_round):
+    """The calls of one stored round, as the model made them."""
+    return [
+        ToolCallPart(
+            (tc.get("function") or {}).get("name") or "",
+            (tc.get("function") or {}).get("arguments") or "{}",
+            tool_call_id=tc.get("id"),
+        )
+        for tc in td_round["tool_calls"]
+    ]
+
+
 def _replay_results(td_round, budget):
-    """Tool messages for one stored round, trimmed to *budget* characters."""
+    """The results of one stored round, trimmed to *budget* characters."""
     from workspace.ai.tool_registry import tool_registry
 
-    hints = {}
-    messages = []
+    calls = {call.tool_call_id: call for call in _replay_calls(td_round)}
+    results = []
     for tr in td_round.get("results", []):
         content = tr["content"]
+        call = calls.get(tr["tool_call_id"])
         if isinstance(content, str) and len(content) > budget:
-            if not hints:
-                hints = {
-                    tc.get("id"): tool_registry.describe_call(
-                        (tc.get("function") or {}).get("name") or "",
-                        (tc.get("function") or {}).get("arguments") or "",
-                    )
-                    for tc in td_round.get("tool_calls") or []
-                }
-            content = truncate_tool_result(
-                content, budget, hint=hints.get(tr["tool_call_id"], "")
+            hint = (
+                tool_registry.describe_call(call.tool_name, call.args) if call else ""
             )
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tr["tool_call_id"],
-                "content": content,
-            }
+            content = truncate_middle(content, budget, hint)
+        results.append(
+            ToolReturnPart(
+                tool_name=call.tool_name if call else "",
+                content=content,
+                tool_call_id=tr["tool_call_id"],
+                outcome=tr.get("outcome", "success"),
+            )
         )
-    return messages
+    return results
 
 
 def _image_pixel_part(att):
-    """Return an image_url content part for an attachment, or None if unreadable."""
+    """An image attachment as the model is shown it, or None if unreadable."""
     try:
         data = att.file.read()
     except Exception:
         logger.warning("Could not read attachment %s", scrub(str(att.uuid)))
         return None
-    b64 = base64.b64encode(data).decode()
-    return {
-        "type": "image_url",
-        "image_url": {"url": f"data:{att.mime_type};base64,{b64}"},
-    }
+    return BinaryContent(data=data, media_type=att.mime_type)
 
 
 def _image_note(att):
@@ -387,25 +399,16 @@ def _collect_media(msg, is_bot, in_window, allowed_att_uuids, att_cache):
     return media_parts, video_descriptions, caption_notes
 
 
-def _assistant_images_message(media_parts, caption_notes=()):
-    # image_url parts are not universally accepted in assistant-role messages,
-    # so the assistant's own images ride in a follow-up user message (same
-    # role rationale as the video descriptions below). Caption notes ride here
+def _assistant_images_part(media_parts, caption_notes=()):
+    # Images are not universally accepted in assistant-role messages, so the
+    # assistant's own images ride in a follow-up user message (same role
+    # rationale as the video descriptions below). Caption notes ride here
     # too: an "[image: ...]" marker in an assistant turn reads as the bot's own
     # writing style and gets imitated in later replies.
-    return {
-        "role": "user",
-        "content": [
-            {
-                "type": "text",
-                "text": "\n".join(
-                    ["[Images sent by the assistant in the message above]"]
-                    + list(caption_notes)
-                ),
-            },
-            *media_parts,
-        ],
-    }
+    note = "\n".join(
+        ["[Images sent by the assistant in the message above]", *caption_notes]
+    )
+    return UserPromptPart([note, *media_parts])
 
 
 def build_conversation_history(conversation_id, bot_profile, human_user):
@@ -481,23 +484,22 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
     replayed_tool_chars = 0
     for msg in reversed(msgs_to_use):
         is_bot = hasattr(msg.author, "bot_profile")
-        role = "assistant" if is_bot else "user"
         body = msg.body
 
         # Timestamp and sender ride on a system line before each message, so
         # the message content itself stays exactly what was written.
-        history.append(
-            {
-                "role": "system",
-                "content": _message_header(
+        send(
+            history,
+            SystemPromptPart(
+                _message_header(
                     msg,
                     bot_profile.user_id,
                     prev_of.get(msg.uuid),
                     _user_tz,
                     _att_cache,
                     window_uuids,
-                ),
-            }
+                )
+            ),
         )
 
         media_parts, video_descriptions, caption_notes = [], [], []
@@ -521,42 +523,38 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
                     # Tool-less rounds only carry thinking for the UI
                     # timeline; reasoning is never replayed to the LLM.
                     continue
-                assistant_msg = {
-                    "role": "assistant",
-                    "content": td_round.get("assistant_content", ""),
-                    "tool_calls": tool_calls,
-                }
-                history.append(assistant_msg)
-                for tool_msg in _replay_results(td_round, budget):
-                    replayed_tool_chars += len(tool_msg["content"])
-                    history.append(tool_msg)
-            history.append({"role": "assistant", "content": body_text})
-            if media_parts or caption_notes:
-                history.append(_assistant_images_message(media_parts, caption_notes))
-            if audio_notes:
-                history.append({"role": "user", "content": "\n".join(audio_notes)})
-            continue
+                said = td_round.get("assistant_content", "")
+                history.append(
+                    ModelResponse(
+                        parts=[
+                            *([TextPart(said)] if said else []),
+                            *_replay_calls(td_round),
+                        ]
+                    )
+                )
+                results = _replay_results(td_round, budget)
+                replayed_tool_chars += sum(len(result.content) for result in results)
+                send(history, *results)
 
         if video_descriptions:
             # Attach the video metadata as a `user` message (not `system`):
             # `desc` includes attachment-derived text like att.original_name,
             # so giving it system-level priority is a prompt-injection vector.
-            history.append({"role": "user", "content": "\n".join(video_descriptions)})
+            send(history, UserPromptPart("\n".join(video_descriptions)))
 
         if is_bot:
-            history.append({"role": "assistant", "content": body_text})
+            history.append(ModelResponse(parts=[TextPart(body_text)]))
             if media_parts or caption_notes:
-                history.append(_assistant_images_message(media_parts, caption_notes))
+                send(history, _assistant_images_part(media_parts, caption_notes))
             if audio_notes:
-                history.append({"role": "user", "content": "\n".join(audio_notes)})
+                send(history, UserPromptPart("\n".join(audio_notes)))
         elif media_parts:
-            content = []
-            if body_text:
-                content.append({"type": "text", "text": body_text})
-            content.extend(media_parts)
-            history.append({"role": role, "content": content})
+            send(
+                history,
+                UserPromptPart([*([body_text] if body_text else []), *media_parts]),
+            )
         else:
-            history.append({"role": role, "content": body_text})
+            send(history, UserPromptPart(body_text))
 
     AI_HISTORY_TOOL_CHARS.observe(replayed_tool_chars)
     return ConversationHistory(history, summary_text, all_msgs)

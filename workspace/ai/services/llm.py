@@ -1,396 +1,222 @@
-import json
-import logging
-import re
+"""The configured backend, as Pydantic AI models, and one-shot prompts on it.
+
+Everything that talks to a text model goes through :func:`get_model`:
+the bots' agent, and the single requests of titles, summaries, mail and
+the editor, which :func:`run_prompt` sends. How a request is written for
+a backend is the model class's business; what is said here is which kind
+of backend the settings describe.
+"""
+
 import time
+from dataclasses import dataclass, replace
+from urllib.parse import urlsplit
 
+import pydantic_ai
 from django.conf import settings
-from pydantic import BaseModel, ValidationError
-
-from workspace.common.logging import scrub
-
-logger = logging.getLogger(__name__)
-
-# Backends spell their inline reasoning tag differently. The backreference keeps
-# an opening tag from being closed by a different one, and the body refuses to
-# cross a further opening tag so a mismatched closer cannot merge two blocks -
-# and with them the answer in between - into a single one.
-_THINK_TAGS = "think|thinking|thought|thoughts|reasoning"
-_THINK_RE = re.compile(
-    rf"<({_THINK_TAGS})>((?:(?!<(?:{_THINK_TAGS})>)[\s\S])*?)</\1>\s*",
-    re.IGNORECASE,
+from pydantic_ai import Agent
+from pydantic_ai.capabilities import AbstractCapability
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelMessagesTypeAdapter,
+    ModelResponse,
+    TextPart,
+    ThinkingPart,
 )
-_RAW_TOOL_CALL_RE = re.compile(r"</?tool_call>", re.IGNORECASE)
-# Matches the history header leaked by the LLM: the bracketed line
-# conversation_history puts before each message ("[2026-04-10 20:07 | Your
-# reply.] ..."), or a bare timestamp with or without brackets.
-_TIMESTAMP_PREFIX_RE = re.compile(
-    r"^(?:\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}[^\]\n]*\]"
-    r"|\[?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]?)\s*"
+from pydantic_ai.models import Model
+from pydantic_ai.settings import ModelSettings
+
+from workspace.ai.metrics import AI_REQUEST_DURATION, AI_TOKENS
+from workspace.ai.services.reply_text import (
+    clean_llm_content,
+    split_inline_thinking,
+    truncate_middle,
 )
-# Image stand-ins injected by conversation_history; the model imitates them.
-# Stripped anywhere (never legitimate output); the leading newline run is put back
-# so a standalone marker leaves no blank line, and the `!` lookbehind spares a
-# markdown image whose alt text starts with "image:".
-_IMAGE_MARKER_RE = re.compile(
-    r"(\n*)(?<!!)\[(?:Images sent by the assistant in the message above"
-    r"|image:[^\n]*?)\][ \t]*\n*",
-    re.IGNORECASE,
-)
-# Fallback for backends that ignore response_format and wrap their JSON in
-# markdown fences anyway.
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.DOTALL)
+
+# Printed into the worker's log on the first run of a process otherwise.
+pydantic_ai.BANNER_ENABLED = False
+
+# Characters of one text kept in a stored conversation.
+_STORED_TEXT_MAX_CHARS = 50_000
 
 
-def clean_llm_content(content: str) -> str:
-    """Strip artifacts that LLMs sometimes leak into their replies."""
-    content = _RAW_TOOL_CALL_RE.sub("", content)
-    # Markers first: _TIMESTAMP_PREFIX_RE is anchored, so a timestamp sitting
-    # behind one is only reachable once the marker is gone.
-    content = _IMAGE_MARKER_RE.sub(r"\1", content)
-    content = _TIMESTAMP_PREFIX_RE.sub("", content)
-    return content.strip()
+def _is_openai(base_url: str) -> bool:
+    """Whether *base_url* is OpenAI's own API, hosted by it or by Azure."""
+    host = urlsplit(base_url).hostname or ""
+    return host == "api.openai.com" or host.endswith(".openai.azure.com")
 
 
-def serialize_response(result):
-    """Serialize an call_llm result dict for storage."""
-    tc = result.get("tool_calls")
-    return {
-        "content": result.get("content", ""),
-        "thinking": result.get("thinking", ""),
-        "tool_calls": [
-            {"id": c.id, "name": c.function.name, "arguments": c.function.arguments}
-            for c in tc
-        ]
-        if tc
-        else None,
-        "model": result.get("model", ""),
-        "finish_reason": result.get("finish_reason"),
-        "prompt_tokens": result.get("prompt_tokens"),
-        "completion_tokens": result.get("completion_tokens"),
-    }
+def _compatible_profile(model_name: str):
+    """What an endpoint that only speaks OpenAI's protocol is taken to do.
 
-
-def sanitize_messages_for_storage(messages):
-    """Strip large base64 image data and truncate huge text from messages."""
-    sanitized = []
-    for msg in messages:
-        content = msg.get("content")
-        if isinstance(content, list):
-            parts = []
-            for part in content:
-                if isinstance(part, dict) and (
-                    part.get("type") == "image_url" or "image_url" in part
-                ):
-                    parts.append({"type": "image_url", "image_url": "[stripped]"})
-                else:
-                    parts.append(part)
-            sanitized.append({**msg, "content": parts})
-        elif isinstance(content, str) and len(content) > 50_000:
-            sanitized.append({**msg, "content": content[:50_000] + "… [truncated]"})
-        else:
-            sanitized.append(msg)
-    return sanitized
-
-
-def truncate_middle(text, max_len, hint=""):
-    """Cap *text* at *max_len* characters by removing its middle.
-
-    A fetched page, a JSON payload or a task list carries its conclusion at
-    the end, so a head-only cut drops exactly what the text was read for.
-    *hint* names the call that produced the text, which leaves the residue a
-    pointer to something obtainable again instead of a dead end. The marker
-    counts against the budget: a cap that quietly returns more is not a cap.
+    The same whatever its model is called. Left to itself the library reads
+    a vendor off a "vendor/model" name and takes that vendor's own API as
+    the limit: no JSON schema output, no system message past the first.
+    Behind LM Studio, vLLM or OpenRouter the name says nothing of the kind.
     """
-    if len(text) <= max_len:
-        return text
-    source = f" of {hint}" if hint else ""
+    from pydantic_ai.profiles import merge_profile
+    from pydantic_ai.profiles.openai import OpenAIModelProfile, openai_model_profile
 
-    def marker(omitted):
-        return (
-            f"\n\n[… {omitted} characters omitted from the middle{source}; "
-            "call the tool again to read the full result …]\n\n"
-        )
-
-    # len(text) is an upper bound on the omitted count, hence on the marker's
-    # width: sizing on it keeps the result within budget once the real (never
-    # longer) number is written in.
-    keep = max_len - len(marker(len(text)))
-    if keep <= 0:
-        return text[:max_len]
-    head, tail = keep - keep // 2, keep // 2
-    return text[:head] + marker(len(text) - keep) + text[len(text) - tail :]
-
-
-def truncate_tool_result(text, max_len, *, hint=""):
-    """Truncate a tool result string for storage, stripping image data."""
-    if not text:
-        return text
-    try:
-        parsed = json.loads(text)
-        if isinstance(parsed, dict) and parsed.get("type") == "image":
-            stripped = {"type": "image", "data": "[stripped]"}
-            if parsed.get("text"):
-                stripped["text"] = parsed["text"]
-            return json.dumps(stripped)
-    except json.JSONDecodeError, TypeError:
-        # Not an image payload (most tool results are plain text JSON or raw
-        # strings) - fall through to plain length-based truncation.
-        pass
-    return truncate_middle(text, max_len, hint)
-
-
-def build_tool_content(tool_result: str):
-    """Convert a tool result string into API content, handling image payloads."""
-    try:
-        parsed = json.loads(tool_result)
-        if isinstance(parsed, dict) and parsed.get("type") == "image":
-            mime = parsed.get("mime_type", "image/webp")
-            data = parsed["data"]
-            return [
-                {"type": "text", "text": parsed.get("text") or "Here is the image:"},
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime};base64,{data}"},
-                },
-            ]
-    except json.JSONDecodeError, KeyError:
-        # Non-image tool result (the common case) - return the raw text.
-        pass
-    return tool_result
-
-
-def _extract_thinking(content: str) -> tuple[str, str]:
-    """Split inline reasoning blocks (<think>, <thought>, ...) out of model output.
-
-    Returns (thinking, cleaned). Multiple blocks join with a blank line.
-    An unclosed tag matches nothing: it stays in the content and captures no
-    thinking.
-    """
-    blocks = [m.group(2).strip() for m in _THINK_RE.finditer(content)]
-    thinking = "\n\n".join(b for b in blocks if b)
-    cleaned = _THINK_RE.sub("", content).strip()
-    return thinking, cleaned
-
-
-def extract_text_tool_calls(content: str):
-    """Parse tool calls that a model emitted as plain text instead of structured output.
-
-    Handles two formats:
-    - ``{"tool": "name", "prompt": "...", ...}`` (shorthand some models use)
-    - ``{"name": "name", "arguments": {...}}`` (OpenAI-like)
-
-    Returns a list of (name, arguments_json) tuples and the remaining text,
-    or (None, content) if nothing was found.
-    """
-    cleaned = _RAW_TOOL_CALL_RE.sub("", content).strip()
-
-    calls = []
-    remaining = cleaned
-
-    for match in re.finditer(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", cleaned):
-        try:
-            parsed = json.loads(match.group())
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(parsed, dict):
-            continue
-
-        match parsed:
-            case {"tool": name, **rest}:
-                calls.append((name, json.dumps(rest)))
-                remaining = remaining.replace(match.group(), "").strip()
-            case {"name": name, "arguments": args}:
-                args_json = args if isinstance(args, str) else json.dumps(args)
-                calls.append((name, args_json))
-                remaining = remaining.replace(match.group(), "").strip()
-
-    if calls:
-        logger.info("Parsed %d tool call(s) from text content", len(calls))
-        return calls, remaining
-    return None, content
-
-
-def call_llm(
-    messages: list[dict],
-    model: str | None = None,
-    max_tokens: int | None = None,
-    tools: list | None = None,
-    response_format: dict | None = None,
-) -> dict:
-    """Call an LLM via OpenAI SDK and return a dict with content and usage info."""
-    from workspace.ai.client import get_ai_client
-    from workspace.ai.metrics import AI_REQUEST_DURATION, AI_TOKENS
-
-    client = get_ai_client()
-    if not client:
-        raise RuntimeError("AI is not configured (AI_API_KEY missing)")
-
-    effective_model = model or settings.AI_MODEL
-    kwargs = {
-        "model": effective_model,
-        "messages": messages,
-        "max_tokens": max_tokens or settings.AI_MAX_TOKENS,
-    }
-    if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
-    if response_format:
-        kwargs["response_format"] = response_format
-
-    started = time.monotonic()
-    try:
-        response = client.chat.completions.create(**kwargs)
-    except Exception:
-        AI_REQUEST_DURATION.labels(
-            model=effective_model,
-            status="error",
-        ).observe(time.monotonic() - started)
-        raise
-    duration = time.monotonic() - started
-    AI_REQUEST_DURATION.labels(
-        model=response.model or effective_model,
-        status="ok",
-    ).observe(duration)
-
-    if response.usage:
-        if response.usage.prompt_tokens:
-            AI_TOKENS.labels(
-                model=response.model or effective_model,
-                kind="prompt",
-            ).inc(response.usage.prompt_tokens)
-        if response.usage.completion_tokens:
-            AI_TOKENS.labels(
-                model=response.model or effective_model,
-                kind="completion",
-            ).inc(response.usage.completion_tokens)
-
-    choice = response.choices[0]
-    thinking, content = _extract_thinking(choice.message.content or "")
-    # Some backends (vLLM/DeepSeek: reasoning_content, OpenRouter: reasoning)
-    # return reasoning as a separate field instead of <think> tags. First
-    # non-blank field wins, so a whitespace-only reasoning_content still
-    # falls back to reasoning.
-    native = next(
-        (
-            v.strip()
-            for v in (
-                getattr(choice.message, "reasoning_content", None),
-                getattr(choice.message, "reasoning", None),
-            )
-            if isinstance(v, str) and v.strip()
+    return merge_profile(
+        openai_model_profile(model_name),
+        OpenAIModelProfile(
+            supports_json_schema_output=True,
+            supports_json_object_output=True,
+            supports_inline_system_prompts=True,
+            # Ollama ignores `max_completion_tokens` without a word and
+            # answers uncapped; every such service reads `max_tokens`.
+            openai_chat_supports_max_completion_tokens=False,
+            # Handed its reasoning back, gpt-oss writes its next tool
+            # call into its reasoning, where nothing runs it.
+            openai_chat_send_back_thinking_parts=False,
         ),
-        "",
     )
-    if native:
-        thinking = native
-    # Apply both strip and clean here so downstream consumers (summaries, mail
-    # composer, titles, ...) see normalized text regardless of which path they
-    # took.
-    content = clean_llm_content(content)
-    finish_reason = getattr(choice, "finish_reason", None)
-    return {
-        "content": content,
-        "thinking": thinking,
-        "tool_calls": choice.message.tool_calls,
-        "message": choice.message,
-        "model": response.model,
-        "finish_reason": finish_reason if isinstance(finish_reason, str) else None,
-        "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
-        "completion_tokens": response.usage.completion_tokens
-        if response.usage
-        else None,
-        "duration": duration,
-    }
 
 
-def _make_strict(node: dict) -> None:
-    """Normalize a Pydantic JSON schema in place for strict structured outputs.
+def get_model(name: str | None = None) -> Model:
+    """The model *name*, or the default one, on the configured backend."""
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+    from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
-    Strict mode (OpenAI-style) only guarantees adherence when every object
-    forbids extra keys and lists all its properties as required; ``default``
-    is dropped because a property that is always present never falls back to
-    it. Recursion follows schema keywords only - a *property* named
-    ``default`` or ``items`` must not be touched.
+    if not settings.AI_API_KEY:
+        raise RuntimeError("AI is not configured (AI_API_KEY missing)")
+    base_url = settings.AI_BASE_URL
+    if not base_url or _is_openai(base_url):
+        provider = OpenAIProvider(base_url=base_url, api_key=settings.AI_API_KEY)
+    else:
+        provider = OpenAICompatibleProvider(
+            "openai-compatible",
+            base_url=base_url,
+            api_key=settings.AI_API_KEY,
+            profile=_compatible_profile,
+        )
+    return OpenAIChatModel(name or settings.AI_MODEL, provider=provider)
+
+
+def model_settings(max_tokens: int | None = None) -> ModelSettings:
+    return ModelSettings(
+        max_tokens=max_tokens or settings.AI_MAX_TOKENS,
+        timeout=settings.AI_TIMEOUT,
+        max_retries=settings.AI_MAX_RETRIES,
+    )
+
+
+class ReplyHygiene(AbstractCapability):
+    """Cleans every reply before anything reads it.
+
+    Reasoning a model wrote between inline tags becomes a thinking part,
+    like reasoning a backend kept apart, and the artifacts a model imitates
+    from its own history are cut from the text.
     """
-    node.pop("default", None)
-    if node.get("type") == "object" and isinstance(node.get("properties"), dict):
-        node["additionalProperties"] = False
-        node["required"] = list(node["properties"])
-        for prop in node["properties"].values():
-            _make_strict(prop)
-    for sub in node.get("$defs", {}).values():
-        _make_strict(sub)
-    if isinstance(node.get("items"), dict):
-        _make_strict(node["items"])
-    for keyword in ("anyOf", "oneOf", "allOf", "prefixItems"):
-        for sub in node.get(keyword, []):
-            _make_strict(sub)
+
+    async def after_model_request(self, ctx, *, request_context, response):
+        parts = []
+        for part in response.parts:
+            if not isinstance(part, TextPart):
+                parts.append(part)
+                continue
+            thinking, text = split_inline_thinking(part.content)
+            if thinking:
+                parts.append(ThinkingPart(thinking))
+            if text := clean_llm_content(text):
+                parts.append(replace(part, content=text))
+        return replace(response, parts=parts)
 
 
-def call_llm_structured(
-    messages: list[dict],
-    schema: type[BaseModel],
+@dataclass
+class RequestMetrics(AbstractCapability):
+    """Times every model request and counts its tokens for Prometheus.
+
+    ``seconds`` adds up the requests of a run and ``last_seconds`` is the
+    latest one: a run reads there what it cost in model time.
+    """
+
+    seconds: float | None = None
+    last_seconds: float | None = None
+
+    async def wrap_model_request(self, ctx, *, request_context, handler):
+        started = time.monotonic()
+        try:
+            response = await handler(request_context)
+        except Exception:
+            AI_REQUEST_DURATION.labels(
+                model=request_context.model.model_name, status="error"
+            ).observe(time.monotonic() - started)
+            raise
+        self.last_seconds = time.monotonic() - started
+        self.seconds = (self.seconds or 0) + self.last_seconds
+        model = response.model_name or request_context.model.model_name
+        AI_REQUEST_DURATION.labels(model=model, status="ok").observe(self.last_seconds)
+        if response.usage.input_tokens:
+            AI_TOKENS.labels(model=model, kind="prompt").inc(
+                response.usage.input_tokens
+            )
+        if response.usage.output_tokens:
+            AI_TOKENS.labels(model=model, kind="completion").inc(
+                response.usage.output_tokens
+            )
+        return response
+
+
+def run_prompt(
+    messages: list[ModelMessage],
+    *,
     model: str | None = None,
     max_tokens: int | None = None,
-) -> tuple[BaseModel | None, dict]:
-    """Call the LLM with output constrained to *schema* and validate the reply.
+    output_type=str,
+):
+    """Send *messages* once and return the run's result.
 
-    The schema is sent as a strict ``json_schema`` response_format so backends
-    with constrained decoding (OpenAI, vLLM, Ollama, LM Studio) guarantee the
-    shape at generation time. The reply is validated with Pydantic regardless:
-    a backend may silently ignore the constraint, which is also why stray
-    markdown fences are still stripped before parsing.
-
-    *schema* must describe a top-level JSON object, not an array - the
-    json_schema response format requires it. Wrap lists in an envelope model.
-    Strict normalization marks every field required, so the model always
-    emits fields that carry a Pydantic default.
-
-    Returns ``(instance, result)`` where *instance* is ``None`` when the reply
-    does not validate; *result* is the raw :func:`call_llm` dict so callers can
-    still record model and token usage, and tell a reply the backend cut at
-    the token cap (``finish_reason == "length"``) from one that ignored the
-    schema. Reasoning counts against that cap on Ollama-style backends, so a
-    model that thinks for long enough returns an empty content.
+    *output_type* is what Pydantic AI should make of the reply: text by
+    default, or a schema (``NativeOutput(Model)``) the reply is constrained
+    to and validated against. A reply that cannot be read as it, or that
+    the backend cut at the token cap, raises.
     """
-    schema_dict = schema.model_json_schema()
-    _make_strict(schema_dict)
-    response_format = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": schema.__name__,
-            "schema": schema_dict,
-            "strict": True,
-        },
-    }
-    result = call_llm(
-        messages,
-        model=model,
-        max_tokens=max_tokens,
-        response_format=response_format,
+    agent = Agent(
+        get_model(model),
+        output_type=output_type,
+        model_settings=model_settings(max_tokens),
+        capabilities=[ReplyHygiene(), RequestMetrics()],
     )
-    raw = _FENCE_RE.sub("", (result.get("content") or "").strip())
-    try:
-        return schema.model_validate_json(raw), result
-    except ValidationError as e:
-        if reply_was_truncated(result):
-            logger.warning(
-                "LLM reply for %s was cut at the token cap (max_tokens=%s) "
-                "before it validated; content starts %r",
-                schema.__name__,
-                max_tokens or settings.AI_MAX_TOKENS,
-                scrub(raw[:200]),
-            )
-        else:
-            logger.warning(
-                "LLM output failed %s validation: %s; content starts %r",
-                schema.__name__,
-                scrub(str(e)[:500]),
-                scrub(raw[:200]),
-            )
-        return None, result
+    return agent.run_sync(message_history=messages)
 
 
-def reply_was_truncated(result: dict) -> bool:
-    """Whether the backend stopped generating at the token cap."""
-    return result.get("finish_reason") == "length"
+def usage_fields(response: ModelResponse, usage) -> dict:
+    """What a run cost, as the AITask columns that record it.
+
+    A backend that reports no usage leaves the counts unknown, not at zero.
+    """
+    return {
+        "model_used": response.model_name or "",
+        "prompt_tokens": usage.input_tokens or None,
+        "completion_tokens": usage.output_tokens or None,
+    }
+
+
+def _stored(value):
+    if isinstance(value, dict):
+        if value.get("kind") == "binary":
+            return {**value, "data": "[stripped]"}
+        if value.get("part_kind") == "tool-return" and isinstance(
+            value.get("content"), str
+        ):
+            cut = truncate_middle(
+                value["content"], settings.AI_TOOL_RESULT_TASK_MAX_CHARS
+            )
+            return {**value, "content": cut}
+        return {key: _stored(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_stored(item) for item in value]
+    if isinstance(value, str) and len(value) > _STORED_TEXT_MAX_CHARS:
+        return value[:_STORED_TEXT_MAX_CHARS] + "… [truncated]"
+    return value
+
+
+def messages_for_storage(messages: list[ModelMessage]) -> list:
+    """A conversation as ``AITask.raw_messages`` keeps it, for a human to read.
+
+    Pydantic AI's own serialization, minus what makes a row heavy: the bytes
+    of images, the tail of very long texts, and all of a tool result past
+    ``AI_TOOL_RESULT_TASK_MAX_CHARS``.
+    """
+    return _stored(ModelMessagesTypeAdapter.dump_python(messages, mode="json"))

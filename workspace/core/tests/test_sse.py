@@ -19,6 +19,7 @@ from prometheus_client import REGISTRY
 from workspace.core.sse_registry import push_user_event
 from workspace.core.views import sse
 from workspace.imports.sse_provider import ImportsSSEProvider
+from workspace.users.services import presence_stream
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -205,7 +206,7 @@ class MetricsTests(TestCase):
 
 
 class StreamDatabaseConnectionTests(TestCase):
-    """A stream spends most of its ten minutes waiting, and must not hold a
+    """A stream spends most of its half hour waiting, and must not hold a
     database connection meanwhile: on PostgreSQL the pool gives each process
     four, so a handful of open tabs would leave none for any other request.
 
@@ -272,10 +273,12 @@ class StreamDatabaseConnectionTests(TestCase):
 
 
 class StreamConstantTests(TestCase):
-    def test_max_connection_seconds_is_aligned_with_nginx_proxy_timeout(self):
-        # nginx ingress proxy-read-timeout is 600s; staying below it avoids the
-        # proxy cutting our stream while the budget is still ticking server-side.
-        self.assertLessEqual(sse._MAX_CONNECTION_SECONDS, 600)
+    def test_a_stream_ends_well_before_the_presence_watch_list_lapses(self):
+        # Each stream that starts pushes the expiry of the list back. One that
+        # lasted as long as the list would let it lapse under an open tab.
+        self.assertLessEqual(sse._MAX_CONNECTION_SECONDS * 2, presence_stream.WATCH_TTL)
+
+    def test_a_stream_lasts_at_least_a_minute(self):
         # Anything under a minute is sub-calibrated: forces too many reconnects
         # which re-emit all initial snapshots and re-init providers.
         self.assertGreaterEqual(sse._MAX_CONNECTION_SECONDS, 60)

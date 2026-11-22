@@ -50,10 +50,10 @@ SSE_PUBSUB_MESSAGES = safe_counter(
     "several for one provider counting once",
 )
 
-# Force a periodic reconnect so workers/providers cycle and stale state clears.
-# Aligned with the nginx ingress proxy-read-timeout (600s); the browser
-# auto-reconnects via EventSource and resumes from Last-Event-Id.
-_MAX_CONNECTION_SECONDS = 600
+# Ends a stream on purpose: the next request is authenticated again, its
+# providers start afresh, and every page re-syncs, catching up what was missed.
+# No proxy read timeout bounds it: a keepalive is written every 15 seconds.
+_MAX_CONNECTION_SECONDS = 1800
 
 # Upper bound on an incoming Last-Event-Id before it is ignored outright.
 _MAX_CURSOR_CHARS = 512

@@ -94,7 +94,7 @@ class Connection:
             self.outbox.put(chunk)
 
     def end(self):
-        """The server ends the stream, as it does every ten minutes."""
+        """The server ends the stream, as it does every half hour."""
         self.outbox.put(None)
 
 

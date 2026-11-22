@@ -1,7 +1,7 @@
 """E2E: a stream reconnection refreshes the agenda where the reader is.
 
 The stream script dispatches ``sse:reconnect`` each time the event stream
-opens again, at least every ten minutes. The agenda must reload in place: a
+opens again, at least every half hour. The agenda must reload in place: a
 reader a few weeks ahead keeps their rows and their scroll position instead
 of being sent back to today. Skipped unless E2E=1 is set.
 """

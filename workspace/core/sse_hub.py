@@ -1,6 +1,6 @@
 """One Redis subscription per process, shared by every SSE stream it serves.
 
-A stream stays open for up to ten minutes. A Pub/Sub connection of its own for
+A stream stays open for up to half an hour. A Pub/Sub connection of its own for
 that long ties up one connection per open tab, and the Redis client pool caps a
 process at a hundred: past that, every cache read of the worker fails as well.
 The hub holds a single pattern subscription to every user's channel instead,

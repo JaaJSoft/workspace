@@ -22,6 +22,9 @@ class PresenceSSEProvider(SSEProvider):
         self._last_check = 0
 
     def get_initial_events(self):
+        # Not left to the pages: a hidden one holds back the re-sync it would
+        # send its ids again on.
+        presence_stream.keep_watching(self.user.id)
         self._watched = presence_stream.watched_user_ids(self.user.id)
         self._sent = presence_stream.statuses_of(self._watched)
         self._last_check = time.monotonic()

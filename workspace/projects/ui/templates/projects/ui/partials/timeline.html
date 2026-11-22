@@ -60,6 +60,7 @@
         {% endcomment %}
         <div
           class="rounded-box border border-base-300 bg-base-100 overflow-x-auto"
+          data-keep-scroll="timeline"
           x-init="$nextTick(() => { const svg = $el.querySelector('svg[data-today-x]'); const x = svg && Number(svg.dataset.todayX); if (x) $el.scrollLeft = Math.max(0, x - $el.clientWidth / 3) })"
         >
           {% translate "Tasks and epic target dates of the project on a date axis" as timeline_aria_label %}

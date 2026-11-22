@@ -10,6 +10,7 @@
   id="task-panel"
   class="flex flex-col min-h-0 h-full"
   x-data="taskPanel()"
+  data-project-revision="{{ project.page_revision }}"
   data-attachments-url="{% url 'project-task-attachments' project_uuid=project.uuid task_uuid=panel_task.uuid %}"
   data-comment-count="{{ panel_comment_count }}"
   data-activity-count="{{ panel_events|length }}"

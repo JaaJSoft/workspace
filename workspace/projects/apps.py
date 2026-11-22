@@ -47,6 +47,13 @@ class ProjectsConfig(AppConfig):
             )
         )
 
+        from workspace.core.sse_registry import SSEProviderInfo, sse_registry
+        from workspace.projects.sse_provider import ProjectsSSEProvider
+
+        sse_registry.register(
+            SSEProviderInfo(slug="projects", provider_cls=ProjectsSSEProvider)
+        )
+
         from workspace.ai.tool_registry import tool_registry
         from workspace.projects.ai_tools import ProjectsToolProvider
 

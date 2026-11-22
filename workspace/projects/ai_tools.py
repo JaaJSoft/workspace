@@ -10,6 +10,7 @@ from pydantic_ai import RunContext
 
 from workspace.ai.tool_registry import ToolDeps, ToolError, ToolProvider, tool
 from workspace.common.logging import scrub
+from workspace.projects.sse_provider import broadcast_project_change
 
 logger = logging.getLogger(__name__)
 
@@ -364,6 +365,7 @@ project's backlog column."""
             due_date=due_date,
             assignees=assignees,
         )
+        broadcast_project_change(project, task_uuid=task.uuid)
         logger.info(
             "AI created task %s in project %s for %s",
             scrub(task.reference),
@@ -419,6 +421,7 @@ list_my_tasks or search_tasks first."""
         old_status = change_task_status(task, target, actor=user)
         if old_status is None:
             return f'Task {task.reference} is already in "{target.name}".'
+        broadcast_project_change(task.project, task_uuid=task.uuid)
         logger.info(
             "AI moved task %s to %s for %s",
             scrub(task.reference),
@@ -493,6 +496,7 @@ first."""
                 notify_assigned(task, user, [member])
                 changes.append(f"assigned to {member.username}")
 
+        broadcast_project_change(task.project, task_uuid=task.uuid)
         logger.info(
             "AI updated task %s for %s", scrub(task.reference), scrub(user.username)
         )
@@ -524,6 +528,7 @@ search_tasks first."""
             raise ToolError("body is required")
 
         add_comment(task, user, body)
+        broadcast_project_change(task.project, task_uuid=task.uuid)
         logger.info(
             "AI commented on task %s for %s",
             scrub(task.reference),

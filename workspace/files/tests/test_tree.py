@@ -2,15 +2,17 @@
 
 import os
 import posixpath
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.common.tests.media import local_storage_only
-from workspace.files.models import File
+from workspace.files.models import File, FileEvent
 from workspace.files.services import trash, tree
 from workspace.files.services.content_writes import (
     replace_content_storage,
@@ -18,6 +20,8 @@ from workspace.files.services.content_writes import (
 )
 from workspace.files.services.locking import Relocated
 from workspace.files.services.names import check_name_available
+from workspace.files.services.refusals import Refusal, Refused
+from workspace.files.services.transfers import move_item
 
 User = get_user_model()
 
@@ -847,3 +851,77 @@ class TestMoveOnStorage(TestCase):
         tree.move(f, folder)
         f.refresh_from_db()
         self.assertEqual(f.parent, folder)
+
+
+class TestMoveFromStaleInstance(TestCase):
+    """tree.move() decides on the parent stored, not the one the caller loaded.
+
+    The caller loads the node when its request begins; another request can
+    move it before this one gets to its own move.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="staleuser", password="pass")
+        self.first = tree.create_folder(self.user, "First")
+        self.second = tree.create_folder(self.user, "Second")
+        self.third = tree.create_folder(self.user, "Third")
+        self.node = tree.create_file(
+            self.user,
+            "doc.txt",
+            parent=self.first,
+            content=ContentFile(b"hello", name="doc.txt"),
+        )
+        self.stale = File.objects.get(pk=self.node.pk)
+        with self.captureOnCommitCallbacks(execute=True):
+            tree.move(File.objects.get(pk=self.node.pk), self.second)
+        self.long_ago = timezone.now() - timedelta(days=1)
+        File.objects.filter(
+            pk__in=[self.first.pk, self.second.pk, self.third.pk]
+        ).update(updated_at=self.long_ago)
+
+    def _moves(self):
+        return FileEvent.objects.filter(
+            file_id=self.node.pk, action=FileEvent.Action.MOVED
+        ).count()
+
+    def _assert_still_in_second(self):
+        current = File.objects.get(pk=self.node.pk)
+        self.assertEqual(current.parent_id, self.second.pk)
+        self.assertTrue(default_storage.is_file(current.content.name))
+        self.assertIn("/Second/", current.content.name)
+
+    def _assert_undated(self, *folders):
+        for folder in folders:
+            folder.refresh_from_db()
+            self.assertEqual(folder.updated_at, self.long_ago, folder.name)
+
+    def test_moving_elsewhere_is_refused(self):
+        with self.assertRaises(tree.MovedMeanwhile):
+            tree.move(self.stale, self.third, acting_user=self.user)
+
+        self._assert_still_in_second()
+        self.assertEqual(self._moves(), 1)
+        self._assert_undated(self.first, self.second, self.third)
+
+    def test_moving_back_to_the_loaded_parent_is_refused_not_skipped(self):
+        # The loaded parent equals the target, which used to read as a no-op
+        # and left the node where the other request had put it.
+        with self.assertRaises(tree.MovedMeanwhile):
+            tree.move(self.stale, self.first, acting_user=self.user)
+
+        self._assert_still_in_second()
+        self.assertEqual(self._moves(), 1)
+
+    def test_moving_where_it_already_is_does_nothing(self):
+        tree.move(self.stale, self.second, acting_user=self.user)
+
+        self._assert_still_in_second()
+        self.assertEqual(self._moves(), 1)
+        self._assert_undated(self.first, self.second, self.third)
+
+    def test_a_move_through_the_transfers_is_refused_as_stale(self):
+        with self.assertRaises(Refused) as caught:
+            move_item(self.user, self.stale, self.third)
+
+        self.assertEqual(caught.exception.reason, Refusal.STALE)
+        self._assert_still_in_second()

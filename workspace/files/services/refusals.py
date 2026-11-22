@@ -14,7 +14,7 @@ from .locking import LockConflict, Relocated, StaleContent, conflicting_lock
 from .names import NameTaken
 from .quota import QuotaExceeded
 from .scanning.policy import QuarantinedSource
-from .tree import GroupRootFolder
+from .tree import GroupRootFolder, MovedMeanwhile
 
 
 class Refusal(StrEnum):
@@ -59,6 +59,8 @@ def refusals():
         raise Refused(Refusal.STALE, current_hash=error.current_hash) from error
     except Relocated as error:
         # The file a write was aimed at moved under it.
+        raise Refused(Refusal.STALE) from error
+    except MovedMeanwhile as error:
         raise Refused(Refusal.STALE) from error
     except GroupRootFolder as error:
         raise Refused(Refusal.GROUP_ROOT) from error

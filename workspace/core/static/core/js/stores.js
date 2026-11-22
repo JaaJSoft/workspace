@@ -183,6 +183,8 @@ document.addEventListener('alpine:init', function () {
     loadingMore: false,
     _filter: 'all',
     _search: '',
+    _cursor: null,
+    _generation: 0,
 
     setCount(n) {
       this.unread = n;
@@ -204,12 +206,14 @@ document.addEventListener('alpine:init', function () {
       this._search = search;
       this.loading = true;
       try {
+        const generation = ++this._generation;
         const r = await fetch(this._buildUrl(), { credentials: 'same-origin' });
-        if (r.ok) {
+        if (r.ok && generation === this._generation) {
           const data = await r.json();
           this.items = data.notifications;
           this.unread = data.unread_count;
           this.hasMore = data.has_more;
+          this._cursor = data.next_cursor;
           this.loaded = true;
         }
       } finally {
@@ -218,15 +222,18 @@ document.addEventListener('alpine:init', function () {
     },
 
     async loadMore() {
-      if (this.loadingMore || !this.hasMore || this.items.length === 0) return;
+      if (this.loadingMore || !this.hasMore || !this._cursor) return;
       this.loadingMore = true;
       try {
-        const last = this.items[this.items.length - 1].uuid;
-        const r = await fetch(this._buildUrl({ before: last }), { credentials: 'same-origin' });
-        if (r.ok) {
+        // A list refetched meanwhile (filter change, reconnect) starts over:
+        // this page belongs to the list it replaced.
+        const generation = this._generation;
+        const r = await fetch(this._buildUrl({ cursor: this._cursor }), { credentials: 'same-origin' });
+        if (r.ok && generation === this._generation) {
           const data = await r.json();
           this.items = this.items.concat(data.notifications);
           this.hasMore = data.has_more;
+          this._cursor = data.next_cursor;
         }
       } finally {
         this.loadingMore = false;

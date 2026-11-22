@@ -10,10 +10,10 @@ from rest_framework.views import APIView
 from workspace.common.cache import invalidate_tags
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.url_guard import UnsafeUrl
-from workspace.common.uuids import parse_uuid_or_none
 
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
+from .services.list_cursor import ORDERING, after_cursor_q, encode_cursor, parse_cursor
 from .services.notifications import _user_tag, get_unread_count
 from .services.push_subscriptions import save_push_subscription
 from .services.push_transport import check_push_endpoint
@@ -30,7 +30,7 @@ class NotificationListView(CacheControlMixin, APIView):
                 recipient=request.user,
             )
             .select_related("actor")
-            .order_by("-created_at")
+            .order_by(*ORDERING)
         )
 
         if request.query_params.get("filter") == "unread":
@@ -44,31 +44,20 @@ class NotificationListView(CacheControlMixin, APIView):
         if search:
             qs = qs.filter(Q(title__ficontains=search) | Q(body__ficontains=search))
 
-        # Simple cursor pagination via ?before=<uuid>. A malformed cursor
-        # falls back to "no cursor" instead of letting UUIDField.to_python
-        # raise ValidationError -> 500.
-        before = request.query_params.get("before")
-        if before:
-            before_uuid = parse_uuid_or_none(before)
-            if before_uuid is not None:
-                # Resolve the cursor inside the caller's already-scoped queryset
-                # (recipient + active filters). An unrestricted
-                # Notification.objects.get(uuid=...) would let a caller use
-                # another user's notification UUID as a cursor and read its
-                # created_at via the resulting page boundary (cross-user timing
-                # oracle).
-                cursor_created_at = (
-                    qs.filter(uuid=before_uuid)
-                    .values_list("created_at", flat=True)
-                    .first()
+        raw_cursor = request.query_params.get("cursor")
+        if raw_cursor:
+            try:
+                qs = qs.filter(after_cursor_q(*parse_cursor(raw_cursor)))
+            except ValueError:
+                return Response(
+                    {"error": "Invalid cursor."}, status=status.HTTP_400_BAD_REQUEST
                 )
-                if cursor_created_at is not None:
-                    qs = qs.filter(created_at__lt=cursor_created_at)
-                # Else: stale, foreign, or filtered-out cursor - ignore and
-                # return the latest page without the created_at filter rather
-                # than 4xx-ing the client.
 
-        limit = min(int(request.query_params.get("limit", 20)), 50)
+        try:
+            limit = int(request.query_params.get("limit", 20))
+        except ValueError:
+            limit = 20
+        limit = max(1, min(limit, 50))
         notifications = list(qs[: limit + 1])
         has_more = len(notifications) > limit
         notifications = notifications[:limit]
@@ -77,6 +66,7 @@ class NotificationListView(CacheControlMixin, APIView):
             {
                 "notifications": NotificationSerializer(notifications, many=True).data,
                 "has_more": has_more,
+                "next_cursor": encode_cursor(notifications[-1]) if has_more else None,
                 "unread_count": get_unread_count(request.user),
             }
         )

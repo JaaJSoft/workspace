@@ -1,3 +1,6 @@
+import uuid
+from datetime import UTC, datetime
+
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import status
@@ -93,44 +96,99 @@ class NotificationListTests(NotifViewMixin, APITestCase):
         self.assertTrue(resp.data["has_more"])
         self.assertEqual(len(resp.data["notifications"]), 5)
 
-    def test_malformed_before_cursor_falls_back_to_no_cursor(self):
-        """Regression: a non-UUID ?before used to crash with 500 because
-        UUIDField.to_python raised ValidationError outside the
-        DoesNotExist except. It now falls back to "no cursor"."""
+    def test_last_page_has_no_cursor(self):
         self._make_notif()
-        resp = self.client.get(self.URL, {"before": "not-a-uuid"})
+        resp = self.client.get(self.URL, {"limit": 5})
+        self.assertFalse(resp.data["has_more"])
+        self.assertIsNone(resp.data["next_cursor"])
+
+    def test_zero_limit_returns_one_row(self):
+        self._make_notif()
+        self._make_notif()
+        resp = self.client.get(self.URL, {"limit": 0})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data["notifications"]), 1)
 
-    def test_foreign_user_cursor_is_ignored(self):
-        """Regression: a ?before UUID belonging to another user must not
-        affect this user's pagination. Before the fix, the unrestricted
-        Notification.objects.get(uuid=...) lookup leaked the foreign
-        notification's created_at into the listing's filter, clipping the
-        page boundary - a cross-user timing oracle."""
-        early = self._make_notif(title="alice-early")
-        late = self._make_notif(title="alice-late")
-        foreign = self._make_notif(user=self.bob, title="bob-mid")
+    def test_malformed_cursor_is_refused(self):
+        self._make_notif()
+        for raw in (
+            "not-a-cursor",
+            "123",
+            f"123.{uuid.uuid4()}x",
+            f"9{'9' * 19}.{uuid.uuid4()}",
+        ):
+            with self.subTest(raw=raw):
+                resp = self.client.get(self.URL, {"cursor": raw})
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-        # Pin created_at order: early < foreign < late. auto_now_add prevents
-        # setting it via .save(), so use queryset .update().
-        Notification.objects.filter(pk=early.pk).update(
-            created_at="2024-01-01T10:00:00Z",
-        )
-        Notification.objects.filter(pk=foreign.pk).update(
-            created_at="2024-01-01T12:00:00Z",
-        )
-        Notification.objects.filter(pk=late.pk).update(
-            created_at="2024-01-01T13:00:00Z",
-        )
 
-        resp = self.client.get(self.URL, {"before": str(foreign.uuid)})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # Both of alice's notifications must be present. If the foreign
-        # cursor's created_at had leaked, alice-late (13:00) would be filtered
-        # out by created_at__lt=12:00.
-        titles = {n["title"] for n in resp.data["notifications"]}
-        self.assertEqual(titles, {"alice-early", "alice-late"})
+class NotificationCursorTests(NotifViewMixin, APITestCase):
+    """Load more must never hand back a row the client already has."""
+
+    URL = "/api/v1/notifications"
+
+    def _make_at(self, title, created_at, **kwargs):
+        notif = self._make_notif(title=title, **kwargs)
+        # auto_now_add ignores an assigned value on insert.
+        Notification.objects.filter(pk=notif.pk).update(created_at=created_at)
+        return notif
+
+    def _make_four(self, **kwargs):
+        return [
+            self._make_at(f"n{i}", datetime(2024, 1, 1, 10 + i, tzinfo=UTC), **kwargs)
+            for i in range(4)
+        ]
+
+    def _titles(self, resp):
+        return [n["title"] for n in resp.data["notifications"]]
+
+    def _first_page(self, **params):
+        resp = self.client.get(self.URL, {"limit": 2, **params})
+        self.assertEqual(self._titles(resp), ["n3", "n2"])
+        return resp.data["next_cursor"]
+
+    def test_cursor_row_merged_to_the_present(self):
+        rows = self._make_four()
+        cursor = self._first_page()
+        # notify_stream bumps created_at of the row it merges into.
+        Notification.objects.filter(pk=rows[2].pk).update(created_at=timezone.now())
+
+        resp = self.client.get(self.URL, {"limit": 2, "cursor": cursor})
+        self.assertEqual(self._titles(resp), ["n1", "n0"])
+
+    def test_cursor_row_read_under_the_unread_filter(self):
+        rows = self._make_four()
+        cursor = self._first_page(filter="unread")
+        Notification.objects.filter(pk=rows[2].pk).update(read_at=timezone.now())
+
+        resp = self.client.get(
+            self.URL, {"limit": 2, "filter": "unread", "cursor": cursor}
+        )
+        self.assertEqual(self._titles(resp), ["n1", "n0"])
+
+    def test_cursor_row_deleted(self):
+        rows = self._make_four()
+        cursor = self._first_page()
+        rows[2].delete()
+
+        resp = self.client.get(self.URL, {"limit": 2, "cursor": cursor})
+        self.assertEqual(self._titles(resp), ["n1", "n0"])
+
+    def test_rows_sharing_a_timestamp_are_each_listed_once(self):
+        instant = datetime(2024, 1, 1, 10, tzinfo=UTC)
+        expected = {self._make_at(f"n{i}", instant).uuid for i in range(5)}
+
+        seen = []
+        params = {"limit": 2}
+        while True:
+            resp = self.client.get(self.URL, params)
+            seen += [n["uuid"] for n in resp.data["notifications"]]
+            if not resp.data["has_more"]:
+                break
+            params["cursor"] = resp.data["next_cursor"]
+
+        self.assertEqual(len(seen), len(expected))
+        self.assertEqual({uuid.UUID(str(u)) for u in seen}, expected)
 
 
 class NotificationDetailTests(NotifViewMixin, APITestCase):

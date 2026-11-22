@@ -309,7 +309,10 @@ class FakeBrowser {
       fetch: (url, init) => {
         tab.fetches.push(url);
         if (typeof snapshot === 'function') return snapshot(url, init);
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: snapshot }) });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ events: snapshot, complete: true }),
+        });
       },
       addEventListener: (type, handler) => {
         tab.windowHandlers[type] = handler;

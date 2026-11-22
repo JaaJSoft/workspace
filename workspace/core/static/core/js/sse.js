@@ -132,9 +132,11 @@
           // again without waiting for its retry.
           stream.reopen();
         }
-        port.postMessage(message.type === 'hello'
-          ? { type: 'welcome', fresh, id: stream.cursor() }
-          : { type: 'alive' });
+        port.postMessage({
+          type: message.type === 'hello' ? 'welcome' : 'alive',
+          fresh,
+          id: stream.cursor(),
+        });
       };
     };
   }
@@ -188,6 +190,10 @@
   let checkTimer = null;
   // Events held back while the snapshot loads; null once it has.
   let buffered = null;
+  // Whether the page is still owed what it missed: its snapshot did not come,
+  // or came short. Until one does, its cursor stays where it stood whatever
+  // arrives, so that asking again still asks for all of it.
+  let owed = false;
 
   // Listeners come with the scripts that follow this one and with Alpine,
   // which starts once the document is parsed. An event dispatched before
@@ -202,7 +208,6 @@
   }
 
   function startListening() {
-    if (listening) return;
     listening = true;
     for (const [type, detail] of early.splice(0)) emit(type, detail);
   }
@@ -226,7 +231,7 @@
   }
 
   function apply(message) {
-    if (message.id) lastEventId = message.id;
+    if (message.id && !owed) lastEventId = message.id;
     dispatch(message.payload);
   }
 
@@ -258,10 +263,12 @@
         // The page left this stream meanwhile, and may have joined it again.
         if (buffered !== held) return;
         buffered = null;
-        if (snapshot && Array.isArray(snapshot.events)) {
-          for (const payload of snapshot.events) dispatch(payload);
-          if (streamCursor) lastEventId = streamCursor;
-        }
+        const events = snapshot && Array.isArray(snapshot.events) ? snapshot.events : [];
+        for (const payload of events) dispatch(payload);
+        // Complete when every provider answered. Anything less is asked
+        // again, from the same cursor (see onWorkerMessage).
+        owed = !(snapshot && snapshot.complete);
+        if (!owed && streamCursor) lastEventId = streamCursor;
         for (const message of held) apply(message);
       });
   }
@@ -280,6 +287,10 @@
     } else if (message.type === 'reconnect') {
       // While its snapshot loads, the page has just rendered or re-synced.
       if (!buffered) announceReconnect();
+    } else if (message.type === 'alive') {
+      // The answer to a check: a page on screen takes it to ask again for a
+      // snapshot it is still owed.
+      if (owed && !buffered && !document.hidden) loadSnapshot(message.id);
     }
   }
 

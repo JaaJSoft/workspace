@@ -136,10 +136,22 @@ class SharedStreamTests(PlaywrightTestCase):
         self.addCleanup(patcher.stop)
         self.addCleanup(self.stream.stopped.set)
 
-        # Every request for a stream, the refused ones included.
+        # Every request for a stream, the refused ones included, and whether
+        # each was refused for showing another user than the session's.
         self.stream_requests = []
         request_started.connect(self._note_request, weak=False)
         self.addCleanup(request_started.disconnect, self._note_request)
+        self.refused_for_another_user = []
+        decide = sse._shows_another_user
+
+        def note_decision(request):
+            refused = decide(request)
+            self.refused_for_another_user.append(refused)
+            return refused
+
+        deciding = patch.object(sse, "_shows_another_user", note_decision)
+        deciding.start()
+        self.addCleanup(deciding.stop)
 
         # A page asks for the snapshot itself, which a route can answer.
         self.snapshots = []
@@ -152,7 +164,7 @@ class SharedStreamTests(PlaywrightTestCase):
 
     def _serve_snapshot(self, route):
         self.snapshots.append(route.request.url)
-        route.fulfill(json={"events": self.snapshot_events})
+        route.fulfill(json={"events": self.snapshot_events, "complete": True})
 
     def _until(self, condition, watcher, expected):
         """Wait on ``watcher``, any page still open, until ``condition`` holds."""
@@ -281,6 +293,9 @@ class SharedStreamTests(PlaywrightTestCase):
         second.evaluate(SET_ASIDE)
         stream.send(_unread(8, event_id="cursor-2"))
         self._wait_unread(first, 8)
+        # Had the worker posted it to the page set aside too, it would be
+        # there by now: both are posted in the same turn.
+        second.wait_for_timeout(4 * POLL_MS)
         self.assertEqual(second.evaluate(f"() => {UNREAD}"), 7)
 
         self.snapshot_events = [{"event": "notifications.count", "data": {"unread": 9}}]
@@ -307,6 +322,8 @@ class SharedStreamTests(PlaywrightTestCase):
         tab.wait_for_timeout(5 * RETRY_MS)
         self.assertEqual(len(self.stream_requests), 2)
         self.assertEqual(len(self.stream.connections), 1, "refused, not served")
+        # Refused for the account it shows, not for an error on the way.
+        self.assertEqual(self.refused_for_another_user, [False, True])
 
         self.login_as(self.user)
         tab.evaluate(COUNT_RECONNECTS)

@@ -43,8 +43,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-function answering(events) {
-  return { ok: true, json: () => Promise.resolve({ events }) };
+function answering(events, complete = true) {
+  return { ok: true, json: () => Promise.resolve({ events, complete }) };
 }
 
 const REFUSED = { ok: false, json: () => Promise.resolve({ events: [] }) };
@@ -384,11 +384,108 @@ test('a snapshot that failed leaves the page where it stood', async () => {
   answers[1].resolve(REFUSED);
   await settle();
 
+  // Events keep coming, and must not carry the page past what it is owed.
+  tab.events.length = 0;
+  worker.stream().deliver(OPERATION, 'cursor-9');
+  await settle();
+  assert.deepStrictEqual(tab.types(), ['sse:files.operation']);
+
   tab.setAside();
   tab.bringBack();
   await settle();
 
   assert.equal(tab.lastFetch(), from(SNAPSHOT, 'cursor-7'), 'what the failed answer held is still owed');
+});
+
+test('a page whose snapshot failed asks again at its next check, and moves on once it came', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const worker = browser.worker();
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+  answers[0].resolve(REFUSED);
+  worker.stream().deliver(OPERATION, 'cursor-7');
+  await settle();
+  tab.events.length = 0;
+
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  assert.equal(tab.fetches.length, 2);
+  assert.equal(tab.lastFetch(), SNAPSHOT, 'from where it stood, which was nowhere yet');
+
+  answers[1].resolve(answering([COUNT_4]));
+  await settle();
+  assert.deepStrictEqual(tab.types(), ['sse:notifications.count']);
+
+  // Caught up: its cursor follows the events again, and nothing more is asked.
+  worker.stream().deliver(OPERATION, 'cursor-8');
+  await settle();
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  assert.equal(tab.fetches.length, 2);
+  tab.setAside();
+  tab.bringBack();
+  await settle();
+  assert.equal(tab.lastFetch(), from(SNAPSHOT, 'cursor-8'));
+});
+
+test('a snapshot that came on asking again brings the page up to the stream', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  browser.worker().stream().deliver(OPERATION, 'cursor-7');
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+  answers[0].resolve(REFUSED);
+  await settle();
+
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  answers[1].resolve(answering([]));
+  await settle();
+  tab.setAside();
+  tab.bringBack();
+  await settle();
+
+  assert.equal(tab.lastFetch(), from(SNAPSHOT, 'cursor-7'), 'no need to ask for all of it again');
+});
+
+test('a snapshot that came short is applied, and asked again', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().deliver(OPERATION, 'cursor-7');
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+
+  // A provider failed on the server: the others answered.
+  answers[0].resolve(answering([COUNT_4], false));
+  await settle();
+  assert.deepStrictEqual(tab.types(), ['sse:notifications.count']);
+
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  assert.equal(tab.fetches.length, 2);
+
+  // Had it taken the stream's position for its own, it would ask from there.
+  assert.equal(tab.lastFetch(), SNAPSHOT);
+});
+
+test('a hidden page waits to be on screen before asking again', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+  answers[0].resolve(REFUSED);
+  await settle();
+
+  tab.hide();
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  assert.equal(tab.fetches.length, 1);
+
+  tab.show();
+  await settle();
+  assert.equal(tab.fetches.length, 2);
 });
 
 test('an event without an id leaves the page where it stood', async () => {

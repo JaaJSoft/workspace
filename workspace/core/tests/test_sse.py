@@ -361,7 +361,7 @@ class StreamSnapshotTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
-        self.assertEqual(response.json(), {"events": opening})
+        self.assertEqual(response.json(), {"events": opening, "complete": True})
 
     def test_a_failing_provider_costs_the_others_nothing(self):
         broken = MagicMock()
@@ -380,10 +380,28 @@ class StreamSnapshotTests(TestCase):
         ):
             response = self.client.get(self.URL)
 
+        # Not complete: the page must not take the stream's position for its
+        # own, which would skip what the failed provider had for it.
         self.assertEqual(
             response.json(),
-            {"events": [{"event": "notifications.count", "data": {"unread": 4}}]},
+            {
+                "events": [{"event": "notifications.count", "data": {"unread": 4}}],
+                "complete": False,
+            },
         )
+
+    def test_a_provider_that_cannot_start_leaves_the_answer_incomplete(self):
+        self.client.force_login(self.user)
+        with (
+            patch.object(
+                ImportsSSEProvider, "__init__", side_effect=RuntimeError("down")
+            ),
+            self.assertLogs("workspace.core.views.sse", level="ERROR"),
+        ):
+            response = self.client.get(self.URL)
+
+        self.assertIs(response.json()["complete"], False)
+        self.assertTrue(response.json()["events"], "the other providers answered")
 
     def test_a_tab_coming_back_is_given_what_was_queued_since_its_cursor(self):
         """A page restored from the bfcache joins a stream that kept running,

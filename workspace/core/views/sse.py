@@ -155,11 +155,12 @@ def _incoming_cursors(request):
     return decode_stream_cursor(raw)
 
 
-def _init_providers(user, cursors):
+def _init_providers(user, cursors, failed=None):
     """Instantiate one provider per registered app the user may see.
 
     The stream is served here, in core, so the preview-module guard never
     judges it: a provider whose module is hidden from the user is skipped.
+    ``failed`` collects the slugs of the providers that could not start.
     """
     providers_info = sse_registry.get_all()
     providers = {}
@@ -170,6 +171,8 @@ def _init_providers(user, cursors):
             providers[slug] = info.provider_cls(user, cursors.get(slug))
         except Exception:
             logger.exception("Failed to instantiate SSE provider '%s'", slug)
+            if failed is not None:
+                failed.append(slug)
     return providers
 
 
@@ -183,11 +186,12 @@ def _emit(slug, event_name, data, event_id, cursors):
     return _format_sse(f"{slug}.{event_name}", data, stream_id)
 
 
-def _initial_events(providers, user_id, render):
+def _initial_events(providers, user_id, render, failed=None):
     """Yield ``render(slug, event_name, data, event_id)`` for every initial event.
 
     A provider that fails, or an event that does not render, costs that
-    provider the rest of its events and the others nothing.
+    provider the rest of its events and the others nothing. ``failed``
+    collects its slug.
     """
     for slug, provider in providers.items():
         try:
@@ -199,6 +203,8 @@ def _initial_events(providers, user_id, render):
                 slug,
                 user_id,
             )
+            if failed is not None:
+                failed.append(slug)
 
 
 def _emit_initial_events(providers, user_id, cursors):
@@ -224,6 +230,10 @@ def stream_snapshot(request):
     asks for them here. A tab coming back to a stream it had left (bfcache,
     frozen tab) sends the cursor it stopped at and is given what was queued
     since, as a stream of its own reopened there would have given it.
+
+    ``complete`` is false when a provider failed. The page then keeps its
+    cursor and asks again: taking the stream's position for its own would skip
+    what that provider had for it.
     """
     if not request.user.is_authenticated or _shows_another_user(request):
         return HttpResponse(status=403)
@@ -232,11 +242,15 @@ def stream_snapshot(request):
     # the instance's language. The same here, or a tab joining late would read
     # other values than the stream sent the others.
     with timezone.override(None), translation.override(settings.LANGUAGE_CODE):
-        providers = _init_providers(request.user, _incoming_cursors(request))
-        events = list(_initial_events(providers, request.user.id, _snapshot_event))
+        failed = []
+        providers = _init_providers(request.user, _incoming_cursors(request), failed)
+        events = list(
+            _initial_events(providers, request.user.id, _snapshot_event, failed)
+        )
 
     response = HttpResponse(
-        orjson.dumps({"events": events}), content_type="application/json"
+        orjson.dumps({"events": events, "complete": not failed}),
+        content_type="application/json",
     )
     response["Cache-Control"] = "private, no-cache"
     return response

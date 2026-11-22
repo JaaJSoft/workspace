@@ -12,6 +12,7 @@ const { loadScripts } = require('../../../common/tests/js/loader');
 function buildApp(documentOverrides = {}) {
   const ctx = loadScripts(
     [
+      'workspace/chat/ui/static/chat/ui/js/messages.js',
       'workspace/chat/ui/static/chat/ui/js/panels.js',
       'workspace/chat/ui/static/chat/ui/js/threads.js',
     ],
@@ -27,7 +28,7 @@ function buildApp(documentOverrides = {}) {
     },
   );
   // Same composition order as chatApp().
-  const app = { ...ctx.chatPanelsMixin(), ...ctx.chatThreadsMixin() };
+  const app = { ...ctx.chatMessagesMixin(), ...ctx.chatPanelsMixin(), ...ctx.chatThreadsMixin() };
   Object.assign(app, {
     activeConversation: { uuid: 'c1' },
     _messageIdPrefix: () => 'msg',
@@ -78,28 +79,33 @@ test('opening the search panel closes an open thread', () => {
   assert.deepStrictEqual(openPanels(app), { info: false, search: true, thread: false });
 });
 
-test('a search hit inside a thread opens that thread to reach it', async () => {
-  // A threaded reply is not in the main flow, so paging further back never
-  // finds it; the panel has to be opened first.
-  const inPanel = { id: 'tmsg-m9', classList: { add() {}, remove() {} }, scrollIntoView() {} };
-  const nodes = {};
-  const app = buildApp({
-    getElementById: (id) => nodes[id] || null,
-  });
-  let pagedBack = 0;
-  app._loadAllAndScrollTo = () => {
-    pagedBack++;
+test('a search hit inside a thread opens that thread on the reply', async () => {
+  // A threaded reply is not in the main flow, so reloading the flow around it
+  // never shows it; the panel has to be opened on it.
+  const app = buildApp();
+  let reloaded = 0;
+  app.showMessage = async () => {
+    reloaded++;
   };
 
-  const scrolling = app.scrollToMessage('m9', 'r1');
-  // The panel fetches its contents, so the target appears a beat later.
-  setTimeout(() => {
-    nodes['tmsg-m9'] = inPanel;
-  }, 120);
-  await scrolling;
+  await app.scrollToMessage('m9', 'r1');
 
   assert.equal(app.openThreadRoot, 'r1', 'the thread is opened');
-  assert.equal(pagedBack, 0, 'the main flow is not paged back through');
+  assert.equal(app.threadFocus, 'm9', 'the panel opens on the reply');
+  assert.equal(reloaded, 0, 'the main flow is not reloaded');
+});
+
+test('a search hit that is not on screen reloads the flow around it', async () => {
+  const app = buildApp();
+  const shown = [];
+  app.showMessage = async (uuid) => {
+    shown.push(uuid);
+  };
+
+  await app.scrollToMessage('m7', null);
+
+  assert.deepStrictEqual(shown, ['m7']);
+  assert.equal(app.openThreadRoot, null);
 });
 
 test('a search hit in the main flow does not open any thread', async () => {

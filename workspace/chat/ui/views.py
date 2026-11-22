@@ -28,6 +28,7 @@ from workspace.chat.services.conversations import (
     get_unread_counts,
     user_conversation_ids,
 )
+from workspace.chat.services.message_pages import find_cursor, message_page
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.dates import time_ago
@@ -312,15 +313,18 @@ def conversation_items_view(request):
     )
 
 
-def group_messages(messages, current_user):
+def group_messages(messages, current_user, continues=None):
     """Group consecutive messages by same author within 5 min, with date separators.
+
+    ``continues`` is the message already on screen right above the first one,
+    for a page appended below it: its day's separator is not repeated.
 
     Returns a list of dicts:
       {'type': 'date', 'date': date_obj}
       {'type': 'messages', 'author': user, 'is_own': bool, 'messages': [msg, ...]}
     """
     groups = []
-    current_date = None
+    current_date = timezone.localdate(continues.created_at) if continues else None
     current_group = None
 
     for msg in messages:
@@ -423,32 +427,23 @@ def conversation_messages_view(request, conversation_uuid):
         .order_by("-created_at")
     )
 
-    if not show_thread_replies_inline(request.user):
+    inline = show_thread_replies_inline(request.user)
+    if not inline:
         qs = qs.filter(thread_root__isnull=True)
 
-    before = request.GET.get("before")
-    if before:
-        before_uuid = parse_uuid_or_none(before)
-        if before_uuid is not None:
-            # Scope the cursor lookup to the current conversation: an unrestricted
-            # Message.objects.get(uuid=...) would let a caller use a UUID from
-            # another conversation as a cursor and read its created_at via the
-            # resulting page boundary (cross-conversation timing oracle).
-            cursor_msg = (
-                Message.objects.filter(
-                    conversation_id=conversation_uuid, uuid=before_uuid
-                )
-                .only("created_at")
-                .first()
-            )
-            if cursor_msg is not None:
-                qs = qs.filter(created_at__lt=cursor_msg.created_at)
-
-    limit = 50
-    messages_page = list(qs[: limit + 1])
-    has_more = len(messages_page) > limit
-    messages_page = messages_page[:limit]
-    messages_page.reverse()  # Back to chronological order
+    # Cursors resolve within this conversation only: a message of another one
+    # is an unknown cursor, so its created_at never shapes a page here.
+    scope = Message.objects.filter(conversation_id=conversation_uuid)
+    direction, cursor = find_cursor(scope, request.GET)
+    target = None
+    if direction == "around" and cursor is not None:
+        target = cursor
+        # A reply outside the flow is reached through its thread: the flow
+        # opens on the root, and the client opens the panel on the reply.
+        if cursor.thread_root_id and not inline:
+            cursor = find_cursor(scope, {"around": cursor.thread_root_id})[1]
+    page = message_page(qs, direction, cursor)
+    messages_page = page.messages
 
     # Read receipt data: for own messages, compute read counts in bulk
     own_msgs = [
@@ -479,9 +474,11 @@ def conversation_messages_view(request, conversation_uuid):
         or "dm"
     )
 
-    groups = group_messages(messages_page, request.user)
-
-    first_uuid = str(messages_page[0].uuid) if messages_page else ""
+    groups = group_messages(
+        messages_page,
+        request.user,
+        continues=page.cursor if page.direction == "after" else None,
+    )
 
     pinned_message_ids = set(
         PinnedMessage.objects.filter(conversation_id=conversation_uuid).values_list(
@@ -504,8 +501,8 @@ def conversation_messages_view(request, conversation_uuid):
         "chat/ui/partials/message_list.html",
         {
             "groups": groups,
-            "has_more": has_more,
-            "first_uuid": first_uuid,
+            "page": page,
+            "target": target,
             "current_user": request.user,
             "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": pinned_message_ids,
@@ -556,29 +553,14 @@ def thread_messages_view(request, root_uuid):
         .order_by("-created_at")
     )
 
-    # Set only when the cursor actually resolved. A malformed or unknown
-    # `?before` is ignored, which makes the response the *first* page again -
-    # and the first page has to carry the root.
-    is_older_page = False
-
-    before = request.GET.get("before")
-    if before:
-        before_uuid = parse_uuid_or_none(before)
-        if before_uuid is not None:
-            cursor = (
-                Message.objects.filter(thread_root=root, uuid=before_uuid)
-                .only("created_at")
-                .first()
-            )
-            if cursor is not None:
-                qs = qs.filter(created_at__lt=cursor.created_at)
-                is_older_page = True
-
-    limit = 50
-    page = list(qs[: limit + 1])
-    has_more = len(page) > limit
-    page = page[:limit]
-    page.reverse()
+    # A cursor names a reply of this thread, deleted since it was rendered
+    # included; anything else is unknown, which makes the response the latest
+    # page again - and that page, like an around page, carries the root.
+    direction, cursor = find_cursor(
+        Message.objects.filter(thread_root=root), request.GET
+    )
+    page = message_page(qs, direction, cursor)
+    is_partial_page = page.direction in ("before", "after")
 
     pinned_message_ids = set(
         PinnedMessage.objects.filter(conversation_id=root.conversation_id).values_list(
@@ -590,16 +572,20 @@ def thread_messages_view(request, root_uuid):
         request,
         "chat/ui/partials/thread_message_list.html",
         {
-            "groups": group_messages(page, request.user),
-            # The root renders outside the paginated list, on the first page
+            "groups": group_messages(
+                page.messages,
+                request.user,
+                continues=page.cursor if page.direction == "after" else None,
+            ),
+            # The root renders outside the paginated list, on a full load
             # only: "load older" prepends into the list, so a root inside it
-            # would sink below the older replies; an older page prepends into a
-            # panel that already shows it.
+            # would sink below the older replies; an older or newer page lands
+            # in a panel that already shows it.
             "root_groups": None
-            if is_older_page
+            if is_partial_page
             else group_messages([root], request.user),
-            "has_more": has_more,
-            "first_uuid": str(page[0].uuid) if page else "",
+            "page": page,
+            "target": cursor if page.direction == "around" else None,
             "root_uuid": root.uuid,
             "current_user": request.user,
             "quick_emojis": quick_reactions_for(request.user),

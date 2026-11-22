@@ -1,10 +1,11 @@
-{% load chat_tags ui_filters %}
 {% comment %}
   Merge targets for the alpine-ajax pipeline in messages.js: a full load
   replaces #message-list wholesale; "load older" replaces #message-list-state
   (fresh pagination cursor) and prepends the fetched groups into
-  #message-list-items. data-conversation-uuid on each target lets the client
-  refuse content rendered for a conversation that is no longer active.
+  #message-list-items; "load newer" replaces the state too and renders its
+  groups inside #message-list-tail, whose children land right before the live
+  tail - the end of the items. data-conversation-uuid on each target lets the
+  client refuse content rendered for a conversation that is no longer active.
 {% endcomment %}
 <div
   id="message-list"
@@ -12,28 +13,29 @@
   {% if bot_processing %}data-bot-processing="true"{% endif %}
 >
 
-  <div
-    id="message-list-state"
-    hidden
-    data-conversation-uuid="{{ conversation_uuid }}"
-    data-has-more="{{ has_more|yesno:'true,false' }}"
-    {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}
-  ></div>
+  {% include "chat/ui/partials/_message_list_state.html" with list_id="message-list" %}
 
   <div
     id="message-list-items"
     x-merge="prepend"
     data-conversation-uuid="{{ conversation_uuid }}"
   >
-    {% for group in groups %}
-      {% if group.type == "date" %}
-        <div class="divider text-xs text-base-content/50 my-3">{{ group.datetime|localtime_tag:"date" }}</div>
-      {% elif group.type == "messages" %}
-        {% include "chat/ui/partials/message_group.html" with group=group current_user=current_user pinned_message_ids=pinned_message_ids conversation_kind=conversation_kind quick_emojis=quick_emojis %}
-      {% elif group.type == "system" %}
-        {% include "chat/ui/partials/_system_call.html" with message=group.message %}
-      {% endif %}
-    {% endfor %}
+    {% if page.direction != "after" %}
+      {% include "chat/ui/partials/_message_groups.html" %}
+    {% endif %}
+    {# Never on an older page: its items are prepended whole, and a second tail would repeat the id. #}
+    {% if page.direction != "before" %}
+      <div
+        id="message-list-tail"
+        x-merge="before"
+        hidden
+        data-conversation-uuid="{{ conversation_uuid }}"
+      >
+        {% if page.direction == "after" %}
+          {% include "chat/ui/partials/_message_groups.html" %}
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
 
 </div>

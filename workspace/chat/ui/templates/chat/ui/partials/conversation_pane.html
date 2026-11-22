@@ -264,6 +264,8 @@
               <div id="message-list"></div>
             </div>
 
+            {% include "chat/ui/partials/_newer_messages.html" with label=_("Latest messages") %}
+
             <!-- Bot typing indicator -->
             <div
               x-show="botTyping"

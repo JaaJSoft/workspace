@@ -132,7 +132,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       }
     },
 
-    async selectConversationById(uuid, updateUrl = true) {
+    async selectConversationById(uuid, updateUrl = true, options = {}) {
       let conv = this.conversations.find(c => c.uuid === uuid);
       if (!conv) {
         try {
@@ -144,7 +144,30 @@ window.chatConversationsMixin = function chatConversationsMixin() {
           return;
         }
       }
-      await this.selectConversation(conv, updateUrl);
+      await this.selectConversation(conv, updateUrl, options);
+    },
+
+    // Reload the open conversation on one message and show it. The list is
+    // cut around it, so it is reached however old it is.
+    async showMessage(uuid) {
+      this._revealMessage(await this.loadMessages({ around: uuid }));
+    },
+
+    // What loadMessages({ around }) answered. An unknown message and one the
+    // reader cannot see answer alike: the latest page, and this notice.
+    _revealMessage({ targetUuid, targetThreadRoot }) {
+      if (!targetUuid) {
+        window.AppAlert?.warning(gettext('This message is not available.'));
+        return;
+      }
+      this.$nextTick(() => {
+        if (this._highlightMessage(targetUuid, undefined, 'instant') || !targetThreadRoot) return;
+        // A reply outside the flow: the flow shows its root, the panel the
+        // reply itself.
+        document.getElementById(`${this._messageIdPrefix()}-${targetThreadRoot}`)
+          ?.scrollIntoView({ behavior: 'instant', block: 'center' });
+      });
+      if (targetThreadRoot) this.openThread?.(targetThreadRoot, { focus: targetUuid });
     },
 
     // Steps back onto the list entry the conversation was opened from, so
@@ -199,14 +222,16 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     },
 
     // Opening from the list adds an entry, so back returns to the list;
-    // switching from an open conversation only rewrites it.
-    async selectConversation(conv, updateUrl = true) {
+    // switching from an open conversation only rewrites it. `message` opens
+    // it on that message rather than on the latest one.
+    async selectConversation(conv, updateUrl = true, { message = null } = {}) {
       // Save draft of current conversation before switching
       this._saveDraft();
 
       const wasOpen = Boolean(this.activeConversation);
       this.activeConversation = conv;
       this.hasMoreMessages = false;
+      this.hasNewerMessages = false;
       this.editingMessageUuid = null;
       this.replyingTo = null;
       this.messageBody = this._restoreDraft(conv.uuid);
@@ -259,7 +284,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       // so that #messages-container exists in the DOM
       await this.$nextTick();
 
-      await this.loadMessages();
+      const shown = await this.loadMessages({ around: message });
+      if (message) this._revealMessage(shown);
 
       // Restore bot typing indicator if there's an active AI task. The
       // server-rendered flag covers a fresh load; the set covers the stream
@@ -283,7 +309,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
           // The requests above took their time: a reader who went up the
           // conversation meanwhile, or loaded an older page, is no longer at
           // its end and must not be taken back there.
-          if (this._isNearBottom()) this.scrollToBottom();
+          if (!this.hasNewerMessages && this._isNearBottom()) this.scrollToBottom();
           this.getMessageInput()?.focus();
         });
       });

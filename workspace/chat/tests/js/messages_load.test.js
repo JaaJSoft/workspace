@@ -139,8 +139,7 @@ test('_refreshCurrentMessages refetches through the surface hooks, not hard-code
     overrides: {
       _messageListId: () => 'thread-message-list',
       _loadTargets() { return ['thread-root-message', 'thread-message-list']; },
-      _messagesUrl: (cursor) =>
-        `/chat/threads/r1/messages${cursor ? '?before=' + cursor : ''}`,
+      _messagesBaseUrl: () => '/chat/threads/r1/messages',
     },
   });
   await app._refreshCurrentMessages();
@@ -288,4 +287,132 @@ test('the missing-target guard ignores targets outside this surface', () => {
   };
   app._onAjaxMissing(event);
   assert.equal(event.prevented, false);
+});
+
+// ── Links to a message: around and after ───────────────────
+
+test('loadMessages({ around }) opens the list on the message and keeps the scroll off the bottom', async () => {
+  const dom = buildDom();
+  dom.nodes['message-list-state'].dataset = {
+    hasMore: 'true', firstUuid: 'm10', hasNewer: 'true', lastUuid: 'm59', targetUuid: 'm35',
+  };
+  let scrolled = 0;
+  const { app, calls } = buildApp({ dom });
+  app.scrollToBottom = () => { scrolled += 1; };
+
+  const shown = await app.loadMessages({ around: 'm35' });
+
+  assert.equal(calls[0].url, '/chat/c1/messages?around=m35');
+  assert.equal(shown.targetUuid, 'm35');
+  assert.equal(shown.targetThreadRoot, null);
+  assert.equal(app.hasNewerMessages, true);
+  assert.equal(scrolled, 0, 'the message is shown, not the end of the page');
+});
+
+test('an around load that found nothing falls back to the latest page at the bottom', async () => {
+  // Unknown and out of reach answer alike: no target on the state element.
+  const dom = buildDom();
+  dom.nodes['message-list-state'].dataset = { hasMore: 'true', firstUuid: 'm0', hasNewer: 'false' };
+  let scrolled = 0;
+  const { app } = buildApp({ dom });
+  app.scrollToBottom = () => { scrolled += 1; };
+
+  const shown = await app.loadMessages({ around: 'gone' });
+
+  assert.equal(shown.targetUuid, null);
+  assert.equal(scrolled, 1);
+});
+
+test('a page that says nothing about a side leaves that side alone', async () => {
+  // An older page does not know whether the reader is at the present.
+  const dom = buildDom();
+  const { app } = buildApp({
+    dom,
+    ajax: async () => {
+      dom.nodes['message-list-state'].dataset = { hasMore: 'false', firstUuid: 'm1' };
+      return [dom.nodes['message-list-state']];
+    },
+  });
+  app.hasMoreMessages = true;
+  app.hasNewerMessages = true;
+  app._newerCursor = 'm59';
+
+  await app.loadMoreMessages();
+
+  assert.equal(app.hasMoreMessages, false);
+  assert.equal(app.hasNewerMessages, true);
+  assert.equal(app._newerCursor, 'm59');
+});
+
+test('loadNewerMessages pages forward from the last message into state + tail', async () => {
+  const dom = buildDom();
+  const { app, calls } = buildApp({
+    dom,
+    ajax: async (url, options) => {
+      calls.push({ url, options });
+      dom.nodes['message-list-state'].dataset = { hasNewer: 'false', lastUuid: 'm120' };
+      return [dom.nodes['message-list-state']];
+    },
+  });
+  app.hasNewerMessages = true;
+  app._newerCursor = 'm59';
+
+  await app.loadNewerMessages();
+
+  assert.equal(calls[0].url, '/chat/c1/messages?after=m59');
+  assert.deepStrictEqual(Array.from(calls[0].options.targets), ['message-list-state', 'message-list-tail']);
+  assert.equal(app.hasNewerMessages, false, 'the present is reached');
+  assert.equal(app.loadingNewerMessages, false);
+});
+
+test('loadNewerMessages at the present issues no request', async () => {
+  const { app, calls } = buildApp();
+  app.hasNewerMessages = false;
+  app._newerCursor = 'm59';
+  await app.loadNewerMessages();
+  assert.deepStrictEqual(calls, []);
+});
+
+test('scrolling to the end of a stretch of the past loads the newer page', () => {
+  const { app } = buildApp();
+  let loaded = 0;
+  app.loadNewerMessages = () => { loaded += 1; };
+  Object.assign(app.$refs.messagesContainer, { scrollTop: 400, scrollHeight: 1000, clientHeight: 580 });
+  app.hasNewerMessages = true;
+
+  app.handleScroll();
+
+  assert.equal(loaded, 1);
+});
+
+test('a refresh away from the present reloads around the message being read', async () => {
+  // The latest page is not what is on screen: reloading it would take the
+  // reader away from the past they opened.
+  const { app, calls } = buildApp();
+  app.hasNewerMessages = true;
+  app._visibleMessage = () => ({ uuid: 'm40', offset: 12 });
+  const restored = [];
+  app._restoreVisibleMessage = (visible) => restored.push(visible.uuid);
+
+  await app._refreshCurrentMessages();
+
+  assert.equal(calls[0].url, '/chat/c1/messages?around=m40');
+  assert.deepStrictEqual(restored, ['m40']);
+});
+
+test('a refresh at the present reloads the latest page', async () => {
+  const { app, calls } = buildApp();
+  app.hasNewerMessages = false;
+  app._visibleMessage = () => { throw new Error('not needed at the present'); };
+  await app._refreshCurrentMessages();
+  assert.equal(calls[0].url, '/chat/c1/messages');
+});
+
+test('messageLink names the conversation and the message', () => {
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/messages.js', {
+    location: { origin: 'https://ws.example' },
+  });
+  const app = ctx.chatMessagesMixin();
+  app.activeConversation = { uuid: 'c1' };
+  assert.equal(app.messageLink('m7'), 'https://ws.example/chat/c1?message=m7');
 });

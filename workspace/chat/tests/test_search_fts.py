@@ -195,7 +195,7 @@ class GlobalMessageProviderTests(TestCase):
         r = results[0]
         self.assertEqual(r.uuid, str(self.msg.uuid))
         self.assertEqual(r.name, "Design room")
-        self.assertEqual(r.url, f"/chat/{self.conv.uuid}")
+        self.assertEqual(r.url, f"/chat/{self.conv.uuid}?message={self.msg.uuid}")
         self.assertIn("flamingo", r.matched_value)
         self.assertEqual(r.module_slug, "chat")
 

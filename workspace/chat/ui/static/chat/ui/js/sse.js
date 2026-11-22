@@ -73,7 +73,9 @@ window.chatSseMixin = function chatSseMixin() {
           this.botTyping = false;
           this.clearBotStep();
         }
-        if (!document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
+        // Away from the present the message lands past the end of what is
+        // on screen; the newer pages bring it in when the reader gets there.
+        if (!this.hasNewerMessages && !document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
           const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();
           this._animateMessageEntry(detail.message.uuid);

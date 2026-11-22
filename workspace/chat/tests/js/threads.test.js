@@ -74,8 +74,7 @@ test('the panel overrides every surface hook so it cannot touch the main flow', 
   assert.equal(panel._messagesContainerId(), 'thread-messages-container');
   assert.equal(panel._messageListId(), 'thread-message-list');
   assert.equal(panel._messageIdPrefix(), 'tmsg');
-  assert.equal(panel._messagesUrl(null), '/chat/threads/r1/messages');
-  assert.equal(panel._messagesUrl('t9'), '/chat/threads/r1/messages?before=t9');
+  assert.equal(panel._messagesBaseUrl(), '/chat/threads/r1/messages');
   assert.deepStrictEqual(
     Array.from(panel._loadTargets()),
     ['thread-root-message', 'thread-message-list'],

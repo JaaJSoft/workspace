@@ -404,6 +404,14 @@ msgstr "Message copié"
 msgid "Failed to copy message"
 msgstr "Impossible de copier le message"
 
+#: ui/static/chat/ui/js/messages.js
+msgid "Link copied"
+msgstr "Lien copié"
+
+#: ui/static/chat/ui/js/conversations.js
+msgid "This message is not available."
+msgstr "Ce message n'est pas disponible."
+
 #: ui/static/chat/ui/js/panels.js
 msgid "%(count)s check-in"
 msgid_plural "%(count)s check-ins"

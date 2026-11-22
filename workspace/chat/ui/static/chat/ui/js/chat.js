@@ -197,7 +197,11 @@ function chatApp(currentUserId) {
       if (!dmParam && this.pendingInitialConvUuid) {
         const uuid = this.pendingInitialConvUuid;
         window.navHistory.replace(`/chat/${uuid}`);
-        await this.selectConversationById(uuid, false);
+        // ?message=<uuid> - a link to one message (search result, Copy link).
+        // A malformed one is passed on as is, to be answered like an unknown
+        // message rather than silently dropped.
+        const message = params.get('message');
+        await this.selectConversationById(uuid, false, { message: message || null });
 
         // ?thread=<root> - a thread-reply notification lands here. The reply
         // is not in the main flow (default preference), so without opening the

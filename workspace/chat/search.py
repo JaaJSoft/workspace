@@ -113,7 +113,7 @@ def search_chat_messages(query, user, limit):
             SearchResult(
                 uuid=str(msg.uuid),
                 name=name,
-                url=f"/chat/{msg.conversation_id}",
+                url=f"/chat/{msg.conversation_id}?message={msg.uuid}",
                 matched_value=msg.body[:120],
                 match_type="message",
                 type_icon="message-square",

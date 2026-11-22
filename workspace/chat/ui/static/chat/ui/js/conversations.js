@@ -72,6 +72,13 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       }
     },
 
+    // After a stream gap: the rows are server-rendered, so reloading the
+    // data alone leaves them showing the previews and order of before.
+    resyncConversations() {
+      this.loadConversations();
+      this.refreshConversationList();
+    },
+
     refreshConversationList() {
       this.$el.addEventListener('ajax:after', () => {
         const target = document.getElementById('conversation-list');

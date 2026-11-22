@@ -118,7 +118,7 @@ function chatApp(currentUserId) {
 
       // Catch up on missed events when SSE reconnects (mobile resume)
       window.addEventListener('sse:reconnect', () => {
-        this.loadConversations();
+        this.resyncConversations();
         if (this.activeConversation) {
           this._refreshCurrentMessages();
         }

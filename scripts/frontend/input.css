@@ -149,6 +149,13 @@
   :where(.btn):is(.btn-disabled, :disabled, [disabled], [aria-disabled="true"]) {
     color: color-mix(in oklch, var(--color-base-content) 20%, #0000);
   }
+
+  /* daisyUI paints a pressed button's border base-200, which vanishes against
+     a dark base-100: an outline toggle (aria-pressed, aria-checked,
+     aria-current) lost its frame in the dark theme once selected. */
+  :where(.btn-outline):is([aria-pressed="true"], [aria-checked="true"], [aria-current]:not([aria-current="false"], [aria-current=""])) {
+    --btn-border: var(--btn-color, var(--color-base-content));
+  }
 }
 
 @layer components {

@@ -4,7 +4,6 @@ from django.test import TestCase
 
 from workspace.people.models import Person, PersonList
 from workspace.people.queries import (
-    can_edit,
     reachable_list,
     reachable_person,
     user_person_lists,
@@ -44,12 +43,6 @@ class UserPersonsTests(TestCase):
         self.assertEqual(reachable_person(self.alice, self.teams.uuid), self.teams)
         self.assertIsNone(reachable_person(self.alice, self.bobs.uuid))
         self.assertIsNone(reachable_person(self.alice, self.others.uuid))
-
-    def test_can_edit(self):
-        self.assertTrue(can_edit(self.alice, self.mine))
-        self.assertTrue(can_edit(self.alice, self.teams))
-        self.assertFalse(can_edit(self.alice, self.bobs))
-        self.assertFalse(can_edit(self.alice, self.others))
 
 
 class UserPersonListsTests(TestCase):

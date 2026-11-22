@@ -5,7 +5,6 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
 
@@ -14,7 +13,6 @@ from workspace.common.logging import scrub
 from workspace.common.task_priority import INTERACTIVE_PRIORITY, NORMAL_PRIORITY
 
 logger = logging.getLogger(__name__)
-User = get_user_model()
 
 
 def _sync_interval():

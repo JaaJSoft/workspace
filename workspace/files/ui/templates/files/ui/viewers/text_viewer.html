@@ -415,7 +415,7 @@
       canEdit: {{ can_edit|yesno:'true,false' }},
       originalContent: '{{ content|escapejs }}',
       fileUuid: '{{ file.uuid }}',
-      fileName: '{{ file.name }}',
+      fileName: '{{ file.name|escapejs }}',
       language: '{{ language }}',
       // The hash of the blob this buffer was loaded from. Sent with every
       // save so a write built on a version someone else has already replaced

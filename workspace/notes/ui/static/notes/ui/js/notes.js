@@ -522,22 +522,26 @@ window.notesApp = function notesApp(config) {
                 this.loadingNotes = true;
             }
             try {
-                const resp = await fetch(url);
-                if (generation !== this._notesGeneration) return;
-                if (resp.ok) {
-                    const page = await resp.json();
-                    if (generation !== this._notesGeneration) return;
-                    // The endpoint answers a bare array, so the header is the
-                    // only thing that knows whether a further page exists.
-                    this.hasMoreNotes = resp.headers.get('X-Has-More') === 'true';
-                    this.notes = append ? this._mergeNotes(this.notes, page) : page;
-                }
+                const page = await this._fetchNotesPage(url);
+                if (generation !== this._notesGeneration || !page) return;
+                this.hasMoreNotes = page.hasMore;
+                this.notes = append ? this._mergeNotes(this.notes, page.notes) : page.notes;
             } finally {
                 if (generation === this._notesGeneration) {
                     this.loadingNotes = false;
                     this.loadingMoreNotes = false;
                 }
             }
+        },
+
+        // { notes, hasMore }, or null when the page did not load.
+        async _fetchNotesPage(url) {
+            const resp = await fetch(url);
+            if (!resp.ok) return null;
+            const notes = await resp.json();
+            // The endpoint answers a bare array, so the header is the only
+            // thing that knows whether a further page exists.
+            return { notes, hasMore: resp.headers.get('X-Has-More') === 'true' };
         },
 
         // A note created between two pages shifts the window, so the next
@@ -1421,17 +1425,28 @@ window.notesApp = function notesApp(config) {
             this.refreshSidebar();
             // The graph owns its own data and is not driven by loadNotes().
             if (this.activeView === 'graph') return;
-            // Reload every page the user had scrolled through, not just the
-            // first: refetching one page would shrink the list under them.
-            const restore = Math.max(this.notes.length, NOTES_PAGE_SIZE);
-            await this.loadNotes(this._buildNotesUrl());
-            while (this.hasMoreNotes && this.notes.length < restore) {
-                const before = this.notes.length;
-                await this.loadMoreNotes();
-                // A failed page leaves hasMoreNotes true and the list the same
-                // length, which would spin here forever.
-                if (this.notes.length === before) break;
+            // Built aside and swapped in whole: going through loadNotes() would
+            // empty the list, and the scroller would jump back to the top. Every
+            // page the user had scrolled through is reloaded, not just the first,
+            // read live so a page appended by scrolling meanwhile counts too.
+            // A folder switch bumps the generation and drops this refresh.
+            const generation = this._notesGeneration;
+            let notes = [];
+            let hasMore = true;
+            while (hasMore && notes.length < Math.max(this.notes.length, NOTES_PAGE_SIZE)) {
+                const page = await this._fetchNotesPage(this._buildNotesUrl(notes.length));
+                if (generation !== this._notesGeneration) return;
+                // Keep the list as it was rather than show it short or empty.
+                if (!page) return;
+                const before = notes.length;
+                notes = this._mergeNotes(notes, page.notes);
+                hasMore = page.hasMore;
+                // A server still saying "more" while sending nothing new would
+                // spin here forever.
+                if (notes.length === before) break;
             }
+            this.notes = notes;
+            this.hasMoreNotes = hasMore;
         },
 
         toggleFilter(name) {

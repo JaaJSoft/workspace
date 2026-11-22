@@ -10,8 +10,16 @@ const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 function makeApp(view) {
+  const calls = { sidebar: 0, urls: [] };
   const ctx = loadScript('workspace/notes/ui/static/notes/ui/js/notes.js', {
-    fetch: () => Promise.resolve({ ok: false }),
+    fetch: (url) => {
+      calls.urls.push(url);
+      return Promise.resolve({
+        ok: true,
+        headers: { get: () => 'false' },
+        json: () => Promise.resolve([]),
+      });
+    },
     sidebarPreference: { initial: () => false, save: () => {} },
     addEventListener: () => {},
     document: { getElementById: () => null },
@@ -19,29 +27,27 @@ function makeApp(view) {
     viewerPanelMixin: () => ({}),
   });
 
-  const calls = { sidebar: 0, urls: [] };
   const app = ctx.notesApp({});
   app.activeView = view;
   app.refreshSidebar = () => { calls.sidebar++; };
-  app.loadNotes = (url) => { calls.urls.push(url); };
   app._buildNotesUrl = () => `/api/v1/files?view=${view}`;
   return { app, calls };
 }
 
-test('resync refreshes the sidebar and reloads the current view', () => {
+test('resync refreshes the sidebar and reloads the current view', async () => {
   const { app, calls } = makeApp('favorites');
 
-  app.resync();
+  await app.resync();
 
   assert.equal(calls.sidebar, 1);
   assert.deepStrictEqual(Array.from(calls.urls), ['/api/v1/files?view=favorites']);
 });
 
-test('resync reloads through the URL builder so filters survive', () => {
+test('resync reloads through the URL builder so filters survive', async () => {
   const { app, calls } = makeApp('folder');
   app._buildNotesUrl = () => '/api/v1/files?parent=abc&search=draft';
 
-  app.resync();
+  await app.resync();
 
   assert.deepStrictEqual(
     Array.from(calls.urls),
@@ -50,15 +56,15 @@ test('resync reloads through the URL builder so filters survive', () => {
   );
 });
 
-test('resync leaves the graph view alone', () => {
+test('resync leaves the graph view alone', async () => {
   const { app, calls } = makeApp('graph');
 
-  app.resync();
+  await app.resync();
 
   assert.equal(calls.sidebar, 1, 'the sidebar still refreshes');
   assert.deepStrictEqual(
     Array.from(calls.urls),
     [],
-    'the graph owns its own data and is not driven by loadNotes()'
+    'the graph owns its own data and is not driven by the note list'
   );
 });

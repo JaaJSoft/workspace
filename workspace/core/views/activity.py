@@ -1,6 +1,7 @@
 from datetime import date
 
 from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,6 +13,18 @@ from workspace.core.services.activity import (
     get_visible_usage_stats,
     serialize_timestamps,
 )
+
+
+def _target_user(request):
+    """Whose activity is asked for and who is looking, as (user_id, viewer_id).
+    The caller's own activity has no viewer."""
+    raw = request.query_params.get("user_id")
+    if not raw:
+        return request.user.id, None
+    try:
+        return int(raw), request.user.id
+    except ValueError:
+        raise ValidationError({"user_id": "A valid integer is required."}) from None
 
 
 class ActivityRecentView(APIView):
@@ -26,13 +39,7 @@ class ActivityRecentView(APIView):
         ],
     )
     def get(self, request):
-        user_id = request.query_params.get("user_id")
-        if user_id:
-            user_id = int(user_id)
-            viewer_id = request.user.id
-        else:
-            user_id = request.user.id
-            viewer_id = None
+        user_id, viewer_id = _target_user(request)
 
         source = request.query_params.get("source")
 
@@ -90,13 +97,7 @@ class ActivityDailyCountsView(APIView):
                 status=400,
             )
 
-        user_id = request.query_params.get("user_id")
-        if user_id:
-            user_id = int(user_id)
-            viewer_id = request.user.id
-        else:
-            user_id = request.user.id
-            viewer_id = None
+        user_id, viewer_id = _target_user(request)
 
         counts = activity_registry.get_daily_counts(
             user_id,
@@ -122,13 +123,7 @@ class ActivityStatsView(APIView):
         ],
     )
     def get(self, request):
-        user_id = request.query_params.get("user_id")
-        if user_id:
-            user_id = int(user_id)
-            viewer_id = request.user.id
-        else:
-            user_id = request.user.id
-            viewer_id = None
+        user_id, viewer_id = _target_user(request)
 
         stats = get_visible_usage_stats(
             user_id, viewer_id=viewer_id, visible_to=request.user

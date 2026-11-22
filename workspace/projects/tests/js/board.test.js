@@ -490,6 +490,7 @@ test('toggleSelect adds then removes a uuid', () => {
 
 function backlogDom(uuids) {
   return {
+    getElementById: () => null,
     querySelectorAll: (selector) => {
       assert.equal(selector, '#task-collection [data-task-uuid]');
       return uuids.map((uuid) => ({ dataset: { taskUuid: uuid } }));

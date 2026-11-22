@@ -10,6 +10,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -111,6 +112,7 @@ from ..services.tasks import (
     settle_task_notifications,
 )
 from ..services.watchers import auto_watch, clear_watch_state, set_watch_state
+from ..sse_provider import broadcast_project_change
 
 User = get_user_model()
 
@@ -225,9 +227,30 @@ class ProjectViewSet(viewsets.ModelViewSet):
             project.save(update_fields=["archived_at", "updated_at"])
         return Response(self.get_serializer(project).data)
 
+    def get_object(self):
+        self._object = super().get_object()
+        return self._object
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        # A deleted project has no page left to refresh, a created one no
+        # page open yet.
+        if self.action in _PROJECT_CHANGES and _succeeded(response):
+            project = getattr(self, "_object", None)
+            if project is not None:
+                broadcast_project_change(project)
+        return response
+
     def _require_admin(self, project):
         if get_project_role(self.request.user, project) != ProjectMember.Role.ADMIN:
             raise PermissionDenied(_("Admin role required."))
+
+
+_PROJECT_CHANGES = {"partial_update", "convert", "archive", "unarchive"}
+
+
+def _succeeded(response):
+    return response.status_code < 400
 
 
 class ProjectContextMixin:
@@ -236,7 +259,13 @@ class ProjectContextMixin:
     404 both when the project does not exist and when the user has no
     access, so existence is never leaked. Mutating endpoints must call
     _require_admin/_require_writable explicitly on top.
+
+    Every write that succeeds is announced to the project's open pages
+    (broadcast_project_change); an endpoint whose writes change nothing they
+    show turns ``broadcasts_changes`` off.
     """
+
+    broadcasts_changes = True
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
@@ -249,6 +278,18 @@ class ProjectContextMixin:
             raise Http404
         self.project = project
         self.role = role
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        project = getattr(self, "project", None)
+        if (
+            self.broadcasts_changes
+            and project is not None
+            and request.method not in SAFE_METHODS
+            and _succeeded(response)
+        ):
+            broadcast_project_change(project, task_uuid=self.kwargs.get("task_uuid"))
+        return response
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -335,6 +376,8 @@ class ProjectNotificationLevelView(ProjectContextMixin, APIView):
     which is why this is not a member sub-resource. Archived projects stay
     writable here: the override is per-user preference, not project data.
     """
+
+    broadcasts_changes = False
 
     @extend_schema(
         summary="Override your notification level for this project",

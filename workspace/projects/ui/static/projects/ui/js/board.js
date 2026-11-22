@@ -172,6 +172,58 @@ function regionHasDraft(root) {
   });
 }
 
+// A change made elsewhere waits this long before the page re-renders, so a
+// burst of writes (a bulk edit, the assistant's chain of tools) costs one.
+const REMOTE_CHANGE_DELAY_MS = 300;
+
+// The project revision a fragment was rendered at (data-project-revision):
+// it shows every change announced up to that number.
+function shownRevision(el) {
+  return Number(el?.dataset.projectRevision) || 0;
+}
+
+// The user is typing in a field of root or has one of its menus open, which a
+// re-render would throw away. A focused button or link is not work in progress.
+function isEditingWithin(root) {
+  const active = document.activeElement;
+  if (!root || !active || active === root || !root.contains(active)) return false;
+  return (
+    active.matches('input, textarea, select, [contenteditable="true"]') ||
+    !!active.closest('[role="menu"], [role="listbox"], .dropdown')
+  );
+}
+
+// Captures the scroll offsets of root and of its [data-keep-scroll] boxes;
+// the function returned puts them back on whatever replaced them, so a
+// re-render does not move the page under the reader.
+function keepScroll(root) {
+  if (!root) return () => {};
+  const offsets = [[null, root.scrollTop, root.scrollLeft]];
+  root.querySelectorAll('[data-keep-scroll]').forEach((el) => {
+    offsets.push([el.dataset.keepScroll, el.scrollTop, el.scrollLeft]);
+  });
+  const id = root.id;
+  return () => {
+    const next = document.getElementById(id);
+    if (!next) return;
+    for (const [key, top, left] of offsets) {
+      const el =
+        key === null
+          ? next
+          : next.querySelector('[data-keep-scroll="' + key + '"]');
+      if (!el) continue;
+      el.scrollTop = top;
+      el.scrollLeft = left;
+    }
+  };
+}
+
+// After the components of a swapped fragment ran their own mount code (the
+// timeline scrolls to today in a $nextTick) and before the browser paints.
+function afterMount(fn) {
+  (window.requestAnimationFrame || setTimeout)(fn);
+}
+
 function emptyTaskForm() {
   return {
     title: '',
@@ -430,6 +482,16 @@ function projectBoard(config) {
     // Keyed by task so opening another task starts from its own defaults.
     panelSections: null,
     panelSectionsTask: null,
+    // Live updates (sse:projects.changed): the newest revision announced for
+    // the project, and for the open task, against the revision the fragments
+    // on screen were rendered at. The tab that made a change refreshes on its
+    // own and then shows that revision, so its own echo is skipped.
+    _announcedRevision: 0,
+    _announcedPanelRevision: 0,
+    _remoteChangeTimer: null,
+    // Reorders not answered yet: their own refresh follows, and one rendered
+    // before they commit would snap the dropped card back for a moment.
+    _ordersInFlight: 0,
 
     init() {
       this.statuses = JSON.parse(
@@ -451,6 +513,15 @@ function projectBoard(config) {
       // Catch up on board changes made elsewhere while the stream was down
       // (resumed tab, or a bfcache restore after a mobile back).
       window.addEventListener('sse:reconnect', () => this.resync());
+      window.addEventListener('sse:projects.changed', (e) =>
+        this.onProjectChanged(e.detail)
+      );
+      // A change held back while the user was busy, or the tab hidden,
+      // lands once they are done.
+      document.addEventListener('focusout', () => this._scheduleRemoteChanges());
+      document.addEventListener('visibilitychange', () =>
+        this._scheduleRemoteChanges()
+      );
 
       // alpine-ajax marks every swap target aria-busy for the life of its
       // request. Listening on the document, that attribute is what tells a
@@ -480,7 +551,79 @@ function projectBoard(config) {
       window.addEventListener('project-fragment-bound', () => {
         this.collectionLoading = false;
         this.syncSidebarCounts();
+        // A change announced while this fragment was loading may be newer.
+        this._scheduleRemoteChanges();
       });
+    },
+
+    onProjectChanged(detail) {
+      if (!detail || detail.project !== config.projectUuid) return;
+      const revision = Number(detail.revision) || 0;
+      this._announcedRevision = Math.max(this._announcedRevision, revision);
+      // A change naming no task (a reorder, a bulk edit, a renamed status)
+      // may still show in the open one.
+      if (!detail.task || detail.task === this.panelTaskUuid) {
+        this._announcedPanelRevision = Math.max(
+          this._announcedPanelRevision,
+          revision
+        );
+      }
+      this._scheduleRemoteChanges();
+    },
+
+    _contentBehind() {
+      return (
+        this._announcedRevision >
+        shownRevision(document.getElementById('project-content'))
+      );
+    },
+
+    _panelBehind() {
+      return (
+        !!this.panelTaskUuid &&
+        this._announcedPanelRevision >
+          shownRevision(document.getElementById('task-panel'))
+      );
+    },
+
+    _scheduleRemoteChanges() {
+      if (this._remoteChangeTimer) return;
+      if (!this._contentBehind() && !this._panelBehind()) return;
+      this._remoteChangeTimer = setTimeout(() => {
+        this._remoteChangeTimer = null;
+        this._applyRemoteChanges();
+      }, REMOTE_CHANGE_DELAY_MS);
+    },
+
+    // A region with a draft is held by _resyncRegion, as on a reconnection,
+    // and reloads once the draft is saved, sent or abandoned.
+    _applyRemoteChanges() {
+      if (document.hidden) return;
+      if (this._contentBehind() && !this._contentBusy()) {
+        this._resyncRegion('project-content', () => this.refreshContent());
+      }
+      if (this._panelBehind() && !this._panelBusy()) {
+        this._resyncRegion('task-panel', () => {
+          if (this.panelTaskUuid && !this._panelSaves) {
+            this._loadPanel(this.panelTaskUuid);
+          }
+        });
+      }
+    },
+
+    // Busy for a moment: the next focusout, drag end or landed swap checks again.
+    _contentBusy() {
+      if (this.dragging || this._ordersInFlight) return true;
+      if (this._collectionSwapPending()) return true;
+      return isEditingWithin(document.getElementById('project-content'));
+    },
+
+    _panelBusy() {
+      const panel = document.getElementById('task-panel');
+      if (!panel || panel.getAttribute('aria-busy') === 'true') return true;
+      // A task save in flight reloads the panel itself once it lands.
+      if (this._panelSaves) return true;
+      return isEditingWithin(panel);
     },
 
     syncSidebarCounts() {
@@ -562,6 +705,7 @@ function projectBoard(config) {
       const origin = dragOrigin;
       this._endDrag();
       if (origin) this._restoreDragged(origin);
+      this._scheduleRemoteChanges();
     },
 
     _restoreDragged({ card, list, next }) {
@@ -643,6 +787,7 @@ function projectBoard(config) {
 
     async saveOrder(statusUuid, order, landed = null) {
       const reorder = this._reorders.start();
+      this._ordersInFlight += 1;
       try {
         const resp = await fetch(config.apiBase + '/tasks/reorder', {
           method: 'POST',
@@ -655,6 +800,7 @@ function projectBoard(config) {
       } finally {
         // The refresh replaces the cards: it would cut a landing short.
         if (landed) await landed;
+        this._ordersInFlight -= 1;
         if (reorder.isCurrent()) this.refresh();
       }
     },
@@ -683,10 +829,18 @@ function projectBoard(config) {
         }
       }
       if ([...keep].length) full += '?' + keep.toString();
+      const restoreScroll = keepScroll(
+        document.getElementById('project-content')
+      );
       // The active filters ride along so a refresh keeps the filtered view.
-      this.$ajax(taskFilterUrl(full, this.filters), {
-        target: 'project-content',
-      });
+      Promise.resolve(
+        this.$ajax(taskFilterUrl(full, this.filters), {
+          target: 'project-content',
+        })
+      )
+        .then(() => afterMount(restoreScroll))
+        // alpine-ajax reports a failure as ajax:error, which drops the veil.
+        .catch(() => {});
     },
 
     refresh() {
@@ -2189,6 +2343,7 @@ window.projectBoardHelpers = {
   pickLabelColor: pickLabelColor,
   bulkActionIntersection: bulkActionIntersection,
   regionHasDraft: regionHasDraft,
+  keepScroll: keepScroll,
 };
 
 // --- Per-task watch state (the eye in the task panel header) ---

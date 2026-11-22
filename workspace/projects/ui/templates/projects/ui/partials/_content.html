@@ -2,6 +2,7 @@
 <div
   id="project-content"
   class="flex-1 min-h-0 overflow-y-auto"
+  data-project-revision="{{ project.page_revision }}"
   x-init="$nextTick(() => window.dispatchEvent(new CustomEvent('project-fragment-bound')))"
 >
   {# Read by syncSidebarCounts(): the sidebar badges live outside this swap target. #}

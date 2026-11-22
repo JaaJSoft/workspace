@@ -62,6 +62,7 @@ from workspace.projects.services.task_filters import (
     task_filters_active,
 )
 from workspace.projects.services.timeline import build_timeline, coerce_scale
+from workspace.projects.sse_provider import project_revision
 from workspace.projects.tasks import reminder_hour
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -138,11 +139,16 @@ def overview(request, project_uuid):
 
 
 def _get_project_or_404(user, project_uuid):
+    # Read before the project and everything the view loads after it: the
+    # page then shows every change up to this revision, and its live updates
+    # skip the events it already covers.
+    revision = project_revision(project_uuid)
     # created_by is rendered by the overview card; joining it here spares
     # every project view a lazy fetch.
     project = get_object_or_404(
         Project.objects.select_related("created_by"), uuid=project_uuid
     )
+    project.page_revision = revision
     role = get_project_role(user, project)
     if role is None:
         raise Http404

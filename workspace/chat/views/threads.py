@@ -3,13 +3,13 @@ from django.db.models import F, Value
 from django.db.models.functions import Greatest
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import serializers, status
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import ConversationMember, Message
-from ..services.conversations import get_active_membership
+from ..services.conversations import user_conversation_ids
 from ..services.threads import mark_thread_read
 
 
@@ -27,9 +27,12 @@ class ThreadReadView(APIView):
         responses={200: OpenApiResponse(response=ThreadReadSerializer)},
     )
     def post(self, request, root_uuid):
-        root = get_object_or_404(Message, uuid=root_uuid, thread_root__isnull=True)
-        if not get_active_membership(request.user, root.conversation_id):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+        root = get_object_or_404(
+            Message,
+            uuid=root_uuid,
+            conversation_id__in=user_conversation_ids(request.user),
+            thread_root__isnull=True,
+        )
 
         # One transaction: the thread counter and the conversation badge are two
         # halves of the same number, so a crash between them would leave the

@@ -1,8 +1,11 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.notifications.models import Notification
 
 User = get_user_model()
@@ -37,100 +40,105 @@ class NotificationListTests(NotifViewMixin, APITestCase):
         self._make_notif()
         resp = self.client.get(self.URL)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(len(resp.data["notifications"]), 1)
+        self.assertEqual(len(resp.data), 1)
 
     def test_excludes_other_users_notifications(self):
         self._make_notif(user=self.bob)
         resp = self.client.get(self.URL)
-        self.assertEqual(len(resp.data["notifications"]), 0)
+        self.assertEqual(len(resp.data), 0)
 
     def test_filter_unread(self):
         self._make_notif()
         self._make_notif(read_at=timezone.now())
         resp = self.client.get(self.URL, {"filter": "unread"})
-        self.assertEqual(len(resp.data["notifications"]), 1)
+        self.assertEqual(len(resp.data), 1)
 
     def test_filter_by_origin(self):
         self._make_notif(origin="chat")
         self._make_notif(origin="files")
         resp = self.client.get(self.URL, {"origin": "files"})
-        self.assertEqual(len(resp.data["notifications"]), 1)
+        self.assertEqual(len(resp.data), 1)
 
     def test_search(self):
         self._make_notif(title="Deploy finished")
         self._make_notif(title="New message")
         resp = self.client.get(self.URL, {"search": "deploy"})
-        self.assertEqual(len(resp.data["notifications"]), 1)
+        self.assertEqual(len(resp.data), 1)
 
     def test_search_title_ignores_accents_and_case(self):
         self._make_notif(title="Événement annulé")
         self._make_notif(title="New message")
         resp = self.client.get(self.URL, {"search": "evenement"})
-        self.assertEqual(
-            [n["title"] for n in resp.data["notifications"]], ["Événement annulé"]
-        )
+        self.assertEqual([n["title"] for n in resp.data], ["Événement annulé"])
 
     def test_search_body_ignores_accents_and_case(self):
         self._make_notif(title="Reminder", body="Réunion à 14h")
         self._make_notif(title="Other", body="Nothing here")
         resp = self.client.get(self.URL, {"search": "REUNION"})
-        self.assertEqual([n["title"] for n in resp.data["notifications"]], ["Reminder"])
+        self.assertEqual([n["title"] for n in resp.data], ["Reminder"])
 
     def test_search_accented_query_matches_unaccented_text(self):
         self._make_notif(title="Elodie shared a file")
         resp = self.client.get(self.URL, {"search": "élodie"})
-        self.assertEqual(len(resp.data["notifications"]), 1)
+        self.assertEqual(len(resp.data), 1)
 
-    def test_includes_unread_count(self):
-        self._make_notif()
+
+class NotificationListPaginationTests(NotifViewMixin, APITestCase):
+    URL = "/api/v1/notifications"
+
+    def _make_dated(self, count):
+        for i in range(count):
+            notif = self._make_notif(title=f"Notif {i}")
+            # auto_now_add ignores a value passed to create().
+            Notification.objects.filter(pk=notif.pk).update(
+                created_at=f"2024-01-01T10:{i:02d}:00Z"
+            )
+
+    def _titles(self, resp):
+        return [n["title"] for n in resp.data]
+
+    def test_pages_newest_first_with_offset(self):
+        self._make_dated(5)
+        first = self.client.get(self.URL, {"limit": 2})
+        second = self.client.get(self.URL, {"limit": 2, "offset": 2})
+        last = self.client.get(self.URL, {"limit": 2, "offset": 4})
+        self.assertEqual(self._titles(first), ["Notif 4", "Notif 3"])
+        self.assertEqual(self._titles(second), ["Notif 2", "Notif 1"])
+        self.assertEqual(self._titles(last), ["Notif 0"])
+        self.assertEqual(first["X-Has-More"], "true")
+        self.assertEqual(second["X-Has-More"], "true")
+        self.assertEqual(last["X-Has-More"], "false")
+
+    def test_without_limit_lists_everything(self):
+        self._make_dated(3)
         resp = self.client.get(self.URL)
-        self.assertIn("unread_count", resp.data)
+        self.assertEqual(len(resp.data), 3)
+        self.assertNotIn("X-Has-More", resp)
 
-    def test_has_more_pagination(self):
-        for i in range(25):
-            self._make_notif(title=f"Notif {i}")
-        resp = self.client.get(self.URL, {"limit": 5})
-        self.assertTrue(resp.data["has_more"])
-        self.assertEqual(len(resp.data["notifications"]), 5)
+    def test_invalid_limit_answers_a_page(self):
+        """Regression: ?limit=abc raised ValueError and ?limit=-5 a negative
+        slice, both a 500; ?limit=0 answered an empty page claiming more."""
+        self._make_dated(3)
+        for limit in ("abc", "-5", "0", "-1"):
+            with self.subTest(limit=limit):
+                resp = self.client.get(self.URL, {"limit": limit})
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                self.assertEqual(len(resp.data), 3)
 
-    def test_malformed_before_cursor_falls_back_to_no_cursor(self):
-        """Regression: a non-UUID ?before used to crash with 500 because
-        UUIDField.to_python raised ValidationError outside the
-        DoesNotExist except. It now falls back to "no cursor"."""
-        self._make_notif()
-        resp = self.client.get(self.URL, {"before": "not-a-uuid"})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data["notifications"]), 1)
+    def test_invalid_offset_starts_at_the_top(self):
+        self._make_dated(3)
+        for offset in ("abc", "-5"):
+            with self.subTest(offset=offset):
+                resp = self.client.get(self.URL, {"limit": 2, "offset": offset})
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                self.assertEqual(self._titles(resp), ["Notif 2", "Notif 1"])
 
-    def test_foreign_user_cursor_is_ignored(self):
-        """Regression: a ?before UUID belonging to another user must not
-        affect this user's pagination. Before the fix, the unrestricted
-        Notification.objects.get(uuid=...) lookup leaked the foreign
-        notification's created_at into the listing's filter, clipping the
-        page boundary - a cross-user timing oracle."""
-        early = self._make_notif(title="alice-early")
-        late = self._make_notif(title="alice-late")
-        foreign = self._make_notif(user=self.bob, title="bob-mid")
-
-        # Pin created_at order: early < foreign < late. auto_now_add prevents
-        # setting it via .save(), so use queryset .update().
-        Notification.objects.filter(pk=early.pk).update(
-            created_at="2024-01-01T10:00:00Z",
-        )
-        Notification.objects.filter(pk=foreign.pk).update(
-            created_at="2024-01-01T12:00:00Z",
-        )
-        Notification.objects.filter(pk=late.pk).update(
-            created_at="2024-01-01T13:00:00Z",
-        )
-
-        resp = self.client.get(self.URL, {"before": str(foreign.uuid)})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # Both of alice's notifications must be present. If the foreign
-        # cursor's created_at had leaked, alice-late (13:00) would be filtered
-        # out by created_at__lt=12:00.
-        titles = {n["title"] for n in resp.data["notifications"]}
-        self.assertEqual(titles, {"alice-early", "alice-late"})
+    def test_limit_is_capped(self):
+        self._make_dated(3)
+        with patch.object(OptInLimitOffsetPagination, "max_limit", 2):
+            resp = self.client.get(self.URL, {"limit": 50})
+        self.assertEqual(len(resp.data), 2)
+        self.assertEqual(resp["X-Has-More"], "true")
 
 
 class NotificationDetailTests(NotifViewMixin, APITestCase):

@@ -111,6 +111,8 @@ window.fileTableControls = function fileTableControls() {
       this.initStorageKey();
       this.loadState();
       this.pruneMissingColumns();
+      const kept = this._takeKeptState();
+      if (kept) this._applyKeptFilters(kept);
       this.ready = true;
       this.applyAll();
       this._initializing = false;
@@ -147,6 +149,11 @@ window.fileTableControls = function fileTableControls() {
         this._paintSelection();
         this._computeBulkActions();
       });
+      if (kept) this._applyKeptSelection(kept);
+      for (const key of ['selectedUuids', 'searchQuery', 'typeFilter', 'tagFilter']) {
+        this.$watch(key, () => this._keepState());
+      }
+      this._keepState();
 
       // Fetch actions for all visible rows
       this.fetchActions();
@@ -537,6 +544,51 @@ window.fileTableControls = function fileTableControls() {
 
     clearSelection() {
       this.selectedUuids = new Set();
+    },
+
+    // --- What a re-render of the same view keeps ---------------------------
+    // A refresh of the listing (stream reconnect, upload landing, a push the
+    // listing could not swap in place) builds this component again from the
+    // server's HTML. The selection and the filters belong to the view, not
+    // to the component: each instance keeps them under its view's URL, and
+    // the next instance takes them back when it renders that same view.
+    // Rendering another view overwrites them, so navigating starts afresh.
+
+    _listingView() {
+      return this._root?.closest('#folder-browser')?.dataset.viewUrl || null;
+    },
+
+    _keepState() {
+      const view = this._listingView();
+      if (!view) return;
+      window._fileListingKept = {
+        view,
+        selectedUuids: Array.from(this.selectedUuids),
+        lastSelectedUuid: this.lastSelectedUuid,
+        searchQuery: this.searchQuery,
+        typeFilter: this.typeFilter,
+        tagFilter: Array.from(this.tagFilter),
+      };
+    },
+
+    _takeKeptState() {
+      const kept = window._fileListingKept;
+      const view = this._listingView();
+      return kept && view && kept.view === view ? kept : null;
+    },
+
+    _applyKeptFilters(kept) {
+      this.searchQuery = kept.searchQuery;
+      this.typeFilter = kept.typeFilter;
+      this.tagFilter = Array.from(kept.tagFilter);
+    },
+
+    // Only the items the new listing still holds: a trashed or moved file
+    // drops out of the selection.
+    _applyKeptSelection(kept) {
+      const listed = (uuid) => this._itemsByUuid.has(uuid);
+      this.selectedUuids = new Set(kept.selectedUuids.filter(listed));
+      this.lastSelectedUuid = listed(kept.lastSelectedUuid) ? kept.lastSelectedUuid : null;
     },
 
     getSelectedUuids() {

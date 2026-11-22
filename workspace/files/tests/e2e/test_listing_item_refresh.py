@@ -217,9 +217,22 @@ class ListingItemRefreshTests(PlaywrightTestCase):
 
         self._settle(self.gamma)
 
-        expect(self.page.locator(f"{ITEMS} {SPINNER}")).to_have_count(2)
+        self.page.wait_for_function(
+            "() => document.querySelector('#folder-browser [data-uuid]')"
+            "?.keptSinceLoad !== true"
+        )
         self.assertFalse(self._kept(self.alpha))
         self.assertNotIn("nodes=", self.listing_requests[-1])
+        # The filter outlives the re-render; cleared, it shows gamma settled.
+        search = self.page.locator("#folder-browser").get_by_placeholder(
+            "Filter by name"
+        )
+        expect(search).to_have_value("alpha")
+        expect(self.page.locator("#folder-browser tbody tr[data-uuid]")).to_have_count(
+            1
+        )
+        search.fill("")
+        expect(self.page.locator(f"{ITEMS} {SPINNER}")).to_have_count(2)
 
     def test_an_item_gone_from_the_listing_re_renders_it(self):
         self._open()

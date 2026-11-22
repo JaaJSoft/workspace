@@ -371,3 +371,13 @@ class ClassifyViewTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
         self.assertEqual(self.msg.message_labels.get().label.name, "Urgent")
         self.assertEqual(Notification.objects.filter(recipient=self.user).count(), 0)
+
+
+class MemoryListFilterTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="memuser", password="pass123")
+        self.client.force_authenticate(self.user)
+
+    def test_a_non_numeric_bot_id_is_a_400(self):
+        resp = self.client.get("/api/v1/ai/memories", {"bot_id": "abc"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

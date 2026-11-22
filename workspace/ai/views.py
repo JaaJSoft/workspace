@@ -382,7 +382,13 @@ class MemoryListView(APIView):
         memories = UserMemory.objects.filter(user=request.user).select_related("bot")
         bot_id = request.query_params.get("bot_id")
         if bot_id:
-            memories = memories.filter(bot_id=bot_id)
+            try:
+                memories = memories.filter(bot_id=int(bot_id))
+            except ValueError:
+                return Response(
+                    {"bot_id": "Must be an integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         serializer = UserMemorySerializer(memories, many=True)
         return Response(serializer.data)
 

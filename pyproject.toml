@@ -72,7 +72,7 @@ dependencies = [
     # push notifications
     "pywebpush>=2.5.0",
     # oauth2
-    "authlib>=1.9.8",
+    "authlib>=1.9.9",
     # reads the ID token of the mail OAuth2 sign-in; also an authlib
     # dependency, declared because the mail module imports it directly
     "joserfc>=1.7.6",

@@ -9,14 +9,9 @@ logger = logging.getLogger(__name__)
 
 class NotificationsSSEProvider(SSEProvider):
     def get_initial_events(self):
-        try:
-            count = get_unread_count(self.user)
-            return [("count", {"unread": count}, None)]
-        except Exception:
-            logger.exception(
-                "Failed initial notification count for user %s", self.user.id
-            )
-            return []
+        # A failure is the caller's to log: it also has to say that its answer
+        # is short of this count.
+        return [("count", {"unread": get_unread_count(self.user)}, None)]
 
     def poll(self, cache_value):
         if cache_value is None:

@@ -92,10 +92,13 @@ def _shows_another_user(request):
 
 def global_stream(request):
     """Global SSE endpoint that aggregates events from all registered providers."""
+    # Ahead of any answer: PresenceMiddleware reads it after the view, and a
+    # refusal a worker keeps running into is no more someone's activity than
+    # the stream is.
+    request._is_sse_stream = True
+
     if not request.user.is_authenticated or _shows_another_user(request):
         return StreamingHttpResponse("", status=403)
-
-    request._is_sse_stream = True
 
     response = StreamingHttpResponse(
         _event_stream(request),

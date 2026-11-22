@@ -390,6 +390,21 @@ class StreamSnapshotTests(TestCase):
             },
         )
 
+    def test_a_count_that_cannot_be_read_leaves_the_answer_incomplete(self):
+        """A provider that kept the failure to itself would have the answer
+        called complete, and the page never ask for its count again."""
+        self.client.force_login(self.user)
+        for count in (
+            "workspace.notifications.sse_provider.get_unread_count",
+            "workspace.chat.sse_provider.get_unread_counts",
+        ):
+            with (
+                self.subTest(count=count),
+                patch(count, side_effect=RuntimeError("down")),
+                self.assertLogs("workspace.core.views.sse", level="ERROR"),
+            ):
+                self.assertIs(self.client.get(self.URL).json()["complete"], False)
+
     def test_a_provider_that_cannot_start_leaves_the_answer_incomplete(self):
         self.client.force_login(self.user)
         with (
@@ -500,6 +515,18 @@ class ShownUserTests(TestCase):
         for url in ("/api/v1/stream", "/api/v1/stream/snapshot"):
             with self.subTest(url=url):
                 self.assertEqual(self._status(url), 200)
+
+    def test_a_refused_stream_is_nobodys_activity(self):
+        """The worker of a tab left open keeps asking, every 20 seconds while
+        that tab is on screen. Counted as activity, each refusal would keep
+        the account now signed in "online" and hold back its web push."""
+        self.client.force_login(self.bob)
+        with patch("workspace.users.services.presence.touch") as touch:
+            self.assertEqual(self._status("/api/v1/stream", shown=self.alice.pk), 403)
+            touch.assert_not_called()
+            # Like the stream it stands in for.
+            self.assertEqual(self._status("/api/v1/stream", shown=self.bob.pk), 200)
+            touch.assert_not_called()
 
 
 @override_settings(PREVIEW_VISIBILITY="staff")

@@ -235,9 +235,7 @@ class MessageDeletePurgeTests(APITestCase):
         response = self.client.get(
             f"/api/v1/chat/conversations/{self.conversation.uuid}/messages"
         )
-        payload = next(
-            m for m in response.data["messages"] if m["uuid"] == str(self.message.uuid)
-        )
+        payload = next(m for m in response.data if m["uuid"] == str(self.message.uuid))
         self.assertEqual(payload["body"], "")
         self.assertNotIn("secret", response.content.decode())
 
@@ -248,8 +246,6 @@ class MessageDeletePurgeTests(APITestCase):
         response = self.client.get(
             f"/api/v1/chat/conversations/{self.conversation.uuid}/messages"
         )
-        payload = next(
-            m for m in response.data["messages"] if m["uuid"] == str(self.message.uuid)
-        )
+        payload = next(m for m in response.data if m["uuid"] == str(self.message.uuid))
         self.assertEqual(payload["author"]["username"], "author")
         self.assertIsNotNone(payload["deleted_at"])

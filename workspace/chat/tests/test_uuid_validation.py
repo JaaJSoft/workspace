@@ -18,22 +18,21 @@ from workspace.chat.sse_provider import ChatSSEProvider
 from workspace.chat.tests.test_chat import ChatTestMixin
 
 
-class MessagesBeforeCursorTests(ChatTestMixin, APITestCase):
-    """GET /api/v1/chat/conversations/<id>/messages?before=<bad>"""
+class MessagesPagingParamsTests(ChatTestMixin, APITestCase):
+    """GET /api/v1/chat/conversations/<id>/messages?limit=<bad>&offset=<bad>"""
 
     def url(self):
         return f"/api/v1/chat/conversations/{self.group.pk}/messages"
 
-    def test_malformed_before_cursor_falls_back_to_no_cursor(self):
-        """A non-UUID ?before is treated as 'no cursor', mirroring unknown UUID."""
+    def test_malformed_paging_params_answer_a_list(self):
         self.client.force_authenticate(self.creator)
-        resp = self.client.get(self.url(), {"before": "not-a-uuid"})
+        resp = self.client.get(self.url(), {"limit": "abc", "offset": "-1"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("messages", resp.data)
+        self.assertIsInstance(resp.data, list)
 
 
-class MessagesUIBeforeCursorTests(ChatTestMixin, APITestCase):
-    """GET /chat/<uuid>/messages?before=<bad> (UI partial)"""
+class MessagesUIMessageParamTests(ChatTestMixin, APITestCase):
+    """GET /chat/<uuid>/messages?message=<bad> (UI partial)"""
 
     def setUp(self):
         cache.clear()
@@ -45,9 +44,9 @@ class MessagesUIBeforeCursorTests(ChatTestMixin, APITestCase):
     def url(self):
         return f"/chat/{self.group.pk}/messages"
 
-    def test_malformed_before_cursor_falls_back_to_no_cursor(self):
+    def test_malformed_message_opens_the_latest_page(self):
         self.client.force_login(self.creator)
-        resp = self.client.get(self.url(), {"before": "not-a-uuid"})
+        resp = self.client.get(self.url(), {"message": "not-a-uuid"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 

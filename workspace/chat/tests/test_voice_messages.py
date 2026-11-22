@@ -130,7 +130,7 @@ class VoiceMessageIngestTests(APITestCase):
             format="multipart",
         )
         resp = self.client.get(self.url)
-        att = resp.data["messages"][0]["attachments"][0]
+        att = resp.data[0]["attachments"][0]
         self.assertTrue(att["is_audio"])
         self.assertAlmostEqual(att["duration_seconds"], 8.0)
 

@@ -6,8 +6,8 @@
 
   The root lives OUTSIDE #thread-message-list: "load older" prepends fetched
   content into the list's items wrapper, so a root inside it would sink below
-  the older replies it prepends. root_groups is None on an older or newer page,
-  whose content lands in a panel already showing the root.
+  the older replies it prepends. Older and newer pages carry it too, but do
+  not target it.
 {% endcomment %}
 {% if root_groups %}
   <div id="thread-root-message">
@@ -21,9 +21,9 @@
 {% comment %}
   Merge targets for the alpine-ajax pipeline in messages.js (surface hooks
   overridden by chatThreadPanel): a full load replaces #thread-root-message
-  and #thread-message-list; "load older" replaces #thread-message-list-state
-  and prepends into #thread-message-list-items; "load newer" renders its
-  replies inside #thread-message-list-tail. data-conversation-uuid also lets
+  and #thread-message-list; an older or a newer page replaces
+  #thread-message-list-state and merges into #thread-message-list-items, at
+  the top or at the end as itemsMerge says. data-conversation-uuid also lets
   the panel verify the thread belongs to the conversation it sits in - a
   crafted ?thread= deep link can point anywhere the user is a member.
 {% endcomment %}
@@ -36,25 +36,10 @@
 
   <div
     id="thread-message-list-items"
-    x-merge="prepend"
+    x-merge:dynamic="itemsMerge"
     data-conversation-uuid="{{ conversation_uuid }}"
   >
-    {% if page.direction != "after" %}
-      {% include "chat/ui/partials/_message_groups.html" with id_prefix="tmsg" hide_quote_for=root_uuid in_thread=True %}
-    {% endif %}
-    {# Never on an older page: its items are prepended whole, and a second tail would repeat the id. #}
-    {% if page.direction != "before" %}
-      <div
-        id="thread-message-list-tail"
-        x-merge="before"
-        hidden
-        data-conversation-uuid="{{ conversation_uuid }}"
-      >
-        {% if page.direction == "after" %}
-          {% include "chat/ui/partials/_message_groups.html" with id_prefix="tmsg" hide_quote_for=root_uuid in_thread=True %}
-        {% endif %}
-      </div>
-    {% endif %}
+    {% include "chat/ui/partials/_message_groups.html" with id_prefix="tmsg" hide_quote_for=root_uuid in_thread=True %}
   </div>
 
 </div>

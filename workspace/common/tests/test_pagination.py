@@ -11,9 +11,11 @@ class OptInLimitOffsetPaginationTests(SimpleTestCase):
         self.paginator = OptInLimitOffsetPagination()
         self.data = list(range(10))
 
-    def _paginate(self, **params):
+    def _paginate(self, default_offset=None, **params):
         request = Request(self.factory.get("/", params))
-        return self.paginator.paginate_queryset(self.data, request)
+        return self.paginator.paginate_queryset(
+            self.data, request, default_offset=default_offset
+        )
 
     def test_no_limit_leaves_the_response_unpaginated(self):
         self.assertIsNone(self._paginate())
@@ -57,6 +59,25 @@ class OptInLimitOffsetPaginationTests(SimpleTestCase):
         response = self.paginator.get_paginated_response(page)
         self.assertEqual(response.data, [8, 9])
         self.assertEqual(response["X-Has-More"], "false")
+
+    def test_default_offset_places_a_request_that_names_none(self):
+        page = self._paginate(limit="3", default_offset=lambda limit: 10 - limit)
+        self.assertEqual(page, [7, 8, 9])
+        self.assertEqual(self.paginator.offset, 7)
+        self.assertFalse(self.paginator.has_more)
+
+    def test_an_offset_in_the_request_wins_over_the_default(self):
+        def default_offset(limit):
+            raise AssertionError("not called when the request names an offset")
+
+        page = self._paginate(limit="3", offset="2", default_offset=default_offset)
+        self.assertEqual(page, [2, 3, 4])
+
+    def test_default_offset_is_not_called_without_a_limit(self):
+        def default_offset(limit):
+            raise AssertionError("not called on an unpaginated request")
+
+        self.assertIsNone(self._paginate(default_offset=default_offset))
 
     def test_schema_stays_an_array(self):
         schema = {"type": "array", "items": {"type": "object"}}

@@ -58,14 +58,14 @@ class MainFlowFilterTests(TestCase):
         url = reverse(
             "chat-messages", kwargs={"conversation_id": self.conversation.uuid}
         )
-        return api.get(url).data["messages"]
+        return api.get(url).data
 
     def test_the_api_message_list_always_includes_thread_replies(self):
         # The inline preference shapes the server-rendered partial only: a UI
         # preference must not shrink an API response. Clients that want the
         # main flow filter on thread_root themselves.
         bodies = [m["body"] for m in self._api_messages()]
-        self.assertEqual(bodies, ["the root message", "the threaded reply"])
+        self.assertEqual(bodies, ["the threaded reply", "the root message"])
 
     def test_the_api_message_list_ignores_the_preference(self):
         set_setting(

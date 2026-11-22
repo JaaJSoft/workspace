@@ -150,10 +150,10 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     // Reload the open conversation on one message and show it. The list is
     // cut around it, so it is reached however old it is.
     async showMessage(uuid) {
-      this._revealMessage(await this.loadMessages({ around: uuid }));
+      this._revealMessage(await this.loadMessages({ message: uuid }));
     },
 
-    // What loadMessages({ around }) answered. An unknown message and one the
+    // What loadMessages({ message }) answered. An unknown message and one the
     // reader cannot see answer alike: the latest page, and this notice.
     _revealMessage({ targetUuid, targetThreadRoot }) {
       if (!targetUuid) {
@@ -284,7 +284,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       // so that #messages-container exists in the DOM
       await this.$nextTick();
 
-      const shown = await this.loadMessages({ around: message });
+      const shown = await this.loadMessages({ message });
       if (message) this._revealMessage(shown);
 
       // Restore bot typing indicator if there's an active AI task. The

@@ -1,11 +1,10 @@
 {% comment %}
   Merge targets for the alpine-ajax pipeline in messages.js: a full load
-  replaces #message-list wholesale; "load older" replaces #message-list-state
-  (fresh pagination cursor) and prepends the fetched groups into
-  #message-list-items; "load newer" replaces the state too and renders its
-  groups inside #message-list-tail, whose children land right before the live
-  tail - the end of the items. data-conversation-uuid on each target lets the
-  client refuse content rendered for a conversation that is no longer active.
+  replaces #message-list wholesale; an older or a newer page replaces
+  #message-list-state and merges its groups into #message-list-items, at the
+  top or at the end as the component's itemsMerge says ('prepend' or
+  'append'). data-conversation-uuid on each target lets the client refuse
+  content rendered for a conversation that is no longer active.
 {% endcomment %}
 <div
   id="message-list"
@@ -17,25 +16,10 @@
 
   <div
     id="message-list-items"
-    x-merge="prepend"
+    x-merge:dynamic="itemsMerge"
     data-conversation-uuid="{{ conversation_uuid }}"
   >
-    {% if page.direction != "after" %}
-      {% include "chat/ui/partials/_message_groups.html" %}
-    {% endif %}
-    {# Never on an older page: its items are prepended whole, and a second tail would repeat the id. #}
-    {% if page.direction != "before" %}
-      <div
-        id="message-list-tail"
-        x-merge="before"
-        hidden
-        data-conversation-uuid="{{ conversation_uuid }}"
-      >
-        {% if page.direction == "after" %}
-          {% include "chat/ui/partials/_message_groups.html" %}
-        {% endif %}
-      </div>
-    {% endif %}
+    {% include "chat/ui/partials/_message_groups.html" %}
   </div>
 
 </div>

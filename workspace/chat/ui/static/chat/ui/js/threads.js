@@ -185,7 +185,7 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid, focusUuid = null) {
       // Take focus so the panel's own Escape binding is reachable from the
       // keyboard, which matters most on mobile where it covers the page.
       this.$nextTick(() => this.$el?.focus?.());
-      const shown = await this.loadMessages({ around: this.threadFocusUuid });
+      const shown = await this.loadMessages({ message: this.threadFocusUuid });
       if (shown.targetUuid) {
         this.$nextTick(() => this._highlightMessage(shown.targetUuid, undefined, 'instant'));
       }

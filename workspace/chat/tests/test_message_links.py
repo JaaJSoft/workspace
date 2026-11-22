@@ -1,9 +1,10 @@
-"""Links to one message: the around and after cursors of the message lists.
+"""Message lists paged by the shared paginator, and links to one message.
 
-A link opens the conversation on a page cut around the message, however far
-back it is, and the reader scrolls down to the present with after pages. A
-message the reader cannot see - another conversation, another thread - is
-answered exactly like one that does not exist.
+The server-rendered lists count offsets from the oldest message, so a new
+message never moves them. Without an offset a list opens on its last page, or
+with ``?message=`` on the page holding that message, however old it is. A
+message the reader cannot see - another conversation, another thread - answers
+exactly like one that does not exist.
 """
 
 import re
@@ -13,9 +14,10 @@ from datetime import UTC, datetime, timedelta
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from rest_framework.test import APITestCase
 
 from workspace.chat.models import Conversation, ConversationMember, Message
-from workspace.chat.services.message_pages import PAGE_SIZE
+from workspace.chat.services.message_lists import PAGE_SIZE
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -38,25 +40,24 @@ def _state(response, list_id="message-list"):
     return dict(re.findall(r'(data-[\w-]+)="([^"]*)"', match.group(1)))
 
 
-def _numbered(conversation, author, count, start=BASE, **fields):
+def _numbered(conversation, author, count):
     messages = []
     for i in range(1, count + 1):
         msg = Message.objects.create(
             conversation=conversation,
             author=author,
             body=f"numbered message {i:03d}",
-            **fields,
         )
         # Strictly increasing, all on one day, and more than the five minutes
         # that would merge one author's messages into a group.
         Message.objects.filter(pk=msg.pk).update(
-            created_at=start + timedelta(minutes=6 * i)
+            created_at=BASE + timedelta(minutes=6 * i)
         )
         messages.append(msg)
     return messages
 
 
-class MessageListCursorTests(TestCase):
+class MessageListPagingTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.alice = User.objects.create_user(username="alice-links", password="x")
@@ -68,17 +69,12 @@ class MessageListCursorTests(TestCase):
             ConversationMember.objects.create(conversation=cls.conv, user=user)
         cls.messages = _numbered(cls.conv, cls.bob, COUNT)
 
-        # A conversation alice is not in, with a message dated in the middle
-        # of hers: used as a cursor it would cut her pages at its timestamp.
         cls.foreign = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, title="Elsewhere", created_by=cls.bob
         )
         ConversationMember.objects.create(conversation=cls.foreign, user=cls.bob)
         cls.foreign_msg = Message.objects.create(
             conversation=cls.foreign, author=cls.bob, body="foreign"
-        )
-        Message.objects.filter(pk=cls.foreign_msg.pk).update(
-            created_at=BASE + timedelta(minutes=305)
         )
 
     def setUp(self):
@@ -90,105 +86,85 @@ class MessageListCursorTests(TestCase):
     def get(self, **params):
         return self.client.get(f"/chat/{self.conv.uuid}/messages", params)
 
-    def test_around_opens_a_page_centred_on_the_message(self):
-        target = self.messages[29]  # 030, far behind the latest page
-        response = self.get(around=target.uuid)
+    def test_without_an_offset_the_list_opens_on_its_last_page(self):
+        response = self.get(limit=PAGE_SIZE)
+
+        bodies = _bodies(response)
+        self.assertEqual(
+            bodies, [f"{i:03d}" for i in range(COUNT - PAGE_SIZE + 1, COUNT + 1)]
+        )
+        state = _state(response)
+        self.assertEqual(state["data-offset"], str(COUNT - PAGE_SIZE))
+        self.assertEqual(state["data-end"], str(COUNT))
+        self.assertEqual(state["data-has-newer"], "false")
+        self.assertNotIn("data-target-uuid", state)
+
+    def test_without_a_limit_the_partial_still_renders_one_page(self):
+        self.assertEqual(len(_bodies(self.get())), PAGE_SIZE)
+
+    def test_an_offset_counts_from_the_oldest_message(self):
+        response = self.get(limit=10, offset=20)
+
+        self.assertEqual(_bodies(response), [f"{i:03d}" for i in range(21, 31)])
+        state = _state(response)
+        self.assertEqual(state["data-offset"], "20")
+        self.assertEqual(state["data-end"], "30")
+        self.assertEqual(state["data-has-newer"], "true")
+
+    def test_a_new_message_does_not_move_the_offsets(self):
+        before = _bodies(self.get(limit=10, offset=20))
+        Message.objects.create(conversation=self.conv, author=self.bob, body="late")
+        self.assertEqual(_bodies(self.get(limit=10, offset=20)), before)
+
+    def test_a_link_opens_the_page_holding_an_old_message(self):
+        target = self.messages[29]  # 030, far behind the last page
+        response = self.get(limit=PAGE_SIZE, message=target.uuid)
 
         bodies = _bodies(response)
         half = PAGE_SIZE // 2
         self.assertEqual(bodies[0], f"{30 - half:03d}")
-        self.assertEqual(bodies[-1], f"{30 + half - 1:03d}")
         self.assertEqual(len(bodies), PAGE_SIZE)
+        self.assertIn("030", bodies)
         state = _state(response)
-        self.assertEqual(state["data-has-more"], "true")
+        self.assertEqual(state["data-offset"], str(29 - half))
         self.assertEqual(state["data-has-newer"], "true")
         self.assertEqual(state["data-target-uuid"], str(target.uuid))
-        self.assertEqual(state["data-first-uuid"], str(self.messages[29 - half].uuid))
+
+    def test_a_link_to_the_first_message_opens_at_the_top(self):
+        response = self.get(limit=PAGE_SIZE, message=self.messages[0].uuid)
+        self.assertEqual(_bodies(response)[0], "001")
+        self.assertEqual(_state(response)["data-offset"], "0")
+
+    def test_an_offset_wins_over_a_link(self):
+        response = self.get(limit=10, offset=0, message=self.messages[99].uuid)
+        self.assertEqual(_bodies(response)[0], "001")
+
+    def test_a_message_of_another_conversation_answers_like_an_unknown_one(self):
+        hidden = self.get(limit=PAGE_SIZE, message=self.foreign_msg.uuid)
+        absent = self.get(limit=PAGE_SIZE, message=uuid.uuid4())
         self.assertEqual(
-            state["data-last-uuid"], str(self.messages[29 + half - 1].uuid)
+            (hidden.status_code, hidden.content), (absent.status_code, absent.content)
         )
 
-    def test_around_the_first_message_has_nothing_older(self):
-        response = self.get(around=self.messages[0].uuid)
-        self.assertEqual(_bodies(response)[0], "001")
-        self.assertEqual(_state(response)["data-has-more"], "false")
-
-    def test_around_a_recent_message_reaches_the_present(self):
-        response = self.get(around=self.messages[-5].uuid)
+    def test_a_malformed_link_opens_the_last_page(self):
+        response = self.get(limit=PAGE_SIZE, message="not-a-uuid")
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(_bodies(response)[-1], f"{COUNT:03d}")
-        self.assertEqual(_state(response)["data-has-newer"], "false")
+        self.assertNotIn("data-target-uuid", _state(response))
 
-    def test_after_pages_forward_into_the_tail(self):
-        cursor = self.messages[49]  # 050
-        response = self.get(after=cursor.uuid)
-
-        self.assertEqual(_bodies(response), [f"{i:03d}" for i in range(51, 101)])
-        state = _state(response)
-        self.assertEqual(state["data-has-newer"], "true")
-        self.assertEqual(state["data-last-uuid"], str(self.messages[99].uuid))
-        # Says nothing about the older side: the list keeps its own cursor.
-        self.assertNotIn("data-has-more", state)
-        self.assertNotIn("data-first-uuid", state)
-        # The groups are rendered inside the tail, whose children the client
-        # merges before the live tail - at the end of the list.
-        html = response.content.decode()
-        tail = html[html.index('id="message-list-tail"') :]
-        self.assertIn("numbered message 051", tail)
-
-    def test_after_the_last_page_is_the_present(self):
-        response = self.get(after=self.messages[100].uuid)
-        self.assertEqual(_bodies(response), [f"{i:03d}" for i in range(102, COUNT + 1)])
-        self.assertEqual(_state(response)["data-has-newer"], "false")
-
-    def test_after_page_does_not_repeat_the_day_it_continues(self):
-        # Every message is on 2024-03-01: the day's separator is already on
-        # screen above the cursor.
-        response = self.get(after=self.messages[49].uuid)
-        self.assertNotIn('class="divider', response.content.decode())
-
-    def test_older_page_carries_no_tail_and_nothing_about_the_newer_side(self):
-        # The items of an older page are prepended whole: a tail in them would
-        # put a second element with its id in the list.
-        response = self.get(before=self.messages[60].uuid)
-        self.assertNotIn('id="message-list-tail"', response.content.decode())
-        state = _state(response)
-        self.assertNotIn("data-has-newer", state)
-        self.assertNotIn("data-last-uuid", state)
-
-    def test_latest_page_is_at_the_present(self):
-        response = self.get()
-        self.assertEqual(_bodies(response)[-1], f"{COUNT:03d}")
-        state = _state(response)
-        self.assertEqual(state["data-has-newer"], "false")
-        self.assertNotIn("data-target-uuid", state)
-        self.assertIn('id="message-list-tail"', response.content.decode())
-
-    def test_message_of_another_conversation_answers_like_an_unknown_one(self):
-        for cursor in ("around", "after", "before"):
-            with self.subTest(cursor=cursor):
-                hidden = self.get(**{cursor: self.foreign_msg.uuid})
-                absent = self.get(**{cursor: uuid.uuid4()})
-                self.assertEqual(
-                    (hidden.status_code, hidden.content),
-                    (absent.status_code, absent.content),
-                )
-
-    def test_unknown_around_falls_back_to_the_latest_page_without_a_target(self):
-        for value in (uuid.uuid4(), "not-a-uuid"):
-            with self.subTest(value=value):
-                response = self.get(around=value)
-                self.assertEqual(response.status_code, 200)
-                self.assertEqual(_bodies(response)[-1], f"{COUNT:03d}")
-                self.assertNotIn("data-target-uuid", _state(response))
-
-    def test_non_member_is_refused_whatever_the_cursor(self):
+    def test_a_non_member_is_refused_whatever_the_link(self):
         self.client.force_login(User.objects.create_user(username="eve-links"))
-        hidden = self.get(around=self.messages[10].uuid)
-        absent = self.get(around=uuid.uuid4())
+        hidden = self.get(message=self.messages[10].uuid)
+        absent = self.get(message=uuid.uuid4())
         self.assertEqual(hidden.status_code, 403)
         self.assertEqual(
             (hidden.status_code, hidden.content), (absent.status_code, absent.content)
         )
+
+    def test_day_separators_carry_their_day(self):
+        # The client drops the second separator of a day split across pages.
+        html = self.get(limit=5, offset=0).content.decode()
+        self.assertIn('data-day="2024-03-01"', html)
 
 
 class ThreadReplyLinkTests(TestCase):
@@ -218,12 +194,11 @@ class ThreadReplyLinkTests(TestCase):
             )
             cls.replies.append(reply)
 
-        other_root = cls.flow[20]
         cls.other_reply = Message.objects.create(
             conversation=cls.conv,
             author=cls.alice,
             body="elsewhere",
-            thread_root=other_root,
+            thread_root=cls.flow[20],
         )
 
     def setUp(self):
@@ -232,60 +207,94 @@ class ThreadReplyLinkTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def test_flow_opens_on_the_root_and_names_the_thread(self):
+    def flow_page(self, **params):
+        return self.client.get(f"/chat/{self.conv.uuid}/messages", params)
+
+    def thread(self, **params):
+        return self.client.get(f"/chat/threads/{self.root.uuid}/messages", params)
+
+    def test_the_flow_opens_on_the_root_and_names_the_thread(self):
         reply = self.replies[3]
-        response = self.client.get(
-            f"/chat/{self.conv.uuid}/messages", {"around": reply.uuid}
-        )
+        response = self.flow_page(limit=PAGE_SIZE, message=reply.uuid)
 
         state = _state(response)
         self.assertEqual(state["data-target-uuid"], str(reply.uuid))
         self.assertEqual(state["data-target-thread-root"], str(self.root.uuid))
-        # The reply is not in the flow; the page is cut around its root.
-        self.assertIn("numbered message 010", response.content.decode())
-        self.assertNotIn("thread reply 004", response.content.decode())
+        html = response.content.decode()
+        self.assertIn("numbered message 010", html)
+        self.assertNotIn("thread reply 004", html)
 
-    def test_flow_opens_on_the_reply_itself_when_replies_are_inline(self):
+    def test_the_flow_opens_on_the_reply_itself_when_replies_are_inline(self):
         set_setting(
             self.alice, "chat", "preferences", {"showThreadRepliesInline": True}
         )
         reply = self.replies[3]
-        response = self.client.get(
-            f"/chat/{self.conv.uuid}/messages", {"around": reply.uuid}
-        )
+        response = self.flow_page(limit=PAGE_SIZE, message=reply.uuid)
 
         self.assertIn("thread reply 004", response.content.decode())
         self.assertEqual(
             _state(response)["data-target-thread-root"], str(self.root.uuid)
         )
 
-    def thread(self, **params):
-        return self.client.get(f"/chat/threads/{self.root.uuid}/messages", params)
-
-    def test_thread_opens_on_an_old_reply_with_its_root(self):
-        reply = self.replies[4]  # 005, behind the latest 50 replies
-        response = self.thread(around=reply.uuid)
+    def test_the_thread_opens_on_an_old_reply_with_its_root(self):
+        reply = self.replies[4]  # 005, behind the last 50 replies
+        response = self.thread(limit=PAGE_SIZE, message=reply.uuid)
 
         html = response.content.decode()
         self.assertIn("thread reply 005", html)
         self.assertIn('id="thread-root-message"', html)
         state = _state(response, "thread-message-list")
         self.assertEqual(state["data-target-uuid"], str(reply.uuid))
+        self.assertEqual(state["data-offset"], "0")
         self.assertEqual(state["data-has-newer"], "true")
 
-    def test_thread_pages_forward_without_the_root(self):
-        response = self.thread(after=self.replies[40].uuid)
-
-        html = response.content.decode()
-        self.assertNotIn('id="thread-root-message"', html)
-        self.assertIn("thread reply 042", html)
-        self.assertEqual(
-            _state(response, "thread-message-list")["data-has-newer"], "false"
-        )
-
-    def test_reply_of_another_thread_answers_like_an_unknown_one(self):
-        hidden = self.thread(around=self.other_reply.uuid)
-        absent = self.thread(around=uuid.uuid4())
+    def test_a_reply_of_another_thread_answers_like_an_unknown_one(self):
+        hidden = self.thread(limit=PAGE_SIZE, message=self.other_reply.uuid)
+        absent = self.thread(limit=PAGE_SIZE, message=uuid.uuid4())
         self.assertEqual(
             (hidden.status_code, hidden.content), (absent.status_code, absent.content)
         )
+
+
+class MessageListApiTests(APITestCase):
+    """GET /api/v1/chat/conversations/<id>/messages - the shared paginator."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="alice-api", password="x")
+        cls.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, title="API", created_by=cls.alice
+        )
+        ConversationMember.objects.create(conversation=cls.conv, user=cls.alice)
+        cls.messages = _numbered(cls.conv, cls.alice, 12)
+
+    def setUp(self):
+        self.client.force_authenticate(self.alice)
+
+    def get(self, **params):
+        return self.client.get(
+            f"/api/v1/chat/conversations/{self.conv.uuid}/messages", params
+        )
+
+    def test_a_page_is_a_bare_array_newest_first_with_the_header(self):
+        response = self.get(limit=5)
+
+        self.assertEqual(
+            [m["body"] for m in response.data],
+            [f"numbered message {i:03d}" for i in range(12, 7, -1)],
+        )
+        self.assertEqual(response["X-Has-More"], "true")
+
+    def test_the_offset_reaches_older_messages(self):
+        response = self.get(limit=5, offset=10)
+
+        self.assertEqual(
+            [m["body"] for m in response.data],
+            ["numbered message 002", "numbered message 001"],
+        )
+        self.assertEqual(response["X-Has-More"], "false")
+
+    def test_without_a_limit_every_message_comes_back(self):
+        response = self.get()
+        self.assertEqual(len(response.data), 12)
+        self.assertNotIn("X-Has-More", response)

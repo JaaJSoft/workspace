@@ -1,11 +1,9 @@
 {% comment %}
-  Pagination state of one message list, replaced on every load. Each side's
-  flag and cursor are written only when the page knows them: an older page
-  says nothing about the newer side, and the client keeps what it had.
-  data-target-uuid names the message an around page was opened on; it is
-  absent when that message is unknown or out of reach, alike.
+  Where the page of one message list sits, replaced on every load: offsets
+  count from the oldest message, so data-offset is the first row of the page
+  and data-end the row past its last. data-target-uuid names the message the
+  list was opened on with ?message=; it is absent when that message is
+  unknown or out of reach, alike.
 {% endcomment %}
-{% with first=page.messages|first last=page.messages|last %}
-  <div id="{{ list_id }}-state" hidden data-conversation-uuid="{{ conversation_uuid }}" {% if page.has_older is not None %}data-has-more="{{ page.has_older|yesno:'true,false' }}"{% if first %} data-first-uuid="{{ first.uuid }}"{% endif %}{% endif %} {% if page.has_newer is not None %}data-has-newer="{{ page.has_newer|yesno:'true,false' }}"{% if last %} data-last-uuid="{{ last.uuid }}"{% endif %}{% endif %} {% if target %}data-target-uuid="{{ target.uuid }}"{% if target.thread_root_id %} data-target-thread-root="{{ target.thread_root_id }}"{% endif %}{% endif %}>
-  </div>
-{% endwith %}
+<div id="{{ list_id }}-state" hidden data-conversation-uuid="{{ conversation_uuid }}" data-offset="{{ window.offset }}" data-end="{{ window.end }}" data-has-newer="{{ window.has_newer|yesno:'true,false' }}" {% if target %}data-target-uuid="{{ target.uuid }}"{% if target.thread_root_id %} data-target-thread-root="{{ target.thread_root_id }}"{% endif %}{% endif %}>
+</div>

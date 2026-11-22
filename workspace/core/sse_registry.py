@@ -33,9 +33,9 @@ class SSEProvider(ABC):
     def get_initial_events(self) -> list[tuple[str, dict, str | None]]:
         """Events sent immediately on connection.
 
-        Also what a tab is given when it joins the stream another tab of the
-        browser holds (``stream_snapshot``), from a provider discarded right
-        after: describe the current state, and consume nothing.
+        Also what a tab is given when it joins a stream that is already open
+        (``stream_snapshot``), from a provider discarded right after: describe
+        the current state, and consume nothing.
 
         Returns list of (event_name, data_dict, event_id_or_None).
         """

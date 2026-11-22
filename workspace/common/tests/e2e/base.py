@@ -44,6 +44,20 @@ TOUCH_CONTEXT = {
 }
 
 
+def stub_global_sse(context):
+    """Keep the pages of ``context`` from opening a stream on the live server.
+
+    A page normally leaves the stream to a shared worker, whose requests
+    Playwright's routes never see: without ``SharedWorker`` each page opens the
+    stream itself, and that request is answered here. The pattern covers
+    ``/api/v1/stream/snapshot`` too, which a page reads as "no snapshot".
+    """
+    context.add_init_script("window.SharedWorker = undefined;")
+    context.route(
+        "**/api/v1/stream**", lambda route: route.fulfill(status=204, body="")
+    )
+
+
 @unittest.skipUnless(E2E_ENABLED, "E2E tests are disabled (set E2E=1 to run)")
 class PlaywrightTestCase(StaticLiveServerTestCase):
     """Base ``TestCase`` that boots a sync Playwright browser once per class.
@@ -96,12 +110,10 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
     # client disconnect between ``time.sleep(1)`` ticks, so when a test
     # ends its in-flight stream keeps holding a DB connection. On Windows
     # this prevents Django's test runner from deleting the test SQLite
-    # file at suite teardown (``PermissionError: file is in use``). No
-    # e2e test today lets a stream reach the server, so short-circuiting
-    # ``/api/v1/stream`` with a 204 keeps the page happy without leaking a
-    # worker thread. The pattern covers ``/api/v1/stream/snapshot`` too,
-    # which a page reads as "no snapshot". Set to ``False`` for tests that
-    # drive SSE themselves.
+    # file at suite teardown (``PermissionError: file is in use``). So
+    # the stream is answered with a 204 (``stub_global_sse``), which keeps
+    # the page happy without leaking a worker thread. Set to ``False`` for
+    # tests that drive SSE themselves.
     STUB_GLOBAL_SSE = True
 
     # Keyword arguments for ``browser.new_context()``, e.g. TOUCH_CONTEXT to
@@ -114,10 +126,7 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         self.page = self.context.new_page()
 
         if self.STUB_GLOBAL_SSE:
-            self.context.route(
-                "**/api/v1/stream**",
-                lambda route: route.fulfill(status=204, body=""),
-            )
+            stub_global_sse(self.context)
 
         # Diagnostics: capture in-browser errors + failed requests so a
         # test failure's root cause lands directly in the CI log, without

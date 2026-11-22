@@ -16,6 +16,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone, translation
 from prometheus_client import REGISTRY
 
+from workspace.core.sse_registry import push_user_event
 from workspace.core.views import sse
 from workspace.users.services.settings import set_setting
 
@@ -327,8 +328,8 @@ def _payloads(chunks):
 
 
 class StreamSnapshotTests(TestCase):
-    """One tab per browser holds the stream; a tab that joins later opens none
-    and asks here for the events a stream starts with."""
+    """A browser holds one stream for all its tabs; a tab that joins it later
+    asks here for the events a stream starts with."""
 
     URL = "/api/v1/stream/snapshot"
 
@@ -383,17 +384,46 @@ class StreamSnapshotTests(TestCase):
             {"events": [{"event": "notifications.count", "data": {"unread": 4}}]},
         )
 
-    def test_providers_start_without_a_resume_point(self):
-        """The initial events are a state, not a replay: no cursor goes in."""
+    def test_a_tab_coming_back_is_given_what_was_queued_since_its_cursor(self):
+        """A page restored from the bfcache used to reopen a stream of its own
+        with its cursor, and got the mailbox replay. Joining a stream that
+        kept running, the snapshot is all it reads: without the replay a
+        ``lock_released`` sent meanwhile never reaches it, and its editor
+        stays read-only."""
+        released = {"type": "lock_released", "file_uuid": "f-1", "actor": "bob"}
+        push_user_event("files", self.user.id, released)
         self.client.force_login(self.user)
-        with patch.object(sse, "_init_providers", return_value={}) as init:
-            self.client.get(self.URL)
-        init.assert_called_once_with(self.user, {})
+
+        def names(response):
+            return [event["event"] for event in response.json()["events"]]
+
+        # A page that has just rendered already reflects it.
+        self.assertNotIn("files.lock_released", names(self.client.get(self.URL)))
+
+        cursor = sse.encode_stream_cursor({"files": "0"})
+        back = self.client.get(self.URL, {"last_event_id": cursor})
+        self.assertIn(
+            {"event": "files.lock_released", "data": released},
+            back.json()["events"],
+        )
+
+    def test_reading_consumes_nothing(self):
+        """The stream must still find what a snapshot read."""
+        push_user_event("files", self.user.id, {"type": "lock_released"})
+        cursor = sse.encode_stream_cursor({"files": "0"})
+        self.client.force_login(self.user)
+
+        first = self.client.get(self.URL, {"last_event_id": cursor}).json()
+        second = self.client.get(self.URL, {"last_event_id": cursor}).json()
+        self.assertEqual(first, second)
+
+        provider = sse._init_providers(self.user, {"files": "0"})["files"]
+        self.assertEqual(len(provider.get_initial_events()), 1)
 
     def test_built_in_the_zone_and_language_a_stream_runs_in(self):
         """A stream body runs once the middlewares have left, in UTC and in the
         instance's language. An event built otherwise here would read
-        differently in a tab depending on whether it holds the stream."""
+        differently in a tab depending on when it joined the stream."""
         set_setting(self.user, "core", "timezone", "Asia/Tokyo")
         set_setting(self.user, "core", "language", "fr")
         seen = {}

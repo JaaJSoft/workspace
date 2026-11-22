@@ -23,7 +23,7 @@ from django.contrib.auth import get_user_model
 from django.test import override_settings
 from playwright.sync_api import Error as PlaywrightError
 
-from workspace.common.tests.e2e.base import PlaywrightTestCase
+from workspace.common.tests.e2e.base import PlaywrightTestCase, stub_global_sse
 from workspace.vault.checks import retired_ids_check
 from workspace.vault.models import (
     AccountIdentity,
@@ -265,9 +265,7 @@ class FormatMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
         second_context = self.browser.new_context()
         self.addCleanup(second_context.close)
         second_page = second_context.new_page()
-        second_context.route(
-            "**/api/v1/stream**", lambda route: route.fulfill(status=204, body="")
-        )
+        stub_global_sse(second_context)
         second_page.route(
             CORPUS_ROUTE,
             lambda route: route.fulfill(

@@ -206,19 +206,21 @@ def _snapshot_event(slug, event_name, data, event_id):
 def stream_snapshot(request):
     """The events a stream opens with, for a page that opens none.
 
-    One tab per browser holds the stream and hands its events to the others
-    (sse.js). A tab that joins later was not there for the initial events - the
-    unread counts, the generations under way - and nothing sends them again, so
-    it asks for them here.
+    A shared worker holds one stream for all the tabs of a browser (sse.js).
+    A tab that joins it later was not there for the initial events - the unread
+    counts, the generations under way - and nothing sends them again, so it
+    asks for them here. A tab coming back to a stream it had left (bfcache,
+    frozen tab) sends the cursor it stopped at and is given what was queued
+    since, as a stream of its own reopened there would have given it.
     """
     if not request.user.is_authenticated:
         return HttpResponse(status=403)
 
     # A stream builds its events once the middlewares have left: in UTC and in
-    # the instance's language. The same here, or a tab would read other values
-    # than the one holding the stream.
+    # the instance's language. The same here, or a tab joining late would read
+    # other values than the stream sent the others.
     with timezone.override(None), translation.override(settings.LANGUAGE_CODE):
-        providers = _init_providers(request.user, {})
+        providers = _init_providers(request.user, _incoming_cursors(request))
         events = list(_initial_events(providers, request.user.id, _snapshot_event))
 
     response = HttpResponse(

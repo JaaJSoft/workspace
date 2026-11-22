@@ -7,17 +7,136 @@
 //
 // Re-dispatches each SSE payload as a window CustomEvent named "sse:<event>",
 // plus dash-separated aliases ("chat-<event>", "ai-stream-<event>") for
-// events whose name starts with "chat." or "ai_stream." — Alpine's
+// events whose name starts with "chat." or "ai_stream.": Alpine's
 // @event.window syntax parses dots as modifiers, so templates need a
 // dot-free event name to bind to.
 //
-// One tab per browser holds the stream. The tabs of a user form a group: the
-// one holding the Web Lock (the leader) opens the stream and posts every event
-// on a BroadcastChannel, the others (followers) dispatch what they receive.
-// The lock's queue is the election: when the leader goes, the browser hands
-// the lock to the next tab, which reopens the stream where the group stopped.
-// Listeners cannot tell the two roles apart.
+// One stream per browser. This file runs in two places: in every page, and in
+// a shared worker the pages of a user start from it. The worker opens the
+// stream and posts its events to each page, which dispatches them; it lives
+// as long as one of them does, so a page that goes takes nothing with it.
+// Listeners cannot tell where an event came from. Without shared workers, a
+// page opens the stream itself.
 (function () {
+  const STREAM_URL = '/api/v1/stream';
+  const SNAPSHOT_URL = '/api/v1/stream/snapshot';
+  // Before a stream the browser gave up on is opened again.
+  const RETRY_MS = 30000;
+
+  function withCursor(url, cursor) {
+    return cursor ? url + '?last_event_id=' + encodeURIComponent(cursor) : url;
+  }
+
+  // The stream, in whichever of the two places it runs. `onEvent(id, payload)`
+  // gets each event with the resume point it leaves the stream at, `onReopen`
+  // is told when a stream opens again after events may have been missed.
+  function openStream(cursor, onEvent, onReopen) {
+    let source = null;
+    let errorCount = 0;
+    let retryTimer = null;
+    // EventSource replays the last id on its own reconnects, but a stream
+    // opened again from here is a brand new EventSource with no id to replay:
+    // it goes in the URL, and the server reads it from there.
+    let lastEventId = cursor || '';
+    // The first opening is silent: the page has just rendered, and listeners
+    // that re-fetch on a reopening would do so for nothing.
+    let firstOpening = true;
+
+    function close() {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+      if (source) { source.close(); source = null; }
+    }
+
+    function connect() {
+      close();
+      const opened = new EventSource(withCursor(STREAM_URL, lastEventId));
+      source = opened;
+      errorCount = 0;
+      opened.addEventListener('sse', function (e) {
+        if (e.lastEventId) lastEventId = e.lastEventId;
+        onEvent(lastEventId, JSON.parse(e.data));
+      });
+      opened.onerror = function () {
+        if (source !== opened) return;
+        // Whatever opens after a failure opens late.
+        firstOpening = false;
+        // CLOSED: an answer the browser never retries after, which is anything
+        // but a 200 event stream - a 502 while the server restarts, for one.
+        // Otherwise it reconnects on its own, until that failed too often.
+        if (opened.readyState === EventSource.CLOSED || ++errorCount > 5) {
+          close();
+          retryTimer = setTimeout(connect, RETRY_MS);
+        }
+      };
+      opened.onopen = function () {
+        errorCount = 0;
+        if (!firstOpening) onReopen();
+        firstOpening = false;
+      };
+    }
+
+    connect();
+    return {
+      close,
+      reopen: connect,
+      isClosed: function () { return !source || source.readyState === EventSource.CLOSED; },
+      cursor: function () { return lastEventId; },
+    };
+  }
+
+  // -- In the shared worker ------------------------------------------------
+
+  function serveTabs() {
+    const ports = new Set();
+    let stream = null;
+
+    function toAll(message) {
+      for (const port of ports) port.postMessage(message);
+    }
+
+    self.onconnect = function (connection) {
+      const port = connection.ports[0];
+      port.onmessage = function (e) {
+        const message = e.data;
+        if (message.type === 'bye') {
+          ports.delete(port);
+          // Nobody listens any more. Pages can outlast that (in the
+          // back/forward cache) and the worker with them: it then holds no
+          // stream, and the next page starts one.
+          if (!ports.size && stream) { stream.close(); stream = null; }
+          return;
+        }
+        if (message.type === 'hello') ports.add(port);
+        const fresh = !stream;
+        if (fresh) {
+          // The page starting the stream says where its last one stopped.
+          stream = openStream(
+            message.id,
+            function (id, payload) { toAll({ type: 'event', id, payload }); },
+            function () { toAll({ type: 'reconnect' }); },
+          );
+        } else if (message.shown && stream.isClosed()) {
+          // Someone has just opened or shown a page: a stream that closed is
+          // opened again without waiting for its retry.
+          stream.reopen();
+        }
+        port.postMessage({
+          type: message.type === 'hello' ? 'welcome' : 'alive',
+          fresh,
+          id: stream.cursor(),
+        });
+      };
+    };
+  }
+
+  if (typeof SharedWorkerGlobalScope !== 'undefined') {
+    serveTabs();
+    return;
+  }
+
+  // -- In a page -------------------------------------------------------------
+
   // Module registry (slug -> {name, icon, color})
   window.__modules = {};
   const modulesEl = document.getElementById('workspace-modules-data');
@@ -32,57 +151,34 @@
     }
   }
 
-  const STREAM_URL = '/api/v1/stream';
-  const SNAPSHOT_URL = '/api/v1/stream/snapshot';
-  // How often a visible follower checks that the leader still answers, and how
-  // long it waits for the answer before taking the stream over.
-  const PROBE_INTERVAL_MS = 15000;
-  const PROBE_TIMEOUT_MS = 3000;
+  // How long the worker has to answer before the page does without it.
+  const ANSWER_TIMEOUT_MS = 5000;
+  // How often a visible page checks that the worker is still there.
+  const CHECK_INTERVAL_MS = 20000;
   // Relays wait for the snapshot, so it cannot be waited for without limit.
   const SNAPSHOT_TIMEOUT_MS = 5000;
 
-  let es = null;
-  let errorCount = 0;
-  let retryTimer = null;
-  // Resume point for the next connect(). EventSource replays the last id on
-  // its own reconnects, but every stream we open ourselves (visibility
-  // change, bfcache restore, a follower taking over) is a brand new
-  // EventSource with no id to replay - so we carry it in the URL and the
-  // server reads it from there. A follower keeps it up to date from what the
-  // leader relays.
-  let lastEventId = '';
-  // Skip the first connect's reconnect event — initial state comes from the
-  // server-rendered template, not from a missed SSE push, so listeners that
-  // re-fetch on reconnect would cause an unnecessary round-trip on page load.
-  let firstConnect = true;
-
-  // Web Locks only exist in a secure context: over plain HTTP outside
-  // localhost every tab keeps a stream of its own.
-  const locks = window.navigator && window.navigator.locks;
+  // The worker is started from the URL this page loaded the file at, which
+  // changes with its content once static files are hashed: a page never talks
+  // to a worker running another version. (Not in development, where a worker
+  // keeps the old code until every tab is closed.)
+  const scriptUrl = document.currentScript && document.currentScript.src;
   const userId = document.body && document.body.dataset.userId;
-  let sharing = Boolean(locks && window.BroadcastChannel && userId);
-  // Named after the user: a tab still showing another account's page must
-  // neither lead nor follow this one's.
-  const groupName = 'workspace-sse:' + userId;
-  const tabId = Math.random().toString(36).slice(2);
+  let sharing = Boolean(window.SharedWorker && scriptUrl && userId);
+  // Named after the user: a tab still showing another account's page must not
+  // be handed this one's events.
+  const workerName = 'workspace-sse:' + userId;
 
-  let channel = null;
-  let leading = false;
-  // The tab whose relays this one trusts: the last to announce it took the lock.
-  let leaderId = null;
-  // Bumped on every join and leave, so a callback from an earlier stay notices.
-  let membership = 0;
-  // Counts the times this tab took the lock, so the loss of an earlier hold
-  // is not mistaken for the loss of the current one.
-  let tenure = 0;
-  // AbortController of the lock request waiting in the queue.
-  let waiting = null;
-  // Resolvers of the promises holding the lock.
-  let releases = [];
-  // Relays held back while the snapshot loads; null once it has.
+  // Where the stream stands, to resume it from: sent to a worker this page
+  // starts, to the snapshot, and to the stream the page falls back to.
+  let lastEventId = '';
+  // The page's own stream, when it shares none.
+  let stream = null;
+  let port = null;
+  let answerTimer = null;
+  let checkTimer = null;
+  // Events held back while the snapshot loads; null once it has.
   let buffered = null;
-  let probeTimer = null;
-  let pongTimer = null;
 
   function dispatch(payload) {
     window.dispatchEvent(new CustomEvent('sse:' + payload.event, { detail: payload.data }));
@@ -94,238 +190,150 @@
     }
   }
 
-  // The stream was reopened, or this tab changed streams: pushes may have been
-  // missed meanwhile - let listeners re-sync.
+  // The stream was opened again, or this page changed streams: pushes may
+  // have been missed meanwhile - let listeners re-sync.
   function announceReconnect() {
     window.dispatchEvent(new CustomEvent('sse:reconnect'));
   }
 
-  function relay(message) {
-    if (leading && channel) channel.postMessage({ ...message, from: tabId });
+  function openOwnStream() {
+    stream = openStream(lastEventId, function (id, payload) {
+      lastEventId = id;
+      dispatch(payload);
+    }, announceReconnect);
   }
 
-  function onMessage(e) {
-    if (e.lastEventId) lastEventId = e.lastEventId;
-    const payload = JSON.parse(e.data);
-    dispatch(payload);
-    relay({ type: 'event', id: lastEventId, payload });
-  }
-
-  function disconnect() {
-    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-    if (es) { es.close(); es = null; }
-  }
-
-  function connect() {
-    disconnect();
-    const url = lastEventId
-      ? STREAM_URL + '?last_event_id=' + encodeURIComponent(lastEventId)
-      : STREAM_URL;
-    es = new EventSource(url);
-    errorCount = 0;
-    es.addEventListener('sse', onMessage);
-    es.onerror = function () {
-      if (++errorCount > 5) { es.close(); es = null; retryTimer = setTimeout(connect, 30000); }
-    };
-    es.onopen = function () {
-      errorCount = 0;
-      if (!firstConnect) {
-        announceReconnect();
-        relay({ type: 'reconnect' });
-      }
-      firstConnect = false;
-    };
-  }
-
-  function apply(message) {
-    if (message.type === 'event') dispatch(message.payload);
-    else if (message.type === 'reconnect') announceReconnect();
-  }
-
-  function onGroupMessage(message) {
-    if (!message) return;
-    if (message.type === 'ping') {
-      if (leading) relay({ type: 'pong', id: lastEventId });
-      return;
-    }
-    // Everything else comes from a leader. A leader that stopped answering and
-    // was replaced still relays what it had in hand once it wakes up: only the
-    // last tab to announce itself is listened to.
-    if (message.type === 'leader') leaderId = message.from;
-    if (leading || (leaderId && message.from !== leaderId)) return;
-    // Whatever it says, the leader is alive.
-    clearTimeout(pongTimer);
-    pongTimer = null;
-    if (message.id) lastEventId = message.id;
-    if (message.type !== 'event' && message.type !== 'reconnect') return;
-    if (buffered) buffered.push(message);
-    else apply(message);
-  }
-
-  // A tab that follows opened no stream, so it never got the events a stream
-  // starts with (unread counts, generations under way): it asks the server.
-  // Relays wait for the answer and are applied after it, the order a stream
-  // would have delivered them in.
+  // A page that joins a stream already open never got the events a stream
+  // starts with (unread counts, generations under way): it asks the server,
+  // with its cursor when it comes back to a stream it had left. Events wait
+  // for the answer and are applied after it, the order a stream would have
+  // delivered them in.
   function loadSnapshot() {
     const held = [];
     buffered = held;
     const tooLong = new AbortController();
     const giveUp = setTimeout(function () { tooLong.abort(); }, SNAPSHOT_TIMEOUT_MS);
-    fetch(SNAPSHOT_URL, { credentials: 'same-origin', signal: tooLong.signal })
+    fetch(withCursor(SNAPSHOT_URL, lastEventId), { credentials: 'same-origin', signal: tooLong.signal })
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null)
       .then((snapshot) => {
         clearTimeout(giveUp);
-        // Promoted or gone meanwhile: the buffer was dealt with there.
+        // The page left this stream meanwhile.
         if (buffered !== held) return;
         buffered = null;
         const events = snapshot && Array.isArray(snapshot.events) ? snapshot.events : [];
         for (const payload of events) dispatch(payload);
-        for (const message of held) apply(message);
+        for (const payload of held) dispatch(payload);
       });
   }
 
-  function probe() {
-    if (leading || !channel || pongTimer || document.hidden) return;
-    const mine = membership;
-    channel.postMessage({ type: 'ping' });
-    pongTimer = setTimeout(function () {
-      pongTimer = null;
-      if (mine === membership && !leading) contend({ steal: true }, mine, true);
-    }, PROBE_TIMEOUT_MS);
+  function onWorkerMessage(message) {
+    // Whatever it says, the worker is there.
+    clearTimeout(answerTimer);
+    answerTimer = null;
+    // A worker this page started is opening the stream now, and its first
+    // events are on their way. One already running sent them long ago: they
+    // are asked for from where this page stopped, before it takes the
+    // worker's cursor for its own.
+    if (message.type === 'welcome' && !message.fresh) loadSnapshot();
+    if (message.id) lastEventId = message.id;
+    if (message.type === 'event') {
+      if (buffered) buffered.push(message.payload);
+      else dispatch(message.payload);
+    } else if (message.type === 'reconnect') {
+      // While its snapshot loads, the page has just rendered or re-synced.
+      if (!buffered) announceReconnect();
+    }
   }
 
-  function stopProbing() {
-    clearInterval(probeTimer);
-    clearTimeout(pongTimer);
-    probeTimer = null;
-    pongTimer = null;
-  }
-
-  // A leader the browser suspended without a word (a background tab on a
-  // phone), or one whose page is stuck, keeps the lock and relays nothing.
-  // Only a visible tab checks: nobody is looking at the others.
-  function startProbing() {
-    stopProbing();
-    probeTimer = setInterval(probe, PROBE_INTERVAL_MS);
-    probe();
-  }
-
-  function lead(resync) {
-    leading = true;
-    // A no-op for the request that was just granted. After a steal, the end
-    // of the one still queued, which would be granted on top of it later.
-    if (waiting) { waiting.abort(); waiting = null; }
-    stopProbing();
-    relay({ type: 'leader' });
-    // What the previous leader relayed before it went is still news.
-    const held = buffered;
-    buffered = null;
-    if (held) held.forEach(apply);
-    firstConnect = !resync;
-    connect();
-  }
-
-  function follow(mine, resync) {
-    leading = false;
-    if (resync) announceReconnect();
-    loadSnapshot();
-    waiting = new AbortController();
-    contend({ signal: waiting.signal }, mine, true);
-    startProbing();
-  }
-
-  // Another tab took the lock from this one, which had stopped answering.
-  function standDown(mine) {
-    releases = [];
-    disconnect();
-    follow(mine, true);
-  }
-
-  // The lock API refused the request outright: back to a stream of its own.
-  function goSolo() {
-    leave();
-    sharing = false;
-    connect();
-  }
-
-  function contend(options, mine, resync) {
-    let held = 0;
-    locks.request(groupName, options, function (lock) {
-      if (mine !== membership) return undefined;
-      if (!lock) {
-        // ifAvailable, and another tab leads.
-        follow(mine, resync);
-        return undefined;
-      }
-      held = ++tenure;
-      // Already leading when a steal lands on a lock this tab had just been
-      // granted, the leader going at that very moment: the steal broke the
-      // tab's own hold, and this one replaces it.
-      if (!leading) lead(resync);
-      // The lock is held for as long as this promise is pending.
-      return new Promise(function (resolve) { releases.push(resolve); });
-    }).catch(function (error) {
-      if (mine !== membership) return;
-      if (held) {
-        if (held === tenure) standDown(mine);
-      } else if (error.name !== 'AbortError') {
-        goSolo();
-      }
-    });
-  }
-
-  function join(resumed) {
-    if (channel) return;
-    const mine = ++membership;
-    leaderId = null;
-    channel = new BroadcastChannel(groupName);
-    channel.onmessage = function (e) { onGroupMessage(e.data); };
-    // Alone, a tab leads at once; next to a leader it learns right away that
-    // it follows, and what it has to ask the server for.
-    contend({ ifAvailable: true }, mine, resumed);
+  function expectAnswer(otherwise) {
+    if (answerTimer) return;
+    answerTimer = setTimeout(function () {
+      answerTimer = null;
+      otherwise();
+    }, ANSWER_TIMEOUT_MS);
   }
 
   function leave() {
-    membership += 1;
-    stopProbing();
+    clearTimeout(answerTimer);
+    clearInterval(checkTimer);
+    answerTimer = null;
+    checkTimer = null;
     buffered = null;
-    if (waiting) { waiting.abort(); waiting = null; }
-    leading = false;
-    disconnect();
-    for (const letGo of releases) letGo();
-    releases = [];
-    if (channel) { channel.close(); channel = null; }
+    if (!port) return;
+    port.postMessage({ type: 'bye' });
+    port.close();
+    port = null;
+  }
+
+  // No worker to be had: back to a stream of the page's own.
+  function goSolo() {
+    leave();
+    sharing = false;
+    openOwnStream();
+  }
+
+  function rejoin() {
+    leave();
+    join(true);
+  }
+
+  // The browser can end a worker without telling its pages (a phone short of
+  // memory). A visible page asks now and then, and starts over when nothing
+  // answers. `shown` when someone has just opened or shown the page.
+  function check(shown) {
+    if (!port || document.hidden) return;
+    port.postMessage({ type: 'check', shown: Boolean(shown) });
+    expectAnswer(rejoin);
+  }
+
+  function join(resumed) {
+    if (port) return;
+    if (resumed) announceReconnect();
+    let worker;
+    try {
+      worker = new SharedWorker(scriptUrl, { name: workerName });
+    } catch (e) {
+      goSolo();
+      return;
+    }
+    const joined = worker.port;
+    port = joined;
+    worker.onerror = function () { if (port === joined) goSolo(); };
+    joined.onmessage = function (e) { if (port === joined) onWorkerMessage(e.data); };
+    joined.postMessage({ type: 'hello', id: lastEventId, shown: !document.hidden });
+    // A worker that failed to start says nothing.
+    expectAnswer(goSolo);
+    checkTimer = setInterval(check, CHECK_INTERVAL_MS);
   }
 
   // Reconnect SSE when the page becomes visible again (mobile resume)
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) return;
-    if (sharing && !leading) { probe(); return; }
-    if (!es || es.readyState === EventSource.CLOSED) connect();
+    if (sharing) check(true);
+    else if (stream.isClosed()) stream.reopen();
   });
 
   // A bfcache restore (mobile back/forward) resumes a frozen page: no script
   // re-runs, no request goes out, and the EventSource can still report OPEN
   // while its underlying connection is already dead - so the readyState check
   // above would skip the reconnect and leave the page on stale data forever.
-  // Reconnect unconditionally instead; connect() closes any previous stream,
-  // and onopen then fires sse:reconnect so listeners re-sync.
+  // Reconnect unconditionally instead, and listeners are told to re-sync.
   window.addEventListener('pageshow', function (e) {
     if (!e.persisted) return;
     if (sharing) join(true);
-    else connect();
+    else stream.reopen();
   });
 
   if (sharing) {
     // A page the browser sets aside (back/forward cache, frozen tab) runs no
-    // script: left holding the lock, it would starve every other tab. It
-    // leaves the group on the way out and joins again when it comes back.
+    // script and must be sent nothing: it leaves on the way out, and joins
+    // again when it comes back.
     window.addEventListener('pagehide', function () { if (sharing) leave(); });
     document.addEventListener('freeze', function () { if (sharing) leave(); });
     document.addEventListener('resume', function () { if (sharing) join(true); });
     join(false);
   } else {
-    connect();
+    openOwnStream();
   }
 })();

@@ -9,6 +9,7 @@ parameters first and unlocks under the switched ones.
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 
+from workspace.common.tests.e2e.base import stub_global_sse
 from workspace.vault.models import AccountIdentity
 from workspace.vault.services import suites
 from workspace.vault.tests.factories import sealed_envelope
@@ -67,9 +68,7 @@ class EnvelopeBrowserCase(VaultBrowserCase):
         """The same account, signed in on another device."""
         context = self.browser.new_context()
         context.add_cookies(self.context.cookies())
-        context.route(
-            "**/api/v1/stream**", lambda route: route.fulfill(status=204, body="")
-        )
+        stub_global_sse(context)
         page = context.new_page()
         page.route(
             CORPUS_ROUTE,

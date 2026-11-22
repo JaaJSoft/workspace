@@ -1,24 +1,21 @@
 'use strict';
 
-// A browser as sse.js sees it, with several tabs open at once. The tabs share
-// what a real browser shares between pages of one origin - the lock manager
-// and the broadcast channels - and each has its own page, EventSource and
-// timers.
+// A browser as sse.js sees it, with several tabs open at once. Each tab has
+// its own page, EventSource and timers; they share the workers a real browser
+// shares between the pages of one origin. A shared worker is sse.js loaded a
+// second time, in a worker scope, as it is in production.
 //
-// Nothing here runs on its own clock: lock callbacks and channel messages are
-// microtasks (await settle() to let them land), timers fire when a test
-// advances them, and a suspended tab keeps what it was sent until it wakes.
+// Nothing here runs on its own clock: messages between a page and a worker
+// are microtasks (await settle() to let them land) and timers fire when a
+// test advances them.
 
 const { loadScript } = require('../../../common/tests/js/loader');
 
 const SSE_SCRIPT = 'workspace/core/static/core/js/sse.js';
+const SCRIPT_URL = 'https://workspace.test/static/core/js/sse.js';
 
 function settle() {
   return new Promise((resolve) => setImmediate(resolve));
-}
-
-function abortError() {
-  return new DOMException('The request was aborted', 'AbortError');
 }
 
 function fakeTimers() {
@@ -37,6 +34,7 @@ function fakeTimers() {
     setInterval: (callback, delay) => schedule(callback, delay, delay),
     clearTimeout: (id) => timers.delete(id),
     clearInterval: (id) => timers.delete(id),
+    /** Fires what falls due, one timer after the other, with no message delivered in between. */
     advance(ms) {
       const end = now + ms;
       for (;;) {
@@ -56,160 +54,164 @@ function fakeTimers() {
   };
 }
 
-class FakeBrowser {
-  constructor() {
-    this.held = new Map();
-    this.queues = new Map();
-    this.channels = [];
-    this.heldBackLosses = null;
-  }
+/** An EventSource class whose instances a test drives by hand, kept in `owner.sources`. */
+function eventSourceFor(owner) {
+  return class FakeEventSource {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSED = 2;
 
-  /**
-   * A tab learns that its lock was stolen in a task of its own, which a real
-   * browser may run before or after the tasks around it: keep those back
-   * until deliverLockLosses(), to play the late order.
-   */
-  holdBackLockLosses() {
-    this.heldBackLosses = [];
-  }
-
-  deliverLockLosses() {
-    const losses = this.heldBackLosses;
-    this.heldBackLosses = null;
-    for (const lose of losses) lose();
-  }
-
-  // -- what reaches a tab ---------------------------------------------------
-
-  _run(tab, task) {
-    queueMicrotask(() => {
-      if (tab.closed) return;
-      if (tab.suspended) tab.backlog.push(task);
-      else task();
-    });
-  }
-
-  /** The tab stops running, without a word: nothing it is sent reaches it. */
-  suspend(tab) {
-    tab.suspended = true;
-  }
-
-  wake(tab) {
-    tab.suspended = false;
-    const backlog = tab.backlog;
-    tab.backlog = [];
-    for (const task of backlog) task();
-  }
-
-  /** The tab is gone, without having run any handler. */
-  close(tab) {
-    tab.closed = true;
-    for (const channel of this.channels) {
-      if (channel.tab === tab) channel.closed = true;
+    constructor(url) {
+      this.url = url;
+      this.readyState = FakeEventSource.CONNECTING;
+      this.listeners = {};
+      owner.sources.push(this);
     }
-    for (const [name, queue] of this.queues) {
-      this.queues.set(name, queue.filter((request) => request.tab !== tab));
+
+    addEventListener(type, handler) {
+      this.listeners[type] = handler;
     }
-    for (const [name, request] of this.held) {
-      if (request.tab !== tab) continue;
-      this.held.delete(name);
-      this._grantNext(name);
+
+    close() {
+      this.readyState = FakeEventSource.CLOSED;
     }
-  }
 
-  // -- Web Locks ------------------------------------------------------------
-
-  _queue(name) {
-    if (!this.queues.has(name)) this.queues.set(name, []);
-    return this.queues.get(name);
-  }
-
-  queued(name) {
-    return this._queue(name).map((request) => request.tab);
-  }
-
-  holder(name) {
-    const request = this.held.get(name);
-    return request ? request.tab : null;
-  }
-
-  _grant(request) {
-    this.held.set(request.name, request);
-    this._run(request.tab, () => {
-      Promise.resolve()
-        .then(() => request.callback({ name: request.name }))
-        .then(
-          (value) => this._settle(request, () => request.resolve(value)),
-          (error) => this._settle(request, () => request.reject(error)),
-        );
-    });
-  }
-
-  _settle(request, finish) {
-    // A stolen lock already rejected its request.
-    if (request.broken) return;
-    if (this.held.get(request.name) === request) {
-      this.held.delete(request.name);
-      this._grantNext(request.name);
+    get closed() {
+      return this.readyState === FakeEventSource.CLOSED;
     }
-    finish();
+
+    open() {
+      this.readyState = FakeEventSource.OPEN;
+      this.onopen();
+    }
+
+    deliver(payload, lastEventId = '') {
+      this.listeners.sse({ data: JSON.stringify(payload), lastEventId });
+    }
+
+    /** A connection lost: the browser reconnects on its own. */
+    stumble() {
+      this.readyState = FakeEventSource.CONNECTING;
+      this.onerror();
+    }
+
+    /** An answer the browser does not retry after: a 502, a 403. */
+    fail() {
+      this.readyState = FakeEventSource.CLOSED;
+      this.onerror();
+    }
+  };
+}
+
+/** One end of a MessageChannel. `isAlive` tells whether its side still runs. */
+class FakePort {
+  constructor(isAlive) {
+    this.isAlive = isAlive;
+    this.other = null;
+    this.closed = false;
+    this.waiting = [];
+    this.handler = null;
   }
 
-  _grantNext(name) {
-    const queue = this._queue(name);
-    if (!this.held.has(name) && queue.length) this._grant(queue.shift());
+  // Assigning the handler starts the port: what was sent before is delivered.
+  set onmessage(handler) {
+    this.handler = handler;
+    const waiting = this.waiting;
+    this.waiting = [];
+    for (const data of waiting) this.receive(data);
   }
 
-  requestLock(tab, name, options, callback) {
-    return new Promise((resolve, reject) => {
-      const request = { tab, name, callback, resolve, reject, broken: false };
-      if (options.steal) {
-        const holder = this.held.get(name);
-        if (holder) {
-          holder.broken = true;
-          const lose = () => this._run(holder.tab, () => holder.reject(abortError()));
-          if (this.heldBackLosses) this.heldBackLosses.push(lose);
-          else lose();
-        }
-        this._grant(request);
-        return;
-      }
-      if (options.ifAvailable) {
-        if (this.held.has(name) || this._queue(name).length) {
-          this._run(tab, () => Promise.resolve(callback(null)).then(resolve, reject));
-        } else {
-          this._grant(request);
-        }
-        return;
-      }
-      if (options.signal) {
-        options.signal.addEventListener('abort', () => {
-          const queue = this._queue(name);
-          const index = queue.indexOf(request);
-          if (index === -1) return;
-          queue.splice(index, 1);
-          reject(abortError());
-        });
-      }
-      this._queue(name).push(request);
-      this._grantNext(name);
-    });
+  get onmessage() {
+    return this.handler;
   }
 
-  // -- BroadcastChannel -----------------------------------------------------
-
-  post(sender, data) {
+  postMessage(data) {
+    if (this.closed) return;
     // A structured clone, as far as plain data goes.
     const text = JSON.stringify(data);
-    for (const channel of [...this.channels]) {
-      if (channel === sender || channel.name !== sender.name) continue;
-      this._run(channel.tab, () => {
-        if (!channel.closed && channel.onmessage) channel.onmessage({ data: JSON.parse(text) });
-      });
+    const target = this.other;
+    queueMicrotask(() => target.receive(JSON.parse(text)));
+  }
+
+  receive(data) {
+    if (this.closed || !this.isAlive()) return;
+    if (!this.handler) this.waiting.push(data);
+    else this.handler({ data });
+  }
+
+  close() {
+    this.closed = true;
+  }
+}
+
+class FakeBrowser {
+  constructor() {
+    this.workers = new Map();
+    // A worker whose script fails never runs, and tells its pages nothing.
+    this.workersStart = true;
+  }
+
+  /** The only worker running. */
+  worker() {
+    const running = [...this.workers.values()];
+    if (running.length !== 1) throw new Error(`${running.length} workers are running`);
+    return running[0];
+  }
+
+  /** The worker ends without a word to its pages, as when the browser reclaims its memory. */
+  kill(worker) {
+    worker.dead = true;
+    this.workers.delete(worker.key);
+    for (const source of worker.sources) source.close();
+  }
+
+  /** The tab is gone, without having run any handler. A worker goes with its last page. */
+  close(tab) {
+    tab.closed = true;
+    for (const worker of [...this.workers.values()]) {
+      worker.tabs.delete(tab);
+      if (!worker.tabs.size) this.kill(worker);
     }
   }
 
-  // -- tabs -----------------------------------------------------------------
+  _connect(tab, url, name) {
+    const key = `${url}\n${name}`;
+    let worker = this.workers.get(key);
+    if (!worker) {
+      worker = {
+        key,
+        name,
+        dead: false,
+        // While deaf, the worker misses what its pages send it.
+        deaf: false,
+        tabs: new Set(),
+        sources: [],
+        timers: fakeTimers(),
+        scope: { onconnect: null },
+      };
+      worker.stream = () => worker.sources[worker.sources.length - 1];
+      worker.openStreams = () => worker.sources.filter((source) => !source.closed);
+      if (this.workersStart) {
+        loadScript(SSE_SCRIPT, {
+          SharedWorkerGlobalScope: class {},
+          self: worker.scope,
+          EventSource: eventSourceFor(worker),
+          setTimeout: worker.timers.setTimeout,
+          clearTimeout: worker.timers.clearTimeout,
+        });
+      }
+      this.workers.set(key, worker);
+    }
+    worker.tabs.add(tab);
+    const pagePort = new FakePort(() => !tab.closed);
+    const workerPort = new FakePort(() => !worker.dead && !worker.deaf);
+    pagePort.other = workerPort;
+    workerPort.other = pagePort;
+    queueMicrotask(() => {
+      if (!worker.dead && worker.scope.onconnect) worker.scope.onconnect({ ports: [workerPort] });
+    });
+    return pagePort;
+  }
 
   /**
    * Load sse.js in a new tab.
@@ -217,79 +219,44 @@ class FakeBrowser {
    * @param {object} options
    * @param {string|null} options.userId - <body data-user-id>, null for none
    * @param {boolean} options.hidden - whether the tab opens in the background
-   * @param {object|null} options.locks - navigator.locks; null for a browser
-   *   without Web Locks, omitted for this browser's
+   * @param {boolean|string} options.sharedWorker - false for a browser
+   *   without them, 'refused' for one that throws when a page asks for one
    * @param {Array|Function} options.snapshot - the events the snapshot
    *   endpoint answers with, or a function returning the fetch promise
+   * @param {boolean} options.currentScript - false when the page cannot tell
+   *   which file it is running
    */
-  openTab({ userId = '7', hidden = false, locks, snapshot = [] } = {}) {
+  openTab({
+    userId = '7', hidden = false, sharedWorker = true, snapshot = [], currentScript = true,
+  } = {}) {
     const browser = this;
     const tab = {
       closed: false,
-      suspended: false,
-      backlog: [],
       events: [],
       sources: [],
       fetches: [],
+      // Every SharedWorker the page constructed, and whether the next one is refused.
+      sharedWorkers: [],
+      refusesSharedWorkers: sharedWorker === 'refused',
       windowHandlers: {},
       documentHandlers: {},
       timers: fakeTimers(),
     };
 
-    class TabEventSource {
-      static CONNECTING = 0;
-      static OPEN = 1;
-      static CLOSED = 2;
-
-      constructor(url) {
+    class TabSharedWorker {
+      constructor(url, options) {
+        if (tab.refusesSharedWorkers) throw new DOMException('refused', 'SecurityError');
         this.url = url;
-        this.readyState = TabEventSource.OPEN;
-        this.listeners = {};
-        tab.sources.push(this);
-      }
-
-      addEventListener(type, handler) {
-        this.listeners[type] = handler;
-      }
-
-      close() {
-        this.readyState = TabEventSource.CLOSED;
-      }
-
-      get closed() {
-        return this.readyState === TabEventSource.CLOSED;
-      }
-
-      open() {
-        this.onopen();
-      }
-
-      deliver(payload, lastEventId = '') {
-        this.listeners.sse({ data: JSON.stringify(payload), lastEventId });
-      }
-    }
-
-    class TabChannel {
-      constructor(name) {
-        this.name = name;
-        this.tab = tab;
-        this.closed = false;
-        this.onmessage = null;
-        browser.channels.push(this);
-      }
-
-      postMessage(data) {
-        if (this.closed) throw new Error('postMessage on a closed channel');
-        browser.post(this, data);
-      }
-
-      close() {
-        this.closed = true;
+        this.name = options.name;
+        this.onerror = null;
+        this.port = browser._connect(tab, url, options.name);
+        tab.sharedWorkers.push(this);
       }
     }
 
     tab.document = {
       hidden,
+      currentScript: currentScript ? { src: SCRIPT_URL } : null,
       body: { dataset: userId === null ? {} : { userId } },
       getElementById: () => null,
       addEventListener: (type, handler) => {
@@ -297,13 +264,9 @@ class FakeBrowser {
       },
     };
 
-    const tabLocks = locks === undefined
-      ? { request: (name, options, callback) => browser.requestLock(tab, name, options, callback) }
-      : locks;
-
     loadScript(SSE_SCRIPT, {
-      EventSource: TabEventSource,
-      BroadcastChannel: TabChannel,
+      EventSource: eventSourceFor(tab),
+      SharedWorker: sharedWorker ? TabSharedWorker : undefined,
       AbortController,
       CustomEvent: class {
         constructor(type, init) {
@@ -312,7 +275,6 @@ class FakeBrowser {
         }
       },
       document: tab.document,
-      navigator: tabLocks ? { locks: tabLocks } : {},
       fetch: (url, init) => {
         tab.fetches.push(url);
         if (typeof snapshot === 'function') return snapshot(url, init);
@@ -337,7 +299,6 @@ class FakeBrowser {
 
     tab.types = () => tab.events.map((event) => event.type);
     tab.stream = () => tab.sources[tab.sources.length - 1];
-    tab.openStreams = () => tab.sources.filter((source) => !source.closed);
     tab.show = () => {
       tab.document.hidden = false;
       tab.documentHandlers.visibilitychange();
@@ -350,4 +311,4 @@ class FakeBrowser {
   }
 }
 
-module.exports = { FakeBrowser, settle };
+module.exports = { FakeBrowser, SCRIPT_URL, settle };

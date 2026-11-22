@@ -1,24 +1,24 @@
 'use strict';
 
-// One stream per browser: the tab holding the Web Lock opens it and relays
-// its events to the other tabs of the same user over a BroadcastChannel.
+// One stream per browser: a shared worker opens it and posts its events to
+// every tab of the same user.
 //
-// What must hold is what each tab's listeners see - the same window events
-// whether the tab holds the stream or not - and that some tab always holds
-// it: when the leader closes, when the browser sets its page aside, and when
-// it stops answering without having said anything.
+// What must hold is what each tab's listeners see - the same window events as
+// when the tab held the stream itself - that a tab going away costs the
+// others nothing, and that a tab is never left without events: when the
+// stream fails, when the worker dies, and when there is no worker to be had.
 
 const assert = require('node:assert');
 const { test } = require('node:test');
 
-const { FakeBrowser, settle } = require('./fake_browser');
+const { FakeBrowser, SCRIPT_URL, settle } = require('./fake_browser');
 
-const GROUP = 'workspace-sse:7';
-const PROBE_INTERVAL_MS = 15000;
-const PROBE_TIMEOUT_MS = 3000;
+const RETRY_MS = 30000;
+const ANSWER_TIMEOUT_MS = 5000;
+const CHECK_INTERVAL_MS = 20000;
 const SNAPSHOT_TIMEOUT_MS = 5000;
 
-/** A leader and its followers, each one settled before the next opens. */
+/** Tabs opened one after the other, each one settled before the next. */
 async function openTabs(browser, count, options) {
   const tabs = [];
   for (let i = 0; i < count; i += 1) {
@@ -34,22 +34,41 @@ function deferred() {
   return { promise, resolve };
 }
 
-test('the tabs of a browser open a single stream', async () => {
-  const browser = new FakeBrowser();
-  const [leader, follower, third] = await openTabs(browser, 3);
+function answering(events) {
+  return { ok: true, json: () => Promise.resolve({ events }) };
+}
 
-  assert.equal(leader.sources.length, 1);
-  assert.equal(leader.stream().url, '/api/v1/stream');
-  assert.equal(follower.sources.length, 0);
-  assert.equal(third.sources.length, 0);
+const COUNT_4 = { event: 'notifications.count', data: { unread: 4 } };
+const COUNT_5 = { event: 'notifications.count', data: { unread: 5 } };
+const OPERATION = { event: 'files.operation', data: {} };
+
+// -- one stream, for every tab ----------------------------------------------
+
+test('the tabs of a browser open a single stream, in a worker', async () => {
+  const browser = new FakeBrowser();
+  const tabs = await openTabs(browser, 3);
+
+  const worker = browser.worker();
+  assert.equal(worker.sources.length, 1);
+  assert.equal(worker.stream().url, '/api/v1/stream');
+  for (const tab of tabs) assert.equal(tab.sources.length, 0);
 });
 
-test('an event the leader receives is dispatched in every tab, aliases included', async () => {
+test('the worker runs the file the page loaded, under the name of its user', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
+  const [tab] = await openTabs(browser, 1);
 
-  leader.stream().deliver({ event: 'chat.unread', data: { total: 3 } }, 'c1');
-  leader.stream().deliver({ event: 'ai_stream.bot_step', data: { id: 'x' } });
+  assert.equal(tab.sharedWorkers.length, 1);
+  assert.equal(tab.sharedWorkers[0].url, SCRIPT_URL);
+  assert.equal(tab.sharedWorkers[0].name, 'workspace-sse:7');
+});
+
+test('an event is dispatched in every tab, aliases included', async () => {
+  const browser = new FakeBrowser();
+  const [first, second] = await openTabs(browser, 2);
+
+  browser.worker().stream().deliver({ event: 'chat.unread', data: { total: 3 } }, 'c1');
+  browser.worker().stream().deliver({ event: 'ai_stream.bot_step', data: { id: 'x' } });
   await settle();
 
   const expected = [
@@ -58,466 +77,700 @@ test('an event the leader receives is dispatched in every tab, aliases included'
     { type: 'sse:ai_stream.bot_step', detail: { id: 'x' } },
     { type: 'ai-stream-bot_step', detail: { id: 'x' } },
   ];
-  assert.deepStrictEqual(leader.events, expected);
-  assert.deepStrictEqual(follower.events, expected);
+  assert.deepStrictEqual(first.events, expected);
+  assert.deepStrictEqual(second.events, expected);
 });
 
-test('a tab that joins a stream asks the server for the events it opens with', async () => {
+test('tabs of two accounts share nothing', async () => {
   const browser = new FakeBrowser();
-  const leader = browser.openTab();
-  await settle();
-  const follower = browser.openTab({
-    snapshot: [{ event: 'notifications.count', data: { unread: 4 } }],
-  });
+  const mine = browser.openTab({ userId: '7' });
+  const theirs = browser.openTab({ userId: '8' });
   await settle();
 
-  assert.deepStrictEqual(leader.fetches, [], 'the leader gets them from its stream');
-  assert.deepStrictEqual(follower.fetches, ['/api/v1/stream/snapshot']);
-  assert.deepStrictEqual(follower.events, [
+  assert.equal(browser.workers.size, 2);
+  const [myWorker, theirWorker] = [mine, theirs].map(
+    (tab) => [...browser.workers.values()].find((worker) => worker.tabs.has(tab)),
+  );
+  assert.notEqual(myWorker, theirWorker);
+
+  myWorker.stream().deliver(COUNT_4);
+  await settle();
+  assert.deepStrictEqual(mine.types(), ['sse:notifications.count']);
+  assert.deepStrictEqual(theirs.types(), []);
+});
+
+// -- a tab that joins a stream already open ---------------------------------
+
+test('the tab that starts the stream reads no snapshot, the next ones do', async () => {
+  const browser = new FakeBrowser();
+  const first = browser.openTab();
+  await settle();
+  const second = browser.openTab({ snapshot: [COUNT_4] });
+  await settle();
+
+  assert.deepStrictEqual(first.fetches, [], 'its stream is about to send them');
+  assert.deepStrictEqual(second.fetches, ['/api/v1/stream/snapshot']);
+  assert.deepStrictEqual(second.events, [
     { type: 'sse:notifications.count', detail: { unread: 4 } },
   ]);
 });
 
-test('relays wait for the snapshot and are applied after it', async () => {
+test('events wait for the snapshot and are applied after it', async () => {
   const browser = new FakeBrowser();
-  const leader = browser.openTab();
-  await settle();
+  await openTabs(browser, 1);
   const snapshot = deferred();
-  const follower = browser.openTab({ snapshot: () => snapshot.promise });
+  const tab = browser.openTab({ snapshot: () => snapshot.promise });
   await settle();
 
-  leader.stream().deliver({ event: 'notifications.count', data: { unread: 5 } });
+  browser.worker().stream().deliver(COUNT_5);
   await settle();
-  assert.deepStrictEqual(follower.events, [], 'a relay must not land ahead of the snapshot');
+  assert.deepStrictEqual(tab.events, [], 'an event must not land ahead of the snapshot');
 
-  snapshot.resolve({
-    ok: true,
-    json: () => Promise.resolve({ events: [{ event: 'notifications.count', data: { unread: 4 } }] }),
-  });
+  snapshot.resolve(answering([COUNT_4]));
   await settle();
 
   assert.deepStrictEqual(
-    follower.events.map((event) => event.detail.unread),
+    tab.events.map((event) => event.detail.unread),
     [4, 5],
     'the newer value must be the one left standing',
   );
 });
 
-test('a snapshot that fails leaves the relays flowing', async () => {
+test('a reopening announced while the snapshot loads is not replayed to a page that has just rendered', async () => {
   const browser = new FakeBrowser();
-  const leader = browser.openTab();
-  await settle();
-  const follower = browser.openTab({ snapshot: () => Promise.resolve({ ok: false }) });
+  const [first] = await openTabs(browser, 1);
+  const stream = browser.worker().stream();
+  stream.open();
+  const snapshot = deferred();
+  const tab = browser.openTab({ snapshot: () => snapshot.promise });
   await settle();
 
-  leader.stream().deliver({ event: 'files.operation', data: {} });
+  // The stream reconnects on its own, and sends its first events again.
+  stream.open();
+  stream.deliver(COUNT_5);
+  await settle();
+  snapshot.resolve(answering([COUNT_4]));
   await settle();
 
-  assert.deepStrictEqual(follower.types(), ['sse:files.operation']);
+  assert.deepStrictEqual(first.types(), ['sse:reconnect', 'sse:notifications.count']);
+  assert.deepStrictEqual(tab.types(), ['sse:notifications.count', 'sse:notifications.count']);
 });
 
-test('a snapshot that never answers stops holding the relays back', async () => {
+test('a refused snapshot leaves the events flowing', async () => {
   const browser = new FakeBrowser();
-  const leader = browser.openTab();
+  await openTabs(browser, 1);
+  const snapshot = deferred();
+  const tab = browser.openTab({ snapshot: () => snapshot.promise });
   await settle();
+  browser.worker().stream().deliver(OPERATION);
+  await settle();
+
+  // An error page can carry a body: it is not a snapshot.
+  snapshot.resolve({ ok: false, json: () => Promise.resolve({ events: [COUNT_4] }) });
+  await settle();
+
+  assert.deepStrictEqual(tab.types(), ['sse:files.operation']);
+});
+
+test('an answer that is no snapshot leaves the events flowing', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const snapshot = deferred();
+  const tab = browser.openTab({ snapshot: () => snapshot.promise });
+  await settle();
+  browser.worker().stream().deliver(OPERATION);
+  await settle();
+
+  snapshot.resolve({ ok: true, json: () => Promise.resolve({}) });
+  await settle();
+
+  assert.deepStrictEqual(tab.types(), ['sse:files.operation']);
+});
+
+test('a snapshot that never answers stops holding the events back', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
   const stalled = (url, init) => new Promise((resolve, reject) => {
     init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
   });
-  const follower = browser.openTab({ snapshot: stalled });
+  const tab = browser.openTab({ snapshot: stalled });
   await settle();
 
-  leader.stream().deliver({ event: 'files.operation', data: {} });
+  browser.worker().stream().deliver(OPERATION);
   await settle();
-  assert.deepStrictEqual(follower.types(), []);
+  assert.deepStrictEqual(tab.types(), []);
 
-  follower.timers.advance(SNAPSHOT_TIMEOUT_MS);
+  tab.timers.advance(SNAPSHOT_TIMEOUT_MS);
   await settle();
-  assert.deepStrictEqual(follower.types(), ['sse:files.operation']);
+  assert.deepStrictEqual(tab.types(), ['sse:files.operation']);
 });
 
-test('the first connection stays silent in every tab', async () => {
+test('a snapshot answered after the page was set aside is dropped', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
-
-  leader.stream().open();
+  await openTabs(browser, 1);
+  const snapshot = deferred();
+  const tab = browser.openTab({ snapshot: () => snapshot.promise });
   await settle();
 
-  assert.deepStrictEqual(leader.types(), []);
-  assert.deepStrictEqual(follower.types(), []);
+  tab.windowHandlers.pagehide({ persisted: true });
+  snapshot.resolve(answering([COUNT_4]));
+  await settle();
+
+  assert.deepStrictEqual(tab.types(), []);
 });
 
-test('a stream the leader reopens re-syncs every tab', async () => {
+test('a tab that saw no event learns from the worker where the stream stands', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
-  leader.stream().open();
+  const [first] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().deliver(OPERATION, 'cursor-7');
+  const [second] = await openTabs(browser, 1);
+  browser.close(first);
+
+  // Left to start the stream again, it resumes it there.
+  browser.kill(worker);
+  second.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  second.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+
+  assert.equal(browser.worker().stream().url, '/api/v1/stream?last_event_id=cursor-7');
+});
+
+// -- the stream opening, and opening again ----------------------------------
+
+test('the first opening stays silent in every tab', async () => {
+  const browser = new FakeBrowser();
+  const [first, second] = await openTabs(browser, 2);
+
+  browser.worker().stream().open();
+  await settle();
+
+  assert.deepStrictEqual(first.types(), []);
+  assert.deepStrictEqual(second.types(), []);
+});
+
+test('a stream that opens again re-syncs every tab', async () => {
+  const browser = new FakeBrowser();
+  const [first, second] = await openTabs(browser, 2);
+  const stream = browser.worker().stream();
+  stream.open();
 
   // EventSource reconnecting on its own, as it does every ten minutes.
-  leader.stream().open();
+  stream.open();
   await settle();
 
-  assert.deepStrictEqual(leader.types(), ['sse:reconnect']);
-  assert.deepStrictEqual(follower.types(), ['sse:reconnect']);
+  assert.deepStrictEqual(first.types(), ['sse:reconnect']);
+  assert.deepStrictEqual(second.types(), ['sse:reconnect']);
 });
 
-test('when the leader closes, a follower reopens the stream where the group stopped', async () => {
+test('a stream the browser gave up on is opened again where it stopped', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower, third] = await openTabs(browser, 3);
-  leader.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-7');
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().open();
+  worker.stream().deliver(OPERATION, 'cursor-7');
   await settle();
-  follower.events.length = 0;
-  third.events.length = 0;
+  tab.events.length = 0;
 
-  browser.close(leader);
+  worker.stream().fail();
+  assert.equal(worker.sources.length, 1, 'not at once: the server is likely restarting');
+
+  worker.timers.advance(RETRY_MS);
+  assert.equal(worker.sources.length, 2);
+  assert.equal(worker.stream().url, '/api/v1/stream?last_event_id=cursor-7');
+
+  worker.stream().open();
   await settle();
-
-  assert.equal(follower.sources.length, 1, 'the next tab in line takes the stream');
-  assert.equal(follower.stream().url, '/api/v1/stream?last_event_id=cursor-7');
-  assert.equal(third.sources.length, 0);
-
-  // Events without an id are lost between the two streams: every tab re-syncs.
-  follower.stream().open();
-  await settle();
-  assert.deepStrictEqual(follower.types(), ['sse:reconnect']);
-  assert.deepStrictEqual(third.types(), ['sse:reconnect']);
-
-  follower.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-8');
-  await settle();
-  assert.deepStrictEqual(third.types(), ['sse:reconnect', 'sse:files.operation']);
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
 });
 
-test('a follower that saw no event learns the resume point from the leader', async () => {
+test('a stream that keeps losing its connection is given a rest, then opened again', async () => {
   const browser = new FakeBrowser();
-  const leader = browser.openTab();
-  await settle();
-  leader.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-7');
-  // Opens visible, so it checks on the leader right away.
-  const follower = browser.openTab();
-  await settle();
+  await openTabs(browser, 1);
+  const worker = browser.worker();
+  const stream = worker.stream();
 
-  browser.close(leader);
-  await settle();
+  for (let i = 0; i < 5; i += 1) stream.stumble();
+  assert.equal(stream.closed, false, 'the browser is left to reconnect on its own');
 
-  assert.equal(follower.stream().url, '/api/v1/stream?last_event_id=cursor-7');
+  stream.stumble();
+  assert.equal(stream.closed, true);
+  worker.timers.advance(RETRY_MS);
+  assert.equal(worker.sources.length, 2);
 });
 
-test('a tab promoted before its snapshot arrived keeps the relays and drops the snapshot', async () => {
+test('an opening that follows a failure is announced, the first one included', async () => {
   const browser = new FakeBrowser();
-  const leader = browser.openTab();
-  await settle();
-  const snapshot = deferred();
-  const follower = browser.openTab({ snapshot: () => snapshot.promise });
-  await settle();
-  leader.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-7');
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+
+  // The page has been waiting for its stream since it rendered.
+  worker.stream().fail();
+  worker.timers.advance(RETRY_MS);
+  worker.stream().open();
   await settle();
 
-  browser.close(leader);
-  await settle();
-  assert.deepStrictEqual(follower.types(), ['sse:files.operation']);
-
-  // Its own stream opens with fresher events than this answer.
-  snapshot.resolve({
-    ok: true,
-    json: () => Promise.resolve({ events: [{ event: 'notifications.count', data: { unread: 4 } }] }),
-  });
-  await settle();
-  assert.deepStrictEqual(follower.types(), ['sse:files.operation']);
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
 });
 
-test('a visible follower takes over from a leader that stopped answering', async () => {
+test('a retry is dropped with the stream it was for', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower, third] = await openTabs(browser, 3, { hidden: false });
-  leader.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-7');
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().fail();
+
+  // The last tab listening goes before the retry is due.
+  tab.windowHandlers.pagehide({ persisted: true });
   await settle();
-  third.hide();
-  third.events.length = 0;
+  worker.timers.advance(RETRY_MS);
 
-  browser.suspend(leader);
-  follower.timers.advance(PROBE_INTERVAL_MS);
-  await settle();
-  assert.equal(follower.sources.length, 0, 'the leader gets a moment to answer');
-
-  follower.timers.advance(PROBE_TIMEOUT_MS);
-  await settle();
-
-  assert.equal(browser.holder(GROUP), follower);
-  assert.equal(follower.stream().url, '/api/v1/stream?last_event_id=cursor-7');
-  assert.ok(
-    !browser.queued(GROUP).includes(follower),
-    'its queued request must go, or the lock would be granted to it a second time',
-  );
-
-  // The old leader wakes up with events in hand: it still believes it leads
-  // until it is told otherwise, and what it relays is no longer the stream.
-  leader.stream().deliver({ event: 'chat.typing', data: { stale: true } });
-  await settle();
-  assert.deepStrictEqual(third.types(), [], 'a replaced leader must not be listened to');
-  assert.ok(!follower.types().includes('sse:chat.typing'));
-
-  leader.events.length = 0;
-  browser.wake(leader);
-  await settle();
-
-  assert.deepStrictEqual(leader.openStreams(), [], 'it closes the stream it lost');
-  assert.deepStrictEqual(leader.types(), ['sse:reconnect'], 'and re-syncs, having changed streams');
-  assert.deepStrictEqual(leader.fetches, ['/api/v1/stream/snapshot']);
-  assert.deepStrictEqual(browser.queued(GROUP), [third, leader], 'back in line for the lock');
-
-  follower.stream().deliver({ event: 'chat.typing', data: { stale: false } });
-  await settle();
-  assert.deepStrictEqual(leader.events[leader.events.length - 1].detail, { stale: false });
+  assert.equal(worker.sources.length, 1);
 });
 
-test('a leader that answers keeps the stream', async () => {
+test('a page someone looks at has a closed stream opened again at once', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().fail();
 
-  // An unanswered check would run out during the next round.
-  for (let round = 0; round < 3; round += 1) {
-    follower.timers.advance(PROBE_INTERVAL_MS);
-    await settle();
-  }
-  follower.timers.advance(PROBE_TIMEOUT_MS);
+  tab.hide();
+  tab.show();
   await settle();
+  assert.equal(worker.sources.length, 2, 'shown again');
 
-  assert.equal(browser.holder(GROUP), leader);
-  assert.equal(follower.sources.length, 0);
+  worker.stream().fail();
+  browser.openTab();
+  await settle();
+  assert.equal(worker.sources.length, 3, 'a page opened next to it');
 });
 
-test('a leader busy relaying needs no separate answer', async () => {
+test('a hidden page opening leaves a closed stream to its retry', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
+  await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().fail();
 
-  follower.timers.advance(PROBE_INTERVAL_MS);
-  // The leader's answer is held up, but an event gets through.
-  browser.suspend(leader);
-  await settle();
-  browser.post(browser.channels.find((channel) => channel.tab === leader), {
-    type: 'event', from: 'someone', id: '', payload: { event: 'chat.typing', data: {} },
-  });
-  await settle();
-  follower.timers.advance(PROBE_TIMEOUT_MS);
+  browser.openTab({ hidden: true });
   await settle();
 
-  assert.equal(follower.sources.length, 0, 'any relay proves the leader is alive');
+  assert.equal(worker.sources.length, 1);
 });
 
-test('a hidden follower leaves the leader alone until someone looks at it', async () => {
+test('the periodic check leaves a closed stream to its retry', async () => {
   const browser = new FakeBrowser();
-  const leader = browser.openTab();
-  await settle();
-  const follower = browser.openTab({ hidden: true });
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().fail();
+
+  tab.timers.advance(CHECK_INTERVAL_MS);
   await settle();
 
-  browser.suspend(leader);
-  follower.timers.advance(4 * PROBE_INTERVAL_MS);
-  await settle();
-  assert.equal(follower.sources.length, 0, 'nobody is looking at this tab');
+  assert.equal(worker.sources.length, 1);
+});
 
-  follower.show();
+test('a stream that is open is left alone when a page is shown', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+
+  tab.hide();
+  tab.show();
   await settle();
-  follower.timers.advance(PROBE_TIMEOUT_MS);
+
+  assert.equal(browser.worker().sources.length, 1);
+});
+
+// -- tabs coming and going ----------------------------------------------------
+
+test('a tab that goes takes nothing with it', async () => {
+  const browser = new FakeBrowser();
+  const [first, second, third] = await openTabs(browser, 3);
+  const worker = browser.worker();
+  worker.stream().open();
+
+  // The tab that started the worker, closed without a word.
+  browser.close(first);
   await settle();
-  assert.equal(follower.sources.length, 1, 'shown, it checks at once');
+
+  assert.equal(browser.worker(), worker);
+  assert.equal(worker.sources.length, 1);
+  assert.equal(worker.stream().closed, false);
+
+  worker.stream().deliver(OPERATION);
+  await settle();
+  assert.deepStrictEqual(second.types(), ['sse:files.operation'], 'no re-sync either');
+  assert.deepStrictEqual(third.types(), ['sse:files.operation']);
+});
+
+test('a tab that navigates leaves the stream alone and joins it again', async () => {
+  const browser = new FakeBrowser();
+  const [navigating, staying] = await openTabs(browser, 2);
+  const worker = browser.worker();
+
+  navigating.windowHandlers.pagehide({ persisted: false });
+  browser.close(navigating);
+  const landed = browser.openTab({ snapshot: [COUNT_4] });
+  await settle();
+
+  assert.equal(worker.sources.length, 1);
+  assert.equal(worker.stream().closed, false);
+  assert.deepStrictEqual(staying.types(), []);
+  assert.deepStrictEqual(landed.fetches, ['/api/v1/stream/snapshot']);
+  assert.deepStrictEqual(landed.types(), ['sse:notifications.count']);
+});
+
+test('the stream goes with the last tab listening, and comes back with the next', async () => {
+  const browser = new FakeBrowser();
+  const [first, second] = await openTabs(browser, 2);
+  const worker = browser.worker();
+
+  first.windowHandlers.pagehide({ persisted: true });
+  await settle();
+  assert.equal(worker.stream().closed, false, 'someone still listens');
+
+  second.windowHandlers.pagehide({ persisted: true });
+  await settle();
+  assert.equal(worker.stream().closed, true, 'pages in the bfcache keep the worker, not a stream');
+
+  const next = browser.openTab();
+  await settle();
+  assert.equal(worker.sources.length, 2);
+  assert.equal(worker.stream().closed, false);
+  assert.deepStrictEqual(next.fetches, [], 'it started this stream');
+});
+
+test('a page set aside is sent nothing', async () => {
+  const browser = new FakeBrowser();
+  const [staying, aside] = await openTabs(browser, 2);
+
+  aside.windowHandlers.pagehide({ persisted: true });
+  await settle();
+  browser.worker().stream().deliver(OPERATION);
+  await settle();
+
+  assert.deepStrictEqual(staying.types(), ['sse:files.operation']);
+  assert.deepStrictEqual(aside.types(), []);
 });
 
 for (const [leaving, returning] of [['pagehide', 'pageshow'], ['freeze', 'resume']]) {
-  test(`a page set aside (${leaving}) hands the stream over and joins again on ${returning}`, async () => {
+  test(`a page back from ${leaving} re-syncs and asks what was queued since it left`, async () => {
     const browser = new FakeBrowser();
-    const [leader, follower] = await openTabs(browser, 2);
-    leader.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-7');
+    const [staying, away] = await openTabs(browser, 2);
+    const worker = browser.worker();
+    worker.stream().deliver(OPERATION, 'cursor-7');
     await settle();
-    const handlers = leaving === 'pagehide' ? leader.windowHandlers : leader.documentHandlers;
+    away.events.length = 0;
+    const handlers = leaving === 'pagehide' ? away.windowHandlers : away.documentHandlers;
 
     handlers[leaving]({ persisted: true });
     await settle();
-
-    assert.deepStrictEqual(leader.openStreams(), []);
-    assert.equal(browser.holder(GROUP), follower);
-    assert.equal(follower.stream().url, '/api/v1/stream?last_event_id=cursor-7');
-
-    // Nothing reaches a page that is set aside.
-    leader.events.length = 0;
-    follower.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-8');
+    worker.stream().deliver(OPERATION, 'cursor-8');
     await settle();
-    assert.deepStrictEqual(leader.types(), []);
 
     handlers[returning]({ persisted: true });
     await settle();
 
-    assert.deepStrictEqual(leader.openStreams(), [], 'the stream stays with the tab that took it');
-    assert.deepStrictEqual(leader.types(), ['sse:reconnect'], 'it missed everything meanwhile');
-    assert.deepStrictEqual(leader.fetches, ['/api/v1/stream/snapshot']);
-    assert.deepStrictEqual(browser.queued(GROUP), [leader]);
+    assert.deepStrictEqual(away.types(), ['sse:reconnect']);
+    assert.deepStrictEqual(away.fetches, [
+      '/api/v1/stream/snapshot',
+      '/api/v1/stream/snapshot?last_event_id=cursor-7',
+    ]);
+    assert.equal(worker.sources.length, 1, 'the stream never moved');
+    assert.deepStrictEqual(staying.types(), ['sse:files.operation', 'sse:files.operation']);
   });
 }
 
-test('a bfcache restore that fires both resume and pageshow joins once', async () => {
+test('the only page, restored from the bfcache, starts the stream again where it stopped', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
-
-  follower.windowHandlers.pagehide({ persisted: true });
-  follower.documentHandlers.freeze();
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().open();
+  worker.stream().deliver(OPERATION, 'cursor-7');
   await settle();
-  assert.deepStrictEqual(browser.queued(GROUP), []);
-
-  follower.documentHandlers.resume();
-  follower.windowHandlers.pageshow({ persisted: true });
-  await settle();
-
-  assert.deepStrictEqual(browser.queued(GROUP), [follower]);
-  assert.equal(follower.fetches.length, 2, 'one snapshot per stay');
-  assert.equal(browser.holder(GROUP), leader);
-
-  follower.events.length = 0;
-  leader.stream().deliver({ event: 'files.operation', data: {} });
-  await settle();
-  assert.deepStrictEqual(follower.types(), ['sse:files.operation'], 'a second channel would hear it twice');
-});
-
-test('a page set aside before the lock answered takes nothing', async () => {
-  const browser = new FakeBrowser();
-  const tab = browser.openTab();
+  tab.events.length = 0;
 
   tab.windowHandlers.pagehide({ persisted: true });
   await settle();
-
-  assert.equal(tab.sources.length, 0);
-  assert.equal(browser.holder(GROUP), null);
-});
-
-test('the only tab leads again after a bfcache restore and re-syncs', async () => {
-  const browser = new FakeBrowser();
-  const tab = browser.openTab();
-  await settle();
-  tab.stream().open();
-  tab.stream().deliver({ event: 'files.operation', data: {} }, 'cursor-7');
-
-  tab.windowHandlers.pagehide({ persisted: true });
-  await settle();
-  assert.equal(browser.holder(GROUP), null, 'a page in the bfcache must not keep the lock');
-
   tab.windowHandlers.pageshow({ persisted: true });
   await settle();
 
-  assert.equal(tab.sources.length, 2);
-  assert.equal(tab.stream().url, '/api/v1/stream?last_event_id=cursor-7');
+  assert.equal(worker.sources.length, 2);
+  assert.equal(worker.stream().url, '/api/v1/stream?last_event_id=cursor-7');
+  assert.deepStrictEqual(tab.fetches, [], 'the stream it started sends its first events itself');
+
+  worker.stream().open();
+  await settle();
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect'], 'told once, when it came back');
+});
+
+test('a restore that fires both resume and pageshow joins once', async () => {
+  const browser = new FakeBrowser();
+  const [, tab] = await openTabs(browser, 2);
+
+  tab.windowHandlers.pagehide({ persisted: true });
+  tab.documentHandlers.freeze();
+  await settle();
+  tab.documentHandlers.resume();
+  tab.windowHandlers.pageshow({ persisted: true });
+  await settle();
+
+  assert.equal(tab.sharedWorkers.length, 2, 'once at load, once on the way back');
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
+
   tab.events.length = 0;
+  browser.worker().stream().deliver(OPERATION);
+  await settle();
+  assert.deepStrictEqual(tab.types(), ['sse:files.operation'], 'a second port would hear it twice');
+});
+
+test('a normal load fires pageshow without persisted and joins nothing again', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+
+  tab.windowHandlers.pageshow({ persisted: false });
+  await settle();
+
+  assert.equal(tab.sharedWorkers.length, 1);
+  assert.deepStrictEqual(tab.types(), []);
+});
+
+// -- a worker that is not there -----------------------------------------------
+
+test('a worker the browser ended is replaced by the page that notices', async () => {
+  const browser = new FakeBrowser();
+  const [tab, other] = await openTabs(browser, 2);
+  const worker = browser.worker();
+  worker.stream().deliver(OPERATION, 'cursor-7');
+  await settle();
+  tab.events.length = 0;
+  other.hide();
+
+  browser.kill(worker);
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  assert.equal(tab.sharedWorkers.length, 1, 'the worker gets a moment to answer');
+
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+
+  const replacement = browser.worker();
+  assert.notEqual(replacement, worker);
+  assert.equal(replacement.stream().url, '/api/v1/stream?last_event_id=cursor-7');
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect'], 'it changed streams');
+
+  replacement.stream().deliver(OPERATION, 'cursor-8');
+  await settle();
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect', 'sse:files.operation']);
+
+  // The other one finds out when someone looks at it, and joins the same worker.
+  other.events.length = 0;
+  other.show();
+  await settle();
+  other.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+  assert.equal(browser.worker(), replacement);
+  assert.equal(replacement.sources.length, 1);
+  assert.deepStrictEqual(other.types(), ['sse:reconnect']);
+  assert.equal(other.fetches[other.fetches.length - 1], '/api/v1/stream/snapshot?last_event_id=cursor-7');
+});
+
+test('a page shown before the worker answered does not give up on it', async () => {
+  const browser = new FakeBrowser();
+  const tab = browser.openTab();
+  // Two waits for an answer at once: the first must not outlive the answer.
+  tab.show();
+  await settle();
+
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+
+  assert.equal(tab.sources.length, 0);
+  assert.equal(tab.sharedWorkers.length, 1);
+});
+
+test('a worker that answers is left alone', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+
+  // An unanswered check would run out during the next round.
+  for (let round = 0; round < 3; round += 1) {
+    tab.timers.advance(CHECK_INTERVAL_MS);
+    await settle();
+  }
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+
+  assert.equal(tab.sharedWorkers.length, 1);
+  assert.deepStrictEqual(tab.types(), []);
+  assert.deepStrictEqual(tab.fetches, [], 'an answer to a check is no invitation to a snapshot');
+});
+
+test('a worker busy sending events needs no separate answer', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+
+  // The check never gets its answer, but an event comes through.
+  worker.deaf = true;
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  worker.deaf = false;
+  worker.stream().deliver(OPERATION);
+  await settle();
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+
+  assert.equal(tab.sharedWorkers.length, 1, 'any message proves the worker is there');
+});
+
+test('a hidden page does not check on the worker until someone looks at it', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { hidden: true });
+  browser.openTab();
+  await settle();
+  const worker = browser.worker();
+
+  browser.kill(worker);
+  tab.timers.advance(4 * CHECK_INTERVAL_MS);
+  await settle();
+  assert.equal(tab.sharedWorkers.length, 1, 'nobody is looking at this tab');
+
+  tab.show();
+  await settle();
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+  assert.equal(tab.sharedWorkers.length, 2, 'shown, it checks at once');
+});
+
+test('a worker that never starts leaves the page a stream of its own', async () => {
+  const browser = new FakeBrowser();
+  browser.workersStart = false;
+  const [tab] = await openTabs(browser, 1);
+  assert.equal(tab.sources.length, 0);
+
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
+  await settle();
+
+  assert.equal(tab.sources.length, 1);
+  assert.equal(tab.stream().url, '/api/v1/stream');
   tab.stream().open();
+  assert.deepStrictEqual(tab.types(), [], 'still a first opening');
+
+  // From there on it behaves as a browser without shared workers does.
+  tab.windowHandlers.pagehide({ persisted: true });
+  assert.equal(tab.stream().closed, false);
+  tab.documentHandlers.resume();
+  tab.windowHandlers.pageshow({ persisted: true });
+  assert.equal(tab.sources.length, 2);
+  assert.equal(tab.sharedWorkers.length, 1);
+});
+
+test('a shared worker the browser refuses leaves the page a stream of its own', async () => {
+  const browser = new FakeBrowser();
+  // As under a content security policy that allows no worker.
+  const [tab] = await openTabs(browser, 1, { sharedWorker: 'refused' });
+
+  assert.equal(browser.workers.size, 0);
+  assert.equal(tab.sources.length, 1);
+  tab.stream().open();
+  assert.deepStrictEqual(tab.types(), [], 'still a first opening');
+});
+
+test('a page whose worker is refused on its way back still re-syncs', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+
+  tab.windowHandlers.pagehide({ persisted: true });
+  tab.refusesSharedWorkers = true;
+  tab.windowHandlers.pageshow({ persisted: true });
+  await settle();
+
+  assert.equal(tab.sources.length, 1);
   assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
 });
 
-test('a leader whose stream closed reopens it when its tab is shown again', async () => {
+test('a worker reporting an error leaves the page a stream of its own', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
+  browser.workersStart = false;
+  const [tab] = await openTabs(browser, 1);
 
-  leader.stream().close();
-  leader.hide();
-  leader.show();
-  await settle();
+  tab.sharedWorkers[0].onerror();
 
-  assert.equal(leader.sources.length, 2);
-  assert.equal(follower.sources.length, 0);
+  assert.equal(tab.sources.length, 1);
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
+  assert.equal(tab.sources.length, 1, 'the wait for an answer ended with it');
 });
 
-test('a tab that took the stream while its own request was being granted ends up leading once', async () => {
+test('a page left without a worker resumes its own stream where the shared one stopped', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().deliver(OPERATION, 'cursor-7');
+  await settle();
+  tab.events.length = 0;
 
-  // The leader goes at the very moment the follower gives up on it: the
-  // follower's queued request is granted, and its steal lands on top.
-  browser.suspend(leader);
-  follower.timers.advance(PROBE_INTERVAL_MS);
-  await settle();
-  browser.close(leader);
-  follower.timers.advance(PROBE_TIMEOUT_MS);
+  browser.kill(worker);
+  tab.refusesSharedWorkers = true;
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  tab.timers.advance(ANSWER_TIMEOUT_MS);
   await settle();
 
-  assert.equal(browser.holder(GROUP), follower);
-  assert.equal(follower.openStreams().length, 1, 'losing its first hold must not close the stream');
-  assert.deepStrictEqual(browser.queued(GROUP), []);
+  assert.equal(tab.stream().url, '/api/v1/stream?last_event_id=cursor-7');
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
 
-  const third = browser.openTab();
-  await settle();
-  follower.windowHandlers.pagehide({ persisted: false });
-  await settle();
-  assert.equal(browser.holder(GROUP), third, 'leaving lets go of whichever hold is the live one');
+  tab.stream().deliver(OPERATION, 'cursor-8');
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect', 'sse:files.operation']);
 });
 
-test('a hold lost after the next one was taken costs nothing', async () => {
+test('without shared workers every tab keeps a stream of its own', async () => {
   const browser = new FakeBrowser();
-  const [leader, follower] = await openTabs(browser, 2);
+  const [first, second] = await openTabs(browser, 2, { sharedWorker: false });
 
-  // Same collision, the other way round: the tab learns that its first hold
-  // was broken only once the hold that broke it is in place.
-  browser.suspend(leader);
-  follower.timers.advance(PROBE_INTERVAL_MS);
-  await settle();
-  browser.close(leader);
-  browser.holdBackLockLosses();
-  follower.timers.advance(PROBE_TIMEOUT_MS);
-  await settle();
-  follower.events.length = 0;
-  browser.deliverLockLosses();
-  await settle();
-
-  assert.equal(browser.holder(GROUP), follower);
-  assert.equal(follower.sources.length, 1, 'the stream it opened is the one it keeps');
-  assert.equal(follower.openStreams().length, 1);
-  assert.deepStrictEqual(follower.types(), [], 'it changed streams once, not twice');
-  assert.deepStrictEqual(browser.queued(GROUP), []);
-});
-
-test('without Web Locks every tab keeps a stream of its own', async () => {
-  const browser = new FakeBrowser();
-  const [first, second] = await openTabs(browser, 2, { locks: null });
-
+  assert.equal(browser.workers.size, 0);
   assert.equal(first.sources.length, 1);
   assert.equal(second.sources.length, 1);
   assert.deepStrictEqual(second.fetches, []);
-  assert.deepStrictEqual(browser.channels, []);
 
-  first.stream().deliver({ event: 'files.operation', data: {} });
+  first.stream().deliver(OPERATION);
   await settle();
   assert.deepStrictEqual(second.types(), []);
+});
+
+test('a stream of its own is opened again when the browser gave up on it', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { sharedWorker: false });
+
+  tab.stream().fail();
+  tab.timers.advance(RETRY_MS);
+
+  assert.equal(tab.sources.length, 2);
+});
+
+test('a stream of its own that closed waits for the page to be shown', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { sharedWorker: false });
+  tab.stream().close();
+
+  tab.hide();
+  assert.equal(tab.sources.length, 1);
+
+  tab.show();
+  assert.equal(tab.sources.length, 2);
+});
+
+test('a page that cannot tell which file it runs keeps a stream of its own', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1, { currentScript: false });
+
+  assert.equal(tab.sharedWorkers.length, 0, 'there is no file to start a worker from');
+  assert.equal(tab.sources.length, 1);
 });
 
 test('a page that names no user keeps a stream of its own', async () => {
   const browser = new FakeBrowser();
   const [first, second] = await openTabs(browser, 2, { userId: null });
 
+  assert.equal(browser.workers.size, 0);
   assert.equal(first.sources.length, 1);
   assert.equal(second.sources.length, 1);
-});
-
-test('tabs of two accounts share nothing', async () => {
-  const browser = new FakeBrowser();
-  const mine = browser.openTab({ userId: '7' });
-  await settle();
-  const theirs = browser.openTab({ userId: '8' });
-  await settle();
-
-  assert.equal(mine.sources.length, 1);
-  assert.equal(theirs.sources.length, 1);
-
-  mine.stream().deliver({ event: 'notifications.count', data: { unread: 4 } });
-  await settle();
-  assert.deepStrictEqual(theirs.types(), []);
-});
-
-test('a lock request the browser refuses falls back to a stream of its own', async () => {
-  const browser = new FakeBrowser();
-  const refusing = {
-    request: () => Promise.reject(new DOMException('refused', 'SecurityError')),
-  };
-  const tab = browser.openTab({ locks: refusing });
-  await settle();
-
-  assert.equal(tab.sources.length, 1);
-  assert.equal(tab.stream().url, '/api/v1/stream');
-  tab.stream().open();
-  assert.deepStrictEqual(tab.types(), [], 'still a first connection');
-
-  // And from there on it behaves as a browser without Web Locks does.
-  tab.windowHandlers.pageshow({ persisted: true });
-  assert.equal(tab.sources.length, 2);
 });

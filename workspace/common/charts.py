@@ -272,7 +272,6 @@ def _fmt(value):
 
 # Gantt: unlike the charts above, the SVG has a real pixel width so a long
 # span scrolls instead of shrinking - the caller wraps it in overflow-x-auto.
-GANTT_SCALES = ("week", "month", "quarter")
 _GANTT_PX_PER_DAY = {"week": 28, "month": 9, "quarter": 3}
 _GANTT_GUTTER = 200
 _GANTT_HEADER = 40

@@ -223,30 +223,6 @@ class EventUpdateSerializer(
     original_start = serializers.DateTimeField(required=False)
 
 
-class OccurrenceSerializer(serializers.Serializer):
-    """Serializes virtual occurrence dicts (not backed by a model instance)."""
-
-    uuid = serializers.CharField()
-    calendar_id = serializers.CharField()
-    title = serializers.CharField()
-    description = serializers.CharField()
-    start = serializers.CharField()
-    end = serializers.CharField(allow_null=True)
-    all_day = serializers.BooleanField()
-    location = serializers.CharField()
-    owner = MemberUserSerializer()
-    members = EventMemberSerializer(many=True)
-    created_at = serializers.CharField()
-    updated_at = serializers.CharField()
-    is_recurring = serializers.BooleanField()
-    is_exception = serializers.BooleanField()
-    master_event_id = serializers.CharField()
-    original_start = serializers.CharField(allow_null=True)
-    recurrence_rule = serializers.CharField(allow_blank=True)
-    recurrence_summary = serializers.CharField(allow_blank=True)
-    recurrence_simple = serializers.DictField(allow_null=True)
-
-
 class InviteeResolveSerializer(serializers.Serializer):
     person_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list

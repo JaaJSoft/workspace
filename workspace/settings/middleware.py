@@ -33,8 +33,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_http_compression.middleware.HttpCompressionMiddleware",
-    # Mesure du temps de traitement pour affichage dans le footer UI et header HTTP
-    # 'Workspace.common.middleware.RequestTimingMiddleware',
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 

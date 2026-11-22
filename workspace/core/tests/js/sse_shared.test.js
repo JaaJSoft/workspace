@@ -16,6 +16,7 @@ const { FakeBrowser, settle } = require('./fake_browser');
 const GROUP = 'workspace-sse:7';
 const PROBE_INTERVAL_MS = 15000;
 const PROBE_TIMEOUT_MS = 3000;
+const SNAPSHOT_TIMEOUT_MS = 5000;
 
 /** A leader and its followers, each one settled before the next opens. */
 async function openTabs(browser, count, options) {
@@ -112,6 +113,25 @@ test('a snapshot that fails leaves the relays flowing', async () => {
   leader.stream().deliver({ event: 'files.operation', data: {} });
   await settle();
 
+  assert.deepStrictEqual(follower.types(), ['sse:files.operation']);
+});
+
+test('a snapshot that never answers stops holding the relays back', async () => {
+  const browser = new FakeBrowser();
+  const leader = browser.openTab();
+  await settle();
+  const stalled = (url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+  const follower = browser.openTab({ snapshot: stalled });
+  await settle();
+
+  leader.stream().deliver({ event: 'files.operation', data: {} });
+  await settle();
+  assert.deepStrictEqual(follower.types(), []);
+
+  follower.timers.advance(SNAPSHOT_TIMEOUT_MS);
+  await settle();
   assert.deepStrictEqual(follower.types(), ['sse:files.operation']);
 });
 
@@ -347,6 +367,22 @@ test('a bfcache restore that fires both resume and pageshow joins once', async (
   assert.deepStrictEqual(browser.queued(GROUP), [follower]);
   assert.equal(follower.fetches.length, 2, 'one snapshot per stay');
   assert.equal(browser.holder(GROUP), leader);
+
+  follower.events.length = 0;
+  leader.stream().deliver({ event: 'files.operation', data: {} });
+  await settle();
+  assert.deepStrictEqual(follower.types(), ['sse:files.operation'], 'a second channel would hear it twice');
+});
+
+test('a page set aside before the lock answered takes nothing', async () => {
+  const browser = new FakeBrowser();
+  const tab = browser.openTab();
+
+  tab.windowHandlers.pagehide({ persisted: true });
+  await settle();
+
+  assert.equal(tab.sources.length, 0);
+  assert.equal(browser.holder(GROUP), null);
 });
 
 test('the only tab leads again after a bfcache restore and re-syncs', async () => {
@@ -405,6 +441,30 @@ test('a tab that took the stream while its own request was being granted ends up
   follower.windowHandlers.pagehide({ persisted: false });
   await settle();
   assert.equal(browser.holder(GROUP), third, 'leaving lets go of whichever hold is the live one');
+});
+
+test('a hold lost after the next one was taken costs nothing', async () => {
+  const browser = new FakeBrowser();
+  const [leader, follower] = await openTabs(browser, 2);
+
+  // Same collision, the other way round: the tab learns that its first hold
+  // was broken only once the hold that broke it is in place.
+  browser.suspend(leader);
+  follower.timers.advance(PROBE_INTERVAL_MS);
+  await settle();
+  browser.close(leader);
+  browser.holdBackLockLosses();
+  follower.timers.advance(PROBE_TIMEOUT_MS);
+  await settle();
+  follower.events.length = 0;
+  browser.deliverLockLosses();
+  await settle();
+
+  assert.equal(browser.holder(GROUP), follower);
+  assert.equal(follower.sources.length, 1, 'the stream it opened is the one it keeps');
+  assert.equal(follower.openStreams().length, 1);
+  assert.deepStrictEqual(follower.types(), [], 'it changed streams once, not twice');
+  assert.deepStrictEqual(browser.queued(GROUP), []);
 });
 
 test('without Web Locks every tab keeps a stream of its own', async () => {

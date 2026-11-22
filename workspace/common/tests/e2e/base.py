@@ -97,9 +97,11 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
     # ends its in-flight stream keeps holding a DB connection. On Windows
     # this prevents Django's test runner from deleting the test SQLite
     # file at suite teardown (``PermissionError: file is in use``). No
-    # e2e test today drives SSE, so short-circuiting ``/api/v1/stream``
-    # with a 204 keeps the page happy without leaking a worker thread.
-    # Set to ``False`` for tests that genuinely need SSE.
+    # e2e test today lets a stream reach the server, so short-circuiting
+    # ``/api/v1/stream`` with a 204 keeps the page happy without leaking a
+    # worker thread. The pattern covers ``/api/v1/stream/snapshot`` too,
+    # which a page reads as "no snapshot". Set to ``False`` for tests that
+    # drive SSE themselves.
     STUB_GLOBAL_SSE = True
 
     # Keyword arguments for ``browser.new_context()``, e.g. TOUCH_CONTEXT to

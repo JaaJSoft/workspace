@@ -38,6 +38,8 @@
   // long it waits for the answer before taking the stream over.
   const PROBE_INTERVAL_MS = 15000;
   const PROBE_TIMEOUT_MS = 3000;
+  // Relays wait for the snapshot, so it cannot be waited for without limit.
+  const SNAPSHOT_TIMEOUT_MS = 5000;
 
   let es = null;
   let errorCount = 0;
@@ -167,10 +169,13 @@
   function loadSnapshot() {
     const held = [];
     buffered = held;
-    fetch(SNAPSHOT_URL, { credentials: 'same-origin' })
+    const tooLong = new AbortController();
+    const giveUp = setTimeout(function () { tooLong.abort(); }, SNAPSHOT_TIMEOUT_MS);
+    fetch(SNAPSHOT_URL, { credentials: 'same-origin', signal: tooLong.signal })
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null)
       .then((snapshot) => {
+        clearTimeout(giveUp);
         // Promoted or gone meanwhile: the buffer was dealt with there.
         if (buffered !== held) return;
         buffered = null;
@@ -186,7 +191,7 @@
     channel.postMessage({ type: 'ping' });
     pongTimer = setTimeout(function () {
       pongTimer = null;
-      if (mine === membership && !leading) takeOver(mine);
+      if (mine === membership && !leading) contend({ steal: true }, mine, true);
     }, PROBE_TIMEOUT_MS);
   }
 
@@ -208,7 +213,8 @@
 
   function lead(resync) {
     leading = true;
-    // A no-op for the request that was just granted, and the end of any other.
+    // A no-op for the request that was just granted. After a steal, the end
+    // of the one still queued, which would be granted on top of it later.
     if (waiting) { waiting.abort(); waiting = null; }
     stopProbing();
     relay({ type: 'leader' });
@@ -236,14 +242,6 @@
     follow(mine, true);
   }
 
-  function takeOver(mine) {
-    // Or the queued request would be granted on top of the stolen lock. It may
-    // have been granted already, the leader going at that very moment: the
-    // steal then breaks this tab's own hold, and contend() takes both in.
-    if (waiting) { waiting.abort(); waiting = null; }
-    contend({ steal: true }, mine, true);
-  }
-
   // The lock API refused the request outright: back to a stream of its own.
   function goSolo() {
     leave();
@@ -261,6 +259,9 @@
         return undefined;
       }
       held = ++tenure;
+      // Already leading when a steal lands on a lock this tab had just been
+      // granted, the leader going at that very moment: the steal broke the
+      // tab's own hold, and this one replaces it.
       if (!leading) lead(resync);
       // The lock is held for as long as this promise is pending.
       return new Promise(function (resolve) { releases.push(resolve); });

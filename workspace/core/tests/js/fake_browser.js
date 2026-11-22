@@ -61,6 +61,22 @@ class FakeBrowser {
     this.held = new Map();
     this.queues = new Map();
     this.channels = [];
+    this.heldBackLosses = null;
+  }
+
+  /**
+   * A tab learns that its lock was stolen in a task of its own, which a real
+   * browser may run before or after the tasks around it: keep those back
+   * until deliverLockLosses(), to play the late order.
+   */
+  holdBackLockLosses() {
+    this.heldBackLosses = [];
+  }
+
+  deliverLockLosses() {
+    const losses = this.heldBackLosses;
+    this.heldBackLosses = null;
+    for (const lose of losses) lose();
   }
 
   // -- what reaches a tab ---------------------------------------------------
@@ -151,7 +167,9 @@ class FakeBrowser {
         const holder = this.held.get(name);
         if (holder) {
           holder.broken = true;
-          this._run(holder.tab, () => holder.reject(abortError()));
+          const lose = () => this._run(holder.tab, () => holder.reject(abortError()));
+          if (this.heldBackLosses) this.heldBackLosses.push(lose);
+          else lose();
         }
         this._grant(request);
         return;
@@ -295,9 +313,9 @@ class FakeBrowser {
       },
       document: tab.document,
       navigator: tabLocks ? { locks: tabLocks } : {},
-      fetch: (url) => {
+      fetch: (url, init) => {
         tab.fetches.push(url);
-        if (typeof snapshot === 'function') return snapshot(url);
+        if (typeof snapshot === 'function') return snapshot(url, init);
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: snapshot }) });
       },
       addEventListener: (type, handler) => {

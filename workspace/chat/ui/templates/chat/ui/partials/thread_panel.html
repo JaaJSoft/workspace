@@ -20,6 +20,8 @@
   @thread-reply-received.window="onReplyReceived($event.detail)"
   {# A reaction toggled in the main flow repainted the flow only; the panel's copy of the message goes stale without this. #}
   @chat:refresh-thread.window="refreshPanelOnly()"
+  {# The conversation behind reloads itself on a reconnection; a reply missed meanwhile reaches the panel only through this. #}
+  @sse:reconnect.window="refreshPanelOnly()"
   @ajax:missing="_onAjaxMissing($event)"
 >
 

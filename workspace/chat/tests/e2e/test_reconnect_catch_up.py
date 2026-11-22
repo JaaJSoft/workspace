@@ -1,4 +1,4 @@
-"""E2E: the call banner and the voice room catch up after a stream reconnection.
+"""E2E: the call banner, the thread panel and the voice room catch up after a stream reconnection.
 
 A call or message event pushed while the stream was down expires from the
 server's queue, so the page has to ask again. The stream is stubbed (no event
@@ -42,14 +42,14 @@ class ReconnectCatchUpTestCase(PlaywrightTestCase):
         cache.clear()
         super().tearDown()
 
-
-class CallBannerReconnectTests(ReconnectCatchUpTestCase):
     def _open_conversation(self):
         self.page.goto(f"{self.live_server_url}/chat")
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
         self.page.locator(f"#conv-item-{self.conv.uuid} > button").click()
         expect(self.page.locator(".chat-rich-input")).to_be_visible()
 
+
+class CallBannerReconnectTests(ReconnectCatchUpTestCase):
     def _banner(self):
         return self.page.get_by_test_id("call-banner")
 
@@ -72,6 +72,33 @@ class CallBannerReconnectTests(ReconnectCatchUpTestCase):
         self.page.evaluate(RECONNECT)
 
         expect(self._banner()).to_be_hidden()
+
+
+class ThreadPanelReconnectTests(ReconnectCatchUpTestCase):
+    def _post(self, body, **fields):
+        return post_message(
+            self.conv, self.peer, body, body_html=render_message_body(body), **fields
+        )
+
+    def test_a_reply_sent_during_the_gap_shows_in_the_open_panel(self):
+        root = self._post("the root of the discussion")
+        self._post("the first reply", reply_to=root, thread_root=root)
+        self._open_conversation()
+        footer = self.page.locator("#messages-container").get_by_test_id(
+            "thread-footer"
+        )
+        expect(footer).to_contain_text("1 reply")
+        footer.click()
+        panel = self.page.locator("#thread-messages-container")
+        expect(panel.get_by_text("the first reply")).to_be_visible()
+        self.page.wait_for_load_state("networkidle")
+
+        body = "a reply written while the stream was away"
+        self._post(body, reply_to=root, thread_root=root)
+        self.page.evaluate(RECONNECT)
+
+        expect(footer).to_contain_text("2 replies")
+        expect(panel.get_by_text(body)).to_be_visible()
 
 
 class VoiceRoomReconnectTests(ReconnectCatchUpTestCase):

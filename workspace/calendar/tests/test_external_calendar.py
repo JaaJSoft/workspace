@@ -719,14 +719,19 @@ class ExternalCalendarAPITests(APITestCase):
     def test_create_external_calendar(self, mock_task):
 
         self.client.force_authenticate(self.user)
-        resp = self.client.post(
-            self.url,
-            {
-                "url": "https://example.com/feed.ics",
-                "name": "My External",
-                "color": "blue",
-            },
-        )
+        with self.captureOnCommitCallbacks() as callbacks:
+            resp = self.client.post(
+                self.url,
+                {
+                    "url": "https://example.com/feed.ics",
+                    "name": "My External",
+                    "color": "blue",
+                },
+            )
+        # The first sync is sent once the calendar is committed, not before.
+        mock_task.apply_async.assert_not_called()
+        for callback in callbacks:
+            callback()
         self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
         self.assertEqual(resp.data["name"], "My External")
         self.assertTrue(resp.data["is_external"])

@@ -54,8 +54,11 @@ class ExternalCalendarListView(APIView):
         )
         ext = ExternalCalendar.objects.select_related("calendar").get(pk=ext.pk)
 
-        sync_external_calendar_task.apply_async(
-            [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
+        # A worker that starts before the commit finds no such calendar.
+        transaction.on_commit(
+            lambda: sync_external_calendar_task.apply_async(
+                [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
+            )
         )
 
         return Response(

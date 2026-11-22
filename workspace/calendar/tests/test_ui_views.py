@@ -137,6 +137,11 @@ class EventCardMembersTests(TestCase):
     def _url(self):
         return f"/calendar/events/{self.event.pk}/card"
 
+    def test_an_impossible_start_is_ignored(self):
+        self.client.login(username="cardowner", password="pass123")
+        resp = self.client.get(self._url() + "?start=2026-13-40T10:00")
+        self.assertEqual(resp.status_code, 200)
+
     def test_attendees_exclude_declined_and_cap_at_five(self):
         self.client.login(username="cardowner", password="pass123")
         resp = self.client.get(self._url())

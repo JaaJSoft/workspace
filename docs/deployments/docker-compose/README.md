@@ -201,7 +201,7 @@ Chat calls connect the participants' browsers directly, found through a public S
 3. Open the firewall: browsers reach the TURN server directly, not through the reverse proxy. It needs 3478 (UDP and TCP) and the relay range 49160-49200/udp. Each relayed connection takes one port of the range; widen `--min-port`/`--max-port` and the firewall rule together for more concurrent calls.
 4. Restart: `docker compose up -d`, then run *Test call connection* from the chat preferences: the network step reads *TURN reachable* once the relay works.
 
-The `--denied-peer-ip` lines stop the TURN server from relaying to the host itself or to private addresses, so a credential cannot be used to reach your internal network. A TURN server without shared-secret mode works too, with one static pair for every user (`CHAT_CALL_TURN_USERNAME`, `CHAT_CALL_TURN_CREDENTIAL`); see [Calls in the chat documentation](../../chat/README.md#calls).
+The `--denied-peer-ip` lines stop the TURN server from relaying to the host itself or to private addresses, IPv4 and IPv6 alike, so a credential cannot be used to reach your internal network. A TURN server without shared-secret mode works too, with one static pair for every user (`CHAT_CALL_TURN_USERNAME`, `CHAT_CALL_TURN_CREDENTIAL`); see [Calls in the chat documentation](../../chat/README.md#calls).
 
 ## Limitations
 

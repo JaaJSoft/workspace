@@ -199,3 +199,18 @@ class SettingsQueryBudgetTests(TestCase):
         with self.assertNumQueries(24):
             resp = self.client.get(reverse("users_ui:settings"))
         self.assertEqual(resp.status_code, 200)
+
+
+class SettingsUsageTabTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="usageuser", password="pass123")
+        self.client.login(username="usageuser", password="pass123")
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("workspace.users.ui.views.get_usage_stats")
+    def test_usage_tab_renders_the_counts(self, mock_stats):
+        mock_stats.return_value = {"files": {"total_files": 1234}}
+        resp = self.client.get(reverse("users_ui:settings"))
+        self.assertRegex(resp.content.decode(), r">\s*1,234\s*<")

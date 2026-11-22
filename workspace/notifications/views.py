@@ -9,12 +9,12 @@ from rest_framework.views import APIView
 
 from workspace.common.cache import invalidate_tags
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.url_guard import UnsafeUrl
-from workspace.common.uuids import parse_uuid_or_none
 
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
-from .services.notifications import _user_tag, get_unread_count
+from .services.notifications import _user_tag
 from .services.push_subscriptions import save_push_subscription
 from .services.push_transport import check_push_endpoint
 
@@ -23,14 +23,21 @@ from .services.push_transport import check_push_endpoint
 class NotificationListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="List notifications")
+    @extend_schema(
+        summary="List notifications",
+        description=(
+            "Newest first. Paginated with ?limit and ?offset; the X-Has-More "
+            "header says whether another page follows."
+        ),
+        responses={200: NotificationSerializer(many=True)},
+    )
     def get(self, request):
         qs = (
             Notification.objects.filter(
                 recipient=request.user,
             )
             .select_related("actor")
-            .order_by("-created_at")
+            .order_by("-created_at", "-uuid")
         )
 
         if request.query_params.get("filter") == "unread":
@@ -44,41 +51,12 @@ class NotificationListView(CacheControlMixin, APIView):
         if search:
             qs = qs.filter(Q(title__ficontains=search) | Q(body__ficontains=search))
 
-        # Simple cursor pagination via ?before=<uuid>. A malformed cursor
-        # falls back to "no cursor" instead of letting UUIDField.to_python
-        # raise ValidationError -> 500.
-        before = request.query_params.get("before")
-        if before:
-            before_uuid = parse_uuid_or_none(before)
-            if before_uuid is not None:
-                # Resolve the cursor inside the caller's already-scoped queryset
-                # (recipient + active filters). An unrestricted
-                # Notification.objects.get(uuid=...) would let a caller use
-                # another user's notification UUID as a cursor and read its
-                # created_at via the resulting page boundary (cross-user timing
-                # oracle).
-                cursor_created_at = (
-                    qs.filter(uuid=before_uuid)
-                    .values_list("created_at", flat=True)
-                    .first()
-                )
-                if cursor_created_at is not None:
-                    qs = qs.filter(created_at__lt=cursor_created_at)
-                # Else: stale, foreign, or filtered-out cursor - ignore and
-                # return the latest page without the created_at filter rather
-                # than 4xx-ing the client.
-
-        limit = min(int(request.query_params.get("limit", 20)), 50)
-        notifications = list(qs[: limit + 1])
-        has_more = len(notifications) > limit
-        notifications = notifications[:limit]
-
-        return Response(
-            {
-                "notifications": NotificationSerializer(notifications, many=True).data,
-                "has_more": has_more,
-                "unread_count": get_unread_count(request.user),
-            }
+        paginator = OptInLimitOffsetPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        if page is None:
+            return Response(NotificationSerializer(qs, many=True).data)
+        return paginator.get_paginated_response(
+            NotificationSerializer(page, many=True).data
         )
 
 

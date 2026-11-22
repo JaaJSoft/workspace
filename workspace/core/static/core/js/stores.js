@@ -206,10 +206,8 @@ document.addEventListener('alpine:init', function () {
       try {
         const r = await fetch(this._buildUrl(), { credentials: 'same-origin' });
         if (r.ok) {
-          const data = await r.json();
-          this.items = data.notifications;
-          this.unread = data.unread_count;
-          this.hasMore = data.has_more;
+          this.items = await r.json();
+          this.hasMore = r.headers.get('X-Has-More') === 'true';
           this.loaded = true;
         }
       } finally {
@@ -221,12 +219,13 @@ document.addEventListener('alpine:init', function () {
       if (this.loadingMore || !this.hasMore || this.items.length === 0) return;
       this.loadingMore = true;
       try {
-        const last = this.items[this.items.length - 1].uuid;
-        const r = await fetch(this._buildUrl({ before: last }), { credentials: 'same-origin' });
+        const r = await fetch(this._buildUrl({ offset: this.items.length }), { credentials: 'same-origin' });
         if (r.ok) {
-          const data = await r.json();
-          this.items = this.items.concat(data.notifications);
-          this.hasMore = data.has_more;
+          // A notification that arrived since the first page shifts the offsets by one.
+          const known = new Set(this.items.map(n => n.uuid));
+          const page = await r.json();
+          this.items = this.items.concat(page.filter(n => !known.has(n.uuid)));
+          this.hasMore = r.headers.get('X-Has-More') === 'true';
         }
       } finally {
         this.loadingMore = false;

@@ -318,6 +318,51 @@ class StreamCursorTests(TestCase):
         self.assertEqual(sse._incoming_cursors(request), {"files": "12"})
 
 
+class ResumePointTests(TestCase):
+    """An id names every provider that keeps a place, not only the ones that
+    have sent an event: a page takes the id of the last event it applied for
+    its cursor, whichever provider sent it."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="sse-resume", password="p")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _id_of_an_event_from_another_provider(self, cursors):
+        chunk = sse._emit("ai_stream", "token", {}, "t-1", cursors)
+        return next(line[4:] for line in chunk.split("\n") if line.startswith("id: "))
+
+    def test_a_stream_resumed_from_another_provider_s_id_skips_nothing(self):
+        """Were files missing from that id, the stream resumed from it would
+        start files at the head, after the lock release queued meanwhile."""
+        push_user_event("files", self.user.id, {"type": "operation"})
+        cursors = {}
+        sse._init_providers(self.user, cursors)
+        event_id = self._id_of_an_event_from_another_provider(cursors)
+
+        push_user_event("files", self.user.id, {"type": "lock_released"})
+        resumed = sse._init_providers(self.user, sse.decode_stream_cursor(event_id))
+
+        self.assertEqual(
+            [name for name, _, _ in resumed["files"].get_initial_events()],
+            ["lock_released"],
+        )
+
+    def test_a_resume_point_handed_in_is_the_one_given_back(self):
+        push_user_event("files", self.user.id, {"type": "operation"})
+        cursors = {"files": "0"}
+        sse._init_providers(self.user, cursors)
+        self.assertEqual(cursors["files"], "0")
+
+    def test_a_provider_that_keeps_no_place_is_not_named(self):
+        cursors = {}
+        providers = sse._init_providers(self.user, cursors)
+        self.assertIn("notifications", providers)
+        self.assertNotIn("notifications", cursors)
+
+
 def _payloads(chunks):
     """The JSON payload of each SSE chunk, as the page parses it."""
     return [

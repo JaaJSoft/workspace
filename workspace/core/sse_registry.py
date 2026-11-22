@@ -48,6 +48,15 @@ class SSEProvider(ABC):
         Returns list of (event_name, data_dict, event_id_or_None).
         """
 
+    def resume_point(self) -> str | None:
+        """Where a stream opened again resumes this provider, if it keeps a place.
+
+        Named in every id the stream sends, before the provider has sent
+        anything too: a page resumes from the id of the last event it applied,
+        whichever provider that was.
+        """
+        return None
+
 
 class SSERegistry:
     """Singleton thread-safe registry for SSE providers."""
@@ -240,6 +249,9 @@ class MailboxSSEProvider(SSEProvider):
             return max(int(last_event_id), 0)
         except TypeError, ValueError:
             return mailbox_head(self.slug, self.user.id)
+
+    def resume_point(self):
+        return str(self._cursor)
 
     def get_initial_events(self):
         return self._read()

@@ -164,6 +164,9 @@ def _init_providers(user, cursors, failed=None):
     The stream is served here, in core, so the preview-module guard never
     judges it: a provider whose module is hidden from the user is skipped.
     ``failed`` collects the slugs of the providers that could not start.
+
+    ``cursors`` hands each provider its resume point and is given back where
+    each one starts, so that every id the stream sends names them all.
     """
     providers_info = sse_registry.get_all()
     providers = {}
@@ -171,11 +174,16 @@ def _init_providers(user, cursors, failed=None):
         if is_hidden_from(user, info.provider_cls.__module__):
             continue
         try:
-            providers[slug] = info.provider_cls(user, cursors.get(slug))
+            provider = info.provider_cls(user, cursors.get(slug))
+            resume_point = provider.resume_point()
         except Exception:
             logger.exception("Failed to instantiate SSE provider '%s'", slug)
             if failed is not None:
                 failed.append(slug)
+            continue
+        providers[slug] = provider
+        if resume_point is not None:
+            cursors[slug] = resume_point
     return providers
 
 

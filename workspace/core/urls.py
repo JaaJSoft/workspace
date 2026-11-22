@@ -12,12 +12,13 @@ from workspace.core.views.incoming import incoming
 from workspace.core.views.modules import ModulesView
 from workspace.core.views.offline import offline_page
 from workspace.core.views.search import UnifiedSearchView
-from workspace.core.views.sse import global_stream
+from workspace.core.views.sse import global_stream, stream_snapshot
 
 urlpatterns = [
     path("api/v1/modules", ModulesView.as_view(), name="modules-list"),
     path("api/v1/search", UnifiedSearchView.as_view(), name="unified-search"),
     path("api/v1/stream", global_stream, name="global-sse-stream"),
+    path("api/v1/stream/snapshot", stream_snapshot, name="sse-stream-snapshot"),
     path(
         "api/v1/activity/recents", ActivityRecentView.as_view(), name="activity-recent"
     ),

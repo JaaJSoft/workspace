@@ -3,8 +3,11 @@ import logging
 import time
 
 import orjson
+from django.conf import settings
 from django.db import close_old_connections
-from django.http import StreamingHttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
+from django.utils import timezone, translation
+from django.views.decorators.http import require_GET
 
 from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
 
@@ -56,19 +59,20 @@ _MAX_CONNECTION_SECONDS = 600
 _MAX_CURSOR_CHARS = 512
 
 
+def _event_json(event_type, data):
+    """One event as the page reads it, on the stream and in a snapshot alike."""
+    return orjson.dumps({"event": event_type, "data": data})
+
+
 def _format_sse(event_type, data, event_id=None):
     """Format an SSE event string.
 
     Uses a single SSE event type 'sse' with the real event name inside the JSON payload.
     """
-    payload = {
-        "event": event_type,
-        "data": data,
-    }
     lines = ["event: sse"]
     if event_id:
         lines.append(f"id: {event_id}")
-    lines.append(f"data: {orjson.dumps(payload).decode()}")
+    lines.append(f"data: {_event_json(event_type, data).decode()}")
     lines.append("")
     lines.append("")
     return "\n".join(lines)
@@ -167,18 +171,61 @@ def _emit(slug, event_name, data, event_id, cursors):
     return _format_sse(f"{slug}.{event_name}", data, stream_id)
 
 
-def _emit_initial_events(providers, user_id, cursors):
-    """Yield initial SSE events from all providers."""
+def _initial_events(providers, user_id, render):
+    """Yield ``render(slug, event_name, data, event_id)`` for every initial event.
+
+    A provider that fails, or an event that does not render, costs that
+    provider the rest of its events and the others nothing.
+    """
     for slug, provider in providers.items():
         try:
             for event_name, data, event_id in provider.get_initial_events():
-                yield _emit(slug, event_name, data, event_id, cursors)
+                yield render(slug, event_name, data, event_id)
         except Exception:
             logger.exception(
                 "Failed to get initial events from SSE provider '%s' for user %s",
                 slug,
                 user_id,
             )
+
+
+def _emit_initial_events(providers, user_id, cursors):
+    """Yield initial SSE events from all providers."""
+
+    def render(slug, event_name, data, event_id):
+        return _emit(slug, event_name, data, event_id, cursors)
+
+    yield from _initial_events(providers, user_id, render)
+
+
+def _snapshot_event(slug, event_name, data, event_id):
+    return orjson.Fragment(_event_json(f"{slug}.{event_name}", data))
+
+
+@require_GET
+def stream_snapshot(request):
+    """The events a stream opens with, for a page that opens none.
+
+    One tab per browser holds the stream and hands its events to the others
+    (sse.js). A tab that joins later was not there for the initial events - the
+    unread counts, the generations under way - and nothing sends them again, so
+    it asks for them here.
+    """
+    if not request.user.is_authenticated:
+        return HttpResponse(status=403)
+
+    # A stream builds its events once the middlewares have left: in UTC and in
+    # the instance's language. The same here, or a tab would read other values
+    # than the one holding the stream.
+    with timezone.override(None), translation.override(settings.LANGUAGE_CODE):
+        providers = _init_providers(request.user, {})
+        events = list(_initial_events(providers, request.user.id, _snapshot_event))
+
+    response = HttpResponse(
+        orjson.dumps({"events": events}), content_type="application/json"
+    )
+    response["Cache-Control"] = "private, no-cache"
+    return response
 
 
 def _poll_provider(slug, provider, cache_value, user_id, cursors):

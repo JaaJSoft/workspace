@@ -260,7 +260,10 @@ window.chatSseMixin = function chatSseMixin() {
         // to end, and nothing to do.
         const step = this.botSteps.find(s => s.id === detail.call_id);
         if (step) step.running = false;
-      } else {
+      } else if (!this.botSteps.some(s => s.id === detail.call_id)) {
+        // A step can arrive twice: a tab joining a stream another tab holds
+        // is handed the queued steps, and gets the stream's copy of one
+        // queued at that moment.
         this.botSteps.push({ id: detail.call_id, html: detail.html, running: true });
         if (this.botSteps.length > 30) this.botSteps.shift();
       }

@@ -9,11 +9,15 @@ Prometheus gauge decrement).
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import orjson
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone, translation
 from prometheus_client import REGISTRY
 
 from workspace.core.views import sse
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -310,6 +314,108 @@ class StreamCursorTests(TestCase):
         raw = sse.encode_stream_cursor({"files": "12"})
         request = RequestFactory().get("/api/v1/stream", {"last_event_id": raw})
         self.assertEqual(sse._incoming_cursors(request), {"files": "12"})
+
+
+def _payloads(chunks):
+    """The JSON payload of each SSE chunk, as the page parses it."""
+    return [
+        orjson.loads(line[len("data: ") :])
+        for chunk in chunks
+        for line in chunk.split("\n")
+        if line.startswith("data: ")
+    ]
+
+
+class StreamSnapshotTests(TestCase):
+    """One tab per browser holds the stream; a tab that joins later opens none
+    and asks here for the events a stream starts with."""
+
+    URL = "/api/v1/stream/snapshot"
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="sse-snapshot", password="p")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_anonymous_is_refused_like_on_the_stream(self):
+        self.assertEqual(self.client.get(self.URL).status_code, 403)
+        self.assertEqual(self.client.get("/api/v1/stream").status_code, 403)
+
+    def test_only_reads(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.post(self.URL).status_code, 405)
+
+    def test_answers_what_a_stream_opens_with(self):
+        """Compared on the registered providers: a new one is covered as it comes."""
+        providers = sse._init_providers(self.user, {})
+        self.assertTrue(providers)
+        opening = _payloads(sse._emit_initial_events(providers, self.user.id, {}))
+        self.assertTrue(opening)
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json(), {"events": opening})
+
+    def test_a_failing_provider_costs_the_others_nothing(self):
+        broken = MagicMock()
+        broken.get_initial_events.side_effect = RuntimeError("down")
+        working = MagicMock()
+        working.get_initial_events.return_value = [("count", {"unread": 4}, "evt-1")]
+        self.client.force_login(self.user)
+
+        with (
+            patch.object(
+                sse,
+                "_init_providers",
+                return_value={"chat": broken, "notifications": working},
+            ),
+            self.assertLogs("workspace.core.views.sse", level="ERROR"),
+        ):
+            response = self.client.get(self.URL)
+
+        self.assertEqual(
+            response.json(),
+            {"events": [{"event": "notifications.count", "data": {"unread": 4}}]},
+        )
+
+    def test_providers_start_without_a_resume_point(self):
+        """The initial events are a state, not a replay: no cursor goes in."""
+        self.client.force_login(self.user)
+        with patch.object(sse, "_init_providers", return_value={}) as init:
+            self.client.get(self.URL)
+        init.assert_called_once_with(self.user, {})
+
+    def test_built_in_the_zone_and_language_a_stream_runs_in(self):
+        """A stream body runs once the middlewares have left, in UTC and in the
+        instance's language. An event built otherwise here would read
+        differently in a tab depending on whether it holds the stream."""
+        set_setting(self.user, "core", "timezone", "Asia/Tokyo")
+        set_setting(self.user, "core", "language", "fr")
+        seen = {}
+
+        def initial_events():
+            seen["zone"] = timezone.get_current_timezone_name()
+            seen["language"] = translation.get_language()
+            return []
+
+        provider = MagicMock()
+        provider.get_initial_events.side_effect = initial_events
+        self.client.force_login(self.user)
+
+        with patch.object(sse, "_init_providers", return_value={"chat": provider}):
+            self.client.get(self.URL)
+
+        self.assertEqual(seen, {"zone": "UTC", "language": "en"})
+
+    def test_is_revalidated_on_every_read(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.URL)
+        self.assertEqual(response["Cache-Control"], "private, no-cache")
 
 
 @override_settings(PREVIEW_VISIBILITY="staff")

@@ -85,6 +85,29 @@ test('a completion whose opening step is unknown is ignored', () => {
   );
 });
 
+test('a step delivered twice is shown once', () => {
+  // A tab that joins a stream another tab holds is given the queued steps by
+  // the server, and a step queued at that very moment reaches it through the
+  // stream as well.
+  const { app } = buildApp();
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Read A</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c2', html: '<span>Read B</span>' });
+
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c2', html: '<span>Read B</span>' });
+
+  assert.deepStrictEqual(Array.from(app.botSteps, s => s.id), ['c1', 'c2']);
+});
+
+test('a step delivered again after it ended stays ended', () => {
+  const { app } = buildApp();
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Read A</span>' });
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', done: true });
+
+  app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Read A</span>' });
+
+  assert.deepStrictEqual(Array.from(app.botSteps, s => [s.id, s.running]), [['c1', false]]);
+});
+
 test('no step at all counts as nothing running', () => {
   const { app } = buildApp();
 

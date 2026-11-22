@@ -74,9 +74,8 @@ The instance sends no email of its own: calendar invitations go out through the 
 
 ### Real-time v2 - P1
 
-Every open tab runs its own SSE stream, and every event makes each stream re-poll its providers. That is fine for a few people, and it is the wall for chat channels and live boards.
+A browser runs one SSE stream for all its tabs, and every event still makes each stream re-poll its providers. That is fine for a few people, and it is the wall for chat channels and live boards.
 
-- [ ] **One SSE stream per browser** - shared between tabs with Web Locks + BroadcastChannel (M)
 - [ ] **Typed wake-ups** - a typing ping or a call signal should not re-run the whole chat poll for every recipient - #1722 (S/M)
 - [ ] **Chat event journal** - read through the core mailbox, with targeted DOM updates instead of reloading the last 50 messages. Every kind of change reaches the other members, hard deletes included (#1698 is today's gap) (L)
 - [ ] **Call signaling, presence and typing on the core mailbox** - fixes #1710 for good (S/M)

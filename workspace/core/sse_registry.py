@@ -19,7 +19,11 @@ class SSEProviderInfo:
 
 
 class SSEProvider(ABC):
-    """Instantiated once per SSE connection per provider."""
+    """Instantiated once per SSE connection per provider.
+
+    A browser holds one connection for all its tabs (sse.js), so an event is
+    for every page the user has open, never for the one that caused it.
+    """
 
     def __init__(self, user, last_event_id: str | None):
         self.user = user
@@ -28,6 +32,10 @@ class SSEProvider(ABC):
     @abstractmethod
     def get_initial_events(self) -> list[tuple[str, dict, str | None]]:
         """Events sent immediately on connection.
+
+        Also what a tab is given when it joins the stream another tab of the
+        browser holds (``stream_snapshot``), from a provider discarded right
+        after: describe the current state, and consume nothing.
 
         Returns list of (event_name, data_dict, event_id_or_None).
         """

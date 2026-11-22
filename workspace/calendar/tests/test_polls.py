@@ -313,6 +313,31 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         self.assertFalse(PollVote.objects.filter(slot=slot3).exists())
         self.assertEqual(poll.slots.count(), 2)
 
+    def test_removing_a_slot_notifies_the_voters_who_voted_on_it(self):
+        self.client.force_authenticate(user=self.owner)
+        poll, slot1, slot2 = self._make_poll_with_slots()
+        slot3 = PollSlot.objects.create(
+            poll=poll, start=timezone.now() + timedelta(days=3), position=2
+        )
+        bystander = User.objects.create_user(username="bystander", password="x")
+        PollVote.objects.create(slot=slot3, user=self.voter, choice="yes")
+        PollVote.objects.create(slot=slot1, user=bystander, choice="yes")
+
+        resp = self.client.patch(
+            f"/api/v1/polls/{poll.uuid}",
+            {
+                "slots": [
+                    {"uuid": str(slot1.uuid), "start": slot1.start.isoformat()},
+                    {"uuid": str(slot2.uuid), "start": slot2.start.isoformat()},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(Notification.objects.filter(recipient=self.voter).exists())
+        self.assertFalse(Notification.objects.filter(recipient=bystander).exists())
+
     def test_cannot_update_others_poll(self):
         self.client.force_authenticate(user=self.voter)
         poll = Poll.objects.create(title="Not yours", created_by=self.owner)
@@ -960,6 +985,21 @@ class PollInviteTests(PollTestMixin, APITestCase):
         self.assertEqual(
             PollInvitee.objects.filter(poll=self.poll, user=self.voter).count(), 1
         )
+
+    def test_reinviting_notifies_only_the_new_invitees(self):
+        PollInvitee.objects.create(poll=self.poll, user=self.voter)
+        newcomer = User.objects.create_user(username="newcomer", password="x")
+        self.client.force_authenticate(user=self.owner)
+
+        resp = self.client.post(
+            f"/api/v1/polls/{self.poll.uuid}/invite",
+            {"user_ids": [self.voter.id, newcomer.id]},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(Notification.objects.filter(recipient=self.voter).exists())
+        self.assertTrue(Notification.objects.filter(recipient=newcomer).exists())
 
     def test_only_creator_can_invite(self):
         self.client.force_authenticate(user=self.voter)

@@ -13,7 +13,11 @@ window.calendarEventsMixin = function calendarEventsMixin() {
   // Hardcoded SVG markup for the recurring-event indicator. Kept as a
   // module-level constant so the hot path in eventDidMount() doesn't
   // re-allocate the string on every render.
-  const RECURRING_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
+  const AGENDA_PAGE_SIZE = 20;
+  // The cap of GET /api/v1/events in cursor mode.
+  const AGENDA_MAX_PAGE_SIZE = 100;
+
+  const RECURRING_ICON_SVG ='<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
 
   return {
     // --- FullCalendar ---
@@ -278,33 +282,40 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // Release the loading lock so a still-in-flight stale call can't keep
       // us blocked - its guarded finally won't clear it once superseded.
       this.agenda.loading = false;
+      this.agenda.refreshing = false;
       await this.loadMoreAgenda();
       if (requestId === this.agenda.requestId) {
         this.agenda.initialLoaded = true;
       }
     },
 
+    // One page of the cursor endpoint, or null when the request failed.
+    async _fetchAgendaPage(after, afterId, limit) {
+      const calIds = Object.keys(this.visibleCalendars)
+        .filter(k => this.visibleCalendars[k]).join(',');
+      const params = new URLSearchParams({
+        after,
+        limit: String(limit),
+        calendar_ids: calIds,
+        show_declined: this.prefs.showDeclined ? 'true' : 'false',
+      });
+      if (afterId) params.set('after_id', afterId);
+      const resp = await fetch(`/api/v1/events?${params}`, {
+        credentials: 'same-origin',
+      });
+      if (!resp.ok) return null;
+      return resp.json();
+    },
+
     async loadMoreAgenda() {
-      if (this.agenda.loading || this.agenda.nextAfter === null) return;
+      if (this.agenda.loading || this.agenda.refreshing || this.agenda.nextAfter === null) return;
       const requestId = this.agenda.requestId || 0;
       this.agenda.loading = true;
       try {
-        const calIds = Object.keys(this.visibleCalendars)
-          .filter(k => this.visibleCalendars[k]).join(',');
-        const params = new URLSearchParams({
-          after: this.agenda.nextAfter,
-          limit: '20',
-          calendar_ids: calIds,
-          show_declined: this.prefs.showDeclined ? 'true' : 'false',
-        });
-        if (this.agenda.nextAfterId) params.set('after_id', this.agenda.nextAfterId);
-        const resp = await fetch(`/api/v1/events?${params}`, {
-          credentials: 'same-origin',
-        });
-        if (requestId !== this.agenda.requestId) return;
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (requestId !== this.agenda.requestId) return;
+        const data = await this._fetchAgendaPage(
+          this.agenda.nextAfter, this.agenda.nextAfterId, AGENDA_PAGE_SIZE,
+        );
+        if (requestId !== this.agenda.requestId || !data) return;
 
         // Dedup boundary events (events with start == cursor may appear on
         // both pages - see backend cursor stability note).
@@ -316,6 +327,50 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       } finally {
         if (requestId === this.agenda.requestId) {
           this.agenda.loading = false;
+        }
+      }
+    },
+
+    // Reload from now as many events as the agenda holds, into a list of its
+    // own assigned once, so the rows and the scroll position stay where the
+    // reader left them. A failed request keeps the agenda as it was.
+    async refreshAgenda() {
+      if (this.currentView !== 'agenda') return;
+      if (!this.agenda.initialLoaded) {
+        await this.loadAgenda();
+        return;
+      }
+      const requestId = this.agenda.requestId = (this.agenda.requestId || 0) + 1;
+      const wanted = Math.max(this.agenda.events.length, AGENDA_PAGE_SIZE);
+      // A superseded loadMoreAgenda's guarded finally won't release its lock.
+      this.agenda.loading = false;
+      this.agenda.refreshing = true;
+      const events = [];
+      const seenIds = new Set();
+      let after = new Date().toISOString();
+      let afterId = null;
+      try {
+        while (after !== null && events.length < wanted) {
+          const limit = Math.min(AGENDA_MAX_PAGE_SIZE, wanted - events.length);
+          const data = await this._fetchAgendaPage(after, afterId, limit);
+          if (requestId !== this.agenda.requestId || !data) return;
+          const before = events.length;
+          for (const event of data.events || []) {
+            if (seenIds.has(event.uuid)) continue;
+            seenIds.add(event.uuid);
+            events.push(event);
+          }
+          after = data.next_after;
+          afterId = data.next_after_id;
+          if (events.length === before) break;
+        }
+        this.agenda.events = events;
+        this.agenda.seenIds = seenIds;
+        this.agenda.nextAfter = after;
+        this.agenda.nextAfterId = afterId;
+      } finally {
+        if (requestId === this.agenda.requestId) {
+          this.agenda.refreshing = false;
         }
       }
     },

@@ -34,9 +34,10 @@ class SSEProvider(ABC):
 
     @abstractmethod
     def poll(self, cache_value: str | None) -> list[tuple[str, dict, str | None]]:
-        """Called every ~2s.
+        """Called on every wake-up of the stream, and every few seconds without one.
 
-        cache_value is non-None when the dirty flag changed, None otherwise.
+        cache_value is non-None after a dirty notification (``notify_sse`` with
+        ``dirty=True``), None on a timer tick or a clean wake-up.
         Returns list of (event_name, data_dict, event_id_or_None).
         """
 
@@ -73,18 +74,23 @@ def _get_redis():
         return None
 
 
-def notify_sse(provider_slug: str, user_id: int):
+def notify_sse(provider_slug: str, user_id: int, *, dirty: bool = True):
     """Notify an SSE provider that new data is available for a user.
 
     Uses Redis Pub/Sub for near-instant delivery when Redis is available,
     falls back to cache dirty flags for local dev without Redis.
+
+    ``dirty=False`` is for state the provider reads on every poll anyway (a
+    typing indicator, a cache mailbox): the stream polls right away, but as on
+    a timer tick, so the provider skips its database work. The cache fallback
+    polls on a timer already and has nothing to flag.
     """
     redis = _get_redis()
     if redis is not None:
         try:
             redis.publish(
                 f"sse:user:{user_id}",
-                orjson.dumps({"provider": provider_slug}),
+                orjson.dumps({"provider": provider_slug, "dirty": dirty}),
             )
             return
         except Exception:
@@ -97,6 +103,8 @@ def notify_sse(provider_slug: str, user_id: int):
             )
 
     # Fallback: cache dirty flag (local dev or Redis failure)
+    if not dirty:
+        return
     cache.set(
         f"sse:{provider_slug}:last_event:{user_id}",
         timezone.now().isoformat(),

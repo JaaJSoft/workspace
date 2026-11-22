@@ -2,6 +2,8 @@
 
 Mirrors the typing-indicator pattern: writes land in the cache and a
 ``notify_sse`` ping wakes the recipient's SSE poll, which drains the mailbox.
+A signal wakes it clean (``dirty=False``): it changes nothing in the database.
+A lifecycle event stays dirty, because the call's system message changes with it.
 Nothing here is durable - the source of truth for call state is the DB.
 """
 
@@ -57,7 +59,7 @@ def send_signal(session_id, to_user_id, from_user_id, signal):
             "signal": signal,
         },
     )
-    notify_sse("chat", to_user_id)
+    notify_sse("chat", to_user_id, dirty=False)
     return envelope_id
 
 
@@ -77,5 +79,5 @@ def send_diagnostic_signal(user_id, lane, signal, run_id):
         "call_diagnostic_signal",
         {"lane": lane, "signal": signal, "run_id": run_id},
     )
-    notify_sse("chat", user_id)
+    notify_sse("chat", user_id, dirty=False)
     return envelope_id

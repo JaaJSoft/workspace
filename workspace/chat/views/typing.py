@@ -39,6 +39,7 @@ class TypingIndicatorView(APIView):
         notify_conversation_members(
             Conversation(pk=conversation_id),
             exclude_user=request.user,
+            dirty=False,
         )
         return Response({"status": "ok"})
 

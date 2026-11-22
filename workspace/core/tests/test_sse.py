@@ -27,7 +27,7 @@ def _fake_hub(*notifications):
     """A hub whose subscription hands out *notifications*, then nothing."""
     hub = MagicMock()
     remaining = iter(notifications)
-    hub.subscribe.return_value.wait.side_effect = lambda timeout: next(remaining, set())
+    hub.subscribe.return_value.wait.side_effect = lambda timeout: next(remaining, {})
     return hub
 
 
@@ -158,7 +158,7 @@ class MetricsTests(TestCase):
         # One notification, then nothing; budget cuts the loop on the 2nd iter.
         provider = MagicMock()
         provider.poll.return_value = []
-        hub = _fake_hub({"chat"})
+        hub = _fake_hub({"chat": True})
 
         before = _sample("sse_pubsub_messages_total")
 
@@ -180,6 +180,22 @@ class MetricsTests(TestCase):
         # Polled for the notification, with a dirty value rather than None.
         provider.poll.assert_called_once()
         self.assertIsNotNone(provider.poll.call_args.args[0])
+
+    def test_pubsub_stream_polls_a_clean_wake_up_like_a_timer_tick(self):
+        provider = MagicMock()
+        provider.poll.return_value = []
+        times = iter([0.0, 0.0, 999.0, 999.0, 999.0])
+        with (
+            patch.object(sse, "_MAX_CONNECTION_SECONDS", 1),
+            patch.object(sse, "_init_providers", return_value={"chat": provider}),
+            patch(
+                "workspace.core.views.sse.time.monotonic",
+                side_effect=lambda: next(times),
+            ),
+        ):
+            list(sse._event_stream_pubsub(self.request, _fake_hub({"chat": False})))
+
+        provider.poll.assert_called_once_with(None)
 
 
 class StreamDatabaseConnectionTests(TestCase):
@@ -204,7 +220,7 @@ class StreamDatabaseConnectionTests(TestCase):
         calls = []
         hub = MagicMock()
         hub.subscribe.return_value.wait.side_effect = lambda timeout: (
-            calls.append("wait") or set()
+            calls.append("wait") or {}
         )
         # Two rounds, then the budget ends the stream.
         times = iter([0.0, 0.0, 0.0, 0.0, 0.0, 999.0])

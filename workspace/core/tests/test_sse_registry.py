@@ -11,6 +11,7 @@ first, a reconnect with no way to resume, a lock that gave up).
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import orjson
 from django.core.cache import cache
 from django.test import TestCase
 
@@ -34,6 +35,33 @@ class NotifySseLogInjectionTests(TestCase):
         self.assertNotIn("\r", message)
         self.assertNotIn("\n", message)
         self.assertIn("42Forged log line", message)
+
+
+class NotifySseDirtyTests(TestCase):
+    def tearDown(self):
+        cache.clear()
+
+    def test_the_notification_says_whether_the_provider_is_dirty(self):
+        redis = MagicMock()
+
+        with patch.object(sse_registry, "_get_redis", return_value=redis):
+            sse_registry.notify_sse("chat", 7)
+            sse_registry.notify_sse("chat", 7, dirty=False)
+
+        payloads = [orjson.loads(call.args[1]) for call in redis.publish.call_args_list]
+        self.assertEqual(
+            payloads,
+            [{"provider": "chat", "dirty": True}, {"provider": "chat", "dirty": False}],
+        )
+
+    def test_without_redis_a_clean_wake_up_flags_nothing(self):
+        """The polling stream reads every provider on its timer anyway."""
+        with patch.object(sse_registry, "_get_redis", return_value=None):
+            sse_registry.notify_sse("chat", 7, dirty=False)
+            self.assertIsNone(cache.get("sse:chat:last_event:7"))
+
+            sse_registry.notify_sse("chat", 7)
+            self.assertIsNotNone(cache.get("sse:chat:last_event:7"))
 
 
 class UserEventMailboxTests(TestCase):

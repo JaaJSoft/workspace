@@ -194,7 +194,6 @@ def chat_view(request, conversation_uuid=None):
             "initial_conversation_uuid": str(conversation_uuid)
             if conversation_uuid
             else "",
-            "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True
             ),
@@ -246,7 +245,6 @@ def chat_room_view(request, conversation_uuid):
             "conversation_uuid": str(conversation_uuid),
             "conversation_title": title,
             "conversation": conversation_data,
-            "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True
             ),

@@ -1,7 +1,8 @@
 import logging
 
-from django.conf import settings
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext
+from django.views.decorators.cache import never_cache
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -19,6 +20,7 @@ from ..services.conversations import (
     is_active_member,
     is_bot_conversation,
 )
+from ..services.webrtc import ice_servers_for
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +61,21 @@ class CallJoinView(APIView):
         return Response(
             {
                 "state": calls.serialize_call_state(session),
-                "ice_servers": getattr(settings, "CHAT_CALL_ICE_SERVERS", []),
+                "ice_servers": ice_servers_for(request.user),
             }
         )
+
+
+@extend_schema(tags=["Chat - Calls"])
+@method_decorator(never_cache, name="dispatch")
+class CallIceServersView(APIView):
+    """ICE servers for the connection diagnostic, which runs outside any call."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="STUN and TURN servers for a call test")
+    def get(self, request):
+        return Response({"ice_servers": ice_servers_for(request.user)})
 
 
 @extend_schema(tags=["Chat - Calls"])

@@ -139,11 +139,47 @@ server, and a TURN server also avoids contacting Google.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CHAT_CALL_ICE_SERVERS` | `stun:stun.l.google.com:19302` | Comma-separated STUN and TURN URLs. |
-| `CHAT_CALL_TURN_USERNAME` | empty | Username added to every `turn:` and `turns:` URL. |
-| `CHAT_CALL_TURN_CREDENTIAL` | empty | Credential added to every `turn:` and `turns:` URL. |
+| `CHAT_CALL_ICE_SERVERS` | `stun:stun.l.google.com:19302` | Comma-separated STUN and TURN URLs. Set but empty means none: browsers only try direct connections. |
+| `CHAT_CALL_TURN_SECRET` | empty | Shared secret of a TURN server in shared-secret mode. When set, each user gets a TURN credential of their own that expires on its own. |
+| `CHAT_CALL_TURN_TTL` | `21600` | Seconds a credential derived from `CHAT_CALL_TURN_SECRET` stays valid (6 hours). |
+| `CHAT_CALL_TURN_USERNAME` | empty | Static username added to every `turn:` and `turns:` URL, for a TURN server without shared-secret mode. Ignored when `CHAT_CALL_TURN_SECRET` is set. |
+| `CHAT_CALL_TURN_CREDENTIAL` | empty | Static credential that goes with `CHAT_CALL_TURN_USERNAME`. |
 | `CHAT_CALL_MAX_PARTICIPANTS` | `6` | Most people in one call. Each participant sends their stream to every other one, so keep it low. |
 | `CHAT_CALL_PRESENCE_TTL` | `12` | Seconds before a participant who stopped responding is dropped from the call. |
+
+TURN credentials are never written into a page. A user receives them when
+they start or join a call, or run the connection diagnostic.
+
+#### Shared secret (recommended)
+
+[coturn](https://github.com/coturn/coturn) and most TURN servers can check
+credentials derived from a secret they share with Workspace (coturn:
+`use-auth-secret` with `static-auth-secret`). Workspace hands each user a
+username made of an expiry time and their user id, and a password that is a
+signature of that username. The TURN server checks the signature and refuses
+the credential once it has expired, so a credential copied from a browser
+stops working after `CHAT_CALL_TURN_TTL` seconds, and a user who leaves gets no
+new one.
+
+```bash
+CHAT_CALL_ICE_SERVERS=stun:turn.example.com:3478,turn:turn.example.com:3478
+CHAT_CALL_TURN_SECRET=...   # openssl rand -hex 32, the same value as coturn's static-auth-secret
+```
+
+A credential is fetched when a call is joined. A participant who stays in one
+call longer than `CHAT_CALL_TURN_TTL` keeps their connections, but a connection
+opened after that (someone joining late) cannot go through the TURN server
+from their side. Raise the lifetime if your calls last longer.
+
+The Docker Compose example ships a commented coturn service set up this way
+(see [Docker Compose deployment](../deployments/docker-compose/README.md#calls-turn-server-optional)).
+
+#### Static credentials
+
+For a TURN server without shared-secret mode, one username and credential is
+added to every `turn:` and `turns:` URL. Every user receives the same pair, and
+it keeps working until you change it on the TURN server and here, so anyone
+who once joined a call can keep relaying through your server until then.
 
 ```bash
 CHAT_CALL_ICE_SERVERS=stun:stun.l.google.com:19302,turn:turn.example.com:3478

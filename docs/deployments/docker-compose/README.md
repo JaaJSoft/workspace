@@ -186,6 +186,23 @@ Notes:
 - Editing permissions follow file permissions: view-only shares open read-only, and saves go through the normal upload pipeline (thumbnails, events).
 - If the editor is down, office files degrade to a download prompt — nothing else breaks.
 
+## Calls TURN server (optional)
+
+Chat calls connect the participants' browsers directly, found through a public STUN server. Users behind strict NATs or corporate firewalls also need a TURN server to relay their audio and video. The commented `coturn` service runs [coturn](https://github.com/coturn/coturn) in shared-secret mode: Workspace hands each user a credential of their own that expires after `CHAT_CALL_TURN_TTL` seconds (6 hours by default), and no page carries a credential that works forever.
+
+1. Uncomment the `coturn` service in `docker-compose.yml` and set `--realm` to the TURN server's public hostname.
+2. Set in your `.env`:
+
+   ```env
+   CHAT_CALL_TURN_SECRET=<openssl rand -hex 32>
+   CHAT_CALL_ICE_SERVERS=stun:turn.example.com:3478,turn:turn.example.com:3478
+   ```
+
+3. Open the firewall: browsers reach the TURN server directly, not through the reverse proxy. It needs 3478 (UDP and TCP) and the relay range 49160-49200/udp. Each relayed connection takes one port of the range; widen `--min-port`/`--max-port` and the firewall rule together for more concurrent calls.
+4. Restart: `docker compose up -d`, then run *Test call connection* from the chat preferences: the network step reads *TURN reachable* once the relay works.
+
+The `--denied-peer-ip` lines stop the TURN server from relaying to the host itself or to private addresses, so a credential cannot be used to reach your internal network. A TURN server without shared-secret mode works too, with one static pair for every user (`CHAT_CALL_TURN_USERNAME`, `CHAT_CALL_TURN_CREDENTIAL`); see [Calls in the chat documentation](../../chat/README.md#calls).
+
 ## Limitations
 
 - **SQLite** is not designed for high-concurrency writes. WAL mode is enabled for better concurrent read performance, but for heavy workloads consider switching to PostgreSQL.

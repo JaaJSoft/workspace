@@ -101,6 +101,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
     _diagStream: null,
     _diagPending: { caller: [], callee: [] }, // ICE buffered until remote desc set
     _diagOnServerEcho: null,
+    _diagIceServers: [],
 
     // -- Live audio stage (shown after the loopback passes) --
     diagLive: false,          // is the live volume/monitor stage active?
@@ -206,9 +207,22 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
       }
     },
 
+    async _diagFetchIceServers() {
+      // Fetched per run: the TURN credential in it expires.
+      try {
+        const resp = await fetch('/api/v1/chat/call/ice-servers');
+        if (!resp.ok) return [];
+        return (await resp.json()).ice_servers || [];
+      } catch (e) {
+        return [];
+      }
+    },
+
     async _diagStepIce() {
       const runId = this.diagRunId;
       this._diagSet('ice', 'running', gettext('Gathering ICE candidates...'));
+      this._diagIceServers = await this._diagFetchIceServers();
+      if (this.diagRunId !== runId) return 'fail';
       const candidates = await this._diagGatherCandidates();
       if (this.diagRunId !== runId) return 'fail'; // run closed/superseded mid-gather
       const summary = window.chatDiagSummarizeIce(candidates);
@@ -229,7 +243,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
       return new Promise((resolve) => {
         let pc;
         try {
-          pc = new RTCPeerConnection({ iceServers: this._loadIceServers() });
+          pc = new RTCPeerConnection({ iceServers: this._diagIceServers });
         } catch (e) { resolve([]); return; }
         const found = [];
         let done = false;
@@ -259,7 +273,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
       this._diagSet('loopback', 'running', gettext('Connecting through the server...'));
       return new Promise((resolve) => {
         let settled = false;
-        const ice = this._loadIceServers();
+        const ice = this._diagIceServers;
         let caller, callee;
         try {
           caller = new RTCPeerConnection({ iceServers: ice });

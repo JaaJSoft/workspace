@@ -110,6 +110,11 @@ urlpatterns = [
     # Calls
     # Call connection diagnostic (user-scoped, no conversation)
     path(
+        "api/v1/chat/call/ice-servers",
+        calls.CallIceServersView.as_view(),
+        name="chat-call-ice-servers",
+    ),
+    path(
         "api/v1/chat/call/diagnostic/signal",
         calls.CallDiagnosticSignalView.as_view(),
         name="chat-call-diagnostic-signal",

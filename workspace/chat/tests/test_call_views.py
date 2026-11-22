@@ -1,6 +1,10 @@
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workspace.chat.models import Conversation, ConversationMember
@@ -47,8 +51,6 @@ class CallViewTests(TestCase):
         self.assertTrue(self.client.get(self._url()).data["active"])
 
     def test_full_room_returns_409(self):
-        from django.test import override_settings
-
         self.client.force_authenticate(self.a)
         with override_settings(CHAT_CALL_MAX_PARTICIPANTS=1):
             self.client.post(self._url("/join"))
@@ -154,3 +156,77 @@ class CallViewTests(TestCase):
         resp = self.client.post(self._url("/join"))
         self.assertEqual(resp.status_code, 200)
         self.assertIsNotNone(calls.get_active_call(self.conv.uuid))
+
+
+@override_settings(
+    CHAT_CALL_ICE_SERVERS=["stun:s:1", "turn:t:3478"],
+    CHAT_CALL_TURN_USERNAME="static-user",
+    CHAT_CALL_TURN_CREDENTIAL="static-credential",
+    CHAT_CALL_TURN_SECRET="north",
+    CHAT_CALL_TURN_TTL=3600,
+)
+class TurnCredentialTests(TestCase):
+    """With a shared secret, TURN credentials are per user and only handed out
+    by the call endpoints, never embedded in a page."""
+
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(username="a", password="x")
+        self.b = User.objects.create_user(username="b", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        for u in (self.a, self.b):
+            ConversationMember.objects.create(conversation=self.conv, user=u)
+        self.api = APIClient()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _turn(self, ice_servers):
+        return next(s for s in ice_servers if s["urls"].startswith("turn:"))
+
+    def _join(self, user):
+        self.api.force_authenticate(user)
+        resp = self.api.post(f"/api/v1/chat/conversations/{self.conv.uuid}/call/join")
+        self.assertEqual(resp.status_code, 200)
+        return self._turn(resp.data["ice_servers"])
+
+    def test_join_hands_each_user_a_credential_of_their_own(self):
+        turn_a, turn_b = self._join(self.a), self._join(self.b)
+        self.assertTrue(turn_a["username"].endswith(f":{self.a.pk}"))
+        self.assertTrue(turn_b["username"].endswith(f":{self.b.pk}"))
+        self.assertNotEqual(turn_a["credential"], turn_b["credential"])
+        self.assertNotEqual(turn_a["credential"], "static-credential")
+
+    def test_join_credential_expires_within_the_ttl(self):
+        frozen = timezone.now()
+        with mock.patch("django.utils.timezone.now", return_value=frozen):
+            turn = self._join(self.a)
+        expires_at = int(turn["username"].split(":")[0])
+        self.assertEqual(expires_at, int(frozen.timestamp()) + 3600)
+
+    def test_diagnostic_endpoint_hands_out_a_derived_credential(self):
+        self.api.force_authenticate(self.a)
+        resp = self.api.get("/api/v1/chat/call/ice-servers")
+        self.assertEqual(resp.status_code, 200)
+        turn = self._turn(resp.data["ice_servers"])
+        self.assertTrue(turn["username"].endswith(f":{self.a.pk}"))
+        self.assertIn("no-store", resp["Cache-Control"])
+
+    def test_diagnostic_endpoint_requires_a_session(self):
+        resp = self.api.get("/api/v1/chat/call/ice-servers")
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_pages_embed_no_turn_credential(self):
+        self.client.force_login(self.a)
+        pages = [
+            reverse("chat_ui:index"),
+            reverse("chat_ui:room", kwargs={"conversation_uuid": self.conv.uuid}),
+        ]
+        for url in pages:
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                self.assertNotIn("turn:t:3478", html)
+                self.assertNotIn("static-credential", html)

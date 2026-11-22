@@ -370,7 +370,7 @@ def _task_panel_context(user, project, role, task, *, members=None):
             if not w.muted
         ],
         "panel_can_comment": "comment" in action_ids,
-        "panel_comment_count": task.comments.count(),
+        "panel_comment_count": task.comments.filter(deleted_at__isnull=True).count(),
         "panel_attachments": TaskAttachmentSerializer(
             task.attachments.select_related("task", "added_by"), many=True
         ).data,

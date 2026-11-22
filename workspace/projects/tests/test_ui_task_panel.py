@@ -9,6 +9,7 @@ from django.utils.html import escapejs
 
 from workspace.files.services import tree
 from workspace.projects.models import Label
+from workspace.projects.services.comments import add_comment
 from workspace.projects.services.file_links import link_files
 from workspace.projects.services.links import create_link, delete_link
 from workspace.projects.services.projects import create_project
@@ -43,6 +44,15 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, 'id="task-panel"')
         self.assertContains(resp, "Ship the panel")
         self.assertContains(resp, "<strong>bold</strong>")
+
+    def test_comment_count_leaves_deleted_comments_out(self):
+        add_comment(self.task, self.admin, "still here")
+        gone = add_comment(self.task, self.admin, "removed")
+        gone.deleted_at = timezone.now()
+        gone.save(update_fields=["deleted_at"])
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'data-comment-count="1"')
 
     def test_description_html_is_escaped(self):
         task = create_task(

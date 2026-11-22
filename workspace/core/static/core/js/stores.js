@@ -174,6 +174,8 @@ document.addEventListener('alpine:init', function () {
   });
 
   // Notifications store
+  const NOTIFICATIONS_PAGE_SIZE = 20;
+
   Alpine.store('notifications', {
     unread: 0,
     items: [],
@@ -189,7 +191,7 @@ document.addEventListener('alpine:init', function () {
     },
 
     _buildUrl(extra) {
-      const p = new URLSearchParams({ limit: '20' });
+      const p = new URLSearchParams({ limit: String(NOTIFICATIONS_PAGE_SIZE) });
       if (this._filter === 'unread') p.set('filter', 'unread');
       else if (this._filter !== 'all') p.set('origin', this._filter);
       if (this._search) p.set('search', this._search);
@@ -202,9 +204,18 @@ document.addEventListener('alpine:init', function () {
       const search = opts?.search ?? this._search;
       this._filter = filter;
       this._search = search;
+      await this._fetchHead(NOTIFICATIONS_PAGE_SIZE);
+    },
+
+    // Reloads as many rows as are listed, so the pages added by Load more survive.
+    async refresh() {
+      await this._fetchHead(Math.max(NOTIFICATIONS_PAGE_SIZE, this.items.length));
+    },
+
+    async _fetchHead(limit) {
       this.loading = true;
       try {
-        const r = await fetch(this._buildUrl(), { credentials: 'same-origin' });
+        const r = await fetch(this._buildUrl({ limit }), { credentials: 'same-origin' });
         if (r.ok) {
           this.items = await r.json();
           this.hasMore = r.headers.get('X-Has-More') === 'true';
@@ -272,10 +283,10 @@ document.addEventListener('alpine:init', function () {
     Alpine.store('notifications').setCount(e.detail.unread);
   });
 
-  // Refresh notification count on SSE reconnect (mobile resume)
+  // Catch up on what the stream missed while it was closed (mobile resume, bfcache, 600 s cut).
   window.addEventListener('sse:reconnect', function () {
     const store = Alpine.store('notifications');
-    if (store.loaded) store.fetchList();
+    if (store.loaded) store.refresh();
   });
 
   // Web Push store

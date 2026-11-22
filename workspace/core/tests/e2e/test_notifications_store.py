@@ -96,3 +96,35 @@ class NotificationsStoreLastRowChangesTests(NotificationsStoreTestCase):
         Notification.objects.filter(title=self.LAST_LOADED).delete()
         self._store("await s.loadMore();")
         self._assert_no_repeat()
+
+
+class NotificationsStoreReconnectTests(NotificationsStoreTestCase):
+    """Regression: a stream reconnection reloaded only the first page, cutting
+    the list back to 20 entries after Load more."""
+
+    def _reconnect(self):
+        # The listener starts the fetch synchronously, so `loading` is already set.
+        self._store(
+            "window.dispatchEvent(new CustomEvent('sse:reconnect'));"
+            "while (s.loading) await new Promise(r => setTimeout(r, 10));"
+        )
+
+    def test_reconnect_keeps_the_pages_loaded_with_load_more(self):
+        self._store("await s.fetchList(); await s.loadMore();")
+        self._notify("Newcomer", START + timedelta(hours=1))
+
+        self._reconnect()
+
+        state = self._state()
+        self.assertEqual(state["titles"], ["Newcomer", *ALL_TITLES[:24]])
+        self.assertTrue(state["hasMore"])
+
+    def test_reconnect_still_reloads_a_single_page(self):
+        self._store("await s.fetchList();")
+        self._notify("Newcomer", START + timedelta(hours=1))
+
+        self._reconnect()
+
+        state = self._state()
+        self.assertEqual(state["titles"], ["Newcomer", *ALL_TITLES[:19]])
+        self.assertTrue(state["hasMore"])

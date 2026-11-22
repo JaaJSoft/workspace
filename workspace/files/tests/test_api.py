@@ -866,3 +866,24 @@ class RecentFilesOrderingTests(APITestCase):
         resp = self.client.get("/api/v1/files?recent=1")
         names = [f["name"] for f in resp.json()]
         self.assertNotIn("doc2.txt", names)
+
+
+class MalformedIdentifierTests(APITestCase):
+    """An id that is not a UUID names no row: a 404, never a 500."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="malformed", password="pw")
+        self.client.force_authenticate(self.user)
+        self.folder = tree.create_folder(self.user, "Docs")
+
+    def test_a_file_id_that_is_not_a_uuid(self):
+        for path in ("not-a-uuid", "not-a-uuid/content", "not-a-uuid/comments"):
+            with self.subTest(path=path):
+                resp = self.client.get(f"/api/v1/files/{path}")
+                self.assertEqual(resp.status_code, 404)
+
+    def test_a_comment_or_link_id_that_is_not_a_uuid(self):
+        for path in ("comments/abc", "share-links/abc"):
+            with self.subTest(path=path):
+                resp = self.client.delete(f"/api/v1/files/{self.folder.uuid}/{path}")
+                self.assertEqual(resp.status_code, 404)

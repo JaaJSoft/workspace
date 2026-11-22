@@ -24,7 +24,7 @@ from workspace.common.booleans import is_truthy
 from workspace.common.filters import CaseInsensitiveOrderingFilter
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.pagination import OptInLimitOffsetPagination
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.queries import (
     FilePermission,
@@ -308,6 +308,7 @@ class FileViewSet(
     serializer_class = FileSerializer
     pagination_class = OptInLimitOffsetPagination
     lookup_field = "uuid"
+    lookup_value_regex = UUID_PATTERN
     # FileSearchFilter comes after the ordering filter on purpose: it sorts by
     # relevance, and the ordering filter would otherwise re-apply the view's
     # default ordering on top of it.

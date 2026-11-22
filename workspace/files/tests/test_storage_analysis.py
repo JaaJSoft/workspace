@@ -351,10 +351,26 @@ class StorageApiTests(_TreeMixin, APITestCase):
         self.assertIn(resp.status_code, (401, 403))
 
 
+ALPINE = {"headers": {"X-Alpine-Request": "true"}}
+
+
 class StorageUiViewTests(_TreeMixin, TestCase):
+    def test_opened_on_its_own_it_leads_to_the_page_showing_the_dialog(self):
+        self.client.force_login(self.alice)
+        self.assertRedirects(
+            self.client.get("/files/storage"),
+            "/files?storage=root",
+            fetch_redirect_response=False,
+        )
+        self.assertRedirects(
+            self.client.get(f"/files/storage/{self.photos.uuid}?category=video&q=c"),
+            f"/files?storage={self.photos.uuid}&storage_category=video&storage_q=c",
+            fetch_redirect_response=False,
+        )
+
     def test_root_partial_renders_every_section(self):
         self.client.force_login(self.alice)
-        resp = self.client.get("/files/storage")
+        resp = self.client.get("/files/storage", **ALPINE)
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode()
         self.assertIn('id="storage-analysis"', html)
@@ -365,7 +381,7 @@ class StorageUiViewTests(_TreeMixin, TestCase):
 
     def test_query_highlights_matches_and_travels_with_the_links(self):
         self.client.force_login(self.alice)
-        html = self.client.get("/files/storage?q=photos").content.decode()
+        html = self.client.get("/files/storage?q=photos", **ALPINE).content.decode()
         self.assertIn("<mark", html)
         self.assertIn('data-query="photos"', html)
         # Drill-down and category links keep the search.
@@ -375,20 +391,22 @@ class StorageUiViewTests(_TreeMixin, TestCase):
         self.assertNotIn("d.pdf", html)
         self.assertIn("docs", html)
         # Markup in the search string is escaped, never rendered.
-        evil = self.client.get("/files/storage?q=%3Cscript%3E").content.decode()
+        evil = self.client.get(
+            "/files/storage?q=%3Cscript%3E", **ALPINE
+        ).content.decode()
         self.assertNotIn("<script>", evil)
 
     def test_other_category_is_not_a_link(self):
         for i, key in enumerate(["audio", "archive", "code", "font", "executable"]):
             _file(self.alice, f"x{i}", None, size=10 - i, category=key)
         self.client.force_login(self.alice)
-        html = self.client.get("/files/storage").content.decode()
+        html = self.client.get("/files/storage", **ALPINE).content.decode()
         self.assertIn("Other", html)
         self.assertNotIn("?category=other", html)
 
     def test_folder_partial_links_back_to_the_parent(self):
         self.client.force_login(self.alice)
-        resp = self.client.get(f"/files/storage/{self.raw.uuid}")
+        resp = self.client.get(f"/files/storage/{self.raw.uuid}", **ALPINE)
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode()
         self.assertIn(f'href="/files/storage/{self.photos.uuid}"', html)
@@ -497,7 +515,7 @@ class SharedFolderPathTests(APITestCase):
         self._share("ro")
         self.client.force_login(self.bob)
 
-        resp = self.client.get(f"/files/storage/{self.shared.uuid}")
+        resp = self.client.get(f"/files/storage/{self.shared.uuid}", **ALPINE)
 
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "deep.txt")

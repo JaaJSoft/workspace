@@ -491,11 +491,18 @@ test('a hidden page waits to be on screen before asking again', async () => {
 test('an event without an id leaves the page where it stood', async () => {
   const browser = new FakeBrowser();
   const [tab] = await openTabs(browser, 1);
+  // A second page that never got anywhere: its snapshot was refused.
+  const { tab: nowhere, answers } = tabAnsweredByHand(browser);
+  await settle();
+  answers[0].resolve(REFUSED);
   browser.worker().stream().deliver(OPERATION, 'cursor-7');
   await settle();
 
-  // A worker that starts over opens a stream with no position yet.
+  // The worker ends, and that page is the one to start the next: its stream
+  // has no position, and neither have the events it sends.
   browser.kill(browser.worker());
+  await checkAndWait(nowhere);
+  assert.equal(browser.worker().stream().url, STREAM);
   await checkAndWait(tab);
   browser.worker().stream().deliver(OPERATION);
   await settle();
@@ -504,6 +511,124 @@ test('an event without an id leaves the page where it stood', async () => {
   await settle();
 
   assert.equal(tab.lastFetch(), from(SNAPSHOT, 'cursor-7'));
+});
+
+test('a page asks less and less often for a snapshot that keeps coming short', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+
+  async function refusedAfter(checks) {
+    answers[answers.length - 1].resolve(REFUSED);
+    await settle();
+    for (let i = 0; i < checks; i += 1) {
+      tab.timers.advance(CHECK_INTERVAL_MS);
+      await settle();
+    }
+    return tab.fetches.length;
+  }
+
+  // A provider down for long: every tab asking every 20 seconds would get
+  // the same queued events each time.
+  assert.equal(await refusedAfter(1), 2, 'at the next check');
+  assert.equal(await refusedAfter(1), 2);
+  assert.equal(await refusedAfter(1), 3, 'then after two');
+  assert.equal(await refusedAfter(3), 3);
+  assert.equal(await refusedAfter(1), 4, 'then after four');
+
+  for (let i = 0; i < 4; i += 1) await refusedAfter(15);
+  const before = tab.fetches.length;
+  assert.equal(await refusedAfter(14), before);
+  assert.equal(await refusedAfter(1), before + 1, 'never more than fifteen');
+});
+
+test('the time a page spends hidden counts towards its wait', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+  answers[0].resolve(REFUSED);
+  await settle();
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+  answers[1].resolve(REFUSED);
+  await settle();
+  assert.equal(tab.fetches.length, 2);
+
+  // Two checks to wait, spent in the background.
+  tab.hide();
+  for (let i = 0; i < 2; i += 1) {
+    tab.timers.advance(CHECK_INTERVAL_MS);
+    await settle();
+  }
+  assert.equal(tab.fetches.length, 2, 'not while hidden');
+
+  tab.show();
+  await settle();
+  assert.equal(tab.fetches.length, 3, 'at once when shown');
+});
+
+test('a snapshot that came puts an end to the waiting', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+  for (let failures = 0; failures < 3; failures += 1) {
+    answers[answers.length - 1].resolve(REFUSED);
+    await settle();
+    for (let i = 0; i < 4 && tab.fetches.length === failures + 1; i += 1) {
+      tab.timers.advance(CHECK_INTERVAL_MS);
+      await settle();
+    }
+  }
+  answers[answers.length - 1].resolve(answering([]));
+  await settle();
+
+  // Owed again later, it starts over at the next check.
+  tab.setAside();
+  tab.bringBack();
+  await settle();
+  answers[answers.length - 1].resolve(REFUSED);
+  await settle();
+  const asked = tab.fetches.length;
+  tab.timers.advance(CHECK_INTERVAL_MS);
+  await settle();
+
+  assert.equal(tab.fetches.length, asked + 1);
+});
+
+test('a page still owed a snapshot is caught up by the stream it starts', async () => {
+  const browser = new FakeBrowser();
+  const [first] = await openTabs(browser, 1);
+  const { tab, answers } = tabAnsweredByHand(browser);
+  await settle();
+  answers[0].resolve(answering([]));
+  browser.worker().stream().deliver(OPERATION, 'cursor-7');
+  await settle();
+  tab.setAside();
+  tab.bringBack();
+  await settle();
+  answers[1].resolve(REFUSED);
+  await settle();
+
+  // Left alone, it starts the next stream from where it stood: nothing is
+  // owed any more, and its cursor follows the events again.
+  first.windowHandlers.pagehide({ persisted: false });
+  browser.close(first);
+  tab.setAside();
+  await settle();
+  tab.bringBack();
+  await settle();
+  assert.equal(browser.worker().stream().url, from(STREAM, 'cursor-7'));
+  browser.worker().stream().deliver(OPERATION, 'cursor-9');
+  await settle();
+  tab.setAside();
+  await settle();
+  tab.bringBack();
+  await settle();
+
+  assert.equal(browser.worker().stream().url, from(STREAM, 'cursor-9'));
 });
 
 // -- the stream opening, and opening again ----------------------------------
@@ -815,7 +940,7 @@ for (const [leaving, returning] of [['pagehide', 'pageshow'], ['freeze', 'resume
   });
 }
 
-test('the only page, restored from the bfcache, starts a stream and asks what it missed', async () => {
+test('the only page, restored from the bfcache, resumes the stream where it stood', async () => {
   const browser = new FakeBrowser();
   const [tab] = await openTabs(browser, 1);
   const worker = browser.worker();
@@ -830,14 +955,40 @@ test('the only page, restored from the bfcache, starts a stream and asks what it
   await settle();
 
   assert.equal(worker.sources.length, 2);
-  // What one page missed is its own business: the stream starts from now, and
-  // would otherwise replay it to every tab that joins in the meantime.
-  assert.equal(worker.stream().url, STREAM);
-  assert.deepStrictEqual(tab.fetches, [from(SNAPSHOT, 'cursor-7')]);
+  // The cursor names a position for every provider that had sent an event: a
+  // stream started without it would forget them all.
+  assert.equal(worker.stream().url, from(STREAM, 'cursor-7'));
+  assert.deepStrictEqual(tab.fetches, [], 'the stream replays what it missed');
+  assert.deepStrictEqual(tab.types(), [], 'nothing can reach it yet');
 
+  // Told once the stream is there: what comes between a re-sync and the
+  // opening would be in neither.
   worker.stream().open();
   await settle();
-  assert.deepStrictEqual(tab.types(), ['sse:reconnect'], 'told once, when it came back');
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
+});
+
+test('a page that comes back twice is not handed the same events twice', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+  const worker = browser.worker();
+  worker.stream().deliver(OPERATION, 'cursor-7');
+  await settle();
+
+  tab.setAside();
+  await settle();
+  tab.bringBack();
+  await settle();
+  // What was queued while it was away, replayed by the stream it started.
+  worker.stream().deliver({ event: 'files.lock_released', data: {} }, 'cursor-8');
+  await settle();
+
+  tab.setAside();
+  await settle();
+  tab.bringBack();
+  await settle();
+
+  assert.equal(worker.stream().url, from(STREAM, 'cursor-8'));
 });
 
 test('a restore that fires both resume and pageshow joins once', async () => {
@@ -881,9 +1032,12 @@ test('a worker the browser ended is replaced by the page that notices', async ()
 
   const replacement = browser.worker();
   assert.notEqual(replacement, worker);
-  assert.equal(replacement.stream().url, STREAM);
+  assert.equal(replacement.stream().url, from(STREAM, 'cursor-7'));
+  assert.deepStrictEqual(tab.fetches, [], 'the stream it starts replays what it missed');
+
+  replacement.stream().open();
+  await settle();
   assert.deepStrictEqual(tab.types(), ['sse:reconnect'], 'it changed streams');
-  assert.equal(tab.lastFetch(), from(SNAPSHOT, 'cursor-7'));
 
   replacement.stream().deliver(OPERATION, 'cursor-8');
   await settle();
@@ -1020,6 +1174,23 @@ test('a worker whose script did not load leaves the page a stream of its own', a
   assert.equal(tab.sources.length, 1, 'the wait for an answer ended with it');
 });
 
+test('a page whose worker fails to load on its way back is told when its own stream opens', async () => {
+  const browser = new FakeBrowser();
+  const [tab] = await openTabs(browser, 1);
+  tab.setAside();
+  await settle();
+
+  browser.kill(browser.worker());
+  browser.workersStart = false;
+  tab.bringBack();
+  tab.sharedWorkers[1].onerror();
+
+  assert.equal(tab.sources.length, 1);
+  assert.deepStrictEqual(tab.types(), []);
+  tab.stream().open();
+  assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
+});
+
 test('an error reported once the worker has answered is not a reason to leave it', async () => {
   const browser = new FakeBrowser();
   const [tab] = await openTabs(browser, 1);
@@ -1058,6 +1229,9 @@ test('a page left without a worker resumes its own stream where it stood', async
   await checkAndWait(tab);
 
   assert.equal(tab.stream().url, from(STREAM, 'cursor-7'));
+  assert.deepStrictEqual(tab.types(), [], 'nothing can reach it yet');
+
+  tab.stream().open();
   assert.deepStrictEqual(tab.types(), ['sse:reconnect']);
 
   tab.stream().deliver(OPERATION, 'cursor-8');

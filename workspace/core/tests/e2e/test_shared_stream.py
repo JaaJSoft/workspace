@@ -263,7 +263,7 @@ class SharedStreamTests(PlaywrightTestCase):
             self.snapshots, [], "the page starts its stream: nothing to ask"
         )
 
-    def test_the_only_page_gives_the_stream_up_while_set_aside(self):
+    def test_the_only_page_gives_the_stream_up_and_resumes_it_where_it_stood(self):
         tab = self._first_tab()
         left = self._connection(1, tab)
         left.send(_unread(7, event_id="cursor-1"))
@@ -274,15 +274,19 @@ class SharedStreamTests(PlaywrightTestCase):
         tab.evaluate(SET_ASIDE)
         self.assertTrue(self._dropped(left))
 
-        self.snapshot_events = [{"event": "notifications.count", "data": {"unread": 9}}]
         tab.evaluate(COUNT_RECONNECTS)
-        with tab.expect_response(SNAPSHOT) as asked:
-            tab.evaluate(BROUGHT_BACK)
+        tab.evaluate(BROUGHT_BACK)
 
-        self.assertIn("last_event_id=cursor-1", asked.value.url)
+        # The stream it starts replays what it missed: nothing to ask, and it
+        # is told to re-sync once that stream is open.
+        resumed = self._connection(2, tab)
+        self.assertTrue(resumed.from_worker)
+        self.assertIn("last_event_id=cursor-1", resumed.path)
+        tab.wait_for_function("() => window.__reconnects === 1")
+        self.assertEqual(self.snapshots, [])
+
+        resumed.send(_unread(9))
         self._wait_unread(tab, 9)
-        self.assertEqual(tab.evaluate(RECONNECTS), 1)
-        self.assertTrue(self._connection(2, tab).from_worker)
 
     def test_a_page_back_next_to_a_running_stream_asks_what_it_missed(self):
         first = self._first_tab()
@@ -355,15 +359,17 @@ class SharedStreamTests(PlaywrightTestCase):
             devtools.send("Target.closeTarget", {"targetId": target_id})
         self.assertTrue(self._dropped(stream))
 
-        self.snapshot_events = [{"event": "notifications.count", "data": {"unread": 9}}]
         tab.evaluate(COUNT_RECONNECTS)
-        with tab.expect_response(SNAPSHOT, timeout=TIMEOUT_MS) as asked:
-            tab.evaluate(SHOWN)
+        tab.evaluate(SHOWN)
 
-        self.assertIn("last_event_id=cursor-1", asked.value.url)
-        self.assertTrue(self._connection(2, tab).from_worker)
+        resumed = self._connection(2, tab)
+        self.assertTrue(resumed.from_worker)
+        self.assertIn("last_event_id=cursor-1", resumed.path)
+        tab.wait_for_function("() => window.__reconnects === 1")
+        self.assertEqual(self.snapshots, [])
+
+        resumed.send(_unread(9))
         self._wait_unread(tab, 9)
-        self.assertEqual(tab.evaluate(RECONNECTS), 1)
 
     def test_a_snapshot_that_beats_the_page_to_its_listeners_is_not_lost(self):
         self._first_tab()

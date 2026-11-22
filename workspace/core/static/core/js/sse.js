@@ -120,10 +120,12 @@
         if (message.type === 'hello') ports.add(port);
         const fresh = !stream;
         if (fresh) {
-          // From now, whatever the page that starts it has seen before: what
-          // one page missed is not news to the others (see loadSnapshot).
+          // Where the page that starts it stood. The cursor names a position
+          // for each provider that sent an event on the stream it comes from,
+          // and a stream opened without one forgets them all. A page coming
+          // back is told when it opens: it missed what came until then.
           stream = openStream(
-            { user: message.user },
+            { user: message.user, cursor: message.cursor, late: message.returning },
             function (id, payload) { toAll({ type: 'event', id, payload }); },
             function () { toAll({ type: 'reconnect' }); },
           );
@@ -168,6 +170,8 @@
   const CHECK_INTERVAL_MS = 20000;
   // Events wait for the snapshot, so it cannot be waited for without limit.
   const SNAPSHOT_TIMEOUT_MS = 5000;
+  // The most checks a page lets pass before asking again for a snapshot.
+  const MAX_PATIENCE = 15;
 
   // The worker is started from the URL this page loaded the file at, which
   // changes with its content once static files are hashed: a page never talks
@@ -178,8 +182,8 @@
   let sharing = Boolean(window.SharedWorker && scriptUrl && userId);
   const workerName = 'workspace-sse:' + userId;
 
-  // The resume point of what this page applied: what it asks the snapshot
-  // from when it comes back, and a stream of its own to start at.
+  // The resume point of what this page applied: where a stream it starts
+  // resumes, its own or the worker's, and what it asks the snapshot from.
   let lastEventId = '';
   // The page's own stream, when it shares none.
   let stream = null;
@@ -194,6 +198,12 @@
   // or came short. Until one does, its cursor stays where it stood whatever
   // arrives, so that asking again still asks for all of it.
   let owed = false;
+  // Checks of the worker to let pass before asking again, and those that
+  // have. Doubled each time the snapshot comes short again: a provider down
+  // for long would otherwise have every tab ask every 20 seconds, and get the
+  // same queued events each time.
+  let patience = 0;
+  let waited = 0;
 
   // Listeners come with the scripts that follow this one and with Alpine,
   // which starts once the document is parsed. An event dispatched before
@@ -235,7 +245,8 @@
     dispatch(message.payload);
   }
 
-  // `late` when the page rendered a while ago: the opening is then announced.
+  // `late` when the page rendered a while ago: it is then told of the
+  // opening, having missed what came until then.
   function openOwnStream(late) {
     stream = openStream(
       { user: userId, cursor: lastEventId, late },
@@ -246,10 +257,10 @@
 
   // A page that joins a stream already open never got the events a stream
   // starts with (unread counts, generations under way), and one coming back
-  // missed what was queued since: both ask the server, the second with its
-  // cursor. Events wait for the answer and are applied after it, the order a
-  // stream would have delivered them in. `streamCursor` is where the stream
-  // stood when the page joined, which the answer brings the page up to.
+  // to it missed what was queued since: both ask the server, the second with
+  // its cursor. Events wait for the answer and are applied after it, the
+  // order a stream would have delivered them in. `streamCursor` is where the
+  // stream stood when the page joined, which the answer brings the page up to.
   function loadSnapshot(streamCursor) {
     const held = [];
     buffered = held;
@@ -268,6 +279,8 @@
         // Complete when every provider answered. Anything less is asked
         // again, from the same cursor (see onWorkerMessage).
         owed = !(snapshot && snapshot.complete);
+        patience = owed ? Math.min(Math.max(1, patience * 2), MAX_PATIENCE) : 0;
+        waited = 0;
         if (!owed && streamCursor) lastEventId = streamCursor;
         for (const message of held) apply(message);
       });
@@ -278,9 +291,16 @@
     clearTimeout(answerTimer);
     answerTimer = null;
     if (message.type === 'welcome') {
-      // A worker this page started is opening the stream now, and its first
-      // events are on their way: only a page coming back has more to ask.
-      if (!message.fresh || returning) loadSnapshot(message.id);
+      if (message.fresh) {
+        // The stream this page started resumes where it stood: its first
+        // events are on their way, and what the page missed with them.
+        owed = false;
+      } else {
+        // Back next to a stream that kept running. A stream it starts tells
+        // the page itself, on opening.
+        if (returning) announceReconnect();
+        loadSnapshot(message.id);
+      }
     } else if (message.type === 'event') {
       if (buffered) buffered.push(message);
       else apply(message);
@@ -289,8 +309,9 @@
       if (!buffered) announceReconnect();
     } else if (message.type === 'alive') {
       // The answer to a check: a page on screen takes it to ask again for a
-      // snapshot it is still owed.
-      if (owed && !buffered && !document.hidden) loadSnapshot(message.id);
+      // snapshot it is still owed. The checks of a hidden page count too, so
+      // that it asks as soon as it is shown.
+      if (owed && !buffered && ++waited >= patience && !document.hidden) loadSnapshot(message.id);
     }
   }
 
@@ -335,25 +356,30 @@
   function join(resumed) {
     if (port) return;
     returning = resumed;
-    if (resumed) announceReconnect();
     let worker;
     try {
       worker = new SharedWorker(scriptUrl, { name: workerName });
     } catch (e) {
-      goSolo(false);
+      goSolo(resumed);
       return;
     }
     const joined = worker.port;
     port = joined;
     // The script did not load. Only until the worker has spoken: Firefox also
     // reports here what a healthy worker failed to catch.
-    worker.onerror = function () { if (port === joined) goSolo(false); };
+    worker.onerror = function () { if (port === joined) goSolo(resumed); };
     joined.onmessage = function (e) {
       if (port !== joined) return;
       worker.onerror = null;
       onWorkerMessage(e.data);
     };
-    joined.postMessage({ type: 'hello', user: userId, visible: !document.hidden });
+    joined.postMessage({
+      type: 'hello',
+      user: userId,
+      cursor: lastEventId,
+      returning: resumed,
+      visible: !document.hidden,
+    });
     // A worker that failed to start says nothing.
     expectAnswer(function () { goSolo(true); });
     checkTimer = setInterval(check, CHECK_INTERVAL_MS);
@@ -371,7 +397,8 @@
   // the way in and joins again. One with a stream of its own reopens it
   // whatever its state: the EventSource can still report OPEN while its
   // connection is dead, and the check above would leave the page on stale
-  // data forever. Either way listeners are told to re-sync.
+  // data forever. Either way listeners are told to re-sync, once a stream is
+  // there to bring what follows.
   window.addEventListener('pageshow', function (e) {
     if (!e.persisted) return;
     if (sharing) join(true);

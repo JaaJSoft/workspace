@@ -9,11 +9,17 @@ Prometheus gauge decrement).
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import orjson
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone, translation
 from prometheus_client import REGISTRY
 
+from workspace.core.sse_registry import push_user_event
 from workspace.core.views import sse
+from workspace.imports.sse_provider import ImportsSSEProvider
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -328,6 +334,262 @@ class StreamCursorTests(TestCase):
         self.assertEqual(sse._incoming_cursors(request), {"files": "12"})
 
 
+class ResumePointTests(TestCase):
+    """An id names every provider that keeps a place, not only the ones that
+    have sent an event: a page takes the id of the last event it applied for
+    its cursor, whichever provider sent it."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="sse-resume", password="p")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _id_of_an_event_from_another_provider(self, cursors):
+        chunk = sse._emit("ai_stream", "token", {}, "t-1", cursors)
+        return next(line[4:] for line in chunk.split("\n") if line.startswith("id: "))
+
+    def test_a_stream_resumed_from_another_provider_s_id_skips_nothing(self):
+        """Were files missing from that id, the stream resumed from it would
+        start files at the head, after the lock release queued meanwhile."""
+        push_user_event("files", self.user.id, {"type": "operation"})
+        cursors = {}
+        sse._init_providers(self.user, cursors)
+        event_id = self._id_of_an_event_from_another_provider(cursors)
+
+        push_user_event("files", self.user.id, {"type": "lock_released"})
+        resumed = sse._init_providers(self.user, sse.decode_stream_cursor(event_id))
+
+        self.assertEqual(
+            [name for name, _, _ in resumed["files"].get_initial_events()],
+            ["lock_released"],
+        )
+
+    def test_a_resume_point_handed_in_is_the_one_given_back(self):
+        push_user_event("files", self.user.id, {"type": "operation"})
+        cursors = {"files": "0"}
+        sse._init_providers(self.user, cursors)
+        self.assertEqual(cursors["files"], "0")
+
+    def test_a_provider_that_keeps_no_place_is_not_named(self):
+        cursors = {}
+        providers = sse._init_providers(self.user, cursors)
+        self.assertIn("notifications", providers)
+        self.assertNotIn("notifications", cursors)
+
+
+def _payloads(chunks):
+    """The JSON payload of each SSE chunk, as the page parses it."""
+    return [
+        orjson.loads(line[len("data: ") :])
+        for chunk in chunks
+        for line in chunk.split("\n")
+        if line.startswith("data: ")
+    ]
+
+
+class StreamSnapshotTests(TestCase):
+    """A browser holds one stream for all its tabs; a tab that joins it later
+    asks here for the events a stream starts with."""
+
+    URL = "/api/v1/stream/snapshot"
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="sse-snapshot", password="p")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_anonymous_is_refused_like_on_the_stream(self):
+        self.assertEqual(self.client.get(self.URL).status_code, 403)
+        self.assertEqual(self.client.get("/api/v1/stream").status_code, 403)
+
+    def test_answers_a_get_only(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.post(self.URL).status_code, 405)
+
+    def test_answers_what_a_stream_opens_with(self):
+        """Compared on the registered providers: a new one is covered as it comes."""
+        providers = sse._init_providers(self.user, {})
+        self.assertTrue(providers)
+        opening = _payloads(sse._emit_initial_events(providers, self.user.id, {}))
+        self.assertTrue(opening)
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json(), {"events": opening, "complete": True})
+
+    def test_a_failing_provider_costs_the_others_nothing(self):
+        broken = MagicMock()
+        broken.get_initial_events.side_effect = RuntimeError("down")
+        working = MagicMock()
+        working.get_initial_events.return_value = [("count", {"unread": 4}, "evt-1")]
+        self.client.force_login(self.user)
+
+        with (
+            patch.object(
+                sse,
+                "_init_providers",
+                return_value={"chat": broken, "notifications": working},
+            ),
+            self.assertLogs("workspace.core.views.sse", level="ERROR"),
+        ):
+            response = self.client.get(self.URL)
+
+        # Not complete: the page must not take the stream's position for its
+        # own, which would skip what the failed provider had for it.
+        self.assertEqual(
+            response.json(),
+            {
+                "events": [{"event": "notifications.count", "data": {"unread": 4}}],
+                "complete": False,
+            },
+        )
+
+    def test_a_count_that_cannot_be_read_leaves_the_answer_incomplete(self):
+        """A provider that kept the failure to itself would have the answer
+        called complete, and the page never ask for its count again."""
+        self.client.force_login(self.user)
+        for count in (
+            "workspace.notifications.sse_provider.get_unread_count",
+            "workspace.chat.sse_provider.get_unread_counts",
+        ):
+            with (
+                self.subTest(count=count),
+                patch(count, side_effect=RuntimeError("down")),
+                self.assertLogs("workspace.core.views.sse", level="ERROR"),
+            ):
+                self.assertIs(self.client.get(self.URL).json()["complete"], False)
+
+    def test_a_provider_that_cannot_start_leaves_the_answer_incomplete(self):
+        self.client.force_login(self.user)
+        with (
+            patch.object(
+                ImportsSSEProvider, "__init__", side_effect=RuntimeError("down")
+            ),
+            self.assertLogs("workspace.core.views.sse", level="ERROR"),
+        ):
+            response = self.client.get(self.URL)
+
+        self.assertIs(response.json()["complete"], False)
+        self.assertTrue(response.json()["events"], "the other providers answered")
+
+    def test_a_tab_coming_back_is_given_what_was_queued_since_its_cursor(self):
+        """A page restored from the bfcache joins a stream that kept running,
+        and the snapshot is all it reads of what it missed: without the replay
+        a ``lock_released`` sent meanwhile never reaches it, and its editor
+        stays read-only."""
+        released = {"type": "lock_released", "file_uuid": "f-1", "actor": "bob"}
+        push_user_event("files", self.user.id, released)
+        self.client.force_login(self.user)
+
+        def names(response):
+            return [event["event"] for event in response.json()["events"]]
+
+        # A page that has just rendered already reflects it.
+        self.assertNotIn("files.lock_released", names(self.client.get(self.URL)))
+
+        cursor = sse.encode_stream_cursor({"files": "0"})
+        back = self.client.get(self.URL, {"last_event_id": cursor})
+        self.assertIn(
+            {"event": "files.lock_released", "data": released},
+            back.json()["events"],
+        )
+
+    def test_reading_consumes_nothing(self):
+        """The stream must still find what a snapshot read."""
+        push_user_event("files", self.user.id, {"type": "lock_released"})
+        cursor = sse.encode_stream_cursor({"files": "0"})
+        self.client.force_login(self.user)
+
+        first = self.client.get(self.URL, {"last_event_id": cursor}).json()
+        second = self.client.get(self.URL, {"last_event_id": cursor}).json()
+        self.assertEqual(first, second)
+
+        provider = sse._init_providers(self.user, {"files": "0"})["files"]
+        self.assertEqual(len(provider.get_initial_events()), 1)
+
+    def test_built_in_the_zone_and_language_a_stream_runs_in(self):
+        """A stream body runs once the middlewares have left, in UTC and in the
+        instance's language. An event built otherwise here would read
+        differently in a tab depending on when it joined the stream."""
+        set_setting(self.user, "core", "timezone", "Asia/Tokyo")
+        set_setting(self.user, "core", "language", "fr")
+        seen = {}
+
+        def initial_events():
+            seen["zone"] = timezone.get_current_timezone_name()
+            seen["language"] = translation.get_language()
+            return []
+
+        provider = MagicMock()
+        provider.get_initial_events.side_effect = initial_events
+        self.client.force_login(self.user)
+
+        with patch.object(sse, "_init_providers", return_value={"chat": provider}):
+            self.client.get(self.URL)
+
+        self.assertEqual(seen, {"zone": "UTC", "language": "en"})
+
+    def test_is_revalidated_on_every_read(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.URL)
+        self.assertEqual(response["Cache-Control"], "private, no-cache")
+
+
+class ShownUserTests(TestCase):
+    """A tab outlives its session. Its stream then reconnects with the cookie
+    of whoever signed in since, and would hand that account's events to a page
+    of the first one: the page says who it shows, and is refused anyone else's.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="sse-alice", password="p")
+        cls.bob = User.objects.create_user(username="sse-bob", password="p")
+
+    def _status(self, url, shown=None):
+        query = {} if shown is None else {"user": shown}
+        with patch.object(sse, "_event_stream", return_value=iter(())):
+            return self.client.get(url, query).status_code
+
+    def test_another_users_page_is_refused(self):
+        self.client.force_login(self.bob)
+        for url in ("/api/v1/stream", "/api/v1/stream/snapshot"):
+            with self.subTest(url=url):
+                self.assertEqual(self._status(url, shown=self.alice.pk), 403)
+                self.assertEqual(self._status(url, shown="nobody"), 403)
+
+    def test_the_users_own_page_is_answered(self):
+        self.client.force_login(self.alice)
+        for url in ("/api/v1/stream", "/api/v1/stream/snapshot"):
+            with self.subTest(url=url):
+                self.assertEqual(self._status(url, shown=self.alice.pk), 200)
+
+    def test_a_page_that_names_nobody_is_answered(self):
+        self.client.force_login(self.alice)
+        for url in ("/api/v1/stream", "/api/v1/stream/snapshot"):
+            with self.subTest(url=url):
+                self.assertEqual(self._status(url), 200)
+
+    def test_a_refused_stream_is_nobodys_activity(self):
+        """The worker of a tab left open keeps asking, every 20 seconds while
+        that tab is on screen. Counted as activity, each refusal would keep
+        the account now signed in "online" and hold back its web push."""
+        self.client.force_login(self.bob)
+        with patch("workspace.users.services.presence.touch") as touch:
+            self.assertEqual(self._status("/api/v1/stream", shown=self.alice.pk), 403)
+            touch.assert_not_called()
+            # Like the stream it stands in for.
+            self.assertEqual(self._status("/api/v1/stream", shown=self.bob.pk), 200)
+            touch.assert_not_called()
+
+
 @override_settings(PREVIEW_VISIBILITY="staff")
 class StreamModuleVisibilityTests(TestCase):
     """The stream is served by core, so the module guard never sees it: a
@@ -340,3 +602,19 @@ class StreamModuleVisibilityTests(TestCase):
     def test_the_audience_gets_them(self):
         staff = User.objects.create_user(username="staff", password="p", is_staff=True)
         self.assertIn("imports", sse._init_providers(staff, {}))
+
+    def test_a_snapshot_leaves_a_hidden_module_out_too(self):
+        regular = User.objects.create_user(username="regular", password="p")
+        staff = User.objects.create_user(username="staff", password="p", is_staff=True)
+        job = {"type": "job", "state": "running"}
+
+        def names(user):
+            self.client.force_login(user)
+            events = self.client.get("/api/v1/stream/snapshot").json()["events"]
+            return [event["event"] for event in events]
+
+        with patch.object(
+            ImportsSSEProvider, "get_initial_events", return_value=[("job", job, None)]
+        ):
+            self.assertIn("imports.job", names(staff))
+            self.assertNotIn("imports.job", names(regular))

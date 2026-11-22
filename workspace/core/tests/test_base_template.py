@@ -3,6 +3,8 @@
 import re
 from pathlib import Path
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.template import Context, Template
 from django.template.loader import get_template
 from django.test import TestCase
@@ -52,6 +54,23 @@ class NavbarLayoutScrollLockTests(TestCase):
         classes = self._body_classes(self._render_base_with_navbar())
         self.assertIn("overflow-hidden", classes)
         self.assertIn("h-dvh", classes)
+
+
+class ShownUserAttributeTests(TestCase):
+    """``<body data-user-id>`` is how a script learns whose page it runs in:
+    the SSE stream is shared between the tabs of that user and refused to any
+    other, and the calendar tells the viewer's own events by it."""
+
+    def _body_tag(self, user):
+        html = Template("{% extends 'base.html' %}").render(Context({"user": user}))
+        return re.search(r"<body\b[^>]*>", html).group(0)
+
+    def test_an_authenticated_page_names_its_user(self):
+        user = get_user_model().objects.create_user(username="shown", password="p")
+        self.assertIn(f'data-user-id="{user.pk}"', self._body_tag(user))
+
+    def test_an_anonymous_page_names_nobody(self):
+        self.assertNotIn("data-user-id", self._body_tag(AnonymousUser()))
 
 
 def _base_template_source() -> str:

@@ -19,7 +19,11 @@ class SSEProviderInfo:
 
 
 class SSEProvider(ABC):
-    """Instantiated once per SSE connection per provider."""
+    """Instantiated once per SSE connection per provider.
+
+    A browser holds one connection for all its tabs (sse.js), so an event is
+    for every page the user has open, never for the one that caused it.
+    """
 
     def __init__(self, user, last_event_id: str | None):
         self.user = user
@@ -28,6 +32,10 @@ class SSEProvider(ABC):
     @abstractmethod
     def get_initial_events(self) -> list[tuple[str, dict, str | None]]:
         """Events sent immediately on connection.
+
+        Also what a tab is given when it joins a stream that is already open
+        (``stream_snapshot``), from a provider discarded right after: describe
+        the current state, and consume nothing.
 
         Returns list of (event_name, data_dict, event_id_or_None).
         """
@@ -40,6 +48,15 @@ class SSEProvider(ABC):
         ``dirty=True``), None on a timer tick or a clean wake-up.
         Returns list of (event_name, data_dict, event_id_or_None).
         """
+
+    def resume_point(self) -> str | None:
+        """Where a stream opened again resumes this provider, if it keeps a place.
+
+        Named in every id the stream sends, before the provider has sent
+        anything too: a page resumes from the id of the last event it applied,
+        whichever provider that was.
+        """
+        return None
 
 
 class SSERegistry:
@@ -240,6 +257,9 @@ class MailboxSSEProvider(SSEProvider):
             return max(int(last_event_id), 0)
         except TypeError, ValueError:
             return mailbox_head(self.slug, self.user.id)
+
+    def resume_point(self):
+        return str(self._cursor)
 
     def get_initial_events(self):
         return self._read()

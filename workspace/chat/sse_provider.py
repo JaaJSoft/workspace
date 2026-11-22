@@ -69,17 +69,11 @@ class ChatSSEProvider(SSEProvider):
         )
 
     def get_initial_events(self):
-        events = []
-        try:
-            unread = get_unread_counts(self.user)
-            events.append(("unread", unread, None))
-            self._last_unread_push = time.time()
-        except Exception:
-            logger.exception(
-                "Failed to send initial unread counts for user %s",
-                self.user.id,
-            )
-        return events
+        # A failure is the caller's to log: it also has to say that its answer
+        # is short of these counts.
+        unread = get_unread_counts(self.user)
+        self._last_unread_push = time.time()
+        return [("unread", unread, None)]
 
     def poll(self, cache_value):
         events = []

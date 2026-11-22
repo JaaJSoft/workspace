@@ -3,8 +3,11 @@ import logging
 import time
 
 import orjson
+from django.conf import settings
 from django.db import close_old_connections
-from django.http import StreamingHttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
+from django.utils import timezone, translation
+from django.views.decorators.http import require_GET
 
 from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
 
@@ -56,30 +59,46 @@ _MAX_CONNECTION_SECONDS = 600
 _MAX_CURSOR_CHARS = 512
 
 
+def _event_json(event_type, data):
+    """One event as the page reads it, on the stream and in a snapshot alike."""
+    return orjson.dumps({"event": event_type, "data": data})
+
+
 def _format_sse(event_type, data, event_id=None):
     """Format an SSE event string.
 
     Uses a single SSE event type 'sse' with the real event name inside the JSON payload.
     """
-    payload = {
-        "event": event_type,
-        "data": data,
-    }
     lines = ["event: sse"]
     if event_id:
         lines.append(f"id: {event_id}")
-    lines.append(f"data: {orjson.dumps(payload).decode()}")
+    lines.append(f"data: {_event_json(event_type, data).decode()}")
     lines.append("")
     lines.append("")
     return "\n".join(lines)
 
 
+def _shows_another_user(request):
+    """Whether the page asking was rendered for someone else than the session.
+
+    A tab outlives its session, and a shared worker reconnects its stream for
+    as long as one of its pages is open: after another account signed in, the
+    browser sends that account's cookie. The page says who it shows (``user``)
+    and is refused what belongs to anyone else.
+    """
+    shown = request.GET.get("user")
+    return shown is not None and shown != str(request.user.pk)
+
+
 def global_stream(request):
     """Global SSE endpoint that aggregates events from all registered providers."""
-    if not request.user.is_authenticated:
-        return StreamingHttpResponse("", status=403)
-
+    # Ahead of any answer: PresenceMiddleware reads it after the view, and a
+    # refusal a worker keeps running into is no more someone's activity than
+    # the stream is.
     request._is_sse_stream = True
+
+    if not request.user.is_authenticated or _shows_another_user(request):
+        return StreamingHttpResponse("", status=403)
 
     response = StreamingHttpResponse(
         _event_stream(request),
@@ -139,11 +158,15 @@ def _incoming_cursors(request):
     return decode_stream_cursor(raw)
 
 
-def _init_providers(user, cursors):
+def _init_providers(user, cursors, failed=None):
     """Instantiate one provider per registered app the user may see.
 
     The stream is served here, in core, so the preview-module guard never
     judges it: a provider whose module is hidden from the user is skipped.
+    ``failed`` collects the slugs of the providers that could not start.
+
+    ``cursors`` hands each provider its resume point and is given back where
+    each one starts, so that every id the stream sends names them all.
     """
     providers_info = sse_registry.get_all()
     providers = {}
@@ -151,9 +174,16 @@ def _init_providers(user, cursors):
         if is_hidden_from(user, info.provider_cls.__module__):
             continue
         try:
-            providers[slug] = info.provider_cls(user, cursors.get(slug))
+            provider = info.provider_cls(user, cursors.get(slug))
+            resume_point = provider.resume_point()
         except Exception:
             logger.exception("Failed to instantiate SSE provider '%s'", slug)
+            if failed is not None:
+                failed.append(slug)
+            continue
+        providers[slug] = provider
+        if resume_point is not None:
+            cursors[slug] = resume_point
     return providers
 
 
@@ -167,18 +197,74 @@ def _emit(slug, event_name, data, event_id, cursors):
     return _format_sse(f"{slug}.{event_name}", data, stream_id)
 
 
-def _emit_initial_events(providers, user_id, cursors):
-    """Yield initial SSE events from all providers."""
+def _initial_events(providers, user_id, render, failed=None):
+    """Yield ``render(slug, event_name, data, event_id)`` for every initial event.
+
+    A provider that fails, or an event that does not render, costs that
+    provider the rest of its events and the others nothing. ``failed``
+    collects its slug.
+    """
     for slug, provider in providers.items():
         try:
             for event_name, data, event_id in provider.get_initial_events():
-                yield _emit(slug, event_name, data, event_id, cursors)
+                yield render(slug, event_name, data, event_id)
         except Exception:
             logger.exception(
                 "Failed to get initial events from SSE provider '%s' for user %s",
                 slug,
                 user_id,
             )
+            if failed is not None:
+                failed.append(slug)
+
+
+def _emit_initial_events(providers, user_id, cursors):
+    """Yield initial SSE events from all providers."""
+
+    def render(slug, event_name, data, event_id):
+        return _emit(slug, event_name, data, event_id, cursors)
+
+    yield from _initial_events(providers, user_id, render)
+
+
+def _snapshot_event(slug, event_name, data, event_id):
+    return orjson.Fragment(_event_json(f"{slug}.{event_name}", data))
+
+
+@require_GET
+def stream_snapshot(request):
+    """The events a stream opens with, for a page that opens none.
+
+    A shared worker holds one stream for all the tabs of a browser (sse.js).
+    A tab that joins it later was not there for the initial events - the unread
+    counts, the generations under way - and nothing sends them again, so it
+    asks for them here. A tab coming back to a stream it had left (bfcache,
+    frozen tab) sends the cursor it stopped at and is given what was queued
+    since, as a stream of its own reopened there would have given it.
+
+    ``complete`` is false when a provider failed. The page then keeps its
+    cursor and asks again: taking the stream's position for its own would skip
+    what that provider had for it.
+    """
+    if not request.user.is_authenticated or _shows_another_user(request):
+        return HttpResponse(status=403)
+
+    # A stream builds its events once the middlewares have left: in UTC and in
+    # the instance's language. The same here, or a tab joining late would read
+    # other values than the stream sent the others.
+    with timezone.override(None), translation.override(settings.LANGUAGE_CODE):
+        failed = []
+        providers = _init_providers(request.user, _incoming_cursors(request), failed)
+        events = list(
+            _initial_events(providers, request.user.id, _snapshot_event, failed)
+        )
+
+    response = HttpResponse(
+        orjson.dumps({"events": events, "complete": not failed}),
+        content_type="application/json",
+    )
+    response["Cache-Control"] = "private, no-cache"
+    return response
 
 
 def _poll_provider(slug, provider, cache_value, user_id, cursors):

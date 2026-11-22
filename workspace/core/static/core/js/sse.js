@@ -155,7 +155,7 @@
   const ANSWER_TIMEOUT_MS = 5000;
   // How often a visible page checks that the worker is still there.
   const CHECK_INTERVAL_MS = 20000;
-  // Relays wait for the snapshot, so it cannot be waited for without limit.
+  // Events wait for the snapshot, so it cannot be waited for without limit.
   const SNAPSHOT_TIMEOUT_MS = 5000;
 
   // The worker is started from the URL this page loaded the file at, which

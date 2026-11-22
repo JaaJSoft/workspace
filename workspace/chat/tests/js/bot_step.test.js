@@ -86,8 +86,8 @@ test('a completion whose opening step is unknown is ignored', () => {
 });
 
 test('a step delivered twice is shown once', () => {
-  // A tab that joins a stream another tab holds is given the queued steps by
-  // the server, and a step queued at that very moment reaches it through the
+  // A tab that joins a stream already open is given the queued steps by the
+  // server, and a step queued at that very moment reaches it through the
   // stream as well.
   const { app } = buildApp();
   app.handleSSEBotStep({ conversation_id: 'conv-1', call_id: 'c1', html: '<span>Read A</span>' });

@@ -235,7 +235,7 @@ window.importsApp = function importsApp() {
 
     formatDate(value) {
       if (!value) return '';
-      return new Date(value).toLocaleString(window.getUserLocale ? window.getUserLocale() : undefined);
+      return new Date(value).toLocaleString(window.getUserLocale(), { timeZone: window.getUserTimeZone() });
     },
 
     hasActiveJobs() {

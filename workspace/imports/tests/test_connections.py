@@ -76,6 +76,15 @@ class UpdateAndTestConnectionTests(TestCase):
         self.assertEqual(self.conn.label, "New")
         self.assertEqual(self.provider.test_calls, 0)
 
+    def test_label_change_keeps_what_another_writer_stored(self):
+        ImportConnection.objects.filter(pk=self.conn.pk).update(
+            last_error="unreachable"
+        )
+        svc.update_connection(self.conn, label="New")
+        self.conn.refresh_from_db()
+        self.assertEqual(self.conn.label, "New")
+        self.assertEqual(self.conn.last_error, "unreachable")
+
     def test_secret_change_is_verified(self):
         self.provider.valid_secret = "rotated"
         svc.update_connection(self.conn, secret="rotated")

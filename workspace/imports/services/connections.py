@@ -69,16 +69,20 @@ def update_connection(
     """Apply the given fields; any credential change is verified against the
     remote before it is saved (the label alone is not)."""
     prov = get_available_provider(connection.provider)
+    written = ["updated_at"]
     credentials_changed = False
     if label is not None:
         connection.label = label
+        written.append("label")
     if username is not None:
         connection.username = username
+        written.append("username")
         credentials_changed = True
     if base_url is not None:
         credentials_changed = True
     if secret is not None:
         connection.set_secret(secret)
+        written.append("secret_encrypted")
         credentials_changed = True
     if credentials_changed:
         connection.base_url = prov.normalize_base_url(
@@ -88,7 +92,8 @@ def update_connection(
         connection.capabilities = prov.test_connection(connection)
         connection.last_checked_at = timezone.now()
         connection.last_error = ""
-    connection.save()
+        written += ["base_url", "capabilities", "last_checked_at", "last_error"]
+    connection.save(update_fields=written)
     return connection
 
 

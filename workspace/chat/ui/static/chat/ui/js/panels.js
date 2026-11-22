@@ -244,19 +244,6 @@ window.chatPanelsMixin = function chatPanelsMixin() {
         .find((el) => el.offsetParent !== null) || null;
     },
 
-    // Scroll to a message on the given surface and flash it. Returns whether
-    // it was found there.
-    _highlightMessage(uuid, prefix) {
-      const el = document.getElementById(`${prefix}-${uuid}`);
-      if (!el) return false;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
-      setTimeout(() => {
-        el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
-      }, 2000);
-      return true;
-    },
-
     /**
      * @param {string} uuid
      * @param {string|null} threadRoot - set for a search hit that lives in a
@@ -264,33 +251,19 @@ window.chatPanelsMixin = function chatPanelsMixin() {
      *   main flow, so paging further back never finds it.
      */
     async scrollToMessage(uuid, threadRoot = null) {
-      if (this._highlightMessage(uuid, this._messageIdPrefix())) return;
-
+      // A reply is shown in its thread, even when the inline preference puts
+      // a copy of it in the flow. A thread already open on it is not rebuilt.
       if (threadRoot && typeof this.openThread === 'function') {
-        this.openThread(threadRoot);
-        // The panel fetches its own contents, so the target does not exist
-        // yet. Bounded poll rather than new plumbing, same shape as the
-        // load-older retry below.
-        for (let attempt = 0; attempt < 20; attempt++) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          if (this._highlightMessage(uuid, 'tmsg')) return;
+        if (this.openThreadRoot !== threadRoot || !this._highlightMessage(uuid, 'tmsg')) {
+          this.openThread(threadRoot, { focus: uuid });
         }
         return;
       }
 
-      // Message not loaded yet — load all then retry
-      this._loadAllAndScrollTo(uuid);
-    },
+      if (this._highlightMessage(uuid)) return;
 
-    async _loadAllAndScrollTo(uuid) {
-      // Keep loading older messages until we find it or run out
-      let attempts = 0;
-      while (this.hasMoreMessages && attempts < 20) {
-        await this.loadMoreMessages();
-        attempts++;
-        await this.$nextTick();
-        if (this._highlightMessage(uuid, this._messageIdPrefix())) return;
-      }
+      // Not on screen: open the list on it, however far back it is.
+      await this.showMessage(uuid);
     },
   };
 };

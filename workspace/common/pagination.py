@@ -11,18 +11,25 @@ class OptInLimitOffsetPagination(LimitOffsetPagination):
     ``X-Has-More`` response header says whether another page exists past
     ``offset + limit``. Existence of a next page is detected by fetching one
     extra row, so no COUNT query is issued.
+
+    A list that does not open on its first row - on its last page, or on the
+    page holding one row - passes ``default_offset``, a function of the limit
+    called only when the request names no ``offset``.
     """
 
     default_limit = None
     max_limit = 1000
     template = None
 
-    def paginate_queryset(self, queryset, request, view=None):
+    def paginate_queryset(self, queryset, request, view=None, *, default_offset=None):
         self.request = request
         self.limit = self.get_limit(request)
         if self.limit is None:
             return None
-        self.offset = self.get_offset(request)
+        if default_offset is None or self.offset_query_param in request.query_params:
+            self.offset = self.get_offset(request)
+        else:
+            self.offset = default_offset(self.limit)
         rows = list(queryset[self.offset : self.offset + self.limit + 1])
         self.has_more = len(rows) > self.limit
         return rows[: self.limit]

@@ -17,7 +17,7 @@ from workspace.chat.services.mentions import build_mention_map
 from workspace.chat.services.reactions import invalidate_quick_reactions
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.pagination import OptInLimitOffsetPagination
 
 from ..models import (
     Conversation,
@@ -35,6 +35,7 @@ from ..serializers import (
 from ..services.conversations import get_active_membership, user_conversation_ids
 from ..services.deletion import soft_delete_message
 from ..services.editing import edit_message
+from ..services.message_lists import PAGE_SIZE
 from ..services.notifications import notify_conversation_members
 from ..services.posting import post_message
 from ..services.rendering import render_message_body
@@ -54,10 +55,15 @@ class MessageListView(CacheControlMixin, APIView):
 
     @extend_schema(
         summary="List messages in a conversation",
+        description=(
+            "Newest first, paged by ?limit (50 when absent) and ?offset; the "
+            "X-Has-More header says whether older messages follow."
+        ),
         parameters=[
-            OpenApiParameter(name="before", type=str, required=False),
             OpenApiParameter(name="limit", type=int, required=False),
+            OpenApiParameter(name="offset", type=int, required=False),
         ],
+        responses=MessageSerializer(many=True),
     )
     def get(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
@@ -67,16 +73,12 @@ class MessageListView(CacheControlMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        try:
-            limit = min(max(int(request.query_params.get("limit", 50)), 1), 100)
-        except TypeError, ValueError:
-            limit = 50
-        before = request.query_params.get("before")
-
+        # Thread replies are always included, carrying their thread_root.
+        # Hiding them from the main flow is a UI presentation preference, and
+        # a preference must not shrink an API response - the server-rendered
+        # partial is where it applies.
         messages = (
-            Message.objects.filter(
-                conversation_id=conversation_id,
-            )
+            Message.objects.filter(conversation_id=conversation_id)
             .select_related(
                 "author",
                 "author__bot_profile",
@@ -93,57 +95,14 @@ class MessageListView(CacheControlMixin, APIView):
                 "attachments",
                 "link_previews__preview",
             )
+            .order_by("-created_at", "-uuid")
         )
 
-        # Thread replies are always included, carrying their thread_root.
-        # Hiding them from the main flow is a UI presentation preference, and
-        # a preference must not shrink an API response - the server-rendered
-        # partial is where it applies.
-
-        if before:
-            before_uuid = parse_uuid_or_none(before)
-            if before_uuid is None:
-                # Malformed cursor: treat as "no cursor" instead of letting
-                # UUIDField.to_python raise ValidationError -> 500.
-                logger.debug("Ignoring malformed ?before cursor: %s", scrub(before))
-            else:
-                # Scope the cursor lookup to the current conversation: an
-                # unrestricted Message.objects.get(uuid=...) would let a caller
-                # use a UUID from another conversation as a cursor and read its
-                # created_at via the resulting page boundary (cross-conversation
-                # timing oracle).
-                cursor_msg = (
-                    Message.objects.filter(
-                        conversation_id=conversation_id, uuid=before_uuid
-                    )
-                    .only("created_at")
-                    .first()
-                )
-                if cursor_msg is not None:
-                    messages = messages.filter(created_at__lt=cursor_msg.created_at)
-                else:
-                    # Unknown cursor (no such UUID, or not in this conversation):
-                    # treat as "no cursor" and return the most recent page.
-                    logger.debug("Ignoring unknown ?before cursor: %s", scrub(before))
-
-        # Get limit+1 to check has_more
-        messages = messages.order_by("-created_at")[: limit + 1]
-        messages = list(messages)
-
-        has_more = len(messages) > limit
-        if has_more:
-            messages = messages[:limit]
-
-        # Return in ascending order
-        messages.reverse()
-
-        serializer = MessageSerializer(messages, many=True)
-        return Response(
-            {
-                "messages": serializer.data,
-                "has_more": has_more,
-            }
-        )
+        paginator = OptInLimitOffsetPagination()
+        # A conversation has no size limit: never serialize all of it.
+        paginator.default_limit = PAGE_SIZE
+        page = paginator.paginate_queryset(messages, request, view=self)
+        return paginator.get_paginated_response(MessageSerializer(page, many=True).data)
 
     @extend_schema(
         summary="Send a message",

@@ -1062,6 +1062,14 @@ msgstr "Fermer le fil"
 msgid "Load older replies"
 msgstr "Charger les réponses précédentes"
 
+#: ui/templates/chat/ui/partials/thread_panel.html
+msgid "Latest replies"
+msgstr "Dernières réponses"
+
+#: ui/templates/chat/ui/partials/conversation_pane.html
+msgid "Latest messages"
+msgstr "Derniers messages"
+
 #: ui/templates/chat/ui/room.html
 msgid "Voice room"
 msgstr "Salon vocal"

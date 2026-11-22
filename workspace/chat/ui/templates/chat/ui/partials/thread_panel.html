@@ -14,7 +14,7 @@
 {% endcomment %}
 <div
   class="h-full flex flex-col min-w-0 bg-base-100 focus:outline-hidden"
-  x-data="chatThreadPanel(openThreadRoot)"
+  x-data="chatThreadPanel(openThreadRoot, threadFocus)"
   tabindex="-1"
   @keydown.escape.prevent.stop="closeThread()"
   @thread-reply-received.window="onReplyReceived($event.detail)"
@@ -77,6 +77,7 @@
       <div id="thread-root-message"></div>
       <div id="thread-message-list"></div>
     </div>
+    {% include "chat/ui/partials/_newer_messages.html" with label=_("Latest replies") %}
   </div>
 
   <div data-testid="thread-composer">{% include "chat/ui/partials/_composer.html" %}</div>

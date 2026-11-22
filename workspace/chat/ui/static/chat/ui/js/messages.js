@@ -7,6 +7,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
   // reader has left it.
   const FOLLOW_SETTLE_MS = 3000;
   const FOLLOW_SLACK_PX = 8;
+  // Rows per page, and the most one request may ask for (the shared
+  // paginator's max_limit).
+  const PAGE_SIZE = 50;
+  const MAX_LIMIT = 1000;
 
   return {
     // ── State ────────────────────────────────────────────────
@@ -14,6 +18,29 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     loadingMessages: false,
     loadingMoreMessages: false,
     hasMoreMessages: false,
+    // Set while the list shows a stretch of the past cut off from the
+    // present (a link to an old message): newer pages load below it, and
+    // the view is no longer the latest page that refreshes reload.
+    hasNewerMessages: false,
+    loadingNewerMessages: false,
+    // The rows on screen, as offsets counted from the oldest message of the
+    // list: [_windowStart, _windowEnd). The server's offsets never move while
+    // the conversation lives (new messages land past the end), so they stay
+    // valid from one page to the next.
+    _windowStart: 0,
+    _windowEnd: 0,
+    // Where an older or newer page merges into the items wrapper: read by
+    // its x-merge:dynamic binding (message_list.html).
+    itemsMerge: 'prepend',
+    // A live message arrived while the window was away from the present and
+    // was not shown: the newer page that reaches the present may have been
+    // cut before it, so one more is asked for then.
+    _missedLive: false,
+    // Set while a refresh away from the present is out; the message being
+    // read is taken when its rows land (_vetoStaleMerge), since the reader
+    // may scroll while the request is out.
+    _anchorOnMerge: false,
+    _refreshAnchor: null,
     editingMessageUuid: null,
     replyingTo: null,
     pinnedMessages: [],
@@ -31,7 +58,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     _messagesContainerId() { return 'messages-container'; },
     _messageListId() { return 'message-list'; },
     // Children the server partial renders inside the list: a state element
-    // carrying the pagination cursor and an items wrapper holding the message
+    // carrying where the page sits and an items wrapper holding the message
     // groups. Derived from _messageListId() so overriding surfaces get them
     // for free.
     _messageListStateId() { return `${this._messageListId()}-state`; },
@@ -40,9 +67,14 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // message, which the server renders outside the paginated list.
     _loadTargets() { return [this._messageListId()]; },
     _messageIdPrefix() { return 'msg'; },
-    _messagesUrl(cursor) {
-      const base = `/chat/${this.activeConversation.uuid}/messages`;
-      return cursor ? `${base}?before=${cursor}` : base;
+    _messagesBaseUrl() { return `/chat/${this.activeConversation.uuid}/messages`; },
+    // query: { limit, offset } for a page, { limit, message } for the page
+    // holding a message; without an offset the list opens on its last page.
+    _messagesUrl(query = {}) {
+      const search = Object.entries(query || {})
+        .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+        .join('&');
+      return search ? `${this._messagesBaseUrl()}?${search}` : this._messagesBaseUrl();
     },
     _replyTarget() { return this.replyingTo?.uuid || null; },
 
@@ -85,6 +117,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const stamped = event.detail?.content?.getAttribute?.('data-conversation-uuid');
       if (stamped && stamped !== this.activeConversation?.uuid) {
         event.preventDefault();
+        return;
+      }
+      if (this._anchorOnMerge && !this._refreshAnchor) {
+        this._refreshAnchor = this._visibleMessage();
       }
     },
 
@@ -99,62 +135,106 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       }
     },
 
-    async loadMessages() {
-      if (this._surfaceGone()) return;
+    // message: open the list on that message instead of the latest page.
+    // Resolves to what the server said about it - { targetUuid,
+    // targetThreadRoot } - with targetUuid null when the message is unknown
+    // or out of reach, which answer alike and fall back to the latest page.
+    async loadMessages({ message = null } = {}) {
+      const none = { targetUuid: null, targetThreadRoot: null };
+      if (this._surfaceGone()) return none;
       this.loadingMessages = true;
       // Drop the previous content so a conversation switch does not show the
       // old conversation under the spinner. Only the items are cleared: the
       // list element itself is a merge target and has to stay in the DOM.
       document.getElementById(this._messageListItemsId())?.replaceChildren();
+      this.hasNewerMessages = false;
+      this._missedLive = false;
 
+      const query = message ? { limit: PAGE_SIZE, message } : { limit: PAGE_SIZE };
+      let shown = none;
       try {
-        const render = await this.$ajax(this._messagesUrl(null), {
+        const render = await this.$ajax(this._messagesUrl(query), {
           targets: this._loadTargets(),
           focus: false,
         });
         // A vetoed or superseded response merges nothing; leave the state
         // and scroll position to the request that won.
         if ((render || []).some(Boolean)) {
-          this._readPaginationState();
-          // Right after the merge: scrollToBottom keeps up as the
-          // attachments take their size.
-          this.scrollToBottom();
+          shown = this._readPaginationState('full');
+          if (message && shown.targetUuid) {
+            this._unfollowBottom?.();
+          } else {
+            // Right after the merge: scrollToBottom keeps up as the
+            // attachments take their size.
+            this.scrollToBottom();
+          }
         }
       } catch (e) {
         console.error('Failed to load messages', e);
       }
       this.loadingMessages = false;
+      return shown;
     },
 
-    _readPaginationState() {
+    // Reads the state element the last merge left. merged says which part of
+    // the window the page was: the whole of it ('full'), or a page added
+    // above ('older') or below ('newer') the rows already on screen.
+    _readPaginationState(merged = 'full') {
       const state = document.getElementById(this._messageListStateId());
-      if (!state) return;
-      this.hasMoreMessages = state.dataset.hasMore === 'true';
+      if (!state) return { targetUuid: null, targetThreadRoot: null };
+      const data = state.dataset;
+      const offset = parseInt(data.offset, 10) || 0;
+      const end = parseInt(data.end, 10) || 0;
+      if (merged !== 'newer') {
+        this._windowStart = offset;
+        this.hasMoreMessages = offset > 0;
+      }
+      if (merged !== 'older') {
+        this._windowEnd = end;
+        this.hasNewerMessages = data.hasNewer === 'true';
+      }
+      return {
+        targetUuid: data.targetUuid || null,
+        targetThreadRoot: data.targetThreadRoot || null,
+      };
+    },
+
+    // A day split across two pages gets a separator from each: keep the
+    // first. Its messages all come after it.
+    _dropRepeatedDays() {
+      const items = document.getElementById(this._messageListItemsId());
+      let previous = null;
+      for (const divider of items?.querySelectorAll?.('[data-day]') || []) {
+        if (divider.dataset.day === previous) divider.remove();
+        else previous = divider.dataset.day;
+      }
     },
 
     async loadMoreMessages() {
       if (!this.activeConversation || !this.hasMoreMessages || this.loadingMoreMessages) return;
-      if (this._surfaceGone()) return;
+      if (this._surfaceGone() || this._windowStart <= 0) return;
 
-      const cursor = document.getElementById(this._messageListStateId())?.dataset.firstUuid;
-      if (!cursor) return;
+      // The page right above the window, never overlapping it.
+      const offset = Math.max(0, this._windowStart - PAGE_SIZE);
+      const limit = this._windowStart - offset;
 
       this.loadingMoreMessages = true;
       const scrollContainer = this.$refs.messagesContainer;
       const prevScrollHeight = scrollContainer.scrollHeight;
 
       try {
-        // Two targets: the state element is replaced (fresh cursor), and the
-        // older groups are prepended into the items wrapper - the partial
-        // carries x-merge="prepend" on it. Both live inside the list, so a
-        // full reload issued meanwhile replaces the list and orphans this
+        // Two targets: the state element is replaced, and the older groups
+        // are prepended into the items wrapper. Both live inside the list, so
+        // a full reload issued meanwhile replaces the list and orphans this
         // request before it can prepend a stale page into fresh content.
-        const render = await this.$ajax(this._messagesUrl(cursor), {
+        this.itemsMerge = 'prepend';
+        const render = await this.$ajax(this._messagesUrl({ limit, offset }), {
           targets: [this._messageListStateId(), this._messageListItemsId()],
           focus: false,
         });
         if ((render || []).some(Boolean)) {
-          this._readPaginationState();
+          this._readPaginationState('older');
+          this._dropRepeatedDays();
           // Maintain scroll position
           this.$nextTick(() => {
             scrollContainer.scrollTop = scrollContainer.scrollHeight - prevScrollHeight;
@@ -166,11 +246,89 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       this.loadingMoreMessages = false;
     },
 
+    // The page right below the window. It lands at the end of the items,
+    // below the viewport, so the scroll position needs no correction.
+    async loadNewerMessages() {
+      if (!this.activeConversation || !this.hasNewerMessages || this.loadingNewerMessages) return;
+      if (this._surfaceGone()) return;
+
+      this.loadingNewerMessages = true;
+      let catchUp = false;
+      try {
+        this.itemsMerge = 'append';
+        const render = await this.$ajax(
+          this._messagesUrl({ limit: PAGE_SIZE, offset: this._windowEnd }),
+          { targets: [this._messageListStateId(), this._messageListItemsId()], focus: false },
+        );
+        if ((render || []).some(Boolean)) {
+          this._readPaginationState('newer');
+          this._dropRepeatedDays();
+          catchUp = !this.hasNewerMessages && this._missedLive;
+        }
+      } catch (e) {
+        console.error('Failed to load newer messages', e);
+      }
+      this.loadingNewerMessages = false;
+      if (catchUp) {
+        this._missedLive = false;
+        this.hasNewerMessages = true;
+        await this.loadNewerMessages();
+      }
+    },
+
+    // Back to the latest page, from a stretch of the past.
+    jumpToPresent() {
+      return this.loadMessages();
+    },
+
     handleScroll() {
       const container = this.$refs.messagesContainer;
-      if (container && container.scrollTop < 50 && this.hasMoreMessages && !this.loadingMoreMessages) {
+      if (!container) return;
+      if (container.scrollTop < 50 && this.hasMoreMessages && !this.loadingMoreMessages) {
         this.loadMoreMessages();
       }
+      if (this.hasNewerMessages && !this.loadingNewerMessages && this._isNearBottom(50)) {
+        this.loadNewerMessages();
+      }
+    },
+
+    // The message at the top of the viewport and how far below the top of
+    // the container it sits, for putting it back after a refresh.
+    _visibleMessage() {
+      const container = this.$refs.messagesContainer;
+      if (!container?.getBoundingClientRect) return null;
+      const top = container.getBoundingClientRect().top;
+      const prefix = `${this._messageIdPrefix()}-`;
+      for (const el of container.querySelectorAll(`[id^="${prefix}"][data-message-uuid]`)) {
+        const rect = el.getBoundingClientRect();
+        if (rect.bottom > top) {
+          return { uuid: el.dataset.messageUuid, offset: rect.top - top };
+        }
+      }
+      return null;
+    },
+
+    _restoreVisibleMessage({ uuid, offset }) {
+      const container = this.$refs.messagesContainer;
+      const el = document.getElementById(`${this._messageIdPrefix()}-${uuid}`);
+      if (!container || !el) return;
+      const top = container.getBoundingClientRect().top;
+      container.scrollTop += el.getBoundingClientRect().top - top - offset;
+    },
+
+    // Scroll to a message on this surface and flash it. Returns whether it
+    // is on screen to be found. A list just opened on the message jumps
+    // ('instant'): gliding from the top of a fresh list takes long enough
+    // to read as the wrong place.
+    _highlightMessage(uuid, prefix = this._messageIdPrefix(), behavior = 'smooth') {
+      const el = document.getElementById(`${prefix}-${uuid}`);
+      if (!el) return false;
+      el.scrollIntoView({ behavior, block: 'center' });
+      el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+      }, 2000);
+      return true;
     },
 
     _isNearBottom(threshold = 150) {
@@ -311,10 +469,16 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           // receivers' refresh path), so the send path must refresh it itself.
           this.refreshConversationItems([this.activeConversation.uuid]);
           // Re-fetch messages — replaces optimistic bubble with real server-rendered one
+          // What was sent belongs at the present. Cleared here, right before
+          // the refresh, and not when the send began: a newer page landing
+          // meanwhile sets it again, and a failed send keeps the past on
+          // screen as it was.
+          this.hasNewerMessages = false;
           await this._refreshCurrentMessages();
           // If bot already replied during the round-trip, hide typing immediately
           if (isBotConv) {
-            const lastGroup = document.getElementById(this._messagesContainerId())?.querySelector('.msg-group:last-child');
+            const groups = document.getElementById(this._messagesContainerId())?.querySelectorAll('.msg-group');
+            const lastGroup = groups?.[groups.length - 1];
             if (lastGroup && lastGroup.classList.contains('msg-group-start')) {
               this.botTyping = false;
               this.clearBotStep?.();
@@ -384,6 +548,11 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           // The sender is excluded from the SSE broadcast, so the send path
           // refreshes its own sidebar row.
           this.refreshConversationItems([convUuid]);
+          // What was sent belongs at the present. Cleared here, right before
+          // the refresh, and not when the send began: a newer page landing
+          // meanwhile sets it again, and a failed send keeps the past on
+          // screen as it was.
+          this.hasNewerMessages = false;
           await this._refreshCurrentMessages();
           this.$nextTick(() => this.scrollToBottom());
           return true;
@@ -468,15 +637,33 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // first: the replace merge swaps old content for new in one step, so
       // the container cannot flash empty mid-refresh.
       if (!this.activeConversation || this._surfaceGone()) return;
+      // Away from the present, the latest page is not what is on screen:
+      // reload the same rows, and put the message being read back where it
+      // was.
+      const away = this.hasNewerMessages;
+      const query = away
+        ? {
+          offset: this._windowStart,
+          limit: Math.min(Math.max(this._windowEnd - this._windowStart, 1), MAX_LIMIT),
+        }
+        : { limit: PAGE_SIZE };
+      if (!away) this._missedLive = false;
+      this._anchorOnMerge = away;
+      this._refreshAnchor = null;
       try {
-        const render = await this.$ajax(this._messagesUrl(null), {
+        const render = await this.$ajax(this._messagesUrl(query), {
           targets: this._loadTargets(),
           focus: false,
         });
-        if ((render || []).some(Boolean)) this._readPaginationState();
+        if ((render || []).some(Boolean)) {
+          this._readPaginationState('full');
+          if (this._refreshAnchor) this._restoreVisibleMessage(this._refreshAnchor);
+        }
       } catch (e) {
         console.error('Failed to refresh messages', e);
       }
+      this._anchorOnMerge = false;
+      this._refreshAnchor = null;
     },
 
     // ── Replying ───────────────────────────────────────────
@@ -750,6 +937,13 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     _messageMenuId() { return 'message-context-menu'; },
 
+    // The address that opens the conversation on this message, for anyone
+    // who can read it. A thread reply needs nothing more: the server knows
+    // its thread and the page opens it.
+    messageLink(uuid) {
+      return `${window.location.origin}/chat/${this.activeConversation.uuid}?message=${encodeURIComponent(uuid)}`;
+    },
+
     messageMenuAction(action, event) {
       const { uuid, authorName, body } = this.msgMenu;
       this.msgMenu.open = false;
@@ -765,6 +959,11 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           navigator.clipboard.writeText(body)
             .then(() => window.AppAlert?.success(gettext('Message copied'), { duration: 2000 }))
             .catch(() => window.AppAlert?.error(gettext('Failed to copy message')));
+          break;
+        case 'copy-link':
+          navigator.clipboard.writeText(this.messageLink(uuid))
+            .then(() => window.AppAlert?.success(gettext('Link copied'), { duration: 2000 }))
+            .catch(() => window.AppAlert?.error(gettext('Failed to copy link')));
           break;
         case 'pin':
           this.pinMessage(uuid);

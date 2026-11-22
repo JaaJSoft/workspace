@@ -116,29 +116,20 @@ class ThreadMessagesViewTests(TestCase):
         html = self.client.get(flow_url).content.decode()
         self.assertIn(f'data-reply-uuid="{self.root.uuid}"', html)
 
-    def test_a_malformed_cursor_still_shows_the_root(self):
-        # A cursor that does not parse is ignored, so the response is the first
-        # page - and the first page heads with the root.
+    def test_a_malformed_message_still_shows_the_root(self):
+        # A ?message= that does not parse opens the latest page, which heads
+        # with the root.
         self.client.force_login(self.alice)
-        html = self.client.get(self.url, {"before": "not-a-uuid"}).content.decode()
+        html = self.client.get(self.url, {"message": "not-a-uuid"}).content.decode()
         self.assertIn("the root message", html)
 
-    def test_an_unknown_cursor_still_shows_the_root(self):
+    def test_a_message_outside_the_thread_still_shows_the_root(self):
         self.client.force_login(self.alice)
         stranger = self._message("elsewhere")
         html = self.client.get(
-            self.url, {"before": str(stranger.uuid)}
+            self.url, {"message": str(stranger.uuid)}
         ).content.decode()
         self.assertIn("the root message", html)
-
-    def test_a_real_cursor_omits_the_root(self):
-        # A genuine "load older" page prepends into a list that already shows
-        # the root, so repeating it would duplicate the message.
-        self.client.force_login(self.alice)
-        html = self.client.get(
-            self.url, {"before": str(self.reply.uuid)}
-        ).content.decode()
-        self.assertNotIn("the root message", html)
 
     def test_a_reply_is_not_a_thread_root(self):
         self.client.force_login(self.alice)
@@ -284,11 +275,13 @@ class ThreadPanelRenderingTests(TestCase):
         self.assertNotIn(f'id="tmsg-{self.root.uuid}"', list_part)
         self.assertIn(f'id="tmsg-{self.root.uuid}"', html)
 
-    def test_an_older_page_carries_no_root_block(self):
-        html = self.client.get(
-            self.url, {"before": str(self.reply.uuid)}
-        ).content.decode()
-        self.assertNotIn('id="thread-root-message"', html)
+    def test_an_offset_page_keeps_the_root_out_of_its_items(self):
+        # An older or newer page merges its items into the panel and leaves
+        # the root alone: a root among those items would be shown twice.
+        html = self.client.get(self.url, {"limit": "1", "offset": "0"}).content.decode()
+        items = html.split('id="thread-message-list-items"', 1)[1]
+        self.assertNotIn(f'id="tmsg-{self.root.uuid}"', items)
+        self.assertIn(f'id="tmsg-{self.reply.uuid}"', items)
 
     def test_a_deleted_reply_is_not_rendered(self):
         # The footer advertises recount_thread's number, which counts live

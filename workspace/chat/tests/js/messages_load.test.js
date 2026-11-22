@@ -29,10 +29,10 @@ function node(id, dataset = {}) {
 function buildDom() {
   const nodes = {
     'message-list': node('message-list'),
-    'message-list-state': node('message-list-state', { hasMore: 'true', firstUuid: 'm0' }),
+    'message-list-state': node('message-list-state', { offset: '70', end: '120', hasNewer: 'false' }),
     'message-list-items': node('message-list-items'),
     'thread-message-list': node('thread-message-list'),
-    'thread-message-list-state': node('thread-message-list-state', { hasMore: 'false', firstUuid: 't0' }),
+    'thread-message-list-state': node('thread-message-list-state', { offset: '0', end: '3', hasNewer: 'false' }),
     'thread-message-list-items': node('thread-message-list-items'),
   };
   return {
@@ -73,16 +73,19 @@ test('loadMessages swaps the surface load targets from the conversation endpoint
   const { app, calls } = buildApp();
   await app.loadMessages();
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, '/chat/c1/messages');
+  assert.equal(calls[0].url, '/chat/c1/messages?limit=50');
   assert.deepStrictEqual(Array.from(calls[0].options.targets), ['message-list']);
   assert.equal(calls[0].options.focus, false, 'a swap must never steal focus');
   assert.equal(app.loadingMessages, false);
 });
 
-test('loadMessages reads pagination state off the state element after the merge', async () => {
+test('loadMessages reads where the page sits off the state element after the merge', async () => {
   const { app } = buildApp();
   await app.loadMessages();
-  assert.equal(app.hasMoreMessages, true);
+  assert.equal(app.hasMoreMessages, true, 'rows above offset 70');
+  assert.equal(app.hasNewerMessages, false);
+  assert.equal(app._windowStart, 70);
+  assert.equal(app._windowEnd, 120);
 });
 
 test('loadMessages clears the items wrapper before requesting', async () => {
@@ -139,13 +142,12 @@ test('_refreshCurrentMessages refetches through the surface hooks, not hard-code
     overrides: {
       _messageListId: () => 'thread-message-list',
       _loadTargets() { return ['thread-root-message', 'thread-message-list']; },
-      _messagesUrl: (cursor) =>
-        `/chat/threads/r1/messages${cursor ? '?before=' + cursor : ''}`,
+      _messagesBaseUrl: () => '/chat/threads/r1/messages',
     },
   });
   await app._refreshCurrentMessages();
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, '/chat/threads/r1/messages');
+  assert.equal(calls[0].url, '/chat/threads/r1/messages?limit=50');
   assert.deepStrictEqual(Array.from(calls[0].options.targets), ['thread-root-message', 'thread-message-list']);
 });
 
@@ -158,30 +160,39 @@ test('_refreshCurrentMessages never clears first, so the view cannot flash empty
 
 // ── Pagination ─────────────────────────────────────────────
 
-test('loadMoreMessages pages backwards from the state cursor into state + items', async () => {
+test('loadMoreMessages asks for the page right above the window, prepended into state + items', async () => {
   const dom = buildDom();
   const { app, calls } = buildApp({
     dom,
     ajax: async (url, options) => {
-      calls.push({ url, options });
-      // The merge replaces the state element (fresh cursor) and prepends the
-      // older groups into the items wrapper.
-      dom.nodes['message-list-state'].dataset = { hasMore: 'false', firstUuid: 'm9' };
+      calls.push({ url, options, merge: app.itemsMerge });
       return [dom.nodes['message-list-state'], dom.nodes['message-list-items']];
     },
   });
-  app.hasMoreMessages = true;
+  await app.loadMessages();
+  calls.length = 0;
+  dom.nodes['message-list-state'].dataset = { offset: '20', end: '70', hasNewer: 'true' };
 
   await app.loadMoreMessages();
 
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, '/chat/c1/messages?before=m0');
+  assert.equal(calls[0].url, '/chat/c1/messages?limit=50&offset=20');
   assert.deepStrictEqual(
     Array.from(calls[0].options.targets),
     ['message-list-state', 'message-list-items'],
   );
-  assert.equal(app.hasMoreMessages, false, 'pagination state follows the response');
+  assert.equal(calls[0].merge, 'prepend');
+  assert.equal(app._windowStart, 20);
+  assert.equal(app._windowEnd, 120, 'an older page leaves the end of the window alone');
+  assert.equal(app.hasNewerMessages, false, 'nor what is known about the present');
   assert.equal(app.loadingMoreMessages, false);
+});
+
+test('loadMoreMessages never overlaps the window near the top', async () => {
+  const { app, calls } = buildApp();
+  app.hasMoreMessages = true;
+  app._windowStart = 12;
+  await app.loadMoreMessages();
+  assert.equal(calls[0].url, '/chat/c1/messages?limit=12&offset=0');
 });
 
 test('loadMoreMessages restores the scroll position after the prepend', async () => {
@@ -194,6 +205,7 @@ test('loadMoreMessages restores the scroll position after the prepend', async ()
     },
   });
   app.hasMoreMessages = true;
+  app._windowStart = 70;
   app.$refs.messagesContainer.scrollTop = 10;
   app.$refs.messagesContainer.scrollHeight = 100;
 
@@ -206,6 +218,7 @@ test('loadMoreMessages restores the scroll position after the prepend', async ()
 test('loadMoreMessages leaves the scroll alone when the merge was refused', async () => {
   const { app } = buildApp({ ajax: async () => [] });
   app.hasMoreMessages = true;
+  app._windowStart = 70;
   app.$refs.messagesContainer.scrollTop = 10;
 
   await app.loadMoreMessages();
@@ -214,13 +227,23 @@ test('loadMoreMessages leaves the scroll alone when the merge was refused', asyn
   assert.equal(app.loadingMoreMessages, false);
 });
 
-test('loadMoreMessages without a cursor issues no request', async () => {
-  const dom = buildDom();
-  delete dom.nodes['message-list-state'].dataset.firstUuid;
-  const { app, calls } = buildApp({ dom });
+test('loadMoreMessages at the top of the list issues no request', async () => {
+  const { app, calls } = buildApp();
   app.hasMoreMessages = true;
+  app._windowStart = 0;
   await app.loadMoreMessages();
   assert.deepStrictEqual(calls, []);
+});
+
+test('a day split across two pages keeps its first separator only', () => {
+  const removed = [];
+  const divider = (day) => ({ dataset: { day }, remove() { removed.push(day); } });
+  const dividers = [divider('2024-03-01'), divider('2024-03-02'), divider('2024-03-02'), divider('2024-03-03')];
+  const dom = buildDom();
+  dom.nodes['message-list-items'].querySelectorAll = () => dividers;
+  const { app } = buildApp({ dom });
+  app._dropRepeatedDays();
+  assert.deepStrictEqual(removed, ['2024-03-02']);
 });
 
 // ── Stale-merge veto ───────────────────────────────────────
@@ -288,4 +311,183 @@ test('the missing-target guard ignores targets outside this surface', () => {
   };
   app._onAjaxMissing(event);
   assert.equal(event.prevented, false);
+});
+
+// ── Links to a message, and newer pages ─────────────────
+
+test('loadMessages({ message }) opens the list on the message and keeps the scroll off the bottom', async () => {
+  const dom = buildDom();
+  dom.nodes['message-list-state'].dataset = {
+    offset: '10', end: '60', hasNewer: 'true', targetUuid: 'm35',
+  };
+  let scrolled = 0;
+  const { app, calls } = buildApp({ dom });
+  app.scrollToBottom = () => { scrolled += 1; };
+
+  const shown = await app.loadMessages({ message: 'm35' });
+
+  assert.equal(calls[0].url, '/chat/c1/messages?limit=50&message=m35');
+  assert.equal(shown.targetUuid, 'm35');
+  assert.equal(shown.targetThreadRoot, null);
+  assert.equal(app.hasNewerMessages, true);
+  assert.equal(scrolled, 0, 'the message is shown, not the end of the page');
+});
+
+test('a link that found nothing falls back to the last page at the bottom', async () => {
+  // Unknown and out of reach answer alike: no target on the state element.
+  let scrolled = 0;
+  const { app } = buildApp();
+  app.scrollToBottom = () => { scrolled += 1; };
+
+  const shown = await app.loadMessages({ message: 'gone' });
+
+  assert.equal(shown.targetUuid, null);
+  assert.equal(scrolled, 1);
+});
+
+test('loadNewerMessages asks for the page right below the window, appended into state + items', async () => {
+  const dom = buildDom();
+  const { app, calls } = buildApp({
+    dom,
+    ajax: async (url, options) => {
+      calls.push({ url, options, merge: app.itemsMerge });
+      dom.nodes['message-list-state'].dataset = { offset: '60', end: '110', hasNewer: 'false' };
+      return [dom.nodes['message-list-state']];
+    },
+  });
+  app.hasNewerMessages = true;
+  app.hasMoreMessages = true;
+  app._windowStart = 10;
+  app._windowEnd = 60;
+
+  await app.loadNewerMessages();
+
+  assert.equal(calls[0].url, '/chat/c1/messages?limit=50&offset=60');
+  assert.deepStrictEqual(Array.from(calls[0].options.targets), ['message-list-state', 'message-list-items']);
+  assert.equal(calls[0].merge, 'append');
+  assert.equal(app._windowEnd, 110);
+  assert.equal(app._windowStart, 10, 'a newer page leaves the top of the window alone');
+  assert.equal(app.hasMoreMessages, true);
+  assert.equal(app.hasNewerMessages, false, 'the present is reached');
+  assert.equal(app.loadingNewerMessages, false);
+});
+
+test('loadNewerMessages at the present issues no request', async () => {
+  const { app, calls } = buildApp();
+  app.hasNewerMessages = false;
+  await app.loadNewerMessages();
+  assert.deepStrictEqual(calls, []);
+});
+
+test('scrolling to the end of a stretch of the past loads the newer page', () => {
+  const { app } = buildApp();
+  let loaded = 0;
+  app.loadNewerMessages = () => { loaded += 1; };
+  Object.assign(app.$refs.messagesContainer, { scrollTop: 400, scrollHeight: 1000, clientHeight: 580 });
+  app.hasNewerMessages = true;
+
+  app.handleScroll();
+
+  assert.equal(loaded, 1);
+});
+
+test('a refresh away from the present reloads the rows on screen', async () => {
+  // The last page is not what is on screen: reloading it would take the
+  // reader away from the past they opened.
+  let visible = 'm40';
+  const { app, calls } = buildApp({
+    ajax: async (url, options) => {
+      calls.push({ url, options });
+      // The reader scrolls while the request is out; alpine-ajax then fires
+      // ajax:merge right before the swap.
+      visible = 'm55';
+      app._vetoStaleMerge(mergeEvent({ 'data-conversation-uuid': 'c1' }));
+      return [{}];
+    },
+  });
+  app.hasNewerMessages = true;
+  app._windowStart = 10;
+  app._windowEnd = 110;
+  app._visibleMessage = () => ({ uuid: visible, offset: 12 });
+  const restored = [];
+  app._restoreVisibleMessage = (anchor) => restored.push(anchor.uuid);
+
+  await app._refreshCurrentMessages();
+
+  assert.equal(calls[0].url, '/chat/c1/messages?offset=10&limit=100');
+  assert.deepStrictEqual(restored, ['m55'], 'the message read when the rows land, not when they were asked for');
+  assert.equal(app._anchorOnMerge, false);
+});
+
+test('a merge outside a refresh takes no anchor', () => {
+  const { app } = buildApp();
+  app._visibleMessage = () => { throw new Error('not taken'); };
+  app._vetoStaleMerge(mergeEvent({ 'data-conversation-uuid': 'c1' }));
+  assert.equal(app._refreshAnchor, null);
+});
+
+test('a refresh at the present reloads the last page', async () => {
+  const { app, calls } = buildApp();
+  app.hasNewerMessages = false;
+  app._visibleMessage = () => { throw new Error('not needed at the present'); };
+  await app._refreshCurrentMessages();
+  assert.equal(calls[0].url, '/chat/c1/messages?limit=50');
+});
+
+test('messageLink names the conversation and the message', () => {
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/messages.js', {
+    location: { origin: 'https://ws.example' },
+  });
+  const app = ctx.chatMessagesMixin();
+  app.activeConversation = { uuid: 'c1' };
+  assert.equal(app.messageLink('m7'), 'https://ws.example/chat/c1?message=m7');
+});
+
+test('a live message missed on the way to the present is fetched with one more page', async () => {
+  // The newer page that reaches the present may have been cut before a
+  // message that arrived while it was on its way.
+  const dom = buildDom();
+  const pages = [
+    { offset: '60', end: '110', hasNewer: 'false' },
+    { offset: '110', end: '111', hasNewer: 'false' },
+  ];
+  const { app, calls } = buildApp({
+    dom,
+    ajax: async (url, options) => {
+      calls.push({ url, options });
+      dom.nodes['message-list-state'].dataset = pages.shift();
+      return [dom.nodes['message-list-state']];
+    },
+  });
+  app.hasNewerMessages = true;
+  app._windowEnd = 60;
+  app._missedLive = true;
+
+  await app.loadNewerMessages();
+
+  assert.deepStrictEqual(
+    calls.map((c) => c.url),
+    ['/chat/c1/messages?limit=50&offset=60', '/chat/c1/messages?limit=50&offset=110'],
+  );
+  assert.equal(app._windowEnd, 111);
+  assert.equal(app._missedLive, false);
+  assert.equal(app.hasNewerMessages, false);
+});
+
+test('reaching the present with nothing missed asks for no extra page', async () => {
+  const dom = buildDom();
+  const { app, calls } = buildApp({
+    dom,
+    ajax: async (url, options) => {
+      calls.push({ url, options });
+      dom.nodes['message-list-state'].dataset = { offset: '60', end: '110', hasNewer: 'false' };
+      return [dom.nodes['message-list-state']];
+    },
+  });
+  app.hasNewerMessages = true;
+  app._windowEnd = 60;
+
+  await app.loadNewerMessages();
+
+  assert.equal(calls.length, 1);
 });

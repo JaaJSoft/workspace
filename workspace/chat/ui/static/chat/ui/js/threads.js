@@ -33,6 +33,9 @@ window.chatThreadsMixin = function chatThreadsMixin() {
   return {
     // uuid of the root whose thread the panel is showing, or null when closed.
     openThreadRoot: null,
+    // Reply the panel opens on instead of the latest ones, read once by the
+    // panel it was opened with.
+    threadFocus: null,
     // root uuid -> unread replies, kept live by the SSE router.
     threadUnreadCounts: {},
 
@@ -42,12 +45,15 @@ window.chatThreadsMixin = function chatThreadsMixin() {
       return this.threadUnreadCounts[rootUuid] || 0;
     },
 
-    openThread(rootUuid) {
+    openThread(rootUuid, { focus = null } = {}) {
+      this.threadFocus = focus;
       // The thread panel is wider than the info and search panels and would
       // fight them for the same column, so opening one closes the others.
       this.showInfoPanel = false;
       this.closeSearchPanel?.();
-      if (this.openThreadRoot && this.openThreadRoot !== rootUuid) {
+      // A focus on the thread already open rebuilds it too: the panel reads
+      // its focus once, when it is constructed.
+      if (this.openThreadRoot && (this.openThreadRoot !== rootUuid || focus)) {
         // x-if only tears down through a falsy value - a root that merely
         // changes never unmounts the panel, which would keep showing the
         // thread it was constructed for. Bounce through null so Alpine
@@ -106,13 +112,14 @@ window.chatThreadsMixin = function chatThreadsMixin() {
   };
 };
 
-window.chatThreadPanel = function chatThreadPanel(rootUuid) {
+window.chatThreadPanel = function chatThreadPanel(rootUuid, focusUuid = null) {
   // Kept before the spread so the override below can still reach the shared
   // implementation: object spread copies values, leaving no `super` to call.
   const messages = chatMessagesMixin();
 
   return {
     threadRootUuid: rootUuid,
+    threadFocusUuid: focusUuid,
 
     ...chatUiHelpersMixin(),
     ...messages,
@@ -125,10 +132,7 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     _messageListId() { return 'thread-message-list'; },
     _messageIdPrefix() { return 'tmsg'; },
     _messageMenuId() { return 'thread-message-context-menu'; },
-    _messagesUrl(cursor) {
-      const base = `/chat/threads/${this.threadRootUuid}/messages`;
-      return cursor ? `${base}?before=${cursor}` : base;
-    },
+    _messagesBaseUrl() { return `/chat/threads/${this.threadRootUuid}/messages`; },
     // A thread load also carries the root message, rendered outside the
     // paginated list so "load older" cannot sink it below older replies.
     _loadTargets() { return ['thread-root-message', this._messageListId()]; },
@@ -159,6 +163,12 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     // new messages. Replies to other threads are the flow's business.
     async onReplyReceived(detail) {
       if (detail?.root !== this.threadRootUuid) return;
+      // Away from the latest replies, the new one lands past the end of what
+      // is on screen: loading it would take the reader away.
+      if (this.hasNewerMessages) {
+        this._missedLive = true;
+        return;
+      }
       await this.loadMessages();
       this._animateMessageEntry(detail.uuid);
     },
@@ -178,7 +188,10 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
       // Take focus so the panel's own Escape binding is reachable from the
       // keyboard, which matters most on mobile where it covers the page.
       this.$nextTick(() => this.$el?.focus?.());
-      await this.loadMessages();
+      const shown = await this.loadMessages({ message: this.threadFocusUuid });
+      if (shown.targetUuid) {
+        this.$nextTick(() => this._highlightMessage(shown.targetUuid, undefined, 'instant'));
+      }
       // The root has to belong to the conversation the panel sits in. The
       // server enforces membership, not coherence: a crafted
       // /chat/<A>?thread=<root of B> deep link loads fine as long as the user

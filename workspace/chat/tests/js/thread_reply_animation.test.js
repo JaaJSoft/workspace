@@ -70,3 +70,13 @@ test('a reply to another thread leaves the panel alone', async () => {
 
   assert.deepStrictEqual(loads, []);
 });
+
+test('a reply past the end of older replies on screen is left for the newer pages', async () => {
+  const { panel, loads } = buildPanel();
+  panel.hasNewerMessages = true;
+
+  await panel.onReplyReceived({ root: 'r1', uuid: 'm4' });
+
+  assert.deepStrictEqual(loads, [], 'the reader is not taken away from the replies on screen');
+  assert.equal(panel._missedLive, true, 'the page reaching the latest reply asks again');
+});

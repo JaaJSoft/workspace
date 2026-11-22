@@ -1,0 +1,9 @@
+{% comment %}
+  Where the page of one message list sits, replaced on every load: offsets
+  count from the oldest message, so data-offset is the first row of the page
+  and data-end the row past its last. data-target-uuid names the message the
+  list was opened on with ?message=; it is absent when that message is
+  unknown or out of reach, alike.
+{% endcomment %}
+<div id="{{ list_id }}-state" hidden data-conversation-uuid="{{ conversation_uuid }}" data-offset="{{ window.offset }}" data-end="{{ window.end }}" data-has-newer="{{ window.has_newer|yesno:'true,false' }}" {% if target %}data-target-uuid="{{ target.uuid }}"{% if target.thread_root_id %} data-target-thread-root="{{ target.thread_root_id }}"{% endif %}{% endif %}>
+</div>

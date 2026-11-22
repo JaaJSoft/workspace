@@ -334,7 +334,7 @@ class LinkPreviewIntegrationTests(APITestCase):
         # Verify the preview appears in the message list API
         resp = self.client.get(f"/api/v1/chat/conversations/{self.conv.pk}/messages")
         self.assertEqual(resp.status_code, 200)
-        messages = resp.data["messages"]
+        messages = resp.data
         msg = next(m for m in messages if m["uuid"] == str(message_uuid))
         self.assertEqual(len(msg["link_previews"]), 1)
         self.assertEqual(msg["link_previews"][0]["title"], "GitHub")

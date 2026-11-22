@@ -74,10 +74,17 @@ window.chatSseMixin = function chatSseMixin() {
           this.clearBotStep();
         }
         if (!document.getElementById(`${this._messageIdPrefix()}-${detail.message.uuid}`)) {
-          const wasAtBottom = this._isNearBottom();
-          await this._refreshCurrentMessages();
-          this._animateMessageEntry(detail.message.uuid);
-          if (wasAtBottom) this.scrollToBottom();
+          if (this.hasNewerMessages) {
+            // Away from the present the message lands past the end of what
+            // is on screen; the newer pages bring it in when the reader gets
+            // there. It is still counted read or unread below.
+            this._missedLive = true;
+          } else {
+            const wasAtBottom = this._isNearBottom();
+            await this._refreshCurrentMessages();
+            this._animateMessageEntry(detail.message.uuid);
+            if (wasAtBottom) this.scrollToBottom();
+          }
           if (this._pageIsWatched()) {
             await this.markAsRead(detail.conversation_id);
           } else {

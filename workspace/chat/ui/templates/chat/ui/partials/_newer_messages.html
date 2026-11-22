@@ -1,0 +1,24 @@
+{% load i18n %}
+{% comment %}
+  Bottom of a message list showing a stretch of the past: newer pages load as
+  the reader scrolls down (handleScroll), and the button goes straight back to
+  the present. Sticky so it stays in reach while the reader scrolls.
+{% endcomment %}
+<div
+  x-show="hasNewerMessages"
+  x-cloak
+  class="sticky bottom-0 flex items-center justify-center gap-2 py-2"
+>
+  <span
+    x-show="loadingNewerMessages"
+    class="loading loading-spinner loading-xs"
+  ></span>
+  <button
+    type="button"
+    class="btn btn-sm btn-primary shadow-md gap-1"
+    @click="jumpToPresent()"
+  >
+    <i data-lucide="arrow-down" class="w-4 h-4"></i>
+    {{ label }}
+  </button>
+</div>

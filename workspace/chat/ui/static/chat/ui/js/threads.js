@@ -165,7 +165,10 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid, focusUuid = null) {
       if (detail?.root !== this.threadRootUuid) return;
       // Away from the latest replies, the new one lands past the end of what
       // is on screen: loading it would take the reader away.
-      if (this.hasNewerMessages) return;
+      if (this.hasNewerMessages) {
+        this._missedLive = true;
+        return;
+      }
       await this.loadMessages();
       this._animateMessageEntry(detail.uuid);
     },

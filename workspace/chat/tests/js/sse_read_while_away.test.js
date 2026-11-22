@@ -120,3 +120,24 @@ test('the open conversation reads as caught up when nothing waits', () => {
 
   assert.equal(app.conversations[0].unread_count, 0);
 });
+
+test('a message past the end of a stretch of the past is still counted unread', async () => {
+  const { app, calls } = buildApp({ attended: false });
+  let refreshed = 0;
+  app._refreshCurrentMessages = async () => { refreshed += 1; };
+  app.hasNewerMessages = true;
+
+  await app.handleSSEMessage(incoming);
+
+  assert.equal(refreshed, 0, 'the reader is not taken away from the past');
+  assert.equal(app._missedLive, true, 'the newer pages fetch it later');
+  assert.equal(app.unreadWhileAway, 'conv-1');
+  assert.deepStrictEqual(calls.markAsRead, []);
+});
+
+test('a message past the end of a stretch of the past is marked read on a watched page', async () => {
+  const { app, calls } = buildApp();
+  app.hasNewerMessages = true;
+  await app.handleSSEMessage(incoming);
+  assert.deepStrictEqual(calls.markAsRead, ['conv-1']);
+});

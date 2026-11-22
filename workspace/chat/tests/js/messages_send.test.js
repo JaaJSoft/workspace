@@ -12,18 +12,22 @@ const { loadScript } = require('../../../common/tests/js/loader');
  * @param {boolean} opts.ok - whether the simulated POST succeeds
  * @returns {{ app: object, counters: { refreshed: number, removed: number } }}
  */
-function buildApp({ ok }) {
+function buildApp({ ok, duringPost = () => {} }) {
+  let app;
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/messages.js', {
     getCSRFToken: () => 'csrf-token',
-    fetch: async () => ({
-      ok,
-      json: async () => ({ uuid: 'm1', created_at: '2026-01-01T00:00:00Z' }),
-    }),
+    fetch: async () => {
+      duringPost(app);
+      return {
+        ok,
+        json: async () => ({ uuid: 'm1', created_at: '2026-01-01T00:00:00Z' }),
+      };
+    },
   });
 
   const counters = { refreshed: 0, removed: 0 };
   const refreshedWith = [];
-  const app = ctx.chatMessagesMixin();
+  app = ctx.chatMessagesMixin();
   Object.assign(app, {
     messageBody: 'hello',
     pendingFiles: [],
@@ -40,7 +44,9 @@ function buildApp({ ok }) {
     $nextTick() {},
     scrollToBottom() {},
     _updateConversationLastMessage() {},
-    async _refreshCurrentMessages() {},
+    async _refreshCurrentMessages() {
+      counters.refreshedAway = this.hasNewerMessages;
+    },
     refreshConversationItems(uuids) {
       counters.refreshed++;
       refreshedWith.push(...uuids);
@@ -61,4 +67,23 @@ test('a failed send does not refresh the conversation sidebar row', async () => 
   await app.sendMessage();
   assert.equal(counters.refreshed, 0, 'sidebar should not refresh when the send fails');
   assert.equal(counters.removed, 1, 'the optimistic message should be rolled back on failure');
+});
+
+test('a message sent from the past is refreshed at the present', async () => {
+  // A newer page landing while the POST is out sets the flag again; the
+  // refresh that shows the sent message must still load the last page.
+  const { app, counters } = buildApp({
+    ok: true,
+    duringPost: (a) => { a.hasNewerMessages = true; },
+  });
+  app.hasNewerMessages = true;
+  await app.sendMessage();
+  assert.equal(counters.refreshedAway, false);
+});
+
+test('a failed send from the past keeps the past on screen as it was', async () => {
+  const { app } = buildApp({ ok: false });
+  app.hasNewerMessages = true;
+  await app.sendMessage();
+  assert.equal(app.hasNewerMessages, true, 'the window is still cut off from the present');
 });

@@ -251,12 +251,16 @@ window.chatPanelsMixin = function chatPanelsMixin() {
      *   main flow, so paging further back never finds it.
      */
     async scrollToMessage(uuid, threadRoot = null) {
-      if (this._highlightMessage(uuid)) return;
-
+      // A reply is shown in its thread, even when the inline preference puts
+      // a copy of it in the flow. A thread already open on it is not rebuilt.
       if (threadRoot && typeof this.openThread === 'function') {
-        this.openThread(threadRoot, { focus: uuid });
+        if (this.openThreadRoot !== threadRoot || !this._highlightMessage(uuid, 'tmsg')) {
+          this.openThread(threadRoot, { focus: uuid });
+        }
         return;
       }
+
+      if (this._highlightMessage(uuid)) return;
 
       // Not on screen: open the list on it, however far back it is.
       await this.showMessage(uuid);

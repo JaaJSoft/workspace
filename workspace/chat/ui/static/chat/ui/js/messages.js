@@ -32,6 +32,15 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // Where an older or newer page merges into the items wrapper: read by
     // its x-merge:dynamic binding (message_list.html).
     itemsMerge: 'prepend',
+    // A live message arrived while the window was away from the present and
+    // was not shown: the newer page that reaches the present may have been
+    // cut before it, so one more is asked for then.
+    _missedLive: false,
+    // Set while a refresh away from the present is out; the message being
+    // read is taken when its rows land (_vetoStaleMerge), since the reader
+    // may scroll while the request is out.
+    _anchorOnMerge: false,
+    _refreshAnchor: null,
     editingMessageUuid: null,
     replyingTo: null,
     pinnedMessages: [],
@@ -108,6 +117,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const stamped = event.detail?.content?.getAttribute?.('data-conversation-uuid');
       if (stamped && stamped !== this.activeConversation?.uuid) {
         event.preventDefault();
+        return;
+      }
+      if (this._anchorOnMerge && !this._refreshAnchor) {
+        this._refreshAnchor = this._visibleMessage();
       }
     },
 
@@ -135,6 +148,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // list element itself is a merge target and has to stay in the DOM.
       document.getElementById(this._messageListItemsId())?.replaceChildren();
       this.hasNewerMessages = false;
+      this._missedLive = false;
 
       const query = message ? { limit: PAGE_SIZE, message } : { limit: PAGE_SIZE };
       let shown = none;
@@ -239,6 +253,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (this._surfaceGone()) return;
 
       this.loadingNewerMessages = true;
+      let catchUp = false;
       try {
         this.itemsMerge = 'append';
         const render = await this.$ajax(
@@ -248,11 +263,17 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if ((render || []).some(Boolean)) {
           this._readPaginationState('newer');
           this._dropRepeatedDays();
+          catchUp = !this.hasNewerMessages && this._missedLive;
         }
       } catch (e) {
         console.error('Failed to load newer messages', e);
       }
       this.loadingNewerMessages = false;
+      if (catchUp) {
+        this._missedLive = false;
+        this.hasNewerMessages = true;
+        await this.loadNewerMessages();
+      }
     },
 
     // Back to the latest page, from a stretch of the past.
@@ -375,9 +396,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const wsFiles = [...(this.pendingPickedFiles || [])];
       if ((!body && files.length === 0 && wsFiles.length === 0) || !this.activeConversation) return;
 
-      // What is sent belongs at the present: the refresh that follows the
-      // send loads the latest page, not the stretch of the past on screen.
-      this.hasNewerMessages = false;
       const replyToUuid = this._replyTarget();
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
 
@@ -451,6 +469,11 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           // receivers' refresh path), so the send path must refresh it itself.
           this.refreshConversationItems([this.activeConversation.uuid]);
           // Re-fetch messages — replaces optimistic bubble with real server-rendered one
+          // What was sent belongs at the present. Cleared here, right before
+          // the refresh, and not when the send began: a newer page landing
+          // meanwhile sets it again, and a failed send keeps the past on
+          // screen as it was.
+          this.hasNewerMessages = false;
           await this._refreshCurrentMessages();
           // If bot already replied during the round-trip, hide typing immediately
           if (isBotConv) {
@@ -490,9 +513,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     async sendVoiceMessage(file, duration) {
       if (!this.activeConversation) return false;
       const convUuid = this.activeConversation.uuid;
-      // What is sent belongs at the present: the refresh that follows the
-      // send loads the latest page, not the stretch of the past on screen.
-      this.hasNewerMessages = false;
       const replyToUuid = this._replyTarget();
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
       const isBotConv = this.isBotConversation(this.activeConversation);
@@ -528,6 +548,11 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           // The sender is excluded from the SSE broadcast, so the send path
           // refreshes its own sidebar row.
           this.refreshConversationItems([convUuid]);
+          // What was sent belongs at the present. Cleared here, right before
+          // the refresh, and not when the send began: a newer page landing
+          // meanwhile sets it again, and a failed send keeps the past on
+          // screen as it was.
+          this.hasNewerMessages = false;
           await this._refreshCurrentMessages();
           this.$nextTick(() => this.scrollToBottom());
           return true;
@@ -622,7 +647,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           limit: Math.min(Math.max(this._windowEnd - this._windowStart, 1), MAX_LIMIT),
         }
         : { limit: PAGE_SIZE };
-      const visible = away ? this._visibleMessage() : null;
+      if (!away) this._missedLive = false;
+      this._anchorOnMerge = away;
+      this._refreshAnchor = null;
       try {
         const render = await this.$ajax(this._messagesUrl(query), {
           targets: this._loadTargets(),
@@ -630,11 +657,13 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         });
         if ((render || []).some(Boolean)) {
           this._readPaginationState('full');
-          if (visible) this._restoreVisibleMessage(visible);
+          if (this._refreshAnchor) this._restoreVisibleMessage(this._refreshAnchor);
         }
       } catch (e) {
         console.error('Failed to refresh messages', e);
       }
+      this._anchorOnMerge = false;
+      this._refreshAnchor = null;
     },
 
     // ── Replying ───────────────────────────────────────────

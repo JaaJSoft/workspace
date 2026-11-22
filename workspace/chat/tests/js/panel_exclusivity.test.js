@@ -129,3 +129,27 @@ test('closing the search panel leaves the thread alone', () => {
   assert.equal(app.showSearchPanel, false);
   assert.equal(app.openThreadRoot, 'r1', 'closing a panel must not close another');
 });
+
+test('a hit on a reply opens its thread even when an inline copy is in the flow', async () => {
+  const inline = { id: 'msg-m9', classList: { add() {}, remove() {} }, scrollIntoView() {} };
+  const app = buildApp({ getElementById: (id) => (id === 'msg-m9' ? inline : null) });
+
+  await app.scrollToMessage('m9', 'r1');
+
+  assert.equal(app.openThreadRoot, 'r1');
+  assert.equal(app.threadFocus, 'm9');
+});
+
+test('a hit on a reply already shown in the open thread is highlighted there, not reopened', async () => {
+  let scrolled = 0;
+  const inPanel = { id: 'tmsg-m9', classList: { add() {}, remove() {} }, scrollIntoView() { scrolled += 1; } };
+  const app = buildApp({ getElementById: (id) => (id === 'tmsg-m9' ? inPanel : null) });
+  app.openThreadRoot = 'r1';
+  let reopened = 0;
+  app.openThread = () => { reopened += 1; };
+
+  await app.scrollToMessage('m9', 'r1');
+
+  assert.equal(reopened, 0);
+  assert.equal(scrolled, 1);
+});

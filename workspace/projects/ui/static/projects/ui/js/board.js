@@ -241,7 +241,7 @@ function emptyTaskForm() {
 
 // The shared <tag-chip> palette, minus its "no color" entry: a new label
 // always gets a color.
-var LABEL_COLORS = window.TAG_CHIP_COLORS.map((c) => c.value).filter(Boolean);
+const LABEL_COLORS = window.TAG_CHIP_COLORS.map((c) => c.value).filter(Boolean);
 
 function pickLabelColor(labels) {
   const counts = new Map(LABEL_COLORS.map((color) => [color, 0]));

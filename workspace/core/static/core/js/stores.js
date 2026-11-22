@@ -267,16 +267,6 @@ document.addEventListener('alpine:init', function () {
       this.items.forEach(n => n.is_read = true);
       this.unread = 0;
     },
-
-    async deleteNotif(uuid) {
-      const r = await fetch('/api/v1/notifications/' + uuid, {
-        method: 'DELETE',
-        credentials: 'same-origin',
-        headers: { 'X-CSRFToken': getCSRFToken() },
-      });
-      if (!r.ok) return;
-      this.items = this.items.filter(n => n.uuid !== uuid);
-    },
   });
 
   window.addEventListener('sse:notifications.count', function (e) {

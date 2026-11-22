@@ -168,11 +168,6 @@ window.chatBotMixin = function chatBotMixin() {
       this.botSteps = [];
     },
 
-    botTypingName() {
-      const m = this._getBotMember();
-      return m ? this.memberDisplayName(m) : gettext('AI');
-    },
-
     async retryBotResponse(errorMsgUuid) {
       if (!this.activeConversation) return;
       const convId = this.activeConversation.uuid;

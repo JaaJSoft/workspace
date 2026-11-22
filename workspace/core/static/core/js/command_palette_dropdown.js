@@ -303,16 +303,6 @@ window.commandPaletteDropdown = function () {
       this._cacheKey = '';
     },
 
-    setActiveFromElement(el) {
-      this._cachedItems = null;
-      this._cacheKey = '';
-      const items = this.getAllItems();
-      const index = items.indexOf(el);
-      if (index !== -1) {
-        this.activeIndex = index;
-      }
-    },
-
     navigate(direction) {
       if (!this.open) return;
 
@@ -335,14 +325,6 @@ window.commandPaletteDropdown = function () {
       });
     },
 
-    navigateDown() {
-      this.navigate(1);
-    },
-
-    navigateUp() {
-      this.navigate(-1);
-    },
-
     select() {
       if (this.activeIndex < 0) return;
 
@@ -352,10 +334,6 @@ window.commandPaletteDropdown = function () {
       if (activeEl?.href) {
         activeEl.click();
       }
-    },
-
-    selectCurrent() {
-      this.select();
     },
 
     getAllItems() {

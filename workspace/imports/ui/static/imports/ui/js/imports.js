@@ -219,11 +219,6 @@ window.importsApp = function importsApp() {
       return this.providers.filter((p) => p.auth === 'credentials');
     },
 
-    providerName(slug) {
-      const p = this.providers.find((x) => x.slug === slug);
-      return p ? p.name : slug;
-    },
-
     hint(kind) {
       const h = PROVIDER_HINTS[this.connForm.provider];
       return h ? h[kind] : '';

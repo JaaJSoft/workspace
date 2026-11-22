@@ -29,14 +29,6 @@ window.fileClipboard = {
     return this.items;
   },
 
-  getMode() {
-    return this.mode;
-  },
-
-  isCut() {
-    return this.mode === 'cut';
-  },
-
   isCopy() {
     return this.mode === 'copy';
   }

@@ -1013,12 +1013,6 @@ window.fileBrowser = function fileBrowser() {
       });
     },
 
-    async pinFolder(uuid) {
-      if (!uuid) return;
-      await this._mark(window.fileActions.setPinned, [uuid], true, gettext('Failed to pin folder'));
-    },
-
-
     async syncAndRefreshFolderBrowser() {
       try {
         const folderId = this.currentFolder;

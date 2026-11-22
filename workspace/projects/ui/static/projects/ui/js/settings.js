@@ -35,7 +35,7 @@ function normalizeProjectKey(value) {
 
 // Stops of the done-retention slider; the stop after the last preset means
 // "always visible" ('' / null).
-var RETENTION_PRESETS = [1, 7, 14, 30, 90];
+const RETENTION_PRESETS = [1, 7, 14, 30, 90];
 
 // Snaps to the nearest preset so an API-set value (e.g. 21) still lands on
 // a valid stop instead of leaving the slider out of range.

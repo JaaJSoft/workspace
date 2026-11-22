@@ -8,9 +8,10 @@ from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.notifications.models import Notification
 
 START = datetime(2024, 1, 1, 10, 0, tzinfo=UTC)
+ALL_TITLES = [f"Notif {i}" for i in range(24, -1, -1)]
 
 
-class NotificationsStorePaginationTests(PlaywrightTestCase):
+class NotificationsStoreTestCase(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="pager")
@@ -37,6 +38,8 @@ class NotificationsStorePaginationTests(PlaywrightTestCase):
             "return { titles: s.items.map(n => n.title), hasMore: s.hasMore };"
         )
 
+
+class NotificationsStorePaginationTests(NotificationsStoreTestCase):
     def test_load_more_appends_the_next_page(self):
         self._store("await s.fetchList();")
         first = self._state()
@@ -46,7 +49,7 @@ class NotificationsStorePaginationTests(PlaywrightTestCase):
 
         self._store("await s.loadMore();")
         state = self._state()
-        self.assertEqual(state["titles"], [f"Notif {i}" for i in range(24, -1, -1)])
+        self.assertEqual(state["titles"], ALL_TITLES)
         self.assertFalse(state["hasMore"])
 
     def test_notification_arriving_between_pages_is_not_listed_twice(self):
@@ -57,5 +60,39 @@ class NotificationsStorePaginationTests(PlaywrightTestCase):
         self._store("await s.loadMore();")
 
         state = self._state()
-        self.assertEqual(state["titles"], [f"Notif {i}" for i in range(24, -1, -1)])
+        self.assertEqual(state["titles"], ALL_TITLES)
         self.assertFalse(state["hasMore"])
+
+
+class NotificationsStoreLastRowChangesTests(NotificationsStoreTestCase):
+    """Regression: the next page was cut after the last loaded row, looked up
+    again on the server. Once that row moved or left the list, the cursor
+    fell back to the top and Load more repeated the first page."""
+
+    LAST_LOADED = "Notif 5"
+
+    def _assert_no_repeat(self):
+        titles = self._state()["titles"]
+        self.assertEqual(len(titles), len(set(titles)), titles)
+        self.assertIn("Notif 0", titles)
+
+    def test_merged_last_row(self):
+        self._store("await s.fetchList();")
+        # What notify_stream does to the row of a conversation with a new message.
+        Notification.objects.filter(title=self.LAST_LOADED).update(
+            created_at=START + timedelta(hours=1)
+        )
+        self._store("await s.loadMore();")
+        self.assertEqual(self._state()["titles"], ALL_TITLES)
+
+    def test_last_row_read_under_the_unread_filter(self):
+        self._store("await s.fetchList({ filter: 'unread' });")
+        Notification.objects.filter(title=self.LAST_LOADED).update(read_at=START)
+        self._store("await s.loadMore();")
+        self._assert_no_repeat()
+
+    def test_last_row_deleted(self):
+        self._store("await s.fetchList();")
+        Notification.objects.filter(title=self.LAST_LOADED).delete()
+        self._store("await s.loadMore();")
+        self._assert_no_repeat()

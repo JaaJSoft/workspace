@@ -282,7 +282,10 @@
         patience = owed ? Math.min(Math.max(1, patience * 2), MAX_PATIENCE) : 0;
         waited = 0;
         if (!owed && streamCursor) lastEventId = streamCursor;
-        for (const message of held) apply(message);
+        for (const message of held) {
+          if (message.type === 'reconnect') announceReconnect();
+          else apply(message);
+        }
       });
   }
 
@@ -305,8 +308,11 @@
       if (buffered) buffered.push(message);
       else apply(message);
     } else if (message.type === 'reconnect') {
-      // While its snapshot loads, the page has just rendered or re-synced.
+      // While the snapshot it joined with loads, the page has just rendered
+      // or re-synced. One asking again has not: it is told in its turn, among
+      // the events held.
       if (!buffered) announceReconnect();
+      else if (owed) buffered.push(message);
     } else if (message.type === 'alive') {
       // The answer to a check: a page on screen takes it to ask again for a
       // snapshot it is still owed. The checks of a hidden page count too, so

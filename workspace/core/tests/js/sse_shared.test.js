@@ -470,6 +470,36 @@ test('a snapshot that came short is applied, and asked again', async () => {
   assert.equal(tab.lastFetch(), SNAPSHOT);
 });
 
+for (const [outcome, answer, expected] of [
+  ['comes', answering([COUNT_4]), ['sse:notifications.count', 'sse:files.operation', 'sse:reconnect', 'sse:notifications.count']],
+  ['fails again', REFUSED, ['sse:files.operation', 'sse:reconnect', 'sse:notifications.count']],
+]) {
+  test(`a reopening announced while a page asks again is kept for it, whether the snapshot ${outcome}`, async () => {
+    const browser = new FakeBrowser();
+    await openTabs(browser, 1);
+    const stream = browser.worker().stream();
+    stream.open();
+    const { tab, answers } = tabAnsweredByHand(browser);
+    await settle();
+    answers[0].resolve(REFUSED);
+    await settle();
+    tab.timers.advance(CHECK_INTERVAL_MS);
+    await settle();
+    assert.equal(tab.fetches.length, 2, 'the page is asking again');
+
+    // The page rendered a while ago: nothing else will tell it to re-sync.
+    stream.deliver(OPERATION);
+    stream.open();
+    stream.deliver(COUNT_5);
+    await settle();
+    assert.deepStrictEqual(tab.types(), [], 'held, in the order they came');
+
+    answers[1].resolve(answer);
+    await settle();
+    assert.deepStrictEqual(tab.types(), expected);
+  });
+}
+
 test('a hidden page waits to be on screen before asking again', async () => {
   const browser = new FakeBrowser();
   await openTabs(browser, 1);

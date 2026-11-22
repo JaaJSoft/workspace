@@ -28,6 +28,8 @@ SNAPSHOT = re.compile(r"/api/v1/stream/snapshot(\?.*)?$")
 # A request made by a worker names the worker's script as its referrer.
 WORKER_SCRIPT = re.compile(r"/static/core/js/sse(\.[0-9a-f]+)?\.js$")
 
+ALPINE = re.compile(r"/static/ui/js/vendor/alpine/alpine(\.[0-9a-f]+)?\.js$")
+
 # How long the browser waits before reconnecting a stream the server ended.
 RETRY_MS = 200
 RETRY = f"retry: {RETRY_MS}\n\n"
@@ -63,6 +65,16 @@ def _event(name, data, event_id=None):
 
 def _unread(count, event_id=None):
     return _event("notifications.count", {"unread": count}, event_id)
+
+
+class HeldRoutes:
+    """Requests left unanswered until a test lets them through."""
+
+    def __init__(self):
+        self.routes = []
+
+    def append_route(self, route):
+        self.routes.append(route)
 
 
 class Connection:
@@ -334,3 +346,20 @@ class SharedStreamTests(PlaywrightTestCase):
         self.assertTrue(self._connection(2, tab).from_worker)
         self._wait_unread(tab, 9)
         self.assertEqual(tab.evaluate(RECONNECTS), 1)
+
+    def test_a_snapshot_that_beats_the_page_to_its_listeners_is_not_lost(self):
+        self._first_tab()
+        self.snapshot_events = [{"event": "notifications.count", "data": {"unread": 4}}]
+
+        # The stores that listen are registered when Alpine starts. On a slow
+        # machine the snapshot is answered first: Alpine is held back here
+        # until it has been.
+        held = HeldRoutes()
+        second = self.context.new_page()
+        second.route(ALPINE, held.append_route)
+        second.goto(self.url, wait_until="commit")
+        self._until(lambda: self.snapshots and held.routes, second, "a snapshot")
+        second.wait_for_timeout(5 * POLL_MS)
+        held.routes[0].continue_()
+
+        self._wait_unread(second, 4)

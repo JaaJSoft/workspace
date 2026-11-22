@@ -274,6 +274,40 @@ test('a snapshot asked during an earlier stay does not answer for the next', asy
   ]);
 });
 
+// -- a page that is not listening yet ------------------------------------------
+
+test('events that beat the page to its listeners are kept for them', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  // The document is still being parsed when the script runs: Alpine, and the
+  // stores that listen, start after it.
+  const tab = browser.openTab({ parsing: true, snapshot: [COUNT_4] });
+  await settle();
+  browser.worker().stream().deliver(COUNT_5);
+  await settle();
+  assert.deepStrictEqual(tab.events, [], 'nobody is listening yet');
+
+  tab.documentHandlers['alpine:initialized']();
+
+  assert.deepStrictEqual(tab.events.map((event) => event.detail.unread), [4, 5]);
+
+  browser.worker().stream().deliver(COUNT_4);
+  await settle();
+  assert.equal(tab.events.length, 3, 'from then on, at once');
+});
+
+test('a page where Alpine never starts listens once it has loaded, and once only', async () => {
+  const browser = new FakeBrowser();
+  await openTabs(browser, 1);
+  const tab = browser.openTab({ parsing: true, snapshot: [COUNT_4] });
+  await settle();
+
+  tab.windowHandlers.load();
+  tab.documentHandlers['alpine:initialized']();
+
+  assert.deepStrictEqual(tab.types(), ['sse:notifications.count']);
+});
+
 // -- where a page stands, for the day it comes back ---------------------------
 
 test('a page coming back asks what was queued since the last event it applied', async () => {

@@ -252,9 +252,12 @@ class FakeBrowser {
    *   endpoint answers with, or a function returning the fetch promise
    * @param {boolean} options.currentScript - false when the page cannot tell
    *   which file it is running
+   * @param {boolean} options.parsing - true while the document is still being
+   *   parsed, as it is when a real page runs the script
    */
   openTab({
     userId = '7', hidden = false, sharedWorker = true, snapshot = [], currentScript = true,
+    parsing = false,
   } = {}) {
     const browser = this;
     const tab = {
@@ -283,6 +286,7 @@ class FakeBrowser {
 
     tab.document = {
       hidden,
+      readyState: parsing ? 'loading' : 'complete',
       currentScript: currentScript ? { src: SCRIPT_URL } : null,
       body: { dataset: userId === null ? {} : { userId } },
       getElementById: () => null,

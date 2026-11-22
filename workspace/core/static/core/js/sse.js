@@ -189,20 +189,40 @@
   // Events held back while the snapshot loads; null once it has.
   let buffered = null;
 
+  // Listeners come with the scripts that follow this one and with Alpine,
+  // which starts once the document is parsed. An event dispatched before
+  // that finds nobody, and a snapshot can be that quick: events are kept
+  // until the page listens.
+  let listening = document.readyState !== 'loading';
+  const early = [];
+
+  function emit(type, detail) {
+    if (listening) window.dispatchEvent(new CustomEvent(type, { detail }));
+    else early.push([type, detail]);
+  }
+
+  function startListening() {
+    if (listening) return;
+    listening = true;
+    for (const [type, detail] of early.splice(0)) emit(type, detail);
+  }
+
+  if (!listening) {
+    document.addEventListener('alpine:initialized', startListening);
+    // Should Alpine never start.
+    window.addEventListener('load', startListening);
+  }
+
   function dispatch(payload) {
-    window.dispatchEvent(new CustomEvent('sse:' + payload.event, { detail: payload.data }));
-    if (payload.event.startsWith('chat.')) {
-      window.dispatchEvent(new CustomEvent('chat-' + payload.event.substring(5), { detail: payload.data }));
-    }
-    if (payload.event.startsWith('ai_stream.')) {
-      window.dispatchEvent(new CustomEvent('ai-stream-' + payload.event.substring(10), { detail: payload.data }));
-    }
+    emit('sse:' + payload.event, payload.data);
+    if (payload.event.startsWith('chat.')) emit('chat-' + payload.event.substring(5), payload.data);
+    if (payload.event.startsWith('ai_stream.')) emit('ai-stream-' + payload.event.substring(10), payload.data);
   }
 
   // The stream was opened again, or this page changed streams: pushes may
   // have been missed meanwhile - let listeners re-sync.
   function announceReconnect() {
-    window.dispatchEvent(new CustomEvent('sse:reconnect'));
+    emit('sse:reconnect');
   }
 
   function apply(message) {

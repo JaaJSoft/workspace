@@ -116,13 +116,7 @@ function chatApp(currentUserId) {
       // Save draft on page unload
       window.addEventListener('beforeunload', () => this._saveDraft());
 
-      // Catch up on missed events when SSE reconnects (mobile resume)
-      window.addEventListener('sse:reconnect', () => {
-        this.resyncConversations();
-        if (this.activeConversation) {
-          this._refreshCurrentMessages();
-        }
-      });
+      window.addEventListener('sse:reconnect', () => this.catchUpAfterReconnect());
 
       // Save-to-files from attachment viewer modal
       window.addEventListener('chat-save-attachment-to-files', (e) => {
@@ -231,6 +225,16 @@ function chatApp(currentUserId) {
           });
         }
       });
+    },
+
+    // Events pushed while the stream was down are lost once they expire from
+    // the server's queue, so everything they would have changed is asked for
+    // again: the list, the open conversation and its call.
+    catchUpAfterReconnect() {
+      this.resyncConversations();
+      if (!this.activeConversation) return;
+      this._refreshCurrentMessages();
+      this._syncCallBanner();
     },
 
     // ── Sidebar collapse ───────────────────────────────────

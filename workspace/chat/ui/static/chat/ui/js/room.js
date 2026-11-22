@@ -79,6 +79,8 @@ function chatRoomApp(currentUserId, conversationId) {
       // Leave cleanly when the tab closes (existing beacon).
       window.addEventListener('pagehide', () => { if (this.inCall) this._leaveBeacon?.(); });
 
+      window.addEventListener('sse:reconnect', () => this.catchUpAfterReconnect());
+
       // Load the conversation messages, then auto-join the call.
       await this.loadMessages();
       await this.startOrJoinCall();
@@ -86,6 +88,12 @@ function chatRoomApp(currentUserId, conversationId) {
         this._startSpeakingMeter();
         this._startDurationTimer();
       }
+    },
+
+    // A message pushed while the stream was down is lost once it expires from
+    // the server's queue, so the conversation is asked for again.
+    catchUpAfterReconnect() {
+      this._refreshCurrentMessages();
     },
 
     // Lightweight speaking meter: sample local + remote streams ~10/s and flag

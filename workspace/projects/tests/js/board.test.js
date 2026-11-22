@@ -2027,3 +2027,114 @@ test('a stale create failing toasts instead of flagging the reopened draft', asy
   assert.equal(board.creatingTask, false);
   assert.deepStrictEqual(Array.from(alerts), ['Could not save the task.']);
 });
+
+function draftPanel() {
+  const panel = ctx.taskPanel();
+  panel.data = { uuid: 'u1', estimate: 2 };
+  panel._savedEstimate = '2';
+  return panel;
+}
+
+test('taskPanel.hasDraft is false at rest', () => {
+  assert.equal(draftPanel().hasDraft(), false);
+});
+
+test('taskPanel.hasDraft holds every field being typed', () => {
+  const cases = [
+    (p) => { p.editing = 'description'; },
+    (p) => { p.editingSubtask = 's1'; },
+    (p) => { p.newSubtask = 'Buy milk'; },
+    (p) => { p.linkQuery = 'PRJ-4'; },
+    (p) => { p.pendingFileLinks = [{ uuid: 'f1' }]; },
+    (p) => { p.data.estimate = '3'; },
+  ];
+  for (const typing of cases) {
+    const panel = draftPanel();
+    typing(panel);
+    assert.equal(panel.hasDraft(), true, typing.toString());
+  }
+});
+
+test('taskPanel.hasDraft ignores blank text', () => {
+  const panel = draftPanel();
+  panel.newSubtask = '   ';
+  panel.linkQuery = ' ';
+  assert.equal(panel.hasDraft(), false);
+});
+
+// Two swappable regions and an Alpine whose effects the test re-runs by
+// hand, standing for a draft that changed.
+function resyncBoard() {
+  const drafts = { 'project-content': false, 'task-panel': false };
+  const region = (id) => ({ id, isConnected: true, querySelectorAll: () => [] });
+  const roots = { 'project-content': region('project-content'), 'task-panel': region('task-panel') };
+  const effects = [];
+  const released = [];
+  const calls = [];
+  ctx.queueMicrotask = queueMicrotask;
+  ctx.document = { getElementById: (id) => roots[id] };
+  ctx.Alpine = {
+    $data: (el) => ({ hasDraft: () => drafts[el.id] }),
+    effect: (fn) => { effects.push(fn); fn(); return fn; },
+    release: (fn) => released.push(fn),
+  };
+  const board = panelBoard();
+  board.panelTaskUuid = 't1';
+  board.refreshContent = () => calls.push('content');
+  board._loadPanel = (uuid) => calls.push('panel ' + uuid);
+  return { board, drafts, roots, region, effects, released, calls };
+}
+
+test('resync reloads both regions when neither holds a draft', () => {
+  const { board, calls } = resyncBoard();
+  board.resync();
+  assert.deepStrictEqual(Array.from(calls), ['content', 'panel t1']);
+});
+
+test('resync holds a region with a draft back until the draft is gone', async () => {
+  const { board, drafts, effects, released, calls } = resyncBoard();
+  drafts['task-panel'] = true;
+  board.resync();
+  board.resync();
+  assert.deepStrictEqual(Array.from(calls), ['content', 'content']);
+  assert.equal(effects.length, 1);
+
+  drafts['task-panel'] = false;
+  effects[0]();
+  await null;
+
+  assert.deepStrictEqual(Array.from(calls), ['content', 'content', 'panel t1']);
+  assert.deepStrictEqual(Array.from(released), [effects[0]]);
+});
+
+test('a held panel is left to the save in flight', async () => {
+  const { board, drafts, effects, calls } = resyncBoard();
+  drafts['task-panel'] = true;
+  board.resync();
+  board._panelSaves = 1;
+  drafts['task-panel'] = false;
+  effects[0]();
+  await null;
+  assert.deepStrictEqual(Array.from(calls), ['content']);
+});
+
+test('a region swapped while held re-syncs on the next reconnection', () => {
+  const { board, drafts, roots, region, effects, released, calls } = resyncBoard();
+  drafts['task-panel'] = true;
+  board.resync();
+  roots['task-panel'] = region('task-panel');
+  drafts['task-panel'] = false;
+  board.resync();
+  assert.deepStrictEqual(Array.from(calls), ['content', 'content', 'panel t1']);
+  assert.deepStrictEqual(Array.from(released), [effects[0]]);
+});
+
+test('regionHasDraft asks every component of the region', () => {
+  const inner = { id: 'comments' };
+  const root = { id: 'panel', querySelectorAll: () => [inner] };
+  ctx.Alpine = { $data: (el) => (el === inner ? { hasDraft: () => true } : {}) };
+  assert.equal(ctx.projectBoardHelpers.regionHasDraft(root), true);
+  ctx.Alpine = { $data: () => ({}) };
+  assert.equal(ctx.projectBoardHelpers.regionHasDraft(root), false);
+  assert.equal(ctx.projectBoardHelpers.regionHasDraft(null), false);
+});

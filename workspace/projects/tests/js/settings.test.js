@@ -686,3 +686,57 @@ test('projectEpics.setTargetDate re-sorts the list', async () => {
     ['e1', 'e2']
   );
 });
+
+function loadedGeneral(fetchImpl) {
+  const data = { name: 'P', description: '', key: 'P1', done_retention_days: null };
+  const c = settingsWith({
+    fetch: fetchImpl,
+    document: {
+      ...CUSTOM_ELEMENT_STUBS.document,
+      getElementById: () => ({ textContent: JSON.stringify(data) }),
+    },
+  }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
+  c.init();
+  return c;
+}
+
+test('projectSettingsGeneral.hasDraft follows the unsaved changes', async () => {
+  const c = loadedGeneral(async () => ({ ok: true }));
+  assert.equal(c.hasDraft(), false);
+  c.name = 'Renamed';
+  assert.equal(c.hasDraft(), true);
+  await c.save();
+  assert.equal(c.hasDraft(), false);
+});
+
+test('projectSettingsGeneral.hasDraft survives a failed save', async () => {
+  const c = loadedGeneral(async () => ({ ok: false, json: async () => ({}) }));
+  c.name = 'Renamed';
+  await c.save();
+  assert.equal(c.hasDraft(), true);
+});
+
+test('column, label and epic editors report the text being typed', () => {
+  const s = ctx();
+  for (const make of [s.projectColumns, s.projectLabels, s.projectEpics]) {
+    const c = make({ apiBase: '/x' });
+    assert.equal(c.hasDraft(), false);
+    c.addForm.name = 'Typed then closed';
+    assert.equal(c.hasDraft(), false);
+    c.adding = true;
+    assert.equal(c.hasDraft(), true);
+    c.adding = false;
+    c.editing = 'a';
+    assert.equal(c.hasDraft(), true);
+  }
+});
+
+test('an epic description being typed is a draft', () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  c.editingDesc = 'e1';
+  assert.equal(c.hasDraft(), true);
+  c.editingDesc = null;
+  c.adding = true;
+  c.addForm.description = 'Why this epic';
+  assert.equal(c.hasDraft(), true);
+});

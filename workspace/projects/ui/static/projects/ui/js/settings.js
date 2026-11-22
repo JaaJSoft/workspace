@@ -86,6 +86,7 @@ function projectSettingsGeneral(config) {
     saved: false,
     error: '',
     writable: config.writable !== false,
+    _savedForm: '',
 
     init() {
       const data = JSON.parse(
@@ -97,6 +98,22 @@ function projectSettingsGeneral(config) {
       this.doneRetentionDays =
         data.done_retention_days == null ? '' : String(data.done_retention_days);
       this.estimateUnit = data.estimate_unit || '';
+      this._savedForm = this._formState();
+    },
+
+    _formState() {
+      return JSON.stringify([
+        this.name,
+        this.description,
+        this.key,
+        this.doneRetentionDays,
+        this.estimateUnit,
+      ]);
+    },
+
+    // Unsaved changes, which a re-render of the settings would throw away.
+    hasDraft() {
+      return this._formState() !== this._savedForm;
     },
 
     retentionIndex() {
@@ -121,6 +138,7 @@ function projectSettingsGeneral(config) {
       this.saving = true;
       this.error = '';
       this.saved = false;
+      const sent = this._formState();
       try {
         const body = {
           name: this.name,
@@ -146,6 +164,7 @@ function projectSettingsGeneral(config) {
               gettext('Could not save.')
           );
         }
+        this._savedForm = sent;
         this.saved = true;
       } catch (e) {
         this.error = e.message;
@@ -459,6 +478,10 @@ function projectColumns(config) {
       }
     },
 
+    hasDraft() {
+      return this.editing !== null || (this.adding && this.addForm.name.trim() !== '');
+    },
+
     startEdit(column) {
       this.editing = column.uuid;
       this.editName = column.name;
@@ -668,6 +691,10 @@ function projectLabels(config) {
       }
     },
 
+    hasDraft() {
+      return this.editing !== null || (this.adding && this.addForm.name.trim() !== '');
+    },
+
     startEdit(label) {
       this.editing = label.uuid;
       this.editName = label.name;
@@ -863,6 +890,15 @@ function projectEpics(config) {
       } catch (e) {
         this.error = e.message;
       }
+    },
+
+    hasDraft() {
+      const form = this.addForm;
+      return (
+        this.editing !== null ||
+        this.editingDesc !== null ||
+        (this.adding && (form.name.trim() !== '' || form.description.trim() !== ''))
+      );
     },
 
     startEdit(epic) {

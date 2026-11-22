@@ -247,7 +247,7 @@
         'py-3.5': mailPrefs.density === 'spacious',
         'bg-module/10': selectedMessage?.uuid === msg.uuid,
         'hover:bg-base-200/50': selectedMessage?.uuid !== msg.uuid,
-        'font-normal opacity-70': msg.is_read,
+        'font-normal': msg.is_read,
         'font-semibold': !msg.is_read,
         'opacity-40': _draggingMsgIds?.includes(msg.uuid),
       }"

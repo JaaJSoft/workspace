@@ -113,6 +113,17 @@ class SearchContactsAccentTests(TestCase):
     def _emails(self, query):
         return [r.matched_value for r in search_contacts(query, self.user, 10)]
 
+    def test_the_compose_link_carries_the_address_as_a_query_value(self):
+        MailMessage.objects.create(
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=2,
+            from_name="Plus Tag",
+            from_email="plus+tag@example.com",
+        )
+        (result,) = search_contacts("plus", self.user, 10)
+        self.assertEqual(result.url, "/mail?compose=plus%2Btag%40example.com")
+
     def test_sender_name_matches_a_query_typed_without_accents(self):
         self.assertEqual(
             self._emails("francois"), ["François Dupré <f.dupre@example.com>"]

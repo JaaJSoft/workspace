@@ -213,12 +213,14 @@ function mailApp() {
         this._showUrlState({ reload: event.detail.stale });
       });
 
-      const composeTo = new URLSearchParams(window.location.search).get('compose');
+      const landingParams = new URLSearchParams(window.location.search);
+      const composeRequested = landingParams.has('compose');
+      const composeTo = landingParams.get('compose');
       await this._showUrlState({ landing: true });
       // Rewrites the landing entry to what is on screen: a bare ?message=
       // gains its folder, and ?compose= is dropped.
       window.navHistory.replace(this._mailUrl(this.selectedMessage?.uuid));
-      if (composeTo) {
+      if (composeRequested) {
         this.$nextTick(() => this.showCompose({ to: composeTo }));
       }
 

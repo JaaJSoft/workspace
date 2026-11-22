@@ -184,6 +184,11 @@ class MailActivityProviderTests(TestCase):
         for e in events:
             self.assertEqual(e["label"], "Email received")
 
+    def test_recent_events_link_to_the_message_in_the_mail_page(self):
+        events = self.provider.get_recent_events(self.user.id)
+        sent = MailMessage.objects.get(subject="Sent by Alice")
+        self.assertEqual(events[0]["url"], f"/mail?message={sent.pk}")
+
     def test_recent_events_sent_actor_uses_owner_name(self):
         """Sent mail actor should be the account owner."""
         events = self.provider.get_recent_events(self.user.id)

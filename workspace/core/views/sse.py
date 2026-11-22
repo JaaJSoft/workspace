@@ -78,9 +78,21 @@ def _format_sse(event_type, data, event_id=None):
     return "\n".join(lines)
 
 
+def _shows_another_user(request):
+    """Whether the page asking was rendered for someone else than the session.
+
+    A tab outlives its session, and a shared worker reconnects its stream for
+    as long as one of its pages is open: after another account signed in, the
+    browser sends that account's cookie. The page says who it shows (``user``)
+    and is refused what belongs to anyone else.
+    """
+    shown = request.GET.get("user")
+    return shown is not None and shown != str(request.user.pk)
+
+
 def global_stream(request):
     """Global SSE endpoint that aggregates events from all registered providers."""
-    if not request.user.is_authenticated:
+    if not request.user.is_authenticated or _shows_another_user(request):
         return StreamingHttpResponse("", status=403)
 
     request._is_sse_stream = True
@@ -213,7 +225,7 @@ def stream_snapshot(request):
     frozen tab) sends the cursor it stopped at and is given what was queued
     since, as a stream of its own reopened there would have given it.
     """
-    if not request.user.is_authenticated:
+    if not request.user.is_authenticated or _shows_another_user(request):
         return HttpResponse(status=403)
 
     # A stream builds its events once the middlewares have left: in UTC and in

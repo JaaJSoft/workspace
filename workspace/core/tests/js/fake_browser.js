@@ -3,16 +3,23 @@
 // A browser as sse.js sees it, with several tabs open at once. Each tab has
 // its own page, EventSource and timers; they share the workers a real browser
 // shares between the pages of one origin. A shared worker is sse.js loaded a
-// second time, in a worker scope, as it is in production.
+// second time, in a scope with no window and no document, as it is in
+// production.
 //
 // Nothing here runs on its own clock: messages between a page and a worker
 // are microtasks (await settle() to let them land) and timers fire when a
 // test advances them.
 
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
 const { loadScript } = require('../../../common/tests/js/loader');
 
 const SSE_SCRIPT = 'workspace/core/static/core/js/sse.js';
 const SCRIPT_URL = 'https://workspace.test/static/core/js/sse.js';
+// workspace/core/tests/js -> repo root
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
 function settle() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -34,6 +41,8 @@ function fakeTimers() {
     setInterval: (callback, delay) => schedule(callback, delay, delay),
     clearTimeout: (id) => timers.delete(id),
     clearInterval: (id) => timers.delete(id),
+    /** How many timers are still set. */
+    pending: () => timers.size,
     /** Fires what falls due, one timer after the other, with no message delivered in between. */
     advance(ms) {
       const end = now + ms;
@@ -65,6 +74,9 @@ function eventSourceFor(owner) {
       this.url = url;
       this.readyState = FakeEventSource.CONNECTING;
       this.listeners = {};
+      // Each connection starts without one: the browser only repeats the last
+      // id on its own reconnects.
+      this.lastEventId = '';
       owner.sources.push(this);
     }
 
@@ -80,23 +92,34 @@ function eventSourceFor(owner) {
       return this.readyState === FakeEventSource.CLOSED;
     }
 
+    // A closed source fires nothing: a test driving one is mistaken.
+    _alive() {
+      if (this.closed) throw new Error(`${this.url} is closed`);
+    }
+
     open() {
+      this._alive();
       this.readyState = FakeEventSource.OPEN;
       this.onopen();
     }
 
-    deliver(payload, lastEventId = '') {
-      this.listeners.sse({ data: JSON.stringify(payload), lastEventId });
+    /** An event, with its id when it has one. Without, it carries the connection's last one. */
+    deliver(payload, id) {
+      this._alive();
+      if (id) this.lastEventId = id;
+      this.listeners.sse({ data: JSON.stringify(payload), lastEventId: this.lastEventId });
     }
 
     /** A connection lost: the browser reconnects on its own. */
     stumble() {
+      this._alive();
       this.readyState = FakeEventSource.CONNECTING;
       this.onerror();
     }
 
     /** An answer the browser does not retry after: a 502, a 403. */
     fail() {
+      this._alive();
       this.readyState = FakeEventSource.CLOSED;
       this.onerror();
     }
@@ -149,6 +172,7 @@ class FakeBrowser {
     this.workers = new Map();
     // A worker whose script fails never runs, and tells its pages nothing.
     this.workersStart = true;
+    this.script = fs.readFileSync(path.join(REPO_ROOT, SSE_SCRIPT), 'utf8');
   }
 
   /** The only worker running. */
@@ -174,34 +198,37 @@ class FakeBrowser {
     }
   }
 
-  _connect(tab, url, name) {
-    const key = `${url}\n${name}`;
-    let worker = this.workers.get(key);
-    if (!worker) {
-      worker = {
-        key,
-        name,
-        dead: false,
-        // While deaf, the worker misses what its pages send it.
-        deaf: false,
-        tabs: new Set(),
-        sources: [],
-        timers: fakeTimers(),
-        scope: { onconnect: null },
-      };
-      worker.stream = () => worker.sources[worker.sources.length - 1];
-      worker.openStreams = () => worker.sources.filter((source) => !source.closed);
-      if (this.workersStart) {
-        loadScript(SSE_SCRIPT, {
-          SharedWorkerGlobalScope: class {},
-          self: worker.scope,
-          EventSource: eventSourceFor(worker),
-          setTimeout: worker.timers.setTimeout,
-          clearTimeout: worker.timers.clearTimeout,
-        });
-      }
-      this.workers.set(key, worker);
+  _startWorker(key, name) {
+    const worker = {
+      key,
+      name,
+      dead: false,
+      // While deaf, the worker misses what its pages send it.
+      deaf: false,
+      tabs: new Set(),
+      sources: [],
+      timers: fakeTimers(),
+    };
+    worker.stream = () => worker.sources[worker.sources.length - 1];
+    // The worker's global: no window, no document, and `self` is the global.
+    worker.scope = {
+      SharedWorkerGlobalScope: class {},
+      EventSource: eventSourceFor(worker),
+      setTimeout: worker.timers.setTimeout,
+      clearTimeout: worker.timers.clearTimeout,
+    };
+    worker.scope.self = worker.scope;
+    if (this.workersStart) {
+      vm.createContext(worker.scope);
+      vm.runInContext(this.script, worker.scope, { filename: SSE_SCRIPT });
     }
+    this.workers.set(key, worker);
+    return worker;
+  }
+
+  _connect(tab, url, name) {
+    const key = `${url} ${name}`;
+    const worker = this.workers.get(key) || this._startWorker(key, name);
     worker.tabs.add(tab);
     const pagePort = new FakePort(() => !tab.closed);
     const workerPort = new FakePort(() => !worker.dead && !worker.deaf);
@@ -299,6 +326,7 @@ class FakeBrowser {
 
     tab.types = () => tab.events.map((event) => event.type);
     tab.stream = () => tab.sources[tab.sources.length - 1];
+    tab.lastFetch = () => tab.fetches[tab.fetches.length - 1];
     tab.show = () => {
       tab.document.hidden = false;
       tab.documentHandlers.visibilitychange();
@@ -307,6 +335,9 @@ class FakeBrowser {
       tab.document.hidden = true;
       tab.documentHandlers.visibilitychange();
     };
+    /** Set aside by the browser, then brought back: the back/forward cache. */
+    tab.setAside = () => tab.windowHandlers.pagehide({ persisted: true });
+    tab.bringBack = () => tab.windowHandlers.pageshow({ persisted: true });
     return tab;
   }
 }

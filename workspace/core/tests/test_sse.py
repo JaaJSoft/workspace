@@ -18,6 +18,7 @@ from prometheus_client import REGISTRY
 
 from workspace.core.sse_registry import push_user_event
 from workspace.core.views import sse
+from workspace.imports.sse_provider import ImportsSSEProvider
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -344,7 +345,7 @@ class StreamSnapshotTests(TestCase):
         self.assertEqual(self.client.get(self.URL).status_code, 403)
         self.assertEqual(self.client.get("/api/v1/stream").status_code, 403)
 
-    def test_only_reads(self):
+    def test_answers_a_get_only(self):
         self.client.force_login(self.user)
         self.assertEqual(self.client.post(self.URL).status_code, 405)
 
@@ -385,10 +386,9 @@ class StreamSnapshotTests(TestCase):
         )
 
     def test_a_tab_coming_back_is_given_what_was_queued_since_its_cursor(self):
-        """A page restored from the bfcache used to reopen a stream of its own
-        with its cursor, and got the mailbox replay. Joining a stream that
-        kept running, the snapshot is all it reads: without the replay a
-        ``lock_released`` sent meanwhile never reaches it, and its editor
+        """A page restored from the bfcache joins a stream that kept running,
+        and the snapshot is all it reads of what it missed: without the replay
+        a ``lock_released`` sent meanwhile never reaches it, and its editor
         stays read-only."""
         released = {"type": "lock_released", "file_uuid": "f-1", "actor": "bob"}
         push_user_event("files", self.user.id, released)
@@ -448,6 +448,42 @@ class StreamSnapshotTests(TestCase):
         self.assertEqual(response["Cache-Control"], "private, no-cache")
 
 
+class ShownUserTests(TestCase):
+    """A tab outlives its session. Its stream then reconnects with the cookie
+    of whoever signed in since, and would hand that account's events to a page
+    of the first one: the page says who it shows, and is refused anyone else's.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="sse-alice", password="p")
+        cls.bob = User.objects.create_user(username="sse-bob", password="p")
+
+    def _status(self, url, shown=None):
+        query = {} if shown is None else {"user": shown}
+        with patch.object(sse, "_event_stream", return_value=iter(())):
+            return self.client.get(url, query).status_code
+
+    def test_another_users_page_is_refused(self):
+        self.client.force_login(self.bob)
+        for url in ("/api/v1/stream", "/api/v1/stream/snapshot"):
+            with self.subTest(url=url):
+                self.assertEqual(self._status(url, shown=self.alice.pk), 403)
+                self.assertEqual(self._status(url, shown="nobody"), 403)
+
+    def test_the_users_own_page_is_answered(self):
+        self.client.force_login(self.alice)
+        for url in ("/api/v1/stream", "/api/v1/stream/snapshot"):
+            with self.subTest(url=url):
+                self.assertEqual(self._status(url, shown=self.alice.pk), 200)
+
+    def test_a_page_that_names_nobody_is_answered(self):
+        self.client.force_login(self.alice)
+        for url in ("/api/v1/stream", "/api/v1/stream/snapshot"):
+            with self.subTest(url=url):
+                self.assertEqual(self._status(url), 200)
+
+
 @override_settings(PREVIEW_VISIBILITY="staff")
 class StreamModuleVisibilityTests(TestCase):
     """The stream is served by core, so the module guard never sees it: a
@@ -460,3 +496,19 @@ class StreamModuleVisibilityTests(TestCase):
     def test_the_audience_gets_them(self):
         staff = User.objects.create_user(username="staff", password="p", is_staff=True)
         self.assertIn("imports", sse._init_providers(staff, {}))
+
+    def test_a_snapshot_leaves_a_hidden_module_out_too(self):
+        regular = User.objects.create_user(username="regular", password="p")
+        staff = User.objects.create_user(username="staff", password="p", is_staff=True)
+        job = {"type": "job", "state": "running"}
+
+        def names(user):
+            self.client.force_login(user)
+            events = self.client.get("/api/v1/stream/snapshot").json()["events"]
+            return [event["event"] for event in events]
+
+        with patch.object(
+            ImportsSSEProvider, "get_initial_events", return_value=[("job", job, None)]
+        ):
+            self.assertIn("imports.job", names(staff))
+            self.assertNotIn("imports.job", names(regular))

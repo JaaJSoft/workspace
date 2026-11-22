@@ -49,8 +49,8 @@ def stub_global_sse(context):
 
     A page normally leaves the stream to a shared worker, whose requests
     Playwright's routes never see: without ``SharedWorker`` each page opens the
-    stream itself, and that request is answered here. The pattern covers
-    ``/api/v1/stream/snapshot`` too, which a page reads as "no snapshot".
+    stream itself, and that request is answered here. Only
+    ``core/tests/e2e/test_shared_stream.py`` runs pages with their worker.
     """
     context.add_init_script("window.SharedWorker = undefined;")
     context.route(

@@ -100,6 +100,7 @@ def create_file(
     acting_user=None,
     check_quota=True,
     keep_both=False,
+    bulk=False,
 ):
     """Create a new file record, optionally with uploaded content.
 
@@ -115,6 +116,9 @@ def create_file(
 
     A taken name raises ``NameTaken``, unless ``keep_both`` asks for the
     first free ``name (Copy N)`` instead - the returned row says which.
+
+    ``bulk=True`` is for a long job creating many files nobody waits on one
+    by one (an import): see ``record_event``.
     """
     name = canonical_name(name)
     group = node_group(parent, group)
@@ -179,14 +183,25 @@ def create_file(
         names.insert_node(file_obj, content)
     if size:
         FILES_UPLOAD_BYTES.inc(size)
-    record_event(file_obj, acting_user or owner, FileEvent.Action.CREATED)
+    record_event(file_obj, acting_user or owner, FileEvent.Action.CREATED, bulk=bulk)
     return file_obj
 
 
 def create_folder(
-    owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
+    owner,
+    name,
+    parent=None,
+    *,
+    icon=None,
+    color=None,
+    group=None,
+    acting_user=None,
+    bulk=False,
 ):
-    """Create a new folder record and its directory, or neither."""
+    """Create a new folder record and its directory, or neither.
+
+    ``bulk`` as for ``create_file``.
+    """
     name = canonical_name(name)
     group = node_group(parent, group)
 
@@ -204,7 +219,7 @@ def create_folder(
     with transaction.atomic():
         names.insert_node(folder)
         storage_ops.ensure_folder_on_storage(folder)
-    record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
+    record_event(folder, acting_user or owner, FileEvent.Action.CREATED, bulk=bulk)
     return folder
 
 

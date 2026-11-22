@@ -30,14 +30,16 @@ logger = logging.getLogger(__name__)
     FileEvent.Action.RENAMED,
     FileEvent.Action.RESTORED,
 )
-def index_search_document_for_event(event):
+def index_search_document_for_event(event, priority):
     """Queue a re-index of the event's file."""
     from workspace.files.tasks import index_search_document
 
     # A copy records one CREATED event for the subtree root; every other
     # action leaves descendant names and contents untouched.
     include_descendants = event.action == FileEvent.Action.CREATED
-    index_search_document.delay(str(event.file_id), include_descendants)
+    index_search_document.apply_async(
+        (str(event.file_id), include_descendants), priority=priority
+    )
 
 
 register_processor("search_index", pending=pending_search_qs, process=index_file)

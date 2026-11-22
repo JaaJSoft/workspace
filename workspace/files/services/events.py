@@ -11,18 +11,24 @@ import logging
 from django.db import transaction
 from django.db.models import Q
 
+from workspace.common.task_priority import LOW_PRIORITY
+
 from ..models import File, FileEvent
 from ..queries import FilePermission, access_arms, accessible_file_ids
 
 logger = logging.getLogger(__name__)
 
 
-def record_event(file, actor, action, metadata=None):
+def record_event(file, actor, action, metadata=None, *, bulk=False):
     """Persist a single audit row for an action performed on a file.
 
     Failures are logged and swallowed - audit logging must never bring
     down the user's primary action (rename, share, ...). On success, the
     event's handlers are scheduled to run after the transaction commits.
+
+    ``bulk=True`` marks the event as one of many from a long job nobody
+    waits on file by file (an import): the tasks it sets off go out at low
+    priority, behind those of the files people are uploading.
     """
     if file is None:
         return None
@@ -43,21 +49,30 @@ def record_event(file, actor, action, metadata=None):
     except Exception:
         logger.exception("Failed to record file event %s for file %s", action, file.pk)
         return None
-    _schedule_dispatch(event)
+    _schedule_dispatch(event, bulk=bulk)
     return event
 
 
-def _schedule_dispatch(event):
+def _schedule_dispatch(event, *, bulk):
     """Run the event's handlers after the surrounding transaction commits.
 
     on_commit guarantees the worker sees committed data and that rolled-back
     mutations dispatch nothing. No-op when no handler is registered. Never
     raises - dispatch must not break the user's action.
+
+    A bulk job already runs in a worker, so its handlers run in place rather
+    than through a dispatch task of their own: one task less per file.
     """
     try:
-        from workspace.files.services.event_dispatch import has_handlers
+        from workspace.files.services.event_dispatch import (
+            has_handlers,
+            run_event_handlers,
+        )
 
         if not has_handlers(event.action):
+            return
+        if bulk:
+            transaction.on_commit(lambda: run_event_handlers(event, LOW_PRIORITY))
             return
         from workspace.files.tasks import run_file_event_handlers
 

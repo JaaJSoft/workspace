@@ -5,11 +5,15 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.base import ContentFile
+from django.db import connection
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from workspace.common.search import fts5_available
+from workspace.common.task_priority import LOW_PRIORITY
 from workspace.common.tests.parameter_limit import sqlite_parameter_limit
-from workspace.files.models import File, FileFavorite, FileTag, Tag
+from workspace.common.tests.task_queue import queued_tasks
+from workspace.files.models import File, FileFavorite, FileTag, SearchIndexState, Tag
 from workspace.files.services import quota, trash, tree
 from workspace.imports.importers.base import ImportContext, JobFailed, Outcome
 from workspace.imports.importers.files import FilesImporter
@@ -543,6 +547,51 @@ class FilesImporterTests(ImporterTestCase):
         )
         with self.assertRaisesRegex(JobFailed, "destination folder no longer exists"):
             self._run(job)
+
+
+class FollowUpPriorityTests(ImporterTestCase):
+    """An import must not hold up the processing of the files people upload."""
+
+    def _files_tasks(self, job, run=()):
+        with (
+            queued_tasks(run=run) as sent,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.assertIs(self._run(job), Outcome.DONE)
+        return [task for task in sent if task[0].startswith("files.")]
+
+    def test_imported_files_and_folders_queue_their_tasks_at_low_priority(self):
+        sent = self._files_tasks(self._job())
+
+        # Three files, each processed and indexed; three folders, indexed. No
+        # dispatch task: the import already runs in a worker.
+        self.assertCountEqual(
+            sent,
+            [("files.process_file", LOW_PRIORITY)] * 3
+            + [("files.index_search_document", LOW_PRIORITY)] * 6,
+        )
+
+    def test_a_replaced_file_queues_its_tasks_at_low_priority(self):
+        root = tree.create_folder(self.user, "Nextcloud import")
+        tree.create_file(self.user, "readme.txt", root, content=ContentFile(b"mine"))
+
+        sent = self._files_tasks(self._job(on_conflict="replace"))
+
+        self.assertCountEqual(
+            sent,
+            [("files.process_file", LOW_PRIORITY)] * 3
+            + [("files.index_search_document", LOW_PRIORITY)] * 5,
+        )
+
+    def test_an_imported_file_is_still_processed_and_indexed(self):
+        self._files_tasks(
+            self._job(), run={"files.process_file", "files.index_search_document"}
+        )
+
+        readme = self._files()["readme.txt"]
+        self.assertEqual(readme.processing_status, File.ProcessingStatus.READY)
+        if connection.vendor == "sqlite" and fts5_available():
+            self.assertTrue(SearchIndexState.objects.filter(file=readme).exists())
 
 
 class CopyPhaseListingFailureTests(ImporterTestCase):

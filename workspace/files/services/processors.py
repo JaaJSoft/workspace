@@ -420,11 +420,11 @@ def _queue(processor, uuid, *, reanalyze, expires):
 
 
 @on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
-def queue_pipeline_for_event(event):
+def queue_pipeline_for_event(event, priority):
     """Queue the upload pipeline for a file whose content just landed."""
     from ..tasks import process_file
 
     file_obj = event.file
     if file_obj.node_type != File.NodeType.FILE or file_obj.deleted_at is not None:
         return
-    process_file.delay(str(file_obj.pk))
+    process_file.apply_async((str(file_obj.pk),), priority=priority)

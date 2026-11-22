@@ -1,9 +1,14 @@
 """In-process registry that runs handlers when a FileEvent is recorded.
 
 Handlers subscribe to one or more FileEvent.Action values via @on_file_event.
-record_event() (services/events.py) schedules run_handlers() on transaction
-commit, so handlers run after the mutation is durably committed and off the
-request thread (via the files.run_file_event_handlers Celery task).
+record_event() (services/events.py) schedules them on transaction commit, so
+they run after the mutation is durably committed: off the request thread
+through the files.run_file_event_handlers Celery task, or in place for an
+event of a bulk job, which already runs in a worker.
+
+A handler is called as ``handler(event, priority)``. *priority* is the level
+the tasks it queues go out at - normal for someone's action, low for a bulk
+job - and a handler queueing one passes it to ``apply_async``.
 """
 
 from __future__ import annotations
@@ -11,6 +16,8 @@ from __future__ import annotations
 import logging
 
 from django.core.exceptions import ValidationError
+
+from workspace.common.task_priority import NORMAL_PRIORITY
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +42,7 @@ def has_handlers(action) -> bool:
 
 
 def run_handlers(event_uuid) -> None:
-    """Load the FileEvent and run every handler registered for its action.
-
-    Handlers are best-effort side effects: one raising is logged and does not
-    stop the others or propagate.
-    """
+    """Load the FileEvent and run every handler registered for its action."""
     from ..models import FileEvent
 
     try:
@@ -47,10 +50,18 @@ def run_handlers(event_uuid) -> None:
     except FileEvent.DoesNotExist, ValidationError, ValueError, TypeError:
         # Unknown or malformed event id (e.g. a non-UUID string): nothing to run.
         return
+    run_event_handlers(event, NORMAL_PRIORITY)
 
+
+def run_event_handlers(event, priority) -> None:
+    """Run every handler registered for *event*'s action, at *priority*.
+
+    Handlers are best-effort side effects: one raising is logged and does not
+    stop the others or propagate.
+    """
     for handler in _HANDLERS.get(str(event.action), []):
         try:
-            handler(event)
+            handler(event, priority)
         except Exception:
             logger.exception(
                 "File event handler %s failed for event %s (%s)",

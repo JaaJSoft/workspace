@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.task_priority import LOW_PRIORITY, NORMAL_PRIORITY
 from workspace.files.models import File, FileEvent
 from workspace.files.services import event_dispatch
 from workspace.files.services.event_dispatch import (
@@ -35,18 +36,28 @@ class DispatchRegistryTests(TestCase):
         seen = []
 
         @on_file_event(FileEvent.Action.CREATED)
-        def handler(event):
+        def handler(event, priority):
             seen.append(event.uuid)
 
         event = self._make_event(FileEvent.Action.CREATED)
         run_handlers(event.uuid)
         self.assertEqual(seen, [event.uuid])
 
+    def test_the_dispatch_task_runs_handlers_at_normal_priority(self):
+        seen = []
+
+        @on_file_event(FileEvent.Action.CREATED)
+        def handler(event, priority):
+            seen.append(priority)
+
+        run_handlers(self._make_event(FileEvent.Action.CREATED).uuid)
+        self.assertEqual(seen, [NORMAL_PRIORITY])
+
     def test_handler_not_called_for_other_actions(self):
         seen = []
 
         @on_file_event(FileEvent.Action.CREATED)
-        def handler(event):
+        def handler(event, priority):
             seen.append(event.uuid)
 
         event = self._make_event(FileEvent.Action.RENAMED)
@@ -57,11 +68,11 @@ class DispatchRegistryTests(TestCase):
         seen = []
 
         @on_file_event(FileEvent.Action.CREATED)
-        def bad(event):
+        def bad(event, priority):
             raise ValueError("boom")
 
         @on_file_event(FileEvent.Action.CREATED)
-        def good(event):
+        def good(event, priority):
             seen.append("ran")
 
         event = self._make_event(FileEvent.Action.CREATED)
@@ -72,7 +83,7 @@ class DispatchRegistryTests(TestCase):
         self.assertFalse(has_handlers(FileEvent.Action.MOVED))
 
         @on_file_event(FileEvent.Action.MOVED)
-        def handler(event):
+        def handler(event, priority):
             pass
 
         self.assertTrue(has_handlers(FileEvent.Action.MOVED))
@@ -102,7 +113,7 @@ class DispatchSchedulingTests(TestCase):
 
     def test_scheduled_on_commit_when_handler_exists(self):
         @on_file_event(FileEvent.Action.CREATED)
-        def handler(event):
+        def handler(event, priority):
             pass
 
         with patch("workspace.files.tasks.run_file_event_handlers") as task:
@@ -115,3 +126,19 @@ class DispatchSchedulingTests(TestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 record_event(self.file, self.user, FileEvent.Action.RENAMED)
             task.delay.assert_not_called()
+
+    def test_a_bulk_event_runs_its_handlers_in_place_at_low_priority(self):
+        seen = []
+
+        @on_file_event(FileEvent.Action.CREATED)
+        def handler(event, priority):
+            seen.append((event.uuid, priority))
+
+        with patch("workspace.files.tasks.run_file_event_handlers") as task:
+            with self.captureOnCommitCallbacks(execute=True):
+                event = record_event(
+                    self.file, self.user, FileEvent.Action.CREATED, bulk=True
+                )
+                self.assertEqual(seen, [])
+            task.delay.assert_not_called()
+        self.assertEqual(seen, [(event.uuid, LOW_PRIORITY)])

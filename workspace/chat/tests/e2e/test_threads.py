@@ -113,6 +113,29 @@ class ThreadPanelTests(PlaywrightTestCase):
         posted = Message.objects.get(body=sent)
         self.assertEqual(posted.thread_root_id, self.root.uuid)
 
+    def test_a_reaction_in_the_conversation_reaches_the_panel_copy(self):
+        # The flow and the panel each hold a copy of the root, and each only
+        # repaints itself: the flow has to tell the panel by an event whose
+        # name both sides agree on, which no unit test can check.
+        self._open_conversation()
+        self._open_thread()
+
+        self.page.evaluate(
+            """([uuid, emoji]) => Alpine.$data(
+                document.querySelector('[x-data^="chatApp"]')
+            ).toggleReaction(uuid, emoji)""",
+            [str(self.root.uuid), "🎉"],
+        )
+
+        main_reactions = self.page.locator(
+            '#messages-container [data-part="below"] button', has_text="🎉"
+        )
+        panel_reactions = self.page.locator(
+            '#thread-messages-container [data-part="below"] button', has_text="🎉"
+        )
+        expect(main_reactions).to_have_count(1)
+        expect(panel_reactions).to_have_count(1)
+
     def test_a_notification_deep_link_opens_the_thread_panel(self):
         # A thread-reply notification points at /chat/<conv>?thread=<root>: the
         # reply is not in the main flow, so without the panel opening on

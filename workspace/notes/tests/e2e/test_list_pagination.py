@@ -63,14 +63,7 @@ class NoteListPaginationTests(PlaywrightTestCase):
             ROWS, "els => els.map(el => el.dataset.noteUuid)"
         )
 
-    def test_the_folder_opens_on_one_page_and_scrolling_reaches_the_rest(self):
-        self._open_folder()
-
-        rows = self.page.locator(ROWS)
-        expect(rows).to_have_count(PAGE_SIZE)
-        self.assertEqual(self._rendered_uuids(), self.expected[:PAGE_SIZE])
-        expect(self.page.locator(SENTINEL)).to_be_visible()
-
+    def _scroll_to_the_end(self):
         # Scrolling the list to its bottom is the user gesture that brings
         # the sentinel into the observer's margin. Re-assert it every frame
         # until the page lands: a single assignment can run before the first
@@ -84,6 +77,16 @@ class NoteListPaginationTests(PlaywrightTestCase):
             }}"""
         )
 
+    def test_the_folder_opens_on_one_page_and_scrolling_reaches_the_rest(self):
+        self._open_folder()
+
+        rows = self.page.locator(ROWS)
+        expect(rows).to_have_count(PAGE_SIZE)
+        self.assertEqual(self._rendered_uuids(), self.expected[:PAGE_SIZE])
+        expect(self.page.locator(SENTINEL)).to_be_visible()
+
+        self._scroll_to_the_end()
+
         expect(rows).to_have_count(SEEDED)
         self.assertEqual(
             self._rendered_uuids(),
@@ -91,3 +94,50 @@ class NoteListPaginationTests(PlaywrightTestCase):
             "the second page must follow the first with no gap or duplicate",
         )
         expect(self.page.locator(SENTINEL)).to_be_hidden()
+
+    def test_a_stream_reconnection_refreshes_the_list_in_place(self):
+        self._open_folder()
+        self._scroll_to_the_end()
+        rows = self.page.locator(ROWS)
+        expect(rows).to_have_count(SEEDED)
+
+        # Somewhere in the middle of the second page, as a reader would be.
+        scroller = f"document.querySelector('{SENTINEL}').parentElement"
+        self.page.evaluate(f"{scroller}.scrollTop = 3000")
+        before = self.page.evaluate(f"{scroller}.scrollTop")
+        self.assertGreater(before, 0)
+
+        # The fewest rows any frame painted while the list refreshed.
+        self.page.evaluate(
+            f"""() => {{
+              window.__fewestRows = Infinity;
+              const sample = () => {{
+                window.__fewestRows = Math.min(
+                  window.__fewestRows, document.querySelectorAll('{ROWS}').length
+                );
+                requestAnimationFrame(sample);
+              }};
+              sample();
+            }}"""
+        )
+        # What the stream script dispatches each time the stream reopens.
+        with self.page.expect_response(
+            lambda r: "/api/v1/files" in r.url and f"offset={PAGE_SIZE}" in r.url
+        ):
+            self.page.evaluate("window.dispatchEvent(new CustomEvent('sse:reconnect'))")
+        # Two frames: one for Alpine to render the swap, one to sample it.
+        self.page.evaluate(
+            "() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        )
+
+        self.assertEqual(
+            self.page.evaluate("window.__fewestRows"),
+            SEEDED,
+            "the list went through a shorter or empty state",
+        )
+        self.assertEqual(self._rendered_uuids(), self.expected)
+        self.assertEqual(
+            self.page.evaluate(f"{scroller}.scrollTop"),
+            before,
+            "the refresh moved the reader away from where they were",
+        )

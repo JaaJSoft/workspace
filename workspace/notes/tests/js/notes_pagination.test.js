@@ -212,6 +212,70 @@ test('resync gives up instead of spinning when a page fails to load', async () =
   assert.ok(calls < 10, `resync looped ${calls} times on a failing page`);
 });
 
+test('resync keeps the list on screen until the reloaded pages replace it', async () => {
+  const ctx = loadNotes();
+  const app = makeApp(ctx);
+  app.activeView = 'all';
+
+  ctx.fetch = () => page(['a', 'b'], true);
+  await app.loadNotes(app._buildNotesUrl());
+  ctx.fetch = () => page(['c', 'd'], false);
+  await app.loadMoreNotes();
+
+  // Snapshot the list at every request: an empty list for one frame is
+  // what scrolled the user back to the first note.
+  const seen = [];
+  const responses = [page(['a', 'b'], true), page(['c', 'e'], false)];
+  ctx.fetch = () => {
+    seen.push(app.notes.map((n) => n.uuid).join(','));
+    return responses.shift();
+  };
+  await app.resync();
+
+  assert.deepEqual(seen, ['a,b,c,d', 'a,b,c,d'], 'the list was cleared or rebuilt in view');
+  assert.equal(app.loadingNotes, false, 'a silent refresh must not show the skeleton');
+  assert.deepEqual(app.notes.map((n) => n.uuid), ['a', 'b', 'c', 'e']);
+  assert.equal(app.hasMoreNotes, false);
+});
+
+test('a resync whose page fails leaves the list as it was', async () => {
+  const ctx = loadNotes();
+  const app = makeApp(ctx);
+  app.activeView = 'all';
+
+  ctx.fetch = () => page(['a', 'b'], true);
+  await app.loadNotes(app._buildNotesUrl());
+
+  ctx.fetch = () => Promise.resolve({ ok: false });
+  await app.resync();
+
+  assert.deepEqual(app.notes.map((n) => n.uuid), ['a', 'b']);
+  assert.equal(app.hasMoreNotes, true);
+});
+
+test('a folder switch during a resync wins over it', async () => {
+  const ctx = loadNotes();
+  const app = makeApp(ctx);
+  app.activeView = 'all';
+
+  ctx.fetch = () => page(['a'], false);
+  await app.loadNotes(app._buildNotesUrl());
+
+  let release;
+  ctx.fetch = () => new Promise((resolve) => {
+    release = () => resolve(page(['stale'], false));
+  });
+  const pending = app.resync();
+
+  ctx.fetch = () => page(['other-folder'], false);
+  await app.loadNotes(app._buildNotesUrl());
+
+  release();
+  await pending;
+
+  assert.deepEqual(app.notes.map((n) => n.uuid), ['other-folder']);
+});
+
 test('deleting a loaded note does not make the next page skip one', async () => {
   const ctx = loadNotes();
   const app = makeApp(ctx);

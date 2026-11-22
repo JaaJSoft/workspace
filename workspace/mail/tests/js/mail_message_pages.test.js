@@ -175,6 +175,26 @@ test('a list on its first page is refreshed with one request', async () => {
   assert.equal(app.messages.length, 50);
 });
 
+test('a page that throws after another selection loaded applies nothing', async () => {
+  const app = await scrolledToPageTwo(listing(() => mails(120, 1)));
+  const server = app._fetch;
+  const other = [{ uuid: 'other-folder-mail' }];
+  app._fetch = async (url) => {
+    const page = Number(new URL(url, 'http://x').searchParams.get('page'));
+    if (page === 1) return server(url);
+    // A folder switch commits its list while page 2 is in flight.
+    app._messagesRequestId += 1;
+    app.messages = other;
+    app.currentPage = 1;
+    throw new TypeError('Failed to fetch');
+  };
+
+  await app.loadMessages();
+
+  assert.equal(app.messages, other);
+  assert.equal(app.currentPage, 1);
+});
+
 test('a load superseded by another selection applies nothing', async () => {
   const app = await scrolledToPageTwo(listing(() => mails(120, 1)));
   const before = app.messages;

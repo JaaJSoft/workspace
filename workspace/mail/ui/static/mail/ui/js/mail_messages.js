@@ -87,7 +87,8 @@ window.mailMessagesMixin = function mailMessagesMixin() {
           last = data;
           if (data.results.length < data.page_size) break;
         }
-        if (!kept) return;
+        // A page that threw leaves the loop without the checks above.
+        if (!kept || !isCurrent()) return;
         this.messages = rows;
         this.currentPage = kept;
         this.totalMessages = last.count;

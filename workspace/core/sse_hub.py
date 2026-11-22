@@ -38,28 +38,30 @@ class Subscription:
 
     Notifications for the same provider coalesce until the stream looks, which
     loses nothing: a provider reads its state from its own cursor, so one poll
-    catches up on any number of notifications.
+    catches up on any number of notifications. The provider is dirty when any
+    of them was (see ``notify_sse``).
     """
 
     def __init__(self, hub, user_id):
         self.user_id = user_id
         self._hub = hub
         self._lock = threading.Lock()
-        self._pending = set()
+        self._pending = {}
         self._wakeup = threading.Event()
 
-    def notify(self, *slugs):
+    def notify(self, *slugs, dirty=True):
         with self._lock:
-            self._pending.update(slugs)
+            for slug in slugs:
+                self._pending[slug] = self._pending.get(slug, False) or dirty
             self._wakeup.set()
 
     def wait(self, timeout):
-        """Slugs of the providers notified since the last call, waiting up to
-        *timeout* seconds for the first one. Empty when none came."""
+        """``{slug: dirty}`` for the providers notified since the last call,
+        waiting up to *timeout* seconds for the first one. Empty when none came."""
         self._wakeup.wait(timeout)
         with self._lock:
             self._wakeup.clear()
-            notified, self._pending = self._pending, set()
+            notified, self._pending = self._pending, {}
         return notified
 
     def close(self):
@@ -146,14 +148,16 @@ class SSEHub:
             if isinstance(channel, bytes):
                 channel = channel.decode()
             user_id = int(channel.removeprefix(CHANNEL_PREFIX))
-            slug = orjson.loads(message["data"])["provider"]
+            payload = orjson.loads(message["data"])
+            slug = payload["provider"]
+            dirty = payload.get("dirty") is not False
         except Exception:
             logger.warning("Dropped a malformed SSE notification on %s", scrub(channel))
             return
         with self._lock:
             subscriptions = tuple(self._subscriptions.get(user_id, ()))
         for subscription in subscriptions:
-            subscription.notify(slug)
+            subscription.notify(slug, dirty=dirty)
 
 
 _hub = None

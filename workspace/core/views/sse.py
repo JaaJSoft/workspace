@@ -246,12 +246,12 @@ def _event_stream_pubsub(request, hub):
                 # Timeout: poll all providers with None (timer-based checks)
                 for slug, provider in providers.items():
                     yield from _poll_provider(slug, provider, None, user_id, cursors)
-            for slug in notified:
+            for slug, dirty in notified.items():
                 SSE_PUBSUB_MESSAGES.inc()
                 # Targeted: only poll the providers that published
                 if slug in providers:
                     yield from _poll_provider(
-                        slug, providers[slug], now, user_id, cursors
+                        slug, providers[slug], now if dirty else None, user_id, cursors
                     )
     finally:
         subscription.close()

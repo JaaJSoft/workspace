@@ -7,8 +7,11 @@ from workspace.core.sse_registry import notify_sse
 from workspace.users.services.settings import get_user_languages
 
 
-def notify_conversation_members(conversation, exclude_user=None):
-    """Update SSE cache keys for all active members of a conversation."""
+def notify_conversation_members(conversation, exclude_user=None, *, dirty=True):
+    """Wake the chat stream of every active member of a conversation.
+
+    ``dirty`` as in ``notify_sse``: False when nothing changed in the database.
+    """
     from ..models import ConversationMember
 
     member_user_ids = ConversationMember.objects.filter(
@@ -19,7 +22,7 @@ def notify_conversation_members(conversation, exclude_user=None):
     for uid in member_user_ids:
         if exclude_user and uid == exclude_user.id:
             continue
-        notify_sse("chat", uid)
+        notify_sse("chat", uid, dirty=dirty)
 
 
 def notification_title(conversation, author_name):

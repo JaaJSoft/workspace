@@ -47,7 +47,7 @@ class CallSignalingTests(SimpleTestCase):
             sig.send_signal(
                 sess, to_user_id=7, from_user_id=3, signal={"type": "offer"}
             )
-        mock_notify.assert_called_once_with("chat", 7)
+        mock_notify.assert_called_once_with("chat", 7, dirty=False)
         out = sig.drain_events(7)
         self.assertEqual(out[0]["event"], "call_signal")
         self.assertEqual(out[0]["data"]["from_user_id"], 3)

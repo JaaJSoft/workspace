@@ -5,6 +5,7 @@ import threading
 import time
 from unittest.mock import patch
 
+import orjson
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, SimpleTestCase, TestCase
 
@@ -16,12 +17,12 @@ from workspace.core.views import sse
 User = get_user_model()
 
 
-def _notification(user_id, slug):
+def _notification(user_id, slug, dirty=True):
     return {
         "type": "pmessage",
         "pattern": b"sse:user:*",
         "channel": f"sse:user:{user_id}".encode(),
-        "data": f'{{"provider":"{slug}"}}'.encode(),
+        "data": orjson.dumps({"provider": slug, "dirty": dirty}),
     }
 
 
@@ -113,9 +114,9 @@ class SubscriptionTests(SimpleTestCase):
 
         self.hub._dispatch(_notification(1, "chat"))
 
-        self.assertEqual(first_tab.wait(timeout=0), {"chat"})
-        self.assertEqual(second_tab.wait(timeout=0), {"chat"})
-        self.assertEqual(someone_else.wait(timeout=0), set())
+        self.assertEqual(first_tab.wait(timeout=0), {"chat": True})
+        self.assertEqual(second_tab.wait(timeout=0), {"chat": True})
+        self.assertEqual(someone_else.wait(timeout=0), {})
 
     def test_notifications_for_one_provider_count_once(self):
         tab = self.hub.subscribe(1)
@@ -123,8 +124,32 @@ class SubscriptionTests(SimpleTestCase):
         for slug in ("chat", "chat", "files"):
             self.hub._dispatch(_notification(1, slug))
 
-        self.assertEqual(tab.wait(timeout=0), {"chat", "files"})
-        self.assertEqual(tab.wait(timeout=0), set())
+        self.assertEqual(tab.wait(timeout=0), {"chat": True, "files": True})
+        self.assertEqual(tab.wait(timeout=0), {})
+
+    def test_a_clean_notification_wakes_the_stream_without_marking_it_dirty(self):
+        tab = self.hub.subscribe(1)
+
+        self.hub._dispatch(_notification(1, "chat", dirty=False))
+
+        self.assertEqual(tab.wait(timeout=0), {"chat": False})
+
+    def test_a_dirty_notification_wins_over_a_clean_one_whatever_the_order(self):
+        tab = self.hub.subscribe(1)
+
+        for dirty in (False, True, False):
+            self.hub._dispatch(_notification(1, "chat", dirty=dirty))
+
+        self.assertEqual(tab.wait(timeout=0), {"chat": True})
+
+    def test_a_notification_that_does_not_say_is_dirty(self):
+        tab = self.hub.subscribe(1)
+
+        self.hub._dispatch(
+            {"channel": b"sse:user:1", "data": orjson.dumps({"provider": "chat"})}
+        )
+
+        self.assertEqual(tab.wait(timeout=0), {"chat": True})
 
     def test_a_closed_stream_is_no_longer_woken(self):
         closed = self.hub.subscribe(1)
@@ -133,8 +158,8 @@ class SubscriptionTests(SimpleTestCase):
 
         self.hub._dispatch(_notification(1, "chat"))
 
-        self.assertEqual(closed.wait(timeout=0), set())
-        self.assertEqual(still_open.wait(timeout=0), {"chat"})
+        self.assertEqual(closed.wait(timeout=0), {})
+        self.assertEqual(still_open.wait(timeout=0), {"chat": True})
 
     def test_a_malformed_notification_is_dropped(self):
         tab = self.hub.subscribe(1)
@@ -145,13 +170,13 @@ class SubscriptionTests(SimpleTestCase):
                 {"channel": b"sse:user:someone", "data": b'{"provider":"chat"}'}
             )
 
-        self.assertEqual(tab.wait(timeout=0), set())
+        self.assertEqual(tab.wait(timeout=0), {})
 
     def test_waiting_with_nothing_notified_times_out_empty(self):
         tab = self.hub.subscribe(1)
 
         started = time.monotonic()
-        self.assertEqual(tab.wait(timeout=0.05), set())
+        self.assertEqual(tab.wait(timeout=0.05), {})
         self.assertGreaterEqual(time.monotonic() - started, 0.04)
 
 
@@ -166,7 +191,7 @@ class ListenerTests(SimpleTestCase):
         self.assertTrue(redis.subscribed.wait(timeout=5))
         pubsub.messages.put(_notification(2, "chat"))
 
-        self.assertEqual(tabs[2].wait(timeout=5), {"chat"})
+        self.assertEqual(tabs[2].wait(timeout=5), {"chat": True})
         self.assertEqual(redis.opened, 1)
         self.assertEqual(pubsub.patterns, ["sse:user:*"])
 
@@ -184,7 +209,7 @@ class ListenerTests(SimpleTestCase):
             self.assertTrue(redis.subscribed.wait(timeout=5))
         working.messages.put(_notification(1, "chat"))
 
-        self.assertEqual(tab.wait(timeout=5), {"chat"})
+        self.assertEqual(tab.wait(timeout=5), {"chat": True})
         self.assertEqual(redis.opened, 2)
         self.assertTrue(lost.closed)
 
@@ -200,7 +225,7 @@ class ListenerTests(SimpleTestCase):
             tab = hub.subscribe(1)
             pubsub.messages.put(_confirmation())
 
-            self.assertEqual(tab.wait(timeout=5), {"chat", "files"})
+            self.assertEqual(tab.wait(timeout=5), {"chat": True, "files": True})
 
     def test_streams_catch_up_once_the_subscription_is_back_after_losing_redis(self):
         """What was published while the hub reconnected is gone: the open
@@ -223,7 +248,7 @@ class ListenerTests(SimpleTestCase):
             dropped.messages.put(ConnectionError("Redis went away"))
             working.messages.put(_confirmation())
 
-            self.assertEqual(tab.wait(timeout=5), {"chat", "files"})
+            self.assertEqual(tab.wait(timeout=5), {"chat": True, "files": True})
 
 
 class StreamSharingTests(TestCase):

@@ -496,7 +496,7 @@
   x-show="emojiPickerVisible"
   x-cloak
   class="fixed z-100"
-  :style="`left:${emojiPickerX}px; top:${emojiPickerY}px`"
+  :style="{ left: emojiPickerX + 'px', top: emojiPickerY + 'px' }"
   @click.outside="closeEmojiPicker()"
   @keydown.escape.stop="closeEmojiPicker()"
 >

@@ -62,7 +62,7 @@ def search_events(query, user, limit, scope=SearchScope.ALL):
 
 
 def search_polls(query, user, limit):
-    polls = Poll.objects.filter(created_by=user, title__icontains=query).order_by(
+    polls = Poll.objects.filter(created_by=user, title__ficontains=query).order_by(
         "-created_at"
     )[:limit]
 

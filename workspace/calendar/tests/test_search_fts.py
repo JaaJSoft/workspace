@@ -209,6 +209,16 @@ class ProviderAndToolTests(TestCase):
         self.assertEqual(len(data), 20)
         self.assertTrue(all(entry["type"] == "event" for entry in data))
 
+    def test_poll_search_folds_accents_and_case(self):
+        from workspace.calendar.models import Poll
+        from workspace.calendar.search import search_polls
+
+        Poll.objects.create(created_by=self.alice, title="Réunion d'équipe")
+
+        results = search_polls("REUNION", self.alice, 10)
+
+        self.assertEqual([r.name for r in results], ["Réunion d'équipe"])
+
     def test_description_match_reports_description_not_title(self):
         # A word only in the description must be reported as a description
         # match with its snippet, not mislabeled as a title match.

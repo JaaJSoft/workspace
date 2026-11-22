@@ -19,8 +19,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     loadingMoreMessages: false,
     hasMoreMessages: false,
     // Set while the list shows a stretch of the past cut off from the
-    // present (a link to an old message): newer pages load below it, and
-    // the view is no longer the latest page that refreshes reload.
+    // present (a link to an old message): newer pages load below it, and a
+    // refresh never reaches past its end.
     hasNewerMessages: false,
     loadingNewerMessages: false,
     // The rows on screen, as offsets counted from the oldest message of the
@@ -637,18 +637,23 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // first: the replace merge swaps old content for new in one step, so
       // the container cannot flash empty mid-refresh.
       if (!this.activeConversation || this._surfaceGone()) return;
-      // Away from the present, the latest page is not what is on screen:
-      // reload the same rows, and put the message being read back where it
-      // was.
+      // The rows on screen stay on screen. A reader following the end gets
+      // as many of the latest rows as the window held, so whatever arrived
+      // meanwhile shows. Anyone else gets the same rows from the same start,
+      // plus room for what arrived when the window reaches the present, and
+      // the message being read is put back where it was.
       const away = this.hasNewerMessages;
-      const query = away
-        ? {
-          offset: this._windowStart,
-          limit: Math.min(Math.max(this._windowEnd - this._windowStart, 1), MAX_LIMIT),
-        }
-        : { limit: PAGE_SIZE };
+      const following = !away && this._isNearBottom();
+      const rows = Math.max(this._windowEnd - this._windowStart, 1);
+      let query;
+      if (following) {
+        query = { limit: Math.min(Math.max(rows, PAGE_SIZE), MAX_LIMIT) };
+      } else {
+        const limit = away ? rows : rows + PAGE_SIZE;
+        query = { offset: this._windowStart, limit: Math.min(limit, MAX_LIMIT) };
+      }
       if (!away) this._missedLive = false;
-      this._anchorOnMerge = away;
+      this._anchorOnMerge = !following;
       this._refreshAnchor = null;
       try {
         const render = await this.$ajax(this._messagesUrl(query), {

@@ -144,6 +144,47 @@ class MessagePaginationTests(PlaywrightTestCase):
             }}"""
         )
 
+    def _message_at_top(self):
+        return self.page.evaluate(
+            f"""() => {{
+              const top = {self.SCROLLER}.getBoundingClientRect().top;
+              const bubbles = document.querySelectorAll(
+                '#message-list-items .msg-bubble[data-body]');
+              for (const el of bubbles) {{
+                const rect = el.getBoundingClientRect();
+                if (rect.bottom > top) return {{ body: el.dataset.body, top: rect.top - top }};
+              }}
+              return null;
+            }}"""
+        )
+
+    def test_a_stream_reconnection_keeps_the_older_pages_and_the_message_read(self):
+        """The stream script dispatches sse:reconnect on every reopening (at
+        least every ten minutes). Its refresh replaced a list grown upwards
+        with the latest page, dropping the older messages being read."""
+        self._open_conversation()
+        flow = self.page.locator("#messages-container")
+        expect(flow.get_by_text(f"pagination message {SEEDED:03d}")).to_be_visible()
+        self._scroll_to_top()
+        expect(flow.get_by_text("pagination message 001")).to_be_attached()
+        # Settle the scroll restore of the prepend before taking the anchor.
+        self.page.wait_for_timeout(300)
+        before = self._message_at_top()
+        self.assertIsNotNone(before)
+
+        with self.page.expect_response(lambda r: "/messages?" in r.url):
+            self.page.evaluate("window.dispatchEvent(new CustomEvent('sse:reconnect'))")
+        self.page.wait_for_timeout(300)
+
+        self.assertEqual(
+            self._bubble_texts(),
+            [f"pagination message {i:03d}" for i in range(1, SEEDED + 1)],
+            "the older page must survive the refresh",
+        )
+        after = self._message_at_top()
+        self.assertEqual(after["body"], before["body"])
+        self.assertLess(abs(after["top"] - before["top"]), 2)
+
     def test_a_reader_who_went_up_stays_there_when_the_opening_ends(self):
         """Opening a conversation ends with a scroll to its newest message,
         once the read receipt and the pins have answered. On a slow server a

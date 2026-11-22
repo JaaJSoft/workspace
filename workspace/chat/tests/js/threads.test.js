@@ -565,6 +565,7 @@ test('a reaction in the panel does not echo back into a second panel fetch', asy
   );
   const panel = ctx.chatThreadPanel('r1');
   panel.activeConversation = { uuid: 'c1' };
+  panel.$refs = {};
 
   await panel.toggleReaction('m1', '👍');
 
@@ -664,6 +665,7 @@ test('overlapping panel loads and refreshes contend for the same targets', async
   const panel = ctx.chatThreadPanel('r1');
   panel.activeConversation = { uuid: 'c1' };
   panel.scrollToBottom = () => {};
+  panel.$refs = {};
   const targeted = [];
   panel.$ajax = async (url, options) => {
     targeted.push(options.targets);

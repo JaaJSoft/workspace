@@ -38,6 +38,18 @@ class GroupRootFolder(ValueError):
     """
 
 
+class MovedMeanwhile(Exception):
+    """A move was refused because the node changed folder since it was loaded.
+
+    Everything the move works out - the bytes' current path, the subtree, the
+    folder it leaves - comes from the caller's copy of the node, which no
+    longer describes it.
+    """
+
+    def __init__(self):
+        super().__init__("The item was moved since it was loaded.")
+
+
 class GroupMismatch(ValueError):
     """A node was asked to join a group other than its parent folder's."""
 
@@ -283,10 +295,12 @@ def validate_move_target(file_obj, new_parent, user=None):
 @transaction.atomic
 def move(file_obj, new_parent, *, acting_user=None):
     """Move a file or folder to a new parent, handling physical storage."""
-    old_parent_id = file_obj.parent_id
     new_parent_id = new_parent.pk if new_parent else None
+    old_parent_id = _stored_parent_id(file_obj)
     if old_parent_id == new_parent_id:
         return
+    if old_parent_id != file_obj.parent_id:
+        raise MovedMeanwhile()
     if is_group_root(file_obj):
         raise GroupRootFolder(gettext("A group's root folder cannot be moved."))
 
@@ -354,6 +368,22 @@ def move(file_obj, new_parent, *, acting_user=None):
             "old_parent_id": str(old_parent_id) if old_parent_id else None,
             "new_parent_id": str(new_parent_id) if new_parent_id else None,
         },
+    )
+
+
+def _stored_parent_id(file_obj):
+    """The folder *file_obj*'s row is in now, locked until the move commits.
+
+    The lock is what keeps the row under that folder until the parent is
+    written: on PostgreSQL a concurrent move waits for this one and then
+    reads where it left the node; on SQLite every transaction begins
+    IMMEDIATE, so no other writer runs in between at all.
+    """
+    return (
+        File.objects.select_for_update()
+        .filter(pk=file_obj.pk)
+        .values_list("parent_id", flat=True)
+        .get()
     )
 
 

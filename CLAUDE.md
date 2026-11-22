@@ -396,7 +396,7 @@ Examples in the codebase: `files/services/{tree,trash,content_writes,names,shari
 
 A module starts with a flat `views.py`. The moment it needs a second view module, it becomes a
 `views/` **package** with an empty `__init__.py` - never a sprawl of `views_<topic>.py` siblings at
-the module root. `chat`, `mail`, `files`, `core`, `projects`, `calendar` and `vault` are already
+the module root. `chat`, `mail`, `files`, `core`, `projects`, `calendar`, `people`, `photos` and `vault` are already
 there; `users`, `ai`, `imports`, `notifications`, `dashboard` and `common` still hold a single
 `views.py`, which is the right shape until they need a second.
 
@@ -743,7 +743,7 @@ Name matching cannot reach a frame's locals either - the local holding a wrapped
 means `@sensitive_variables()`: `@sensitive_post_parameters` cleanses `request.POST`, which a JSON
 body leaves empty. It is still worth keeping, because the default parser list also accepts a
 form-encoded body, and on that request it is the only thing standing between the field and the
-technical 500 page. `workspace/vault/views.py` is the worked example.
+technical 500 page. `workspace/vault/views/account.py` is the worked example.
 
 ### Substring search - `__ficontains`, never `__icontains`
 
@@ -871,7 +871,7 @@ with source.content.open('rb') as f:
 - Always pin this with a regression test that asserts `dest.content.name != source.content.name` after the copy AND that the bytes round-trip. Don't rely on a "content equality" check alone - the buggy version with a shared blob also passes a content check (it's the same blob).
 - Wrap the open + save in `try/except (FileNotFoundError, OSError)` whenever copying user-uploaded content. A vanished blob otherwise surfaces as a bare 500 with no breadcrumbs. Mirror the response code of the closest read endpoint (404 for chat / mail attachment paths) and log the path through `scrub()` before re-raising or returning.
 - `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
-- Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views/attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views/attachments.py:MailAttachmentSaveToFilesView`, `workspace/files/services/storage_ops.py:copy_node`.
+- Existing precedent in the codebase: `workspace/chat/views/attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views/attachments.py:MailAttachmentSaveToFilesView`, `workspace/files/services/storage_ops.py:copy_node`.
 
 ### Static lists - one definition, everything else derives from it
 
@@ -1431,6 +1431,6 @@ const data = await resp.json();
 const actionIds = (data[fileUuid] || []).map(a => a.id);
 ```
 
-Use a race-protection counter (see `_loadGeneration` in `workspace/notes/ui/static/notes/ui/js/notes.js:557`) when the fetched list feeds reactive state that depends on the current selection - rapid selection changes otherwise lead to stale results being applied.
+Use a race-protection counter (see `_notesGeneration` in `workspace/notes/ui/static/notes/ui/js/notes.js`) when the fetched list feeds reactive state that depends on the current selection - rapid selection changes otherwise lead to stale results being applied.
 
 **Scope:** applies to the `files` module and every module whose UI manipulates files (notes, mail attachments, chat attachments, etc.). If a module manipulates another kind of entity with its own action registry (not files), follow the same principle against that module's equivalent endpoint - `POST /api/v1/projects/actions` for projects and tasks, `POST /api/v1/vault/actions` for vault entries. The vault one differs on a point worth knowing before you copy it: it never answers 404, because one unreachable UUID must not cost the rest of the batch its answer. Every submitted UUID comes back with a key - spelled the way you sent it - and an unreachable one comes back with an empty list. That is a batch-semantics choice, not a disclosure one: the projects 404 fires for "no such row" and "not yours" alike, so neither endpoint tells the two apart.

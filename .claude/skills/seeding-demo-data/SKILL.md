@@ -108,8 +108,6 @@ next to the photos, and face grouping is turned on for those users.
   downloaded on the first analysis). With `DEBUG` on, the analysis runs during
   the seed itself, one photo at a time; otherwise the hourly catch-up picks
   the photos up.
-- Photos is a preview module: start the server with `PREVIEW_VISIBILITY=all`
-  to see it as `demo`, as for the vault below.
 
 ## The vault
 

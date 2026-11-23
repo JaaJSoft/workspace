@@ -5,8 +5,9 @@ can be retuned on telemetry without a code change. The values there are the
 design's v1 starting point, not measurements.
 """
 
-from rest_framework.settings import api_settings
 from rest_framework.throttling import SimpleRateThrottle, UserRateThrottle
+
+from workspace.common.client_address import client_address
 
 
 class IpRateThrottle(SimpleRateThrottle):
@@ -18,18 +19,9 @@ class IpRateThrottle(SimpleRateThrottle):
     """
 
     def get_ident(self, request):
-        """The peer address, unless a deployment has said how far to trust
-        ``X-Forwarded-For``.
-
-        DRF's own implementation falls back to the whole header when
-        ``NUM_PROXIES`` is unset, and the header is written by the caller: a
-        different value per request buys a fresh bucket, and the limit is gone.
-        Only a declared proxy count says which hop is the real peer, so
-        without one the header is ignored rather than believed.
-        """
-        if api_settings.NUM_PROXIES is None:
-            return request.META.get("REMOTE_ADDR")
-        return super().get_ident(request)
+        # DRF's own falls back to the whole X-Forwarded-For header when
+        # NUM_PROXIES is unset, which the caller writes.
+        return client_address(request)
 
     def get_cache_key(self, request, view):
         return self.cache_format % {

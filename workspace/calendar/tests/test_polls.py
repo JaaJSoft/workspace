@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.settings import api_settings
 from rest_framework.test import APITestCase
 
 from workspace.calendar.models import (
@@ -782,6 +783,36 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         # 11th should be rate limited
         resp = self.client.post(url, payload, format="json")
         self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def _vote_from(self, forwarded_for):
+        return self.client.post(
+            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
+            {
+                "guest_name": "Spammer",
+                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+            },
+            format="json",
+            HTTP_X_FORWARDED_FOR=forwarded_for,
+        )
+
+    def test_a_forged_forwarded_for_header_buys_no_new_guest_votes(self):
+        cache.clear()
+        for attempt in range(10):
+            resp = self._vote_from(f"203.0.113.{attempt}")
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        resp = self._vote_from("203.0.113.99")
+        self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_behind_a_declared_proxy_guests_are_counted_by_the_entry_it_wrote(self):
+        cache.clear()
+        with patch.object(api_settings, "NUM_PROXIES", 1):
+            for attempt in range(10):
+                resp = self._vote_from(f"203.0.113.{attempt}, 198.51.100.1")
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            same_guest = self._vote_from("203.0.113.99, 198.51.100.1")
+            another_guest = self._vote_from("203.0.113.99, 198.51.100.2")
+        self.assertEqual(same_guest.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(another_guest.status_code, status.HTTP_200_OK)
 
 
 # ── Finalize ─────────────────────────────────────────────────────

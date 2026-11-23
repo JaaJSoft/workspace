@@ -91,7 +91,7 @@ dependencies = [
     # it. Run scripts/agent_evals.py before and after a bump.
     "pydantic-ai-slim>=2.71.0",
     # web search & scraping
-    "httpx2>=2.16.0",
+    "httpx2>=2.16.2",
     "trafilatura>=2.3.1",
     # Apache Tika compiled ahead of time to a native library: text and
     # metadata out of PDFs, Office and OpenDocument files without a JVM, a

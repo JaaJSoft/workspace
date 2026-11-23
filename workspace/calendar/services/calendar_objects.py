@@ -70,16 +70,6 @@ def find_object(calendar, name):
     return master
 
 
-def find_objects(calendar, names):
-    """``{name: master}`` for the *names* that exist in *calendar*."""
-    found = {}
-    for name in names:
-        master = find_object(calendar, name)
-        if master is not None:
-            found[name] = master
-    return found
-
-
 @transaction.atomic
 def store_object(calendar, name, parsed, existing=None):
     """Write *parsed* as the object *name* of *calendar*; return its master.

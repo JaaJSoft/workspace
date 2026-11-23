@@ -493,6 +493,14 @@ class GroupFolderSerializerTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["group"], self.group.id)
 
+    def test_a_non_numeric_group_is_a_400(self):
+        self.client.force_authenticate(user=self.alice)
+        resp = self.client.post(
+            "/api/v1/files",
+            {"name": "Marketing Files", "node_type": "folder", "group": "abc"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_create_file_in_group_folder_inherits_group(self):
         self.client.force_authenticate(user=self.alice)
         root = File.objects.create(

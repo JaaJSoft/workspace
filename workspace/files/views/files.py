@@ -582,6 +582,13 @@ class FileViewSet(
     def create(self, request, *args, **kwargs):
         group_id = request.data.get("group")
         if group_id:
+            try:
+                group_id = int(group_id)
+            except TypeError, ValueError:
+                return Response(
+                    {"group": _("Invalid group.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if not request.user.groups.filter(id=group_id).exists():
                 return Response(
                     {"group": _("You are not a member of this group.")},

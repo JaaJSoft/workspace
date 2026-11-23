@@ -67,10 +67,6 @@ window.calendarRecurrenceMixin = function calendarRecurrenceMixin() {
       return this._panelRaw?.recurrence_summary || '';
     },
 
-    isRecurringEvent() {
-      return this._panelRaw?.is_recurring || this._panelRaw?.master_event_id;
-    },
-
     openScopeDialog(action) {
       return new Promise((resolve) => {
         this.scopeAction = action;

@@ -208,9 +208,19 @@ class PollDetailView(APIView):
             }
             existing = {str(s.uuid): s for s in poll.slots.all()}
 
-            # Delete removed slots (cascade deletes their votes)
+            # Delete removed slots (cascade deletes their votes, so read
+            # who voted on them first)
             removed_uuids = set(existing.keys()) - submitted_uuids
+            voter_ids = []
             if removed_uuids:
+                voter_ids = list(
+                    PollVote.objects.filter(
+                        slot__uuid__in=removed_uuids, user__isnull=False
+                    )
+                    .exclude(user=request.user)
+                    .values_list("user_id", flat=True)
+                    .distinct()
+                )
                 PollSlot.objects.filter(uuid__in=removed_uuids).delete()
 
             # Update kept slots + create new ones (sorted by date)
@@ -231,14 +241,7 @@ class PollDetailView(APIView):
                         position=i,
                     )
 
-            # Notify voters who had voted on removed slots
-            if removed_uuids:
-                voter_ids = (
-                    PollVote.objects.filter(slot__poll=poll, user__isnull=False)
-                    .exclude(user=request.user)
-                    .values_list("user_id", flat=True)
-                    .distinct()
-                )
+            if voter_ids:
                 voters = list(User.objects.filter(id__in=voter_ids))
                 if voters:
                     notify_in_languages(
@@ -434,6 +437,7 @@ class PollInviteView(APIView):
         request=PollInviteSerializer,
         responses=PollSerializer,
     )
+    @transaction.atomic
     def post(self, request, poll_id):
         poll = get_object_or_404(
             Poll,
@@ -445,13 +449,16 @@ class PollInviteView(APIView):
         ser.is_valid(raise_exception=True)
 
         user_ids = ser.validated_data["user_ids"]
-        # Exclude creator and already-invited users
-        users = User.objects.filter(id__in=user_ids).exclude(id=request.user.id)
-        invitees = [PollInvitee(poll=poll, user=user) for user in users]
-        PollInvitee.objects.bulk_create(invitees, ignore_conflicts=True)
+        newly_invited = list(
+            User.objects.filter(id__in=user_ids)
+            .exclude(id=request.user.id)
+            .exclude(poll_invitations__poll=poll)
+        )
+        PollInvitee.objects.bulk_create(
+            [PollInvitee(poll=poll, user=user) for user in newly_invited],
+            ignore_conflicts=True,
+        )
 
-        # Notify newly invited users
-        newly_invited = list(users)
         if newly_invited:
             notify_in_languages(
                 recipients=newly_invited,

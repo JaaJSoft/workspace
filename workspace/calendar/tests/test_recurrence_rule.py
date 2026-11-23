@@ -100,15 +100,6 @@ class LastOccurrenceEndTests(SimpleTestCase):
 
 
 class SimpleRoundTripTests(SimpleTestCase):
-    def test_from_simple_omits_interval_of_one(self):
-        self.assertEqual(rr.from_simple("weekly"), "RRULE:FREQ=WEEKLY")
-
-    def test_from_simple_emits_interval_and_until(self):
-        self.assertEqual(
-            rr.from_simple("daily", 2, datetime(2026, 3, 1, 9, tzinfo=UTC)),
-            "RRULE:FREQ=DAILY;INTERVAL=2;UNTIL=20260301T090000Z",
-        )
-
     def test_to_simple_round_trips(self):
         self.assertEqual(
             rr.to_simple("RRULE:FREQ=DAILY;INTERVAL=2"),

@@ -2404,20 +2404,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ollama"
-version = "0.6.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic", version = "2.12.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.15'" },
-    { name = "pydantic", version = "2.14.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.15'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b8/97/eeafe65594e4f4b25e443e068ef7d83aa3105b023e12e1c408c38669fc07/ollama-0.6.3.tar.gz", hash = "sha256:41fc49a8095c4a75939c4c1f8582e4d0671692fb6eac2a5a7ede8c9872b67096", size = 56868, upload-time = "2026-09-29T01:26:51.906Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/64/87505d9e006461233c21c8e66dc1ecee49c996090584b216abd0dd4a8322/ollama-0.6.3-py3-none-any.whl", hash = "sha256:6a20bc42c1a5f889295d7ec490d35e5132fc31f339561530f43a8abd4dbfe508", size = 16603, upload-time = "2026-09-29T01:26:50.451Z" },
-]
-
-[[package]]
 name = "onnxruntime"
 version = "1.32.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3853,7 +3839,6 @@ dependencies = [
     { name = "djangorestframework" },
     { name = "drf-orjson-renderer" },
     { name = "drf-spectacular" },
-    { name = "faker" },
     { name = "fastembed" },
     { name = "gevent" },
     { name = "gunicorn" },
@@ -3869,7 +3854,6 @@ dependencies = [
     { name = "mozilla-django-oidc" },
     { name = "nh3" },
     { name = "numpy" },
-    { name = "ollama" },
     { name = "onnxruntime" },
     { name = "openai" },
     { name = "phonenumbers" },
@@ -3900,6 +3884,7 @@ dev = [
     { name = "coverage" },
     { name = "django-debug-toolbar" },
     { name = "djlint" },
+    { name = "faker" },
     { name = "moto", extra = ["s3"] },
     { name = "odfpy" },
     { name = "oidc-provider-mock" },
@@ -3937,7 +3922,6 @@ requires-dist = [
     { name = "djangorestframework", specifier = "==3.18.3" },
     { name = "drf-orjson-renderer", specifier = ">=1.7.0" },
     { name = "drf-spectacular", specifier = "==0.30.0" },
-    { name = "faker", specifier = ">=40.54.0" },
     { name = "fastembed", specifier = ">=0.9.1" },
     { name = "gevent", specifier = ">=26.9.0" },
     { name = "gunicorn", specifier = ">=27.0.1" },
@@ -3953,7 +3937,6 @@ requires-dist = [
     { name = "mozilla-django-oidc", specifier = ">=5.0.2" },
     { name = "nh3", specifier = ">=0.3.7" },
     { name = "numpy", specifier = ">=2.5.5" },
-    { name = "ollama", specifier = ">=0.6.3" },
     { name = "onnxruntime", specifier = ">=1.32.0" },
     { name = "openai", specifier = ">=3.51.0" },
     { name = "phonenumbers", specifier = ">=9.0.42" },
@@ -3984,6 +3967,7 @@ dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.17.3" },
     { name = "django-debug-toolbar", specifier = "==8.0.0" },
     { name = "djlint", specifier = ">=1.54.0" },
+    { name = "faker", specifier = ">=40.54.0" },
     { name = "moto", extras = ["s3"], specifier = ">=5.2.5" },
     { name = "odfpy", specifier = ">=1.4.1" },
     { name = "oidc-provider-mock", specifier = ">=0.4.8" },

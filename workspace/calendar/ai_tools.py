@@ -353,7 +353,7 @@ scheduling polls."""
         events = list(search_events_qs(user, query).select_related("calendar")[:20])
 
         poll_limit = min(10, 20 - len(events))
-        polls = Poll.objects.filter(created_by=user, title__icontains=query).order_by(
+        polls = Poll.objects.filter(created_by=user, title__ficontains=query).order_by(
             "-created_at"
         )[:poll_limit]
 

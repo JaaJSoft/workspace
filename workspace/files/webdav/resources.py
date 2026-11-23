@@ -679,15 +679,6 @@ def _dest_parts(dest_path):
     return [part for part in dest_path.split("/") if part]
 
 
-@contextmanager
-def _as_insufficient_storage():
-    """Translate a refused write into the 507 a WebDAV client expects."""
-    try:
-        yield
-    except quota.QuotaExceeded as exc:
-        raise DAVError(HTTP_INSUFFICIENT_STORAGE, str(exc)) from exc
-
-
 # What a store with no limit of its own advertises (object storage): every
 # client takes a figure at face value, and one that gets none makes up its own.
 _NO_LIMIT_FREE_BYTES = 2**50

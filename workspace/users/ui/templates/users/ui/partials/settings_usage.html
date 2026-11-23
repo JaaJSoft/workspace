@@ -1,12 +1,6 @@
-{% load i18n %}
+{% load humanize i18n %}
 <!-- Usage Tab -->
-<div
-  x-show="tab === 'usage'"
-  x-cloak
-  x-data="usageTab()"
-  x-init="$watch('$root.tab', v => { if (v === 'usage') animate() })"
-  class="space-y-4"
->
+<div x-show="tab === 'usage'" x-cloak class="space-y-4">
   <!-- Files -->
   <a
     href="/files"
@@ -26,12 +20,7 @@
           >
             {% translate "Total files" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.files.total_files|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.files.total_files|default:0|intcomma }}</div>
         </div>
         <div>
           <div
@@ -42,9 +31,8 @@
           <div class="font-semibold text-2xl mt-1">{{ storage_usage|filesizeformat }}</div>
           <div class="w-full bg-base-300 rounded-full h-2 mt-2">
             <div
-              class="{% if storage_percent >= 100 %}bg-error{% elif storage_percent >= 90 %}bg-warning{% else %}bg-primary{% endif %} rounded-full h-2 transition-all duration-700"
-              x-ref="settingsStorageBar"
-              style="width: 0%"
+              class="{% if storage_percent >= 100 %}bg-error{% elif storage_percent >= 90 %}bg-warning{% else %}bg-primary{% endif %} rounded-full h-2"
+              style="width: {{ storage_percent|default:0|stringformat:'d' }}%"
             ></div>
           </div>
           <div class="text-xs text-base-content/50 mt-1">
@@ -74,12 +62,7 @@
           >
             {% translate "Conversations" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.chat.active_conversations|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.chat.active_conversations|default:0|intcomma }}</div>
         </div>
         <div>
           <div
@@ -87,12 +70,7 @@
           >
             {% translate "Messages sent" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.chat.total_messages|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.chat.total_messages|default:0|intcomma }}</div>
         </div>
       </div>
     </div>
@@ -117,12 +95,7 @@
           >
             {% translate "Accounts" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.mail.total_accounts|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.total_accounts|default:0|intcomma }}</div>
         </div>
         <div>
           <div
@@ -130,12 +103,7 @@
           >
             {% translate "Messages" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.mail.total_messages|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.total_messages|default:0|intcomma }}</div>
         </div>
         <div>
           <div
@@ -143,12 +111,7 @@
           >
             {% translate "Unread" context "unread mail messages" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.mail.unread_messages|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.unread_messages|default:0|intcomma }}</div>
         </div>
       </div>
     </div>
@@ -173,12 +136,7 @@
           >
             {% translate "Total events" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.calendar.total_events|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.calendar.total_events|default:0|intcomma }}</div>
         </div>
         <div>
           <div
@@ -186,54 +144,9 @@
           >
             {% translate "Upcoming" context "upcoming events" %}
           </div>
-          <div
-            class="font-semibold text-2xl mt-1"
-            data-count="{{ usage_stats.calendar.upcoming_events|default:"0" }}"
-          >
-            0
-          </div>
+          <div class="font-semibold text-2xl mt-1">{{ usage_stats.calendar.upcoming_events|default:0|intcomma }}</div>
         </div>
       </div>
     </div>
   </a>
 </div>
-
-<script>
-  function usageTab() {
-    return {
-      animated: false,
-      animate() {
-        if (this.animated) return;
-        this.animated = true;
-        this.$nextTick(() => {
-          this.$el.querySelectorAll('[data-count]').forEach(el => {
-            const target = parseInt(el.dataset.count) || 0;
-            if (target === 0) {
-              el.textContent = '0';
-              return;
-            }
-            this._countUp(el, target, 600);
-          });
-          const bar = this.$refs.settingsStorageBar;
-          if (bar) {
-            const pct = {{ storage_percent|default:"0" }};
-            requestAnimationFrame(() => {
-              bar.style.width = pct + '%';
-            });
-          }
-        });
-      },
-      _countUp(el, target, duration) {
-        const start = performance.now();
-
-        function tick(now) {
-          const progress = Math.min((now - start) / duration, 1);
-          const eased = 1 - Math.pow(1 - progress, 3);
-          el.textContent = Math.round(eased * target).toLocaleString(window.getUserLocale());
-          if (progress < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-      },
-    };
-  }
-</script>

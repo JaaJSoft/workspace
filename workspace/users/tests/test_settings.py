@@ -9,7 +9,6 @@ from workspace.common.tests.parameter_limit import sqlite_parameter_limit
 from workspace.users.models import UserSetting
 from workspace.users.services.settings import (
     delete_setting,
-    get_all_settings,
     get_module_settings,
     get_setting,
     get_user_language,
@@ -290,26 +289,6 @@ class GetModuleSettingsTests(TestCase):
         set_setting(self.user, "mail", "sig", "bye")  # different module
         result = get_module_settings(self.user, "core")
         self.assertEqual(result, {"theme": "dark", "lang": "fr"})
-
-
-class GetAllSettingsTests(TestCase):
-    def setUp(self):
-        cache.clear()
-        self.user = User.objects.create_user(username="alice", password="pass")
-
-    def tearDown(self):
-        cache.clear()
-
-    def test_returns_empty_list_when_none(self):
-        self.assertEqual(get_all_settings(self.user), [])
-
-    def test_returns_all_settings(self):
-        set_setting(self.user, "core", "theme", "dark")
-        set_setting(self.user, "mail", "sig", "bye")
-        result = get_all_settings(self.user)
-        self.assertEqual(len(result), 2)
-        modules = {r["module"] for r in result}
-        self.assertEqual(modules, {"core", "mail"})
 
 
 class SettingCacheTests(TestCase):

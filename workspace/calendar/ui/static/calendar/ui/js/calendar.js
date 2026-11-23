@@ -244,10 +244,6 @@ window.calendarApp = function calendarApp() {
       localStorage.setItem('calendarVisible', JSON.stringify(ids));
     },
 
-    isCalendarVisible(uuid) {
-      return !!this.visibleCalendars[uuid];
-    },
-
     // ── Sidebar ─────────────────────────────────────────────
     isMobile() {
       return window.matchMedia('(max-width: 1023px)').matches;

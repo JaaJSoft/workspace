@@ -12,7 +12,6 @@ from workspace.projects.services.sprints import (
     ActiveSprintError,
     SprintStateError,
     SprintTargetError,
-    active_sprint,
     assign_tasks_to_sprint,
     complete_sprint,
     start_sprint,
@@ -241,11 +240,6 @@ class DefaultSprintTests(SprintServiceTestCase):
         move_tasks(self.scrum, self.todo, [task.uuid], actor=self.admin)
         task.refresh_from_db()
         self.assertIsNone(task.sprint)
-
-    def test_active_sprint_helper(self):
-        self.assertIsNone(active_sprint(self.scrum))
-        sprint = self.scrum.sprints.create(name="Sprint 1", state=Sprint.State.ACTIVE)
-        self.assertEqual(active_sprint(self.scrum), sprint)
 
 
 class SprintEventIdentityTests(SprintServiceTestCase):

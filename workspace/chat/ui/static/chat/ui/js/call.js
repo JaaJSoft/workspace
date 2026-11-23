@@ -122,10 +122,6 @@ window.chatCallMixin = function chatCallMixin() {
       return !!this.callSession && !this.inCall;
     },
 
-    isInCall() {
-      return this.inCall;
-    },
-
     _mediaState() {
       return window.chatCallMediaState(this.isMuted, this.cameraOn, this.sharing);
     },

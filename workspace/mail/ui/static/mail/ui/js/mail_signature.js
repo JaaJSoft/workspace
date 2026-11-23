@@ -2,25 +2,25 @@
 // compose textarea body. No DOM access - unit-tested via node --test.
 window.mailSignature = (function () {
   // Opens the quote of a reply or a forward: QUOTE_MARKER in mail/services/compose.py.
-  var QUOTE_MARKER = '\n\n---\n';
+  const QUOTE_MARKER = '\n\n---\n';
 
   function buildBlock(signature) {
-    var sig = (signature || '').trim();
+    const sig = (signature || '').trim();
     return sig ? '\n-- \n' + sig + '\n' : '';
   }
 
   function applySignature(body, signature) {
-    var src = body || '';
-    var block = buildBlock(signature);
+    const src = body || '';
+    const block = buildBlock(signature);
     if (!block) return { body: src, block: '' };
-    var idx = src.indexOf(QUOTE_MARKER);
+    const idx = src.indexOf(QUOTE_MARKER);
     if (idx === -1) return { body: src + block, block: block };
     return { body: src.slice(0, idx) + block + src.slice(idx), block: block };
   }
 
   function swapSignature(body, oldBlock, newSignature) {
-    var src = body || '';
-    var newBlock = buildBlock(newSignature);
+    const src = body || '';
+    const newBlock = buildBlock(newSignature);
     if (oldBlock && src.indexOf(oldBlock) !== -1) {
       return { body: src.replace(oldBlock, newBlock), block: newBlock };
     }

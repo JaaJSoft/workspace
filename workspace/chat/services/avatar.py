@@ -75,11 +75,6 @@ def get_group_avatar_path(conversation_uuid) -> str:
     return f"avatars/groups/{conversation_uuid}.webp"
 
 
-def has_group_avatar(conversation) -> bool:
-    """Check whether *conversation* has an uploaded avatar."""
-    return conversation.has_avatar
-
-
 def process_and_save_group_avatar(
     conversation,
     image_file,

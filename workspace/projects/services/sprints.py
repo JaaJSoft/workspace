@@ -21,11 +21,6 @@ class SprintTargetError(ProjectRuleError):
     """The sprint receiving tasks is missing or invalid."""
 
 
-def active_sprint(project):
-    """The project's running sprint, or None."""
-    return project.sprints.filter(state=Sprint.State.ACTIVE).first()
-
-
 def _locked_sprint(project, sprint):
     """*sprint* as stored now, or None once it is gone.
 

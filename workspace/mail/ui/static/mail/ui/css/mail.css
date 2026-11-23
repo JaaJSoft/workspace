@@ -8,50 +8,6 @@
   color: color-mix(in oklab, var(--color-base-content) 85%, transparent);
 }
 
-/* Message list - unread indicator */
-.mail-unread-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--module);
-  flex-shrink: 0;
-}
-
-/* Star animation */
-.mail-star-animate {
-  animation: mail-star-pop 0.2s ease-out;
-}
-
-@keyframes mail-star-pop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.3); }
-  100% { transform: scale(1); }
-}
-
-/* Folder list active state */
-.mail-folder-active {
-  background: color-mix(in oklab, var(--module) 10%, transparent);
-  color: var(--module);
-}
-
-/* Scrollbar styling for message list */
-.mail-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.mail-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.mail-scrollbar::-webkit-scrollbar-thumb {
-  background: color-mix(in oklab, var(--color-base-content) 15%, transparent);
-  border-radius: 3px;
-}
-
-.mail-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in oklab, var(--color-base-content) 25%, transparent);
-}
-
 /* Drag & drop */
 [draggable="true"] {
   -webkit-user-drag: element;

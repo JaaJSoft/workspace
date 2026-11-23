@@ -8,6 +8,11 @@ class MailConfig(AppConfig):
     label = "mail"
 
     def ready(self):
+        from workspace.mail.user_settings import MailSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("mail", MailSettings)
+
         from workspace.common.search.schema import register_fulltext_index
         from workspace.mail.search import MAIL_FTS, search_contacts, search_mail
 

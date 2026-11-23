@@ -7,6 +7,11 @@ class NotesConfig(AppConfig):
     name = "workspace.notes"
 
     def ready(self):
+        from workspace.notes.user_settings import NotesSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("notes", NotesSettings)
+
         from workspace.core.activity_registry import (
             ActivityProviderInfo,
             activity_registry,

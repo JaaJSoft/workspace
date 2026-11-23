@@ -13,6 +13,11 @@ class FilesConfig(AppConfig):
     name = "workspace.files"
 
     def ready(self):
+        from workspace.files.user_settings import FilesSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("files", FilesSettings)
+
         # Django's default chunk size (64 KB) causes hundreds of small writes
         # for multi-MB files. On replicated storage (e.g. Longhorn) each write
         # must be confirmed by every replica, so larger chunks dramatically

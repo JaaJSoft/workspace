@@ -1,9 +1,9 @@
 """The dashboard preferences a user sets in the header's Preferences popover.
 
-Each is a ``dashboard`` user setting. The API refuses a malformed value (see
-``_validate_setting_value`` in users/views.py), and every reader here falls
-back to the default on one anyway: a value stored before the rule existed
-must not break the page.
+Each is a ``dashboard`` user setting, declared in ``dashboard/user_settings.py``:
+the API refuses a malformed value. Every reader here falls back to the
+default on one anyway: a value stored before the rule existed must not break
+the page.
 """
 
 MODULE = "dashboard"

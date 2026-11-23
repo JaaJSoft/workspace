@@ -21,8 +21,9 @@ IN_APP_PRIORITY = "low"
 def module_level(user):
     """The user's module-wide level (``projects.notify_level`` setting).
 
-    The setting stores arbitrary JSON, so anything unrecognised falls back
-    to ``all`` rather than silencing notifications by accident.
+    A value stored before the API checked it may be anything, so whatever
+    is unrecognised falls back to ``all`` rather than silencing notifications
+    by accident.
     """
     from workspace.users.services.settings import get_setting
 

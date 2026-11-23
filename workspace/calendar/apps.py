@@ -8,6 +8,11 @@ class CalendarConfig(AppConfig):
     label = "calendar"
 
     def ready(self):
+        from workspace.calendar.user_settings import CalendarSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("calendar", CalendarSettings)
+
         import workspace.calendar.services.sync_log  # noqa: F401 - signal receivers
         from workspace.calendar.search import search_events
         from workspace.core.module_registry import (

@@ -577,107 +577,6 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["value"], "dark")
 
-    def test_put_rejects_out_of_range_reminder_hour(self):
-        for value in [-1, 24, "8", 7.5, True]:
-            resp = self.client.put(
-                self._url("projects", "reminder_hour"),
-                {"value": value},
-                format="json",
-            )
-            self.assertEqual(resp.status_code, 400, value)
-
-    def test_put_accepts_valid_reminder_hour(self):
-        resp = self.client.put(
-            self._url("projects", "reminder_hour"),
-            {"value": 10},
-            format="json",
-        )
-        self.assertIn(resp.status_code, (200, 201))
-
-    def test_put_rejects_a_photo_tile_size_off_the_slider(self):
-        for value in [0, 6, -1, "3", 2.5, True]:
-            resp = self.client.put(
-                self._url("photos", "tile_size"),
-                {"value": value},
-                format="json",
-            )
-            self.assertEqual(resp.status_code, 400, value)
-
-    def test_put_accepts_every_photo_tile_size_of_the_slider(self):
-        for value in [1, 2, 3, 4, 5]:
-            resp = self.client.put(
-                self._url("photos", "tile_size"),
-                {"value": value},
-                format="json",
-            )
-            self.assertIn(resp.status_code, (200, 201), value)
-
-    def test_put_checks_the_photos_preferences(self):
-        cases = {
-            "tile_shape": (["square", "original"], ["round", 1]),
-            "tile_badges": ([True, False], ["true", 1]),
-            "video_hover_preview": ([True, False], ["yes", 0]),
-            "import_by_date": ([True, False], ["on", 1]),
-            "show_hidden": ([True, False], ["1", 1]),
-            "auto_tags": ([True, False], ["1", 1]),
-            "default_media_type": (["all", "photo", "video"], ["audio", 1]),
-            "default_scope": (
-                ["mine", "all", "shared", "group:12"],
-                ["group:", "group:x", "family", 3, "mine "],
-            ),
-        }
-        for key, (accepted, rejected) in cases.items():
-            for value in accepted:
-                resp = self.client.put(
-                    self._url("photos", key), {"value": value}, format="json"
-                )
-                self.assertIn(resp.status_code, (200, 201), (key, value))
-            for value in rejected:
-                resp = self.client.put(
-                    self._url("photos", key), {"value": value}, format="json"
-                )
-                self.assertEqual(resp.status_code, 400, (key, value))
-
-    def test_put_rejects_a_lock_delay_that_is_not_a_delay(self):
-        """A vault that never locks is the failure this setting can cause, so
-        the value is checked here rather than trusted from the page."""
-        for value in [0, -1, "15", 7.5, True, 100000]:
-            resp = self.client.put(
-                self._url("vault", "lock_after_minutes"),
-                {"value": value},
-                format="json",
-            )
-            self.assertEqual(resp.status_code, 400, value)
-
-    def test_put_accepts_a_lock_delay(self):
-        for value in [1, 5, 60, 1440]:
-            resp = self.client.put(
-                self._url("vault", "lock_after_minutes"),
-                {"value": value},
-                format="json",
-            )
-            self.assertIn(resp.status_code, (200, 201), value)
-
-    def test_put_rejects_an_unknown_default_sort(self):
-        """Stored unchecked, it reaches the listing as a sort nothing
-        implements and leaves the sort control on a value no option carries."""
-        for value in ["size", "", 3, "NAME"]:
-            resp = self.client.put(
-                self._url("vault", "default_sort"),
-                {"value": value},
-                format="json",
-            )
-            self.assertEqual(resp.status_code, 400, value)
-
-    def test_put_accepts_the_sorts_the_panel_offers(self):
-        for value in ["default", "name", "favorite", "created"]:
-            resp = self.client.put(
-                self._url("vault", "default_sort"),
-                {"value": value},
-                format="json",
-            )
-            self.assertIn(resp.status_code, (200, 201), value)
-
     def test_put_creates_setting(self):
         resp = self.client.put(
             self._url("core", "theme"),
@@ -706,22 +605,12 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.data["value"], "dark")
 
     def test_put_json_value(self):
+        value = {"sortField": "name", "columnOrder": ["name", "size"]}
         resp = self.client.put(
-            self._url("core", "prefs"),
-            {"value": {"a": 1, "b": [2, 3]}},
-            format="json",
+            self._url("files", "table_controls"), {"value": value}, format="json"
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data["value"], {"a": 1, "b": [2, 3]})
-
-    def test_put_null_value(self):
-        resp = self.client.put(
-            self._url("core", "key"),
-            {"value": None},
-            format="json",
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertIsNone(resp.data["value"])
+        self.assertEqual(resp.data["value"], value)
 
     def test_delete_existing(self):
         UserSetting.objects.create(
@@ -746,16 +635,6 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         UserSetting.objects.create(user=other, module="core", key="theme", value="dark")
         resp = self.client.get(self._url("core", "theme"))
         self.assertEqual(resp.status_code, 404)
-
-    def test_get_stored_null_value_returns_200(self):
-        """A stored null is a present setting, not a missing one."""
-        resp = self.client.put(
-            self._url("core", "flag"), {"value": None}, format="json"
-        )
-        self.assertEqual(resp.status_code, 200)
-        resp = self.client.get(self._url("core", "flag"))
-        self.assertEqual(resp.status_code, 200)
-        self.assertIsNone(resp.data["value"])
 
     def test_get_sees_fresh_value_after_put(self):
         self.client.get(self._url("core", "theme"))  # warm any cache (404 path)
@@ -877,10 +756,12 @@ class SettingsModuleTests(UserTestMixin, APITestCase):
             seen_in_atomic.append(not dj_transaction.get_autocommit())
             return real(user, module, key, value)
 
-        with mock_patch("workspace.users.views.set_setting", side_effect=spy):
+        with mock_patch(
+            "workspace.users.services.settings.set_setting", side_effect=spy
+        ):
             resp = self.client.patch(
                 self._url("core"),
-                {"a": 1, "b": 2, "c": 3},
+                {"theme": "nord", "light_theme": "nord", "dark_theme": "dim"},
                 format="json",
             )
         self.assertEqual(resp.status_code, 200)
@@ -899,25 +780,6 @@ class SettingsModuleTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data, {})
         self.assertFalse(UserSetting.objects.filter(user=self.user).exists())
-
-    def test_patch_supports_json_value_types(self):
-        resp = self.client.patch(
-            self._url("core"),
-            {
-                "string": "hi",
-                "number": 42,
-                "list": [1, 2, 3],
-                "nested": {"a": 1},
-                "null_value": None,
-            },
-            format="json",
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data["string"], "hi")
-        self.assertEqual(resp.data["number"], 42)
-        self.assertEqual(resp.data["list"], [1, 2, 3])
-        self.assertEqual(resp.data["nested"], {"a": 1})
-        self.assertIsNone(resp.data["null_value"])
 
     def test_patch_invalidates_module_cache_so_subsequent_get_is_fresh(self):
         # Prime the module-level cache with an empty result.

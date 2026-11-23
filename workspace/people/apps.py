@@ -7,6 +7,11 @@ class PeopleConfig(AppConfig):
     name = "workspace.people"
 
     def ready(self):
+        from workspace.core.sidebar_settings import SidebarSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("people", SidebarSettings)
+
         import workspace.people.services.sync_log  # noqa: F401 - signal receivers
         from workspace.core.module_registry import ModuleInfo, registry
 

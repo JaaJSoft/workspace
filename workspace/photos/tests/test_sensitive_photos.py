@@ -633,7 +633,7 @@ class SensitivePreviewTests(TestCase):
         for key in ("reveal_sensitive_on_hover", "reveal_sensitive_in_viewer"):
             response = self.client.put(
                 f"/api/v1/settings/core/{key}",
-                {"value": "on"},
+                {"value": "maybe"},
                 content_type="application/json",
             )
 

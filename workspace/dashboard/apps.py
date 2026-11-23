@@ -7,6 +7,11 @@ class DashboardConfig(AppConfig):
     name = "workspace.dashboard"
 
     def ready(self):
+        from workspace.dashboard.user_settings import DashboardSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("dashboard", DashboardSettings)
+
         from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
 
         registry.register(

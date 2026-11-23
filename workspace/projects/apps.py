@@ -7,6 +7,11 @@ class ProjectsConfig(AppConfig):
     name = "workspace.projects"
 
     def ready(self):
+        from workspace.projects.user_settings import ProjectsSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("projects", ProjectsSettings)
+
         from workspace.core.module_registry import ModuleInfo, registry
 
         registry.register(

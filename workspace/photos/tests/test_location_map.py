@@ -214,7 +214,7 @@ class LocationMapPagesTests(TestCase):
         url = "/api/v1/settings/photos/show_map"
 
         refused = self.client.put(
-            url, {"value": "yes"}, content_type="application/json"
+            url, {"value": "maybe"}, content_type="application/json"
         )
         accepted = self.client.put(
             url, {"value": True}, content_type="application/json"

@@ -6,6 +6,11 @@ class UsersConfig(AppConfig):
     name = "workspace.users"
 
     def ready(self):
+        from workspace.users.settings_registry import user_settings_registry
+        from workspace.users.user_settings import ProfileSettings
+
+        user_settings_registry.register("profile", ProfileSettings)
+
         from django.contrib.auth.signals import user_logged_out
 
         from workspace.core.sse_registry import SSEProviderInfo, sse_registry

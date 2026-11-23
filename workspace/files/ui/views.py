@@ -56,6 +56,7 @@ from workspace.files.services.storage_analysis import (
     analyze_storage,
 )
 from workspace.files.services.tags import viewer_file_tags
+from workspace.files.user_settings import VIEW_MODES
 from workspace.files.views.share_links import _record_access
 from workspace.users.services.settings import get_module_settings
 
@@ -296,7 +297,7 @@ def _listing_view_mode(file_prefs):
     markup, and the toggle is rare enough to be a re-render.
     """
     view_mode = file_prefs.get("defaultViewMode")
-    if not isinstance(view_mode, str) or view_mode not in {"list", "mosaic"}:
+    if not isinstance(view_mode, str) or view_mode not in VIEW_MODES:
         return "list"
     return view_mode
 

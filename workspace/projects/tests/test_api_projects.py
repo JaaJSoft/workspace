@@ -42,7 +42,7 @@ class ProjectListCreateTests(ProjectTestMixin, APITestCase):
         self.assertEqual(project.statuses.count(), 4)
         self.assertEqual(project.type, Project.Type.KANBAN)
 
-    def test_create_rejects_group_user_is_not_in(self):
+    def test_create_attaches_a_group_the_creator_is_not_in(self):
         group = Group.objects.create(name="devs")
         self.client.force_authenticate(self.outsider)
         response = self.client.post(
@@ -50,7 +50,9 @@ class ProjectListCreateTests(ProjectTestMixin, APITestCase):
             {"name": "New", "groups": [group.pk]},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        project = Project.objects.get(uuid=response.data["uuid"])
+        self.assertEqual(list(project.groups.all()), [group])
 
     def test_create_with_groups_attaches_them(self):
         devs = Group.objects.create(name="devs")
@@ -142,7 +144,7 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_update_rejects_added_group_user_is_not_in(self):
+    def test_update_attaches_a_group_the_admin_is_not_in(self):
         group = Group.objects.create(name="devs")
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
@@ -150,11 +152,10 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
             {"groups": [group.pk]},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(self.project.groups.all()), [group])
 
-    def test_update_keeps_already_attached_foreign_group(self):
-        # Attached by another admin: keeping it in the list must not require
-        # the requesting admin to belong to it, only newly added groups do.
+    def test_update_keeps_a_group_another_admin_attached(self):
         foreign = Group.objects.create(name="ops")
         self.project.groups.add(foreign)
         mine = Group.objects.create(name="devs")

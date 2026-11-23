@@ -127,28 +127,6 @@ class ProjectSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_groups(self, groups):
-        # Only newly added groups require the requester's membership:
-        # a group attached by another admin must survive a list update
-        # (and be removable) without locking the two admins out.
-        attached = (
-            set(self.instance.groups.values_list("pk", flat=True))
-            if self.instance is not None
-            else set()
-        )
-        added = {group.pk for group in groups} - attached
-        if added:
-            mine = set(
-                self.context["request"]
-                .user.groups.filter(pk__in=added)
-                .values_list("pk", flat=True)
-            )
-            if added - mine:
-                raise serializers.ValidationError(
-                    _("You can only attach groups you belong to.")
-                )
-        return groups
-
     def validate(self, attrs):
         if (
             self.instance is not None

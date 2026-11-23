@@ -260,7 +260,7 @@ function projectGroupAccess(config) {
       );
       this.items = data.groups || [];
       try {
-        const resp = await fetch('/api/v1/users/groups');
+        const resp = await fetch('/api/v1/groups');
         if (resp.ok) this.available = await resp.json();
       } catch (e) {
         // Additions stay unavailable; attached chips still render and can
@@ -268,7 +268,7 @@ function projectGroupAccess(config) {
       }
     },
 
-    // Getter for the shared group selector: my groups not yet attached.
+    // Getter for the shared group selector: the groups not yet attached.
     selectableGroups() {
       const attached = this.items.map(function (g) {
         return String(g.id);

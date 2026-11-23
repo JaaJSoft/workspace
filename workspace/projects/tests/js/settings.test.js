@@ -272,11 +272,11 @@ test('projectGroupAccess.removeGroup PATCHes the reduced id list', async () => {
 test('projectGroupAccess.save surfaces the server field error and keeps items', async () => {
   const c = groupAccess(async () => ({
     ok: false,
-    json: async () => ({ groups: ['You can only attach groups you belong to.'] }),
+    json: async () => ({ groups: ['Personal projects cannot be attached to groups.'] }),
   }));
   c.items = [{ id: 1, name: 'devs' }];
   await c.addGroup({ id: 2, name: 'design' });
-  assert.equal(c.error, 'You can only attach groups you belong to.');
+  assert.equal(c.error, 'Personal projects cannot be attached to groups.');
   assert.equal(c.saved, false);
   assert.equal(c.busy, false);
   assert.deepEqual(c.items.map((g) => g.name), ['devs']);

@@ -164,7 +164,7 @@
             </span>
           </div>
           {% if writable %}
-            {% translate "Attach one of your groups" as group_placeholder %}
+            {% translate "Attach a group" as group_placeholder %}
             {% include "ui/partials/group_selector.html" with on_select_event="project-group-selected" local_source="selectableGroups()" placeholder=group_placeholder %}
           {% endif %}
           <div class="flex flex-wrap gap-2" x-show="items.length">

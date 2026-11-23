@@ -22,8 +22,8 @@ SIGNATURE = "AXNpZ25hdHVyZQ"
 
 class DeleteIdentityTests(TestCase):
     def setUp(self):
-        self.user, _signer, self.identity = make_account("leaving")
-        self.other, _signer, self.other_identity = make_account("staying")
+        self.user, _, self.identity = make_account("leaving")
+        self.other, _, self.other_identity = make_account("staying")
 
     def _vault(self, owner, *members):
         vault = make_vault(owner)

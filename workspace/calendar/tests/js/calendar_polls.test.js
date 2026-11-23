@@ -201,3 +201,20 @@ test('saving an edit does not clear a create still in flight', async () => {
   await creating;
   assert.equal(app.pollCreating, false);
 });
+
+// A slot the API refuses is reported per slot and per field, and a list too
+// short for the poll as a whole: the form shows the sentence either way.
+for (const [shape, body, shown] of [
+  ['one slot', { slots: [{}, { start: ['Datetime has wrong format.'] }] }, 'Datetime has wrong format.'],
+  ['the list', { slots: { non_field_errors: ['Too few slots.'] } }, 'Too few slots.'],
+  ['another field', { title: ['Required.'] }, 'Failed to create poll.'],
+]) {
+  test(`a refusal about ${shape} shows as a sentence in the form`, async () => {
+    const { app, requests } = makeApp();
+    app.pollForm = twoSlotForm('Standup');
+    const submitting = app.submitPoll();
+    requests[0].answer(body, 400);
+    await submitting;
+    assert.equal(app.pollFormError, shown);
+  });
+}

@@ -202,44 +202,24 @@ class PollListSerializer(serializers.ModelSerializer):
         return auth_count + guest_count
 
 
+class PollSlotInputSerializer(serializers.Serializer):
+    """A proposed time. ``uuid`` names a slot the poll already has, on update."""
+
+    uuid = serializers.UUIDField(required=False, allow_null=True)
+    start = serializers.DateTimeField()
+    end = serializers.DateTimeField(required=False, allow_null=True)
+
+
 class PollCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, default="", allow_blank=True)
-    slots = serializers.ListField(
-        child=serializers.DictField(),
-        min_length=2,
-    )
-
-    def validate_slots(self, value):
-        for i, slot in enumerate(value):
-            if "start" not in slot:
-                raise serializers.ValidationError(f'Slot {i}: "start" is required.')
-        return value
+    slots = PollSlotInputSerializer(many=True, min_length=2)
 
 
 class PollUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
-    slots = serializers.ListField(
-        child=serializers.DictField(),
-        min_length=2,
-        required=False,
-    )
-
-    def validate_slots(self, value):
-        for i, slot in enumerate(value):
-            if "start" not in slot:
-                raise serializers.ValidationError(f'Slot {i}: "start" is required.')
-            if "uuid" in slot and slot["uuid"]:
-                try:
-                    import uuid as _uuid
-
-                    _uuid.UUID(str(slot["uuid"]))
-                except ValueError:
-                    raise serializers.ValidationError(
-                        f"Slot {i}: invalid uuid."
-                    ) from None
-        return value
+    slots = PollSlotInputSerializer(many=True, min_length=2, required=False)
 
 
 class VoteItemSerializer(serializers.Serializer):

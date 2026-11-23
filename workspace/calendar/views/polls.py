@@ -208,11 +208,11 @@ class PollDetailView(APIView):
             submitted_uuids = {
                 slot_data["uuid"] for slot_data in d["slots"] if slot_data.get("uuid")
             }
-            existing = {str(s.uuid): s for s in poll.slots.all()}
+            existing = {s.uuid: s for s in poll.slots.all()}
 
             # Delete removed slots (cascade deletes their votes, so read
             # who voted on them first)
-            removed_uuids = set(existing.keys()) - submitted_uuids
+            removed_uuids = set(existing) - submitted_uuids
             voter_ids = []
             if removed_uuids:
                 voter_ids = list(
@@ -234,7 +234,7 @@ class PollDetailView(APIView):
                     slot.start = slot_data["start"]
                     slot.end = slot_data.get("end")
                     slot.position = i
-                    slot.save()
+                    slot.save(update_fields=["start", "end", "position"])
                 else:
                     PollSlot.objects.create(
                         poll=poll,

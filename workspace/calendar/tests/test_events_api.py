@@ -36,6 +36,17 @@ class EventListTests(CalendarTestMixin, APITestCase):
         resp = self.client.get(self.url, self._range_params())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_a_run_of_digits_as_a_date_is_a_400(self):
+        self.client.force_authenticate(self.owner)
+        digits = "9" * 30
+        for params in (
+            {"start": digits, "end": timezone.now().isoformat()},
+            {"after": digits},
+        ):
+            with self.subTest(params=params):
+                resp = self.client.get(self.url, params)
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_requires_start_and_end_params(self):
         self.client.force_authenticate(self.owner)
         resp = self.client.get(self.url)

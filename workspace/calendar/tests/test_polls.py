@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -135,6 +135,40 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         slots = resp.data["slots"]
         self.assertIsNotNone(slots[0]["end"])
         self.assertIsNone(slots[1]["end"])
+
+    def test_a_slot_whose_start_is_not_a_date_is_refused(self):
+        self.client.force_authenticate(self.owner)
+        for start in ("soon", "", 12, None, "2026-02-30T10:00:00Z"):
+            with self.subTest(start=start):
+                resp = self.client.post(
+                    "/api/v1/polls",
+                    {
+                        "title": "When?",
+                        "slots": [
+                            {"start": start},
+                            {"start": timezone.now().isoformat()},
+                        ],
+                    },
+                    format="json",
+                )
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("slots", resp.data)
+        self.assertFalse(Poll.objects.exists())
+
+    def test_slots_are_ordered_by_instant_not_by_spelling(self):
+        self.client.force_authenticate(self.owner)
+        # 08:00 UTC written with an offset sorts after 09:00 UTC as text.
+        earlier = "2026-06-01T10:00:00+02:00"
+        later = "2026-06-01T09:00:00Z"
+        resp = self.client.post(
+            "/api/v1/polls",
+            {"title": "When?", "slots": [{"start": later}, {"start": earlier}]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        poll = Poll.objects.get(uuid=resp.data["uuid"])
+        hours = [slot.start.astimezone(UTC).hour for slot in poll.slots.all()]
+        self.assertEqual(hours, [8, 9])
 
     def test_create_poll_requires_min_2_slots(self):
         self.client.force_authenticate(user=self.owner)

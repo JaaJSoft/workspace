@@ -6,11 +6,20 @@ Only providers with a configured CLIENT_ID will appear in the UI.
 
 import os
 
+from .env import env_bool, env_list
+
 # Bytes of attachments one outgoing message may carry. Common SMTP servers
 # refuse messages past 25-50 MB, and base64 grows them by a third on the wire.
 MAIL_MAX_ATTACHMENTS_SIZE = int(
     os.getenv("MAIL_MAX_ATTACHMENTS_SIZE", str(25 * 1024 * 1024))
 )
+
+# Mail connects to the IMAP and SMTP servers users type, so every connection
+# is vetted: loopback and link-local addresses are always refused, private
+# networks unless MAIL_ALLOW_PRIVATE_NETWORKS is on; hosts listed in
+# MAIL_ALLOWED_HOSTS skip the check entirely.
+MAIL_ALLOW_PRIVATE_NETWORKS = env_bool("MAIL_ALLOW_PRIVATE_NETWORKS", False)
+MAIL_ALLOWED_HOSTS = env_list("MAIL_ALLOWED_HOSTS")
 
 # Google (Gmail / Google Workspace)
 OAUTH_GOOGLE_CLIENT_ID = os.getenv("OAUTH_GOOGLE_CLIENT_ID", "")

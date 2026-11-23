@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
 from workspace.common.task_priority import INTERACTIVE_PRIORITY
+from workspace.common.url_guard import UnsafeUrl
 
 from ..models import MailAccount
 from ..serializers import (
@@ -152,30 +153,29 @@ class MailAccountTestView(APIView):
         from ..services.imap_connection import test_imap_connection
         from ..services.smtp import test_smtp_connection
 
-        imap_ok, imap_error = test_imap_connection(account)
-        smtp_ok, smtp_error = test_smtp_connection(account)
-
-        if imap_error:
-            logger.warning(
-                "IMAP test failed for %s: %s", scrub(account.email), scrub(imap_error)
-            )
-        if smtp_error:
-            logger.warning(
-                "SMTP test failed for %s: %s", scrub(account.email), scrub(smtp_error)
-            )
-
-        return Response(
-            {
-                "imap": {
-                    "success": imap_ok,
-                    "error": None if imap_ok else _("Connection failed"),
-                },
-                "smtp": {
-                    "success": smtp_ok,
-                    "error": None if smtp_ok else _("Connection failed"),
-                },
+        results = {}
+        for protocol, probe in (
+            ("imap", test_imap_connection),
+            ("smtp", test_smtp_connection),
+        ):
+            try:
+                ok, error = probe(account)
+            except UnsafeUrl as refusal:
+                # The guard writes its own message, safe to show as it is.
+                results[protocol] = {"success": False, "error": refusal.user_message}
+                continue
+            if error:
+                logger.warning(
+                    "%s test failed for %s: %s",
+                    protocol.upper(),
+                    scrub(account.email),
+                    scrub(error),
+                )
+            results[protocol] = {
+                "success": ok,
+                "error": None if ok else _("Connection failed"),
             }
-        )
+        return Response(results)
 
 
 @extend_schema(tags=["Mail - Accounts"])

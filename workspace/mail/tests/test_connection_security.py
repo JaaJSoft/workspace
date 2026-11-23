@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from imapclient.exceptions import IMAPClientError, LoginError
 
 from workspace.mail.models import MailAccount
@@ -201,6 +201,7 @@ class _AccountMixin:
                 self.assertNotIn(verb, line.upper())
 
 
+@override_settings(MAIL_ALLOWED_HOSTS=["127.0.0.1"])
 class ConnectImapSecurityTests(_AccountMixin, TestCase):
     def _connect(self, server, *, implicit_tls):
         self.account.imap_use_ssl = implicit_tls
@@ -273,6 +274,7 @@ class ConnectImapSecurityTests(_AccountMixin, TestCase):
         self.assertTrue(server.hung_up.wait(timeout=5))
 
 
+@override_settings(MAIL_ALLOWED_HOSTS=["127.0.0.1"])
 class ConnectSmtpSecurityTests(_AccountMixin, TestCase):
     def _connect(self, server, *, starttls):
         self.account.smtp_use_tls = starttls

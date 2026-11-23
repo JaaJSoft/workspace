@@ -10,7 +10,9 @@ from imapclient.datetime_util import datetime_to_INTERNALDATE
 from imapclient.exceptions import IMAPClientAbortError, IMAPClientError, ProtocolError
 from imapclient.response_parser import parse_response
 
+from workspace.common.url_guard import UnsafeUrl
 from workspace.mail.services import tls
+from workspace.mail.services.network_policy import check_mail_host
 
 # Default network timeout in seconds, for the connection and for every read
 # after it. Without one a server that stops responding mid-handshake hangs a
@@ -30,6 +32,7 @@ def connect_imap(account):
     connection in clear: ``starttls()`` raises when the server does not offer
     it, before any credential is sent. Both verify the server's certificate.
     """
+    check_mail_host(account.imap_host)
     context = tls.client_context()
     client = IMAPClient(
         account.imap_host,
@@ -146,10 +149,13 @@ def imap_session(account):
 
 
 def test_imap_connection(account):
-    """Test IMAP connectivity. Returns (success, error_message)."""
+    """Test IMAP connectivity. Returns (success, error_message); a server
+    mail may not connect to raises ``UnsafeUrl`` instead."""
     try:
         _close(connect_imap(account))
         return True, None
+    except UnsafeUrl:
+        raise
     except Exception as e:
         return False, str(e)
 

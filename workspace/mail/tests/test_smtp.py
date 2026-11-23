@@ -5,7 +5,7 @@ import ssl
 from email import message_from_bytes, message_from_string
 from unittest.mock import ANY, MagicMock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.mail.services.smtp import (
     SMTP_TIMEOUT,
@@ -258,6 +258,7 @@ class BuildDraftMessageTests(TestCase):
 # ── connect_smtp ────────────────────────────────────────────────
 
 
+@override_settings(MAIL_ALLOWED_HOSTS=["smtp.example.com"])
 class ConnectSmtpTests(TestCase):
     def assertVerifies(self, context):
         self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)

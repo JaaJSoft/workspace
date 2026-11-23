@@ -174,6 +174,8 @@ sync. AI features run in the worker too.
 |---|---|---|
 | `MAIL_SYNC_INTERVAL` | `300` | Seconds between two syncs of an account. |
 | `MAIL_MAX_ATTACHMENTS_SIZE` | 25 MB | Bytes of attachments one outgoing message may carry. Common SMTP servers refuse 25-50 MB, and encoding adds a third on the wire. |
+| `MAIL_ALLOW_PRIVATE_NETWORKS` | off | Allow IMAP and SMTP servers on private networks (10/8, 172.16/12, 192.168/16, fc00::/7, carrier-grade NAT). |
+| `MAIL_ALLOWED_HOSTS` | empty | Comma-separated server names trusted as they are, skipping every address check below. |
 
 ### OAuth2 sign-in
 
@@ -214,6 +216,21 @@ mail server with a self-signed or private-CA certificate is refused until that
 authority is trusted: add it to the system store of the web and worker
 containers, or point `SSL_CERT_FILE` at a PEM bundle that contains it.
 
+### Server addresses
+
+Mail connects to whatever server a user types, so the address is checked
+before each connection: loopback, link-local (cloud metadata), multicast and
+reserved addresses are always refused, private networks unless
+`MAIL_ALLOW_PRIVATE_NETWORKS` is on. A server listed in `MAIL_ALLOWED_HOSTS`
+skips the check: list only servers you would connect to yourself. So do the
+servers of the generic OAuth2 provider, which the administrator chose.
+
+An account whose server is refused keeps its messages and stops syncing; its
+last sync error says why, and so does **Test connection**.
+
+The address checked is the one connected to, which defeats DNS rebinding.
+TLS still runs against the server's name.
+
 ### Stored data
 
 - Passwords and OAuth tokens are encrypted with a key derived from
@@ -223,7 +240,8 @@ containers, or point `SSL_CERT_FILE` at a PEM bundle that contains it.
   storage under `mail/attachments/`.
 - **Detect** reads the provider's autoconfig file from its domain, then from
   Mozilla's database (`autoconfig.thunderbird.net`). It never connects to a
-  private address, so a mail server on the local network is entered by hand.
+  private address, so a mail server on the local network is entered by hand,
+  once the administrator has opened it (see *Server addresses*).
 
 ### Monitoring
 

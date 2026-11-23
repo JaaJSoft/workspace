@@ -75,8 +75,18 @@ def check_remote_url(url: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:
         raise UnsafeUrl(_("Only http:// and https:// URLs are supported."))
     if not host:
         raise UnsafeUrl(_("The URL has no host."))
+    check_remote_host(host, policy)
+
+
+def check_remote_host(host: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:
+    """``check_remote_url`` for a protocol that has a server name and no URL:
+    refuse a ``localhost`` name or an IP address that is off limits, without
+    resolving anything."""
+    host = host.strip().lower()
     if host in policy.allowed_hosts:
         return
+    if not host:
+        raise _unresolved(host)
     if host == "localhost" or host.endswith(".localhost"):
         raise _off_limits(host)
     try:
@@ -84,6 +94,38 @@ def check_remote_url(url: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:
     except ValueError:
         return
     _check_address(address, host, policy)
+
+
+def connect_vetted(
+    host: str,
+    port: int,
+    timeout,
+    policy: NetworkPolicy = PUBLIC_INTERNET,
+    source_address=None,
+) -> socket.socket:
+    """A TCP connection to *host* that only dials an address *policy* accepts:
+    ``guarded_transport`` for a client library that is handed its socket.
+
+    The name is resolved once, every answer is vetted before the first is
+    dialed, and the addresses that were checked are the ones tried, in the
+    resolver's order. Letting the library resolve the name again is what would
+    let it answer the check with a public address and the connection with a
+    private one. The caller still runs TLS against the name, so SNI and the
+    certificate check are those of the server it asked for.
+    """
+    name = host.strip().lower()
+    if name in policy.allowed_hosts:
+        return socket.create_connection((host, port), timeout, source_address)
+    check_remote_host(name, policy)
+    *others, last = _vetted_addresses(name, policy)
+    for address in others:
+        try:
+            return socket.create_connection(
+                (str(address), port), timeout, source_address
+            )
+        except OSError:
+            continue
+    return socket.create_connection((str(last), port), timeout, source_address)
 
 
 def check_resolved_url(url: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:

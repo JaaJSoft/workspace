@@ -263,7 +263,7 @@ class ConnectSmtpTests(TestCase):
         self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
         self.assertTrue(context.check_hostname)
 
-    @patch("workspace.mail.services.smtp.smtplib.SMTP")
+    @patch("workspace.mail.services.smtp.GuardedSMTP")
     def test_tls_connection(self, mock_smtp_cls):
         mock_server = MagicMock()
         mock_smtp_cls.return_value = mock_server
@@ -285,7 +285,7 @@ class ConnectSmtpTests(TestCase):
         mock_server.login.assert_called_with("alice", "secret")
         self.assertEqual(server, mock_server)
 
-    @patch("workspace.mail.services.smtp.smtplib.SMTP_SSL")
+    @patch("workspace.mail.services.smtp.GuardedSMTPSSL")
     def test_ssl_connection(self, mock_smtp_ssl_cls):
         mock_server = MagicMock()
         mock_smtp_ssl_cls.return_value = mock_server

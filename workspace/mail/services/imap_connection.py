@@ -6,11 +6,15 @@ import mmap
 
 from django.utils import timezone
 from imapclient import IMAPClient
+from imapclient import imap4 as imapclient_imap4
+from imapclient import tls as imapclient_tls
 from imapclient.datetime_util import datetime_to_INTERNALDATE
 from imapclient.exceptions import IMAPClientAbortError, IMAPClientError, ProtocolError
 from imapclient.response_parser import parse_response
 
+from workspace.common.url_guard import UnsafeUrl
 from workspace.mail.services import tls
+from workspace.mail.services.network_policy import open_mail_socket
 
 # Default network timeout in seconds, for the connection and for every read
 # after it. Without one a server that stops responding mid-handshake hangs a
@@ -23,15 +27,49 @@ IMAP_TIMEOUT = 30
 ConnectionLost = (IMAPClientAbortError, ProtocolError, OSError)
 
 
+class _GuardedIMAP4(imapclient_imap4.IMAP4WithTimeout):
+    def _create_socket(self, timeout=None):
+        return open_mail_socket(
+            self.host, self.port, self._timeout if timeout is None else timeout
+        )
+
+
+class _GuardedIMAP4TLS(imapclient_tls.IMAP4_TLS):
+    def _create_socket(self, timeout=None):
+        sock = open_mail_socket(
+            self.host, self.port, self._timeout if timeout is None else timeout
+        )
+        return imapclient_tls.wrap_socket(sock, self.ssl_context, self.host)
+
+
+class GuardedIMAPClient(IMAPClient):
+    """IMAPClient on a socket that only dials an address mail may connect to.
+
+    IMAPClient opens its socket by name, and a name can answer a check with
+    one address and the connection with another. These classes hand it the
+    socket ``open_mail_socket`` vetted instead. They lean on how IMAPClient
+    builds its connection (``_create_IMAP4``, ``_create_socket``): the
+    connection security tests and the live IMAP tests fail if an upgrade
+    moves it.
+    """
+
+    def _create_IMAP4(self):
+        timeout = self._timeout.connect
+        if self.ssl:
+            return _GuardedIMAP4TLS(self.host, self.port, self.ssl_context, timeout)
+        return _GuardedIMAP4(self.host, self.port, timeout)
+
+
 def connect_imap(account):
     """Open and authenticate an IMAP connection for the given account.
 
     ``imap_use_ssl`` picks implicit TLS (on) or STARTTLS (off). There is no
     connection in clear: ``starttls()`` raises when the server does not offer
     it, before any credential is sent. Both verify the server's certificate.
+    A server mail may not connect to raises ``UnsafeUrl``.
     """
     context = tls.client_context()
-    client = IMAPClient(
+    client = GuardedIMAPClient(
         account.imap_host,
         account.imap_port,
         ssl=account.imap_use_ssl,
@@ -146,10 +184,13 @@ def imap_session(account):
 
 
 def test_imap_connection(account):
-    """Test IMAP connectivity. Returns (success, error_message)."""
+    """Test IMAP connectivity. Returns (success, error_message); a server
+    mail may not connect to raises ``UnsafeUrl`` instead."""
     try:
         _close(connect_imap(account))
         return True, None
+    except UnsafeUrl:
+        raise
     except Exception as e:
         return False, str(e)
 

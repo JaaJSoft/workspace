@@ -3,6 +3,14 @@
 const SYNC_POLL_INTERVAL_MS = 2000;
 const SYNC_POLL_ATTEMPTS = 150;
 
+// The first sentence of a validation answer ({field: [sentence]}), or ''.
+function mailFirstFieldError(data) {
+  for (const messages of Object.values(data || {})) {
+    if (Array.isArray(messages) && messages.length) return String(messages[0]);
+  }
+  return '';
+}
+
 window.mailAccountsMixin = function mailAccountsMixin() {
   return {
     // ----- Accounts -----
@@ -84,7 +92,7 @@ window.mailAccountsMixin = function mailAccountsMixin() {
           this.syncAccount(account.uuid);
         } else {
           const data = await res.json().catch(() => ({}));
-          this.accountError = data.detail || JSON.stringify(data) || gettext('Failed to add account');
+          this.accountError = data.detail || mailFirstFieldError(data) || gettext('Failed to add account');
         }
       } catch (e) {
         this.accountError = gettext('Network error. Please check your connection and try again.');
@@ -255,7 +263,7 @@ window.mailAccountsMixin = function mailAccountsMixin() {
           this.closeEditAccount();
         } else {
           const data = await res.json().catch(() => ({}));
-          this.editAccountError = data.detail || JSON.stringify(data) || gettext('Failed to save account');
+          this.editAccountError = data.detail || mailFirstFieldError(data) || gettext('Failed to save account');
         }
       } catch (e) {
         this.editAccountError = gettext('Network error. Please check your connection and try again.');

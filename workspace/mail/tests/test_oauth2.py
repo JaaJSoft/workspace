@@ -263,7 +263,7 @@ class ConnectImapOAuth2Test(TestCase):
         )
         self.account.save()
 
-    @patch("workspace.mail.services.imap_connection.IMAPClient")
+    @patch("workspace.mail.services.imap_connection.GuardedIMAPClient")
     @patch(
         "workspace.mail.services.oauth2.get_valid_access_token",
         return_value="test-token",
@@ -277,7 +277,7 @@ class ConnectImapOAuth2Test(TestCase):
         client.oauth2_login.assert_called_once_with("user@gmail.com", "test-token")
         client.login.assert_not_called()
 
-    @patch("workspace.mail.services.imap_connection.IMAPClient")
+    @patch("workspace.mail.services.imap_connection.GuardedIMAPClient")
     @patch(
         "workspace.mail.services.oauth2.get_valid_access_token",
         return_value=None,
@@ -294,7 +294,7 @@ class ConnectImapOAuth2Test(TestCase):
         client.oauth2_login.assert_not_called()
         client.shutdown.assert_called_once()
 
-    @patch("workspace.mail.services.imap_connection.IMAPClient")
+    @patch("workspace.mail.services.imap_connection.GuardedIMAPClient")
     def test_uses_login_for_password_accounts(self, mock_client):
         self.account.auth_method = "password"
         self.account.set_password("mypass")
@@ -330,14 +330,14 @@ class ConnectSmtpOAuth2Test(TestCase):
         )
         self.account.save()
 
-    @patch("workspace.mail.services.smtp.smtplib")
+    @patch("workspace.mail.services.smtp.GuardedSMTP")
     @patch(
         "workspace.mail.services.oauth2.get_valid_access_token",
         return_value="smtp-token",
     )
-    def test_uses_xoauth2_for_oauth2_accounts(self, mock_token, mock_smtplib):
+    def test_uses_xoauth2_for_oauth2_accounts(self, mock_token, mock_smtp):
         mock_server = MagicMock()
-        mock_smtplib.SMTP.return_value = mock_server
+        mock_smtp.return_value = mock_server
         from workspace.mail.services.smtp import connect_smtp
 
         connect_smtp(self.account)
@@ -347,13 +347,13 @@ class ConnectSmtpOAuth2Test(TestCase):
         self.assertEqual(args[0], "AUTH")
         self.assertIn("XOAUTH2", args[1])
 
-    @patch("workspace.mail.services.smtp.smtplib")
-    def test_uses_login_for_password_accounts(self, mock_smtplib):
+    @patch("workspace.mail.services.smtp.GuardedSMTP")
+    def test_uses_login_for_password_accounts(self, mock_smtp):
         self.account.auth_method = "password"
         self.account.set_password("mypass")
         self.account.save()
         mock_server = MagicMock()
-        mock_smtplib.SMTP.return_value = mock_server
+        mock_smtp.return_value = mock_server
         from workspace.mail.services.smtp import connect_smtp
 
         connect_smtp(self.account)

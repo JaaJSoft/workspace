@@ -153,6 +153,30 @@ class AccountHostTests(APITestCase):
         account.refresh_from_db()
         self.assertEqual(account.smtp_host, "imap.example.org")
 
+    def test_a_port_outside_the_valid_range_is_refused(self):
+        for field in ("imap_port", "smtp_port"):
+            for port in (0, -1, 65536, 10**12):
+                with self.subTest(field=field, port=port):
+                    response = self.client.post(
+                        "/api/v1/mail/accounts",
+                        self._payload(**{field: port}),
+                        format="json",
+                    )
+                    self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                    self.assertIn(field, response.data)
+        self.assertFalse(MailAccount.objects.exists())
+
+    def test_an_account_cannot_be_moved_to_a_port_out_of_range(self):
+        account = _account(self.user, "imap.example.org")
+        response = self.client.patch(
+            f"/api/v1/mail/accounts/{account.uuid}",
+            {"imap_port": 70000},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        account.refresh_from_db()
+        self.assertEqual(account.imap_port, 993)
+
     def test_a_named_server_is_accepted_without_a_lookup(self):
         with FakeNetwork({}) as net:
             response = self.client.post(

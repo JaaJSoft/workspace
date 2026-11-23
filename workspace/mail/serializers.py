@@ -61,6 +61,11 @@ class MailAccountSerializer(serializers.ModelSerializer):
         ]
 
 
+class _PortField(serializers.IntegerField):
+    def __init__(self, **kwargs):
+        super().__init__(required=False, min_value=1, max_value=65535, **kwargs)
+
+
 class _MailHostsMixin:
     """Refuses a server mail may not connect to. A name passes here and is
     resolved and checked each time a connection is opened."""
@@ -85,10 +90,10 @@ class MailAccountCreateSerializer(_MailHostsMixin, serializers.Serializer):
         max_length=255, required=False, default="", allow_blank=True
     )
     imap_host = serializers.CharField(max_length=255)
-    imap_port = serializers.IntegerField(required=False, default=993)
+    imap_port = _PortField(default=993)
     imap_use_ssl = serializers.BooleanField(required=False, default=True)
     smtp_host = serializers.CharField(max_length=255)
-    smtp_port = serializers.IntegerField(required=False, default=587)
+    smtp_port = _PortField(default=587)
     smtp_use_tls = serializers.BooleanField(required=False, default=True)
     username = serializers.CharField(max_length=255)
     password = serializers.CharField(write_only=True)
@@ -100,10 +105,10 @@ class MailAccountUpdateSerializer(_MailHostsMixin, serializers.Serializer):
     )
     signature = serializers.CharField(required=False, allow_blank=True, max_length=5000)
     imap_host = serializers.CharField(max_length=255, required=False)
-    imap_port = serializers.IntegerField(required=False)
+    imap_port = _PortField()
     imap_use_ssl = serializers.BooleanField(required=False)
     smtp_host = serializers.CharField(max_length=255, required=False)
-    smtp_port = serializers.IntegerField(required=False)
+    smtp_port = _PortField()
     smtp_use_tls = serializers.BooleanField(required=False)
     username = serializers.CharField(max_length=255, required=False)
     password = serializers.CharField(write_only=True, required=False)

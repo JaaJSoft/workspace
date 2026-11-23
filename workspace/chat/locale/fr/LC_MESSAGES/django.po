@@ -1119,12 +1119,6 @@ msgstr "Revenir à la grille"
 msgid "Leave call"
 msgstr "Quitter l’appel"
 
-#. Translators: a date format for Django's date filter; "M j" reads "Feb 5".
-#: ui/templatetags/chat_tags.py
-msgctxt "chat day separator format"
-msgid "M j"
-msgstr "j N"
-
 #: ui/views.py
 #, python-format
 msgid "sent a file"

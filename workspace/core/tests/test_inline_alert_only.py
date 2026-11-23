@@ -14,8 +14,11 @@ from django.test import SimpleTestCase
 
 WORKSPACE = Path(__file__).resolve().parents[2]
 
-# The class attribute, static or bound, on one line or spread over several.
-CLASS_ATTRIBUTE = re.compile(r'(?<![\w-])(?::|x-bind:)?class="([^"]*)"', re.DOTALL)
+# The class attribute, static or bound, in either quote, on one line or several.
+CLASS_ATTRIBUTE = re.compile(
+    r"""(?<![\w-])(?::|x-bind:)?class=(?P<quote>["'])(?P<value>.*?)(?P=quote)""",
+    re.DOTALL,
+)
 ALERT_CLASS = re.compile(
     r"(?<![\w:/-])alert(?:-(?:info|success|warning|error|sm))?(?![\w-])"
 )
@@ -31,9 +34,10 @@ def _templates():
 def alert_classes(text):
     """``(line, class value)`` of each class attribute naming daisyUI's alert."""
     for attribute in CLASS_ATTRIBUTE.finditer(text):
-        if ALERT_CLASS.search(attribute.group(1)):
+        value = attribute.group("value")
+        if ALERT_CLASS.search(value):
             line = text.count("\n", 0, attribute.start()) + 1
-            yield line, " ".join(attribute.group(1).split())
+            yield line, " ".join(value.split())
 
 
 class InlineAlertOnlyTests(SimpleTestCase):
@@ -71,6 +75,14 @@ class InlineAlertOnlyTests(SimpleTestCase):
                     "<div :class=\"ok ? 'alert-success' : ''\">"
                 )
             ],
+            [1],
+        )
+        self.assertEqual(
+            [line for line, _ in alert_classes("<div class='alert alert-warning'>")],
+            [1],
+        )
+        self.assertEqual(
+            [line for line, _ in alert_classes("<div :class='{ \"alert\": ok }'>")],
             [1],
         )
 

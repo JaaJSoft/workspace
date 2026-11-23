@@ -28,7 +28,7 @@ class FileEntryBrowserTests(VaultBrowserCase):
         self._open_vault()
         self._create_entry("GitHub", "octocat", "hunter2")
         self._create_folder("Banking")
-        notice = self.page.locator("inline-alert[type=success]")
+        notice = self.page.locator("inline-alert[type=success]", has_text="Moved")
 
         self._move_through_the_dialog("GitHub", "Banking")
         notice.get_by_text("Moved 1 entry to Banking.").wait_for(timeout=30000)

@@ -12,7 +12,8 @@
   <inline-alert type="success" icon="clipboard-check" toast>
   <span>
     <span x-text="clipboard.label"></span> copied - clears in
-    <span class="font-medium" x-text="clipboard.secondsLeft"></span>s
+    {# Off: inline-alert is role=alert, which would announce every tick. #}
+    <span class="font-medium" aria-live="off" x-text="clipboard.secondsLeft"></span>s
   </span>
   <button
     slot="actions"

@@ -7,7 +7,9 @@ from workspace.common.url_guard import (
     NetworkPolicy,
     ResponseTooLarge,
     UnsafeUrl,
+    check_remote_host,
     check_remote_url,
+    check_resolved_host,
     check_resolved_url,
     guarded_transport,
     read_capped,
@@ -200,6 +202,64 @@ class CheckResolvedUrlTests(SimpleTestCase):
         policy = NetworkPolicy(allowed_hosts=["nas.local"])
         with FakeNetwork({}) as net:
             check_resolved_url("http://nas.local/", policy)
+        self.assertEqual(net.lookups, [])
+
+
+class CheckRemoteHostTests(SimpleTestCase):
+    def test_a_name_is_left_to_whoever_connects(self):
+        with FakeNetwork({}) as net:
+            check_remote_host("imap.example.org")
+        self.assertEqual(net.lookups, [])
+
+    def test_loopback_and_link_local_are_refused_whatever_the_policy(self):
+        for host in (
+            "127.0.0.1",
+            "::1",
+            "localhost",
+            "mail.localhost",
+            "169.254.169.254",
+        ):
+            with self.subTest(host=host), self.assertRaises(UnsafeUrl):
+                check_remote_host(host, LAN)
+
+    def test_a_private_address_follows_the_policy(self):
+        with self.assertRaisesRegex(UnsafeUrl, "private network"):
+            check_remote_host("192.168.1.10")
+        check_remote_host("192.168.1.10", LAN)
+
+    def test_an_allow_listed_host_passes(self):
+        check_remote_host("127.0.0.1", NetworkPolicy(allowed_hosts=["127.0.0.1"]))
+
+    def test_a_missing_name_is_refused(self):
+        with self.assertRaises(UnsafeUrl):
+            check_remote_host("  ")
+
+
+class CheckResolvedHostTests(SimpleTestCase):
+    def test_a_name_resolving_to_a_public_address_passes(self):
+        with FakeNetwork({"imap.example.org": [[PUBLIC]]}) as net:
+            check_resolved_host("imap.example.org")
+        self.assertEqual(net.lookups, ["imap.example.org"])
+
+    def test_a_name_resolving_to_a_private_address_is_refused(self):
+        with FakeNetwork({"imap.example.org": [[PUBLIC, "10.0.0.5"]]}):
+            with self.assertRaisesRegex(UnsafeUrl, "private network"):
+                check_resolved_host("imap.example.org")
+
+    def test_a_name_resolving_to_loopback_is_refused_whatever_the_policy(self):
+        with FakeNetwork({"imap.example.org": [["127.0.0.1"]]}):
+            with self.assertRaises(UnsafeUrl):
+                check_resolved_host("imap.example.org", LAN)
+
+    def test_an_unresolvable_name_is_refused(self):
+        with FakeNetwork({}):
+            with self.assertRaisesRegex(UnsafeUrl, "could not be resolved"):
+                check_resolved_host("nope.invalid")
+
+    def test_an_allow_listed_host_is_not_resolved(self):
+        policy = NetworkPolicy(allowed_hosts=["mail.lan"])
+        with FakeNetwork({}) as net:
+            check_resolved_host("mail.lan", policy)
         self.assertEqual(net.lookups, [])
 
 

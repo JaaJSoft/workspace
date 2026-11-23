@@ -109,6 +109,14 @@ msgstr "Le %(date)s, %(sender)s a écrit :"
 msgid "Forwarded message from %(sender)s:"
 msgstr "Message transféré de %(sender)s :"
 
+#: services/network_policy.py
+msgid ""
+"Ask the administrator to allow private networks for mail if your mail server "
+"lives there."
+msgstr ""
+"Demandez à l’administrateur d’autoriser les réseaux privés pour le mail si "
+"votre serveur de messagerie s’y trouve."
+
 #: services/oauth2.py
 #, python-format
 msgid "Mail account %(email)s disconnected"

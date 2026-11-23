@@ -13,7 +13,9 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
 from workspace.common.logging import scrub
+from workspace.common.url_guard import UnsafeUrl
 from workspace.mail.services import tls
+from workspace.mail.services.network_policy import check_mail_host
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ def connect_smtp(account):
     ``smtp_use_tls`` picks STARTTLS (on) or implicit TLS (off), and both verify
     the server's certificate before any credential is sent.
     """
+    check_mail_host(account.smtp_host)
     context = tls.client_context()
     if account.smtp_use_tls:
         server = smtplib.SMTP(
@@ -62,11 +65,14 @@ def connect_smtp(account):
 
 
 def test_smtp_connection(account):
-    """Test SMTP connectivity. Returns (success, error_message)."""
+    """Test SMTP connectivity. Returns (success, error_message); a server
+    mail may not connect to raises ``UnsafeUrl`` instead."""
     try:
         server = connect_smtp(account)
         server.quit()
         return True, None
+    except UnsafeUrl:
+        raise
     except Exception as e:
         return False, str(e)
 

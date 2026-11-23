@@ -37,7 +37,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from imapclient import IMAPClient
 
 from workspace.common.booleans import is_truthy
@@ -116,6 +116,8 @@ def _mail(subject, body="Hello.", message_id=None):
     return message.as_bytes()
 
 
+# The test servers listen on loopback, which mail never dials unasked.
+@override_settings(MAIL_ALLOWED_HOSTS=[HOST])
 class LiveImapCase(TestCase):
     port = PORT
 

@@ -4,6 +4,8 @@ import mistune
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
+from workspace.common.url_guard import UnsafeUrl, check_remote_host
+
 from .models import (
     MailAccount,
     MailAttachment,
@@ -16,6 +18,7 @@ from .models import (
 )
 from .services.imap_parse import sanitize_mail_html
 from .services.inline_images import InlineImages
+from .services.network_policy import mail_network_policy
 from .services.remote_images import has_remote_images
 from .services.rules.schema import (
     SchemaError,
@@ -58,7 +61,25 @@ class MailAccountSerializer(serializers.ModelSerializer):
         ]
 
 
-class MailAccountCreateSerializer(serializers.Serializer):
+class _MailHostsMixin:
+    """Refuses a server mail may not connect to. A name passes here and is
+    resolved and checked each time a connection is opened."""
+
+    def _allowed(self, host):
+        try:
+            check_remote_host(host, mail_network_policy())
+        except UnsafeUrl as exc:
+            raise serializers.ValidationError(exc.user_message) from None
+        return host
+
+    def validate_imap_host(self, value):
+        return self._allowed(value)
+
+    def validate_smtp_host(self, value):
+        return self._allowed(value)
+
+
+class MailAccountCreateSerializer(_MailHostsMixin, serializers.Serializer):
     email = serializers.EmailField()
     display_name = serializers.CharField(
         max_length=255, required=False, default="", allow_blank=True
@@ -73,7 +94,7 @@ class MailAccountCreateSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
-class MailAccountUpdateSerializer(serializers.Serializer):
+class MailAccountUpdateSerializer(_MailHostsMixin, serializers.Serializer):
     display_name = serializers.CharField(
         max_length=255, required=False, allow_blank=True
     )

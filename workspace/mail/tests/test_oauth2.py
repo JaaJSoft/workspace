@@ -241,6 +241,7 @@ class GetValidAccessTokenTests(TestCase):
         mock_refresh.assert_called_once()
 
 
+@override_settings(MAIL_ALLOWED_HOSTS=["imap.gmail.com", "smtp.gmail.com"])
 class ConnectImapOAuth2Test(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="imapuser", password="pass")
@@ -308,6 +309,7 @@ class ConnectImapOAuth2Test(TestCase):
         client.oauth2_login.assert_not_called()
 
 
+@override_settings(MAIL_ALLOWED_HOSTS=["imap.gmail.com", "smtp.gmail.com"])
 class ConnectSmtpOAuth2Test(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="smtpuser", password="pass")

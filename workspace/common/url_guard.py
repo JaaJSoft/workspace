@@ -75,8 +75,18 @@ def check_remote_url(url: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:
         raise UnsafeUrl(_("Only http:// and https:// URLs are supported."))
     if not host:
         raise UnsafeUrl(_("The URL has no host."))
+    check_remote_host(host, policy)
+
+
+def check_remote_host(host: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:
+    """``check_remote_url`` for a protocol that has a server name and no URL:
+    refuse a ``localhost`` name or an IP address that is off limits, without
+    resolving anything."""
+    host = host.strip().lower()
     if host in policy.allowed_hosts:
         return
+    if not host:
+        raise _unresolved(host)
     if host == "localhost" or host.endswith(".localhost"):
         raise _off_limits(host)
     try:
@@ -84,6 +94,23 @@ def check_remote_url(url: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:
     except ValueError:
         return
     _check_address(address, host, policy)
+
+
+def check_resolved_host(host: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:
+    """``check_remote_host``, then resolve the name and refuse it when any
+    answer is off limits.
+
+    For a client library that opens its own socket. Whoever connects resolves
+    the name again, so this narrows what the connection can reach without
+    pinning it the way ``guarded_transport`` does: enough where the server has
+    to prove its name before anything is sent (TLS with a verified
+    certificate), since a name re-pointed between the two lookups then gets a
+    refused handshake, not a conversation.
+    """
+    check_remote_host(host, policy)
+    host = host.strip().lower()
+    if host not in policy.allowed_hosts:
+        _vetted_addresses(host, policy)
 
 
 def check_resolved_url(url: str, policy: NetworkPolicy = PUBLIC_INTERNET) -> None:

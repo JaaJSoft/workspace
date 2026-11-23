@@ -741,6 +741,23 @@ class ExternalCalendarAPITests(APITestCase):
             [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
         )
 
+    @patch("workspace.calendar.views.external.sync_external_calendar_task")
+    def test_create_survives_a_first_sync_that_cannot_be_sent(self, mock_task):
+        mock_task.apply_async.side_effect = RuntimeError("broker down")
+        self.client.force_authenticate(self.user)
+
+        with self.assertLogs(level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                resp = self.client.post(
+                    self.url,
+                    {"url": "https://example.com/feed.ics", "name": "Feed"},
+                )
+
+        self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
+        self.assertTrue(
+            ExternalCalendar.objects.filter(calendar__owner=self.user).exists()
+        )
+
     def test_list_external_calendars(self):
         cal = Calendar.objects.create(name="Ext1", owner=self.user)
         ExternalCalendar.objects.create(calendar=cal, url="https://example.com/1.ics")

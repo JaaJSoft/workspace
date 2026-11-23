@@ -54,11 +54,13 @@ class ExternalCalendarListView(APIView):
         )
         ext = ExternalCalendar.objects.select_related("calendar").get(pk=ext.pk)
 
-        # A worker that starts before the commit finds no such calendar.
+        # After the commit: a worker starting earlier finds no such calendar.
+        # Robust: the periodic sync picks up a feed whose first sync was not sent.
         transaction.on_commit(
             lambda: sync_external_calendar_task.apply_async(
                 [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
-            )
+            ),
+            robust=True,
         )
 
         return Response(

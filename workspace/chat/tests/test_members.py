@@ -306,6 +306,43 @@ class RenameConversationTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_a_title_or_a_description_that_is_not_text_is_refused(self):
+        self.client.force_authenticate(self.creator)
+        for body in (
+            {"title": ["Renamed"]},
+            {"title": {"text": "Renamed"}},
+            {"title": True},
+            {"description": ["About"]},
+        ):
+            with self.subTest(body=body):
+                resp = self.client.patch(self.url(self.group.uuid), body, format="json")
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.title, "Test Group")
+
+    def test_a_title_longer_than_the_column_is_refused(self):
+        self.client.force_authenticate(self.creator)
+        resp = self.client.patch(
+            self.url(self.group.uuid), {"title": "x" * 256}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_body_naming_neither_field_is_refused(self):
+        self.client.force_authenticate(self.creator)
+        resp = self.client.patch(self.url(self.group.uuid), {}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_null_description_clears_it(self):
+        self.client.force_authenticate(self.creator)
+        self.group.description = "About"
+        self.group.save(update_fields=["description"])
+        resp = self.client.patch(
+            self.url(self.group.uuid), {"description": None}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.description, "")
+
 
 class ConversationDescriptionTests(ChatTestMixin, APITestCase):
     """Tests for PATCH /api/v1/chat/conversations/<id> (description)"""

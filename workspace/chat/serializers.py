@@ -335,6 +335,23 @@ class NotificationLevelSerializer(serializers.Serializer):
     )
 
 
+class ConversationUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255, required=False)
+    description = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+
+    def validate_description(self, value):
+        return value or ""
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError(
+                gettext("No fields to update. Provide title or description.")
+            )
+        return attrs
+
+
 class ConversationCreateSerializer(serializers.Serializer):
     member_ids = serializers.ListField(
         child=serializers.IntegerField(),

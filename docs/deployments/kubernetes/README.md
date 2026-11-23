@@ -25,6 +25,8 @@ All containers run in a single pod:
 | **beat**   | Celery beat (task scheduler)     | `ghcr.io/jaajsoft/workspace:main` |
 | **redis**  | Cache and Celery broker          | `redis:7-alpine`                  |
 
+`main` is the edge build: it follows the main branch. For a deployment that only moves when you decide, replace it in `app.yaml` with a release tag.
+
 An **initContainer** (`migrate`) runs database migrations before the pod starts.
 
 The three Workspace containers run the same image and command; `PROCESS_TYPE` picks what each one starts. The worker and scheduler options are listed under [Processes](../README.md#processes).
@@ -76,7 +78,7 @@ kubectl apply -f ingress.yaml
 
 | Key            | Description                                                           |
 |----------------|-----------------------------------------------------------------------|
-| `SECRET_KEY`              | Django secret key. **Must be changed** before deploying.              |
+| `SECRET_KEY`              | Django secret key. **Must be changed**: the app refuses to start on the placeholder. |
 | `DATABASE_URL`            | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
 | `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key. `manage.py generate_vapid_keys` prints raw base64url; PEM and base64url DER are also accepted |

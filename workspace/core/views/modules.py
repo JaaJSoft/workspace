@@ -4,9 +4,9 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.common.cache import cached_response
 from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import registry
+from workspace.core.services.module_visibility import user_can_see_module
 
 
 class ModulesView(CacheControlMixin, APIView):
@@ -15,9 +15,12 @@ class ModulesView(CacheControlMixin, APIView):
     @extend_schema(
         tags=["Modules"],
         summary="List workspace modules",
-        description="Returns all registered workspace modules.",
+        description="Returns the registered workspace modules the caller may see.",
     )
-    @cached_response(3600, per_user=False)
     def get(self, request):
-        modules = [asdict(m) for m in registry.get_all()]
+        modules = [
+            asdict(module)
+            for module in registry.get_all()
+            if user_can_see_module(request.user, module)
+        ]
         return Response({"results": modules})

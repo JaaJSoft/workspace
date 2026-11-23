@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from .env import env_bool, env_list
+from .env import env_bool, env_list, env_secret_key
 
 # Fix MIME types for JavaScript modules on Windows
 mimetypes.add_type("application/javascript", ".js", True)
@@ -17,16 +17,11 @@ mimetypes.add_type("application/javascript", ".mjs", True)
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv(
-    "SECRET_KEY", "django-insecure-(apvd+h#1t_@zz504ks3ek2q_4*wm!p+#!(vte70q*xru47-zj"
-)
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DEBUG", default=True)
+
+# Required with DEBUG off; a development key stands in with DEBUG on.
+SECRET_KEY = env_secret_key(DEBUG)
 
 # True while running the test suite: disables the debug toolbar and swaps in
 # cheaper password hashing / a file-backed test database.

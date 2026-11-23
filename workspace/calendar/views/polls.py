@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.client_address import client_address
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import (
     mark_source_read,
@@ -180,6 +181,7 @@ class PollDetailView(APIView):
 
     @extend_schema(summary="Get poll detail", responses=PollSerializer)
     def get(self, request, poll_id):
+        # Public to the instance by design: whoever holds the link reads the poll.
         poll = get_object_or_404(_poll_detail_queryset(), uuid=poll_id)
 
         mark_source_read(request.user, poll)
@@ -276,6 +278,7 @@ class PollVoteView(APIView):
         summary="Submit votes", request=VoteSubmitSerializer, responses=PollSerializer
     )
     def post(self, request, poll_id):
+        # Public to the instance by design: whoever holds the link votes.
         poll = get_object_or_404(Poll, uuid=poll_id, status=Poll.Status.OPEN)
         ser = VoteSubmitSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -553,12 +556,6 @@ class SharedPollVoteView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
-    def _get_client_ip(self, request):
-        xff = request.META.get("HTTP_X_FORWARDED_FOR")
-        if xff:
-            return xff.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR", "")
-
     @extend_schema(
         summary="Submit guest votes",
         request=GuestVoteSubmitSerializer,
@@ -568,8 +565,7 @@ class SharedPollVoteView(APIView):
         poll = get_object_or_404(Poll, share_token=token, status=Poll.Status.OPEN)
 
         # Rate limit: max 10 vote submissions per IP per hour
-        ip = self._get_client_ip(request)
-        rate_key = f"poll_vote_rate:{token}:{ip}"
+        rate_key = f"poll_vote_rate:{token}:{client_address(request)}"
         attempts = cache.get(rate_key, 0)
         if attempts >= 10:
             return Response(

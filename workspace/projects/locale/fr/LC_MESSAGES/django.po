@@ -388,10 +388,6 @@ msgid "Another project already uses this key."
 msgstr "Un autre projet utilise déjà cette clé."
 
 #: serializers.py
-msgid "You can only attach groups you belong to."
-msgstr "Vous ne pouvez associer que des groupes dont vous êtes membre."
-
-#: serializers.py
 msgid "Personal projects cannot be attached to groups."
 msgstr "Un projet personnel ne peut pas être associé à des groupes."
 
@@ -1754,8 +1750,8 @@ msgstr ""
 "Partagez ce projet avec un groupe ou ajoutez des personnes directement."
 
 #: ui/templates/projects/ui/partials/settings.html
-msgid "Attach one of your groups"
-msgstr "Associer l’un de vos groupes"
+msgid "Attach a group"
+msgstr "Associer un groupe"
 
 #: ui/templates/projects/ui/partials/settings.html
 msgid "No groups attached."

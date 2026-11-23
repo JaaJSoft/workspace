@@ -36,8 +36,9 @@ Each service of the app runs the same image with the same environment, shared th
 ## Deploy
 
 ```bash
-# 1. Copy docker-compose.yml to your server
-#    Optionally create a .env file next to it
+# 1. Copy docker-compose.yml to your server and create a .env file next to it
+#    with at least SECRET_KEY, a long random value:
+#    python -c "import secrets; print(secrets.token_urlsafe(50))"
 
 # 2. Start: the migrate service brings the database up to date first
 docker compose up -d
@@ -57,7 +58,7 @@ All settings are configurable via environment variables or a `.env` file next to
 | Variable               | Default                          | Description                               |
 |------------------------|----------------------------------|-------------------------------------------|
 | `WORKSPACE_IMAGE`      | `ghcr.io/jaajsoft/workspace:latest` | Image every app service runs           |
-| `SECRET_KEY`           | `change-me-to-a-real-secret-key` | Django secret key. **Must be changed.**   |
+| `SECRET_KEY`           | *(none, required)*               | Django secret key. Compose refuses to start without it |
 | `ALLOWED_HOSTS`        | `*`                              | Comma-separated list of allowed hostnames |
 | `CSRF_TRUSTED_ORIGINS` | *(empty)*                        | Comma-separated list of trusted origins   |
 | `USE_X_FORWARDED_HOST` | *(empty)*                        | Set to `1` when the proxy rewrites `Host` (Cloudflare, cloud LBs) |

@@ -222,7 +222,7 @@ The most common variables are listed below. For the full, annotated list - inclu
 
 | Variable               | Description                                       | Default                      |
 |------------------------|---------------------------------------------------|------------------------------|
-| `SECRET_KEY`           | Django secret key. Always set it in production    | *(an insecure development key)* |
+| `SECRET_KEY`           | Django secret key. Required with `DEBUG` off: the app refuses to start without one | *(a development key, with `DEBUG` on only)* |
 | `DEBUG`                | Enable debug mode                                 | `True` (`0` in the Compose and Kubernetes setups) |
 | `ALLOWED_HOSTS`        | Comma-separated allowed hosts                     | `*` with `DEBUG` off, localhost only with `DEBUG` on |
 | `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins              | *(none)*                     |

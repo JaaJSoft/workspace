@@ -77,3 +77,5 @@ One line per finding is enough for the reviewer: `file:line`, entry point (metho
 - A serializer only ever used for output (`MailRuleLogSerializer.message`).
 - A public endpoint documented as such (avatar by UUID, a share-token route) - check what it exposes, not that it is public.
 - "Invite anyone" fields (event members, poll invitees): granting access to the invitee is the feature; check it grants nothing beyond the invited object.
+- A poll read or voted on by a signed-in user who is neither its creator nor an invitee (`PollDetailView.get`, `PollVoteView`): polls are public to the instance, whoever holds the link takes part. Changing a poll stays its creator's.
+- A share target that is a group the caller is not in (a file share, an album share, a project's groups): sharing with another team is the feature. A group that *owns* the space - a group folder, a group album, a group contact list - still requires membership.

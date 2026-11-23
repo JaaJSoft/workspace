@@ -53,7 +53,14 @@ from workspace.files.services.transfers import OnConflict, move_item
 from workspace.files.services.tree import GroupMismatch
 from workspace.files.services.uploads import CHUNK_SIZE
 
-from .models import File, FileComment, FileOperation, UploadSession, canonical_name
+from .models import (
+    File,
+    FileComment,
+    FileOperation,
+    FileShareLink,
+    UploadSession,
+    canonical_name,
+)
 
 
 class FileLocked(APIException):
@@ -1249,3 +1256,63 @@ class FileOperationSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_cancel_requested(self, obj):
         return obj.cancel_requested_at is not None
+
+
+class FileListQuerySerializer(serializers.Serializer):
+    """The identifiers the listing takes from its query string."""
+
+    parent = serializers.UUIDField(required=False)
+    group = serializers.IntegerField(required=False, min_value=1)
+
+
+class ShareLinkCreateSerializer(serializers.Serializer):
+    """The options of a new public link, typed. Which combinations a link may
+    carry is the service's rule (``sharing.create_share_link``)."""
+
+    password = serializers.CharField(
+        required=False, allow_blank=True, default="", trim_whitespace=False
+    )
+    expires_at = serializers.DateTimeField(
+        required=False, allow_null=True, default=None
+    )
+    mode = serializers.ChoiceField(
+        choices=FileShareLink.Mode.choices,
+        required=False,
+        allow_null=True,
+        default=FileShareLink.Mode.READ,
+    )
+    max_file_bytes = serializers.IntegerField(
+        required=False, allow_null=True, default=None
+    )
+    max_file_count = serializers.IntegerField(
+        required=False, allow_null=True, default=None
+    )
+
+
+class ShareLinkSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    node_type = serializers.CharField(source="file.node_type", read_only=True)
+    has_password = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = FileShareLink
+        fields = [
+            "uuid",
+            "token",
+            "url",
+            "node_type",
+            "mode",
+            "max_file_bytes",
+            "max_file_count",
+            "upload_count",
+            "has_password",
+            "expires_at",
+            "view_count",
+            "last_accessed_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_url(self, link) -> str:
+        request = self.context["request"]
+        return request.build_absolute_uri(f"/files/shared/{link.token}")

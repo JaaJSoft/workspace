@@ -60,3 +60,32 @@ class VaultAdminTests(TestCase):
             self.assertEqual(
                 self.client.get(reverse(url_name)).status_code, 403, url_name
             )
+
+    def test_deleting_an_identity_takes_what_only_it_could_open(self):
+        response = self.client.post(
+            reverse("admin:vault_accountidentity_delete", args=[self.identity.pk]),
+            {"post": "yes"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(AccountIdentity.objects.filter(pk=self.identity.pk).exists())
+        self.assertFalse(Vault.objects.filter(pk=self.vault.pk).exists())
+        self.assertFalse(VaultKeyWrap.objects.filter(pk=self.wrap.pk).exists())
+        self.assertFalse(VaultEntry.objects.filter(pk=self.entry.pk).exists())
+
+    def test_the_confirmation_page_lists_what_goes_with_an_identity(self):
+        response = self.client.get(
+            reverse("admin:vault_accountidentity_delete", args=[self.identity.pk])
+        )
+        self.assertContains(response, str(self.vault.pk))
+
+    def test_the_bulk_delete_takes_the_same_path(self):
+        self.client.post(
+            reverse("admin:vault_accountidentity_changelist"),
+            {
+                "action": "delete_selected",
+                "_selected_action": [str(self.identity.pk)],
+                "post": "yes",
+            },
+        )
+        self.assertFalse(AccountIdentity.objects.filter(pk=self.identity.pk).exists())
+        self.assertFalse(Vault.objects.filter(pk=self.vault.pk).exists())

@@ -4,6 +4,8 @@ from workspace.core.services.module_visibility import visible_modules
 from workspace.notifications.services.notifications import get_unread_badges
 from workspace.users.services.settings import get_module_settings
 
+from . import preferences
+
 
 def dashboard_modules(user, *, deep_links=True):
     """Build the module tiles for the home page grid and the navbar switcher.
@@ -18,7 +20,7 @@ def dashboard_modules(user, *, deep_links=True):
     opens that item directly (the unread conversation, the due task, ...).
     """
     badges = get_unread_badges(user)
-    hidden = set(get_module_settings(user, "dashboard").get("hidden_modules") or [])
+    hidden = preferences.hidden_modules(get_module_settings(user, preferences.MODULE))
     modules = []
     dashboard_apps = []
     for m in visible_modules(user):

@@ -76,6 +76,8 @@
    Without the cap the axis is sized to its widest label. */
 .fc .fc-timegrid-axis-cushion {
   max-width: none;
+  font-size: 0.75rem;
+  color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
 }
 
 /* Day cells */

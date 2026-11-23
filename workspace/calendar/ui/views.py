@@ -104,7 +104,10 @@ def event_card(request, event_id):
     occ_end = None
     raw_start = request.GET.get("start")
     if raw_start:
-        occ_start = parse_datetime(raw_start)
+        try:
+            occ_start = parse_datetime(raw_start)
+        except ValueError:
+            occ_start = None
         if occ_start and event.start and event.end:
             duration = event.end - event.start
             occ_end = occ_start + duration

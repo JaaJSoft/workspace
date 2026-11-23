@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils.html import escape, format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
@@ -689,6 +689,16 @@ def storage(request, uuid=None):
     if category is not None and category not in CATEGORY_META:
         raise Http404
     query = (request.GET.get("q") or "").strip()[:QUERY_MAX_LENGTH] or None
+
+    # The dialog's links are real hrefs: opened on their own (new tab, reload)
+    # they lead to the page that shows the dialog, not to a bare fragment.
+    if not request.headers.get("X-Alpine-Request"):
+        params = {"storage": folder.uuid if folder is not None else "root"}
+        if category:
+            params["storage_category"] = category
+        if query:
+            params["storage_q"] = query
+        return redirect(f"/files?{urlencode(params)}")
 
     analysis = analyze_storage(request.user, folder, category=category, query=query)
     chart = donut_chart(

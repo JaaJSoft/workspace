@@ -173,3 +173,23 @@ class ActivityApiPreviewModuleVisibilityTests(TestCase):
         self.assertIn("photos", [s["slug"] for s in recents["sources"]])
         self.assertEqual(counts["2026-03-02"], 41)
         self.assertEqual(stats["photos"], {"albums": 3})
+
+
+class ActivityTargetUserTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="targetuser", password="pw")
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_a_user_id_that_is_not_a_number_is_a_400(self):
+        for path in (
+            "recents?user_id=abc",
+            "daily-counts?date_from=2026-01-01&date_to=2026-01-31&user_id=abc",
+            "stats?user_id=abc",
+        ):
+            with self.subTest(path=path):
+                resp = self.client.get(f"/api/v1/activity/{path}")
+                self.assertEqual(resp.status_code, 400)

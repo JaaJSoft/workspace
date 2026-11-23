@@ -128,8 +128,3 @@ def notify_new_message(
                 actor=author,
                 priority_map=priority_map,
             )
-
-
-def notify_user(user_id):
-    """Mark that a user has pending SSE events."""
-    notify_sse("chat", user_id)

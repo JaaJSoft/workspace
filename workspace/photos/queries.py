@@ -499,11 +499,6 @@ def album_summaries(user, albums):
     return _summaries(albums, visible_album_items(user, [a.uuid for a in albums]))
 
 
-def link_summary(album):
-    """``album_summaries`` for one album, as its public links show it."""
-    return _summaries([album], link_items(album))[album.uuid]
-
-
 def album_date_range(files):
     """The earliest and latest capture dates of *files*, as ``(first, last)``."""
     bounds = files.aggregate(

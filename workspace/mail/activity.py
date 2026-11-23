@@ -86,7 +86,7 @@ class MailActivityProvider(ActivityProvider):
                     "label": _("Email sent") if is_sent else _("Email received"),
                     "description": msg.subject or _("(no subject)"),
                     "timestamp": msg.date or msg.created_at,
-                    "url": f"/mail/{msg.account_id}/messages/{msg.pk}",
+                    "url": f"/mail?message={msg.pk}",
                     "actor": {
                         "id": msg.account.owner_id,
                         "username": msg.account.owner.username,

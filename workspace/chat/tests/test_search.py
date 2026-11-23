@@ -66,6 +66,13 @@ class ConversationMessageSearchTests(ChatTestMixin, APITestCase):
         resp = self.client.get(self.url(self.group.uuid))
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_an_impossible_date_is_a_400(self):
+        self.client.force_authenticate(self.creator)
+        for param in ("date_from", "date_to"):
+            with self.subTest(param=param):
+                resp = self.client.get(self.url(self.group.uuid), {param: "2026-02-30"})
+                self.assertEqual(resp.status_code, 400)
+
     def test_member_can_search(self):
         Message.objects.create(
             conversation=self.group,

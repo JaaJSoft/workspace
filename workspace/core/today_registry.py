@@ -70,10 +70,6 @@ class TodayRegistry:
                 )
             self._sources[source.slug] = source
 
-    def unregister(self, slug):
-        with self._lock:
-            self._sources.pop(slug, None)
-
     def visible_sources(self, user) -> list[TodaySource]:
         """The sources whose module *user* may see, in display order."""
         return sorted(

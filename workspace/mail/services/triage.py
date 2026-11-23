@@ -54,9 +54,6 @@ def flag_operations():
     }
 
 
-FLAG_NAMES = ("read", "unread", "starred", "unstarred")
-
-
 def set_flag(message, flag):
     """Apply one flag to `message` locally and mirror it to IMAP.
 

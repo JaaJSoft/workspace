@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from workspace.common.uuids import UUID_PATTERN
 from workspace.files.models import FileComment
 from workspace.files.serializers import (
     FileCommentCreateSerializer,
@@ -108,7 +109,7 @@ class CommentsMixin:
     @action(
         detail=True,
         methods=["patch", "delete"],
-        url_path=r"comments/(?P<comment_uuid>[0-9a-f-]+)",
+        url_path=rf"comments/(?P<comment_uuid>{UUID_PATTERN})",
     )
     def comment_detail(self, request, uuid=None, comment_uuid=None):
         """Edit or soft-delete a comment."""

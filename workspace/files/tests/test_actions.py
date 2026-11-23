@@ -455,6 +455,15 @@ class FilesActionsEndpointTests(APITestCase):
             password="pass123",
         )
 
+    def test_an_item_that_is_not_a_uuid_is_a_400(self):
+        self.client.force_authenticate(user=self.owner)
+        for uuids in (["not-a-uuid"], [{}], [12]):
+            with self.subTest(uuids=uuids):
+                resp = self.client.post(
+                    "/api/v1/files/actions", {"uuids": uuids}, format="json"
+                )
+                self.assertEqual(resp.status_code, 400)
+
     def test_basic_request(self):
         self.client.force_authenticate(user=self.owner)
         f = File.objects.create(

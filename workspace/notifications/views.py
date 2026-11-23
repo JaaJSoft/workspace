@@ -88,6 +88,7 @@ class NotificationDetailView(APIView):
         ).delete()
         if not deleted:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        invalidate_tags(_user_tag(request.user.id))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

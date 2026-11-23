@@ -10,10 +10,8 @@ from celery.signals import (
     beat_init,
     celeryd_after_setup,
     celeryd_init,
-    task_failure,
     task_postrun,
     task_prerun,
-    task_retry,
 )
 from prometheus_client.core import GaugeMetricFamily
 
@@ -98,20 +96,6 @@ def _on_task_postrun(task_id=None, task=None, state=None, **kwargs):
     # state is one of 'SUCCESS', 'FAILURE', 'RETRY' (uppercase from celery.states).
     label = (state or "unknown").lower()
     CELERY_TASKS_TOTAL.labels(task=name, state=label).inc()
-
-
-@task_failure.connect
-def _on_task_failure(sender=None, **kwargs):
-    # task_postrun also fires with state='FAILURE', so we don't double-count here.
-    # This handler exists so that catastrophic failures (worker crash mid-task)
-    # which skip task_postrun still leave a trace.
-    pass
-
-
-@task_retry.connect
-def _on_task_retry(sender=None, **kwargs):
-    # Same rationale as above: task_postrun handles the increment in-band.
-    pass
 
 
 # ---------------------------------------------------------------------------

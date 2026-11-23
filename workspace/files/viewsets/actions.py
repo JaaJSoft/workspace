@@ -13,6 +13,12 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from workspace.common.uuids import (
+    BatchTooLarge,
+    MalformedUuid,
+    UuidBatchError,
+    parse_uuid_batch,
+)
 from workspace.files.models import File, FileFavorite, FileShare, PinnedFolder
 from workspace.files.queries import (
     accessible_files_q,
@@ -67,15 +73,21 @@ class ActionsMixin:
         from workspace.files.actions import ActionRegistry
         from workspace.notes.services.journal import journal_folder_id
 
-        uuids = request.data.get("uuids", [])
-        if not isinstance(uuids, list) or len(uuids) == 0:
-            return Response(
-                {"detail": "uuids must be a non-empty list."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if len(uuids) > 200:
+        try:
+            uuids = parse_uuid_batch(request.data, max_items=200)
+        except BatchTooLarge:
             return Response(
                 {"detail": "Too many UUIDs (max 200)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except MalformedUuid:
+            return Response(
+                {"detail": "uuids must hold UUIDs."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except UuidBatchError:
+            return Response(
+                {"detail": "uuids must be a non-empty list."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

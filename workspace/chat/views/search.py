@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.db.models import Count, F, Max, Min, Q
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.translation import gettext
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
@@ -10,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.booleans import is_truthy
 from workspace.common.datetimes import local_date_range
 from workspace.common.mixins import CacheControlMixin
 
@@ -18,6 +20,15 @@ from ..services.conversations import get_active_membership
 from ..services.message_search import search_messages_qs
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_day(value):
+    """The date a filter names, or None: parse_date raises on a well-formed
+    but impossible one (2026-02-30) where it answers None for garbage."""
+    try:
+        return parse_date(value)
+    except ValueError:
+        return None
 
 
 @extend_schema(tags=["Chat - Messages"])
@@ -62,8 +73,8 @@ class ConversationMessageSearchView(APIView):
         date_range = params.get("date_range", "").strip()
         date_from = params.get("date_from", "").strip()
         date_to = params.get("date_to", "").strip()
-        has_files = params.get("has_files", "").lower() == "true"
-        has_images = params.get("has_images", "").lower() == "true"
+        has_files = is_truthy(params.get("has_files"))
+        has_images = is_truthy(params.get("has_images"))
 
         has_any = (
             query
@@ -116,12 +127,8 @@ class ConversationMessageSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validate ISO dates up front so the ORM never sees garbage like
-        # ?date_from=invalid (which would 500).
-        from django.utils.dateparse import parse_date
-
         if date_from:
-            parsed = parse_date(date_from)
+            parsed = _parse_day(date_from)
             if parsed is None:
                 return Response(
                     {"detail": gettext("Invalid date_from.")},
@@ -130,7 +137,7 @@ class ConversationMessageSearchView(APIView):
             start, _ = local_date_range(parsed, parsed)
             qs = qs.filter(created_at__gte=start)
         if date_to:
-            parsed = parse_date(date_to)
+            parsed = _parse_day(date_to)
             if parsed is None:
                 return Response(
                     {"detail": gettext("Invalid date_to.")},

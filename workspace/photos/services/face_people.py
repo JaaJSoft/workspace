@@ -95,11 +95,6 @@ def link_new_person(cluster, user, name):
     return person
 
 
-def unlink_person(user, person):
-    """Clear *person*'s name from every cluster of *user*'s."""
-    FaceCluster.objects.filter(owner=user, person=person).update(person=None)
-
-
 def person_clusters(user, person):
     return FaceCluster.objects.filter(owner=user, person=person)
 

@@ -36,17 +36,6 @@ def reachable_list(user, uuid):
     return user_person_lists(user).filter(uuid=uuid).first()
 
 
-def user_group_ids(user):
-    return set(user.groups.values_list("id", flat=True))
-
-
-def can_edit(user, obj):
-    """Owner or group member. Reachability and editability coincide: no roles."""
-    if obj.owner_id is not None:
-        return obj.owner_id == user.id
-    return obj.group_id in user_group_ids(user)
-
-
 def person_with_email(persons, email):
     """The first person of ``persons`` carrying ``email``, case-insensitively.
 

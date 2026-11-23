@@ -1,5 +1,6 @@
 import hashlib
 from collections import Counter, defaultdict
+from urllib.parse import quote
 
 from django.db.models import Q
 
@@ -137,7 +138,7 @@ def search_contacts(query, user, limit):
             SearchResult(
                 uuid=uid,
                 name=name or email,
-                url=f"/mail?compose={email}",
+                url=f"/mail?compose={quote(email)}",
                 matched_value=display,
                 match_type="contact",
                 type_icon="user",

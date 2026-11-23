@@ -719,14 +719,19 @@ class ExternalCalendarAPITests(APITestCase):
     def test_create_external_calendar(self, mock_task):
 
         self.client.force_authenticate(self.user)
-        resp = self.client.post(
-            self.url,
-            {
-                "url": "https://example.com/feed.ics",
-                "name": "My External",
-                "color": "blue",
-            },
-        )
+        with self.captureOnCommitCallbacks() as callbacks:
+            resp = self.client.post(
+                self.url,
+                {
+                    "url": "https://example.com/feed.ics",
+                    "name": "My External",
+                    "color": "blue",
+                },
+            )
+        # The first sync is sent once the calendar is committed, not before.
+        mock_task.apply_async.assert_not_called()
+        for callback in callbacks:
+            callback()
         self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
         self.assertEqual(resp.data["name"], "My External")
         self.assertTrue(resp.data["is_external"])
@@ -734,6 +739,23 @@ class ExternalCalendarAPITests(APITestCase):
         ext = ExternalCalendar.objects.get(calendar__owner=self.user)
         mock_task.apply_async.assert_called_once_with(
             [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
+        )
+
+    @patch("workspace.calendar.views.external.sync_external_calendar_task")
+    def test_create_survives_a_first_sync_that_cannot_be_sent(self, mock_task):
+        mock_task.apply_async.side_effect = RuntimeError("broker down")
+        self.client.force_authenticate(self.user)
+
+        with self.assertLogs(level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                resp = self.client.post(
+                    self.url,
+                    {"url": "https://example.com/feed.ics", "name": "Feed"},
+                )
+
+        self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
+        self.assertTrue(
+            ExternalCalendar.objects.filter(calendar__owner=self.user).exists()
         )
 
     def test_list_external_calendars(self):

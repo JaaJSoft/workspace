@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 from workspace.files.models import File, FileShare, FileShareLink
 from workspace.files.queries import get_permission
 from workspace.files.services.share_notifications import notify_share_targets
@@ -345,7 +345,9 @@ class ShareMixin:
         )
 
     @action(
-        detail=True, methods=["delete"], url_path=r"share-links/(?P<link_uuid>[^/.]+)"
+        detail=True,
+        methods=["delete"],
+        url_path=rf"share-links/(?P<link_uuid>{UUID_PATTERN})",
     )
     def delete_share_link(self, request, uuid=None, link_uuid=None):
         """Revoke (delete) a share link (owner only)."""

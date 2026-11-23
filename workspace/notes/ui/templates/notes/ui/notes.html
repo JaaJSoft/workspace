@@ -293,7 +293,6 @@
   <!-- Initial preferences embedded server-side so JS doesn't need to fetch
      /api/v1/settings/notes/preferences on page load. -->
   {{ notes_prefs|json_script:"notes-prefs-data" }}
-  <script src="{% static 'ui/js/icon_picker.js' %}"></script>
   <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/file_operations.js' %}"></script>

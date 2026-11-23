@@ -19,10 +19,12 @@ function loadPushStore({ subscription = null, fetchOk = true, appVersion = '', l
   const warnings = [];
   const registered = [];
   const Alpine = {
+    // As Alpine does: registering a store that defines init() runs it.
     store(name, obj) {
       if (obj === undefined) return stores[name];
       stores[name] = obj;
-      return obj;
+      if (Object.hasOwn(obj, 'init') && typeof obj.init === 'function') obj.init();
+      return undefined;
     },
   };
   const document = {
@@ -62,7 +64,7 @@ function loadPushStore({ subscription = null, fetchOk = true, appVersion = '', l
       return { ok: fetchOk, status: fetchOk ? 201 : 500, json: async () => ({}) };
     },
   });
-  // Fire alpine:init: registers the stores and kicks off push.init().
+  // Fire alpine:init: registers the stores, which runs push.init().
   document._alpineInit();
   return { stores, fetchCalls, warnings, registered };
 }

@@ -328,7 +328,7 @@
       error: null,
       originalContent: '{{ content|escapejs }}',
       fileUuid: '{{ file.uuid }}',
-      fileName: '{{ file.name }}',
+      fileName: '{{ file.name|escapejs }}',
       // The hash of the blob this buffer was loaded from. Sent with every
       // save so a write built on a version someone else has already replaced
       // is refused (412) instead of overwriting them.

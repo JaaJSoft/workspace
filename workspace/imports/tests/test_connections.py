@@ -76,6 +76,15 @@ class UpdateAndTestConnectionTests(TestCase):
         self.assertEqual(self.conn.label, "New")
         self.assertEqual(self.provider.test_calls, 0)
 
+    def test_label_change_keeps_what_another_writer_stored(self):
+        ImportConnection.objects.filter(pk=self.conn.pk).update(
+            last_error="unreachable"
+        )
+        svc.update_connection(self.conn, label="New")
+        self.conn.refresh_from_db()
+        self.assertEqual(self.conn.label, "New")
+        self.assertEqual(self.conn.last_error, "unreachable")
+
     def test_secret_change_is_verified(self):
         self.provider.valid_secret = "rotated"
         svc.update_connection(self.conn, secret="rotated")
@@ -88,6 +97,15 @@ class UpdateAndTestConnectionTests(TestCase):
             svc.update_connection(self.conn, secret="wrong")
         self.conn.refresh_from_db()
         self.assertEqual(self.conn.get_secret(), "good")
+
+    def test_overlapping_credential_edits_store_a_pair_the_remote_verified(self):
+        other = ImportConnection.objects.get(pk=self.conn.pk)
+        svc.update_connection(self.conn, username="bob")  # verifies bob / good
+        self.provider.valid_secret = "rotated"
+        svc.update_connection(other, secret="rotated")  # verifies alice / rotated
+
+        stored = ImportConnection.objects.get(pk=self.conn.pk)
+        self.assertEqual((stored.username, stored.get_secret()), ("alice", "rotated"))
 
     def test_base_url_change_is_normalised_and_verified(self):
         svc.update_connection(self.conn, base_url="https://other.example.org/")

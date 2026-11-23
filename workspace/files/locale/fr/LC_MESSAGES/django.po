@@ -2524,10 +2524,6 @@ msgstr "Partage introuvable."
 msgid "%(actor)s revoked your access to \"%(name)s\""
 msgstr "%(actor)s a révoqué votre accès à « %(name)s »"
 
-#: viewsets/share.py
-msgid "Must be a whole number."
-msgstr "Doit être un nombre entier."
-
 #: viewsets/storage.py
 msgid "Storage analysis applies to folders."
 msgstr "L’analyse du stockage ne s’applique qu’aux dossiers."

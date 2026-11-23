@@ -6,12 +6,15 @@ from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from workspace.common.uuids import UUID_PATTERN, parse_uuid_or_none
 from workspace.files.models import File, FileShare, FileShareLink
 from workspace.files.queries import get_permission
+from workspace.files.serializers import (
+    ShareLinkCreateSerializer,
+    ShareLinkSerializer,
+)
 from workspace.files.services.share_notifications import notify_share_targets
 from workspace.files.services.sharing import (
     create_share_link as service_create_share_link,
@@ -315,32 +318,18 @@ class ShareMixin:
         if file_obj.owner_id != request.user.id:
             raise Http404
 
+        context = {"request": request}
         if request.method == "GET":
             links = FileShareLink.objects.filter(file=file_obj).select_related("file")
-            data = [self._serialize_share_link(link, request) for link in links]
-            return Response(data)
+            return Response(ShareLinkSerializer(links, many=True, context=context).data)
 
-        # POST - create
-        def _cap(field):
-            raw = request.data.get(field)
-            if raw in (None, ""):
-                return None
-            try:
-                return int(raw)
-            except (ValueError, TypeError) as exc:
-                raise ValidationError({field: _("Must be a whole number.")}) from exc
-
+        options = ShareLinkCreateSerializer(data=request.data)
+        options.is_valid(raise_exception=True)
         link = service_create_share_link(
-            file_obj,
-            acting_user=request.user,
-            password=request.data.get("password", ""),
-            expires_at=request.data.get("expires_at"),
-            mode=request.data.get("mode") or FileShareLink.Mode.READ,
-            max_file_bytes=_cap("max_file_bytes"),
-            max_file_count=_cap("max_file_count"),
+            file_obj, acting_user=request.user, **options.validated_data
         )
         return Response(
-            self._serialize_share_link(link, request),
+            ShareLinkSerializer(link, context=context).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -367,31 +356,3 @@ class ShareMixin:
         if not deleted:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @staticmethod
-    def _format_dt(value):
-        """Format a datetime value for API responses, handling both datetime objects and strings."""
-        if value is None:
-            return None
-        if isinstance(value, str):
-            return value
-        return value.isoformat()
-
-    def _serialize_share_link(self, link, request):
-        """Serialize a FileShareLink for API responses."""
-        url = request.build_absolute_uri(f"/files/shared/{link.token}")
-        return {
-            "uuid": str(link.uuid),
-            "token": link.token,
-            "url": url,
-            "node_type": link.file.node_type,
-            "mode": link.mode,
-            "max_file_bytes": link.max_file_bytes,
-            "max_file_count": link.max_file_count,
-            "upload_count": link.upload_count,
-            "has_password": link.has_password,
-            "expires_at": self._format_dt(link.expires_at),
-            "view_count": link.view_count,
-            "last_accessed_at": self._format_dt(link.last_accessed_at),
-            "created_at": self._format_dt(link.created_at),
-        }

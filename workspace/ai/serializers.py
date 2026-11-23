@@ -133,6 +133,18 @@ class UserMemorySerializer(serializers.ModelSerializer):
     def get_bot_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
 
+    def validate_key(self, value):
+        # The unique constraint spans user and bot, which are not fields here.
+        memory = self.instance
+        taken = UserMemory.objects.filter(
+            user_id=memory.user_id, bot_id=memory.bot_id, key=value
+        ).exclude(pk=memory.pk)
+        if taken.exists():
+            raise serializers.ValidationError(
+                _("Another memory of this assistant already has this key.")
+            )
+        return value
+
 
 class ClassifyRequestSerializer(serializers.Serializer):
     account_id = serializers.UUIDField(required=False)

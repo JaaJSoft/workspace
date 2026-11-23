@@ -665,3 +665,119 @@ class InRecipientLanguagesTests(TestCase):
             for _users in in_recipient_languages([self.camille]):
                 pass
             self.assertEqual(translation.get_language(), "en")
+
+
+class _SettingsApiCase(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="shapes", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _put(self, module, key, value):
+        return self.client.put(
+            f"/api/v1/settings/{module}/{key}",
+            data={"value": value},
+            content_type="application/json",
+        )
+
+
+class ProfileSettingValidationTests(_SettingsApiCase):
+    def test_a_bio_and_a_role_within_their_limits_are_stored(self):
+        self.assertEqual(self._put("profile", "bio", "x" * 200).status_code, 200)
+        self.assertEqual(self._put("profile", "role", "x" * 50).status_code, 200)
+        self.assertEqual(get_setting(self.user, "profile", "role"), "x" * 50)
+
+    def test_a_bio_or_a_role_past_its_limit_is_refused(self):
+        self.assertEqual(self._put("profile", "bio", "x" * 201).status_code, 400)
+        self.assertEqual(self._put("profile", "role", "x" * 51).status_code, 400)
+        self.assertEqual(get_module_settings(self.user, "profile"), {})
+
+    def test_a_bio_that_is_not_text_is_refused(self):
+        for value in (12, ["a"], {"a": 1}):
+            with self.subTest(value=value):
+                self.assertEqual(self._put("profile", "bio", value).status_code, 400)
+
+    def test_a_banner_is_a_preset_or_three_hex_colours(self):
+        custom = {"from": "#112233", "via": "#445566", "to": "#778899"}
+        self.assertEqual(
+            self._put("profile", "banner_palette", custom).status_code, 200
+        )
+        for value in (
+            "no-such-preset",
+            {"from": "#112233", "via": "#445566"},
+            {"from": "red", "via": "#445566", "to": "#778899"},
+            {"from": 1, "via": 2, "to": 3},
+            7,
+        ):
+            with self.subTest(value=value):
+                response = self._put("profile", "banner_palette", value)
+                self.assertEqual(response.status_code, 400)
+        self.assertEqual(get_setting(self.user, "profile", "banner_palette"), custom)
+
+    def test_null_clears_a_profile_setting(self):
+        self._put("profile", "bio", "hello")
+        self.assertEqual(self._put("profile", "bio", None).status_code, 200)
+        self.assertIsNone(get_setting(self.user, "profile", "bio"))
+
+
+class PreferencesSettingValidationTests(_SettingsApiCase):
+    """Each module reads its ``preferences`` setting as an object."""
+
+    def test_an_object_is_stored(self):
+        prefs = {"notifyPollVotes": False}
+        self.assertEqual(self._put("calendar", "preferences", prefs).status_code, 200)
+        self.assertEqual(get_setting(self.user, "calendar", "preferences"), prefs)
+
+    def test_anything_else_is_refused_in_every_module(self):
+        for module in ("calendar", "notes", "chat", "files", "mail"):
+            for value in ([1, 2], "compact", 3, True):
+                with self.subTest(module=module, value=value):
+                    response = self._put(module, "preferences", value)
+                    self.assertEqual(response.status_code, 400)
+            self.assertEqual(get_module_settings(self.user, module), {})
+
+    def test_the_bulk_write_refuses_it_too(self):
+        response = self.client.patch(
+            "/api/v1/settings/notes",
+            data={"preferences": ["journal"], "other": 1},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(get_module_settings(self.user, "notes"), {})
+
+
+class HiddenModulesSettingValidationTests(_SettingsApiCase):
+    def test_accepts_a_list_of_slugs(self):
+        response = self._put("dashboard", "hidden_modules", ["mail", "chat"])
+        self.assertEqual(response.status_code, 200)
+
+    def test_rejects_anything_else(self):
+        for value in (1, "mail", {"mail": True}, ["mail", 2]):
+            with self.subTest(value=value):
+                response = self._put("dashboard", "hidden_modules", value)
+                self.assertEqual(response.status_code, 400)
+        self.assertNotIn("hidden_modules", get_module_settings(self.user, "dashboard"))
+
+
+class SettingBodyTests(_SettingsApiCase):
+    def test_a_body_that_is_not_an_object_is_refused(self):
+        for body in ("[1, 2]", '"dark"', "7"):
+            with self.subTest(body=body):
+                response = self.client.put(
+                    "/api/v1/settings/core/theme",
+                    data=body,
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+        self.assertEqual(get_module_settings(self.user, "core"), {})
+
+    def test_a_body_without_a_value_clears_the_setting(self):
+        self._put("core", "theme", "dark")
+        response = self.client.put(
+            "/api/v1/settings/core/theme", data={}, content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(get_setting(self.user, "core", "theme"))

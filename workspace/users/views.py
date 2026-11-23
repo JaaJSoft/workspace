@@ -32,6 +32,7 @@ from workspace.core.sse_registry import notify_sse
 from workspace.dashboard.services import preferences as dashboard_preferences
 from workspace.files.models import File
 from workspace.files.sensitivity import BlurPreference
+from workspace.users.banner_palettes import validate_profile_setting
 from workspace.users.models import APITokenLabel, UserSetting
 from workspace.users.queries import (
     DEFAULT_SEARCH_LIMIT,
@@ -551,6 +552,12 @@ _setting_fields = {
 }
 
 
+class SettingValueSerializer(serializers.Serializer):
+    """The body of a single-setting write. A missing value clears the setting."""
+
+    value = serializers.JSONField(allow_null=True, required=False, default=None)
+
+
 _CORE_FLAGS = (
     "reveal_sensitive_on_hover",
     "reveal_sensitive_in_viewer",
@@ -632,9 +639,24 @@ def _validate_setting_value(module, key, value):
         module == dashboard_preferences.MODULE
         and key == dashboard_preferences.HIDDEN_TODAY_SOURCES
         and value is not None
-        and not dashboard_preferences.is_source_list(value)
+        and not dashboard_preferences.is_slug_list(value)
     ):
         return "hidden_today_sources must be a list of source slugs."
+    if (
+        module == dashboard_preferences.MODULE
+        and key == dashboard_preferences.HIDDEN_MODULES
+        and value is not None
+        and not dashboard_preferences.is_slug_list(value)
+    ):
+        return "hidden_modules must be a list of module slugs."
+    if module == "profile" and value is not None:
+        valid, error = validate_profile_setting(key, value)
+        if not valid:
+            return error
+    # Every module keeps the options of its Preferences panel in one object,
+    # and reads it as one.
+    if key == "preferences" and value is not None and not isinstance(value, dict):
+        return "preferences must be an object."
     if module == "vault" and key == "default_sort" and value is not None:
         # The four the preferences panel offers. Stored unchecked, an unknown
         # value reaches the listing as a sort nothing implements, and the sort
@@ -715,17 +737,16 @@ class SettingDetailView(APIView):
 
     @extend_schema(
         summary="Create or update a setting",
-        request=inline_serializer(
-            name="SettingWriteRequest",
-            fields={"value": serializers.JSONField(allow_null=True)},
-        ),
+        request=SettingValueSerializer,
         responses={
             200: inline_serializer(name="SettingWriteResponse", fields=_setting_fields),
             400: OpenApiResponse(description="Invalid value for this setting."),
         },
     )
     def put(self, request, module, key):
-        value = request.data.get("value")
+        body = SettingValueSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        value = body.validated_data["value"]
         error = _validate_setting_value(module, key, value)
         if error:
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)

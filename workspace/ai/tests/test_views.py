@@ -226,6 +226,39 @@ class MemoryAPITests(APITestCase):
         mem.refresh_from_db()
         self.assertEqual(mem.content, "Paul")
 
+    def _memory(self, key, bot=None):
+        return UserMemory.objects.create(
+            user=self.user, bot=bot or self.bot_user, key=key, content="x"
+        )
+
+    def _rename(self, memory, key):
+        return self.client.patch(
+            f"/api/v1/ai/memories/{memory.id}", data={"key": key}, format="json"
+        )
+
+    def test_renaming_a_memory_onto_a_taken_key_is_refused(self):
+        self._memory("name")
+        memory = self._memory("lang")
+
+        resp = self._rename(memory, "name")
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("key", resp.json())
+        memory.refresh_from_db()
+        self.assertEqual(memory.key, "lang")
+
+    def test_a_memory_may_be_saved_under_its_own_key(self):
+        memory = self._memory("lang")
+        self.assertEqual(self._rename(memory, "lang").status_code, 200)
+
+    def test_a_key_another_bot_holds_is_free(self):
+        other_bot = User.objects.create_user(username="bot2", password="pass123")
+        BotProfile.objects.create(user=other_bot)
+        self._memory("name", bot=other_bot)
+        memory = self._memory("lang")
+
+        self.assertEqual(self._rename(memory, "name").status_code, 200)
+
 
 @override_settings(AI_API_KEY="test-key")
 class ClassifyViewTests(APITestCase):

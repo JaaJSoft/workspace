@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.utils.translation import gettext, gettext_lazy
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -19,6 +19,7 @@ from ..serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
     ConversationListSerializer,
+    ConversationUpdateSerializer,
     NotificationLevelSerializer,
 )
 from ..services.conversations import (
@@ -309,13 +310,7 @@ class ConversationDetailView(APIView):
 
     @extend_schema(
         summary="Update conversation details",
-        request=inline_serializer(
-            "ConversationUpdate",
-            fields={
-                "title": serializers.CharField(required=False),
-                "description": serializers.CharField(required=False),
-            },
-        ),
+        request=ConversationUpdateSerializer,
     )
     def patch(self, request, conversation_id):
         role = get_conversation_role(request.user, conversation_id)
@@ -334,10 +329,12 @@ class ConversationDetailView(APIView):
                 {"detail": GROUP_ADMINS_ONLY},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        update_fields = []
+        ser = ConversationUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        changes = ser.validated_data
 
-        # Title update (groups and bot conversations)
-        if "title" in request.data:
+        # A title belongs to groups and bot conversations; a description to all.
+        if "title" in changes:
             is_bot_conv = conversation.members.filter(
                 user__bot_profile__isnull=False,
                 left_at__isnull=True,
@@ -347,31 +344,10 @@ class ConversationDetailView(APIView):
                     {"detail": gettext("Only group conversations can be renamed.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            title = request.data["title"].strip() if request.data["title"] else ""
-            if not title:
-                return Response(
-                    {"detail": gettext("Title cannot be empty.")},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            conversation.title = title
-            update_fields.append("title")
 
-        # Description update (all conversation types)
-        if "description" in request.data:
-            conversation.description = (request.data["description"] or "").strip()
-            update_fields.append("description")
-
-        if not update_fields:
-            return Response(
-                {
-                    "detail": gettext(
-                        "No fields to update. Provide title or description."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        conversation.save(update_fields=update_fields)
+        for field, value in changes.items():
+            setattr(conversation, field, value)
+        conversation.save(update_fields=list(changes))
         return Response(
             {
                 "uuid": str(conversation.uuid),

@@ -331,6 +331,22 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.services.modules.get_unread_badges")
     @patch("workspace.dashboard.services.modules.visible_modules")
+    def test_a_malformed_hidden_modules_value_hides_nothing(
+        self, mock_visible, mock_badges
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_badges.return_value = {}
+        for stored in (7, "mail", {"mail": True}, [1, 2]):
+            with self.subTest(stored=stored):
+                set_setting(self.user, "dashboard", "hidden_modules", stored)
+
+                context = _build_dashboard_context(self.user)
+
+                slugs = [m["slug"] for m in context["modules"]]
+                self.assertEqual(slugs, ["chat", "mail"])
+
+    @patch("workspace.dashboard.services.modules.get_unread_badges")
+    @patch("workspace.dashboard.services.modules.visible_modules")
     def test_empty_hidden_modules_shows_all(self, mock_visible, mock_badges):
         mock_visible.return_value = [_mod("chat"), _mod("mail")]
         mock_badges.return_value = {}

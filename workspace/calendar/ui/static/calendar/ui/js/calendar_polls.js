@@ -3,6 +3,20 @@
 // Calls into pollUtils helpers from polls.js for vote-class/icon and
 // slot date/time formatting (kept in polls.js because they're shared with
 // the standalone /polls/<token> guest-vote page).
+// The first sentence the API reports about the slots: one for the list
+// (too few slots), or one per slot and per field.
+function pollSlotsError(data) {
+  const slots = data?.slots;
+  if (!slots) return '';
+  if (!Array.isArray(slots)) return slots.non_field_errors?.[0] || '';
+  for (const slot of slots) {
+    if (typeof slot === 'string') return slot;
+    const sentences = Object.values(slot || {})[0];
+    if (sentences?.[0]) return sentences[0];
+  }
+  return '';
+}
+
 window.calendarPollsMixin = function calendarPollsMixin() {
   return {
     _pollLoads: window.latestOnly(),
@@ -103,7 +117,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
           this.openPollDetail(created.uuid);
         } else {
           const data = await resp.json().catch(() => null);
-          this.pollFormError = data?.detail || data?.slots?.[0] || gettext('Failed to create poll.');
+          this.pollFormError = data?.detail || pollSlotsError(data) || gettext('Failed to create poll.');
         }
       } catch (e) {
         this.pollFormError = gettext('Network error. Please try again.');
@@ -412,7 +426,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
 
         } else {
           const data = await resp.json().catch(() => null);
-          this.pollFormError = data?.detail || data?.slots?.[0] || gettext('Failed to update poll.');
+          this.pollFormError = data?.detail || pollSlotsError(data) || gettext('Failed to update poll.');
         }
       } catch (e) {
         this.pollFormError = gettext('Network error. Please try again.');

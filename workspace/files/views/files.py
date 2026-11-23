@@ -44,7 +44,12 @@ from workspace.notifications.services.notifications import notify
 from workspace.users.services.settings import get_user_language
 
 from ..models import File
-from ..serializers import FileLocked, FileSerializer, locked_payload
+from ..serializers import (
+    FileListQuerySerializer,
+    FileLocked,
+    FileSerializer,
+    locked_payload,
+)
 from ..viewsets.actions import ActionsMixin
 from ..viewsets.comments import CommentsMixin
 from ..viewsets.content import ContentMixin
@@ -379,28 +384,19 @@ class FileViewSet(
         return queryset.exclude(excluded._descendant_filter())
 
     def _is_favorites_query(self):
-        value = self.request.query_params.get("favorites")
-        if value is None:
-            return False
-        return str(value).lower() in {"1", "true", "yes"}
+        return is_truthy(self.request.query_params.get("favorites"))
 
     def _is_recent_query(self):
-        value = self.request.query_params.get("recent")
-        if value is None:
-            return False
-        return str(value).lower() in {"1", "true", "yes"}
+        return is_truthy(self.request.query_params.get("recent"))
 
     def _is_trash_query(self):
-        value = self.request.query_params.get("trashed")
-        if value is None:
-            return False
-        return str(value).lower() in {"1", "true", "yes"}
+        return is_truthy(self.request.query_params.get("trashed"))
 
     def _is_groups_query(self):
         return is_truthy(self.request.query_params.get("groups"))
 
     def _is_descendants_query(self):
-        return self.request.query_params.get("descendants", "").lower() in {"1", "true"}
+        return is_truthy(self.request.query_params.get("descendants"))
 
     def _is_paginated_query(self):
         return "limit" in self.request.query_params
@@ -496,8 +492,12 @@ class FileViewSet(
             )
 
         # Resolve parent context: detect group from parent, resolve descendants
-        parent_uuid = self.request.query_params.get("parent")
-        group_id = self.request.query_params.get("group")
+        parent_uuid = group_id = None
+        if self.action == "list":
+            query = FileListQuerySerializer(data=self.request.query_params)
+            query.is_valid(raise_exception=True)
+            parent_uuid = query.validated_data.get("parent")
+            group_id = query.validated_data.get("group")
         ancestor = None
 
         if self.action == "list" and parent_uuid:

@@ -99,7 +99,10 @@ def validate_profile_setting(key, value):
         if isinstance(value, dict):
             if set(value.keys()) != {"from", "via", "to"}:
                 return False, "Custom palette must have exactly from, via, to keys."
-            if not all(_HEX_RE.match(value.get(k, "")) for k in ("from", "via", "to")):
+            if not all(
+                isinstance(colour, str) and _HEX_RE.match(colour)
+                for colour in value.values()
+            ):
                 return False, "Each color must be a valid #rrggbb hex string."
             return True, None
         return False, "Palette must be a preset ID or {from, via, to} object."

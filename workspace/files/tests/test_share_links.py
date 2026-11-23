@@ -1,5 +1,5 @@
 import secrets
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -106,6 +106,38 @@ class ShareLinkAPITests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertIsNotNone(resp.data["expires_at"])
+
+    def test_the_expiry_is_stored_as_the_instant_it_names(self):
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.post(
+            f"/api/v1/files/{self.file.uuid}/share-links",
+            {"expires_at": "2026-12-31T23:59:59+02:00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        link = FileShareLink.objects.get(uuid=resp.data["uuid"])
+        self.assertEqual(
+            link.expires_at, datetime(2026, 12, 31, 21, 59, 59, tzinfo=UTC)
+        )
+
+    def test_options_of_the_wrong_type_are_refused(self):
+        self.client.force_authenticate(user=self.user)
+        for options in (
+            {"expires_at": "next week"},
+            {"expires_at": 12},
+            {"mode": "everything"},
+            {"max_file_count": "many"},
+            {"max_file_bytes": [1]},
+            {"password": ["secret"]},
+        ):
+            with self.subTest(options=options):
+                resp = self.client.post(
+                    f"/api/v1/files/{self.file.uuid}/share-links",
+                    options,
+                    format="json",
+                )
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(FileShareLink.objects.exists())
 
     def test_create_share_link_with_password(self):
         self.client.force_authenticate(user=self.user)

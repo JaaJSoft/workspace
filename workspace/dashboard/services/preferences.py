@@ -11,6 +11,9 @@ MODULE = "dashboard"
 # Slugs of the Today card's sources the user switched off.
 HIDDEN_TODAY_SOURCES = "hidden_today_sources"
 
+# Slugs of the modules whose tile the user took off the grid.
+HIDDEN_MODULES = "hidden_modules"
+
 TEMPERATURE_UNIT = "temperature_unit"
 
 CELSIUS = "celsius"
@@ -25,12 +28,18 @@ def temperature_unit(dashboard_settings):
     return value if value in TEMPERATURE_UNITS else CELSIUS
 
 
-def is_source_list(value):
-    """Whether *value* can be stored as ``hidden_today_sources``."""
+def is_slug_list(value):
+    """Whether *value* can be stored as one of the two lists of slugs."""
     return isinstance(value, list) and all(isinstance(slug, str) for slug in value)
 
 
 def hidden_today_sources(dashboard_settings):
     """Slugs of the Today sources switched off; none on a malformed value."""
     value = dashboard_settings.get(HIDDEN_TODAY_SOURCES)
-    return set(value) if is_source_list(value) else set()
+    return set(value) if is_slug_list(value) else set()
+
+
+def hidden_modules(dashboard_settings):
+    """Slugs of the modules taken off the grid; none on a malformed value."""
+    value = dashboard_settings.get(HIDDEN_MODULES)
+    return set(value) if is_slug_list(value) else set()

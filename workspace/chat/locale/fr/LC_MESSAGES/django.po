@@ -1269,11 +1269,7 @@ msgstr "Impossible de créer une conversation privée avec vous-même."
 msgid "Only group conversations can be renamed."
 msgstr "Seules les conversations de groupe peuvent être renommées."
 
-#: views/conversations.py
-msgid "Title cannot be empty."
-msgstr "Le titre ne peut pas être vide."
-
-#: views/conversations.py
+#: serializers.py
 msgid "No fields to update. Provide title or description."
 msgstr "Aucun champ à mettre à jour. Indiquez un titre ou une description."
 

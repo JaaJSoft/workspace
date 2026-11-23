@@ -834,6 +834,38 @@ class ScheduleToolTests(TestCase):
         self.assertEqual(schedule.recurrence_interval, 2)
         self.assertEqual(schedule.recurrence_unit, "hours")
 
+    def test_a_day_out_of_range_schedules_nothing(self):
+        for every, on_day in (
+            ("weeks", 7),
+            ("weeks", -1),
+            ("months", 0),
+            ("months", 32),
+        ):
+            with self.subTest(every=every, on_day=on_day), self.assertRaises(ToolError):
+                self._call(
+                    "schedule_message",
+                    ScheduleMessageParams(
+                        prompt="Check in", every=every, on_day=on_day
+                    ),
+                )
+        self.assertFalse(ScheduledMessage.objects.exists())
+
+    def test_the_last_day_of_each_range_is_scheduled(self):
+        for every, on_day in (
+            ("weeks", 0),
+            ("weeks", 6),
+            ("months", 1),
+            ("months", 31),
+        ):
+            with self.subTest(every=every, on_day=on_day):
+                result = self._call(
+                    "schedule_message",
+                    ScheduleMessageParams(
+                        prompt="Check in", every=every, on_day=on_day
+                    ),
+                )
+                self.assertIn("Scheduled recurring", result)
+
     def test_schedule_recurring_daily_converts_to_utc(self):
         """Regression: schedule_message used django.utils.timezone.utc which
         does not exist — must use datetime.timezone.utc for the conversion."""

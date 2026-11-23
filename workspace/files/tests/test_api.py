@@ -887,3 +887,13 @@ class MalformedIdentifierTests(APITestCase):
             with self.subTest(path=path):
                 resp = self.client.delete(f"/api/v1/files/{self.folder.uuid}/{path}")
                 self.assertEqual(resp.status_code, 404)
+
+    def test_a_parent_or_a_group_that_is_not_an_id_is_a_400(self):
+        for query in ("parent=abc", "parent=123", "group=abc", "group=1.5", "group=0"):
+            with self.subTest(query=query):
+                response = self.client.get(f"/api/v1/files?{query}")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_an_empty_parent_is_no_parent(self):
+        response = self.client.get("/api/v1/files?parent=")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

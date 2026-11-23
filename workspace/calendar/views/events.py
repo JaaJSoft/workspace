@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.booleans import is_truthy
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import (
@@ -64,7 +65,8 @@ def _parse_dt(value):
         if dt.tzinfo is None:
             dt = timezone.make_aware(dt)
         return dt
-    except ValueError, TypeError:
+    # OverflowError: a run of digits dateutil reads as a number too large.
+    except ValueError, TypeError, OverflowError:
         return None
 
 
@@ -203,11 +205,7 @@ class EventListView(CacheControlMixin, APIView):
             if calendar_ids is None:
                 return _invalid_calendar_ids()
 
-        show_declined = request.query_params.get("show_declined", "").lower() in (
-            "1",
-            "true",
-            "yes",
-        )
+        show_declined = is_truthy(request.query_params.get("show_declined"))
 
         after_id = request.query_params.get("after_id") or None
         if (

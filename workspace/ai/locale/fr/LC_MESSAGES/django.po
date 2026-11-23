@@ -36,6 +36,10 @@ msgstr "Une transcription seule ne permet de cloner aucune voix."
 msgid "Instructions are required for custom actions."
 msgstr "Les actions personnalisées demandent des instructions."
 
+#: serializers.py
+msgid "Another memory of this assistant already has this key."
+msgstr "Un autre souvenir de cet assistant porte déjà cette clé."
+
 #: services/responses.py
 msgid "Sorry, I encountered an error generating a response. Please try again."
 msgstr ""

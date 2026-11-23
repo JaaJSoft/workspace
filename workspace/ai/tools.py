@@ -1570,6 +1570,16 @@ schedules with a similar prompt — update or cancel the old one instead of crea
 
         at_time_str = args.at_time.strip()
         on_day = args.on_day
+        day_range = {"weeks": (0, 6), "months": (1, 31)}.get(every)
+        if (
+            on_day is not None
+            and day_range
+            and not day_range[0] <= on_day <= day_range[1]
+        ):
+            raise ToolError(
+                f"on_day must be between {day_range[0]} and {day_range[1]} "
+                f"for a schedule in {every}"
+            )
 
         recurrence_time = None
         if at_time_str:

@@ -228,10 +228,8 @@ servers of the generic OAuth2 provider, which the administrator chose.
 An account whose server is refused keeps its messages and stops syncing; its
 last sync error says why, and so does **Test connection**.
 
-The name is resolved for the check and again by the connection. A name
-pointed elsewhere in between reaches nothing useful: the connection is TLS
-with a verified certificate, so a server that cannot prove the name gets a
-refused handshake.
+The address checked is the one connected to, which defeats DNS rebinding.
+TLS still runs against the server's name.
 
 ### Stored data
 

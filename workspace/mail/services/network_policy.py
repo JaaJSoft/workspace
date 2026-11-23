@@ -3,7 +3,7 @@
 from django.conf import settings
 from django.utils.translation import gettext as _
 
-from workspace.common.url_guard import NetworkPolicy, check_resolved_host
+from workspace.common.url_guard import NetworkPolicy, connect_vetted
 
 
 def mail_network_policy() -> NetworkPolicy:
@@ -27,6 +27,7 @@ def mail_network_policy() -> NetworkPolicy:
     )
 
 
-def check_mail_host(host):
-    """Raise ``UnsafeUrl`` when mail may not connect to *host*."""
-    check_resolved_host(host, mail_network_policy())
+def open_mail_socket(host, port, timeout, source_address=None):
+    """A TCP connection to a mail server, at an address that was vetted;
+    ``UnsafeUrl`` when mail may not connect to *host*."""
+    return connect_vetted(host, port, timeout, mail_network_policy(), source_address)

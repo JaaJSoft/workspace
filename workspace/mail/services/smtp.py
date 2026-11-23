@@ -15,7 +15,7 @@ from email.utils import formataddr, formatdate, make_msgid
 from workspace.common.logging import scrub
 from workspace.common.url_guard import UnsafeUrl
 from workspace.mail.services import tls
-from workspace.mail.services.network_policy import check_mail_host
+from workspace.mail.services.network_policy import open_mail_socket
 
 logger = logging.getLogger(__name__)
 
@@ -26,18 +26,33 @@ logger = logging.getLogger(__name__)
 SMTP_TIMEOUT = 30
 
 
+class GuardedSMTP(smtplib.SMTP):
+    """smtplib on a socket that only dials an address mail may connect to.
+
+    ``_get_socket`` is the hook smtplib gives its own TLS subclass; the
+    connection security tests fail if an upgrade moves it.
+    """
+
+    def _get_socket(self, host, port, timeout):
+        return open_mail_socket(host, port, timeout, self.source_address)
+
+
+class GuardedSMTPSSL(smtplib.SMTP_SSL):
+    def _get_socket(self, host, port, timeout):
+        sock = open_mail_socket(host, port, timeout, self.source_address)
+        return self.context.wrap_socket(sock, server_hostname=self._host)
+
+
 def connect_smtp(account):
     """Open and authenticate an SMTP connection for the given account.
 
     ``smtp_use_tls`` picks STARTTLS (on) or implicit TLS (off), and both verify
-    the server's certificate before any credential is sent.
+    the server's certificate before any credential is sent. A server mail may
+    not connect to raises ``UnsafeUrl``.
     """
-    check_mail_host(account.smtp_host)
     context = tls.client_context()
     if account.smtp_use_tls:
-        server = smtplib.SMTP(
-            account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT
-        )
+        server = GuardedSMTP(account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT)
         try:
             server.ehlo()
             server.starttls(context=context)
@@ -46,7 +61,7 @@ def connect_smtp(account):
             server.close()
             raise
     else:
-        server = smtplib.SMTP_SSL(
+        server = GuardedSMTPSSL(
             account.smtp_host, account.smtp_port, timeout=SMTP_TIMEOUT, context=context
         )
         server.ehlo()

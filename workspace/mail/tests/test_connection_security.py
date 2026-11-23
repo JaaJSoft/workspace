@@ -7,6 +7,7 @@ hands it a context that does, which is how a man in the middle looks to a
 client that verifies certificates.
 """
 
+import contextlib
 import datetime
 import ipaddress
 import socketserver
@@ -24,6 +25,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from imapclient.exceptions import IMAPClientError, LoginError
 
+from workspace.common.tests.network import FakeNetwork
 from workspace.mail.models import MailAccount
 from workspace.mail.services.imap_connection import connect_imap
 from workspace.mail.services.smtp import connect_smtp
@@ -33,8 +35,12 @@ User = get_user_model()
 PASSWORD = "s3cret-password"
 
 
+# A name the tests resolve to the loopback server themselves.
+NAMED = "mail.test"
+
+
 def _self_signed_cert(test):
-    """Paths of a certificate and key valid for 127.0.0.1."""
+    """Paths of a certificate and key valid for 127.0.0.1 and for NAMED."""
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
     now = datetime.datetime.now(datetime.UTC)
@@ -48,7 +54,10 @@ def _self_signed_cert(test):
         .not_valid_after(now + datetime.timedelta(days=1))
         .add_extension(
             x509.SubjectAlternativeName(
-                [x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
+                [
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                    x509.DNSName(NAMED),
+                ]
             ),
             critical=False,
         )
@@ -181,6 +190,17 @@ def _trusting(server):
     )
 
 
+def _resolving_to_loopback():
+    """NAMED answers 127.0.0.1 and passes the guard, which never lets a real
+    name reach loopback: the only way to watch a vetted address being dialed
+    on a server that listens there."""
+    answers = {NAMED: [["127.0.0.1"]], "127.0.0.1": [["127.0.0.1"]]}
+    stack = contextlib.ExitStack()
+    network = stack.enter_context(FakeNetwork(answers))
+    stack.enter_context(patch("workspace.common.url_guard._check_address"))
+    return stack, network
+
+
 class _AccountMixin:
     def setUp(self):
         user = User.objects.create_user(username="wire", password="pw")
@@ -225,6 +245,18 @@ class ConnectImapSecurityTests(_AccountMixin, TestCase):
         self.assertIn((False, b"STARTTLS"), commands)
         self.assertIn((True, b"LOGIN"), commands)
         self.assertNothingSentInClear(server, b"LOGIN")
+
+    def test_a_named_server_is_dialed_once_at_its_vetted_address(self):
+        for implicit_tls in (True, False):
+            with self.subTest(implicit_tls=implicit_tls):
+                server = _serve(self, _IMAPHandler, implicit_tls=implicit_tls)
+                self.account.imap_host = NAMED
+                stack, network = _resolving_to_loopback()
+                with stack, _trusting(server):
+                    self._connect(server, implicit_tls=implicit_tls).logout()
+
+                self.assertEqual(network.lookups.count(NAMED), 1)
+                self.assertIn((True, b"LOGIN"), self._imap_commands(server))
 
     def test_starttls_refused_when_the_server_does_not_offer_it(self):
         server = _serve(self, _IMAPHandler, offers_starttls=False)
@@ -286,6 +318,18 @@ class ConnectSmtpSecurityTests(_AccountMixin, TestCase):
         return [
             (tls, line.split(b" ")[0].strip().upper()) for tls, line in server.received
         ]
+
+    def test_a_named_server_is_dialed_once_at_its_vetted_address(self):
+        for starttls in (True, False):
+            with self.subTest(starttls=starttls):
+                server = _serve(self, _SMTPHandler, implicit_tls=not starttls)
+                self.account.smtp_host = NAMED
+                stack, network = _resolving_to_loopback()
+                with stack, _trusting(server):
+                    self._connect(server, starttls=starttls).quit()
+
+                self.assertEqual(network.lookups.count(NAMED), 1)
+                self.assertIn((True, b"AUTH"), self._smtp_commands(server))
 
     def test_starttls_upgrades_before_authenticating(self):
         server = _serve(self, _SMTPHandler)

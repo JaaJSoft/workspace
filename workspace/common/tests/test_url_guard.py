@@ -9,8 +9,8 @@ from workspace.common.url_guard import (
     UnsafeUrl,
     check_remote_host,
     check_remote_url,
-    check_resolved_host,
     check_resolved_url,
+    connect_vetted,
     guarded_transport,
     read_capped,
 )
@@ -235,31 +235,85 @@ class CheckRemoteHostTests(SimpleTestCase):
             check_remote_host("  ")
 
 
-class CheckResolvedHostTests(SimpleTestCase):
-    def test_a_name_resolving_to_a_public_address_passes(self):
+class _Dialer:
+    """Stands in for ``socket.create_connection``: records each attempt and
+    hands back a token naming the address, or refuses an unreachable one."""
+
+    def __init__(self, unreachable=()):
+        self.unreachable = set(unreachable)
+        self.dialed = []
+
+    def __call__(self, address, timeout=None, source_address=None):
+        self.dialed.append(address)
+        if address[0] in self.unreachable:
+            raise ConnectionRefusedError
+        return f"socket to {address[0]}"
+
+
+class ConnectVettedTests(SimpleTestCase):
+    def _connect(self, dialer, host, policy=None):
+        with patch("socket.create_connection", dialer):
+            if policy is None:
+                return connect_vetted(host, 993, 5)
+            return connect_vetted(host, 993, 5, policy)
+
+    def test_a_name_is_dialed_at_the_address_that_was_vetted(self):
+        dialer = _Dialer()
         with FakeNetwork({"imap.example.org": [[PUBLIC]]}) as net:
-            check_resolved_host("imap.example.org")
+            sock = self._connect(dialer, "imap.example.org")
+        self.assertEqual(sock, f"socket to {PUBLIC}")
+        self.assertEqual(dialer.dialed, [(PUBLIC, 993)])
         self.assertEqual(net.lookups, ["imap.example.org"])
 
-    def test_a_name_resolving_to_a_private_address_is_refused(self):
+    def test_every_answer_is_checked_before_the_first_is_dialed(self):
+        dialer = _Dialer()
         with FakeNetwork({"imap.example.org": [[PUBLIC, "10.0.0.5"]]}):
             with self.assertRaisesRegex(UnsafeUrl, "private network"):
-                check_resolved_host("imap.example.org")
+                self._connect(dialer, "imap.example.org")
+        self.assertEqual(dialer.dialed, [])
 
-    def test_a_name_resolving_to_loopback_is_refused_whatever_the_policy(self):
+    def test_a_name_that_changes_its_answer_is_refused_at_the_new_one(self):
+        dialer = _Dialer()
+        with FakeNetwork({"imap.example.org": [[PUBLIC], ["127.0.0.1"]]}):
+            self._connect(dialer, "imap.example.org")
+            with self.assertRaises(UnsafeUrl):
+                self._connect(dialer, "imap.example.org")
+        self.assertEqual(dialer.dialed, [(PUBLIC, 993)])
+
+    def test_the_next_answer_is_tried_when_one_is_unreachable(self):
+        dialer = _Dialer(unreachable=[PUBLIC])
+        with FakeNetwork({"imap.example.org": [[PUBLIC, PUBLIC_V6]]}):
+            sock = self._connect(dialer, "imap.example.org")
+        self.assertEqual(sock, f"socket to {PUBLIC_V6}")
+        self.assertEqual(dialer.dialed, [(PUBLIC, 993), (PUBLIC_V6, 993)])
+
+    def test_no_reachable_answer_raises_the_last_failure(self):
+        dialer = _Dialer(unreachable=[PUBLIC, PUBLIC_V6])
+        with FakeNetwork({"imap.example.org": [[PUBLIC, PUBLIC_V6]]}):
+            with self.assertRaises(ConnectionRefusedError):
+                self._connect(dialer, "imap.example.org")
+
+    def test_loopback_is_refused_whatever_the_policy(self):
+        dialer = _Dialer()
+        for host in ("127.0.0.1", "localhost"):
+            with self.subTest(host=host), self.assertRaises(UnsafeUrl):
+                self._connect(dialer, host, LAN)
         with FakeNetwork({"imap.example.org": [["127.0.0.1"]]}):
             with self.assertRaises(UnsafeUrl):
-                check_resolved_host("imap.example.org", LAN)
+                self._connect(dialer, "imap.example.org", LAN)
+        self.assertEqual(dialer.dialed, [])
 
     def test_an_unresolvable_name_is_refused(self):
         with FakeNetwork({}):
             with self.assertRaisesRegex(UnsafeUrl, "could not be resolved"):
-                check_resolved_host("nope.invalid")
+                self._connect(_Dialer(), "nope.invalid")
 
-    def test_an_allow_listed_host_is_not_resolved(self):
+    def test_an_allow_listed_host_is_dialed_by_name(self):
+        dialer = _Dialer()
         policy = NetworkPolicy(allowed_hosts=["mail.lan"])
         with FakeNetwork({}) as net:
-            check_resolved_host("mail.lan", policy)
+            self._connect(dialer, "mail.lan", policy)
+        self.assertEqual(dialer.dialed, [("mail.lan", 993)])
         self.assertEqual(net.lookups, [])
 
 

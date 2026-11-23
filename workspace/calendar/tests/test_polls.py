@@ -1001,6 +1001,24 @@ class PollInviteTests(PollTestMixin, APITestCase):
         self.assertFalse(Notification.objects.filter(recipient=self.voter).exists())
         self.assertTrue(Notification.objects.filter(recipient=newcomer).exists())
 
+    def test_a_failed_notification_leaves_nobody_invited(self):
+        # Otherwise a retry skips them as already invited and never tells them.
+        self.client.force_authenticate(user=self.owner)
+        self.client.raise_request_exception = False
+
+        with patch(
+            "workspace.calendar.views.polls.notify_in_languages",
+            side_effect=RuntimeError("push down"),
+        ):
+            resp = self.client.post(
+                f"/api/v1/polls/{self.poll.uuid}/invite",
+                {"user_ids": [self.voter.id]},
+                format="json",
+            )
+
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertFalse(PollInvitee.objects.filter(poll=self.poll).exists())
+
     def test_only_creator_can_invite(self):
         self.client.force_authenticate(user=self.voter)
         resp = self.client.post(

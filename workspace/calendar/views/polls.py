@@ -437,6 +437,7 @@ class PollInviteView(APIView):
         request=PollInviteSerializer,
         responses=PollSerializer,
     )
+    @transaction.atomic
     def post(self, request, poll_id):
         poll = get_object_or_404(
             Poll,

@@ -27,11 +27,11 @@ View-level (DRF class-based views)::
 
 For global (non-user-specific) view caching::
 
-    class ModulesView(APIView):
+    class InstanceInfoView(APIView):
         @cached_response(3600, per_user=False)
         def get(self, request): ...
 
-    invalidate('ModulesView')
+    invalidate('InstanceInfoView')
 """
 
 import hashlib

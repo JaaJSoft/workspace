@@ -340,3 +340,27 @@ class SuiteDefaultTests(SimpleTestCase):
         preview module's own tests would all be refused. Tests of the audience
         override it back."""
         self.assertEqual(settings.PREVIEW_VISIBILITY, "all")
+
+
+@override_settings(PREVIEW_VISIBILITY="staff")
+class ModulesEndpointTests(TestCase):
+    """GET /api/v1/modules names a preview module to its audience only."""
+
+    def setUp(self):
+        self.normal = User.objects.create_user(username="n", password="x")
+        self.staff = User.objects.create_user(username="s", password="x", is_staff=True)
+        self.previews = {m.slug for m in registry.get_all() if m.preview}
+
+    def tearDown(self):
+        cache.clear()
+
+    def _listed(self, user):
+        self.client.force_login(user)
+        results = self.client.get("/api/v1/modules").json()["results"]
+        return {module["slug"] for module in results}
+
+    def test_a_preview_module_is_listed_to_its_audience_only(self):
+        self.assertTrue(self.previews)
+        # Staff first: an answer shared between users would hand theirs on.
+        self.assertLessEqual(self.previews, self._listed(self.staff))
+        self.assertFalse(self.previews & self._listed(self.normal))

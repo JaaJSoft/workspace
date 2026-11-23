@@ -146,7 +146,7 @@ dev = [
     "pyhpke>=0.6.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
-    "ruff==0.17.5",
+    "ruff==0.17.6",
     # HTML template linter/formatter (djlint workspace --lint / --reformat).
     "djlint>=1.54.0",
     # Office authoring libraries, used only to write the fixtures the text

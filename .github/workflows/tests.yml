@@ -93,7 +93,7 @@ jobs:
 
       - name: Filter changed paths
         id: filter
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        uses: dorny/paths-filter@v4.0.3
         with:
           filters: |
             python:
@@ -655,7 +655,7 @@ jobs:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -717,7 +717,7 @@ jobs:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -787,7 +787,7 @@ jobs:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Install dependencies
         run: uv sync --frozen

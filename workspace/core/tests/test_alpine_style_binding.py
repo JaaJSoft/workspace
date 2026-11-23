@@ -16,12 +16,20 @@ from django.test import SimpleTestCase
 WORKSPACE = Path(__file__).resolve().parents[2]
 
 TAG_START = re.compile(r"<([a-zA-Z][\w-]*)")
+# An attribute value may hold its own double quotes inside {{ }} or {% %}. Each
+# character can only start one branch, so a value that never closes fails in
+# linear time instead of backtracking through every way to split it.
+VALUE = (
+    r"(?:\{\{(?:[^}]|\}(?!\}))*\}\}"
+    r"|\{%(?:[^%]|%(?!\}))*%\}"
+    r"|\{(?![{%])"
+    r'|[^"{])*'
+)
 # One attribute, a bare Django tag between attributes, or the end of the tag.
-# A value may hold its own double quotes inside {{ }} or {% %}.
 TAG_PART = re.compile(
     r"\s*(?:(?P<end>/?>)"
     r"|(?P<django>\{%.*?%\}|\{\{.*?\}\}|\{#.*?#\})"
-    r'|(?P<name>[^\s=>/"]+)(?:="(?P<value>(?:\{\{.*?\}\}|\{%.*?%\}|[^"])*)")?)',
+    rf'|(?P<name>[^\s=>/"]+)(?:="(?P<value>{VALUE})")?)',
     re.DOTALL,
 )
 HIDES = re.compile(r"x-show|x-transition(?:[.:].*)?|x-collapse(?:\..*)?")

@@ -1125,9 +1125,11 @@ menu stayed on screen at 0,0 with no row behind it.
   `:style` must use the object form. When in doubt, use the object form: it is
   never wrong.
 - The string form is only safe on an element nothing else styles at runtime.
-- A unit test cannot see this - it is the browser's style attribute. Check it
-  in a real browser by reading `getComputedStyle(el).display` after the state
-  that should have hidden the element.
+- A unit test cannot see this - it is the browser's style attribute, and a
+  browser test only catches the effect order that happened to run.
+  `core/tests/test_alpine_style_binding.py` checks the templates instead: it
+  fails on a string `:style` on any element `x-show`, `x-transition` or
+  `x-collapse` also touches.
 
 ### `$root` is a DOM element, not the parent component's data
 
@@ -1431,6 +1433,6 @@ const data = await resp.json();
 const actionIds = (data[fileUuid] || []).map(a => a.id);
 ```
 
-Use a race-protection counter (see `_notesGeneration` in `workspace/notes/ui/static/notes/ui/js/notes.js`) when the fetched list feeds reactive state that depends on the current selection - rapid selection changes otherwise lead to stale results being applied.
+Use a race-protection counter (see `_actionsFetchGen` in `workspace/notes/ui/static/notes/ui/js/notes.js`) when the fetched list feeds reactive state that depends on the current selection - rapid selection changes otherwise lead to stale results being applied.
 
 **Scope:** applies to the `files` module and every module whose UI manipulates files (notes, mail attachments, chat attachments, etc.). If a module manipulates another kind of entity with its own action registry (not files), follow the same principle against that module's equivalent endpoint - `POST /api/v1/projects/actions` for projects and tasks, `POST /api/v1/vault/actions` for vault entries. The vault one differs on a point worth knowing before you copy it: it never answers 404, because one unreachable UUID must not cost the rest of the batch its answer. Every submitted UUID comes back with a key - spelled the way you sent it - and an unreachable one comes back with an empty list. That is a batch-semantics choice, not a disclosure one: the projects 404 fires for "no such row" and "not yours" alike, so neither endpoint tells the two apart.

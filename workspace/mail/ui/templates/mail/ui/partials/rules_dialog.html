@@ -401,11 +401,9 @@
           ></textarea>
         </div>
 
-        <div
-          x-show="rulesForm.error"
-          class="text-error text-xs"
-          x-text="rulesForm.error"
-        ></div>
+        <inline-alert type="error" class="mt-3" x-show="rulesForm.error" x-cloak>
+        <span x-text="rulesForm.error"></span>
+        </inline-alert>
 
         <label class="flex items-center gap-2 mt-3">
           <input

@@ -163,9 +163,9 @@ and the tag_dialog partial on the same page for create/edit.
           </template>
         </select>
       </label>
-      <div x-show="tagManager.error" x-cloak class="mb-3">
-        <div class="text-sm text-error" x-text="tagManager.error"></div>
-      </div>
+      <inline-alert type="error" class="mb-3" x-show="tagManager.error" x-cloak>
+      <span x-text="tagManager.error"></span>
+      </inline-alert>
       <div class="modal-action">
         <button type="button" class="btn btn-ghost btn-sm" @click="cancelTagMerge()">{% translate "Cancel" %}</button>
         <button

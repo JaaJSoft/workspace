@@ -186,10 +186,9 @@
       <div class="flex-1 overflow-y-auto space-y-4 pr-1">
         <!-- Error -->
         <template x-if="pollFormError">
-          <div class="alert alert-error alert-sm">
-            <i data-lucide="alert-circle" class="w-4 h-4"></i>
-            <span x-text="pollFormError"></span>
-          </div>
+          <inline-alert type="error">
+          <span x-text="pollFormError"></span>
+          </inline-alert>
         </template>
 
         <label class="fieldset w-full">
@@ -315,10 +314,9 @@
       <div class="flex-1 overflow-y-auto space-y-4 pr-1">
         <!-- Error -->
         <template x-if="pollFormError">
-          <div class="alert alert-error alert-sm">
-            <i data-lucide="alert-circle" class="w-4 h-4"></i>
-            <span x-text="pollFormError"></span>
-          </div>
+          <inline-alert type="error">
+          <span x-text="pollFormError"></span>
+          </inline-alert>
         </template>
 
         <label class="fieldset w-full">
@@ -510,33 +508,30 @@
 
       <!-- Closed banner -->
       <template x-if="currentPoll?.status === 'closed'">
-        <div class="alert mb-4 bg-base-200 border-base-300">
-          <i data-lucide="trophy" class="w-5 h-5 text-success shrink-0"></i>
-          <div class="flex-1">
-            <span class="font-medium">{% translate "This poll has been finalized." %}</span>
-            <template x-if="currentPoll?.event_id">
-              <span class="ml-1">{% translate "An event has been created." %}</span>
-            </template>
-            <template x-if="pollChosenSlot()">
-              <p class="text-sm opacity-60 mt-0.5">
-                {% translate "Chosen date:" %} <span
-                  class="font-medium text-base-content"
-                  x-text="formatPollSlotDate(pollChosenSlot()) + ' ' + formatPollSlotTime(pollChosenSlot())"
-                ></span>
-              </p>
-            </template>
-          </div>
-          <template x-if="currentPoll?.event_id">
-            <button
-              type="button"
-              class="btn btn-sm btn-module gap-1.5 shrink-0"
-              @click="closePollDetail(); openEventById(currentPoll.event_id)"
-            >
-              <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-              {% translate "View event" %}
-            </button>
-          </template>
-        </div>
+        <inline-alert type="success" icon="trophy" class="mb-4">
+        <span class="font-medium text-base-content">{% translate "This poll has been finalized." %}</span>
+        <template x-if="currentPoll?.event_id">
+          <span class="ml-1">{% translate "An event has been created." %}</span>
+        </template>
+        <template x-if="pollChosenSlot()">
+          <p class="text-base-content/60 mt-0.5">
+            {% translate "Chosen date:" %} <span
+              class="font-medium text-base-content"
+              x-text="formatPollSlotDate(pollChosenSlot()) + ' ' + formatPollSlotTime(pollChosenSlot())"
+            ></span>
+          </p>
+        </template>
+        <template slot="actions" x-if="currentPoll?.event_id">
+          <button
+            type="button"
+            class="btn btn-xs btn-module gap-1"
+            @click="closePollDetail(); openEventById(currentPoll.event_id)"
+          >
+            <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+            {% translate "View event" %}
+          </button>
+        </template>
+        </inline-alert>
       </template>
 
       <!-- Finalize toolbar (creator only, open poll) — above grid -->

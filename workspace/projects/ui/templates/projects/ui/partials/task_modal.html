@@ -4,9 +4,9 @@
   <div class="modal-box max-w-lg overflow-visible">
     {% include "ui/partials/dialog_header.html" with icon="square-pen" title=_("New task") subtitle=project.name close_expr="$refs.taskDialog.close()" only %}
     <template x-if="formError">
-      <div class="mb-2">
-        <div class="alert alert-error text-sm" x-text="formError"></div>
-      </div>
+      <inline-alert type="error" class="mb-2">
+      <span x-text="formError"></span>
+      </inline-alert>
     </template>
     <form @submit.prevent="saveTask()">
       <label class="fieldset w-full">

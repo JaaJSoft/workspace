@@ -248,9 +248,9 @@
             x-model="labelModal.notifyOnApply"
           />
         </label>
-        <div x-show="labelModal.error" x-cloak class="mb-3">
-          <div class="text-sm text-error" x-text="labelModal.error"></div>
-        </div>
+        <inline-alert type="error" class="mb-3" x-show="labelModal.error" x-cloak>
+        <span x-text="labelModal.error"></span>
+        </inline-alert>
         <div class="modal-action">
           <button
             type="button"
@@ -525,12 +525,9 @@
             />
           </label>
         </div>
-        <div id="account-error" class="mt-3" x-show="accountError" x-cloak>
-          <div class="alert alert-error text-white text-sm">
-            <i data-lucide="x-circle" class="w-4 h-4"></i>
-            <span x-text="accountError"></span>
-          </div>
-        </div>
+        <inline-alert type="error" class="mt-3" x-show="accountError" x-cloak>
+        <span x-text="accountError"></span>
+        </inline-alert>
         <div class="modal-action">
           <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">
             {% translate "Cancel" %}
@@ -649,12 +646,9 @@
               />
             </label>
           </div>
-          <div class="mt-3" x-show="editAccountError" x-cloak>
-            <div class="alert alert-error text-white text-sm">
-              <i data-lucide="x-circle" class="w-4 h-4"></i>
-              <span x-text="editAccountError"></span>
-            </div>
-          </div>
+          <inline-alert type="error" class="mt-3" x-show="editAccountError" x-cloak>
+          <span x-text="editAccountError"></span>
+          </inline-alert>
           <div class="modal-action">
             <button
               type="button"
@@ -693,12 +687,9 @@
             placeholder="{% translate "Your signature" %}"
           ></textarea>
         </label>
-        <div class="mt-3" x-show="signatureEditError" x-cloak>
-          <div class="alert alert-error text-white text-sm">
-            <i data-lucide="x-circle" class="w-4 h-4"></i>
-            <span x-text="signatureEditError"></span>
-          </div>
-        </div>
+        <inline-alert type="error" class="mt-3" x-show="signatureEditError" x-cloak>
+        <span x-text="signatureEditError"></span>
+        </inline-alert>
         <div class="modal-action">
           <button
             type="button"

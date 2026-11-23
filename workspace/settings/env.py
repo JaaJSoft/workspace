@@ -19,6 +19,35 @@ _TRUE_VALUES = {"1", "true", "yes", "on"}
 
 _CGROUP_ROOT = Path("/sys/fs/cgroup")
 
+# The key a checkout runs on when none is set. It is in the repository, so it
+# protects nothing.
+_DEVELOPMENT_SECRET_KEY = (
+    "django-insecure-(apvd+h#1t_@zz504ks3ek2q_4*wm!p+#!(vte70q*xru47-zj"
+)
+# The placeholder the deployment examples shipped is just as public.
+_PUBLISHED_SECRET_KEYS = frozenset(
+    {_DEVELOPMENT_SECRET_KEY, "change-me-to-a-real-secret-key"}
+)
+
+
+def env_secret_key(debug):
+    """SECRET_KEY from the environment.
+
+    With DEBUG on, a missing key falls back to the development one. With DEBUG
+    off, a missing key or a published placeholder refuses to start: sessions
+    are signed with the key and stored credentials are encrypted with one
+    derived from it, so a key anyone can read protects neither.
+    """
+    key = os.getenv("SECRET_KEY") or _DEVELOPMENT_SECRET_KEY
+    if not debug and key in _PUBLISHED_SECRET_KEYS:
+        raise ImproperlyConfigured(
+            "SECRET_KEY is unset or still a published placeholder. Set it to a "
+            "long random value before running with DEBUG off, for example the "
+            "output of: "
+            'python -c "import secrets; print(secrets.token_urlsafe(50))"'
+        )
+    return key
+
 
 def env_bool(name, default=False):
     """Read a boolean env var. Anything outside _TRUE_VALUES reads as False."""

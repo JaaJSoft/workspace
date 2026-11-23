@@ -76,7 +76,7 @@ kubectl apply -f ingress.yaml
 
 | Key            | Description                                                           |
 |----------------|-----------------------------------------------------------------------|
-| `SECRET_KEY`              | Django secret key. **Must be changed** before deploying.              |
+| `SECRET_KEY`              | Django secret key. **Must be changed**: the app refuses to start on the placeholder. |
 | `DATABASE_URL`            | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
 | `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key. `manage.py generate_vapid_keys` prints raw base64url; PEM and base64url DER are also accepted |

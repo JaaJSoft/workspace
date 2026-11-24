@@ -17,6 +17,9 @@ from .module_visibility import hidden_module_slugs, visible_modules
 # across every activity provider. A short time-based cache removes that cost;
 # worst-case staleness is the TTL.
 _USAGE_STATS_TTL = 60  # seconds
+# How far back a feed pages. Every provider reads offset + limit rows to merge
+# them, so the offset is what a request costs, and it is the caller's to pick.
+MAX_ACTIVITY_OFFSET = 1000
 
 
 def get_sources(user=None):
@@ -148,12 +151,15 @@ def get_recent_events(
         exclude_user_id: Exclude events from this user (e.g. self).
         search: Text to filter events by (matches description, label, actor).
         limit: Max events to return.
-        offset: Skip this many events.
+        offset: Skip this many events; past ``MAX_ACTIVITY_OFFSET`` the feed
+            is empty.
         visible_to: User whose module visibility gates the sources - UI
             callers pass the viewing user so preview modules hidden from
             them contribute no events (and an explicitly requested hidden
             source yields an empty feed).
     """
+    if offset > MAX_ACTIVITY_OFFSET:
+        return []
     allowed_sources = None
     if visible_to is not None:
         allowed = allowed_activity_sources(visible_to)

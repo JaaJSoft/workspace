@@ -193,3 +193,40 @@ class ActivityTargetUserTests(TestCase):
             with self.subTest(path=path):
                 resp = self.client.get(f"/api/v1/activity/{path}")
                 self.assertEqual(resp.status_code, 400)
+
+
+class ActivityOffsetCapTests(TestCase):
+    """An offset past the feed's depth reads no provider: each would load
+    offset + limit rows to merge them."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="pager", password="pass123")
+
+    def _fetch(self, offset):
+        from django.urls import reverse
+
+        api = APIClient()
+        api.force_authenticate(user=self.user)
+        self.client.force_login(self.user)
+        target = "workspace.core.activity_registry.ActivityRegistry.get_recent_events"
+        with patch(target, return_value=[]) as providers:
+            api_resp = api.get(f"/api/v1/activity/recents?offset={offset}")
+            feed_resp = self.client.get(
+                f"{reverse('dashboard:activity_feed')}?offset={offset}",
+                HTTP_X_ALPINE_REQUEST="true",
+            )
+        self.assertEqual(api_resp.status_code, 200)
+        self.assertEqual(feed_resp.status_code, 200)
+        return providers
+
+    def test_a_huge_offset_reads_nothing(self):
+        providers = self._fetch(100_000_000)
+
+        providers.assert_not_called()
+
+    def test_an_offset_within_the_feed_still_reads(self):
+        from workspace.core.services.activity import MAX_ACTIVITY_OFFSET
+
+        providers = self._fetch(MAX_ACTIVITY_OFFSET)
+
+        self.assertEqual(providers.call_count, 2)

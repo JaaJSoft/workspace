@@ -311,6 +311,41 @@ class VaultUpdateTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def _withdrawn(self, action_id):
+        from unittest.mock import patch
+
+        from workspace.vault.actions import VaultTargetActionRegistry
+
+        action = VaultTargetActionRegistry.get(action_id)
+        return patch.object(type(action), "is_available", return_value=False)
+
+    def test_a_withdrawn_rename_is_refused(self):
+        with self._withdrawn("rename"):
+            response = self.client.patch(self.url, self._body(), "application/json")
+
+        self.assertEqual(response.status_code, 404)
+        self.vault.refresh_from_db()
+        self.assertEqual(self.vault.encrypted_name, "AQ")
+
+    def test_a_favourite_needs_only_the_favourite_action(self):
+        self.client.patch(self.url, self._body(), "application/json")
+
+        with self._withdrawn("rename"):
+            response = self.client.patch(
+                self.url, self._body(is_favorite=True), "application/json"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.vault.refresh_from_db()
+        self.assertTrue(self.vault.is_favorite)
+
+    def test_a_withdrawn_delete_is_refused(self):
+        with self._withdrawn("delete"):
+            response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Vault.objects.filter(uuid=VAULT_UUID).exists())
+
     def test_the_owner_can_delete_their_vault(self):
         self.assertEqual(self.client.delete(self.url).status_code, 204)
         self.assertFalse(Vault.objects.filter(uuid=VAULT_UUID).exists())

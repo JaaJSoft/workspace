@@ -27,6 +27,11 @@ function makeApp(folders, accounts = [{ uuid: 'acc1' }]) {
   const app = ctx.mailApp();
   app.folders = folders;
   app.accounts = accounts;
+  // As the page embeds them from services/triage.py.
+  app.filingRules = {
+    archive_refused_from: ['archive', 'trash', 'spam', 'drafts'],
+    spam_refused_from: ['spam', 'trash', 'drafts', 'sent'],
+  };
   return app;
 }
 

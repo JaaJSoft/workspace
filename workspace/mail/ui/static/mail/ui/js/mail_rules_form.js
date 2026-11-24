@@ -1,50 +1,28 @@
 // Mail rules form: simple/advanced mode, payload building, save.
 // List-side methods (load, toggle, delete) live in mail_rules.js.
 window.mailRulesFormMixin = function mailRulesFormMixin() {
-  const TEXT_FIELDS = ['from', 'to', 'cc', 'recipient', 'subject', 'body', 'folder'];
-  const BOOL_FIELDS = ['has_attachments', 'is_starred'];
-  const DATE_FIELDS = ['date'];
-
+  // `rulesConditionFields` is root state, read from the page: every field
+  // with the operators it accepts, as services/rules/choices.py lists them.
   return {
-    rulesConditionFields: [
-      { value: 'from', label: gettext('From') },
-      { value: 'to', label: gettext('To') },
-      { value: 'cc', label: gettext('Cc') },
-      { value: 'recipient', label: gettext('To or Cc') },
-      { value: 'subject', label: gettext('Subject') },
-      { value: 'body', label: gettext('Body') },
-      { value: 'folder', label: gettext('Folder') },
-      { value: 'has_attachments', label: gettext('Has attachments') },
-      { value: 'is_starred', label: gettext('Is starred') },
-      { value: 'date', label: gettext('Date') },
-    ],
-
     rulesCompatibleOps(field) {
-      if (TEXT_FIELDS.includes(field)) {
-        return ['contains', 'equals', 'starts_with', 'ends_with', 'matches_regex', 'in_list'];
+      const entry = this.rulesConditionFields.find(f => f.value === field);
+      return entry ? entry.ops.map(o => o.value) : [];
+    },
+
+    _rulesOp(op) {
+      for (const field of this.rulesConditionFields) {
+        const found = field.ops.find(o => o.value === op);
+        if (found) return found;
       }
-      if (BOOL_FIELDS.includes(field)) return ['is_true', 'is_false'];
-      if (DATE_FIELDS.includes(field)) return ['greater_than', 'less_than'];
-      return [];
+      return null;
     },
 
     rulesOpLabel(op) {
-      return {
-        contains: gettext('contains'),
-        equals: gettext('equals'),
-        starts_with: gettext('starts with'),
-        ends_with: gettext('ends with'),
-        matches_regex: gettext('matches regex'),
-        in_list: gettext('in list'),
-        is_true: gettext('is true'),
-        is_false: gettext('is false'),
-        greater_than: gettext('greater than'),
-        less_than: gettext('less than'),
-      }[op] || op.replace(/_/g, ' ');
+      return this._rulesOp(op)?.label || op.replace(/_/g, ' ');
     },
 
     rulesNeedsValue(op) {
-      return !['is_true', 'is_false'].includes(op);
+      return this._rulesOp(op)?.takes_value ?? true;
     },
 
     // When the user switches the field, the previously-selected op may not

@@ -6,18 +6,21 @@
  * an object literal which is spread into the root, so all mixins share the
  * same `this`. State stays here; methods live in the mixins.
  */
-function _eagerAccounts() {
+function _pageData(id, fallback) {
   try {
-    const el = document.getElementById('accounts-data');
+    const el = document.getElementById(id);
     if (el) return JSON.parse(el.textContent);
   } catch (e) {}
-  return [];
+  return fallback;
 }
 
 function mailApp() {
   return {
     // State
-    accounts: _eagerAccounts(),
+    accounts: _pageData('accounts-data', []),
+    // Server-side definitions (services/rules/choices.py, services/triage.py).
+    rulesConditionFields: _pageData('mail-rule-condition-fields-data', []),
+    filingRules: _pageData('mail-filing-rules-data', { archive_refused_from: [], spam_refused_from: [] }),
     folders: {},        // { accountUuid: [folder, ...] }
     messages: [],
     selectedFolder: null,

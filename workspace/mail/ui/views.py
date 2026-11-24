@@ -15,6 +15,8 @@ from workspace.mail.services.notifications import (
     resolve_notify_mode,
 )
 from workspace.mail.services.oauth2 import get_available_providers
+from workspace.mail.services.rules.choices import condition_fields
+from workspace.mail.services.triage import ARCHIVE_REFUSED_FROM, SPAM_REFUSED_FROM
 from workspace.people.queries import person_with_email, user_persons
 from workspace.users.queries import active_user_with_email
 from workspace.users.services.settings import get_setting
@@ -39,6 +41,11 @@ def index(request):
             "notify_mode": resolve_notify_mode(request.user),
             "notify_max_burst": resolve_notify_burst(request.user),
             "mail_prefs": preferences if isinstance(preferences, dict) else {},
+            "rule_condition_fields": condition_fields(),
+            "filing_rules": {
+                "archive_refused_from": list(ARCHIVE_REFUSED_FROM),
+                "spam_refused_from": list(SPAM_REFUSED_FROM),
+            },
         },
     )
 

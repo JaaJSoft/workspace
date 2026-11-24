@@ -423,6 +423,7 @@ msgstr "Ajouter aux contacts"
 msgid "New Message"
 msgstr "Nouveau message"
 
+#: services/rules/choices.py
 #: ui/templates/mail/ui/partials/compose_dialog.html
 #: ui/templates/mail/ui/partials/message_detail.html
 msgid "To"
@@ -432,6 +433,7 @@ msgstr "À"
 msgid "Cc/Bcc"
 msgstr "Cc/Cci"
 
+#: services/rules/choices.py
 #: ui/templates/mail/ui/partials/compose_dialog.html
 #: ui/templates/mail/ui/partials/message_detail.html
 msgid "Cc"
@@ -441,6 +443,7 @@ msgstr "Cc"
 msgid "Bcc"
 msgstr "Cci"
 
+#: services/rules/choices.py
 #: ui/templates/mail/ui/partials/compose_dialog.html
 msgid "Subject"
 msgstr "Objet"
@@ -1224,3 +1227,69 @@ msgstr "Suivi"
 #: ui/templates/mail/ui/partials/folder_list.html
 msgid "Last sync failed"
 msgstr "Échec de la dernière synchronisation"
+
+#: services/rules/choices.py
+msgid "To or Cc"
+msgstr "À ou Cc"
+
+#: services/rules/choices.py
+msgid "Body"
+msgstr "Corps"
+
+#: services/rules/choices.py
+msgid "Has attachments"
+msgstr "A des pièces jointes"
+
+#: services/rules/choices.py
+msgid "Is starred"
+msgstr "Est suivi"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "contains"
+msgstr "contient"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "equals"
+msgstr "est égal à"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "starts with"
+msgstr "commence par"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "ends with"
+msgstr "se termine par"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "matches regex"
+msgstr "correspond à l’expression régulière"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "in list"
+msgstr "dans la liste"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "is true"
+msgstr "est vrai"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "is false"
+msgstr "est faux"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "greater than"
+msgstr "après"
+
+#: services/rules/choices.py
+msgctxt "mail rule operator"
+msgid "less than"
+msgstr "avant"

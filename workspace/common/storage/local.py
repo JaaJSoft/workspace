@@ -312,9 +312,11 @@ class _StagedFile(StagedWriter):
         staging = backend._staging_dir()
         os.makedirs(staging, mode=0o700, exist_ok=True)
         self._temp_path = os.path.join(staging, f"{uuid.uuid4().hex}.part")
+        # Without O_BINARY, Windows opens the descriptor in text mode and
+        # writes every \n as \r\n.
         self._fd = os.open(
             self._temp_path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
             0o600,
         )
 

@@ -247,6 +247,30 @@ class FileAPITests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["uuid"], str(child.uuid))
 
+    def test_list_a_folder_narrowed_to_one_name(self):
+        root = File.objects.create(
+            owner=self.user, name="Root", node_type=File.NodeType.FOLDER
+        )
+        wanted = File.objects.create(
+            owner=self.user,
+            name="2026-11-24.md",
+            node_type=File.NodeType.FILE,
+            parent=root,
+        )
+        File.objects.create(
+            owner=self.user,
+            name="2026-11-23.md",
+            node_type=File.NodeType.FILE,
+            parent=root,
+        )
+
+        response = self.client.get(
+            f"/api/v1/files?parent={root.uuid}&name=2026-11-24.md"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row["uuid"] for row in response.data], [str(wanted.uuid)])
+
     def test_retrieve_file(self):
         """Test retrieving a specific file."""
         file = File.objects.create(

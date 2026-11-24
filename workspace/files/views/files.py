@@ -328,6 +328,7 @@ class FileViewSet(
         "parent": ["exact"],
         "owner": ["exact"],
         "type": ["exact"],
+        "name": ["exact"],
     }
     ordering_fields = ["name", "created_at", "updated_at", "size"]
     ordering_case_insensitive_fields = ["name"]

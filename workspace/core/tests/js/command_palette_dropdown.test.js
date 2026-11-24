@@ -5,7 +5,7 @@
 // page already embeds, and never asks /api/v1/search for files.
 const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 const COMMANDS = [
   { name: 'Notes', keywords: ['notes', 'markdown'], icon: 'notebook-pen', color: 'success', url: '/notes', kind: 'navigate', module_slug: 'notes', order: 1 },
@@ -43,7 +43,7 @@ function boot({ fetchImpl, putImpl, scope = null } = {}) {
     'workspace-commands': JSON.stringify(COMMANDS),
     'search-scope-data': JSON.stringify(scope),
   };
-  const ctx = loadScript('workspace/core/static/core/js/command_palette_dropdown.js', {
+  const ctx = loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/core/static/core/js/command_palette_dropdown.js'], {
     document: {
       getElementById: (id) => (id in embedded ? { textContent: embedded[id] } : null),
       querySelector: () => ({ querySelector: () => input }),

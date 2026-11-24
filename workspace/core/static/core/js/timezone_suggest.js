@@ -4,18 +4,6 @@
  * #tz-suggest-banner.
  */
 (function() {
-  const putTimezone = function(value) {
-    return fetch('/api/v1/settings/core/timezone', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCSRFToken()
-      },
-      body: JSON.stringify({
-        value: value
-      }),
-    });
-  };
   const readDismissed = function() {
     try {
       return localStorage.getItem('tz-suggest-dismissed');
@@ -29,9 +17,7 @@
   if (!stored) {
     // A failure needs no recovery path: the setting stays unset, so the next
     // page load tries again. It does need to be visible.
-    putTimezone(detected).then(function(resp) {
-      if (!resp.ok) console.warn('Timezone save failed:', resp.status);
-    }).catch(function(err) {
+    window.saveUserSetting('core', 'timezone', detected).catch(function(err) {
       console.warn('Timezone save failed:', err);
     });
     return;
@@ -63,8 +49,7 @@
     update.addEventListener('click', function() {
       if (saving) return;
       saving = true;
-      putTimezone(detected).then(function(resp) {
-        if (!resp.ok) throw new Error('timezone save failed');
+      window.saveUserSetting('core', 'timezone', detected).then(function() {
         window.location.reload();
       }).catch(function() {
         saving = false;

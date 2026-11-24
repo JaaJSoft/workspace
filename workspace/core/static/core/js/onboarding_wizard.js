@@ -28,26 +28,13 @@ function onboardingWizard(pending) {
       if (this.completed) return Promise.resolve();
       this.completed = true;
       // keepalive lets the request finish even when the click also navigates
-      // away (module cards, "Get started"); .catch keeps a network failure
-      // from bubbling as an unhandled rejection.
-      return fetch('/api/v1/settings/core/onboarding_completed', {
-        method: 'PUT',
-        credentials: 'same-origin',
-        keepalive: true,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCSRFToken(),
-        },
-        body: JSON.stringify({
-          value: true
-        }),
-      }).then((response) => {
-        // Do not record a completion the server never accepted: the flag is
-        // what stops a retry, and the tour reads it from the server anyway.
-        if (!response.ok) this.completed = false;
-      }).catch(() => {
-        this.completed = false;
-      });
+      // away (module cards, "Get started"). A completion the server never
+      // accepted is not recorded: the flag is what stops a retry, and the
+      // tour reads it from the server anyway.
+      return window.saveUserSetting('core', 'onboarding_completed', true, { keepalive: true })
+        .catch(() => {
+          this.completed = false;
+        });
     },
     async goTo(url) {
       // Persist completion BEFORE navigating: the destination page runs the

@@ -5,7 +5,7 @@
 // when it diverges from the stored one.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 class FakeElement {
   constructor(tag = 'div') {
@@ -45,7 +45,7 @@ function boot({ stored = 'UTC', detected = 'Europe/Paris', dismissed = null,
   const state = { fetches: [], warnings: [], stored: dismissed, reloaded: false };
   let resolveFetch;
 
-  const ctx = loadScript('workspace/core/static/core/js/timezone_suggest.js', {
+  const ctx = loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/core/static/core/js/timezone_suggest.js'], {
     ...(gettext ? { gettext } : {}),
     getCSRFToken: () => 'token',
     fetch: (url, options) => {

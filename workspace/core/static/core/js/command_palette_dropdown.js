@@ -166,11 +166,7 @@ window.commandPaletteDropdown = function () {
       const scope = mineOnly ? SCOPE_MINE : SCOPE_ALL;
       if (scope === this.scope) return;
       this.scope = scope;
-      searchScopeWrite = searchScopeWrite.then(() => fetch('/api/v1/settings/core/search_scope', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: scope }),
-      }).catch(() => {}));
+      searchScopeWrite = searchScopeWrite.then(() => window.saveUserSetting('core', 'search_scope', scope).catch(() => {}));
       window.dispatchEvent(new CustomEvent(SCOPE_EVENT, { detail: { scope } }));
       this.search();
       this.$nextTick(() => this.$refs.input?.focus());

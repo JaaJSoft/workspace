@@ -4,11 +4,11 @@
 // step machine is trivial and the dialog itself has a browser test.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 function wizard({ reply } = {}) {
   const calls = [];
-  const ctx = loadScript('workspace/core/static/core/js/onboarding_wizard.js', {
+  const ctx = loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/core/static/core/js/onboarding_wizard.js'], {
     getCSRFToken: () => 'token',
     fetch: async (url, options) => {
       calls.push({ url, options });
@@ -25,6 +25,7 @@ test('a first close records the completion once', async () => {
   await app.markCompleteIfNeeded();
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, '/api/v1/settings/core/onboarding_completed');
+  assert.equal(calls[0].options.keepalive, true);
   assert.equal(app.completed, true);
 });
 
@@ -62,7 +63,7 @@ test('a refused completion is retried on the next close', async () => {
 });
 
 test('an account that already finished the tour writes nothing', async () => {
-  const ctx = loadScript('workspace/core/static/core/js/onboarding_wizard.js', {
+  const ctx = loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/core/static/core/js/onboarding_wizard.js'], {
     getCSRFToken: () => 'token',
     fetch: async () => assert.fail('no request expected'),
   });

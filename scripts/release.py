@@ -152,7 +152,7 @@ def git_commit_and_tag(version: str) -> None:
         files.append("uv.lock")
 
     run(["git", "add", *files])
-    run(["git", "commit", "-m", f"release: {tag}"])
+    run(["git", "commit", "-m", f"chore(release): {tag}"])
     run(["git", "tag", "-a", tag, "-m", f"Release {tag}"])
     print(f"  Committed and tagged {tag}")
 

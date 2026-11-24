@@ -58,12 +58,17 @@ def _delete_pks_in_batches(pks, still_matching=None):
     for batch in batched(pks, HARD_DELETE_BATCH_SIZE, strict=False):
         with transaction.atomic():
             if still_matching is not None:
-                # As a subquery: FOR UPDATE refuses the DISTINCT and the outer
-                # joins a caller's queryset (the admin's) may carry.
-                batch = list(
+                # Lock, then re-check in a statement of its own: a check in the
+                # locking statement reads its snapshot, from before a restore
+                # that committed while it waited for the lock.
+                list(
                     File.objects.filter(pk__in=batch)
-                    .filter(pk__in=still_matching.order_by().values("pk"))
-                    .select_for_update(of=("self",))
+                    .select_for_update()
+                    .values_list("pk", flat=True)
+                )
+                batch = list(
+                    still_matching.filter(pk__in=batch)
+                    .order_by()
                     .values_list("pk", flat=True)
                 )
             # The storage cleanup receiver reads owner.username on every row.

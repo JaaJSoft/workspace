@@ -277,11 +277,17 @@ def _take_back(created_pks):
     )
     for pk in list(folder_pks):
         with transaction.atomic():
-            # The emptiness check is the delete's own filter, so the parent
-            # cascade never reaches a row added in between.
-            File.objects.filter(pk=pk, children__isnull=True).select_related(
-                "owner"
-            ).delete()
+            # Locked before the emptiness check: a child added after it cannot
+            # commit until the folder is gone, and then fails on its parent
+            # rather than being collected by the delete's cascade.
+            folder = (
+                File.objects.select_for_update(of=("self",))
+                .select_related("owner")
+                .filter(pk=pk)
+                .first()
+            )
+            if folder is not None and not File.objects.filter(parent_id=pk).exists():
+                folder.delete()
 
 
 def extract_item(user, node, parent):

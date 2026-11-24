@@ -3,6 +3,7 @@ from collections import Counter, defaultdict
 from urllib.parse import quote
 
 from django.db.models import Q
+from django.utils.translation import gettext as _
 
 from workspace.common.search import apply_fulltext
 from workspace.common.search.schema import Col, FulltextIndex
@@ -52,7 +53,7 @@ def search_mail(query, user, limit):
     return [
         SearchResult(
             uuid=str(m.uuid),
-            name=m.subject or "(no subject)",
+            name=m.subject or _("(no subject)"),
             url=f"/mail?message={m.uuid}",
             matched_value=m.subject or m.snippet,
             match_type="subject",

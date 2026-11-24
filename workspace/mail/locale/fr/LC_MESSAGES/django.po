@@ -27,7 +27,7 @@ msgstr[0] "%(count)s non lu"
 msgstr[1] "%(count)s non lus"
 msgstr[2] "%(count)s non lus"
 
-#: activity.py services/notifications.py
+#: activity.py search.py services/notifications.py
 #: ui/templates/mail/ui/partials/message_detail.html
 #: ui/templates/mail/ui/partials/message_list.html
 msgid "(no subject)"

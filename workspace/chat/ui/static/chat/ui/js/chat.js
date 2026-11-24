@@ -97,7 +97,9 @@ function chatApp(currentUserId) {
       }
 
       const groupsEl = document.getElementById('chat-groups-data');
-      this.myGroups = groupsEl ? JSON.parse(groupsEl.textContent) : [];
+      this.chatGroups = window.markOwnChatGroups(
+        groupsEl ? JSON.parse(groupsEl.textContent) : []
+      );
 
       // Auto-collapse when the viewport shrinks into the mobile range.
       // The initial mobile check happens synchronously above (in the

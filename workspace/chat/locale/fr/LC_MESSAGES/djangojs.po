@@ -245,6 +245,11 @@ msgid "Failed to create the loopback offer."
 msgstr "Impossible de créer l’offre de boucle."
 
 #: ui/static/chat/ui/js/conversations.js
+msgctxt "group the user belongs to"
+msgid "Member"
+msgstr "Membre"
+
+#: ui/static/chat/ui/js/conversations.js
 msgid "Mentions only"
 msgstr "Mentions uniquement"
 

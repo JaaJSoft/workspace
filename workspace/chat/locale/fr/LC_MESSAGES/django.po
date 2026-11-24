@@ -976,6 +976,14 @@ msgid "To"
 msgstr "À"
 
 #: ui/templates/chat/ui/partials/new_conversation_dialog.html
+msgid ""
+"The members of the conversation follow these groups. Include at least one "
+"you belong to."
+msgstr ""
+"Les membres de la conversation suivent ces groupes. Incluez-en au moins un "
+"dont vous faites partie."
+
+#: ui/templates/chat/ui/partials/new_conversation_dialog.html
 msgid "Group name"
 msgstr "Nom du groupe"
 

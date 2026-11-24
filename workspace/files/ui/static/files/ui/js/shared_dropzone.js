@@ -97,6 +97,7 @@ window.sharedDrop = function sharedDrop(token, maxFileBytes, rootName) {
         xhr.onload = () => resolve(xhr.status);
         xhr.onerror = () => reject(new Error('Network error'));
         xhr.open('POST', window.sharedLinkUrl(this.token, '/upload', {}));
+        xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
         xhr.send(body);
       });
     },

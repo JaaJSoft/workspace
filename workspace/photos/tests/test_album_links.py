@@ -294,6 +294,17 @@ class PublicLinkPasswordTests(LinkTestCase):
         self.assertTrue(cookie["httponly"])
         self.assertEqual(self.client.get(self.content_url).status_code, 200)
 
+    def test_an_unlocked_thumbnail_stays_out_of_shared_caches(self):
+        self.verify("s3cret")
+        url = f"{PUBLIC}/{self.link.token}/files/{self.photos[0].uuid}/thumbnail"
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("private", response["Cache-Control"])
+        self.assertNotIn("public", response["Cache-Control"])
+        self.assertIn("Cookie", response["Vary"])
+
     def test_an_access_token_in_the_query_string_opens_nothing(self):
         token = SIGNER.sign(self.link.token)
 

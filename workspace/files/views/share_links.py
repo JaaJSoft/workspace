@@ -16,6 +16,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
+from workspace.common.link_access import csrf_failure, keep_private
 from workspace.files.models import File, FileEvent, FileShareLink
 from workspace.files.services import tree
 from workspace.files.services.downloads import signed_redirect
@@ -112,7 +113,21 @@ def _check_password_access(link, request):
             {"detail": _("Invalid or expired access token.")},
             status=status.HTTP_403_FORBIDDEN,
         )
+    request.unlocked_by_cookie = True
     return None
+
+
+class _LinkReadView(APIView):
+    """A read through a link: anonymous, and private once the cookie unlocked it."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        if getattr(request, "unlocked_by_cookie", False):
+            keep_private(response)
+        return response
 
 
 def _check_quarantine(file_obj):
@@ -244,11 +259,8 @@ class SharedFileVerifyView(APIView):
 
 
 @extend_schema(tags=["Files - Shared Links"])
-class SharedFileContentView(APIView):
+class SharedFileContentView(_LinkReadView):
     """GET /api/v1/files/shared/{token}/content — serve file inline."""
-
-    permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get(self, request, token):
         link, err = _resolve_link(token)
@@ -298,11 +310,8 @@ class SharedFileContentView(APIView):
 
 
 @extend_schema(tags=["Files - Shared Links"])
-class SharedFileDownloadView(APIView):
+class SharedFileDownloadView(_LinkReadView):
     """GET /api/v1/files/shared/{token}/download — download file."""
-
-    permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get(self, request, token):
         link, err = _resolve_link(token)
@@ -352,11 +361,8 @@ class SharedFileDownloadView(APIView):
 
 
 @extend_schema(tags=["Files - Shared Links"])
-class SharedFileThumbnailView(APIView):
+class SharedFileThumbnailView(_LinkReadView):
     """GET /api/v1/files/shared/{token}/thumbnail - public WebP thumbnail."""
-
-    permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get(self, request, token):
         size = parse_thumbnail_size(request.query_params.get("size"))
@@ -391,8 +397,9 @@ class SharedFileThumbnailView(APIView):
         response = FileResponse(
             default_storage.open(thumb_path, "rb"), content_type="image/webp"
         )
-        # `public` here, unlike the authenticated endpoint: the token is the
-        # only credential, and it is already in the URL a cache would key on.
+        # `public` here, unlike the authenticated endpoint: the link token is
+        # the only credential, and it is in the URL a cache keys on. A link
+        # behind a password turns it private on the way out (_LinkReadView).
         response["Cache-Control"] = "public, max-age=3600"
         return response
 
@@ -416,6 +423,10 @@ class SharedFolderUploadView(APIView):
         pwd_err = _check_password_access(link, request)
         if pwd_err:
             return pwd_err
+        if link.has_password and (reason := csrf_failure(request)):
+            return Response(
+                {"detail": f"CSRF Failed: {reason}"}, status=status.HTTP_403_FORBIDDEN
+            )
 
         parts = request.FILES.getlist("file")
         if len(parts) != 1:

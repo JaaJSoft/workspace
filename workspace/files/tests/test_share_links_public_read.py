@@ -146,3 +146,45 @@ class SharedFolderReadTests(APITestCase):
         self.assertEqual(resp["Content-Type"], "image/webp")
         self.read_link.refresh_from_db()
         self.assertEqual(self.read_link.view_count, 1)
+
+    def _unlock(self):
+        from django.contrib.auth.hashers import make_password
+
+        self.read_link.password = make_password("secret")
+        self.read_link.save(update_fields=["password"])
+        self.client.post(
+            f"/api/v1/files/shared/{self.read_link.token}/verify",
+            {"password": "secret"},
+            format="json",
+        )
+
+    def test_an_unlocked_thumbnail_stays_out_of_shared_caches(self):
+        self._unlock()
+        self.doc.has_thumbnail = True
+        self.doc.save(update_fields=["has_thumbnail"])
+        default_storage.save(
+            get_thumbnail_path(self.doc.uuid), ContentFile(b"webp-bytes")
+        )
+
+        resp = self.client.get(
+            f"/api/v1/files/shared/{self.read_link.token}/thumbnail",
+            {"file": str(self.doc.uuid)},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("private", resp["Cache-Control"])
+        self.assertNotIn("public", resp["Cache-Control"])
+        self.assertIn("Cookie", resp["Vary"])
+
+    def test_unlocked_content_stays_out_of_shared_caches(self):
+        self._unlock()
+
+        resp = self.client.get(
+            f"/api/v1/files/shared/{self.read_link.token}/content",
+            {"file": str(self.doc.uuid)},
+        )
+        b"".join(resp.streaming_content)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("private", resp["Cache-Control"])
+        self.assertIn("Cookie", resp["Vary"])

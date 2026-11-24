@@ -37,6 +37,7 @@ function makeDrop(statuses, dataset) {
       }
     },
     XMLHttpRequest: FakeXhr,
+    getCSRFToken: () => 'csrf',
     setTimeout,
     folderNav: { reload: () => reloads.push(1) },
     document: { getElementById: () => (dataset ? { dataset } : null) },

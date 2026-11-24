@@ -221,6 +221,36 @@ class ShareLinkUploadTests(APITestCase):
         resp = self.client.post(self.url, {"file": part()}, format="multipart")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
+    def test_an_unlocked_write_needs_the_csrf_token(self):
+        from django.contrib.auth.hashers import make_password
+        from rest_framework.test import APIClient
+
+        self.link.password = make_password("secret")
+        self.link.save(update_fields=["password"])
+        client = APIClient(enforce_csrf_checks=True)
+        client.post(
+            f"/api/v1/files/shared/{self.link.token}/verify",
+            {"password": "secret"},
+            format="json",
+        )
+        page = client.get(f"/files/shared/{self.link.token}")
+        token = page.cookies["csrftoken"].value
+
+        forged = client.post(self.url, {"file": part()}, format="multipart")
+        sent = client.post(
+            self.url,
+            {"file": part("other.pdf")},
+            format="multipart",
+            HTTP_X_CSRFTOKEN=token,
+        )
+
+        self.assertEqual(forged.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(sent.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(
+            list(File.objects.filter(parent=self.root).values_list("name", flat=True)),
+            ["other.pdf"],
+        )
+
     def test_a_query_parameter_access_token_does_not_unlock_the_write_path(self):
         from django.contrib.auth.hashers import make_password
 

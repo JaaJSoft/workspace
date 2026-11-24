@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.link_access import keep_private
 from workspace.core.module_guard import ModuleVisible
 from workspace.files.views.share_links import ShareLinkVerifyThrottle
 
@@ -43,6 +44,7 @@ def _open_link(request, token):
             {"detail": gettext("Password required."), "has_password": True},
             status=status.HTTP_403_FORBIDDEN,
         )
+    request.unlocked_by_cookie = link.has_password
     return link, None
 
 
@@ -63,6 +65,12 @@ class _PublicView(APIView):
     # kept so a signed-in caller meets the same module guard as everywhere else.
     permission_classes = [ModuleVisible, AllowAny]
     authentication_classes = []
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        if getattr(request, "unlocked_by_cookie", False):
+            keep_private(response)
+        return response
 
 
 @extend_schema(tags=["Photos - Album links"])

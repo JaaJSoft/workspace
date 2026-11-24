@@ -369,11 +369,19 @@ def group_messages(messages, current_user):
         else:
             if current_group:
                 groups.append(current_group)
+            previous = current_group or (groups[-1] if groups else None)
             current_group = {
                 "type": "messages",
                 "author": msg.author,
                 "is_own": msg.author_id == current_user.id,
                 "is_bot": hasattr(msg.author, "bot_profile"),
+                # Same author right above, only split by the time window:
+                # the name and avatar would say twice who is talking.
+                "continues": bool(
+                    previous
+                    and previous["type"] == "messages"
+                    and previous["author"].id == msg.author_id
+                ),
                 "messages": [msg],
             }
 

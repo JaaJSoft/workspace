@@ -142,7 +142,7 @@
             <input
               type="text"
               x-ref="noteTitle"
-              class="input input-ghost input-sm font-semibold flex-1 min-w-0"
+              class="input input-ghost input-sm text-base sm:text-lg font-semibold flex-1 min-w-0"
               :value="selectedNote ? noteName(selectedNote) : ''"
               @change="renameNote($event.target.value)"
               :readonly="!canDoOnSelected('rename')"

@@ -120,7 +120,7 @@
   </td>
   {% if not is_trash_view %}
     <td
-      class="text-center text-base-content/60"
+      class="hidden sm:table-cell text-center text-base-content/60"
       data-stop-row-click
       data-col="favorite"
     >
@@ -143,7 +143,10 @@
           aria-label="{% translate 'Add to favorites' %}"
           data-item-control="favorite"
         >
-          <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+          <i
+            data-lucide="star"
+            class="w-4 h-4 opacity-0 group-hover:opacity-40 group-focus-within:opacity-40 [@media(hover:none)]:opacity-40"
+          ></i>
         </button>
       {% endif %}
     </td>

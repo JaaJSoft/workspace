@@ -65,3 +65,16 @@ test('a marker past the antimeridian shows in the world copy in view', () => {
   assert.equal(nearestCopy(170, -175), -190);
   assert.equal(nearestCopy(2.29, 10), 2.29);
 });
+
+test('the map never zooms out past the point where the world stops filling its height', () => {
+  const { fillingZoom } = utils();
+  // 256 px of world at zoom 0, 512 at 1, 1024 at 2, 2048 at 3.
+  assert.equal(fillingZoom(400, 19), 1);
+  assert.equal(fillingZoom(512, 19), 1);
+  assert.equal(fillingZoom(513, 19), 2);
+  assert.equal(fillingZoom(900, 19), 2);
+  assert.equal(fillingZoom(1100, 19), 3);
+  // A canvas not laid out yet, and a tile server that stops early.
+  assert.equal(fillingZoom(0, 19), 1);
+  assert.equal(fillingZoom(5000, 2), 2);
+});

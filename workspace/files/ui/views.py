@@ -156,15 +156,14 @@ def build_breadcrumbs(folder, user=None):
     if folder.group_id and reads_full_path(permission):
         breadcrumbs.insert(0, {"label": _("Groups"), "icon": "users"})
     else:
-        label = user.get_full_name() or user.username if user else _("My Files")
-        breadcrumbs.insert(0, _root_crumb(label))
+        breadcrumbs.insert(0, _root_crumb())
     return breadcrumbs
 
 
-def _root_crumb(label):
+def _root_crumb():
     """The user's root: a drop target like any folder, with an empty id."""
     return {
-        "label": label,
+        "label": _("My Files"),
         "url": "/files",
         "icon": "hard-drive",
         "data": {"drop-folder": ""},
@@ -358,8 +357,7 @@ def _build_context(request, folder=None, is_trash_view=False):
     is_shared_view = active_special == "shared"
     is_favorites_view = active_special == "favorites"
     is_recent_view = active_special == "recent"
-    user_label = request.user.get_full_name() or request.user.username
-    files_root = _root_crumb(user_label)
+    files_root = _root_crumb()
     breadcrumbs = [files_root]
 
     SPECIAL_VIEWS = {

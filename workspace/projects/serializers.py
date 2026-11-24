@@ -149,10 +149,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 class MemberSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     username = serializers.CharField(source="user.username", read_only=True)
+    display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectMember
-        fields = ["uuid", "user", "username", "role", "joined_at"]
+        fields = ["uuid", "user", "username", "display_name", "role", "joined_at"]
+
+    def get_display_name(self, member) -> str:
+        return member.user.get_full_name() or member.user.username
 
 
 class ProjectUserSerializer(serializers.Serializer):

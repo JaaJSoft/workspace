@@ -34,12 +34,18 @@ msgid "Dashboard preferences"
 msgstr "Préférences du tableau de bord"
 
 #: templates/dashboard/index.html
-msgid "Recent Activity"
-msgstr "Activité récente"
+msgctxt "dashboard button"
+msgid "Usage"
+msgstr "Utilisation"
 
 #: templates/dashboard/index.html
-msgid "What's happening across your workspace."
-msgstr "Ce qui se passe dans votre Workspace."
+msgctxt "dashboard button"
+msgid "Customize"
+msgstr "Personnaliser"
+
+#: templates/dashboard/index.html
+msgid "Recent Activity"
+msgstr "Activité récente"
 
 #: templates/dashboard/index.html
 #, python-format

@@ -48,15 +48,15 @@ one thing this layout exists to prevent.
     >
       {% for group in chart.groups %}
         <rect x="0" y="{{ group.y }}" width="{{ chart.gutter }}" height="{{ group.height }}" class="fill-base-content/5" />
-        <text x="8" y="{{ group.y }}" dy="19" class="fill-base-content" font-size="12" font-weight="600">{{ group.label }}</text>
+        <text x="8" y="{{ group.y }}" dy="20" class="fill-base-content" font-size="13" font-weight="600">{{ group.label }}</text>
         {% if group.progress %}
-          <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="19" dx="-8" text-anchor="end" class="fill-base-content/60" font-size="11" font-family="ui-monospace, monospace">{{ group.progress }}</text>
+          <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="20" dx="-8" text-anchor="end" class="fill-base-content/60" font-size="12" font-family="ui-monospace, monospace">{{ group.progress }}</text>
         {% endif %}
         {% for row in group.rows %}
           <g class="cursor-pointer hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" role="button" tabindex="0" data-row-id="{{ row.id }}" @click="$dispatch('gantt-row', { id: $el.dataset.rowId })" @keydown.enter.prevent="$dispatch('gantt-row', { id: $el.dataset.rowId })">
           <title>{{ row.tooltip }}</title>
           <rect x="0" y="{{ row.y }}" width="{{ chart.gutter }}" height="{{ chart.row_height }}" class="fill-transparent" />
-          <text x="8" y="{{ row.y }}" dy="18" class="fill-base-content/80" font-size="11">{{ row.label }}</text>
+          <text x="8" y="{{ row.y }}" dy="20" class="fill-base-content/80" font-size="13">{{ row.label }}</text>
           </g>
         {% endfor %}
       {% endfor %}
@@ -82,12 +82,12 @@ one thing this layout exists to prevent.
     {% endfor %}
     {% for major in chart.axis.majors %}
       <line x1="{{ major.x }}" y1="0" x2="{{ major.x }}" y2="{{ chart.height }}" class="stroke-base-content/20" stroke-width="1" />
-      <text x="{{ major.x }}" y="14" dx="4" class="fill-base-content/70" font-size="11" font-weight="500">{{ major.label }}</text>
+      <text x="{{ major.x }}" y="15" dx="4" class="fill-base-content/70" font-size="12" font-weight="500">{{ major.label }}</text>
     {% endfor %}
     {% for group in chart.groups %}
       <rect x="{{ chart.gutter }}" y="{{ group.y }}" width="{{ chart.plot_width }}" height="{{ group.height }}" class="fill-base-content/5" />
       {% if group.sublabel %}
-        <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="19" dx="6" class="fill-base-content/60" font-size="11">{{ group.sublabel }}</text>
+        <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="20" dx="6" class="fill-base-content/60" font-size="12">{{ group.sublabel }}</text>
       {% endif %}
       {% for row in group.rows %}
         <g class="cursor-pointer hover:opacity-80" data-row-id="{{ row.id }}" aria-hidden="true" @click="$dispatch('gantt-row', { id: $el.dataset.rowId })">

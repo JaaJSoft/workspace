@@ -59,12 +59,12 @@
           <button
             type="button"
             @click="toggle()"
-            class="btn btn-ghost btn-sm btn-square"
+            class="btn btn-ghost btn-sm max-sm:btn-square sm:gap-1.5 font-normal text-base-content/70"
             :class="open && 'btn-active'"
-            aria-label="{% translate 'Workspace usage' %}"
             title="{% translate 'Workspace usage' %}"
           >
             <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+            <span class="max-sm:sr-only">{% translate "Usage" context "dashboard button" %}</span>
           </button>
           <div
             x-show="open"
@@ -91,14 +91,14 @@
             type="button"
             x-ref="prefsTrigger"
             @click="prefsOpen = !prefsOpen"
-            class="btn btn-ghost btn-sm btn-square"
+            class="btn btn-ghost btn-sm max-sm:btn-square sm:gap-1.5 font-normal text-base-content/70"
             :class="prefsOpen && 'btn-active'"
-            aria-label="{% translate 'Dashboard preferences' %}"
             title="{% translate 'Dashboard preferences' %}"
             :aria-expanded="prefsOpen"
             aria-controls="dashboard-preferences-panel"
           >
             <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+            <span class="max-sm:sr-only">{% translate "Customize" context "dashboard button" %}</span>
           </button>
           <div
             id="dashboard-preferences-panel"
@@ -113,30 +113,6 @@
             </h4>
             {% include "dashboard/partials/_preferences_content.html" %}
           </div>
-        </div>
-      </div>
-    </section>
-
-    {# ── Search bar ── #}
-    <section
-      id="dashboard-search"
-      class="hidden sm:block max-w-2xl mx-auto w-full"
-      x-data="commandPaletteDropdown()"
-    >
-      <div class="relative">
-        {% include "core/partials/search/search_input.html" with input_class="input-md text-base shadow-xs" show_kbd=True size="lg" %}
-
-        {# ── Dropdown ── #}
-        <div
-          x-show="open"
-          x-cloak
-          @click.outside="close()"
-          class="absolute z-100 mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
-        >
-          {% include "core/partials/search/quick_actions.html" with size="lg" %}
-          {% include "core/partials/search/search_results.html" with size="lg" %}
-
-          {% include "core/partials/search/footer_hints.html" %}
         </div>
       </div>
     </section>
@@ -171,13 +147,10 @@
             <div
               class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
             >
-              <div class="space-y-1">
-                <h2 class="card-title text-xl">
-                  <i data-lucide="activity" class="w-5 h-5"></i>
-                  {% translate "Recent Activity" %}
-                </h2>
-                <p class="text-sm text-base-content/60">{% translate "What's happening across your workspace." %}</p>
-              </div>
+              <h2 class="card-title text-xl shrink-0">
+                <i data-lucide="activity" class="w-5 h-5"></i>
+                {% translate "Recent Activity" %}
+              </h2>
               <div class="flex items-center gap-2 min-w-0">
                 {% include "core/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
                 <button

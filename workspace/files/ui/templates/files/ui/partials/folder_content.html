@@ -537,7 +537,7 @@
         {% if view_mode != "mosaic" %}
           <table
             class="table table-fixed [&_td]:align-middle [&_th]:align-middle"
-            :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-square]:h-5 [&_.btn-square]:w-5 [&_.btn-square]:min-h-0' : ''"
+            :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-square]:h-5 [&_.btn-square]:w-5 [&_.btn-square]:min-h-0' : '[&_td]:py-2'"
           >
             <thead class="sticky top-0 z-10">
               <tr class="bg-base-200">
@@ -553,7 +553,7 @@
                 <th class="w-12" data-col="icon"><span class="sr-only">{% translate "Type" %}</span></th>
                 <th data-col="name">{% translate "Name" %}</th>
                 {% if not is_trash_view %}
-                  <th class="w-10 text-center" data-col="favorite">{% translate "Fav" %}</th>
+                  <th class="hidden sm:table-cell w-10 text-center" data-col="favorite">{% translate "Fav" %}</th>
                 {% endif %}
                 <th class="hidden lg:table-cell w-48" data-col="tags">{% translate "Tags" %}</th>
                 <th class="hidden sm:table-cell w-24" data-col="size">{% translate "Size" %}</th>

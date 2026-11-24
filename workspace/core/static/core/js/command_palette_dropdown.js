@@ -109,8 +109,7 @@ window.commandPaletteDropdown = function () {
           // Shift makes the browser report 'K', hence the case fold.
           if (!(e.metaKey || e.ctrlKey) || (e.key || '').toLowerCase() !== 'k') return;
           e.preventDefault();
-          const input = document.getElementById('dashboard-search')?.querySelector('input')
-            || document.querySelector('[x-data*="commandPaletteDropdown"]')?.querySelector('input');
+          const input = document.querySelector('[x-data*="commandPaletteDropdown"]')?.querySelector('input');
           if (!input) return;
           if (e.shiftKey) {
             // The listener is bound once for the page, so it cannot reach the

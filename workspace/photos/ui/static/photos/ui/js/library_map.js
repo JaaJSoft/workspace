@@ -38,6 +38,14 @@ function libraryMapWrapLongitude(lng) {
 
 // The pure half of the page, apart so it can be tested without a map.
 window.libraryMapUtils = {
+  // The lowest zoom at which the world (256 px tall at zoom 0, doubling at
+  // each step) covers a map this tall: further out, blank bands show above
+  // and below it. Longitudes wrap, so the width never needs it.
+  fillingZoom(height, maxZoom) {
+    const zoom = Math.ceil(Math.log2(Math.max(height, 256) / 256));
+    return Math.min(Math.max(zoom, 1), maxZoom);
+  },
+
   // A month counted from year 0 (year * 12 + month - 1), as the points carry it.
   monthToken(index) {
     const year = Math.floor(index / 12);
@@ -157,12 +165,15 @@ window.libraryMap = function libraryMap() {
     init() {
       config = JSON.parse(document.getElementById('library-map-data').textContent);
       if (!window.L || !window.Supercluster) return;
-      map = L.map(this.$refs.canvas, {
+      const canvas = this.$refs.canvas;
+      map = L.map(canvas, {
         zoomControl: false,
         worldCopyJump: true,
-        // Low enough for a narrow map to fit a library spread over the world.
-        minZoom: 1,
+        minZoom: utils.fillingZoom(canvas.clientHeight, config.maxZoom),
         maxZoom: config.maxZoom,
+        // Nothing to pan to past the poles.
+        maxBounds: [[-85.0511, -1e6], [85.0511, 1e6]],
+        maxBoundsViscosity: 1,
       });
       map.attributionControl.setPrefix(false);
       shownTileUrl = tileUrl();
@@ -183,7 +194,11 @@ window.libraryMap = function libraryMap() {
         this._follow();
       });
       // The properties panel opening narrows the map without a resize.
-      resizeObserver = new ResizeObserver(() => map && map.invalidateSize());
+      resizeObserver = new ResizeObserver(() => {
+        if (!map) return;
+        map.invalidateSize();
+        map.setMinZoom(utils.fillingZoom(canvas.clientHeight, config.maxZoom));
+      });
       resizeObserver.observe(this.$refs.canvas);
       if (config.tileUrlDark) {
         themeObserver = new MutationObserver(() => {

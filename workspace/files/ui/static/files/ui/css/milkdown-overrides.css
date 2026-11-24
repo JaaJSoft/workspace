@@ -26,7 +26,9 @@
   --crepe-color-hover: color-mix(in oklab, var(--color-base-300) 40%, transparent);
   --crepe-color-solid: var(--color-base-content);
   --crepe-color-line: var(--color-base-300);
-  --crepe-color-inline-code: var(--color-base-200);
+  /* Crepe paints inline code text in inline-code, on inline-area */
+  --crepe-color-inline-code: var(--color-base-content);
+  --crepe-color-inline-area: var(--color-base-300);
 }
 
 /* ========================================================

@@ -64,9 +64,9 @@ Parameters:
           <a
             :href="tagViewHref(tag)"
             @click.prevent="openTagView(tag)"
-            class="group flex items-center hover:bg-base-300/50 text-base rounded-lg transition-colors"
+            class="group flex items-center hover:bg-base-300/50 text-sm rounded-lg transition-colors"
             :class="[
-              {{ ce }} ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3',
+              {{ ce }} ? 'justify-center w-10 h-10 p-0' : 'px-2 py-1.5 gap-3',
               isTagViewActive(tag) ? (tag.color ? '' : '{{ active|escapejs }}') : 'text-base-content/70'
             ]"
             {# The active row wears the tag's own color; the palette is 6-digit hex, so '1a' is a 10% alpha. #}

@@ -36,7 +36,7 @@
         <i data-lucide="contact" class="w-4 h-4 text-module shrink-0"></i>
         <input
           type="text"
-          class="input input-ghost input-sm font-semibold flex-1 min-w-0"
+          class="input input-ghost input-sm text-base sm:text-lg font-semibold flex-1 min-w-0"
           x-model="person.display_name"
           @change="saveField('display_name')"
           :readonly="!can('edit')"

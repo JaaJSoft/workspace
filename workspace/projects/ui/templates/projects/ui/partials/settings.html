@@ -5,14 +5,6 @@
   id="settings"
   class="w-full max-w-6xl mx-auto flex flex-col gap-4 pb-8"
 >
-  <div>
-    <h2 class="text-lg font-semibold flex items-center gap-2">
-      <i data-lucide="settings" class="w-5 h-5 text-module"></i>
-      {% translate "Settings" %}
-    </h2>
-    <p class="text-sm text-base-content/60 mt-0.5">{% translate "Project details, board setup and access." %}</p>
-  </div>
-
   {# Default stretch alignment on purpose: side-by-side cards share their row's height, so a tall neighbor never leaves a floating short card. #}
   <div class="grid gap-4 xl:grid-cols-2">
     <section
@@ -209,10 +201,15 @@
                   <span x-show="!imgOk" x-text="member.username.charAt(0).toUpperCase()"></span>
                 </div>
               </div>
-              <span class="font-medium flex-1 truncate" x-text="member.username"></span>
+              <span
+                class="font-medium flex-1 truncate"
+                x-text="member.display_name"
+                :title="member.username"
+              ></span>
               {% if writable %}
+                {# A fixed width, whatever the role's label: the remove buttons line up. #}
                 <select
-                  class="select select-sm w-auto"
+                  class="select select-sm w-32 shrink-0"
                   :value="member.role"
                   :disabled="busy"
                   @change="changeRole(member, $event.target.value)"

@@ -463,7 +463,7 @@ class LibraryMapPhotosTests(TestCase):
     def test_says_when_the_area_is_empty(self):
         html = self._grid(bbox="-10,-10,-9,-9")
 
-        self.assertIn("Nothing was taken in this area", html)
+        self.assertIn("Nothing in this area", html)
 
     @CONFIGURED
     def test_400_on_a_malformed_area_period_or_cursor(self):

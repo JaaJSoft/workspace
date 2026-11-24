@@ -349,22 +349,38 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
     previous relative order after the listed ones (pinned-folders precedent:
     handles concurrent creates/deletes gracefully). Unknown UUIDs are
     skipped. Idempotent: replaying the same payload yields the same state.
+
+    The backlog is one list whatever number of backlog columns the project
+    has: reordering it orders every backlog task and leaves each in its own
+    backlog column.
     """
     with transaction.atomic():
-        # Status row first (same lock order as _locked_tail_position): the
+        if status.category == TaskStatus.Category.BACKLOG:
+            column_ids = set(
+                project.statuses.filter(
+                    category=TaskStatus.Category.BACKLOG
+                ).values_list("pk", flat=True)
+            )
+        else:
+            column_ids = {status.pk}
+        # Status rows first (same lock order as _locked_tail_position): the
         # task-row locks below don't serialize writers when the column is
         # empty, since there are then no rows to lock.
-        TaskStatus.objects.select_for_update().get(pk=status.pk)
+        list(
+            TaskStatus.objects.select_for_update()
+            .filter(pk__in=column_ids)
+            .order_by("pk")
+        )
         # One locking query for both the column and the listed tasks: two
         # separate SELECT FOR UPDATE passes would leave a window between
         # them where a concurrent reorder locks the other half first.
         tasks = list(
             project.tasks.select_for_update().filter(
-                Q(status=status) | Q(uuid__in=ordered_uuids)
+                Q(status_id__in=column_ids) | Q(uuid__in=ordered_uuids)
             )
         )
         in_status = sorted(
-            (t for t in tasks if t.status_id == status.pk),
+            (t for t in tasks if t.status_id in column_ids),
             key=lambda t: (t.position, t.created_at),
         )
         by_uuid = {t.uuid: t for t in tasks}
@@ -388,7 +404,7 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
         joined_sprint = []
         for i, task in enumerate(sequence):
             changed = False
-            if task.status_id != status.pk:
+            if task.status_id not in column_ids:
                 moved.append((task, task.status))
                 task.status = status
                 task.completed_at = completion_stamp(status, task.completed_at, now)

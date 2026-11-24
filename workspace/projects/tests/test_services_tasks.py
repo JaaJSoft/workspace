@@ -229,6 +229,31 @@ class ReorderTasksTests(TaskServiceMixin, TestCase):
 
         self.assertEqual(self._backlog_titles(), ["t3", "t1", "t2"])
 
+    def test_backlog_reorder_keeps_each_task_in_its_backlog_column(self):
+        ideas = create_status(
+            self.project, name="Ideas", category=TaskStatus.Category.BACKLOG
+        )
+        idea = create_task(self.project, self.admin, title="idea", status=ideas)
+
+        # The backlog page lists both columns as one list and posts the
+        # first backlog column with the whole order.
+        reorder_tasks(
+            self.project,
+            self.backlog,
+            [idea.uuid, self.t1.uuid, self.t2.uuid, self.t3.uuid],
+        )
+
+        idea.refresh_from_db()
+        self.assertEqual(idea.status, ideas)
+        self.assertFalse(idea.events.filter(type=TaskEvent.Type.MOVED).exists())
+        backlog_order = [
+            t.title
+            for t in self.project.tasks.filter(
+                status__category=TaskStatus.Category.BACKLOG
+            ).order_by("position", "created_at")
+        ]
+        self.assertEqual(backlog_order, ["idea", "t1", "t2", "t3"])
+
 
 class MoveTasksTests(TaskServiceMixin, TestCase):
     def setUp(self):

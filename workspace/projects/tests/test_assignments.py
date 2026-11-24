@@ -101,3 +101,53 @@ class AssignmentNotificationTests(AssignmentTestsBase):
         self.assertFalse(self._unread(task, self.admin).exists())
         # Creation already lands in the feed as CREATED.
         self.assertFalse(self._events(task, TaskEvent.Type.ASSIGNED).exists())
+
+
+class AssigneeOutsideTheProjectTests(AssignmentTestsBase):
+    """A user outside the project answers exactly like an id nobody holds, so
+    the field cannot be used to look up who is behind an id."""
+
+    def _unknown_id(self):
+        return User.objects.order_by("-pk").first().pk + 1000
+
+    def _assert_same_answer(self, outsider_resp, unknown_resp):
+        self.assertEqual(outsider_resp.status_code, 400)
+        self.assertNotIn(self.outsider.username, outsider_resp.content.decode())
+        self.assertEqual(
+            outsider_resp.content.decode().replace(str(self.outsider.pk), "<id>"),
+            unknown_resp.content.decode().replace(str(self._unknown_id()), "<id>"),
+        )
+
+    def test_a_task_edit(self):
+        task = self._task()
+
+        outsider = self._patch_task(task, {"assignees": [self.outsider.pk]})
+        unknown = self._patch_task(task, {"assignees": [self._unknown_id()]})
+
+        self._assert_same_answer(outsider, unknown)
+        self.assertFalse(task.assignees.exists())
+
+    def test_a_bulk_edit(self):
+        task = self._task()
+        url = f"/api/v1/projects/{self.project.uuid}/tasks/bulk"
+        self.client.force_authenticate(self.admin)
+
+        def assign(user_id):
+            payload = {"tasks": [str(task.uuid)], "assign": [user_id]}
+            return self.client.post(url, payload, format="json")
+
+        self._assert_same_answer(assign(self.outsider.pk), assign(self._unknown_id()))
+        self.assertFalse(task.assignees.exists())
+
+    def test_a_member_through_a_group_is_assignable(self):
+        from django.contrib.auth.models import Group
+
+        team = Group.objects.create(name="Team")
+        self.outsider.groups.add(team)
+        self.project.groups.add(team)
+        task = self._task()
+
+        response = self._patch_task(task, {"assignees": [self.outsider.pk]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(task.assignees.all()), [self.outsider])

@@ -663,6 +663,7 @@ window.notesApp = function notesApp(config) {
         // creating today's would write the history it is replaying.
         async openJournal(options) {
             const restoring = !!(options && options.restoring);
+            if (this.activeView !== 'journal') this._resetFilters();
             this.activeView = 'journal';
             this.activeId = null;
             this.viewTitle = gettext('Journal');
@@ -672,7 +673,7 @@ window.notesApp = function notesApp(config) {
             if (!journalUuid) return;
 
             this.activeId = journalUuid;
-            await this.loadNotes('/api/v1/files?type=markdown&parent=' + journalUuid + '&ordering=-name');
+            await this.loadNotes(this._buildNotesUrl(0));
             if (restoring) return;
 
             // Create today's note if needed ("today" in the user's timezone)
@@ -680,7 +681,16 @@ window.notesApp = function notesApp(config) {
                 ? window.userTzDayKey(new Date())
                 : new Date().toISOString().split('T')[0];
             const todayName = today + '.md';
-            let todayNote = this.notes.find(function(n) { return n.name === todayName; });
+            const findToday = () => this.notes.find(function(n) { return n.name === todayName; });
+            let todayNote = findToday();
+            // The journal lists newest name first: once a page ends below today's name, today's note is not further down.
+            while (!todayNote && this.hasMoreNotes
+                && this.notes[this.notes.length - 1].name.toLowerCase() > todayName.toLowerCase()) {
+                const loaded = this.notes.length;
+                await this.loadMoreNotes();
+                if (this.notes.length === loaded) break;
+                todayNote = findToday();
+            }
 
             if (!todayNote) {
                 todayNote = await this._createMdFile(todayName, journalUuid);

@@ -217,9 +217,6 @@ def _task_by_reference(qs, project, raw):
 def _base_context(request, project, role, view):
     statuses = list(project.statuses.order_by("position", "created_at"))
     members = project.members.filter(left_at__isnull=True).select_related("user")
-    # Resolved once and handed down to the deep-link panel: project_users
-    # costs two queries and the panel needs the same list.
-    project_members = project_users(project)
     context = {
         "project": project,
         "role": role,
@@ -228,21 +225,11 @@ def _base_context(request, project, role, view):
         "today": timezone.localdate(),
         "statuses": statuses,
         "members": members,
-        "statuses_data": [
-            {
-                "uuid": str(s.uuid),
-                "name": s.name,
-                "category": s.category,
-                "color": s.color,
-            }
-            for s in statuses
-        ],
         "labels_data": [
             {"uuid": str(label.uuid), "name": label.name, "color": label.color}
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
-        "members_data": ProjectUserSerializer(project_members, many=True).data,
         # In both render paths: the sidebar sits outside #project-content,
         # so every swap carries fresh counts for the shell to pick up after
         # a task moved in or out of the backlog.
@@ -260,6 +247,19 @@ def _base_context(request, project, role, view):
         },
     }
     if not request.headers.get("X-Alpine-Request"):
+        # Resolved once and handed down to the deep-link panel: project_users
+        # costs two queries and the panel needs the same list.
+        project_members = project_users(project)
+        context["statuses_data"] = [
+            {
+                "uuid": str(s.uuid),
+                "name": s.name,
+                "category": s.category,
+                "color": s.color,
+            }
+            for s in statuses
+        ]
+        context["members_data"] = ProjectUserSerializer(project_members, many=True).data
         context["projects"] = _sidebar_projects(request.user)
         context["projects_prefs"] = {
             "reminder_hour": reminder_hour(request.user),

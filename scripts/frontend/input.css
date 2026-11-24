@@ -11,6 +11,8 @@
 /* Minified vendored bundles carry no utility class, but the scanner finds
    class-shaped substrings in them and emits dead rules for each. */
 @source not "../../workspace/**/static/**/vendor/**";
+/* The admin renders with Unfold's own stylesheet, never this one. */
+@source not "../../workspace/core/templates/core/admin/**";
 
 /* daisyUI semantic colors that the codebase interpolates at runtime
    (calendar.color, label.color, badge_variant, drawer_item's color param...),

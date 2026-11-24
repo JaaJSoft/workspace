@@ -1,7 +1,5 @@
 """Template engine configuration."""
 
-from .base import BASE_DIR
-
 # No explicit "loaders": Django then wraps the filesystem and app_directories
 # loaders in the cached loader in every mode, and runserver's autoreloader
 # clears that cache when a template changes. Under `runserver --noreload`
@@ -9,7 +7,7 @@ from .base import BASE_DIR
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

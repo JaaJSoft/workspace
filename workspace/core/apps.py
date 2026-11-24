@@ -15,3 +15,9 @@ class CoreConfig(AppConfig):
         from workspace.core.checks import check_task_broker
 
         register(check_task_broker)
+
+        from django.contrib import admin
+
+        # Unfold swaps admin.site for its own site in its ready(), which runs
+        # first: it sits above core in INSTALLED_APPS.
+        admin.site.index_template = "core/admin/index.html"

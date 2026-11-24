@@ -96,10 +96,6 @@ msgid "New"
 msgstr "Nouveau"
 
 #: ui/templates/people/ui/index.html
-msgid "Export"
-msgstr "Exporter"
-
-#: ui/templates/people/ui/index.html
 #: ui/templates/people/ui/partials/dialogs.html
 msgid "Export contacts"
 msgstr "Exporter des contacts"
@@ -194,10 +190,6 @@ msgstr "Contact : %%(name)s"
 #, python-format
 msgid "List: %%(name)s"
 msgstr "Liste : %%(name)s"
-
-#: ui/templates/people/ui/partials/dialogs.html
-msgid "Everything"
-msgstr "Tout"
 
 #: ui/templates/people/ui/partials/dialogs.html
 msgid ""

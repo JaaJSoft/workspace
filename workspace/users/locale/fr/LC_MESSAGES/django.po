@@ -681,9 +681,5 @@ msgid "Current password and new password are required."
 msgstr "Le mot de passe actuel et le nouveau mot de passe sont obligatoires."
 
 #: views.py
-msgid "Current password is incorrect."
-msgstr "Le mot de passe actuel est incorrect."
-
-#: views.py
 msgid "Avatar updated successfully."
 msgstr "Avatar mis à jour."

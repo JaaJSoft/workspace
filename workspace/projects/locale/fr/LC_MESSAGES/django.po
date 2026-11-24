@@ -775,10 +775,6 @@ msgid "Due date"
 msgstr "Échéance"
 
 #: ui/templates/projects/ui/partials/_bulk_toolbar.html
-msgid "Apply"
-msgstr "Appliquer"
-
-#: ui/templates/projects/ui/partials/_bulk_toolbar.html
 msgid "Clear due date"
 msgstr "Effacer l’échéance"
 

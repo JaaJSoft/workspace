@@ -304,12 +304,20 @@ msgid "%(size)s used"
 msgstr "%(size)s utilisés"
 
 #: vocabulary.py
+msgid "(optional)"
+msgstr "(facultatif)"
+
+#: vocabulary.py
 msgid "Actions"
 msgstr "Actions"
 
 #: vocabulary.py
 msgid "Activity"
 msgstr "Activité"
+
+#: vocabulary.py
+msgid "Add"
+msgstr "Ajouter"
 
 #: vocabulary.py
 msgid "Add a group"
@@ -338,6 +346,10 @@ msgstr "Toute la journée"
 #: vocabulary.py
 msgid "API Access"
 msgstr "Accès à l’API"
+
+#: vocabulary.py
+msgid "Apply"
+msgstr "Appliquer"
 
 #: vocabulary.py
 msgid "Apps"
@@ -472,6 +484,10 @@ msgid "Crop your photo"
 msgstr "Recadrez votre photo"
 
 #: vocabulary.py
+msgid "Current password is incorrect."
+msgstr "Le mot de passe actuel est incorrect."
+
+#: vocabulary.py
 msgid "Dashboard"
 msgstr "Tableau de bord"
 
@@ -482,6 +498,10 @@ msgstr "Date"
 #: vocabulary.py
 msgid "Default"
 msgstr "Par défaut"
+
+#: vocabulary.py
+msgid "Default sort"
+msgstr "Tri par défaut"
 
 #: vocabulary.py
 msgid "Default view"
@@ -502,6 +522,14 @@ msgstr "Supprimer le message"
 #: vocabulary.py
 msgid "Delete permanently"
 msgstr "Supprimer définitivement"
+
+#: vocabulary.py
+msgid "Description"
+msgstr "Description"
+
+#: vocabulary.py
+msgid "Deselect"
+msgstr "Désélectionner"
 
 #: vocabulary.py
 msgid "Discard"
@@ -528,8 +556,16 @@ msgid "Download as ZIP"
 msgstr "Télécharger en ZIP"
 
 #: vocabulary.py
+msgid "Empty trash"
+msgstr "Vider la corbeille"
+
+#: vocabulary.py
 msgid "Events"
 msgstr "Événements"
+
+#: vocabulary.py
+msgid "Everything"
+msgstr "Tout"
 
 #: vocabulary.py
 msgid "Expand sidebar"
@@ -538,6 +574,10 @@ msgstr "Déplier la barre latérale"
 #: vocabulary.py
 msgid "Expiration (optional)"
 msgstr "Expiration (facultatif)"
+
+#: vocabulary.py
+msgid "Export"
+msgstr "Exporter"
 
 #: vocabulary.py
 msgid "Failed to copy link"
@@ -556,12 +596,20 @@ msgid "Failed to update favorites"
 msgstr "Impossible de mettre à jour les favoris"
 
 #: vocabulary.py
+msgid "Fav"
+msgstr "Fav."
+
+#: vocabulary.py
 msgid "Favorites"
 msgstr "Favoris"
 
 #: vocabulary.py
 msgid "Files"
 msgstr "Fichiers"
+
+#: vocabulary.py
+msgid "Filter by name"
+msgstr "Filtrer par nom"
 
 #: vocabulary.py
 msgid "Filters"
@@ -598,6 +646,10 @@ msgstr "La documentation complète de l’API est disponible à l’adresse"
 #: vocabulary.py
 msgid "Generate"
 msgstr "Générer"
+
+#: vocabulary.py
+msgid "Generate a password"
+msgstr "Générer un mot de passe"
 
 #: vocabulary.py
 msgid "Group"
@@ -718,6 +770,10 @@ msgstr "Messages"
 #: vocabulary.py
 msgid "More actions"
 msgstr "Plus d’actions"
+
+#: vocabulary.py
+msgid "Mosaic view"
+msgstr "Vue mosaïque"
 
 #: vocabulary.py
 msgid "My contacts"
@@ -916,12 +972,20 @@ msgid "Rename"
 msgstr "Renommer"
 
 #: vocabulary.py
+msgid "Rename folder"
+msgstr "Renommer le dossier"
+
+#: vocabulary.py
 msgid "Replace"
 msgstr "Remplacer"
 
 #: vocabulary.py
 msgid "Reply"
 msgstr "Répondre"
+
+#: vocabulary.py
+msgid "Reset"
+msgstr "Réinitialiser"
 
 #: vocabulary.py
 msgid "Restore"
@@ -1039,8 +1103,20 @@ msgid "Something went wrong"
 msgstr "Une erreur s’est produite"
 
 #: vocabulary.py
+msgid "Something went wrong. Try again."
+msgstr "Une erreur s’est produite. Réessayez."
+
+#: vocabulary.py
+msgid "Sort ascending"
+msgstr "Tri croissant"
+
+#: vocabulary.py
 msgid "Sort by"
 msgstr "Trier par"
+
+#: vocabulary.py
+msgid "Sort descending"
+msgstr "Tri décroissant"
 
 #: vocabulary.py
 msgid "Stop"
@@ -1055,12 +1131,24 @@ msgid "Summary"
 msgstr "Résumé"
 
 #: vocabulary.py
+msgid "Tag"
+msgstr "Étiquette"
+
+#: vocabulary.py
 msgid "Tag name"
 msgstr "Nom de l’étiquette"
 
 #: vocabulary.py
 msgid "Tags"
 msgstr "Étiquettes"
+
+#: vocabulary.py
+msgid "This cannot be undone"
+msgstr "Cette action est irréversible"
+
+#: vocabulary.py
+msgid "This folder is empty"
+msgstr "Ce dossier est vide"
 
 #: vocabulary.py
 msgid "This link has no password."
@@ -1097,6 +1185,10 @@ msgstr "Erreur inconnue"
 #: vocabulary.py
 msgid "Unmark as sensitive"
 msgstr "Ne plus marquer comme sensible"
+
+#: vocabulary.py
+msgid "Unnamed"
+msgstr "Sans nom"
 
 #: vocabulary.py
 msgid "Unsupported image type. Use JPEG, PNG, WebP, or GIF."

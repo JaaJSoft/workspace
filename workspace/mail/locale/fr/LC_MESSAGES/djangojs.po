@@ -185,10 +185,6 @@ msgid "Enter a name for the new folder."
 msgstr "Saisissez un nom pour le nouveau dossier."
 
 #: ui/static/mail/ui/js/mail_folders.js
-msgid "Rename folder"
-msgstr "Renommer le dossier"
-
-#: ui/static/mail/ui/js/mail_folders.js
 msgid "Failed to rename folder"
 msgstr "Échec du renommage du dossier"
 
@@ -366,10 +362,6 @@ msgid ""
 msgstr ""
 "Appliquer la règle « %(name)s » au dossier choisi maintenant ? Les actions "
 "comme le déplacement et la suppression sont irréversibles."
-
-#: ui/static/mail/ui/js/mail_rules.js
-msgid "Apply"
-msgstr "Appliquer"
 
 #: ui/static/mail/ui/js/mail_rules.js
 msgid "Delete rule"

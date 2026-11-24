@@ -59,11 +59,6 @@ msgstr ""
 "Votre coffre-fort n’a pas pu être créé. Rien n’a été enregistré ; réessayez."
 
 #: ui/static/vault/ui/js/vault_browser.js
-#: ui/static/vault/ui/js/vault_switcher.js
-msgid "This cannot be undone"
-msgstr "Cette action est irréversible"
-
-#: ui/static/vault/ui/js/vault_browser.js
 msgid "Permanently delete this entry?"
 msgid_plural "Permanently delete these %(count)s entries?"
 msgstr[0] "Supprimer définitivement cette entrée ?"
@@ -226,10 +221,6 @@ msgid "That folder could not be created. Try again."
 msgstr "Ce dossier n’a pas pu être créé. Réessayez."
 
 #: ui/static/vault/ui/js/vault_browser.js
-msgid "Tag"
-msgstr "Étiquette"
-
-#: ui/static/vault/ui/js/vault_browser.js
 msgid "All entries"
 msgstr "Toutes les entrées"
 
@@ -240,10 +231,6 @@ msgstr "Modifier l’entrée"
 #: ui/static/vault/ui/js/vault_browser.js
 msgid "New entry"
 msgstr "Nouvelle entrée"
-
-#: ui/static/vault/ui/js/vault_browser.js
-msgid "Rename folder"
-msgstr "Renommer le dossier"
 
 #: ui/static/vault/ui/js/vault_export.js
 msgid "Export passphrase"
@@ -386,10 +373,6 @@ msgstr ""
 "d’importance - comparez-la à votre kit de secours."
 
 #: ui/static/vault/ui/js/vault_password.js
-msgid "Current password is incorrect."
-msgstr "Le mot de passe actuel est incorrect."
-
-#: ui/static/vault/ui/js/vault_password.js
 msgid "Current password or recovery key is incorrect."
 msgstr "Le mot de passe actuel ou la clé de récupération est incorrect."
 
@@ -465,10 +448,6 @@ msgstr "Version plus récente"
 #: ui/static/vault/ui/js/vault_switcher.js
 msgid "Unreadable vault"
 msgstr "Coffre-fort illisible"
-
-#: ui/static/vault/ui/js/vault_switcher.js
-msgid "Unnamed"
-msgstr "Sans nom"
 
 #: ui/static/vault/ui/js/vault_switcher.js
 msgid "Saved by a newer version of the app. Reload the page to read it."
@@ -564,10 +543,6 @@ msgstr ""
 "Cela n’a pas ouvert ce compte. Soit le mot de passe principal est erroné, "
 "soit la clé de récupération mémorisée sur cet appareil appartient à un autre "
 "compte - les deux échouent de la même façon. Rien n’a été envoyé au serveur."
-
-#: ui/static/vault/ui/js/vault_unlock.js
-msgid "Something went wrong. Try again."
-msgstr "Une erreur s’est produite. Réessayez."
 
 #: ui/static/vault/ui/js/vault_unlock.js
 msgid ""

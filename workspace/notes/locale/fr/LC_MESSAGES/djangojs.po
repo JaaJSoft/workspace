@@ -49,10 +49,6 @@ msgid "Graph"
 msgstr "Graphe"
 
 #: ui/static/notes/ui/js/notes.js
-msgid "Tag"
-msgstr "Étiquette"
-
-#: ui/static/notes/ui/js/notes.js
 msgid "New note"
 msgstr "Nouvelle note"
 

@@ -81,10 +81,6 @@ msgctxt "vault field"
 msgid "Username"
 msgstr "Nom d’utilisateur"
 
-#: types.py ui/templates/vault/ui/partials/password_dialog.html
-msgid "Generate a password"
-msgstr "Générer un mot de passe"
-
 #: types.py ui/templates/vault/ui/partials/browser_panel.html
 #: ui/templates/vault/ui/partials/entry_dialog.html
 msgid "Authenticator key"
@@ -336,10 +332,6 @@ msgid "1 hour"
 msgstr "1 heure"
 
 #: ui/templates/vault/ui/partials/_preferences_content.html
-msgid "Default sort"
-msgstr "Tri par défaut"
-
-#: ui/templates/vault/ui/partials/_preferences_content.html
 msgid "This device"
 msgstr "Cet appareil"
 
@@ -376,10 +368,6 @@ msgid "No favourites yet"
 msgstr "Aucun favori pour l’instant"
 
 #: ui/templates/vault/ui/partials/browser_content.html
-msgid "This folder is empty"
-msgstr "Ce dossier est vide"
-
-#: ui/templates/vault/ui/partials/browser_content.html
 msgctxt "vault column"
 msgid "Deleted"
 msgstr "Supprimée"
@@ -405,15 +393,6 @@ msgstr "L’effacer"
 msgid "Select every entry shown"
 msgstr "Sélectionner toutes les entrées affichées"
 
-#: ui/templates/vault/ui/partials/browser_content.html
-msgid "Fav"
-msgstr "Fav."
-
-#: ui/templates/vault/ui/partials/browser_content.html
-#: ui/templates/vault/ui/partials/browser_listing_menu_items.html
-msgid "Deselect"
-msgstr "Désélectionner"
-
 #: ui/templates/vault/ui/partials/browser_header.html
 msgid "Parent folder"
 msgstr "Dossier parent"
@@ -425,10 +404,6 @@ msgstr "Chaque champ de ce coffre-fort est chiffré avant de quitter cette page"
 #: ui/templates/vault/ui/partials/browser_header.html
 msgid "Everything encrypted"
 msgstr "Tout est chiffré"
-
-#: ui/templates/vault/ui/partials/browser_header.html
-msgid "Empty trash"
-msgstr "Vider la corbeille"
 
 #: ui/templates/vault/ui/partials/browser_header.html
 msgid "New"
@@ -536,11 +511,6 @@ msgstr "Générateur de mots de passe"
 
 #: ui/templates/vault/ui/partials/browser_sidebar.html
 #: ui/templates/vault/ui/partials/export_dialog.html
-msgid "Export"
-msgstr "Exporter"
-
-#: ui/templates/vault/ui/partials/browser_sidebar.html
-#: ui/templates/vault/ui/partials/export_dialog.html
 msgid "Export this account"
 msgstr "Exporter ce compte"
 
@@ -553,36 +523,12 @@ msgid "Lock"
 msgstr "Verrouiller"
 
 #: ui/templates/vault/ui/partials/browser_toolbar.html
-msgid "Sort descending"
-msgstr "Tri décroissant"
-
-#: ui/templates/vault/ui/partials/browser_toolbar.html
-msgid "Sort ascending"
-msgstr "Tri croissant"
-
-#: ui/templates/vault/ui/partials/browser_toolbar.html
-msgid "Filter by name"
-msgstr "Filtrer par nom"
-
-#: ui/templates/vault/ui/partials/browser_toolbar.html
-msgid "Everything"
-msgstr "Tout"
-
-#: ui/templates/vault/ui/partials/browser_toolbar.html
 msgid "Entries"
 msgstr "Entrées"
 
 #: ui/templates/vault/ui/partials/browser_toolbar.html
 msgid "Reset filters and sorting"
 msgstr "Réinitialiser les filtres et le tri"
-
-#: ui/templates/vault/ui/partials/browser_toolbar.html
-msgid "Reset"
-msgstr "Réinitialiser"
-
-#: ui/templates/vault/ui/partials/browser_toolbar.html
-msgid "Mosaic view"
-msgstr "Vue mosaïque"
 
 #: ui/templates/vault/ui/partials/clipboard_banner.html
 #, python-format
@@ -609,26 +555,12 @@ msgstr "Personnel, Travail…"
 
 #: ui/templates/vault/ui/partials/create_vault_dialog.html
 #: ui/templates/vault/ui/partials/vault_dialog.html
-msgid "Description"
-msgstr "Description"
-
-#: ui/templates/vault/ui/partials/create_vault_dialog.html
-#: ui/templates/vault/ui/partials/vault_dialog.html
-msgid "(optional)"
-msgstr "(facultatif)"
-
-#: ui/templates/vault/ui/partials/create_vault_dialog.html
-#: ui/templates/vault/ui/partials/vault_dialog.html
 msgid "A short description…"
 msgstr "Une courte description…"
 
 #: ui/templates/vault/ui/partials/entry_dialog.html
 msgid "No authenticator key"
 msgstr "Aucune clé d’authentification"
-
-#: ui/templates/vault/ui/partials/entry_dialog.html
-msgid "Add"
-msgstr "Ajouter"
 
 #: ui/templates/vault/ui/partials/entry_dialog.html
 msgid "An authenticator key is set"
@@ -665,10 +597,6 @@ msgstr ""
 "Un tiret signifie que certaines d’entre elles portent l’étiquette. Seules "
 "les étiquettes sur lesquelles vous cliquez changent ; les autres restent "
 "telles quelles sur chaque entrée."
-
-#: ui/templates/vault/ui/partials/entry_tags_dialog.html
-msgid "Apply"
-msgstr "Appliquer"
 
 #: ui/templates/vault/ui/partials/export_dialog.html
 msgid "Hide the archive passphrase"

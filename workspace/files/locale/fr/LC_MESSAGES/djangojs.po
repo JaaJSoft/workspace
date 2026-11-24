@@ -171,10 +171,6 @@ msgstr ""
 "Tous les éléments de la corbeille seront supprimés définitivement. Cette "
 "action est irréversible."
 
-#: ui/static/files/ui/js/browser.js ui/static/files/ui/js/storage.js
-msgid "Empty trash"
-msgstr "Vider la corbeille"
-
 #: ui/static/files/ui/js/browser.js
 msgid "Failed to update the files"
 msgstr "Impossible de mettre à jour les fichiers"
@@ -612,10 +608,6 @@ msgstr "Favori"
 msgctxt "table column"
 msgid "Select"
 msgstr "Sélection"
-
-#: ui/static/files/ui/js/table.js
-msgid "Fav"
-msgstr "Fav."
 
 #: ui/static/files/ui/js/table.js
 msgid "%(visible)s of %(count)s item"

@@ -574,11 +574,6 @@ msgid "Sync and refresh folder"
 msgstr "Synchroniser et actualiser le dossier"
 
 #: ui/templates/files/ui/index.html
-#: ui/templates/files/ui/partials/storage_analysis.html
-msgid "Empty trash"
-msgstr "Vider la corbeille"
-
-#: ui/templates/files/ui/index.html
 #: ui/templates/files/ui/partials/share_modal.html
 msgid "New"
 msgstr "Nouveau"
@@ -752,10 +747,6 @@ msgstr "Sections de la barre latérale"
 #: ui/templates/files/ui/partials/_preferences_content.html
 msgid "Show pinned folders"
 msgstr "Afficher les dossiers épinglés"
-
-#: ui/templates/files/ui/partials/_preferences_content.html
-msgid "Default sort"
-msgstr "Tri par défaut"
 
 #: ui/templates/files/ui/partials/_preferences_content.html
 #: ui/templates/files/ui/partials/folder_content.html
@@ -1067,10 +1058,6 @@ msgid "Playable media"
 msgstr "Média lisible"
 
 #: ui/templates/files/ui/partials/empty_folder.html
-msgid "This folder is empty"
-msgstr "Ce dossier est vide"
-
-#: ui/templates/files/ui/partials/empty_folder.html
 msgid "Create a folder or upload files to get started."
 msgstr "Créez un dossier ou téléversez des fichiers pour commencer."
 
@@ -1208,10 +1195,6 @@ msgid "%%(count)s items selected"
 msgstr "%%(count)s éléments sélectionnés"
 
 #: ui/templates/files/ui/partials/folder_content.html
-msgid "Filter by name"
-msgstr "Filtrer par nom"
-
-#: ui/templates/files/ui/partials/folder_content.html
 msgid "All"
 msgstr "Tout"
 
@@ -1254,14 +1237,6 @@ msgstr "Ordre"
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Reset columns"
 msgstr "Réinitialiser les colonnes"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Mosaic view"
-msgstr "Vue mosaïque"
-
-#: ui/templates/files/ui/partials/folder_content.html
-msgid "Fav"
-msgstr "Fav."
 
 #: ui/templates/files/ui/partials/folder_content.html
 msgid "Deleted"
@@ -1615,10 +1590,6 @@ msgstr "Aucune limite"
 #: ui/templates/files/ui/partials/share_modal.html
 msgid "Max uploads"
 msgstr "Téléversements max."
-
-#: ui/templates/files/ui/partials/share_modal.html
-msgid "Generate a password"
-msgstr "Générer un mot de passe"
 
 #: ui/templates/files/ui/partials/shared_dropzone.html
 #, python-format

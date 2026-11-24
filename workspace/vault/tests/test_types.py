@@ -73,6 +73,7 @@ class CatalogueTests(SimpleTestCase):
                 "label": "Password",
                 "secret": True,
                 "generator": True,
+                "generate_label": "Generate a password",
                 "kind": "text",
             },
         )

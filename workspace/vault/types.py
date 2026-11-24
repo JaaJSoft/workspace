@@ -10,6 +10,8 @@ would become interchangeable.
 from dataclasses import dataclass
 
 from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 
 from .models import EntryType, VaultEntry
 from .services.fields import RESERVED_FIELD_IDS
@@ -30,6 +32,9 @@ class Field:
     secret: bool = False
     generator: bool = False
     kind: str = "text"
+    # A whole sentence, not "Generate a " + label: the article agrees with the
+    # noun in other languages.
+    generate_label: str = ""
 
 
 class TypedEntryManager(models.Manager):
@@ -63,6 +68,9 @@ class TypedEntry(VaultEntry):
     # type has to stay one class, so nothing on the page may hold a second
     # list of types to keep in step with this one.
     LABEL = ""
+    # The "New ..." menu item and dialog title, for the same reason as
+    # Field.generate_label.
+    NEW_LABEL = ""
     ICON = "key-round"
     FIELD_SCHEMA = ()
 
@@ -78,8 +86,8 @@ class TypedEntry(VaultEntry):
                     "reserved field identifier"
                 )
         if cls.ENTRY_TYPE is not None:
-            if not cls.LABEL:
-                raise ValueError(f"{cls.__name__} declares no LABEL")
+            if not cls.LABEL or not cls.NEW_LABEL:
+                raise ValueError(f"{cls.__name__} declares no LABEL or NEW_LABEL")
             _REGISTRY[cls.ENTRY_TYPE] = cls
 
 
@@ -90,14 +98,21 @@ class LoginEntry(TypedEntry):
     class Meta:
         proxy = True
 
-    LABEL = "Login"
+    LABEL = pgettext_lazy("entry type", "Login")
+    NEW_LABEL = _("New login")
     ICON = "key-round"
 
     FIELD_SCHEMA = (
-        Field("username", label="Username"),
-        Field("password", label="Password", secret=True, generator=True),
-        Field("totp", label="Authenticator key", secret=True, kind="totp"),
-        Field("uri", label="Website"),
+        Field("username", label=pgettext_lazy("vault field", "Username")),
+        Field(
+            "password",
+            label=_("Password"),
+            secret=True,
+            generator=True,
+            generate_label=_("Generate a password"),
+        ),
+        Field("totp", label=_("Authenticator key"), secret=True, kind="totp"),
+        Field("uri", label=_("Website")),
     )
 
 
@@ -134,14 +149,16 @@ def type_catalogue() -> list[dict]:
     return [
         {
             "id": entry_type,
-            "label": proxy.LABEL,
+            "label": str(proxy.LABEL),
+            "new_label": str(proxy.NEW_LABEL),
             "icon": proxy.ICON,
             "fields": [
                 {
                     "field_id": field.field_id,
-                    "label": field.label,
+                    "label": str(field.label),
                     "secret": field.secret,
                     "generator": field.generator,
+                    "generate_label": str(field.generate_label),
                     "kind": field.kind,
                 }
                 for field in proxy.FIELD_SCHEMA

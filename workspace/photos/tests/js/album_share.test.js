@@ -15,6 +15,13 @@ function fakeFetch(routes, requests = [], { failing = [] } = {}) {
   };
 }
 
+// As the page embeds them (photos/services/album_sharing.py).
+const ROLES = [
+  { value: 'viewer', label: 'Viewer', hint: 'Browses the album' },
+  { value: 'contributor', label: 'Contributor', hint: 'Also adds their own photos, and removes them' },
+  { value: 'manager', label: 'Manager', hint: 'Also edits the album, its members and its links' },
+];
+
 const MEMBERS = {
   owner: { type: 'user', id: 1, username: 'owner' },
   shares: [{ type: 'user', id: 2, username: 'bob', role: 'contributor' }],
@@ -34,6 +41,9 @@ function modal(routes = {}, { failing = [] } = {}) {
       ...routes,
     }, requests, { failing }),
     getCSRFToken: () => 't',
+    document: {
+      getElementById: (id) => (id === 'photos-album-share-roles' ? { textContent: JSON.stringify(ROLES) } : null),
+    },
     addEventListener() {},
     dispatchEvent: (event) => events.push(event),
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },

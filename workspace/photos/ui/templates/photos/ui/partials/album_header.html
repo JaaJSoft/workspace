@@ -113,16 +113,8 @@
             {% endblocktranslate %}
           {% endif %}
         </span>
-        {% if album.sharing.role != "owner" %}
-          <span class="badge badge-sm badge-ghost" data-album-role>
-            {% if album.sharing.role == "manager" %}
-              {% translate "Manager" context "album role" %}
-            {% elif album.sharing.role == "contributor" %}
-              {% translate "Contributor" context "album role" %}
-            {% else %}
-              {% translate "Viewer" context "album role" %}
-            {% endif %}
-          </span>
+        {% if album.sharing.role_label %}
+          <span class="badge badge-sm badge-ghost" data-album-role>{{ album.sharing.role_label }}</span>
         {% endif %}
       </div>
     {% endif %}

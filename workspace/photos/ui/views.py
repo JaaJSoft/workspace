@@ -33,7 +33,7 @@ from workspace.files.ui.viewers import (
 )
 from workspace.notifications.services.notifications import mark_source_read
 from workspace.people.queries import reachable_person
-from workspace.photos.models import Album, Appearance, Face, MediaItem
+from workspace.photos.models import Album, AlbumShare, Appearance, Face, MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
@@ -63,6 +63,7 @@ from workspace.photos.services.album_cards import (
     shared_album_cards,
 )
 from workspace.photos.services.album_links import find_link, has_access, record_view
+from workspace.photos.services.album_sharing import share_role_choices
 from workspace.photos.services.analysis import library_extensions
 from workspace.photos.services.appearance_review import (
     outfit_suggestions,
@@ -642,6 +643,7 @@ def _render_page(request, template, context):
         context["library_extensions"] = library_extensions()
         context["photos_prefs"] = display_preferences(request.user)
         context["sensitive_blur_choices"] = sensitive_blur_choices()
+        context["album_share_roles"] = share_role_choices()
         context["hidden_folders"] = [
             hidden_folder_data(folder) for folder in hidden_folders(request.user)
         ]
@@ -1164,7 +1166,7 @@ def _album_sharing(album, role):
         "members": list(members[:HEADER_MEMBERS]),
         "count": members.count(),
         "shared_by": album.owner if role != OWNER and album.group_id is None else None,
-        "role": role,
+        "role_label": None if role == OWNER else AlbumShare.Role(role).label,
     }
 
 

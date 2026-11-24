@@ -12,33 +12,6 @@ msgstr ""
 "1000000 == 0 ? 1 : 2;\n"
 
 #: ui/static/photos/ui/js/album_share.js
-msgctxt "album role"
-msgid "Viewer"
-msgstr "Lecteur"
-
-#: ui/static/photos/ui/js/album_share.js
-msgid "Browses the album"
-msgstr "Parcourt l’album"
-
-#: ui/static/photos/ui/js/album_share.js
-msgctxt "album role"
-msgid "Contributor"
-msgstr "Contributeur"
-
-#: ui/static/photos/ui/js/album_share.js
-msgid "Also adds their own photos, and removes them"
-msgstr "Peut aussi ajouter ses propres photos et les retirer"
-
-#: ui/static/photos/ui/js/album_share.js
-msgctxt "album role"
-msgid "Manager"
-msgstr "Gestionnaire"
-
-#: ui/static/photos/ui/js/album_share.js
-msgid "Also edits the album, its members and its links"
-msgstr "Peut aussi modifier l’album, ses membres et ses liens"
-
-#: ui/static/photos/ui/js/album_share.js
 msgid "Some changes failed (%(count)s error)"
 msgid_plural "Some changes failed (%(count)s errors)"
 msgstr[0] "Certaines modifications ont échoué (%(count)s erreur)"

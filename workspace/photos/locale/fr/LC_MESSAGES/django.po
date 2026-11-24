@@ -98,17 +98,17 @@ msgstr "Photos favorites"
 msgid "Undated photos"
 msgstr "Photos sans date"
 
-#: models.py ui/templates/photos/ui/partials/album_header.html
+#: models.py
 msgctxt "album role"
 msgid "Viewer"
 msgstr "Lecteur"
 
-#: models.py ui/templates/photos/ui/partials/album_header.html
+#: models.py
 msgctxt "album role"
 msgid "Contributor"
 msgstr "Contributeur"
 
-#: models.py ui/templates/photos/ui/partials/album_header.html
+#: models.py
 msgctxt "album role"
 msgid "Manager"
 msgstr "Gestionnaire"
@@ -196,6 +196,18 @@ msgstr[1] ""
 "%(name)s et %(others)s autres ont ajouté %(count)s de photos à « %(title)s »"
 msgstr[2] ""
 "%(name)s et %(others)s autres ont ajouté %(count)s photos à « %(title)s »"
+
+#: services/album_sharing.py
+msgid "Browses the album"
+msgstr "Parcourt l’album"
+
+#: services/album_sharing.py
+msgid "Also adds their own photos, and removes them"
+msgstr "Peut aussi ajouter ses propres photos et les retirer"
+
+#: services/album_sharing.py
+msgid "Also edits the album, its members and its links"
+msgstr "Peut aussi modifier l’album, ses membres et ses liens"
 
 #: services/details.py
 msgid "Flash"

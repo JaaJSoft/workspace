@@ -153,3 +153,37 @@ test('does nothing for an empty uuid list', async () => {
   assert.equal(calls.ajax.length, 0);
   assert.equal(calls.fullRefresh, 0);
 });
+
+/**
+ * Same app with the real refreshConversationList, which listens on $el.
+ */
+function buildAppWithFullRefresh(dom) {
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/conversations.js', {
+    document: { getElementById: (id) => dom[id] || null },
+  });
+  const calls = { ajax: [] };
+  const app = ctx.chatConversationsMixin();
+  Object.assign(app, {
+    $el: { addEventListener() {} },
+    async $ajax(url, options) { calls.ajax.push({ url, options }); },
+  });
+  return { app, calls };
+}
+
+test('a page without the sidebar (voice room) sends no request for a new message', async () => {
+  const { app, calls } = buildAppWithFullRefresh({});
+
+  await app.refreshConversationItems(['a']);
+  app.refreshConversationList();
+
+  assert.equal(calls.ajax.length, 0);
+});
+
+test('the full-list refresh still runs when the sidebar is on the page', async () => {
+  const { app, calls } = buildAppWithFullRefresh({ 'conversation-list': {} });
+
+  await app.refreshConversationItems(['new-conv']);
+
+  assert.equal(calls.ajax.length, 1);
+  assert.equal(calls.ajax[0].url, '/chat/conversations');
+});

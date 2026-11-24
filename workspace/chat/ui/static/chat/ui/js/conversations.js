@@ -90,6 +90,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     },
 
     refreshConversationList() {
+      // The voice room reuses this mixin but has no sidebar to refresh.
+      if (!document.getElementById('conversation-list')) return;
       this.$el.addEventListener('ajax:after', () => {
         const target = document.getElementById('conversation-list');
         if (!target) return;

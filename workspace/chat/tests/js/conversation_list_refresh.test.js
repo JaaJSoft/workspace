@@ -10,7 +10,8 @@ const { loadScript } = require('../../../common/tests/js/loader');
 
 function buildApp() {
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/conversations.js', {
-    document: { getElementById: () => null },
+    // The chat page always renders the sidebar list.
+    document: { getElementById: (id) => (id === 'conversation-list' ? {} : null) },
   });
   const app = ctx.chatConversationsMixin();
   const requests = [];

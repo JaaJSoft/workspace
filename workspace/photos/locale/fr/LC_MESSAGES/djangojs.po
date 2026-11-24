@@ -69,6 +69,59 @@ msgstr[0] "%(count)s photo mise à jour"
 msgstr[1] "%(count)s de photos mises à jour"
 msgstr[2] "%(count)s photos mises à jour"
 
+#: ui/static/photos/ui/js/faces.js ui/static/photos/ui/js/library_map.js
+#: ui/static/photos/ui/js/photos.js
+msgid "%(count)s photo"
+msgid_plural "%(count)s photos"
+msgstr[0] "%(count)s photo"
+msgstr[1] "%(count)s de photos"
+msgstr[2] "%(count)s photos"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s face"
+msgid_plural "%(count)s faces"
+msgstr[0] "%(count)s visage"
+msgstr[1] "%(count)s de visages"
+msgstr[2] "%(count)s visages"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "%(count)s silhouette"
+msgid_plural "%(count)s silhouettes"
+msgstr[0] "%(count)s silhouette"
+msgstr[1] "%(count)s de silhouettes"
+msgstr[2] "%(count)s silhouettes"
+
+#: ui/static/photos/ui/js/faces.js
+msgid "Unnamed person with %(count)s photo"
+msgid_plural "Unnamed person with %(count)s photos"
+msgstr[0] "Personne sans nom, %(count)s photo"
+msgstr[1] "Personne sans nom, %(count)s de photos"
+msgstr[2] "Personne sans nom, %(count)s photos"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"Unnamed person with %(count)s photo, the same person as another face here"
+msgid_plural ""
+"Unnamed person with %(count)s photos, the same person as another face here"
+msgstr[0] "Personne sans nom, %(count)s photo, déjà présente sur cette photo"
+msgstr[1] "Personne sans nom, %(count)s de photos, déjà présente sur cette photo"
+msgstr[2] "Personne sans nom, %(count)s photos, déjà présente sur cette photo"
+
+#: ui/static/photos/ui/js/faces.js
+msgid ""
+"%(count)s more face of this group, closer to the rest, goes with the answer."
+msgid_plural ""
+"%(count)s more faces of this group, closer to the rest, go with the answer."
+msgstr[0] ""
+"Votre réponse s’appliquera aussi à %(count)s autre visage de ce groupe, plus "
+"ressemblant."
+msgstr[1] ""
+"Votre réponse s’appliquera aussi aux %(count)s autres visages de ce groupe, "
+"plus ressemblants."
+msgstr[2] ""
+"Votre réponse s’appliquera aussi aux %(count)s autres visages de ce groupe, "
+"plus ressemblants."
+
 #: ui/static/photos/ui/js/faces.js
 msgid "Request failed (%(status)s)"
 msgstr "La requête a échoué (%(status)s)"
@@ -460,14 +513,6 @@ msgid_plural "%(count)s people put back"
 msgstr[0] "%(count)s personne remise en place"
 msgstr[1] "%(count)s de personnes remises en place"
 msgstr[2] "%(count)s personnes remises en place"
-
-#: ui/static/photos/ui/js/faces.js ui/static/photos/ui/js/library_map.js
-#: ui/static/photos/ui/js/photos.js
-msgid "%(count)s photo"
-msgid_plural "%(count)s photos"
-msgstr[0] "%(count)s photo"
-msgstr[1] "%(count)s de photos"
-msgstr[2] "%(count)s photos"
 
 #: ui/static/photos/ui/js/faces.js
 msgid "%(count)s person to name"

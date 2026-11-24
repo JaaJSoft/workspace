@@ -886,29 +886,6 @@ msgstr ""
 "Personnes."
 
 #: ui/templates/photos/ui/partials/face_assign_dialog.html
-#: ui/templates/photos/ui/partials/merge_dialog.html
-#: ui/templates/photos/ui/partials/name_dialog.html
-#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
-#, python-format
-msgid "%%(count)s photo"
-msgstr "%%(count)s photo"
-
-#: ui/templates/photos/ui/partials/face_assign_dialog.html
-#: ui/templates/photos/ui/partials/faces_dialog.html
-#: ui/templates/photos/ui/partials/merge_dialog.html
-#: ui/templates/photos/ui/partials/name_dialog.html
-#: ui/templates/photos/ui/partials/silhouette_assign_dialog.html
-#, python-format
-msgid "%%(count)s photos"
-msgstr "%%(count)s photos"
-
-#: ui/templates/photos/ui/partials/face_assign_dialog.html
-#: ui/templates/photos/ui/partials/faces_dialog.html
-#, python-format
-msgid "Unnamed person with %%(count)s photos"
-msgstr "Personne sans nom, %%(count)s photos"
-
-#: ui/templates/photos/ui/partials/face_assign_dialog.html
 #: ui/templates/photos/ui/partials/faces_dialog.html
 #: ui/templates/photos/ui/partials/name_dialog.html
 #: ui/templates/photos/ui/partials/review_card.html
@@ -997,12 +974,6 @@ msgstr "à %%(time)s"
 #: ui/templates/photos/ui/partials/faces_dialog.html
 msgid "Already another face here: both are kept as one person"
 msgstr "Déjà présente sur cette photo : les deux visages compteront pour une seule personne"
-
-#: ui/templates/photos/ui/partials/faces_dialog.html
-#, python-format
-msgid ""
-"Unnamed person with %%(count)s photos, the same person as another face here"
-msgstr "Personne sans nom, %%(count)s photos, déjà présente sur cette photo"
 
 #: ui/templates/photos/ui/partials/faces_dialog.html
 msgid "Change person"
@@ -1148,31 +1119,11 @@ msgstr "Choisir cette personne"
 
 #: ui/templates/photos/ui/partials/person_header.html
 #, python-format
-msgid "%%(count)s silhouette"
-msgstr "%%(count)s silhouette"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
-msgid "%%(count)s silhouettes"
-msgstr "%%(count)s silhouettes"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
 msgid "%(counter)s silhouette"
 msgid_plural "%(counter)s silhouettes"
 msgstr[0] "%(counter)s silhouette"
 msgstr[1] "%(counter)s de silhouettes"
 msgstr[2] "%(counter)s silhouettes"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
-msgid "%%(count)s face"
-msgstr "%%(count)s visage"
-
-#: ui/templates/photos/ui/partials/person_header.html
-#, python-format
-msgid "%%(count)s faces"
-msgstr "%%(count)s visages"
 
 #: ui/templates/photos/ui/partials/person_header.html
 #, python-format
@@ -1380,12 +1331,6 @@ msgstr "Personne, écarter"
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "Face, leave out"
 msgstr "Visage, écarter"
-
-#: ui/templates/photos/ui/partials/review_card.html
-#, python-format
-msgid ""
-"%%(count)s more faces of this group, closer to the rest, go with the answer."
-msgstr "Votre réponse s’appliquera aussi aux %%(count)s autres visages de ce groupe, plus ressemblants."
 
 #: ui/templates/photos/ui/partials/review_card.html
 msgid "Someone else? Type a name"

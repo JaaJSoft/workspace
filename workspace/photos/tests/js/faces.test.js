@@ -1364,3 +1364,30 @@ test('a refused face grouping write says so and reloads nothing', async () => {
   assert.equal(errors.length, 1);
   assert.equal(faces.facesSaving, false);
 });
+
+// French: 0 and 1 take the singular, a round million the "de" form.
+function frenchNgettext(singular, plural, count) {
+  return count === 0 || count === 1 ? singular : plural;
+}
+
+test('counted labels follow the language\'s plural rules, not count === 1', () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+    ngettext: frenchNgettext,
+  });
+  const labels = ctx.photosCountLabels;
+
+  assert.equal(labels.photos(0), '0 photo');
+  assert.equal(labels.photos(1), '1 photo');
+  assert.equal(labels.photos(4), '4 photos');
+  assert.equal(labels.faces(0), '0 face');
+  assert.equal(labels.silhouettes(2), '2 silhouettes');
+  assert.equal(labels.unnamedPerson(1), 'Unnamed person with 1 photo');
+  assert.equal(labels.unnamedPerson(3), 'Unnamed person with 3 photos');
+  assert.equal(
+    labels.unnamedPersonTaken(1),
+    'Unnamed person with 1 photo, the same person as another face here',
+  );
+  assert.equal(labels.moreFaces(1), '1 more face of this group, closer to the rest, goes with the answer.');
+  assert.equal(labels.moreFaces(5), '5 more faces of this group, closer to the rest, go with the answer.');
+});

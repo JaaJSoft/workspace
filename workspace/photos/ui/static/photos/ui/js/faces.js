@@ -61,6 +61,44 @@ function faceTimeLabel(seconds) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
+function withCount(text, count) {
+  return interpolate(text, { count }, true);
+}
+
+// The counts the people pages work out in the browser, as their templates
+// render them: the dialogs, the person header and the review cards.
+window.photosCountLabels = {
+  photos(count) {
+    return withCount(ngettext('%(count)s photo', '%(count)s photos', count), count);
+  },
+  faces(count) {
+    return withCount(ngettext('%(count)s face', '%(count)s faces', count), count);
+  },
+  silhouettes(count) {
+    return withCount(ngettext('%(count)s silhouette', '%(count)s silhouettes', count), count);
+  },
+  unnamedPerson(count) {
+    return withCount(
+      ngettext('Unnamed person with %(count)s photo', 'Unnamed person with %(count)s photos', count),
+      count,
+    );
+  },
+  unnamedPersonTaken(count) {
+    return withCount(ngettext(
+      'Unnamed person with %(count)s photo, the same person as another face here',
+      'Unnamed person with %(count)s photos, the same person as another face here',
+      count,
+    ), count);
+  },
+  moreFaces(count) {
+    return withCount(ngettext(
+      '%(count)s more face of this group, closer to the rest, goes with the answer.',
+      '%(count)s more faces of this group, closer to the rest, go with the answer.',
+      count,
+    ), count);
+  },
+};
+
 function openInViewer(uuid, name, type, at) {
   window.dispatchEvent(new CustomEvent('open-file-viewer', {
     detail: { uuid, name, type, at: at == null ? null : at },
@@ -1551,10 +1589,6 @@ window.facesReview = function facesReview() {
 
     destroy() {
       clearTimeout(this._searchTimer);
-    },
-
-    photoLabel(count) {
-      return interpolate(ngettext('%(count)s photo', '%(count)s photos', count), { count }, true);
     },
 
     // Mirrors _review_left_label() in photos/ui/views.py.

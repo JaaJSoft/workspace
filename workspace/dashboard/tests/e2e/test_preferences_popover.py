@@ -12,7 +12,7 @@ class DashboardPreferencesPopoverTests(PlaywrightTestCase):
         user = self.create_user(username="prefs")
         self.login_as(user)
         self.page.goto(f"{self.live_server_url}/")
-        self.page.get_by_role("button", name="Customize").click()
+        self.page.get_by_role("button", name="Dashboard preferences").click()
         panel = self.page.locator("#dashboard-preferences-panel")
         expect(panel).to_be_visible()
         return panel
@@ -38,7 +38,7 @@ class DashboardPreferencesPopoverTests(PlaywrightTestCase):
         self.page.mouse.click(5, 5)
         expect(panel).to_be_hidden()
 
-        self.page.get_by_role("button", name="Customize").click()
+        self.page.get_by_role("button", name="Dashboard preferences").click()
         expect(panel).to_be_visible()
         self.page.keyboard.press("Escape")
         expect(panel).to_be_hidden()

@@ -34,16 +34,6 @@ msgid "Dashboard preferences"
 msgstr "Préférences du tableau de bord"
 
 #: templates/dashboard/index.html
-msgctxt "dashboard button"
-msgid "Usage"
-msgstr "Utilisation"
-
-#: templates/dashboard/index.html
-msgctxt "dashboard button"
-msgid "Customize"
-msgstr "Personnaliser"
-
-#: templates/dashboard/index.html
 msgid "Recent Activity"
 msgstr "Activité récente"
 

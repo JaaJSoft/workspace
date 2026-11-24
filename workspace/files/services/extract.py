@@ -48,6 +48,10 @@ class ArchiveTooLargeError(ValueError):
     """
 
 
+class ExtractionTargetGoneError(Exception):
+    """Raised when a folder the archive extracts into is trashed meanwhile."""
+
+
 class ArchiveTooManyEntriesError(ValueError):
     """Raised when an archive's entry count exceeds the cap.
 
@@ -230,14 +234,18 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                                 group=dest_group,
                                 additional_bytes=tmp.size,
                             )
-                        new_file = tree.create_file(
-                            acting_user,
-                            leaf,
-                            parent=parent,
-                            content=tmp,
-                            acting_user=acting_user,
-                            check_quota=False,
-                        )
+                        with transaction.atomic():
+                            # Entries commit one by one: the folder may have
+                            # been trashed since the previous one.
+                            _lock_live_parent(parent)
+                            new_file = tree.create_file(
+                                acting_user,
+                                leaf,
+                                parent=parent,
+                                content=tmp,
+                                acting_user=acting_user,
+                                check_quota=False,
+                            )
                         created_pks.append(new_file.pk)
                     finally:
                         tmp.close()
@@ -257,6 +265,20 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         "destination_uuid": str(dest_folder.uuid) if dest_folder is not None else None,
         "files_created": files_created,
     }
+
+
+def _lock_live_parent(parent):
+    """Hold *parent* for the insert below it, refusing one trashed since."""
+    if parent is None:
+        return
+    live = (
+        File.objects.select_for_update(of=("self",))
+        .filter(pk=parent.pk, deleted_at__isnull=True)
+        .values_list("pk", flat=True)
+        .first()
+    )
+    if live is None:
+        raise ExtractionTargetGoneError
 
 
 def _take_back(created_pks):
@@ -305,6 +327,8 @@ def extract_item(user, node, parent):
         raise Refused(Refusal.ARCHIVE_TOO_LARGE) from error
     except ArchiveTooManyEntriesError as error:
         raise Refused(Refusal.ARCHIVE_TOO_MANY_ENTRIES) from error
+    except ExtractionTargetGoneError as error:
+        raise Refused(Refusal.TARGET) from error
     except ValueError as error:
         logger.info("Extracting %s refused: %s", scrub(str(node.pk)), scrub(str(error)))
         raise Refused(Refusal.ARCHIVE_INVALID) from error

@@ -421,6 +421,28 @@ class ExtractZipServiceTests(TestCase):
             File.objects.filter(name__in=["a.txt", "b.txt", "deep"]).exists()
         )
 
+    def test_a_folder_trashed_between_two_entries_receives_no_more(self):
+        from workspace.files.services import trash
+        from workspace.files.services.extract import ExtractionTargetGoneError
+
+        payload = _make_zip([("new/a.txt", b"a"), ("new/b.txt", b"b")])
+        archive = self._make_archive_file(payload)
+
+        # Someone trashes the folder once the first entry is in it.
+        def trash_after_first(sender, instance, created, **kwargs):
+            if created and instance.name == "a.txt":
+                trash.soft_delete(instance.parent, acting_user=self.user)
+
+        post_save.connect(trash_after_first, sender=File, weak=False)
+        try:
+            with self.assertRaises(ExtractionTargetGoneError):
+                extract_zip(archive, self.dest, acting_user=self.user)
+        finally:
+            post_save.disconnect(trash_after_first, sender=File)
+
+        self.assertFalse(File.objects.filter(name="b.txt").exists())
+        self.assertFalse(File.objects.filter(name="a.txt").exists())
+
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip(
             [

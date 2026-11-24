@@ -193,7 +193,7 @@ def delete_tasks(project, task_uuids, *, actor=None):
     with transaction.atomic():
         tasks = _lock_tasks(project, task_uuids)
         links = TaskFileLink.objects.filter(task__in=tasks).select_related(
-            "task", "share"
+            "task__project", "share"
         )
         for link in links:
             unlink_file(link, actor=actor)

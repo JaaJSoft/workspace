@@ -452,6 +452,26 @@ class BulkServiceTests(BulkTestsBase):
             7,
         )
 
+    def test_bulk_delete_reads_no_project_per_unlinked_file(self):
+        tasks = self._more_tasks(3)
+        doc = tree.create_file(
+            self.admin,
+            "spec.md",
+            content=SimpleUploadedFile("spec.md", b"hi", content_type="text/plain"),
+        )
+        for task in tasks:
+            link_files(self.admin, task, [doc])
+
+        with CaptureQueriesContext(connection) as ctx:
+            delete_tasks(self.project, self._uuids(*tasks), actor=self.admin)
+
+        project_reads = [
+            q["sql"]
+            for q in ctx.captured_queries
+            if q["sql"].startswith("SELECT") and 'FROM "projects_project"' in q["sql"]
+        ]
+        self.assertEqual(project_reads, [])
+
     def test_bulk_delete_revokes_the_shares_its_links_created(self):
         doc = tree.create_file(
             self.admin,

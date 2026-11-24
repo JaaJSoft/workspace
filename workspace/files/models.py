@@ -493,6 +493,16 @@ class File(models.Model):
         if self.name in (".", ".."):
             raise ValueError("File and folder names must not be '.' or '..'.")
 
+        update_fields = kwargs.get("update_fields")
+        if (
+            update_fields is not None
+            and self.path
+            and not {"name", "parent", "parent_id"}.intersection(update_fields)
+        ):
+            # The path derives from the name and the parent alone.
+            super().save(*args, **kwargs)
+            return
+
         old_data = None
         if self.pk:
             old_data = (
@@ -509,7 +519,6 @@ class File(models.Model):
         new_path = self._build_path_for(self.name, self.parent_id)
         self.path = new_path
 
-        update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = set(update_fields) | {"path"}
             if "name" in update_fields:

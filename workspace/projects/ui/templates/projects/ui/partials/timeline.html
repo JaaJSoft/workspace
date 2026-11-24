@@ -14,12 +14,10 @@
       x-init="$nextTick(() => window.dispatchEvent(new CustomEvent('project-fragment-bound')))"
     >
       {% if timeline_is_empty and not filters_active %}
-        <div
-          class="rounded-box border border-base-300 bg-base-100 p-8 flex flex-col items-center gap-3 text-center"
-        >
-          <i data-lucide="chart-gantt" class="w-10 h-10 text-base-content/30"></i>
-          <p class="font-medium">{% translate "Nothing to place on the timeline yet" %}</p>
-          <p class="text-sm text-base-content/60 max-w-md">
+        <div class="empty-state rounded-box border border-base-300 bg-base-100">
+          <i data-lucide="chart-gantt" class="empty-state-icon"></i>
+          <p class="empty-state-title">{% translate "Nothing to place on the timeline yet" %}</p>
+          <p class="max-w-md">
             {% if role == "admin" %}
               {% translate "Give tasks a start or due date to draw them here, and give an epic a target date from the project settings to mark what lands when." %}
             {% else %}

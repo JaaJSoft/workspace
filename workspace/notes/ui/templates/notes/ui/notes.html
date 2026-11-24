@@ -225,22 +225,16 @@
               <p class="text-sm text-base-content/60" x-text="viewerError"></p>
             </div>
           </div>
-          <div
-            x-show="!selectedNote"
-            x-cloak
-            class="flex items-center justify-center h-full text-base-content/30"
-          >
-            <div class="text-center">
-              <i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
-              <p class="text-lg font-medium">{% translate "Select or create a note" %}</p>
-              <label
-                for="notes-drawer"
-                class="btn btn-module btn-sm mt-4 lg:hidden cursor-pointer"
-              >
-                <i data-lucide="menu" class="w-4 h-4"></i>
-                {% translate "Open notes" %}
-              </label>
-            </div>
+          <div x-show="!selectedNote" x-cloak class="empty-state h-full">
+            <i data-lucide="notebook-pen" class="empty-state-icon"></i>
+            <p class="empty-state-title">{% translate "Select or create a note" %}</p>
+            <label
+              for="notes-drawer"
+              class="btn btn-module btn-sm lg:hidden cursor-pointer"
+            >
+              <i data-lucide="menu" class="w-4 h-4"></i>
+              {% translate "Open notes" %}
+            </label>
           </div>
         </div>
       </div>

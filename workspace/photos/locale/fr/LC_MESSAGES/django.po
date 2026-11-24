@@ -1038,10 +1038,12 @@ msgstr ""
 "count\">%(count)s</span> dans cette zone"
 
 #: ui/templates/photos/ui/partials/map_photos.html
-msgid "Nothing was taken in this area. Move the map or zoom out to see more."
-msgstr ""
-"Aucune photo n’a été prise dans cette zone. Déplacez la carte ou dézoomez "
-"pour en voir davantage."
+msgid "Nothing in this area"
+msgstr "Rien dans cette zone"
+
+#: ui/templates/photos/ui/partials/map_photos.html
+msgid "Move the map or zoom out to see more."
+msgstr "Déplacez la carte ou dézoomez pour en voir davantage."
 
 #: ui/templates/photos/ui/partials/merge_dialog.html
 #: ui/templates/photos/ui/people.html

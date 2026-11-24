@@ -381,13 +381,11 @@
       <template x-if="!loading">
         <div>
           <template x-if="items.length === 0">
-            <div
-              class="flex flex-col items-center justify-center py-8 text-base-content/40"
-            >
-              <i x-show="!isFileMode" data-lucide="folder-x" class="w-8 h-8 mb-2"></i>
-              <i x-show="isFileMode" data-lucide="file-x" class="w-8 h-8 mb-2"></i>
+            <div class="empty-state py-8">
+              <i x-show="!isFileMode" data-lucide="folder-x" class="empty-state-icon"></i>
+              <i x-show="isFileMode" data-lucide="file-x" class="empty-state-icon"></i>
               <span
-                class="text-sm"
+                class="empty-state-title"
                 x-text="search ? '{{ no_files_found_label|escapejs }}' : (isFileMode ? '{{ empty_folder_label|escapejs }}' : '{{ no_subfolders_label|escapejs }}')"
               ></span>
             </div>

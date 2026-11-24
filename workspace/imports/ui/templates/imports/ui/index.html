@@ -33,7 +33,7 @@
           >
             <i data-lucide="download-cloud" class="w-5 h-5"></i>
           </div>
-          <h1 class="text-2xl font-bold">{% translate "Imports" %}</h1>
+          <h1 class="page-title">{% translate "Imports" %}</h1>
         </div>
         <p class="text-base-content/60 text-sm mt-1">
           {% translate "Bring your files and contacts over from another cloud - Nextcloud, any WebDAV host, and more to come." %}
@@ -62,11 +62,9 @@
     <section class="mb-8">
       <h2 class="text-lg font-semibold mb-3">{% translate "Connections" %}</h2>
       <template x-if="connections.length === 0">
-        <div
-          class="border border-dashed border-base-300 rounded-lg p-8 text-center"
-        >
-          <i data-lucide="plug" class="w-8 h-8 mx-auto text-base-content/40 mb-2"></i>
-          <p class="text-sm text-base-content/60 mb-3">
+        <div class="empty-state border border-dashed border-base-300 rounded-lg">
+          <i data-lucide="plug" class="empty-state-icon"></i>
+          <p class="max-w-sm">
             {% translate "Connect the cloud you are leaving - a Nextcloud account or any WebDAV folder." %}
           </p>
           <button

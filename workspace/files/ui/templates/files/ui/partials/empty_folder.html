@@ -7,12 +7,6 @@
     - title: str (default: "This folder is empty")
     - message: str (default: "Create a folder or upload files to get started.")
 {% endcomment %}
-<div
-  class="flex h-full min-h-48 items-center justify-center text-base-content/60"
->
-  <div class="text-center">
-    <i data-lucide="folder-open" class="w-12 h-12 mb-4 opacity-40 mx-auto"></i>
-    <p class="text-lg font-medium mb-1">{% if title %}{{ title }}{% else %}{% translate "This folder is empty" %}{% endif %}</p>
-    <p class="text-sm">{% if message %}{{ message }}{% else %}{% translate "Create a folder or upload files to get started." %}{% endif %}</p>
-  </div>
-</div>
+{% translate "This folder is empty" as default_title %}
+{% translate "Create a folder or upload files to get started." as default_message %}
+{% include "ui/partials/empty_state.html" with icon="folder-open" title=title|default:default_title message=message|default:default_message class="h-full min-h-48" %}

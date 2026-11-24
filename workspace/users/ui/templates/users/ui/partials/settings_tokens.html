@@ -63,18 +63,19 @@
 
       <!-- Empty state -->
       <template x-if="!loading && tokens.length === 0">
-        <div class="text-center py-8 text-base-content/50">
-          <i data-lucide="key-round" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
-          <p class="text-sm">{% translate "No API tokens yet." %}</p>
+        <div class="empty-state">
+          <i data-lucide="key-round" class="empty-state-icon"></i>
+          <p class="empty-state-title">{% translate "No API tokens yet." %}</p>
         </div>
       </template>
 
       <!-- No search results -->
       <div
         x-show="!loading && tokens.length > 0 && filteredTokens.length === 0"
-        class="text-center py-6 text-base-content/50"
+        class="empty-state"
       >
-        <p class="text-sm">{% translate "No tokens matching your search." %}</p>
+        <i data-lucide="search-x" class="empty-state-icon"></i>
+        <p class="empty-state-title">{% translate "No tokens matching your search." %}</p>
       </div>
 
       <!-- Token list -->

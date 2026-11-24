@@ -19,11 +19,8 @@
   {% if entries %}
     <div class="p-2">{% include "photos/ui/partials/timeline_page.html" %}</div>
   {% else %}
-    <div class="flex flex-col items-center text-center gap-2 px-6 py-12">
-      <i data-lucide="map-pin" class="w-8 h-8 text-base-content/30"></i>
-      <p class="text-sm text-base-content/60 max-w-xs">
-        {% translate "Nothing was taken in this area. Move the map or zoom out to see more." %}
-      </p>
-    </div>
+    {% translate "Nothing in this area" as nothing_here_label %}
+    {% translate "Move the map or zoom out to see more." as nothing_here_hint %}
+    {% include "ui/partials/empty_state.html" with icon="map-pin" title=nothing_here_label message=nothing_here_hint %}
   {% endif %}
 </div>

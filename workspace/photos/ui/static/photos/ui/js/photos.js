@@ -263,6 +263,7 @@ window.photosApp = function photosApp() {
     albumUuid: null,
     albumActions: [],
     _albumGeneration: 0,
+    _albumActionsRead: null,
     albumMenu: { open: false, x: 0, y: 0, actions: null },
     picker: { open: false, loading: false, busy: false, albums: [], files: [] },
     _pickerGeneration: 0,
@@ -1371,12 +1372,23 @@ window.photosApp = function photosApp() {
       const generation = ++this._albumGeneration;
       this.albumUuid = album ? album.uuid : null;
       this.albumActions = [];
+      this._albumActionsRead = null;
       if (!album) return Promise.resolve();
-      return this._fetchAlbumActions(album.uuid).then((actions) => {
+      const read = { uuid: album.uuid, request: this._fetchAlbumActions(album.uuid) };
+      this._albumActionsRead = read;
+      return read.request.then((actions) => {
         if (generation === this._albumGeneration) {
           this.albumActions = actions.map((a) => a.id);
         }
-      }).catch(() => {});
+      }).catch(() => {
+        if (this._albumActionsRead === read) this._albumActionsRead = null;
+      });
+    },
+
+    // The album menu reads what syncAlbum asked for the album on screen.
+    _albumActionsFor(uuid) {
+      const read = this._albumActionsRead;
+      return read && read.uuid === uuid ? read.request : this._fetchAlbumActions(uuid);
     },
 
     _fetchAlbumActions(uuid) {
@@ -1539,7 +1551,7 @@ window.photosApp = function photosApp() {
       const x = Math.max(4, Math.min(rect.left, window.innerWidth - PHOTOS_MENU_WIDTH - 4));
       const generation = ++this._ctxGeneration;
       this.albumMenu = { open: true, x, y: rect.bottom + 4, actions: null };
-      this._fetchAlbumActions(album.uuid).then((actions) => {
+      this._albumActionsFor(album.uuid).then((actions) => {
         if (generation !== this._ctxGeneration) return;
         this.albumMenu.actions = actions.filter((a) => ALBUM_MENU_ACTIONS.includes(a.id));
       }).catch(() => {

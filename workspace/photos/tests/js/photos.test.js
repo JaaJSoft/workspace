@@ -812,6 +812,49 @@ test('the album on screen and what its registry allows there', async () => {
   assert.equal(app.albumAllows('set_cover'), false);
 });
 
+test('the album menu reuses the actions the page already asked for', async () => {
+  const requests = [];
+  const page = grid(['a'], { uuid: 'al1', title: 'Summer' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [{ id: 'rename' }, { id: 'reorder' }] } }, requests),
+  }).ctx.photosApp();
+  await app.syncAlbum();
+  const anchor = { getBoundingClientRect: () => ({ left: 10, bottom: 40 }) };
+
+  app.openAlbumMenu(anchor);
+  await flush();
+  app.openAlbumMenu(anchor);
+  await flush();
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(Array.from(app.albumMenu.actions, (a) => a.id), ['rename']);
+});
+
+test('a failed read of the album actions is asked again when the menu opens', async () => {
+  const requests = [];
+  let fail = true;
+  const page = grid(['a'], { uuid: 'al1', title: 'Summer' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: (url, opts) => {
+      requests.push(url);
+      if (fail) return Promise.reject(new Error('offline'));
+      return jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [{ id: 'rename' }] } })(url, opts);
+    },
+  }).ctx.photosApp();
+  await app.syncAlbum();
+  fail = false;
+
+  app.openAlbumMenu({ getBoundingClientRect: () => ({ left: 10, bottom: 40 }) });
+  await flush();
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(Array.from(app.albumMenu.actions, (a) => a.id), ['rename']);
+});
+
 test('outside an album nothing is allowed and nothing is asked', async () => {
   const requests = [];
   const app = load({ fetch: jsonFetch({}, requests) }).ctx.photosApp();

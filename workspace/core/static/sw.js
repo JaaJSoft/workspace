@@ -1,4 +1,4 @@
-/* Service Worker — PWA caching + Web Push Notifications */
+/* Service Worker - PWA caching + Web Push Notifications */
 
 const SW_PARAMS = new URL(self.location).searchParams;
 const CACHE_VERSION = SW_PARAMS.get('v') || 'dev';
@@ -49,7 +49,7 @@ self.addEventListener('activate', function (event) {
 });
 
 /* ──────────────────────────────────────────
-   Fetch — routing by request type
+   Fetch - routing by request type
    ────────────────────────────────────────── */
 
 self.addEventListener('fetch', function (event) {
@@ -65,7 +65,7 @@ self.addEventListener('fetch', function (event) {
   // Only handle GET requests
   if (request.method !== 'GET') return;
 
-  // API requests — network only
+  // API requests - network only
   if (url.pathname.startsWith('/api/')) return;
 
   // Another origin's content (map tiles, an image in a message): the page
@@ -73,14 +73,14 @@ self.addEventListener('fetch', function (event) {
   // tile ever seen.
   if (url.origin !== self.location.origin) return;
 
-  // Local static assets — dev: skip SW (always fresh), prod: cache first (invalidated by version bump)
+  // Local static assets - dev: skip SW (always fresh), prod: cache first (invalidated by version bump)
   if (url.pathname.startsWith('/static/')) {
     if (CACHE_VERSION === 'dev') return;
     event.respondWith(cacheFirst(request));
     return;
   }
 
-  // HTML navigation — network first with offline fallback
+  // HTML navigation - network first with offline fallback
   if (request.mode === 'navigate') {
     event.respondWith(networkFirstWithOffline(request));
     return;
@@ -126,7 +126,7 @@ function networkFirstWithOffline(request) {
 }
 
 /* ──────────────────────────────────────────
-   Incoming — what another app shares with the installed app
+   Incoming - what another app shares with the installed app
    ────────────────────────────────────────── */
 
 // The manifest has a single share_target, so everything another app shares

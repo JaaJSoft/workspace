@@ -29,7 +29,7 @@ class ChatSidebarRefreshTests(PlaywrightTestCase):
 
     def setUp(self):
         super().setUp()
-        # Main user — the one who sees the sidebar.
+        # Main user - the one who sees the sidebar.
         self.user = self.create_user(username="viewer", password="pass12345")
         # Two DM peers. DM display name falls back to the peer's username
         # when get_full_name() is empty, so the search query matches them
@@ -63,7 +63,7 @@ class ChatSidebarRefreshTests(PlaywrightTestCase):
         expect(list_root.get_by_text("alice-contact")).to_be_visible()
         expect(list_root.get_by_text("bob-contact")).to_be_visible()
 
-        # Type in the search box — triggers a 300 ms debounced $ajax swap.
+        # Type in the search box - triggers a 300 ms debounced $ajax swap.
         self.page.locator('input[placeholder="Search conversations"]').fill(
             "alice-contact"
         )
@@ -89,7 +89,7 @@ class ChatSidebarRefreshTests(PlaywrightTestCase):
         from django.utils import timezone
 
         # Give the two conversations distinct updated_at. `auto_now=True`
-        # on the field means we MUST bypass .save() — use .update().
+        # on the field means we MUST bypass .save() - use .update().
         now = timezone.now()
         Conversation.objects.filter(pk=self.conv_a.pk).update(updated_at=now)
         Conversation.objects.filter(pk=self.conv_b.pk).update(
@@ -99,7 +99,7 @@ class ChatSidebarRefreshTests(PlaywrightTestCase):
         self.login_as(self.user)
         self.page.goto(f"{self.live_server_url}/chat")
 
-        # DM items rendered in ``#conversation-list`` — there's no
+        # DM items rendered in ``#conversation-list`` - there's no
         # data-conversation-uuid on DM <li>, so we match by text content.
         # conv_a is the most recent → alice-contact's <li> is first.
         list_root = self.page.locator("#conversation-list")
@@ -151,7 +151,7 @@ class ChatSidebarRefreshTests(PlaywrightTestCase):
             ")"
         )
 
-        # Wait until the first DM <li> is bob-contact — proves the morph
+        # Wait until the first DM <li> is bob-contact - proves the morph
         # landed and the server's -updated_at ordering is reflected
         # client-side. When the sidebar is collapsed the name is only
         # available via the button's title attribute (the template binds

@@ -36,6 +36,17 @@ def settle_task_notifications(tasks):
     settle_sources(tasks, max_priority="normal")
 
 
+def settle_moved_due_dates(tasks):
+    """Settle the reminders a due-date move made moot, among *tasks*.
+
+    *tasks* carry their new due date. Every writer of a due date calls it,
+    or a pushed-back deadline keeps nagging until the next cron pass.
+    """
+    settled = [task for task in tasks if due_move_settles(task.due_date)]
+    if settled:
+        settle_task_notifications(settled)
+
+
 def _default_sprint(project, status):
     """Sprint a task entering *status* without one should default to.
 

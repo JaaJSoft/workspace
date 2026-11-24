@@ -9,7 +9,9 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.ai.tests.agents import tool_context
 from workspace.notifications.models import Notification
+from workspace.projects.ai_tools import ProjectsToolProvider, UpdateTaskParams
 from workspace.projects.services.members import remove_member
 from workspace.projects.services.tasks import (
     change_task_status,
@@ -333,3 +335,17 @@ class SettleOnDueDateChangeTests(NotifyDueTasksMixin, APITestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(self._unread(task, self.member).exists())
+
+
+class SettleOnAiDueDateChangeTests(NotifyDueTasksMixin, TestCase):
+    def test_pushing_due_date_back_through_the_assistant_settles(self):
+        task = self._task(due_days=0)
+        self._run_cron()
+
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        ProjectsToolProvider().update_task(
+            tool_context(user=self.admin),
+            UpdateTaskParams(task_uuid=task.uuid, due_date=tomorrow.isoformat()),
+        )
+
+        self.assertFalse(self._unread(task, self.member).exists())

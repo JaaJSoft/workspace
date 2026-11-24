@@ -447,6 +447,7 @@ first."""
         from .models import TaskEvent
         from .services.assignments import notify_assigned
         from .services.events import record_task_event
+        from .services.tasks import settle_moved_due_dates
         from .services.watchers import auto_watch
 
         task = _get_task(user, args.task_uuid)
@@ -479,6 +480,7 @@ first."""
                 task.due_date = due_date
                 task.save(update_fields=["due_date", "updated_at"])
                 record_task_event(task, type=TaskEvent.Type.UPDATED, actor=user)
+                settle_moved_due_dates([task])
             changes.append(
                 f"due date set to {due_date.isoformat()}"
                 if due_date

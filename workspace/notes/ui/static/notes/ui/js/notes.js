@@ -25,6 +25,20 @@ window._notesPrefsDefaults = {
     window._notesPrefsCache = { ...window._notesPrefsDefaults, ...initial };
 })();
 
+// The page holds two preference panels (popover and dialog): a folder's label is fetched once for both.
+const notesFolderLabels = new Map();
+function notesFolderLabel(uuid) {
+    if (!notesFolderLabels.has(uuid)) {
+        const label = fetch('/api/v1/files/' + uuid)
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(f) { return f ? (f.path || f.name) : null; })
+            .catch(function() { return null; });
+        notesFolderLabels.set(uuid, label);
+        label.then(function(value) { if (value === null) notesFolderLabels.delete(uuid); });
+    }
+    return notesFolderLabels.get(uuid);
+}
+
 window.notesPreferences = function notesPreferences() {
     const API_URL = '/api/v1/settings/notes/preferences';
     let _saveTimer = null;
@@ -62,10 +76,8 @@ window.notesPreferences = function notesPreferences() {
             this.prefs.defaultFolderUuid = folder.uuid;
             this.defaultFolderName = folder.name || gettext('Root');
             if (folder.uuid) {
-                try {
-                    const r = await fetch('/api/v1/files/' + folder.uuid);
-                    if (r.ok) { const f = await r.json(); this.defaultFolderName = f.path || f.name; }
-                } catch(e) {}
+                const label = await notesFolderLabel(folder.uuid);
+                if (label) this.defaultFolderName = label;
             }
             this._saveRemote();
             this._broadcast();
@@ -84,35 +96,20 @@ window.notesPreferences = function notesPreferences() {
             this.prefs.journalFolderUuid = folder.uuid;
             this.journalFolderName = folder.name || gettext('Root');
             if (folder.uuid) {
-                try {
-                    const r2 = await fetch('/api/v1/files/' + folder.uuid);
-                    if (r2.ok) { const f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
-                } catch(e) {}
+                const label = await notesFolderLabel(folder.uuid);
+                if (label) this.journalFolderName = label;
             }
             this._saveRemote();
             this._broadcast();
         },
 
         async _loadFolderNames() {
-            if (this.prefs.defaultFolderUuid) {
-                try {
-                    const r = await fetch('/api/v1/files/' + this.prefs.defaultFolderUuid);
-                    if (r.ok) { const f = await r.json(); this.defaultFolderName = f.path || f.name; }
-                    else this.defaultFolderName = gettext('Not set');
-                } catch(e) { this.defaultFolderName = gettext('Not set'); }
-            } else {
-                this.defaultFolderName = gettext('Not set');
-            }
-
-            if (this.prefs.journalFolderUuid) {
-                try {
-                    const r2 = await fetch('/api/v1/files/' + this.prefs.journalFolderUuid);
-                    if (r2.ok) { const f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
-                    else this.journalFolderName = gettext('Not set');
-                } catch(e) { this.journalFolderName = gettext('Not set'); }
-            } else {
-                this.journalFolderName = gettext('Not set');
-            }
+            const [defaultLabel, journalLabel] = await Promise.all([
+                this.prefs.defaultFolderUuid ? notesFolderLabel(this.prefs.defaultFolderUuid) : null,
+                this.prefs.journalFolderUuid ? notesFolderLabel(this.prefs.journalFolderUuid) : null,
+            ]);
+            this.defaultFolderName = defaultLabel || gettext('Not set');
+            this.journalFolderName = journalLabel || gettext('Not set');
         },
 
         _broadcast() {

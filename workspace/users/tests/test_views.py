@@ -740,33 +740,6 @@ class SettingsModuleTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data, {"theme": "nord", "light_theme": "nord"})
 
-    def test_patch_runs_inside_single_transaction(self):
-        # All set_setting calls must happen inside the same atomic block,
-        # so on SQLite the writer-lock is acquired once for the whole batch.
-        # We assert this by patching ``set_setting`` and checking that the
-        # outer connection is in an atomic block when each call lands.
-        from unittest.mock import patch as mock_patch
-
-        from django.db import transaction as dj_transaction
-
-        seen_in_atomic: list[bool] = []
-        real = set_setting
-
-        def spy(user, module, key, value):
-            seen_in_atomic.append(not dj_transaction.get_autocommit())
-            return real(user, module, key, value)
-
-        with mock_patch(
-            "workspace.users.services.settings.set_setting", side_effect=spy
-        ):
-            resp = self.client.patch(
-                self._url("core"),
-                {"theme": "nord", "light_theme": "nord", "dark_theme": "dim"},
-                format="json",
-            )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(seen_in_atomic, [True, True, True])
-
     def test_patch_rejects_non_object_body(self):
         resp = self.client.patch(
             self._url("core"),

@@ -527,6 +527,27 @@ class WriteSettingsTests(TestCase):
             write_settings(self.user, "profile", {"role": "dev", "bio": "x" * 201})
         self.assertEqual(get_module_settings(self.user, "profile"), {})
 
+    def test_a_write_that_fails_midway_stores_nothing(self):
+        store = set_setting
+        written = []
+
+        def fail_on_the_second(user, module, key, value):
+            written.append(key)
+            if len(written) == 2:
+                raise RuntimeError("storage failed")
+            return store(user, module, key, value)
+
+        with (
+            patch(
+                "workspace.users.services.settings.set_setting",
+                side_effect=fail_on_the_second,
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            write_settings(self.user, "profile", {"bio": "hello", "role": "dev"})
+        self.assertEqual(len(written), 2)
+        self.assertFalse(UserSetting.objects.filter(user=self.user).exists())
+
     def test_a_key_only_the_server_writes_is_refused(self):
         with self.assertRaises(serializers.ValidationError):
             write_settings(self.user, "profile", {"has_avatar": True})

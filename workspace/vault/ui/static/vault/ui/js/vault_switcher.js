@@ -70,23 +70,30 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     },
 
     // Struck through: a vault nothing on this account can repair. One written
-    // by a newer build is fine and opens after a reload, so it is not.
+    // by a newer build opens after a reload, and one this account holds no key
+    // for opens once a member shares it again, so neither is.
     vaultIsStruckThrough: function (vault) {
-      return this.vaultIsDegraded(vault) && !vault.unsupported;
+      return this.vaultIsDegraded(vault) && !vault.unsupported && !vault.unopenable;
     },
 
     // Short enough for the switcher's width; the full instruction is the
     // row's tooltip.
     vaultRowLabel: function (vault) {
       if (vault.unsupported) return 'Newer version';
+      if (vault.unopenable) return 'Awaiting a key';
       if (this.vaultIsDegraded(vault)) return 'Unreadable vault';
       return vault.name || 'Unnamed';
     },
 
     vaultRowTitle: function (vault) {
-      return vault.unsupported
-        ? 'Saved by a newer version of the app. Reload the page to read it.'
-        : null;
+      if (vault.unsupported) {
+        return 'Saved by a newer version of the app. Reload the page to read it.';
+      }
+      if (vault.unopenable) {
+        return 'Your account holds no key for this vault any more. '
+          + 'A member who can still open it has to share it with you again.';
+      }
+      return null;
     },
 
     switchVault: async function (vault) {

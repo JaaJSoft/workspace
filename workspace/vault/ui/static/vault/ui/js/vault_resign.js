@@ -17,22 +17,19 @@ window.vaultResign = (function () {
     });
   }
 
-  // Deepest first. VaultFolder.parent is CASCADE, so the server refuses a
-  // folder that still has subfolders rather than silently taking folders -
-  // and signatures - the client never named.
+  // The folder and every folder below it. VaultFolder.parent is CASCADE, so
+  // the server refuses the deletion when the subfolders it would take with
+  // the folder are not exactly the ones the client named.
   function subtree(folders, rootUuid) {
-    const children = function (uuid) {
-      return folders.filter(function (folder) {
-        return String(folder.parent) === String(uuid);
+    const found = [String(rootUuid)];
+    for (let index = 0; index < found.length; index++) {
+      folders.forEach(function (folder) {
+        if (String(folder.parent) === found[index] && !found.includes(String(folder.uuid))) {
+          found.push(String(folder.uuid));
+        }
       });
-    };
-    const ordered = [];
-    const walk = function (uuid) {
-      children(uuid).forEach(function (child) { walk(child.uuid); });
-      ordered.push(uuid);
-    };
-    walk(rootUuid);
-    return ordered;
+    }
+    return found;
   }
 
   function Blocked() {
@@ -84,30 +81,26 @@ window.vaultResign = (function () {
       return window.vaultApi.deleteTag(tagUuid, signed);
     },
 
-    // One transactional request per folder, deepest first. The body carries
-    // every entry the folder holds - trashed ones included, because
-    // deleted_at is a view and folder_id is still a RESTRICT reference - each
-    // re-signed with no folder. The server compares the submitted set against
-    // the folder's real contents and refuses a mismatch.
+    // One transactional request for the whole subtree. The body names every
+    // subfolder and carries every entry they and the folder hold - trashed
+    // ones included, because deleted_at is a view and folder_id is still a
+    // RESTRICT reference - each re-signed with no folder. The server compares
+    // both sets against the stored subtree and refuses a mismatch.
     deleteFolderSafely: async function (vault, folderUuid, folders, entries, unverified) {
-      const levels = subtree(folders, folderUuid).map(String);
+      const levels = subtree(folders, folderUuid);
       const inSubtree = function (entry) { return levels.includes(String(entry.folder)); };
-      assertResignable(entries.filter(inSubtree), (unverified || []).filter(inSubtree));
-      for (const uuid of subtree(folders, folderUuid)) {
-        const occupants = entries.filter(function (entry) {
-          return String(entry.folder) === String(uuid);
-        });
-        const signed = [];
-        for (const row of occupants) {
-          const body = await window.buildEntryResignRequest(
-            window.vaultSession, vault, row, { folder: null }
-          );
-          // The endpoint reads everything else from the row it already holds;
-          // sending more would be sending a second copy to disagree with.
-          signed.push({ uuid: body.uuid, metadata_sig: body.metadata_sig });
-        }
-        await window.vaultApi.deleteFolder(uuid, signed);
+      const occupants = entries.filter(inSubtree);
+      assertResignable(occupants, (unverified || []).filter(inSubtree));
+      const signed = [];
+      for (const row of occupants) {
+        const body = await window.buildEntryResignRequest(
+          window.vaultSession, vault, row, { folder: null }
+        );
+        // The endpoint reads everything else from the row it already holds;
+        // sending more would be sending a second copy to disagree with.
+        signed.push({ uuid: body.uuid, metadata_sig: body.metadata_sig });
       }
+      return window.vaultApi.deleteFolder(folderUuid, levels.slice(1), signed);
     },
   };
 })();

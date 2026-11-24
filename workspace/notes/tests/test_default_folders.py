@@ -1,113 +1,60 @@
-"""Tests for the Notes/Journal default-folder bootstrap and migration logic.
+"""Tests for the Notes/Journal default-folder bootstrap."""
 
-`_ensure_default_folders` runs on every notes UI page load. On a legacy
-account (root-level "Journal" folder), it re-parents Journal under Notes.
-This test class verifies that re-parenting goes through ``tree.move`` so
-descendant content storage paths follow the move on disk.
-"""
-
-import os
-from unittest.mock import patch
-
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
-from workspace.files.models import File
 from workspace.files.services import tree
-from workspace.files.services.refusals import Refusal, Refused
 from workspace.notes.ui.views import _ensure_default_folders
 from workspace.users.services.settings import get_setting
 
 User = get_user_model()
 
 
-class EnsureDefaultFoldersStorageTests(TestCase):
-    """Verifies the legacy Journal migration migrates content on disk."""
-
+class EnsureDefaultFoldersTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            username="journalmig",
-            email="jmig@test.com",
+            username="journalroot",
+            email="jroot@test.com",
             password="pass",
         )
 
     def tearDown(self):
         cache.clear()
 
-    def test_legacy_journal_migration_moves_descendant_content(self):
-        """A root-level Journal containing a note must migrate the note's bytes
-        when re-parented under Notes.
-
-        Regression: the migration used a raw `parent = ...; save()` which
-        bypassed tree.move() and left the note's bytes orphaned at
-        the root-level path while the DB row pointed under Notes/Journal.
-        """
-        journal = tree.create_folder(
-            self.user,
-            "Journal",
-            icon="book-open",
-            color="success",
-        )
+    def test_a_root_folder_named_journal_stays_where_the_user_put_it(self):
+        root_journal = tree.create_folder(self.user, "Journal")
         note = tree.create_file(
             self.user,
-            "2026-04-26.md",
-            parent=journal,
-            content=ContentFile(b"today I refactored", name="2026-04-26.md"),
+            "plan.md",
+            parent=root_journal,
+            content=ContentFile(b"mine", name="plan.md"),
         )
-        old_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(old_full_path))
 
         _ensure_default_folders(self.user)
 
+        root_journal.refresh_from_db()
         note.refresh_from_db()
-        new_content_name = note.content.name.replace("\\", "/")
-        self.assertTrue(
-            new_content_name.startswith("files/users/journalmig/Notes/Journal/"),
-            f"Expected new path under Notes/Journal/, got {new_content_name}",
-        )
-        new_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
-        self.assertFalse(os.path.isfile(old_full_path))
-
-        # The Journal folder itself must now live under Notes.
-        journal.refresh_from_db()
-        self.assertIsNotNone(journal.parent_id)
+        self.assertIsNone(root_journal.parent_id)
+        self.assertEqual(note.parent_id, root_journal.uuid)
+        journal_uuid = get_setting(self.user, "notes", "preferences")[
+            "journalFolderUuid"
+        ]
+        self.assertNotEqual(journal_uuid, str(root_journal.uuid))
+        journal = root_journal.__class__.objects.get(uuid=journal_uuid)
+        self.assertEqual(journal.name, "Journal")
         self.assertEqual(journal.parent.name, "Notes")
 
-    def test_a_root_journal_stays_when_notes_holds_one_already(self):
-        root_journal = tree.create_folder(self.user, "Journal")
+    def test_an_existing_notes_journal_is_adopted(self):
         notes = tree.create_folder(self.user, "Notes")
         inner_journal = tree.create_folder(self.user, "Journal", parent=notes)
 
         _ensure_default_folders(self.user)
 
-        root_journal.refresh_from_db()
-        self.assertIsNone(root_journal.parent_id)
         self.assertEqual(
             get_setting(self.user, "notes", "preferences")["journalFolderUuid"],
             str(inner_journal.uuid),
-        )
-
-    def test_a_root_journal_that_cannot_move_stays_the_journal(self):
-        root_journal = tree.create_folder(self.user, "Journal")
-
-        with patch(
-            "workspace.notes.ui.views.move_item",
-            side_effect=Refused(Refusal.NOT_ALLOWED),
-        ):
-            _ensure_default_folders(self.user)
-
-        root_journal.refresh_from_db()
-        self.assertIsNone(root_journal.parent_id)
-        self.assertEqual(
-            get_setting(self.user, "notes", "preferences")["journalFolderUuid"],
-            str(root_journal.uuid),
-        )
-        self.assertEqual(
-            File.objects.filter(name="Journal", deleted_at__isnull=True).count(), 1
         )
 
 

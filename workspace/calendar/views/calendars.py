@@ -58,7 +58,7 @@ class CalendarDetailView(APIView):
         ser.is_valid(raise_exception=True)
         for k, v in ser.validated_data.items():
             setattr(cal, k, v)
-        cal.save()
+        cal.save(update_fields=[*ser.validated_data, "updated_at"])
         cal = Calendar.objects.select_related("owner").get(pk=cal.pk)
         invalidate("CalendarListView", user=request.user)
         return Response(CalendarSerializer(cal).data)

@@ -17,7 +17,7 @@ from django.utils import timezone
 from ..models import Task, TaskEvent
 from .assignments import notify_bulk_assigned
 from .events import record_task_event
-from .tasks import delete_task, due_move_settles, settle_task_notifications
+from .tasks import delete_task, settle_moved_due_dates
 from .watchers import auto_watch
 
 # Distinguishes "leave due_date alone" from "clear it" (None is a value).
@@ -165,10 +165,7 @@ def bulk_update_tasks(
         for task in plain_updates:
             record_task_event(task, type=TaskEvent.Type.UPDATED, actor=actor)
 
-    # Same rule as the single-task PATCH.
-    settled = [task for task in due_changed if due_move_settles(task.due_date)]
-    if settled:
-        settle_task_notifications(settled)
+    settle_moved_due_dates(due_changed)
     tasks_by_user = defaultdict(list)
     for task, users in added_assignees.items():
         for user in users:

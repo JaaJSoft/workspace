@@ -138,6 +138,13 @@ class ProjectSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def update(self, instance, validated_data):
+        groups = validated_data.pop("groups", None)
+        save_written_columns(instance, validated_data, also=["updated_at"])
+        if groups is not None:
+            instance.groups.set(groups)
+        return instance
+
 
 class MemberSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)

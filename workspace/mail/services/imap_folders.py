@@ -31,7 +31,7 @@ def create_folder(account, folder_name, parent_name=""):
     folder = MailFolder.objects.create(
         account=account,
         name=full_name,
-        display_name=_display_name(full_name),
+        display_name=_display_name(full_name, account.imap_delimiter),
         folder_type="other",
     )
     return folder
@@ -51,7 +51,8 @@ def create_archive_folder(account):
     from ..models import MailFolder
 
     with imap_session(account) as client:
-        name = _personal_prefix(client) + ARCHIVE_NAME
+        prefix, delimiter = _personal_namespace(client)
+        name = prefix + ARCHIVE_NAME
         try:
             client.create_folder(name)
         except IMAPClientError:
@@ -63,20 +64,24 @@ def create_archive_folder(account):
         account=account,
         name=name,
         defaults={
-            "display_name": _display_name(name),
+            "display_name": _display_name(name, delimiter or account.imap_delimiter),
             "folder_type": MailFolder.FolderType.ARCHIVE,
         },
     )
     return folder
 
 
-def _personal_prefix(client):
+def _personal_namespace(client):
+    """``(prefix, delimiter)`` of the personal namespace, ``("", "")`` when
+    the server names none. The delimiter is the server's own, which the
+    account may not have learnt yet: no folder sync has to have run."""
     if not client.has_capability("NAMESPACE"):
-        return ""
+        return "", ""
     personal = client.namespace().personal
     if not personal:
-        return ""
-    return _text(personal[0][0])
+        return "", ""
+    prefix, delimiter = personal[0]
+    return _text(prefix), _text(delimiter)
 
 
 def delete_folder(account, folder):
@@ -131,7 +136,7 @@ def _rename(account, folder, new_name):
 
     with transaction.atomic():
         folder.name = new_name
-        folder.display_name = _display_name(new_name)
+        folder.display_name = _display_name(new_name, delimiter)
         folder.save(update_fields=["name", "display_name", "updated_at"])
 
         # Each child gets a distinct new name (path rewrite), so this cannot
@@ -144,7 +149,7 @@ def _rename(account, folder, new_name):
             now = dj_timezone.now()
             for child in children:
                 child.name = new_name + delimiter + child.name[len(old_prefix) :]
-                child.display_name = _display_name(child.name)
+                child.display_name = _display_name(child.name, delimiter)
                 child.updated_at = now  # bulk_update bypasses auto_now
             MailFolder.objects.bulk_update(
                 children,

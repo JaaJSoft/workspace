@@ -73,6 +73,18 @@ def soft_delete_message(message):
     return True
 
 
+@transaction.atomic
+def remove_message(message):
+    """Delete *message* for good, leaving no tombstone (a retried bot error).
+
+    It goes through the soft delete first: a hard delete cascades the rows but
+    would leave the unread and thread counters counting it, and its attachment
+    blobs on storage.
+    """
+    soft_delete_message(message)
+    message.delete()
+
+
 def purge_message_content(message):
     """Erase what a message being soft-deleted still exposes.
 

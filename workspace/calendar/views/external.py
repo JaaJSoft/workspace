@@ -97,10 +97,10 @@ class ExternalCalendarDetailView(APIView):
         ser.is_valid(raise_exception=True)
 
         cal = ext.calendar
-        for field in ("name", "color"):
-            if field in ser.validated_data:
-                setattr(cal, field, ser.validated_data[field])
-        cal.save()
+        changed = [f for f in ("name", "color") if f in ser.validated_data]
+        for field in changed:
+            setattr(cal, field, ser.validated_data[field])
+        cal.save(update_fields=[*changed, "updated_at"])
 
         ext = ExternalCalendar.objects.select_related("calendar").get(pk=ext.pk)
         return Response(ExternalCalendarSerializer(ext).data)

@@ -80,12 +80,13 @@ window.vaultApi = (function () {
     updateFolder: function (uuid, body) {
       return request('/api/v1/vault/folders/' + uuid, { method: 'PATCH', body: body });
     },
-    // Not a DELETE: the folder's entries have to be re-signed with no folder,
-    // and they travel with the deletion so the two cannot half-happen.
-    deleteFolder: function (uuid, entries) {
+    // Not a DELETE: the entries of the folder and of its subfolders have to be
+    // re-signed with no folder, and they travel with the deletion so the two
+    // cannot half-happen. The subfolders are named so none goes unseen.
+    deleteFolder: function (uuid, subfolders, entries) {
       return request('/api/v1/vault/folders/' + uuid + '/delete', {
         method: 'POST',
-        body: { entries: entries },
+        body: { subfolders: subfolders, entries: entries },
       });
     },
     listTags: function (vaultUuid) {

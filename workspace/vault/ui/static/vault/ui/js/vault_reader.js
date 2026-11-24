@@ -171,6 +171,13 @@ window.vaultReader = (function () {
   // still shows a name.
   async function readVault(session, row) {
     const V = window.vaultCrypto;
+    // No key for this account: nothing of the vault can be shown, so its
+    // signature has nothing to vouch for. An owner whose identity was reset
+    // lands here, and the signature of the old identity would otherwise
+    // fail against the new one and read as tampering.
+    if (!row.wrapped_key) {
+      return Object.assign({}, row, { unopenable: true, name: '', description: '' });
+    }
     const payload = V.vaultMetadataPayload(
       Object.assign({}, row, { vault_uuid: row.uuid })
     );
@@ -189,9 +196,6 @@ window.vaultReader = (function () {
       // Signed by nobody the account trusts: never shown with a name that
       // came along for the ride.
       return Object.assign({}, row, { tampered: true, name: '', description: '' });
-    }
-    if (!row.wrapped_key) {
-      return Object.assign({}, row, { unopenable: true, name: '', description: '' });
     }
     try {
       const metaKey = await session.openVaultKey(row);

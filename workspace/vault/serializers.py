@@ -472,13 +472,16 @@ class FolderDeleteEntrySerializer(serializers.Serializer):
 
 
 class FolderDeleteSerializer(serializers.Serializer):
-    """The folder's entries, re-signed with no folder.
+    """Every subfolder deleted with the folder, and every entry of all of them re-signed with no folder.
 
     Capped rather than paginated: a folder with 500 entries is a UI problem,
     and a silent truncation here would delete a folder while leaving entries
     in it.
     """
 
+    subfolders = serializers.ListField(
+        child=serializers.UUIDField(), allow_empty=True, max_length=500
+    )
     entries = serializers.ListField(
         child=FolderDeleteEntrySerializer(), allow_empty=True, max_length=500
     )

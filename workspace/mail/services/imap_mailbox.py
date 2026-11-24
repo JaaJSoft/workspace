@@ -46,17 +46,25 @@ def encode_name(name):
     return imap_utf7.encode(name).decode("ascii")
 
 
-def _detect_folder_type(name, flags):
+def _leaf(name, delimiter):
+    """The last segment of a mailbox path. An empty `delimiter` (NIL in the
+    LIST answer) means a flat namespace: the name is a single segment, dots
+    and slashes included."""
+    return name.rsplit(delimiter, 1)[-1] if delimiter else name
+
+
+def _detect_folder_type(name, flags, delimiter):
     """Detect folder type from special-use attributes or name.
 
-    `flags` are the lowercased LIST attributes of the mailbox.
+    `flags` are the lowercased LIST attributes of the mailbox, `delimiter`
+    its hierarchy delimiter.
     """
     for attribute, folder_type in SPECIAL_USE_MAP.items():
         if attribute in flags:
             return folder_type
 
     # Name-based detection
-    lower_name = name.lower().split("/")[-1].split(".")[-1]
+    lower_name = _leaf(name, delimiter).lower()
     if lower_name in NAME_TYPE_MAP:
         return NAME_TYPE_MAP[lower_name]
 
@@ -67,12 +75,13 @@ def _detect_folder_type(name, flags):
     return "other"
 
 
-def _display_name(name):
-    """Derive a human-readable display name from an IMAP folder name."""
-    # Take last segment after / or .
-    for sep in ("/", "."):
-        if sep in name:
-            name = name.rsplit(sep, 1)[-1]
+def _display_name(name, delimiter):
+    """Derive a human-readable display name from an IMAP folder name.
+
+    Only the server's own `delimiter` separates levels: "Clients/acme.com"
+    on a "/" server is the folder "acme.com", not "com".
+    """
+    name = _leaf(name, delimiter)
     try:
         return imap_utf7.decode(name.encode("ascii"))
     except ValueError:

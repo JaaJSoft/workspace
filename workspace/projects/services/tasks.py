@@ -36,6 +36,17 @@ def settle_task_notifications(tasks):
     settle_sources(tasks, max_priority="normal")
 
 
+def settle_moved_due_dates(tasks):
+    """Settle the reminders a due-date move made moot, among *tasks*.
+
+    *tasks* carry their new due date. Every writer of a due date calls it,
+    or a pushed-back deadline keeps nagging until the next cron pass.
+    """
+    settled = [task for task in tasks if due_move_settles(task.due_date)]
+    if settled:
+        settle_task_notifications(settled)
+
+
 def _default_sprint(project, status):
     """Sprint a task entering *status* without one should default to.
 
@@ -50,6 +61,39 @@ def _default_sprint(project, status):
     ):
         return None
     return project.sprints.filter(state=Sprint.State.ACTIVE).first()
+
+
+def _board_sprint_join(project, status):
+    """The running sprint a task entering *status* joins, and what it leaves.
+
+    Returns ``(sprint, leavable)``: *sprint* is ``_default_sprint``'s answer
+    and *leavable* maps to its row each sprint id a task gives up for it -
+    no sprint (None) and every planned sprint. The board only shows the
+    running sprint, so a task planned for a later one and sent to the board
+    would be on neither the board nor the backlog. A closed sprint is never
+    left: a task moving between done columns keeps its history.
+    """
+    sprint = _default_sprint(project, status)
+    if sprint is None:
+        return None, {}
+    leavable = {None: None}
+    leavable.update(
+        (planned.pk, planned)
+        for planned in project.sprints.filter(state=Sprint.State.PLANNED)
+    )
+    return sprint, leavable
+
+
+def _record_sprint_join(task, left, sprint, actor):
+    record_task_event(
+        task,
+        type=TaskEvent.Type.SPRINT,
+        actor=actor,
+        from_value=left.name if left is not None else "",
+        to_value=sprint.name,
+        from_ref=left.pk if left is not None else None,
+        to_ref=sprint.pk,
+    )
 
 
 def completion_stamp(status, completed_at, now):
@@ -205,15 +249,16 @@ def has_field_updates(task, validated_data):
     return False
 
 
-def change_task_status(task, status, *, actor=None):
+def change_task_status(task, status, *, actor=None, keep_sprint=False):
     """Move *task* to the end of *status*'s column; return the column it left.
 
     The status, the position and ``completed_at`` land in one write under
     the task's row lock, decided from the row as stored rather than from
     *task*, which may have been loaded before another writer moved it. A
-    task without a sprint entering a board column joins the running sprint.
-    *task* is updated in place. Writes nothing and returns None when the
-    task already sits in *status*.
+    task without a sprint, or planned for a later one, entering a board
+    column joins the running sprint - unless *keep_sprint*, when the caller
+    has just set the sprint on purpose. *task* is updated in place. Writes
+    nothing and returns None when the task already sits in *status*.
     """
     with transaction.atomic():
         position = _locked_tail_position(task.project, status)
@@ -233,11 +278,12 @@ def change_task_status(task, status, *, actor=None):
             # A queryset update bypasses auto_now.
             "updated_at": now,
         }
-        joined_sprint = None
-        if stored.sprint_id is None:
-            joined_sprint = _default_sprint(task.project, status)
-            if joined_sprint is not None:
-                changes["sprint"] = joined_sprint
+        joined_sprint, leavable = _board_sprint_join(task.project, status)
+        if not keep_sprint and stored.sprint_id in leavable:
+            left_sprint = leavable[stored.sprint_id]
+            changes["sprint"] = joined_sprint
+        else:
+            joined_sprint = None
         Task.objects.filter(pk=task.pk).update(**changes)
         for field, value in changes.items():
             setattr(task, field, value)
@@ -249,13 +295,7 @@ def change_task_status(task, status, *, actor=None):
             to_status=status,
         )
         if joined_sprint is not None:
-            record_task_event(
-                task,
-                type=TaskEvent.Type.SPRINT,
-                actor=actor,
-                to_value=joined_sprint.name,
-                to_ref=joined_sprint.pk,
-            )
+            _record_sprint_join(task, left_sprint, joined_sprint, actor)
     if status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task])
     # After the settle: settling would immediately mark the fresh
@@ -292,7 +332,7 @@ def move_tasks(project, status, task_uuids, *, actor=None):
     """
     with transaction.atomic():
         position = _locked_tail_position(project, status)
-        default_sprint = _default_sprint(project, status)
+        default_sprint, leavable = _board_sprint_join(project, status)
         tasks = sorted(
             project.tasks.select_for_update().filter(uuid__in=task_uuids),
             key=lambda t: (t.position, t.created_at),
@@ -308,9 +348,9 @@ def move_tasks(project, status, task_uuids, *, actor=None):
             task.position = position
             position += 1
             task.completed_at = completion_stamp(status, task.completed_at, now)
-            if default_sprint is not None and task.sprint_id is None:
+            if task.sprint_id in leavable:
+                joined_sprint.append((task, leavable[task.sprint_id]))
                 task.sprint = default_sprint
-                joined_sprint.append(task)
             # bulk_update bypasses save(), so auto_now would leave
             # updated_at stale; stamp it by hand.
             task.updated_at = now
@@ -327,14 +367,8 @@ def move_tasks(project, status, task_uuids, *, actor=None):
                 from_status=old_status,
                 to_status=status,
             )
-        for task in joined_sprint:
-            record_task_event(
-                task,
-                type=TaskEvent.Type.SPRINT,
-                actor=actor,
-                to_value=default_sprint.name,
-                to_ref=default_sprint.pk,
-            )
+        for task, left in joined_sprint:
+            _record_sprint_join(task, left, default_sprint, actor)
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])
     notify_status_changed(moved, actor)
@@ -349,22 +383,38 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
     previous relative order after the listed ones (pinned-folders precedent:
     handles concurrent creates/deletes gracefully). Unknown UUIDs are
     skipped. Idempotent: replaying the same payload yields the same state.
+
+    The backlog is one list whatever number of backlog columns the project
+    has: reordering it orders every backlog task and leaves each in its own
+    backlog column.
     """
     with transaction.atomic():
-        # Status row first (same lock order as _locked_tail_position): the
+        if status.category == TaskStatus.Category.BACKLOG:
+            column_ids = set(
+                project.statuses.filter(
+                    category=TaskStatus.Category.BACKLOG
+                ).values_list("pk", flat=True)
+            )
+        else:
+            column_ids = {status.pk}
+        # Status rows first (same lock order as _locked_tail_position): the
         # task-row locks below don't serialize writers when the column is
         # empty, since there are then no rows to lock.
-        TaskStatus.objects.select_for_update().get(pk=status.pk)
+        list(
+            TaskStatus.objects.select_for_update()
+            .filter(pk__in=column_ids)
+            .order_by("pk")
+        )
         # One locking query for both the column and the listed tasks: two
         # separate SELECT FOR UPDATE passes would leave a window between
         # them where a concurrent reorder locks the other half first.
         tasks = list(
             project.tasks.select_for_update().filter(
-                Q(status=status) | Q(uuid__in=ordered_uuids)
+                Q(status_id__in=column_ids) | Q(uuid__in=ordered_uuids)
             )
         )
         in_status = sorted(
-            (t for t in tasks if t.status_id == status.pk),
+            (t for t in tasks if t.status_id in column_ids),
             key=lambda t: (t.position, t.created_at),
         )
         by_uuid = {t.uuid: t for t in tasks}
@@ -382,19 +432,19 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                 seen.add(t.uuid)
 
         now = timezone.now()
-        default_sprint = _default_sprint(project, status)
+        default_sprint, leavable = _board_sprint_join(project, status)
         to_update = []
         moved = []
         joined_sprint = []
         for i, task in enumerate(sequence):
             changed = False
-            if task.status_id != status.pk:
+            if task.status_id not in column_ids:
                 moved.append((task, task.status))
                 task.status = status
                 task.completed_at = completion_stamp(status, task.completed_at, now)
-                if default_sprint is not None and task.sprint_id is None:
+                if task.sprint_id in leavable:
+                    joined_sprint.append((task, leavable[task.sprint_id]))
                     task.sprint = default_sprint
-                    joined_sprint.append(task)
                 changed = True
             if task.position != i:
                 task.position = i
@@ -417,14 +467,8 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
                 from_status=old_status,
                 to_status=status,
             )
-        for task in joined_sprint:
-            record_task_event(
-                task,
-                type=TaskEvent.Type.SPRINT,
-                actor=actor,
-                to_value=default_sprint.name,
-                to_ref=default_sprint.pk,
-            )
+        for task, left in joined_sprint:
+            _record_sprint_join(task, left, default_sprint, actor)
     if moved and status.category == TaskStatus.Category.DONE:
         settle_task_notifications([task for task, _ in moved])
     notify_status_changed(moved, actor)

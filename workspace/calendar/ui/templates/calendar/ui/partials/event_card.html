@@ -59,8 +59,8 @@
           {% endif %}
         {% endfor %}
       </div>
-      {% if event.members.count > 5 %}
-        <span class="text-xs text-base-content/40">+{{ event.members.count|add:"-5" }}</span>
+      {% if more_attendees %}
+        <span class="text-xs text-base-content/40">+{{ more_attendees }}</span>
       {% endif %}
     </div>
   {% endif %}

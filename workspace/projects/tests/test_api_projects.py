@@ -13,6 +13,7 @@ from workspace.projects.services.projects import (
     create_project,
     get_or_create_personal_project,
 )
+from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
 
@@ -103,6 +104,20 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.project.refresh_from_db()
         self.assertEqual(self.project.name, "X")
+
+    def test_rename_keeps_a_task_number_allocated_meanwhile(self):
+        # The PATCH loads the project, then a task creation elsewhere takes
+        # the next number before the PATCH writes.
+        loaded = Project.objects.get(pk=self.project.pk)
+        create_task(self.project, self.admin, title="t")
+        serializer = ProjectSerializer(loaded, data={"name": "X"}, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        serializer.save()
+
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.name, "X")
+        self.assertEqual(self.project.next_task_number, 2)
 
     def test_admin_deletes(self):
         self.client.force_authenticate(self.admin)

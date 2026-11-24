@@ -762,10 +762,19 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       return String(this.eventOwner.id) === String(document.body.dataset.userId);
     },
 
+    // Instant of a form input value, in ms. A timed value is a wall clock in
+    // the user's zone, never the browser's; a date-only value is a day label,
+    // read at UTC midnight so a DST switch never stretches a day.
+    _formValueMs(value) {
+      return value.length === 10
+        ? Date.parse(value)
+        : Date.parse(window.wallClockToIso(value, this._tz()));
+    },
+
     // --- Save ---
     async saveEvent() {
       if (!this.form.title.trim()) return;
-      if (this.form.end && this.form.start && new Date(this.form.end) < new Date(this.form.start)) {
+      if (this.form.end && this.form.start && this._formValueMs(this.form.end) < this._formValueMs(this.form.start)) {
         await AppDialog.error({ message: gettext('End date cannot be before start date.') });
         return;
       }
@@ -1017,9 +1026,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     // --- Duration shortcuts ---
     activeDuration() {
       if (!this.form.start || !this.form.end) return null;
-      const startMs = new Date(this.form.start).getTime();
-      const endMs = new Date(this.form.end).getTime();
-      const minutes = Math.round((endMs - startMs) / 60000);
+      const minutes = Math.round(
+        (this._formValueMs(this.form.end) - this._formValueMs(this.form.start)) / 60000,
+      );
       // The all-day end input names the last covered day, so a one-day event
       // carries identical labels.
       return this.form.all_day ? minutes + 1440 : minutes;

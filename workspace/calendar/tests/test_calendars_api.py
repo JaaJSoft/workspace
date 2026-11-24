@@ -1,9 +1,11 @@
 import uuid
+from unittest.mock import patch
 
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, CalendarSubscription, Event
+from workspace.calendar.serializers import CalendarCreateSerializer
 
 from .test_calendar import CalendarTestMixin
 
@@ -94,6 +96,30 @@ class CalendarDetailTests(CalendarTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["name"], "Renamed")
         self.assertEqual(resp.data["color"], "secondary")
+
+    def test_a_rename_keeps_a_sync_revision_bumped_meanwhile(self):
+        """An event change between the rename's read and its write must not be
+        rolled back: CalDAV clients would see the sync token go backwards."""
+        validate = CalendarCreateSerializer.is_valid
+
+        def event_changed_meanwhile(serializer, *args, **kwargs):
+            Calendar.objects.filter(pk=self.calendar.pk).update(sync_revision=7)
+            return validate(serializer, *args, **kwargs)
+
+        self.client.force_authenticate(self.owner)
+        with patch.object(
+            CalendarCreateSerializer,
+            "is_valid",
+            autospec=True,
+            side_effect=event_changed_meanwhile,
+        ):
+            resp = self.client.put(
+                self.url(self.calendar.uuid), {"name": "Renamed"}, format="json"
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.calendar.refresh_from_db()
+        self.assertEqual(self.calendar.name, "Renamed")
+        self.assertEqual(self.calendar.sync_revision, 7)
 
     def test_update_calendar_not_owner_returns_404(self):
         self.client.force_authenticate(self.member)

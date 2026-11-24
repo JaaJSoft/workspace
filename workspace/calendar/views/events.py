@@ -22,7 +22,11 @@ from workspace.notifications.services.notifications import (
 
 from ..models import Calendar, Event, EventMember
 from ..queries import visible_events_q
-from ..recurrence import expand_recurring_events, make_virtual_occurrence
+from ..recurrence import (
+    expand_recurring_events,
+    make_virtual_occurrence,
+    overlap_q,
+)
 from ..serializers import (
     EventCreateSerializer,
     EventRespondSerializer,
@@ -260,30 +264,34 @@ class EventListView(CacheControlMixin, APIView):
                 return _invalid_calendar_ids()
 
         cal_or_member = visible_events_q(request.user, calendar_ids)
+        in_range = overlap_q(range_start, range_end)
 
         # Non-recurring events (exclude exceptions)
         non_recurring = Event.objects.filter(
             cal_or_member,
+            in_range,
             is_recurring=False,
             recurrence_parent__isnull=True,
             is_cancelled=False,
-            start__lt=range_end,
-        ).filter(
-            Q(end__gt=range_start) | Q(end__isnull=True, start__gte=range_start),
         )
         non_recurring = _prefetch_event(non_recurring).order_by("start")
 
         non_recurring_data = EventSerializer(non_recurring, many=True).data
 
-        # Recurring masters overlapping the range
+        # Recurring masters with an occurrence in the range, or with one moved
+        # into it from a slot outside it (past the end of the rule included).
+        moved_in = Event.objects.filter(
+            in_range, recurrence_parent__isnull=False, is_cancelled=False
+        ).values("recurrence_parent_id")
         masters = Event.objects.filter(
             cal_or_member,
             is_recurring=True,
             recurrence_parent__isnull=True,
             is_cancelled=False,
-            start__lt=range_end,
         ).filter(
-            Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=range_start),
+            Q(start__lt=range_end)
+            & (Q(recurrence_until__isnull=True) | Q(recurrence_until__gte=range_start))
+            | Q(uuid__in=moved_in)
         )
         masters = _prefetch_event(masters)
 
@@ -453,11 +461,20 @@ class EventDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        scope = request.query_params.get("scope")
+        if event.is_recurring and not scope:
+            # Guessing "all" would turn "skip this Monday" into deleting the
+            # whole series.
+            return Response(
+                {"detail": _("Choose which occurrences of the series to delete.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             cancel_event(
                 event,
                 request.user,
-                scope=request.query_params.get("scope", "all"),
+                scope=scope or "all",
                 original_start=_parse_dt(request.query_params.get("original_start")),
             )
         except EventScopeError as exc:

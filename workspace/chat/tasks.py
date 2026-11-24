@@ -37,6 +37,27 @@ def purge_orphan_attachments(self):
     return result
 
 
+def _fetch_preview(url: str) -> LinkPreview:
+    """Fetch ``url`` and store its preview, or reuse the row a concurrent task stored first."""
+    try:
+        meta = fetch_opengraph(url)
+    except Exception:
+        logger.info(
+            "fetch_link_previews: failed to fetch %s", scrub(url), exc_info=True
+        )
+        fields = {"fetch_failed": True}
+    else:
+        fields = {
+            "title": meta.get("title", "")[:500],
+            "description": meta.get("description", "")[:2000],
+            "image_url": meta.get("image", "")[:2048],
+            "favicon_url": meta.get("favicon", "")[:500],
+            "site_name": meta.get("site_name", "")[:200],
+        }
+    preview, _ = LinkPreview.objects.get_or_create(url=url, defaults=fields)
+    return preview
+
+
 @shared_task(
     name="chat.fetch_link_previews",
     priority=INTERACTIVE_PRIORITY,
@@ -58,46 +79,15 @@ def fetch_link_previews(message_uuid: str, urls: list[str]):
     created_any = False
 
     for position, url in enumerate(urls):
-        # Check for existing cached preview
-        try:
-            preview = LinkPreview.objects.get(url=url)
-            if preview.fetch_failed:
-                continue  # Don't retry previously failed URLs
-            # Reuse cached preview
-            MessageLinkPreview.objects.get_or_create(
-                message=message,
-                preview=preview,
-                defaults={"position": position},
-            )
-            created_any = True
-            continue
-        except LinkPreview.DoesNotExist:
-            # No cached preview for this URL yet: fall through and fetch one.
-            pass
-
-        # Fetch new preview
-        preview = LinkPreview(url=url)
-        try:
-            meta = fetch_opengraph(url)
-            preview.title = meta.get("title", "")[:500]
-            preview.description = meta.get("description", "")[:2000]
-            preview.image_url = meta.get("image", "")[:2048]
-            preview.favicon_url = meta.get("favicon", "")[:500]
-            preview.site_name = meta.get("site_name", "")[:200]
-            preview.fetch_failed = False
-            preview.save()
-            MessageLinkPreview.objects.create(
-                message=message,
-                preview=preview,
-                position=position,
-            )
-            created_any = True
-        except Exception:
-            logger.info(
-                "fetch_link_previews: failed to fetch %s", scrub(url), exc_info=True
-            )
-            preview.fetch_failed = True
-            preview.save()
+        preview = LinkPreview.objects.filter(url=url).first() or _fetch_preview(url)
+        if preview.fetch_failed:
+            continue  # Don't retry previously failed URLs
+        MessageLinkPreview.objects.get_or_create(
+            message=message,
+            preview=preview,
+            defaults={"position": position},
+        )
+        created_any = True
 
     if created_any:
         notify_conversation_members(message.conversation)

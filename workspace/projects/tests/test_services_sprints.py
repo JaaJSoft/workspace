@@ -16,7 +16,12 @@ from workspace.projects.services.sprints import (
     complete_sprint,
     start_sprint,
 )
-from workspace.projects.services.tasks import create_task, move_tasks
+from workspace.projects.services.tasks import (
+    change_task_status,
+    create_task,
+    move_tasks,
+    reorder_tasks,
+)
 
 from .base import ProjectTestMixin
 
@@ -240,6 +245,52 @@ class DefaultSprintTests(SprintServiceTestCase):
         move_tasks(self.scrum, self.todo, [task.uuid], actor=self.admin)
         task.refresh_from_db()
         self.assertIsNone(task.sprint)
+
+    def test_task_planned_for_a_later_sprint_joins_the_running_one_on_the_board(
+        self,
+    ):
+        running = self.scrum.sprints.create(name="Sprint 1")
+        start_sprint(running, actor=self.admin)
+        later = self.scrum.sprints.create(name="Sprint 2")
+        moves = {
+            "send to board": lambda task: move_tasks(
+                self.scrum, self.todo, [task.uuid], actor=self.admin
+            ),
+            "status change": lambda task: change_task_status(
+                task, self.todo, actor=self.admin
+            ),
+            "drop on a column": lambda task: reorder_tasks(
+                self.scrum, self.todo, [task.uuid], actor=self.admin
+            ),
+        }
+        for name, move in moves.items():
+            with self.subTest(name):
+                task = create_task(self.scrum, self.admin, title=name, sprint=later)
+
+                move(task)
+
+                task.refresh_from_db()
+                # The board only shows the running sprint's tasks.
+                self.assertEqual(task.sprint, running)
+                event = TaskEvent.objects.filter(
+                    task=task, type=TaskEvent.Type.SPRINT
+                ).latest("created_at")
+                self.assertEqual((event.from_ref, event.to_ref), (later.pk, running.pk))
+
+    def test_task_of_a_closed_sprint_keeps_it_between_board_columns(self):
+        closed = self.scrum.sprints.create(name="Sprint 1")
+        start_sprint(closed, actor=self.admin)
+        task = create_task(
+            self.scrum, self.admin, title="a", sprint=closed, status=self.done
+        )
+        complete_sprint(closed, actor=self.admin)
+        running = self.scrum.sprints.create(name="Sprint 2")
+        start_sprint(running, actor=self.admin)
+
+        change_task_status(task, self.doing, actor=self.admin)
+
+        task.refresh_from_db()
+        self.assertEqual(task.sprint, closed)
 
 
 class SprintEventIdentityTests(SprintServiceTestCase):

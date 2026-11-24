@@ -15,6 +15,7 @@ from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File, FileEvent
 from workspace.files.services import trash, tree
 from workspace.files.services.content_writes import (
+    move_content_from,
     replace_content_storage,
     update_content,
 )
@@ -510,6 +511,49 @@ class TestReplaceContentStorage(TestCase):
         )
         f.refresh_from_db()
         self.assertGreater(f.updated_at, original_updated_at)
+
+    def test_drops_the_viewer_pinned_for_the_previous_content(self):
+        """A voice recording pinned to the audio player, overwritten over
+        WebDAV with a real video: the pin described the old bytes."""
+        f = tree.create_file(
+            self.user,
+            "clip.webm",
+            content=ContentFile(b"old", name="clip.webm"),
+        )
+        File.objects.filter(pk=f.pk).update(viewer="audio")
+        f.refresh_from_db()
+
+        replace_content_storage(
+            f,
+            storage_path=f.content.name,
+            size=10,
+            content_hash="0" * 64,
+        )
+
+        f.refresh_from_db()
+        self.assertEqual(f.viewer, "")
+
+    def test_a_move_onto_a_file_brings_the_pin_of_the_moved_bytes(self):
+        folder = tree.create_folder(self.user, "Docs")
+        target = tree.create_file(
+            self.user,
+            "clip.webm",
+            parent=folder,
+            content=ContentFile(b"video", name="clip.webm"),
+        )
+        source = tree.create_file(
+            self.user,
+            "clip.webm",
+            content=ContentFile(b"voice", name="clip.webm"),
+        )
+        File.objects.filter(pk=source.pk).update(viewer="audio")
+        source.refresh_from_db()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            move_content_from(target, source)
+
+        target.refresh_from_db()
+        self.assertEqual(target.viewer, "audio")
 
     def test_points_content_name_at_storage_path(self):
         f = tree.create_file(

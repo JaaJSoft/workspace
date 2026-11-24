@@ -9,6 +9,7 @@ from workspace.mail.models import (
     MailMessage,
     MailMessageLabel,
 )
+from workspace.mail.services.counts import refresh_folder_counts, refresh_label_counts
 from workspace.mail.services.rules.actions import apply_action
 from workspace.mail.services.rules.schema import parse_actions
 
@@ -92,7 +93,7 @@ class LabelActionTests(_BaseActionTests):
 
 
 class FlagActionTests(_BaseActionTests):
-    @patch("workspace.mail.services.rules.actions.mark_read")
+    @patch("workspace.mail.services.imap_messages.mark_read")
     def test_mark_read(self, mock_imap):
         action = parse_actions([{"type": "mark_read"}])[0]
         result = apply_action(action, self.msg)
@@ -101,7 +102,7 @@ class FlagActionTests(_BaseActionTests):
         self.assertTrue(self.msg.is_read)
         mock_imap.assert_called_once_with(self.account, self.msg)
 
-    @patch("workspace.mail.services.rules.actions.mark_unread")
+    @patch("workspace.mail.services.imap_messages.mark_unread")
     def test_mark_unread(self, mock_imap):
         self.msg.is_read = True
         self.msg.save(update_fields=["is_read"])
@@ -112,7 +113,7 @@ class FlagActionTests(_BaseActionTests):
         self.assertFalse(self.msg.is_read)
         mock_imap.assert_called_once()
 
-    @patch("workspace.mail.services.rules.actions.star_message")
+    @patch("workspace.mail.services.imap_messages.star_message")
     def test_star(self, mock_imap):
         action = parse_actions([{"type": "star"}])[0]
         result = apply_action(action, self.msg)
@@ -121,7 +122,7 @@ class FlagActionTests(_BaseActionTests):
         self.assertTrue(self.msg.is_starred)
         mock_imap.assert_called_once_with(self.account, self.msg)
 
-    @patch("workspace.mail.services.rules.actions.unstar_message")
+    @patch("workspace.mail.services.imap_messages.unstar_message")
     def test_unstar(self, mock_imap):
         self.msg.is_starred = True
         self.msg.save(update_fields=["is_starred"])
@@ -133,7 +134,7 @@ class FlagActionTests(_BaseActionTests):
         mock_imap.assert_called_once_with(self.account, self.msg)
 
     @patch(
-        "workspace.mail.services.rules.actions.mark_read",
+        "workspace.mail.services.imap_messages.mark_read",
         side_effect=Exception("IMAP down"),
     )
     def test_mark_read_imap_failure_still_writes_db(self, _mock):
@@ -147,7 +148,7 @@ class FlagActionTests(_BaseActionTests):
         self.assertTrue(self.msg.is_read)
 
     @patch(
-        "workspace.mail.services.rules.actions.mark_read",
+        "workspace.mail.services.imap_messages.mark_read",
         side_effect=Exception("IMAP down"),
     )
     def test_a_flag_the_server_did_not_take_makes_the_sync_read_the_folder(self, _mock):
@@ -163,6 +164,53 @@ class FlagActionTests(_BaseActionTests):
         folder.refresh_from_db()
         self.assertIsNone(folder.remote_state)
         self.assertEqual(folder.remote_state_version, 1)
+
+
+class CounterRefreshTests(_BaseActionTests):
+    """A rule changes what the badges count; they follow at once, as they do
+    when the same change comes from the mail UI."""
+
+    def setUp(self):
+        super().setUp()
+        refresh_folder_counts(self.folder)
+        refresh_label_counts(self.label)
+
+    def _apply(self, **action):
+        return apply_action(parse_actions([action])[0], self.msg)
+
+    @patch("workspace.mail.services.imap_messages.mark_read")
+    def test_mark_read_lowers_the_folder_unread_count(self, _imap):
+        self.assertEqual(self.folder.unread_count, 1)
+
+        self._apply(type="mark_read")
+
+        self.folder.refresh_from_db()
+        self.assertEqual(self.folder.unread_count, 0)
+
+    @patch("workspace.mail.services.imap_messages.mark_read")
+    def test_mark_read_lowers_the_label_unread_count(self, _imap):
+        MailMessageLabel.objects.create(message=self.msg, label=self.label)
+        refresh_label_counts(self.label)
+
+        self._apply(type="mark_read")
+
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.unread_count, 0)
+
+    def test_add_label_raises_the_label_unread_count(self):
+        self._apply(type="add_label", label_id=str(self.label.uuid))
+
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.unread_count, 1)
+
+    def test_remove_label_lowers_the_label_unread_count(self):
+        MailMessageLabel.objects.create(message=self.msg, label=self.label)
+        refresh_label_counts(self.label)
+
+        self._apply(type="remove_label", label_id=str(self.label.uuid))
+
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.unread_count, 0)
 
 
 class MoveDeleteActionTests(_BaseActionTests):

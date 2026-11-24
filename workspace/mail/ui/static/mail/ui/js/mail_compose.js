@@ -79,6 +79,20 @@ window.mailComposeMixin = function mailComposeMixin() {
       this.clearAttachments();
     },
 
+    // Drops what was written: nothing is saved, and a draft an earlier
+    // autosave already stored on the server is deleted.
+    async discardCompose() {
+      const discarded = this.compose;
+      if (discarded._saveTimer) clearTimeout(discarded._saveTimer);
+      document.getElementById('mail-compose-dialog').close();
+      this.compose = _defaultCompose();
+      this.clearAttachments();
+      // An autosave still in flight would store the draft after this point.
+      if (discarded._savePromise) await discarded._savePromise;
+      this._clearLocalStorageDraft();
+      if (discarded.draft_id) await this._deleteDraft(discarded.draft_id, discarded.account_id);
+    },
+
     onComposeAccountChange() {
       const acc = this.accounts.find(a => a.uuid === this.compose.account_id);
       const r = window.mailSignature.swapSignature(
@@ -354,7 +368,7 @@ window.mailComposeMixin = function mailComposeMixin() {
             this.clearAttachments();
           }
           // Delete the draft after sending
-          if (sent.draft_id) this._deleteDraft(sent.draft_id);
+          if (sent.draft_id) this._deleteDraft(sent.draft_id, sent.account_id);
         } else {
           const data = await res.json().catch(() => ({}));
           sent.error = data.detail || data.error || gettext('Failed to send email');
@@ -380,26 +394,35 @@ window.mailComposeMixin = function mailComposeMixin() {
       this.compose._saveTimer = setTimeout(() => this._saveDraft(), 30000);
     },
 
-    async _saveDraft() {
-      if (this.compose.saving || this.compose.sending) return;
-      if (!this._hasComposeContent()) return;
+    // Bound to the compose it started from: the dialog may be closed or
+    // discarded, and this.compose replaced, before the server answers.
+    _saveDraft() {
+      const draft = this.compose;
+      if (draft.saving || draft.sending) return draft._savePromise;
+      if (!this._hasComposeContent()) return Promise.resolve();
 
-      this.compose.saving = true;
+      draft.saving = true;
+      draft._savePromise = this._writeDraft(draft).finally(() => {
+        draft.saving = false;
+      });
+      return draft._savePromise;
+    },
 
-      const htmlBody = this.compose.body.replace(/\n/g, '<br>');
+    async _writeDraft(draft) {
+      const htmlBody = draft.body.replace(/\n/g, '<br>');
 
       const payload = {
-        account_id: this.compose.account_id,
-        to: this.compose.to,
-        cc: this.compose.cc,
-        bcc: this.compose.bcc,
-        subject: this.compose.subject,
-        body_text: this.compose.body,
+        account_id: draft.account_id,
+        to: draft.to,
+        cc: draft.cc,
+        bcc: draft.bcc,
+        subject: draft.subject,
+        body_text: draft.body,
         body_html: htmlBody,
-        attachment_uuids: this.compose.mail_attachments.map(a => a.uuid),
+        attachment_uuids: draft.mail_attachments.map(a => a.uuid),
       };
-      if (this.compose.draft_id) payload.draft_id = this.compose.draft_id;
-      if (this.compose.reply_message_id) payload.reply_message_id = this.compose.reply_message_id;
+      if (draft.draft_id) payload.draft_id = draft.draft_id;
+      if (draft.reply_message_id) payload.reply_message_id = draft.reply_message_id;
 
       try {
         const res = await this._fetch('/api/v1/mail/drafts', {
@@ -409,34 +432,32 @@ window.mailComposeMixin = function mailComposeMixin() {
 
         if (res.ok) {
           const data = await res.json();
-          this.compose.draft_id = data.uuid;
-          this.compose.last_saved = Date.now();
-          // Refresh drafts folder counts
-          this._refreshDraftsFolderCounts();
+          draft.draft_id = data.uuid;
+          draft.last_saved = Date.now();
+          this._refreshDraftsFolderCounts(draft.account_id);
         }
       } catch (e) {
-        // Silent fail — save to localStorage as fallback
+        // Silent fail - save to localStorage as fallback
       }
 
       // Always save to localStorage as fallback
-      this._saveComposeToLocalStorage();
-      this.compose.saving = false;
+      this._saveComposeToLocalStorage(draft);
     },
 
-    _saveComposeToLocalStorage() {
+    _saveComposeToLocalStorage(draft = this.compose) {
       try {
         const data = {
-          account_id: this.compose.account_id,
-          to: this.compose.to,
-          cc: this.compose.cc,
-          bcc: this.compose.bcc,
-          subject: this.compose.subject,
-          body: this.compose.body,
-          draft_id: this.compose.draft_id,
-          is_reply: this.compose.is_reply,
-          reply_message_id: this.compose.reply_message_id,
-          _sigBlock: this.compose._sigBlock,
-          mail_attachments: this.compose.mail_attachments,
+          account_id: draft.account_id,
+          to: draft.to,
+          cc: draft.cc,
+          bcc: draft.bcc,
+          subject: draft.subject,
+          body: draft.body,
+          draft_id: draft.draft_id,
+          is_reply: draft.is_reply,
+          reply_message_id: draft.reply_message_id,
+          _sigBlock: draft._sigBlock,
+          mail_attachments: draft.mail_attachments,
           saved_at: Date.now(),
         };
         localStorage.setItem('mail_compose_draft', JSON.stringify(data));
@@ -461,12 +482,11 @@ window.mailComposeMixin = function mailComposeMixin() {
       } catch (e) { return null; }
     },
 
-    async _refreshDraftsFolderCounts() {
+    async _refreshDraftsFolderCounts(composeUuid = this.compose?.account_id) {
       // Refresh the Drafts folder of the account the draft was saved to, not
       // the first account that happens to have a Drafts folder. Otherwise a
       // user composing on a non-default account would see the badge update on
       // the wrong account and a stale badge on the right one.
-      const composeUuid = this.compose?.account_id;
       if (!composeUuid) return;
       const flds = this.folders[composeUuid] || [];
       const draftsFolder = flds.find(f => f.folder_type === 'drafts');
@@ -477,10 +497,10 @@ window.mailComposeMixin = function mailComposeMixin() {
       }
     },
 
-    async _deleteDraft(draftId) {
+    async _deleteDraft(draftId, accountId) {
       try {
         await this._fetch(`/api/v1/mail/drafts/${draftId}`, { method: 'DELETE' });
-        this._refreshDraftsFolderCounts();
+        this._refreshDraftsFolderCounts(accountId);
       } catch (e) {}
     },
   };

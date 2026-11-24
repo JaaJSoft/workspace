@@ -1140,6 +1140,10 @@ msgid "Cannot delete events from an external calendar."
 msgstr "Impossible de supprimer les événements d’un calendrier externe."
 
 #: views/events.py
+msgid "Choose which occurrences of the series to delete."
+msgstr "Choisissez les occurrences de la série à supprimer."
+
+#: views/events.py
 msgid "Not invited."
 msgstr "Vous n’êtes pas invité."
 

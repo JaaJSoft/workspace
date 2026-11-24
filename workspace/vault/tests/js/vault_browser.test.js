@@ -2345,7 +2345,10 @@ test('a folder deletion carries its entries, trashed ones included', async () =>
         opts && opts.trashed
           ? [entryWith('e-2', { folder: 'f-1', deleted_at: '2026-08-01' })]
           : [entryWith('e-1', { folder: 'f-1' })],
-      deleteFolder: async (uuid, entries) => { bodies.push([uuid, entries]); return null; },
+      deleteFolder: async (uuid, subfolders, entries) => {
+        bodies.push([uuid, entries]);
+        return null;
+      },
     },
   });
   component.init();

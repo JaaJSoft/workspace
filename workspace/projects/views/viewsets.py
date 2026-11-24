@@ -105,11 +105,10 @@ from ..services.tasks import (
     change_task_status,
     create_task,
     delete_task,
-    due_move_settles,
     has_field_updates,
     move_tasks,
     reorder_tasks,
-    settle_task_notifications,
+    settle_moved_due_dates,
 )
 from ..services.watchers import auto_watch, clear_watch_state, set_watch_state
 from ..sse_provider import broadcast_project_change
@@ -835,7 +834,13 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         if new_status is not None:
             # Even when it names the status loaded above: another writer may
             # have moved the task since, and the client asked for this one.
-            change_task_status(task, new_status, actor=self.request.user)
+            change_task_status(
+                task,
+                new_status,
+                actor=self.request.user,
+                # A sprint named in the same request is the client's choice.
+                keep_sprint=serializer.validated_data.get("sprint") is not None,
+            )
         added_assignees = [
             u
             for u in serializer.validated_data.get("assignees", [])
@@ -869,8 +874,8 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 from_value=old_epic.name if old_epic else "",
                 to_value=task.epic.name if task.epic else "",
             )
-        if task.due_date != old_due_date and due_move_settles(task.due_date):
-            settle_task_notifications([task])
+        if task.due_date != old_due_date:
+            settle_moved_due_dates([task])
         # The response describes the row as stored, moves landed by another
         # writer since the task was loaded included.
         try:

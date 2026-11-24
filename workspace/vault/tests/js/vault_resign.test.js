@@ -68,8 +68,10 @@ function resign(overrides = {}) {
           calls.push('delete-tag:' + uuid + ':' + entries.map((e) => e.uuid).join(','));
           return null;
         },
-        deleteFolder: async (uuid, entries) => {
-          calls.push('delete-folder:' + uuid + ':' + entries.length);
+        deleteFolder: async (uuid, subfolders, entries) => {
+          calls.push(
+            'delete-folder:' + uuid + ':' + subfolders.join('|') + ':' + entries.length,
+          );
           return null;
         },
         ...overrides.api,
@@ -218,7 +220,7 @@ test('a folder is deleted with every one of its entries, trash included', async 
     row('e-2', { folder: 'f-1', deleted_at: '2026-08-01' }),
     row('e-3', { folder: null }),
   ]);
-  assert.deepStrictEqual(Array.from(calls), ['delete-folder:f-1:2']);
+  assert.deepStrictEqual(Array.from(calls), ['delete-folder:f-1::2']);
 });
 
 test('a folder holding an unverified entry blocks the deletion before any request', async () => {
@@ -250,7 +252,7 @@ test('the entries travel re-signed with no folder', async () => {
   const bodies = [];
   const { ctx } = resign({
     api: {
-      deleteFolder: async (uuid, entries) => { bodies.push(entries); return null; },
+      deleteFolder: async (uuid, subfolders, entries) => { bodies.push(entries); return null; },
     },
   });
   await ctx.vaultResign.deleteFolderSafely(VAULT, 'f-1', [], [
@@ -263,9 +265,10 @@ test('the entries travel re-signed with no folder', async () => {
   assert.deepStrictEqual(Object.keys(bodies[0][0]).sort(), ['metadata_sig', 'uuid']);
 });
 
-test('a folder with children is emptied from the bottom up', async () => {
-  // VaultFolder.parent is CASCADE, so the server refuses a folder that still
-  // has subfolders rather than taking signatures it was never shown with it.
+test('a folder with children goes in one request naming every subfolder', async () => {
+  // One request, one transaction: a failure part way cannot leave the lower
+  // levels deleted and the upper ones standing. VaultFolder.parent is
+  // CASCADE, so the subfolders are named for the server to check.
   const { ctx, calls } = resign();
   await ctx.vaultResign.deleteFolderSafely(
     VAULT,
@@ -274,37 +277,11 @@ test('a folder with children is emptied from the bottom up', async () => {
       { uuid: 'f-1', parent: null },
       { uuid: 'f-2', parent: 'f-1' },
       { uuid: 'f-3', parent: 'f-2' },
+      { uuid: 'f-4', parent: null },
     ],
-    [row('e-1', { folder: 'f-3' })],
+    [row('e-1', { folder: 'f-3' }), row('e-2', { folder: 'f-1' }), row('e-3', { folder: 'f-4' })],
   );
-  assert.deepStrictEqual(Array.from(calls), [
-    'delete-folder:f-3:1',
-    'delete-folder:f-2:0',
-    'delete-folder:f-1:0',
-  ]);
-});
-
-test('a refused deletion partway up stops the walk', async () => {
-  const { ctx, calls } = resign({
-    api: {
-      deleteFolder: async (uuid) => {
-        if (uuid === 'f-2') throw new Error('refused');
-        return null;
-      },
-    },
-  });
-  await assert.rejects(() =>
-    ctx.vaultResign.deleteFolderSafely(
-      VAULT,
-      'f-1',
-      [
-        { uuid: 'f-1', parent: null },
-        { uuid: 'f-2', parent: 'f-1' },
-      ],
-      [],
-    ),
-  );
-  assert.ok(!calls.includes('delete-folder:f-1:0'));
+  assert.deepStrictEqual(Array.from(calls), ['delete-folder:f-1:f-2|f-3:2']);
 });
 
 test('a re-signature signs with the session it was handed, not the global one', async () => {

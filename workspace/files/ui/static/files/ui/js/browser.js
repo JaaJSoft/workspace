@@ -337,7 +337,74 @@ window.fileBrowser = function fileBrowser() {
       // Cleared at once so picking the same files again still fires change.
       event.target.value = '';
       if (!files.length) return;
+      // The folder picker names each file by its path below the picked folder.
+      if (files.some((file) => file.webkitRelativePath)) {
+        await this.uploadTree(
+          files.map((file) => ({
+            file,
+            dir: file.webkitRelativePath.split('/').slice(0, -1).join('/'),
+          }))
+        );
+        return;
+      }
       await this.uploadFiles(files);
+    },
+
+    // Uploads *entries* ({ file, dir }, dir being the '/'-separated folder
+    // path of the file below *folderId*), recreating every folder of the tree
+    // first. A folder that already exists under the same name is reused, so
+    // uploading a folder again merges into it and the file collisions are
+    // decided as usual, folder by folder.
+    async uploadTree(entries, folderId = this.currentFolder || null) {
+      const byDir = new Map();
+      for (const entry of entries) {
+        if (!byDir.has(entry.dir)) byDir.set(entry.dir, []);
+        byDir.get(entry.dir).push(entry.file);
+      }
+      const folderIds = new Map([['', folderId]]);
+      const childFolders = new Map();
+      const ensureFolder = async (dir) => {
+        if (folderIds.has(dir)) return folderIds.get(dir);
+        const cut = dir.lastIndexOf('/');
+        const parentId = await ensureFolder(cut === -1 ? '' : dir.slice(0, cut));
+        const name = dir.slice(cut + 1);
+        if (!childFolders.has(parentId)) {
+          childFolders.set(parentId, await this._childFolders(parentId));
+        }
+        let uuid = childFolders.get(parentId).get(name.toLowerCase());
+        if (!uuid) {
+          uuid = (await window.fileActions.createFolder(name, parentId)).uuid;
+          childFolders.get(parentId).set(name.toLowerCase(), uuid);
+        }
+        folderIds.set(dir, uuid);
+        return uuid;
+      };
+      // One folder at a time: two creations of the same parent would race.
+      for (const [dir, files] of byDir) {
+        let target;
+        try {
+          target = await ensureFolder(dir);
+        } catch (error) {
+          window.AppAlert.error(error.message || gettext('Failed to create folder'));
+          return;
+        }
+        await this.uploadFiles(files, target);
+      }
+      // The queue refreshes once its files are up; the new folders show now.
+      this.refreshFolderBrowser();
+    },
+
+    async _childFolders(folderId) {
+      const params = new URLSearchParams({ node_type: 'folder' });
+      if (folderId) params.set('parent', folderId);
+      const folders = new Map();
+      const response = await fetch(`/api/v1/files?${params}`, { headers: { Accept: 'application/json' } });
+      if (!response.ok) return folders;
+      const rows = await response.json();
+      for (const row of Array.isArray(rows) ? rows : rows.results || []) {
+        folders.set(row.name.toLowerCase(), row.uuid);
+      }
+      return folders;
     },
 
     // The target folder is read once, here: the queue keeps it per file, so

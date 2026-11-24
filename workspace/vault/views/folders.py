@@ -235,20 +235,37 @@ class FolderDetailView(_FolderWriteMixin, CacheControlMixin, APIView):
         return Response(VaultFolderSerializer(folder).data)
 
 
+def _descendant_ids(folder):
+    """The primary keys of every folder below *folder*, at any depth."""
+    found = set()
+    frontier = {folder.pk}
+    while frontier:
+        frontier = (
+            set(
+                VaultFolder.objects.filter(parent_id__in=frontier).values_list(
+                    "pk", flat=True
+                )
+            )
+            - found
+        )
+        found |= frontier
+    return found
+
+
 @method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
 class FolderDeleteView(CacheControlMixin, APIView):
-    """Deleting a folder moves its entries to the vault root, in one go.
+    """Deleting a folder and its subfolders moves their entries to the vault root, in one go.
 
     VaultEntry.folder is RESTRICT, so the entries have to move first - and
     folder_uuid is inside their signature, so they cannot move without being
-    re-signed by their owner. Either the whole thing lands or none of it does.
+    re-signed by their owner. Either the whole subtree goes or none of it does.
     """
 
     cache_no_store = True
 
     @extend_schema(
         tags=["Vault"],
-        summary="Delete a folder, moving its entries to the vault root",
+        summary="Delete a folder and its subfolders, moving their entries to the vault root",
         request=FolderDeleteSerializer,
         responses={204: None},
     )
@@ -267,6 +284,7 @@ class FolderDeleteView(CacheControlMixin, APIView):
         submitted = {
             item["uuid"]: item for item in serializer.validated_data["entries"]
         }
+        submitted_subfolders = set(serializer.validated_data["subfolders"])
 
         try:
             with transaction.atomic():
@@ -276,20 +294,21 @@ class FolderDeleteView(CacheControlMixin, APIView):
                 # an IntegrityError rather than as the 409 the same state
                 # produces when it is seen in time.
                 #
-                # A folder with children is refused rather than emptied:
-                # VaultFolder.parent is CASCADE, so deleting it would take
-                # folders the client never named - and their signatures - with
-                # it. The client deletes bottom-up.
-                if folder.children.exists():
-                    raise _ContentsChanged("The folder still has subfolders.")
+                # VaultFolder.parent is CASCADE: the subfolders go with the
+                # folder, so the client names every one of them, and a
+                # subfolder it was never shown refuses the deletion rather than
+                # vanish with it.
+                subfolders = _descendant_ids(folder)
+                if subfolders != submitted_subfolders:
+                    raise _ContentsChanged("The folder's subfolders changed.")
 
                 # Trashed entries included: deleted_at is a view, folder_id is
                 # still a RESTRICT reference, and a client that skipped them
                 # would meet a 409 it has no way to interpret.
                 occupants = list(
-                    VaultEntry.objects.filter(folder=folder).prefetch_related(
-                        "tags", "fields"
-                    )
+                    VaultEntry.objects.filter(
+                        folder_id__in=subfolders | {folder.pk}
+                    ).prefetch_related("tags", "fields")
                 )
                 if {entry.uuid for entry in occupants} != set(submitted):
                     raise _ContentsChanged(

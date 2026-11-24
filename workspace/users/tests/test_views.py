@@ -230,6 +230,24 @@ class ChangePasswordTests(UserTestMixin, APITestCase):
         resp2 = session_client.get("/api/v1/users/me")
         self.assertEqual(resp2.status_code, 200)
 
+    def test_change_writes_only_the_password(self):
+        # The view holds the user loaded with the request; a profile edit
+        # landing meanwhile must survive the password write.
+        User.objects.filter(pk=self.user.pk).update(
+            first_name="Alicia", email="alicia@example.com"
+        )
+
+        resp = self.client.post(
+            self.URL,
+            {"current_password": "Str0ngP@ss!", "new_password": "N3wStr0ng!Pass"},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("N3wStr0ng!Pass"))
+        self.assertEqual(self.user.first_name, "Alicia")
+        self.assertEqual(self.user.email, "alicia@example.com")
+
 
 # ── UserAvatarRetrieveView ──────────────────────────────────────
 

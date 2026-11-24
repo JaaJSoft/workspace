@@ -150,6 +150,14 @@ class EventCardMembersTests(TestCase):
         self.assertEqual(len(attendees), 5)
         self.assertNotIn(self.declined_user.id, [m.user_id for m in attendees])
 
+    def test_the_overflow_count_leaves_out_declined_members(self):
+        """Seven members attend (six accepted, the pending viewer): five
+        avatars and "+2". The decliner is neither drawn nor counted."""
+        self.client.login(username="cardowner", password="pass123")
+        resp = self.client.get(self._url())
+        self.assertContains(resp, "+2</span>")
+        self.assertNotContains(resp, "+3</span>")
+
     def test_invite_status_for_member_viewer(self):
         from workspace.calendar.models import EventMember
 

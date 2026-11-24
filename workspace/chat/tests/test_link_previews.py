@@ -243,6 +243,54 @@ class FetchLinkPreviewsTaskTests(TestCase):
         mock_fetch.assert_not_called()
         self.assertEqual(MessageLinkPreview.objects.count(), 0)
 
+    @patch("workspace.chat.tasks.fetch_opengraph")
+    @patch("workspace.chat.tasks.notify_conversation_members")
+    def test_reuses_a_preview_another_task_stored_during_the_fetch(
+        self, mock_notify, mock_fetch
+    ):
+        from workspace.chat.tasks import fetch_link_previews
+
+        def other_task_wins(url):
+            if url == "https://example.com":
+                LinkPreview.objects.create(url=url, title="Stored by the other task")
+            return {"title": "Fetched"}
+
+        mock_fetch.side_effect = other_task_wins
+
+        fetch_link_previews(
+            str(self.message.pk), ["https://example.com", "https://other.com"]
+        )
+
+        winner = LinkPreview.objects.get(url="https://example.com")
+        self.assertEqual(winner.title, "Stored by the other task")
+        self.assertFalse(winner.fetch_failed)
+        linked = MessageLinkPreview.objects.filter(message=self.message)
+        self.assertEqual(
+            sorted(link.preview.url for link in linked),
+            ["https://example.com", "https://other.com"],
+        )
+        mock_notify.assert_called_once()
+
+    @patch("workspace.chat.tasks.fetch_opengraph")
+    @patch("workspace.chat.tasks.notify_conversation_members")
+    def test_a_duplicate_run_that_linked_the_message_first_is_reused(
+        self, mock_notify, mock_fetch
+    ):
+        from workspace.chat.tasks import fetch_link_previews
+
+        def duplicate_run_wins(url):
+            preview = LinkPreview.objects.create(url=url, title="Duplicate run")
+            MessageLinkPreview.objects.create(message=self.message, preview=preview)
+            return {"title": "Fetched"}
+
+        mock_fetch.side_effect = duplicate_run_wins
+
+        fetch_link_previews(str(self.message.pk), ["https://example.com"])
+
+        preview = LinkPreview.objects.get(url="https://example.com")
+        self.assertFalse(preview.fetch_failed)
+        self.assertEqual(MessageLinkPreview.objects.filter(preview=preview).count(), 1)
+
 
 class MessageSerializerPreviewTests(TestCase):
     def setUp(self):

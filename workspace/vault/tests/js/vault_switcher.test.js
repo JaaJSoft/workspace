@@ -193,7 +193,7 @@ test('a vault written by a newer build reads as a reload away, not as broken', (
 
 test('a vault nothing here can repair is struck through and carries no reload hint', () => {
   const { component } = switcher();
-  for (const flag of ['tampered', 'unopenable', 'unreadable']) {
+  for (const flag of ['tampered', 'unreadable']) {
     const vault = { uuid: 'v-' + flag, [flag]: true, name: '' };
     assert.equal(component.vaultIsStruckThrough(vault), true, flag);
     assert.equal(component.vaultRowLabel(vault), 'Unreadable vault', flag);
@@ -202,6 +202,15 @@ test('a vault nothing here can repair is struck through and carries no reload hi
   assert.equal(component.vaultIsStruckThrough(VAULT), false);
   assert.equal(component.vaultRowLabel(VAULT), 'Personal');
   assert.equal(component.vaultRowLabel({ uuid: 'v-x', name: '' }), 'Unnamed');
+});
+
+test('a vault this account holds no key for waits for a re-share, not struck through', () => {
+  const { component } = switcher();
+  const keyless = { uuid: 'v-keyless', unopenable: true, name: '' };
+  assert.equal(component.vaultIsDegraded(keyless), true);
+  assert.equal(component.vaultIsStruckThrough(keyless), false);
+  assert.equal(component.vaultRowLabel(keyless), 'Awaiting a key');
+  assert.match(component.vaultRowTitle(keyless), /no key for this vault.*share it with you again/);
 });
 
 test('the search matches the label a row shows, not only the decrypted name', () => {

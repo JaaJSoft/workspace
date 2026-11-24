@@ -336,6 +336,7 @@ def move_content_from(target, source, *, acting_user=None):
                 storage_path=storage_path,
                 size=source.size,
                 content_hash=source.content_hash,
+                viewer=source.viewer,
                 acting_user=acting_user,
             )
             if storage.exists(storage_path):
@@ -364,6 +365,7 @@ def replace_content_storage(
     storage_path,
     size,
     content_hash,
+    viewer="",
     acting_user=None,
     expected_hash=None,
 ):
@@ -383,6 +385,9 @@ def replace_content_storage(
     a rename, a move or a trip to the trash that committed while the claim
     waited makes it a path that move is emptying: that refuses with
     ``Relocated``.
+
+    *viewer* is the pin the new bytes carry, empty to derive it from their
+    type: a pin chosen for the previous content does not describe them.
     """
     detected = detection.detect_from_name(file_obj.name)
     fields = _content_fields(
@@ -392,6 +397,7 @@ def replace_content_storage(
         mime_type=detected.mime_type,
         type=detected.label,
         category=detected.group or "unknown",
+        viewer=viewer,
         processing_status=File.ProcessingStatus.PENDING,
     )
     with transaction.atomic():

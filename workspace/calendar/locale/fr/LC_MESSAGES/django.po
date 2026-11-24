@@ -296,6 +296,26 @@ msgid "Every %(count)s months on day %(day)s"
 msgstr "Tous les %(count)s mois le %(day)s"
 
 #: tasks.py
+#, python-format
+msgid "Accepted: %(title)s"
+msgstr "Accepté : %(title)s"
+
+#: tasks.py
+#, python-format
+msgid "%(name)s has accepted \"%(title)s\"."
+msgstr "%(name)s a accepté « %(title)s »."
+
+#: tasks.py
+#, python-format
+msgid "Declined: %(title)s"
+msgstr "Refusé : %(title)s"
+
+#: tasks.py
+#, python-format
+msgid "%(name)s has declined \"%(title)s\"."
+msgstr "%(name)s a refusé « %(title)s »."
+
+#: tasks.py
 msgid "All day today"
 msgstr "Toute la journée aujourd’hui"
 

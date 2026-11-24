@@ -18,15 +18,18 @@ logger = logging.getLogger(__name__)
 )
 def send_ics_reply(event_id, user_id, response_status):
     """Send an iCalendar REPLY email to the event organizer."""
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-    from email.utils import formatdate, make_msgid
+    import email.policy
+    from email.message import EmailMessage, MIMEPart
+    from email.utils import formataddr, formatdate, make_msgid
 
     from django.contrib.auth import get_user_model
+    from django.utils import translation
+    from django.utils.translation import gettext as _
 
-    from workspace.calendar.models import Event
+    from workspace.calendar.models import Event, EventMember
     from workspace.calendar.services.ics_builder import build_reply
     from workspace.mail.services.smtp import connect_smtp
+    from workspace.users.services.settings import get_user_language
 
     User = get_user_model()
 
@@ -45,29 +48,37 @@ def send_ics_reply(event_id, user_id, response_status):
         return
 
     ics_data = build_reply(event, user, response_status)
-    status_label = "Accepted" if response_status == "accepted" else "Declined"
+    name = user.get_full_name() or user.username
+    values = {"name": name, "title": event.title}
 
-    msg = MIMEMultipart("mixed")
-    msg["From"] = f"{user.get_full_name() or user.username} <{account.email}>"
+    # The organizer is outside the workspace: the reply is written in the
+    # language of the member who answered.
+    with translation.override(get_user_language(user)):
+        if response_status == EventMember.Status.ACCEPTED:
+            subject = _("Accepted: %(title)s") % values
+            body = _('%(name)s has accepted "%(title)s".') % values
+        else:
+            subject = _("Declined: %(title)s") % values
+            body = _('%(name)s has declined "%(title)s".') % values
+
+    msg = EmailMessage(policy=email.policy.SMTP)
+    msg["From"] = formataddr((name, account.email))
     msg["To"] = event.external_organizer
-    msg["Subject"] = f"{status_label}: {event.title}"
+    msg["Subject"] = subject
     msg["Date"] = formatdate(localtime=True)
     msg["Message-ID"] = make_msgid(domain=account.email.split("@")[-1])
+    msg.set_content(body)
+    msg.make_mixed()
 
-    body = MIMEText(
-        f'{user.get_full_name() or user.username} has {response_status} "{event.title}".',
-        "plain",
-        "utf-8",
+    calendar_part = MIMEPart(policy=email.policy.SMTP)
+    calendar_part.set_content(
+        ics_data.decode("utf-8"), subtype="calendar", params={"method": "REPLY"}
     )
-    msg.attach(body)
-
-    cal_part = MIMEText(ics_data.decode("utf-8"), "calendar", "utf-8")
-    cal_part.set_param("method", "REPLY")
-    msg.attach(cal_part)
+    msg.attach(calendar_part)
 
     server = connect_smtp(account)
     try:
-        server.sendmail(account.email, [event.external_organizer], msg.as_string())
+        server.sendmail(account.email, [event.external_organizer], msg.as_bytes())
     finally:
         server.quit()
 

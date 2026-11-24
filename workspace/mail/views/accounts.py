@@ -12,6 +12,7 @@ from workspace.common.task_priority import INTERACTIVE_PRIORITY
 from workspace.common.url_guard import UnsafeUrl
 
 from ..models import MailAccount
+from ..queries import reachable_account, user_accounts
 from ..serializers import (
     MailAccountCreateSerializer,
     MailAccountSerializer,
@@ -73,7 +74,7 @@ class MailAccountListView(APIView):
 
     @extend_schema(summary="List user's mail accounts")
     def get(self, request):
-        accounts = MailAccount.objects.filter(owner=request.user)
+        accounts = user_accounts(request.user)
         return Response(MailAccountSerializer(accounts, many=True).data)
 
     @extend_schema(summary="Add a mail account", request=MailAccountCreateSerializer)
@@ -97,22 +98,16 @@ class MailAccountListView(APIView):
 class MailAccountDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def _get_account(self, request, uuid):
-        try:
-            return MailAccount.objects.get(uuid=uuid, owner=request.user)
-        except MailAccount.DoesNotExist:
-            return None
-
     @extend_schema(summary="Get mail account details")
     def get(self, request, uuid):
-        account = self._get_account(request, uuid)
+        account = reachable_account(request.user, uuid)
         if not account:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(MailAccountSerializer(account).data)
 
     @extend_schema(summary="Update a mail account", request=MailAccountUpdateSerializer)
     def patch(self, request, uuid):
-        account = self._get_account(request, uuid)
+        account = reachable_account(request.user, uuid)
         if not account:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -132,7 +127,7 @@ class MailAccountDetailView(APIView):
 
     @extend_schema(summary="Delete a mail account")
     def delete(self, request, uuid):
-        account = self._get_account(request, uuid)
+        account = reachable_account(request.user, uuid)
         if not account:
             return Response(status=status.HTTP_404_NOT_FOUND)
         account.delete()
@@ -145,9 +140,8 @@ class MailAccountTestView(APIView):
 
     @extend_schema(summary="Test IMAP and SMTP connections for an account")
     def post(self, request, uuid):
-        try:
-            account = MailAccount.objects.get(uuid=uuid, owner=request.user)
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, uuid)
+        if account is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         from ..services.imap_connection import test_imap_connection
@@ -191,9 +185,8 @@ class MailAccountSyncView(APIView):
         ),
     )
     def post(self, request, uuid):
-        try:
-            account = MailAccount.objects.get(uuid=uuid, owner=request.user)
-        except MailAccount.DoesNotExist:
+        account = reachable_account(request.user, uuid)
+        if account is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         if not account.is_active:

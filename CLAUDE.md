@@ -480,11 +480,17 @@ membership = get_active_membership(user, conversation_id)
 #### Mail - `workspace.mail.queries`
 
 ```python
-from workspace.mail.queries import user_account_ids
-account_ids = user_account_ids(user)  # returns queryset of account UUIDs
+from workspace.mail.queries import (
+    reachable_account, reachable_message, user_account_ids, user_accounts,
+    user_folders, user_labels, user_messages, user_rules,
+)
+account_ids = user_account_ids(user)            # returns queryset of account UUIDs
+account = reachable_account(user, uuid)         # the account or None - 404 on None
+msg = reachable_message(user, uuid)             # a non-deleted message or None
+folder = user_folders(user).filter(uuid=uuid).first()   # same for labels, messages, rules
 ```
 
-Returns mail account UUIDs owned by the user. Use for filtering messages: `MailMessage.objects.filter(account_id__in=account_ids, ...)`.
+Returns mail account UUIDs owned by the user. Use for filtering messages: `MailMessage.objects.filter(account_id__in=account_ids, ...)`. Never compare `obj.account.owner` with the user in a view: start from the `user_*` queryset, so a row of another user's account and a missing row both come back as `None`.
 
 #### Calendar - `workspace.calendar.queries`
 

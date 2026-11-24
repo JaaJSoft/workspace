@@ -4,7 +4,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.prefetch import prefetchable
-from workspace.mail.models import MailAccount
+from workspace.mail.queries import user_accounts
 from workspace.mail.serializers import MailAccountSerializer
 from workspace.mail.services.ai_settings import (
     MAIL_AI_FEATURES,
@@ -24,7 +24,7 @@ from workspace.users.services.settings import get_setting
 @login_required
 @ensure_csrf_cookie
 def index(request):
-    accounts = MailAccount.objects.filter(owner=request.user, is_active=True)
+    accounts = user_accounts(request.user).filter(is_active=True)
     preferences = get_setting(request.user, "mail", "preferences", default={})
 
     return render(

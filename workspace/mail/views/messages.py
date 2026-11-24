@@ -19,13 +19,16 @@ from workspace.common.stored_content import protect_stored_content
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import mark_sources_read
 
-from ..models import MailFolder, MailLabel, MailMessage, MailMessageLabel
+from ..models import MailFolder, MailMessage, MailMessageLabel
 from ..queries import (
     canonical_folder,
     canonical_folder_id,
     folder_group_ids,
     reachable_message,
     user_account_ids,
+    user_folders,
+    user_labels,
+    user_messages,
 )
 from ..serializers import (
     BatchActionSerializer,
@@ -85,11 +88,13 @@ class MailMessageListView(CacheControlMixin, APIView):
                     {"detail": '"label" must be a valid UUID.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            try:
-                label = MailLabel.objects.select_related("account").get(uuid=label_uuid)
-            except MailLabel.DoesNotExist:
-                return Response(status=status.HTTP_404_NOT_FOUND)
-            if label.account.owner != request.user:
+            label = (
+                user_labels(request.user)
+                .select_related("account")
+                .filter(uuid=label_uuid)
+                .first()
+            )
+            if label is None:
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
         if folder_id:
@@ -99,13 +104,13 @@ class MailMessageListView(CacheControlMixin, APIView):
                     {"detail": '"folder" must be a valid UUID.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            try:
-                folder = MailFolder.objects.select_related("account").get(
-                    uuid=folder_uuid
-                )
-            except MailFolder.DoesNotExist:
-                return Response(status=status.HTTP_404_NOT_FOUND)
-            if folder.account.owner != request.user:
+            folder = (
+                user_folders(request.user)
+                .select_related("account")
+                .filter(uuid=folder_uuid)
+                .first()
+            )
+            if folder is None:
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
         # Build base queryset
@@ -188,25 +193,21 @@ class MailMessageDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_message(self, request, uuid):
-        try:
-            msg = (
-                MailMessage.objects.select_related("account", "folder")
-                .prefetch_related(
-                    "attachments",
-                    Prefetch(
-                        "message_labels",
-                        queryset=MailMessageLabel.objects.select_related(
-                            "label"
-                        ).order_by("label__position", "label__name"),
+        return (
+            user_messages(request.user)
+            .select_related("account", "folder")
+            .prefetch_related(
+                "attachments",
+                Prefetch(
+                    "message_labels",
+                    queryset=MailMessageLabel.objects.select_related("label").order_by(
+                        "label__position", "label__name"
                     ),
-                )
-                .get(uuid=uuid, deleted_at__isnull=True)
+                ),
             )
-        except MailMessage.DoesNotExist:
-            return None
-        if msg.account.owner != request.user:
-            return None
-        return msg
+            .filter(uuid=uuid, deleted_at__isnull=True)
+            .first()
+        )
 
     @extend_schema(summary="Get full message details")
     def get(self, request, uuid):
@@ -301,17 +302,17 @@ class MailBatchActionView(APIView):
         target_folder = None
         if action == "move":
             target_folder_id = ser.validated_data.get("target_folder_id")
-            try:
-                target_folder = MailFolder.objects.select_related("account").get(
-                    uuid=target_folder_id
-                )
-            except MailFolder.DoesNotExist:
+            target_folder = (
+                user_folders(request.user)
+                .select_related("account")
+                .filter(uuid=target_folder_id)
+                .first()
+            )
+            if target_folder is None:
                 return Response(
                     {"detail": _("Target folder not found")},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-            if target_folder.account.owner != request.user:
-                return Response(status=status.HTTP_404_NOT_FOUND)
             # A UUID captured before a merge still addresses the group.
             target_folder = canonical_folder(target_folder)
 

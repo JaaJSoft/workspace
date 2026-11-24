@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.mail.models import MailAccount
+from workspace.mail.queries import user_accounts
 from workspace.mail.serializers import MailAccountSerializer
 from workspace.mail.services.oauth2 import (
     build_authorize_url,
@@ -124,8 +125,7 @@ def oauth2_callback(request):
     # Reconnect existing account or create a new one
     config = get_provider_config(provider)
     try:
-        account = MailAccount.objects.get(
-            owner=request.user,
+        account = user_accounts(request.user).get(
             email=email,
             auth_method="oauth2",
         )

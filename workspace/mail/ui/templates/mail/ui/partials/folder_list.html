@@ -70,6 +70,17 @@
       ></span>
       <button
         type="button"
+        class="btn btn-ghost btn-xs btn-square text-warning"
+        x-show="account.last_sync_error"
+        x-cloak
+        :title="account.last_sync_error"
+        aria-label="{% translate "Last sync failed" %}"
+        @click.stop="showSyncError(account)"
+      >
+        <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+      </button>
+      <button
+        type="button"
         class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100"
         @click.stop="openAccountContextMenu($event, account)"
       >

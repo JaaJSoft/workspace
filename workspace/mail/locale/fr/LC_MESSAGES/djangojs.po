@@ -478,3 +478,7 @@ msgstr "En-têtes copiés"
 #: ui/static/mail/ui/js/mail_messages.js
 msgid "Could not copy the headers."
 msgstr "Impossible de copier les en-têtes."
+
+#: ui/static/mail/ui/js/mail_accounts.js
+msgid "Last sync failed"
+msgstr "Échec de la dernière synchronisation"

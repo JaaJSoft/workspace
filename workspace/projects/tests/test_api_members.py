@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -21,6 +22,36 @@ class MemberListTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.outsider)
         response = self.client.get(f"/api/v1/projects/{self.project.uuid}/members")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class ProjectUserListTests(ProjectTestMixin, APITestCase):
+    """Everyone a task can be assigned to, which the assignee pickers reload
+    after a change of members."""
+
+    def _users(self, user):
+        self.client.force_authenticate(user)
+        return self.client.get(f"/api/v1/projects/{self.project.uuid}/users")
+
+    def test_members_and_the_users_of_an_attached_group(self):
+        group = Group.objects.create(name="devs")
+        self.outsider.groups.add(group)
+        self.project.groups.add(group)
+
+        response = self._users(self.member)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {u["username"] for u in response.data}, {"admin1", "member1", "outsider1"}
+        )
+        self.assertEqual(
+            next(u for u in response.data if u["username"] == "outsider1")["id"],
+            str(self.outsider.pk),
+        )
+
+    def test_outsider_gets_404(self):
+        self.assertEqual(
+            self._users(self.outsider).status_code, status.HTTP_404_NOT_FOUND
+        )
 
 
 class MemberCreateTests(ProjectTestMixin, APITestCase):

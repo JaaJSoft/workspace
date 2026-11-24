@@ -37,6 +37,31 @@ class MailIndexAIFeaturesContextTests(TestCase):
         self.assertTrue(resp.context["mail_ai_features"]["manual"])
 
 
+class MailIndexPreferencesTests(TestCase):
+    """The page carries the preferences, so nothing fetches them on load."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="mailprefs", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _embedded(self):
+        resp = self.client.get(reverse("mail_ui:index"))
+        return resp.context["mail_prefs"], resp.content.decode()
+
+    def test_a_user_on_the_defaults_gets_an_empty_object(self):
+        prefs, html = self._embedded()
+        self.assertEqual(prefs, {})
+        self.assertIn('id="mail-prefs-data"', html)
+
+    def test_stored_preferences_are_embedded(self):
+        set_setting(self.user, "mail", "preferences", {"confirmBeforeDelete": False})
+        prefs, _ = self._embedded()
+        self.assertEqual(prefs, {"confirmBeforeDelete": False})
+
+
 class MailAccountSignatureApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="sig-api", password="x")

@@ -155,6 +155,16 @@ class MemberSerializer(serializers.ModelSerializer):
         fields = ["uuid", "user", "username", "role", "joined_at"]
 
 
+class ProjectUserSerializer(serializers.Serializer):
+    """Someone a task can be assigned to: a member, or a user of a group the
+    project is attached to (``queries.project_users``)."""
+
+    id = serializers.CharField(source="pk", read_only=True)
+    username = serializers.CharField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+
+
 class MemberWriteSerializer(serializers.Serializer):
     user = serializers.IntegerField()
     role = serializers.ChoiceField(

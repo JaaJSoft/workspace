@@ -154,7 +154,8 @@ class EbookViewerTests(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.get(
-            reverse("files_ui:view_file", kwargs={"uuid": self.file.uuid})
+            reverse("files_ui:view_file", kwargs={"uuid": self.file.uuid}),
+            HTTP_X_ALPINE_REQUEST="true",
         )
 
         self.assertEqual(response.status_code, 200)

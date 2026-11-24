@@ -70,7 +70,9 @@ class TrashedFilePreviewTests(APITestCase):
     def test_the_owner_opens_it_in_the_viewer_read_only(self):
         self.client.force_login(self.owner)
 
-        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        resp = self.client.get(
+            f"/files/view/{self.file.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
 
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "canEdit: false")
@@ -78,7 +80,9 @@ class TrashedFilePreviewTests(APITestCase):
     def test_the_viewer_is_out_of_reach_of_a_share(self):
         self.client.force_login(self.other)
 
-        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        resp = self.client.get(
+            f"/files/view/{self.file.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
 
         self.assertEqual(resp.status_code, 404)
 
@@ -98,7 +102,7 @@ class LiveFileViewerTests(APITestCase):
         )
         self.client.force_login(owner)
 
-        resp = self.client.get(f"/files/view/{live.uuid}")
+        resp = self.client.get(f"/files/view/{live.uuid}", HTTP_X_ALPINE_REQUEST="true")
 
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "canEdit: true")

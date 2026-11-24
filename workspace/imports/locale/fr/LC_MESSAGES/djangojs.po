@@ -313,3 +313,8 @@ msgid ""
 msgstr ""
 "Import lancé. Vous pouvez quitter cette page, vous recevrez une notification "
 "à la fin."
+
+#: ui/static/imports/ui/js/imports.js
+#, javascript-format
+msgid "Favorites and tags were not imported: %(reason)s"
+msgstr "Les favoris et les étiquettes n’ont pas été importés : %(reason)s"

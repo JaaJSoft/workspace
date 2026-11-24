@@ -857,6 +857,11 @@ class MetadataPhaseTests(ImporterTestCase):
         self.assertIn("cannot read favorites", job.stats["files"]["metadata_error"])
         self.assertEqual(job.stats["files"]["files"], 3)
         self.assertTrue(self.provider.last_metadata.closed)
+        # Said in the summary the finished-import notification carries.
+        summary = FilesImporter().summarize(job.stats["files"])
+        self.assertIn("3 files", summary)
+        self.assertIn("favorites and tags not imported", summary)
+        self.assertIn("cannot read favorites", summary)
 
     def test_a_tag_that_cannot_be_read_does_not_fail_the_import(self):
         self.provider.tags = [

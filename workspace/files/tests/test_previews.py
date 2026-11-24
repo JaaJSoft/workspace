@@ -301,7 +301,9 @@ class ViewerPanelIdTests(TestCase):
         pdf = _file(owner, "report.pdf", "pdf", "application/pdf")
         self.client.force_login(owner)
         response = self.client.get(
-            f"/files/view/{pdf.uuid}", HTTP_X_ALPINE_TARGET="viewer-panel-modal"
+            f"/files/view/{pdf.uuid}",
+            HTTP_X_ALPINE_TARGET="viewer-panel-modal",
+            HTTP_X_ALPINE_REQUEST="true",
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(

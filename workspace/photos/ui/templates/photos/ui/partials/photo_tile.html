@@ -52,6 +52,7 @@
   data-display-name="{{ file.name }}"
   data-file-type="{{ file.type }}"
   data-media-type="{{ file.media_item.media_type }}"
+  data-viewer="{% if file.media_item.media_type == 'photo' %}image{% else %}video{% endif %}"
   data-width="{{ file.media_item.width|default_if_none:'' }}"
   data-height="{{ file.media_item.height|default_if_none:'' }}"
   data-sensitive="{{ file.media_item.sensitive_level }}"

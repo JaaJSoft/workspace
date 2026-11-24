@@ -32,12 +32,11 @@ function makeTable(embedded) {
 }
 
 test('the saved controls embedded in the page are applied without a request', () => {
-  const { table, fetched } = makeTable(JSON.stringify({ sortField: 'size', sortDir: 'desc' }));
+  const { table, fetched } = makeTable(JSON.stringify({ columnVisibility: { size: false } }));
 
   table.loadState();
 
-  assert.equal(table.sortField, 'size');
-  assert.equal(table.sortDir, 'desc');
+  assert.equal(table.columnVisibility.size, false);
   assert.deepStrictEqual(fetched, []);
 });
 
@@ -52,11 +51,10 @@ test('a user who never saved controls keeps the defaults without a request', () 
 });
 
 test('the server copy wins over the one this browser kept', () => {
-  const { table, stored } = makeTable(JSON.stringify({ sortField: 'name', sortDir: 'asc' }));
-  stored[table.storageKey] = JSON.stringify({ sortField: 'modified', sortDir: 'desc' });
+  const { table, stored } = makeTable(JSON.stringify({ columnVisibility: { size: false } }));
+  stored[table.storageKey] = JSON.stringify({ columnVisibility: { size: true } });
 
   table.loadState();
 
-  assert.equal(table.sortField, 'name');
-  assert.equal(table.sortDir, 'asc');
+  assert.equal(table.columnVisibility.size, false);
 });

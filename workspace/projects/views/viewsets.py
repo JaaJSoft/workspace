@@ -45,6 +45,7 @@ from ..serializers import (
     ProjectConvertSerializer,
     ProjectNotificationLevelSerializer,
     ProjectSerializer,
+    ProjectUserSerializer,
     ReorderSerializer,
     SprintCompleteSerializer,
     SprintSerializer,
@@ -322,6 +323,15 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     def list(self, request, *args, **kwargs):
         serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Users a task can be assigned to",
+        responses=ProjectUserSerializer(many=True),
+    )
+    def users(self, request, *args, **kwargs):
+        """The members and the users of the attached groups."""
+        users = project_users(self.project)
+        return Response(ProjectUserSerializer(users, many=True).data)
 
     def create(self, request, *args, **kwargs):
         self._require_admin()

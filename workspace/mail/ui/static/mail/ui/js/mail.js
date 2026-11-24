@@ -181,9 +181,6 @@ function mailApp() {
     },
 
     async init() {
-      // Load preferences
-      await window._mailPrefsReady;
-      this.mailPrefs = { ...window._mailPrefsCache };
       window.addEventListener('mail:preferences-changed', (e) => {
         this.mailPrefs = { ...e.detail };
       });

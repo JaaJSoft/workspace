@@ -124,6 +124,9 @@
           {% translate "Public links" %}
         </label>
 
+        <inline-alert type="error" class="mb-2" x-show="linkError" x-cloak>
+        <span x-text="linkError"></span>
+        </inline-alert>
         <!-- Loading -->
         <div x-show="linksLoading" class="flex justify-center py-2">
           <span class="loading loading-spinner loading-sm"></span>

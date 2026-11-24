@@ -66,17 +66,33 @@ def connect_smtp(account):
         )
         server.ehlo()
 
-    if account.auth_method == "oauth2":
-        from workspace.mail.services.oauth2 import get_valid_access_token
-
-        token = get_valid_access_token(account)
-        auth_string = f"user={account.username}\x01auth=Bearer {token}\x01\x01"
-        server.docmd(
-            "AUTH", "XOAUTH2 " + base64.b64encode(auth_string.encode()).decode()
-        )
-    else:
-        server.login(account.username, account.get_password())
+    try:
+        if account.auth_method == "oauth2":
+            _authenticate_xoauth2(server, account)
+        else:
+            server.login(account.username, account.get_password())
+    except BaseException:
+        server.close()
+        raise
     return server
+
+
+def _authenticate_xoauth2(server, account):
+    from workspace.mail.services.oauth2 import get_valid_access_token
+
+    token = get_valid_access_token(account)
+    if not token:
+        raise RuntimeError("No valid OAuth2 access token available")
+    initial_response = f"user={account.username}\x01auth=Bearer {token}\x01\x01"
+
+    def xoauth2(challenge=None):
+        # A refused token gets a 334 carrying the error as JSON; the client
+        # answers it with an empty line and the server then sends its 535.
+        return initial_response if challenge is None else ""
+
+    # auth() reads the reply code and raises SMTPAuthenticationError on
+    # anything but success, which a bare docmd() would drop.
+    server.auth("XOAUTH2", xoauth2)
 
 
 def test_smtp_connection(account):

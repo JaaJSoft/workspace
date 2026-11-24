@@ -36,10 +36,9 @@ class FilePreferences(Preferences):
 
 
 class TableControls(Preferences):
-    """The listing's sort and its columns, as the table left them."""
+    """The listing's columns, as the table left them. The sort is not kept:
+    a listing opens on the Default sort preference."""
 
-    sortField = _column()
-    sortDir = serializers.ChoiceField(choices=_SORT_DIRECTIONS)
     columnOrder = serializers.ListField(child=_column(), max_length=_MAX_COLUMNS)
     columnVisibility = serializers.DictField(child=serializers.BooleanField())
 

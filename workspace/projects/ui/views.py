@@ -31,7 +31,10 @@ from workspace.projects.queries import (
     user_project_ids,
     visible_task_events_q,
 )
-from workspace.projects.serializers import TaskAttachmentSerializer
+from workspace.projects.serializers import (
+    ProjectUserSerializer,
+    TaskAttachmentSerializer,
+)
 from workspace.projects.services.analytics import (
     flow_summary,
     open_task_distribution,
@@ -226,7 +229,12 @@ def _base_context(request, project, role, view):
         "statuses": statuses,
         "members": members,
         "statuses_data": [
-            {"uuid": str(s.uuid), "name": s.name, "category": s.category}
+            {
+                "uuid": str(s.uuid),
+                "name": s.name,
+                "category": s.category,
+                "color": s.color,
+            }
             for s in statuses
         ],
         "labels_data": [
@@ -234,15 +242,7 @@ def _base_context(request, project, role, view):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
-        "members_data": [
-            {
-                "id": str(u.pk),
-                "username": u.username,
-                "first_name": u.first_name,
-                "last_name": u.last_name,
-            }
-            for u in project_members
-        ],
+        "members_data": ProjectUserSerializer(project_members, many=True).data,
         # In both render paths: the sidebar sits outside #project-content,
         # so every swap carries fresh counts for the shell to pick up after
         # a task moved in or out of the backlog.

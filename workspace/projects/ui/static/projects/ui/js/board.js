@@ -7,6 +7,19 @@ function listOrder(listEl) {
   );
 }
 
+// The checklist after `uuid` was dropped on `targetUuid`: it takes the
+// target's place, so a drop on the item just below moves it down one. No
+// target (the list's empty end) sends it last.
+function movedOnto(items, uuid, targetUuid) {
+  const from = items.findIndex((s) => s.uuid === uuid);
+  if (from === -1 || targetUuid === uuid) return items;
+  const target = targetUuid ? items.findIndex((s) => s.uuid === targetUuid) : -1;
+  const next = items.slice();
+  const moved = next.splice(from, 1)[0];
+  next.splice(target === -1 ? next.length : target, 0, moved);
+  return next;
+}
+
 const TASK_ANIMATION = 'task-drag';
 
 function prefersReducedMotion() {
@@ -1297,7 +1310,10 @@ function projectBoard(config) {
       if (!dialog) return;
       // The dropdown holding the trigger stays open on focus alone.
       if (document.activeElement) document.activeElement.blur();
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) {
+        dialog.showModal();
+        window.dispatchEvent(new CustomEvent('sprints-opened'));
+      }
       if (add) window.dispatchEvent(new CustomEvent('sprint-add'));
     },
 
@@ -2034,14 +2050,8 @@ function taskPanel() {
       if (targetUuid === uuid) return;
       // Optimistic local reorder (board onDrop precedent); the endpoint is
       // idempotent, and any failure refreshes back to server truth.
-      const items = this.subtasks.slice();
-      const from = items.findIndex((s) => s.uuid === uuid);
-      if (from === -1) return;
-      const moved = items.splice(from, 1)[0];
-      const to = targetUuid
-        ? items.findIndex((s) => s.uuid === targetUuid)
-        : items.length;
-      items.splice(to === -1 ? items.length : to, 0, moved);
+      const items = movedOnto(this.subtasks, uuid, targetUuid);
+      if (items === this.subtasks) return;
       this.subtasks = items;
       this.saveSubtaskOrder();
     },
@@ -2334,6 +2344,7 @@ window.labelSelector = labelSelector;
 window.selectDropdown = selectDropdown;
 window.projectBoardHelpers = {
   listOrder: listOrder,
+  movedOnto: movedOnto,
   dropAnchor: dropAnchor,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,

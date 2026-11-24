@@ -203,7 +203,7 @@ window.viewerSlideshowMixin = function viewerSlideshowMixin() {
       const files = this._getViewableFiles();
       const idx = files.findIndex((f) => f.uuid === this.fileUuid);
       const next = idx >= 0 ? files[idx + 1] : null;
-      if (!next || !(next.fileType || '').startsWith('image/')) return;
+      if (!next || next.viewer !== 'image') return;
       const row = this._row(next.uuid);
       const url = (row && row.dataset.contentUrl) || `/api/v1/files/${next.uuid}/content`;
       const img = new Image();

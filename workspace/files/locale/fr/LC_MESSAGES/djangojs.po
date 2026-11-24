@@ -824,3 +824,11 @@ msgstr "Impossible de charger les fichiers"
 #: ui/static/files/ui/js/wikilink_autocomplete.js
 msgid "Couldn't load notes"
 msgstr "Impossible de charger les notes"
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "The link could not be created."
+msgstr "Le lien n’a pas pu être créé."
+
+#: ui/static/files/ui/js/share_modal.js
+msgid "The link could not be revoked."
+msgstr "Le lien n’a pas pu être révoqué."

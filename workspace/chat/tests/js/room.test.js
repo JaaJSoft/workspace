@@ -41,3 +41,16 @@ test('chatRoomApp sets currentUserId and roomConversationId', () => {
   assert.equal(app.roomConversationId, 'conv-2');
   assert.equal(app.callRole, 'owner');
 });
+
+test('the call room wires the conversation pane as the chat page does', async () => {
+  let wired = 0;
+  const roomCtx = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', {
+    ...stubs,
+    chatInputMixin: () => ({ listenToConversationPane() { wired += 1; } }),
+    document: { getElementById: () => null },
+    addEventListener: () => {},
+  });
+  const app = roomCtx.chatRoomApp(1, 'conv-1');
+  await app.init();
+  assert.equal(wired, 1);
+});

@@ -217,3 +217,42 @@ class NotificationReadAllTests(NotifViewMixin, APITestCase):
             ).count(),
             1,
         )
+
+
+@patch("workspace.notifications.services.notifications.notify_sse")
+class NotificationStreamWakeTests(NotifViewMixin, APITestCase):
+    """A read or a deletion wakes the recipient's streams, so every other open
+    tab shows the new unread count at once."""
+
+    def _woken(self, notify_sse, send):
+        with self.captureOnCommitCallbacks(execute=True):
+            send()
+        return [call.args for call in notify_sse.call_args_list]
+
+    def test_marking_one_read(self, notify_sse):
+        notif = self._make_notif()
+        woken = self._woken(
+            notify_sse, lambda: self.client.patch(f"/api/v1/notifications/{notif.pk}")
+        )
+        self.assertEqual(woken, [("notifications", self.alice.pk)])
+
+    def test_marking_all_read(self, notify_sse):
+        self._make_notif()
+        woken = self._woken(
+            notify_sse, lambda: self.client.post("/api/v1/notifications/read-all")
+        )
+        self.assertEqual(woken, [("notifications", self.alice.pk)])
+
+    def test_deleting_one(self, notify_sse):
+        notif = self._make_notif()
+        woken = self._woken(
+            notify_sse, lambda: self.client.delete(f"/api/v1/notifications/{notif.pk}")
+        )
+        self.assertEqual(woken, [("notifications", self.alice.pk)])
+
+    def test_nothing_changed_wakes_nobody(self, notify_sse):
+        notif = self._make_notif(read_at=timezone.now())
+        woken = self._woken(
+            notify_sse, lambda: self.client.patch(f"/api/v1/notifications/{notif.pk}")
+        )
+        self.assertEqual(woken, [])

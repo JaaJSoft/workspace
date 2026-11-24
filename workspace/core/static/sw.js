@@ -68,11 +68,10 @@ self.addEventListener('fetch', function (event) {
   // API requests — network only
   if (url.pathname.startsWith('/api/')) return;
 
-  // CDN assets — stale-while-revalidate
-  if (url.origin !== self.location.origin) {
-    event.respondWith(staleWhileRevalidate(request));
-    return;
-  }
+  // Another origin's content (map tiles, an image in a message): the page
+  // loads nothing of its own from one, and caching it here would keep every
+  // tile ever seen.
+  if (url.origin !== self.location.origin) return;
 
   // Local static assets — dev: skip SW (always fresh), prod: cache first (invalidated by version bump)
   if (url.pathname.startsWith('/static/')) {
@@ -104,24 +103,6 @@ function cacheFirst(request) {
     });
   }).catch(function () {
     return new Response('', { status: 503, statusText: 'Service Unavailable' });
-  });
-}
-
-function staleWhileRevalidate(request) {
-  return caches.match(request).then(function (cached) {
-    const fetchPromise = fetch(request).then(function (response) {
-      // For cross-origin, accept opaque responses (status 0)
-      if (response.ok || response.type === 'opaque') {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(function (cache) { cache.put(request, clone); });
-      }
-      return response;
-    }).catch(function () {
-      return cached || new Response('', { status: 503, statusText: 'Service Unavailable' });
-    });
-    return cached || fetchPromise;
-  }).catch(function () {
-    return fetch(request);
   });
 }
 

@@ -123,6 +123,11 @@ def get_daily_counts(user_id, date_from, date_to, viewer_id=None, allowed_source
     )
 
 
+# How many events a search reads before giving up on filling its page.
+SEARCH_SCAN_LIMIT = 5000
+SEARCH_BATCH = 200
+
+
 def get_recent_events(
     *,
     user_id=None,
@@ -158,37 +163,41 @@ def get_recent_events(
         else:
             allowed_sources = allowed
 
-    if search:
-        fetch_limit = limit + offset + 50
-    else:
-        fetch_limit = limit
+    def fetch(count, skip):
+        return activity_registry.get_recent_events(
+            user_id,
+            limit=count,
+            offset=skip,
+            viewer_id=viewer_id,
+            source=source,
+            exclude_actor_id=exclude_user_id,
+            allowed_sources=allowed_sources,
+        )
 
-    events = activity_registry.get_recent_events(
-        user_id,
-        limit=fetch_limit,
-        offset=0 if search else offset,
-        viewer_id=viewer_id,
-        source=source,
-        exclude_actor_id=exclude_user_id,
-        allowed_sources=allowed_sources,
+    if not search:
+        return fetch(limit, offset)
+
+    # Events are built by each module in Python, so a search filters them
+    # here. It reads further back until the page is full or the feed runs
+    # out, each round twice as deep, up to SEARCH_SCAN_LIMIT events.
+    query = search.lower()
+    wanted = offset + limit
+    depth = max(wanted * 2, SEARCH_BATCH)
+    while True:
+        events = fetch(depth, 0)
+        matches = [e for e in events if _matches(e, query)]
+        if len(matches) >= wanted or len(events) < depth or depth >= SEARCH_SCAN_LIMIT:
+            return matches[offset:wanted]
+        depth = min(depth * 2, SEARCH_SCAN_LIMIT)
+
+
+def _matches(event, query):
+    actor = event.get("actor")
+    username = actor.get("username", "") if isinstance(actor, dict) else ""
+    return any(
+        query in (text or "").lower()
+        for text in (event.get("description", ""), event.get("label", ""), username)
     )
-
-    if search:
-        q = search.lower()
-        events = [
-            e
-            for e in events
-            if q in e.get("description", "").lower()
-            or q in e.get("label", "").lower()
-            or q
-            in (
-                e.get("actor", {}).get("username", "")
-                if isinstance(e.get("actor"), dict)
-                else ""
-            ).lower()
-        ]
-        events = events[offset : offset + limit]
-    return events
 
 
 def annotate_time_ago(events):

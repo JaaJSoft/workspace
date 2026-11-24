@@ -29,7 +29,8 @@ class ViewerPanelWrapperTests(TestCase):
 
     def _get(self, file_obj):
         return self.client.get(
-            reverse("files_ui:view_file", kwargs={"uuid": file_obj.uuid})
+            reverse("files_ui:view_file", kwargs={"uuid": file_obj.uuid}),
+            HTTP_X_ALPINE_REQUEST="true",
         )
 
     def test_a_rendered_viewer_is_wrapped_in_the_panel(self):

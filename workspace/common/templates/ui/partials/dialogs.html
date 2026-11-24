@@ -142,7 +142,12 @@
       ></div>
       <h3 id="app-dialog-message-title" class="font-bold text-lg">{% translate "Message" %}</h3>
     </div>
-    <div id="app-dialog-message-message" class="py-2 mt-2 wrap-break-word">{% translate "Done." %}</div>
+    <div
+      id="app-dialog-message-message"
+      class="py-2 mt-2 wrap-break-word whitespace-pre-line"
+    >
+      {% translate "Done." %}
+    </div>
     <div class="modal-action">
       <form method="dialog">
         <button type="submit" id="app-dialog-message-ok" class="btn btn-sm">{% translate "OK" %}</button>

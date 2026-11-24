@@ -640,7 +640,9 @@ class SensitivePreviewTests(TestCase):
             self.assertEqual(response.status_code, 400, key)
 
     def test_the_files_viewer_is_covered(self):
-        html = self.client.get(f"/files/view/{self.photo.uuid}").content.decode()
+        html = self.client.get(
+            f"/files/view/{self.photo.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        ).content.decode()
 
         self.assertIn("sensitive-cover", html)
         self.assertIn("sensitive-veiled", html)
@@ -648,7 +650,9 @@ class SensitivePreviewTests(TestCase):
     def test_the_files_viewer_of_a_photo_in_clear_is_not(self):
         clear = make_photo(self.user, "b.jpg", _at(2024, 7, 14))
 
-        html = self.client.get(f"/files/view/{clear.uuid}").content.decode()
+        html = self.client.get(
+            f"/files/view/{clear.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        ).content.decode()
 
         self.assertNotIn("sensitive-cover", html)
 
@@ -656,16 +660,24 @@ class SensitivePreviewTests(TestCase):
         borderline = make_photo(self.user, "b.jpg", _at(2024, 7, 14), sensitive_level=1)
         url = f"/files/view/{borderline.uuid}"
 
-        self.assertNotIn("sensitive-cover", self.client.get(url).content.decode())
+        self.assertNotIn(
+            "sensitive-cover",
+            self.client.get(url, HTTP_X_ALPINE_REQUEST="true").content.decode(),
+        )
 
         self._set_blur("strict")
 
-        self.assertIn("sensitive-cover", self.client.get(url).content.decode())
+        self.assertIn(
+            "sensitive-cover",
+            self.client.get(url, HTTP_X_ALPINE_REQUEST="true").content.decode(),
+        )
 
     def test_the_viewer_is_not_covered_once_the_user_turned_it_off(self):
         self._set_blur("off")
 
-        html = self.client.get(f"/files/view/{self.photo.uuid}").content.decode()
+        html = self.client.get(
+            f"/files/view/{self.photo.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        ).content.decode()
 
         self.assertNotIn("sensitive-cover", html)
 

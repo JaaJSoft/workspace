@@ -52,7 +52,6 @@ function makeApp() {
       document: { getElementById: () => null, addEventListener() {} },
       addEventListener() {},
       sidebarPreference: { initial: () => false, save: () => {} },
-      _mailPrefsReady: Promise.resolve(),
       _mailPrefsCache: {},
       getCSRFToken: () => 'token',
       AppDialog: { confirm: async () => true, error() {} },

@@ -156,6 +156,15 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       return new Promise(resolve => setTimeout(resolve, SYNC_POLL_INTERVAL_MS));
     },
 
+    async showSyncError(account) {
+      await AppDialog.message({
+        title: gettext('Last sync failed'),
+        message: account.last_sync_error,
+        icon: 'alert-triangle',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+    },
+
     async testAccount(uuid) {
       const res = await this._fetch(`/api/v1/mail/accounts/${uuid}/test`, { method: 'POST' });
       if (res.ok) {

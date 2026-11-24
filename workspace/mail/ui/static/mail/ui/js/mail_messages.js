@@ -361,17 +361,20 @@ window.mailMessagesMixin = function mailMessagesMixin() {
 
     async deleteMessage(msg) {
       const permanent = this._deleteIsPermanent(msg);
-      const ok = await AppDialog.confirm({
-        title: gettext('Delete message'),
-        message: permanent
-          ? gettext('Permanently delete this message? It cannot be recovered.')
-          : gettext('Move this message to trash?'),
-        okLabel: permanent ? gettext('Delete permanently') : gettext('Move to trash'),
-        okClass: 'btn-error',
-        icon: 'trash-2',
-        iconClass: 'bg-error/10 text-error',
-      });
-      if (!ok) return;
+      // A delete that cannot be undone asks whatever the preference says.
+      if (permanent || this.mailPrefs.confirmBeforeDelete !== false) {
+        const ok = await AppDialog.confirm({
+          title: gettext('Delete message'),
+          message: permanent
+            ? gettext('Permanently delete this message? It cannot be recovered.')
+            : gettext('Move this message to trash?'),
+          okLabel: permanent ? gettext('Delete permanently') : gettext('Move to trash'),
+          okClass: 'btn-error',
+          icon: 'trash-2',
+          iconClass: 'bg-error/10 text-error',
+        });
+        if (!ok) return;
+      }
 
       this.actionsInFlight += 1;
       // Optimistic UI update

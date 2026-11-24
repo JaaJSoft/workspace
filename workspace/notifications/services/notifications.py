@@ -253,6 +253,36 @@ def notify_stream(
     return to_update + to_create
 
 
+def mark_read(notification):
+    """Mark one notification read and refresh its recipient's count in every
+    open tab."""
+    if notification.read_at is not None:
+        return
+    notification.read_at = timezone.now()
+    notification.save(update_fields=["read_at"])
+    _announce([notification.recipient_id])
+
+
+def mark_all_read(user):
+    """Mark every unread notification of *user* read. Returns how many."""
+    marked = Notification.objects.filter(recipient=user, read_at__isnull=True).update(
+        read_at=timezone.now()
+    )
+    if marked:
+        _announce([user.pk])
+    return marked
+
+
+def delete_notification(user, notification_uuid):
+    """Delete one of *user*'s notifications. Returns whether it existed."""
+    deleted, _ = Notification.objects.filter(
+        uuid=notification_uuid, recipient=user
+    ).delete()
+    if deleted:
+        _announce([user.pk])
+    return bool(deleted)
+
+
 def mark_source_read(user, source):
     """Mark the user's unread notifications for *source* as read.
 

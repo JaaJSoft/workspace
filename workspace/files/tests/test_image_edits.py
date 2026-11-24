@@ -447,7 +447,9 @@ class ImageViewerEditTests(ImageEditTestMixin, TestCase):
 
     def _html(self, user, query=""):
         self.client.force_login(user)
-        return self.client.get(f"/files/view/{self.file.uuid}{query}").content.decode()
+        return self.client.get(
+            f"/files/view/{self.file.uuid}{query}", HTTP_X_ALPINE_REQUEST="true"
+        ).content.decode()
 
     def test_an_editor_gets_the_edit_button_and_the_stored_edit(self):
         html = self._html(self.owner)

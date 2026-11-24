@@ -230,6 +230,7 @@
               <div class="mt-2 text-sm">
                 <span x-text="summary(job)"></span>
                 <template x-if="job.error"><inline-alert type="error" class="mt-2 text-xs"><span x-text="job.error"></span></inline-alert></template>
+                <template x-if="metadataError(job)"><inline-alert type="warning" class="mt-2 text-xs"><span x-text="metadataError(job)"></span></inline-alert></template>
               </div>
             </template>
           </li>

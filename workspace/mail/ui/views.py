@@ -17,6 +17,7 @@ from workspace.mail.services.notifications import (
 from workspace.mail.services.oauth2 import get_available_providers
 from workspace.people.queries import person_with_email, user_persons
 from workspace.users.queries import active_user_with_email
+from workspace.users.services.settings import get_setting
 
 
 @prefetchable
@@ -24,6 +25,7 @@ from workspace.users.queries import active_user_with_email
 @ensure_csrf_cookie
 def index(request):
     accounts = MailAccount.objects.filter(owner=request.user, is_active=True)
+    preferences = get_setting(request.user, "mail", "preferences", default={})
 
     return render(
         request,
@@ -36,6 +38,7 @@ def index(request):
             },
             "notify_mode": resolve_notify_mode(request.user),
             "notify_max_burst": resolve_notify_burst(request.user),
+            "mail_prefs": preferences if isinstance(preferences, dict) else {},
         },
     )
 

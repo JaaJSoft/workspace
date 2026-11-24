@@ -88,3 +88,45 @@ test('a failed group listing clears the groups from the previous open', async ()
   await app.loadGroups();
   assert.deepStrictEqual(Array.from(app.groups), []);
 });
+
+function linkModal(fetchImpl) {
+  const ctx = loadScript('workspace/files/ui/static/files/ui/js/share_modal.js', {
+    fetch: fetchImpl,
+    getCSRFToken: () => 'token',
+    gettext: (text) => text,
+  });
+  const app = ctx.shareModal();
+  app.fileUuid = 'f1';
+  return app;
+}
+
+const reply = (status, body) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
+
+test('a revoke the server refused keeps the link listed and says so', async () => {
+  const app = linkModal(async () => reply(500, {}));
+  app.shareLinks = [{ uuid: 'l1' }];
+  await app.deleteShareLink('l1');
+  assert.equal(app.shareLinks.length, 1);
+  assert.equal(app.linkError, 'The link could not be revoked.');
+});
+
+test('a revoked link leaves the list', async () => {
+  const app = linkModal(async () => reply(204, null));
+  app.shareLinks = [{ uuid: 'l1' }, { uuid: 'l2' }];
+  await app.deleteShareLink('l1');
+  assert.deepStrictEqual(app.shareLinks.map(l => l.uuid), ['l2']);
+  assert.equal(app.linkError, '');
+});
+
+test('a refused link creation shows the reason and keeps the form open', async () => {
+  const app = linkModal(async () => reply(400, { password: ['Too short.'] }));
+  app.showLinkForm = true;
+  await app.createShareLink();
+  assert.equal(app.showLinkForm, true);
+  assert.equal(app.linkError, 'Too short.');
+  assert.equal(app.creatingLink, false);
+});

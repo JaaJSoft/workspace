@@ -59,7 +59,6 @@ function makeApp(search = '') {
       document: { getElementById: () => null, addEventListener() {} },
       addEventListener(type, fn) { listeners[type] = fn; },
       sidebarPreference: { initial: () => false, save: () => {} },
-      _mailPrefsReady: Promise.resolve(),
       _mailPrefsCache: {},
     },
   );

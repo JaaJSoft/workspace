@@ -48,9 +48,14 @@ window.chatPanelsMixin = function chatPanelsMixin() {
           this.loadScheduledMessages(conversationId);
         }
       }
+      // The panel is rendered twice, docked beside the messages on a wide
+      // screen and as an overlay on a narrow one: the section is the copy on
+      // screen.
       if (scrollTo) {
         this.$nextTick(() => {
-          document.getElementById(scrollTo)?.scrollIntoView({ behavior: 'smooth' });
+          const sections = document.querySelectorAll(`[data-info-section="${scrollTo}"]`);
+          const shown = Array.from(sections).find((el) => el.getClientRects().length > 0);
+          shown?.scrollIntoView({ behavior: 'smooth' });
         });
       }
     },

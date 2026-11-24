@@ -33,6 +33,7 @@ from workspace.files.queries import (
     can_access,
     get_permission,
     restorable_files_qs,
+    trash_permission,
     user_group_files_qs,
 )
 from workspace.files.services.announcements import announce_replaced
@@ -431,8 +432,8 @@ class FileViewSet(
         Raises Http404 if no access.
 
         *include_trashed* also resolves a trashed file, for the read-only
-        endpoints the trash view previews through. Only its owner gets a
-        permission on it, which is who the trash lists it for.
+        endpoints the trash view previews through, with the permission the
+        trash gives on it: its owner's, and a group's current members'.
         """
         files = File.objects.filter(uuid=uuid)
         if not include_trashed:
@@ -440,7 +441,10 @@ class FileViewSet(
         file_obj = files.first()
         if not file_obj:
             raise Http404
-        perm = get_permission(self.request.user, file_obj)
+        if file_obj.deleted_at is not None:
+            perm = trash_permission(self.request.user, file_obj)
+        else:
+            perm = get_permission(self.request.user, file_obj)
         if perm is None:
             raise Http404
         return file_obj, perm

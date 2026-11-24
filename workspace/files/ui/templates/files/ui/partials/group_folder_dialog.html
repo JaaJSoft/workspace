@@ -1,61 +1,14 @@
 {% load i18n %}
 <!-- Create Group Folder Dialog -->
 <dialog id="create-group-folder-dialog" class="modal">
-  <div class="modal-box" x-data="{ selectedGroup: '' }">
+  <div
+    class="modal-box"
+    x-data="{ selectedGroup: '' }"
+    @group-folders-changed.window="selectedGroup = ''"
+  >
     {% translate "Create Group Folder" as create_group_folder_title %}
     {% include "ui/partials/dialog_header.html" with icon="users" title=create_group_folder_title only %}
-    {% if available_groups %}
-      <form
-        @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.groupSelect.options[$refs.groupSelect.selectedIndex].text } })); }"
-      >
-        <div class="fieldset">
-          <label class="fieldset-legend">
-            <span>{% translate "Group" %}</span>
-          </label>
-          <select
-            x-model="selectedGroup"
-            x-ref="groupSelect"
-            class="select w-full"
-            required
-          >
-            <option value="" disabled selected>{% translate "Select a group" %}</option>
-            {% for g in available_groups %}
-              <option value="{{ g.id }}">{{ g.name }}</option>
-            {% endfor %}
-          </select>
-          <label class="label whitespace-normal">
-            <span>{% translate "The folder will be named after the group" %}</span>
-          </label>
-        </div>
-        <div class="modal-action">
-          <button
-            type="button"
-            class="btn btn-sm"
-            onclick="document.getElementById('create-group-folder-dialog').close()"
-          >
-            {% translate "Cancel" %}
-          </button>
-          <button
-            type="submit"
-            class="btn btn-module btn-sm"
-            :disabled="!selectedGroup"
-          >
-            {% translate "Create" %}
-          </button>
-        </div>
-      </form>
-    {% else %}
-      <p class="text-base-content/60 text-sm">{% translate "All your groups already have a folder." %}</p>
-      <div class="modal-action">
-        <button
-          type="button"
-          class="btn btn-sm"
-          onclick="document.getElementById('create-group-folder-dialog').close()"
-        >
-          {% translate "Close" %}
-        </button>
-      </div>
-    {% endif %}
+    {% include "files/ui/partials/group_folder_choices.html" %}
   </div>
   <form method="dialog" class="modal-backdrop">
     <button type="submit">{% translate "close" %}</button>

@@ -42,6 +42,8 @@ window.shareModal = function shareModal() {
     // Reported beside the panel, not through AppAlert: the toasts render
     // under the dialog's backdrop, out of sight of whoever pressed Copy.
     linkGeneratorError: '',
+    // A link that could not be created or revoked, reported the same way.
+    linkError: '',
 
     // A share is addressed to a user or a group, and the two id spaces
     // overlap, so every entry is keyed by both.
@@ -84,6 +86,7 @@ window.shareModal = function shareModal() {
         this.pendingAdds = [];
         this.pendingRemovals = new Set();
         this.pendingPermissionChanges = new Map();
+        this.linkError = '';
         this.loadShares();
         this.loadGroups();
         this.loadShareLinks();
@@ -404,6 +407,7 @@ window.shareModal = function shareModal() {
         if (this.newLinkMaxBytes) body.max_file_bytes = Number(this.newLinkMaxBytes);
         if (this.newLinkMaxCount) body.max_file_count = Number(this.newLinkMaxCount);
       }
+      this.linkError = '';
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links`, {
           method: 'POST',
@@ -414,21 +418,45 @@ window.shareModal = function shareModal() {
         if (resp.ok) {
           this.closeLinkForm();
           await this.loadShareLinks();
+        } else {
+          this.linkError = await this._linkFailure(resp, gettext('The link could not be created.'));
         }
-      } catch (e) {}
+      } catch (e) {
+        this.linkError = gettext('The link could not be created.');
+      }
       this.creatingLink = false;
     },
 
     async deleteShareLink(linkUuid) {
       const csrfToken = getCSRFToken();
+      this.linkError = '';
       try {
-        await fetch(`/api/v1/files/${this.fileUuid}/share-links/${linkUuid}`, {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links/${linkUuid}`, {
           method: 'DELETE',
           headers: { 'X-CSRFToken': csrfToken },
           credentials: 'same-origin',
         });
-        this.shareLinks = this.shareLinks.filter(l => l.uuid !== linkUuid);
-      } catch (e) {}
+        // Already gone is what was asked for.
+        if (resp.ok || resp.status === 404) {
+          this.shareLinks = this.shareLinks.filter(l => l.uuid !== linkUuid);
+        } else {
+          this.linkError = await this._linkFailure(resp, gettext('The link could not be revoked.'));
+        }
+      } catch (e) {
+        this.linkError = gettext('The link could not be revoked.');
+      }
+    },
+
+    // The server's reason when it gave one: a detail, or the first message
+    // of the first field it refused.
+    async _linkFailure(resp, fallback) {
+      const data = await resp.json().catch(() => null);
+      if (!data || typeof data !== 'object') return fallback;
+      if (typeof data.detail === 'string') return data.detail;
+      const first = Object.values(data)[0];
+      if (Array.isArray(first) && typeof first[0] === 'string') return first[0];
+      if (typeof first === 'string') return first;
+      return fallback;
     },
 
     copyShareLink(url) {

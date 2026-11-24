@@ -623,7 +623,7 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.data["value"], "dark")
 
     def test_put_json_value(self):
-        value = {"sortField": "name", "columnOrder": ["name", "size"]}
+        value = {"columnOrder": ["name", "size"], "columnVisibility": {"size": False}}
         resp = self.client.put(
             self._url("files", "table_controls"), {"value": value}, format="json"
         )

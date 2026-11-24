@@ -47,13 +47,11 @@ class FilesSettingsTests(SettingsApiTestCase):
         self.put("preferences", {"compactList": True, "thumbnailCache": "big"})
         self.assertEqual(self.stored()["preferences"], {"compactList": True})
 
-    def test_the_table_controls_are_a_sort_and_columns(self):
+    def test_the_table_controls_are_columns(self):
         self.assertAccepts(
             "table_controls",
             [
                 {
-                    "sortField": "name",
-                    "sortDir": "desc",
                     "columnOrder": ["name", "size", "modified"],
                     "columnVisibility": {"size": True, "owner": False},
                 }
@@ -62,7 +60,6 @@ class FilesSettingsTests(SettingsApiTestCase):
         self.assertRefuses(
             "table_controls",
             [
-                {"sortDir": "sideways"},
                 {"columnOrder": "name"},
                 {"columnOrder": [f"column-{n}" for n in range(65)]},
                 {"columnVisibility": {"size": "sometimes"}},

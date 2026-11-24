@@ -95,6 +95,7 @@ window.chatSseMixin = function chatSseMixin() {
         }
       }
 
+      await this._listConversation(detail.conversation_id);
       this._updateConversationLastMessage(detail.conversation_id, detail.message);
       // Only bump unread if the user is NOT currently viewing this conversation
       if (!isViewing) {
@@ -286,6 +287,20 @@ window.chatSseMixin = function chatSseMixin() {
         if (a.is_pinned && b.is_pinned) return (a.pin_position || 0) - (b.pin_position || 0);
         return new Date(b.updated_at) - new Date(a.updated_at);
       });
+    },
+
+    // A conversation started while the page is open is missing from the list
+    // the page was served with, and its row reads its unread dot from there.
+    async _listConversation(convId) {
+      if (this.conversations.some(c => c.uuid === convId)) return;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${convId}`, { credentials: 'same-origin' });
+        if (!resp.ok) return;
+        const conv = await resp.json();
+        if (!this.conversations.some(c => c.uuid === conv.uuid)) this.conversations.unshift(conv);
+      } catch (e) {
+        // The row still shows; only its dot waits for the next page load.
+      }
     },
 
     _bumpConversationUnread(convId) {

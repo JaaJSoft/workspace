@@ -127,6 +127,12 @@ window.fileBrowser = function fileBrowser() {
         this.refreshFolderBrowser();
       });
 
+      // A file added or changed outside the listing: an image saved from
+      // the viewer as a copy, or edited in place.
+      window.addEventListener('files-changed', () => {
+        this.refreshFolderBrowser();
+      });
+
       // Listen for folder icon changes (from properties panel)
       window.addEventListener('folder-icons-changed', () => {
         this.refreshFolderBrowser();

@@ -120,55 +120,7 @@ function chatApp(currentUserId) {
 
       window.addEventListener('sse:reconnect', () => this.catchUpAfterReconnect());
 
-      // Save-to-files from attachment viewer modal
-      window.addEventListener('chat-save-attachment-to-files', (e) => {
-        this.saveAttachmentToFiles(e.detail.uuid);
-      });
-
-      // Refresh messages after an interactive question is answered, so the
-      // server-rendered partial re-paints in its answered state. Use the
-      // incremental refresh (no container clear, preserves scroll position)
-      // instead of the full loadMessages which flashes empty + forces scroll.
-      window.addEventListener('chat:refresh-messages', () => {
-        if (this.activeConversation?.uuid && typeof this._refreshCurrentMessages === 'function') {
-          this._refreshCurrentMessages();
-        }
-      });
-
-      // Optimistic UI for AI question answers: inject a temp message bubble +
-      // bot typing indicator immediately on click. Matters in DEBUG mode where
-      // CELERY_TASK_ALWAYS_EAGER blocks the POST until the LLM completes; the
-      // optimistic bubble lets the user see their choice without waiting.
-      window.addEventListener('chat:answer-optimistic', (e) => {
-        const detail = e.detail || {};
-        if (!detail.tempId || !detail.body) return;
-        if (typeof this._injectOptimisticMessage === 'function') {
-          this._injectOptimisticMessage(detail.tempId, detail.body, null, null);
-          if (this.isBotConversation?.(this.activeConversation)) {
-            this.botTyping = true;
-            this.clearBotStep?.();
-          }
-          this.$nextTick(() => this.scrollToBottom?.());
-        }
-      });
-
-      window.addEventListener('chat:answer-optimistic-rollback', (e) => {
-        const detail = e.detail || {};
-        if (detail.tempId && typeof this._removeOptimisticMessage === 'function') {
-          this._removeOptimisticMessage(detail.tempId);
-        }
-        this.botTyping = false;
-        this.clearBotStep?.();
-      });
-
-      window.addEventListener('chat-message_interaction_updated', (e) => {
-        const data = e.detail || {};
-        if (data.conversation_id === this.activeConversation?.uuid) {
-          window.dispatchEvent(new CustomEvent('chat:refresh-messages', {
-            detail: { reason: 'sse-interaction-update' },
-          }));
-        }
-      });
+      this.listenToConversationPane();
 
       // ?action=new - open new conversation dialog from command palette
       const params = new URLSearchParams(window.location.search);
@@ -211,22 +163,6 @@ function chatApp(currentUserId) {
       this.pendingInitialConvUuid = null;
 
       this.fetchBots();
-
-      // Emoji picker event listener
-      this.$nextTick(() => {
-        const picker = this.$refs.emojiPicker;
-        if (picker) {
-          picker.addEventListener('emoji-click', (e) => {
-            const unicode = e.detail.unicode;
-            if (this.emojiPickerMode === 'input') {
-              this.insertEmoji(unicode);
-            } else if (this.emojiPickerMode === 'reaction' && this.emojiPickerTargetMsg) {
-              this.toggleReaction(this.emojiPickerTargetMsg, unicode);
-            }
-            this.closeEmojiPicker();
-          });
-        }
-      });
     },
 
     // Events pushed while the stream was down are lost once they expire from

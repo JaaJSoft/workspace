@@ -72,13 +72,14 @@ function makeHost({ uuids = ['a', 'b', 'c'], blurSensitive = false, storage = {}
     viewerLoading: false,
     fileUuid: uuids[0],
     uuids,
+    viewers: {},
     panel: makePanel(),
     steps: [],
     $refs: { frame },
     _openEvent: 'open-file-viewer',
     _viewerPanelId: () => 'viewer-panel',
     _getViewableFiles() {
-      return this.uuids.map((uuid) => ({ uuid, name: uuid, fileType: 'image/jpeg' }));
+      return this.uuids.map((uuid) => ({ uuid, name: uuid, fileType: 'jpeg', viewer: this.viewers[uuid] || 'image' }));
     },
     _totalViewable() {
       return this.uuids.length;
@@ -293,6 +294,14 @@ test('the next image is preloaded from its content endpoint', () => {
   host.startSlideshow();
 
   assert.deepEqual(preloads, ['/api/v1/files/b/content']);
+});
+
+test('a next file another viewer opens is not preloaded', () => {
+  const { host, preloads } = makeHost();
+  host.viewers = { b: 'video' };
+  host.startSlideshow();
+
+  assert.deepEqual(preloads, []);
 });
 
 test('an opener asking for the slideshow starts it on the file it opened', () => {

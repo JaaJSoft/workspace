@@ -55,11 +55,13 @@ window.pollUtils = {
   formatSlotTime(slot) {
     if (!slot?.start) return '';
     const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+    // The shared poll page has no localtime.js: guests read the locale's clock.
+    const clock = window.userClockOptions ? window.userClockOptions() : { hour: '2-digit', minute: '2-digit' };
     const start = new Date(slot.start);
-    const parts = [start.toLocaleTimeString(this.locale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' })];
+    const parts = [start.toLocaleTimeString(this.locale(), { timeZone: tz, ...clock })];
     if (slot.end) {
       const end = new Date(slot.end);
-      parts.push(end.toLocaleTimeString(this.locale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' }));
+      parts.push(end.toLocaleTimeString(this.locale(), { timeZone: tz, ...clock }));
     }
     return parts.join(' - ');
   },

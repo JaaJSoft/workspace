@@ -13,7 +13,6 @@ class CalendarPreferences(Preferences):
     # 0 is Sunday, as FullCalendar counts.
     firstDay = serializers.IntegerField(min_value=0, max_value=6)
     weekNumbers = serializers.BooleanField()
-    timeFormat = serializers.ChoiceField(choices=("12h", "24h"))
     defaultAllDay = serializers.BooleanField()
     showDeclined = serializers.BooleanField()
     notifyPollVotes = serializers.BooleanField()

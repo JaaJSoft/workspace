@@ -2,8 +2,10 @@
 // The zone comes from <html data-timezone> (the user's stored setting);
 // without it, formatting falls back to the browser timezone. Month names and
 // field order follow the interface language (<html lang>).
+// The clock (12h or 24h) comes from <html data-time-format>, 24h without it.
 // Registers window.convertLocaltimes(root), window.getUserTimeZone(),
-// window.getUserLocale(), window.userTzDayKey(date) and a MutationObserver
+// window.getUserLocale(), window.getUserTimeFormat(), window.userClockOptions(),
+// window.userTzDayKey(date) and a MutationObserver
 // that formats any <time data-localtime> nodes added to the DOM later.
 (function () {
   function getUserTimeZone() {
@@ -20,6 +22,19 @@
     const browserLanguages = typeof navigator === 'undefined' ? [] : (navigator.languages || []);
     const regional = browserLanguages.find((tag) => tag.toLowerCase().split('-')[0] === lang);
     return regional || lang;
+  }
+
+  function getUserTimeFormat() {
+    return document.documentElement.getAttribute('data-time-format') === '12h' ? '12h' : '24h';
+  }
+
+  // Intl options for a time of day on the user's clock, spread next to
+  // timeZone. hourCycle rather than hour12: hour12: false reads midnight as
+  // "24:00" in some locales.
+  function userClockOptions() {
+    return getUserTimeFormat() === '12h'
+      ? { hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }
+      : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
   }
 
   // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
@@ -49,13 +64,13 @@
     const fmt = el.dataset.localtime || 'time';
     switch (fmt) {
       case 'time':
-        el.textContent = d.toLocaleTimeString(getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleTimeString(getUserLocale(), { timeZone: tz, ...userClockOptions() });
         break;
       case 'date':
         el.textContent = _dateLabelLocal(d, tz);
         break;
       case 'datetime':
-        el.textContent = d.toLocaleDateString(getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleDateString(getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric', ...userClockOptions() });
         break;
       case 'relative':
         el.textContent = window.formatTimeAgo(d);
@@ -63,12 +78,12 @@
       case 'smart': {
         const isToday = _dayKey(d, tz) === _dayKey(new Date(), tz);
         el.textContent = isToday
-          ? d.toLocaleTimeString(getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' })
-          : d.toLocaleDateString(getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          ? d.toLocaleTimeString(getUserLocale(), { timeZone: tz, ...userClockOptions() })
+          : d.toLocaleDateString(getUserLocale(), { timeZone: tz, month: 'short', day: 'numeric', ...userClockOptions() });
         break;
       }
       case 'full':
-        el.textContent = d.toLocaleDateString(getUserLocale(), { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleDateString(getUserLocale(), { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(getUserLocale(), { timeZone: tz, ...userClockOptions() });
         break;
     }
   }
@@ -126,6 +141,8 @@
 
   window.getUserTimeZone = getUserTimeZone;
   window.getUserLocale = getUserLocale;
+  window.getUserTimeFormat = getUserTimeFormat;
+  window.userClockOptions = userClockOptions;
   window.userTzDayKey = userTzDayKey;
   window.wallClockToIso = wallClockToIso;
   window.isoToWallClock = isoToWallClock;

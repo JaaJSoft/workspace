@@ -68,7 +68,6 @@ class CalendarIndexViewTests(TestCase):
                 "defaultView": "agenda",
                 "firstDay": 0,
                 "weekNumbers": True,
-                "timeFormat": "12h",
             },
         )
         self.client.login(username="caluser", password="pass123")
@@ -77,7 +76,6 @@ class CalendarIndexViewTests(TestCase):
         self.assertEqual(prefs["defaultView"], "agenda")
         self.assertEqual(prefs["firstDay"], 0)
         self.assertTrue(prefs["weekNumbers"])
-        self.assertEqual(prefs["timeFormat"], "12h")
 
     def test_prefs_rendered_as_json_script_tag(self):
         """End-to-end: |json_script must inject a parseable <script> tag with the prefs."""

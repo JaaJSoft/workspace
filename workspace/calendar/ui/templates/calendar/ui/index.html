@@ -129,8 +129,9 @@
           <template
             x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading"
           >
-            <div class="agenda-empty">
-              <p>{% translate "No upcoming events" %}</p>
+            <div class="empty-state py-20">
+              <i data-lucide="calendar-x" class="empty-state-icon"></i>
+              <p class="empty-state-title">{% translate "No upcoming events" %}</p>
               <button type="button" class="btn btn-sm" @click="createEventNow()">{% translate "New event" %}</button>
             </div>
           </template>

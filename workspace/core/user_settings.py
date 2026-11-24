@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from rest_framework import serializers
 
+from workspace.common.datetimes import TIME_FORMATS
 from workspace.files.sensitivity import BlurPreference
 from workspace.users.settings_registry import not_a_choice
 
@@ -21,6 +22,7 @@ class CoreSettings(serializers.Serializer):
     light_theme = _theme()
     dark_theme = _theme()
     timezone = serializers.CharField(max_length=64)
+    time_format = serializers.ChoiceField(choices=TIME_FORMATS)
     language = serializers.ChoiceField(choices=settings.LANGUAGES)
     search_scope = serializers.ChoiceField(choices=SearchScope.CHOICES)
     sensitive_blur = serializers.ChoiceField(choices=BlurPreference.choices)

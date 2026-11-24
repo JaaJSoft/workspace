@@ -1,9 +1,10 @@
 {% load i18n %}
 {% translate "last one %(date)s" as goal_last_check_label %}
+{# A modal dialog follows the flag; @close catches the browser closing it on Escape. #}
 <dialog
-  :class="{'modal-open': goalEditor.open}"
   class="modal"
-  @keydown.escape.prevent="closeGoalEditor()"
+  x-effect="goalEditor.open ? $el.open || $el.showModal() : $el.close()"
+  @close="goalEditor.open && closeGoalEditor()"
 >
   <div class="modal-box max-w-2xl p-0 flex flex-col max-h-[90vh]">
     {% include "ui/partials/dialog_header.html" with icon="target" icon_class="bg-warning/10 text-warning" title=_("Edit goal") close_expr="closeGoalEditor()" class="px-5 pt-5 pb-2" only %}

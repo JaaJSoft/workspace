@@ -3,6 +3,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { clockGlobals } = require('../../../common/tests/js/clock');
 
 const mixinStub = () => ({});
 
@@ -11,6 +12,7 @@ function makeApp(userTz) {
 document: { getElementById: () => null },
     sidebarPreference: { initial: () => false, save: () => {} },
     getUserLocale: () => 'en-US',
+    ...clockGlobals(),
     // Domain mixins live in separate files; the formatters under test are
     // defined in mail.js itself, so empty stubs are enough.
     attachmentInputMixin: mixinStub,

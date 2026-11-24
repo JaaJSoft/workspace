@@ -48,7 +48,7 @@
         href="{{ open_url }}"
         target="_blank"
         rel="noopener"
-        class="btn btn-module gap-2"
+        class="btn btn-module btn-sm gap-2"
       >
         <i data-lucide="external-link" class="w-4 h-4"></i>
         {% translate "Open" %}
@@ -57,7 +57,7 @@
     <a
       href="{{ download_url }}"
       download="{{ file.name }}"
-      class="btn gap-2 {% if open_url %}btn-ghost bg-base-100 border-base-content/10{% else %}btn-module{% endif %}"
+      class="btn btn-sm gap-2 {% if open_url %}btn-ghost bg-base-100 border-base-content/10{% else %}btn-module{% endif %}"
     >
       <i data-lucide="download" class="w-4 h-4"></i>
       {% translate "Download" %}

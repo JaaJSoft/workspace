@@ -159,6 +159,28 @@
 }
 
 @layer components {
+  /* The title of a module page, the same in every module. */
+  .page-title {
+    @apply text-xl lg:text-2xl font-bold;
+  }
+
+  /* A box with nothing to show: a muted icon, one line saying so, then an
+     optional hint and actions. ui/partials/empty_state.html covers the
+     static case; Alpine-driven text and buttons use the classes directly.
+     Callers add the height (h-full, flex-1) when it must fill its box. */
+  .empty-state {
+    @apply flex flex-col items-center justify-center gap-2 px-4 py-12 text-center text-sm text-base-content/60;
+  }
+  .empty-state-icon {
+    @apply size-10 mb-1 opacity-40;
+  }
+  .empty-state-title {
+    @apply text-base font-medium text-base-content/80;
+  }
+  .empty-state > .btn {
+    @apply mt-2;
+  }
+
   /* Scrollable control rows (filter pills, chip rows): hide the scrollbar
      entirely - the row still scrolls by touch/wheel. Sub-pixel rounding can
      make such rows overflow by 1px when a child toggles visible, which

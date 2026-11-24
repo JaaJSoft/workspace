@@ -23,6 +23,7 @@ from django.db import transaction
 from django.utils import translation
 
 from workspace.common.cache import cached, invalidate_tags
+from workspace.common.datetimes import TIME_FORMATS
 from workspace.users.models import UserSetting
 from workspace.users.settings_registry import user_settings_registry
 
@@ -66,6 +67,17 @@ def get_user_timezones(user_ids) -> dict[int, ZoneInfo]:
     """
     stored = _stored_core_values(user_ids, "timezone")
     return {user_id: _zone_or_utc(stored.get(user_id)) for user_id in user_ids}
+
+
+def get_user_time_formats(user_ids) -> dict[int, str]:
+    """Clock (a TIME_FORMATS value) each of *user_ids* reads times on, in one query."""
+    stored = _stored_core_values(user_ids, "time_format")
+    return {
+        user_id: stored[user_id]
+        if stored.get(user_id) in TIME_FORMATS
+        else TIME_FORMATS[0]
+        for user_id in user_ids
+    }
 
 
 def get_user_language(user) -> str:

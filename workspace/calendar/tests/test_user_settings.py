@@ -5,7 +5,6 @@ PAGE_PREFERENCES = {
     "defaultView": "dayGridMonth",
     "firstDay": 1,
     "weekNumbers": False,
-    "timeFormat": "24h",
     "defaultAllDay": False,
     "showDeclined": False,
     "notifyPollVotes": True,
@@ -31,7 +30,6 @@ class CalendarSettingsTests(SettingsApiTestCase):
             [
                 {"defaultView": "listWeek"},
                 {"firstDay": 7},
-                {"timeFormat": "36h"},
                 {"notifyPollVotes": "rarely"},
                 [1, 2],
                 3,

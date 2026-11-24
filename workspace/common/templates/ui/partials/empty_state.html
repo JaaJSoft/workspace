@@ -1,0 +1,10 @@
+{% comment %}
+  A box with nothing to show (the .empty-state classes of app.css).
+  Params: icon (lucide name), title, optional message and class (e.g. "h-full").
+  A state with Alpine-driven text or buttons writes the classes itself.
+{% endcomment %}
+<div class="empty-state{% if class %} {{ class }}{% endif %}">
+  <i data-lucide="{{ icon }}" class="empty-state-icon"></i>
+  <p class="empty-state-title">{{ title }}</p>
+  {% if message %}<p class="max-w-sm">{{ message }}</p>{% endif %}
+</div>

@@ -854,18 +854,6 @@ msgid "Saturday"
 msgstr "Samedi"
 
 #: ui/templates/calendar/ui/partials/_preferences_content.html
-msgid "Time format"
-msgstr "Format de l’heure"
-
-#: ui/templates/calendar/ui/partials/_preferences_content.html
-msgid "24h (14:00)"
-msgstr "24 h (14:00)"
-
-#: ui/templates/calendar/ui/partials/_preferences_content.html
-msgid "12h (2:00 PM)"
-msgstr "12 h (2:00 PM)"
-
-#: ui/templates/calendar/ui/partials/_preferences_content.html
 msgid "Show week numbers"
 msgstr "Afficher les numéros de semaine"
 

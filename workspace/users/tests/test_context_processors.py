@@ -37,6 +37,7 @@ class UserPreferencesContextProcessorTests(TestCase):
         set_setting(self.user, "core", "light_theme", "nord")
         set_setting(self.user, "core", "dark_theme", "dracula")
         set_setting(self.user, "core", "timezone", "Europe/Paris")
+        set_setting(self.user, "core", "time_format", "12h")
 
         ctx = user_preferences(self._request(self.user))
         self.assertEqual(
@@ -46,6 +47,7 @@ class UserPreferencesContextProcessorTests(TestCase):
                 "user_light_theme": "nord",
                 "user_dark_theme": "dracula",
                 "user_timezone": "Europe/Paris",
+                "user_time_format": "12h",
             },
         )
 
@@ -58,6 +60,7 @@ class UserPreferencesContextProcessorTests(TestCase):
                 "user_light_theme": "light",
                 "user_dark_theme": "dark",
                 "user_timezone": "",
+                "user_time_format": "24h",
             },
         )
 

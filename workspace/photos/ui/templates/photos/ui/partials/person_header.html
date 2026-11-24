@@ -44,7 +44,7 @@
       />
     {% endif %}
     <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-      <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
+      <h1 class="page-title truncate">{{ title }}</h1>
       <span
         class="text-sm text-base-content/60 tabular-nums"
         x-text="interpolate(total === 1 ? '{{ count_one|escapejs }}' : '{{ count_other|escapejs }}', { count: total }, true)"

@@ -1538,7 +1538,7 @@ window.notesApp = function notesApp(config) {
             const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
             const d = new Date(dateStr);
             const locale = window.getUserLocale ? window.getUserLocale() : undefined;
-            return d.toLocaleDateString(locale, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            return d.toLocaleDateString(locale, { timeZone: tz, month: 'short', day: 'numeric', ...window.userClockOptions() });
         },
 
         toggleCollapse() {

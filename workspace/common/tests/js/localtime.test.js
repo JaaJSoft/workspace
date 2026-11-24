@@ -4,11 +4,12 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('./loader');
 
-function docStub(tzAttr, lang = '') {
+function docStub(tzAttr, lang = '', timeFormat = null) {
+  const attrs = { 'data-timezone': tzAttr, 'data-time-format': timeFormat };
   return {
     documentElement: {
       lang,
-      getAttribute: (n) => (n === 'data-timezone' ? tzAttr : null),
+      getAttribute: (n) => attrs[n] ?? null,
     },
     body: {},
     querySelectorAll: () => [],
@@ -19,9 +20,9 @@ class ObserverStub {
   observe() {}
 }
 
-function load(tzAttr) {
+function load(tzAttr, timeFormat = null) {
   return loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/localtime.js'], {
-    document: docStub(tzAttr),
+    document: docStub(tzAttr, 'en', timeFormat),
     MutationObserver: ObserverStub,
   });
 }
@@ -58,6 +59,33 @@ test('convertLocaltimes formats times in the user timezone', () => {
   const ctx = load('Asia/Tokyo');
   // 20:00Z = 05:00 in Tokyo
   assert.match(convert(ctx, mkEl('2026-01-31T20:00:00Z', 'time')), /05:00/);
+});
+
+test('times read on a 24h clock unless the user picked 12h', () => {
+  // 19:23 UTC = 04:23 the next morning in Tokyo; 07:23 UTC = 16:23.
+  const morning = mkEl('2026-01-31T19:23:00Z', 'time');
+  const afternoon = mkEl('2026-01-31T07:23:00Z', 'time');
+  const midnight = mkEl('2026-01-31T15:05:00Z', 'time');
+
+  const ctx24 = load('Asia/Tokyo');
+  assert.equal(ctx24.getUserTimeFormat(), '24h');
+  assert.equal(convert(ctx24, morning), '04:23');
+  assert.equal(convert(ctx24, afternoon), '16:23');
+  assert.equal(convert(ctx24, midnight), '00:05');
+
+  const ctx12 = load('Asia/Tokyo', '12h');
+  assert.equal(ctx12.getUserTimeFormat(), '12h');
+  assert.match(convert(ctx12, morning), /^4:23\sAM$/);
+  assert.match(convert(ctx12, afternoon), /^4:23\sPM$/);
+  assert.match(convert(ctx12, midnight), /^12:05\sAM$/);
+});
+
+test('the clock holds whatever the interface language', () => {
+  const ctx = loadScripts(['workspace/common/static/ui/js/zoned_formatter.js', 'workspace/common/static/ui/js/localtime.js'], {
+    document: docStub('UTC', 'fr', '12h'),
+    MutationObserver: ObserverStub,
+  });
+  assert.match(convert(ctx, mkEl('2026-01-31T19:23:00Z', 'time')), /^7:23\sPM$/);
 });
 
 test('date mode crosses the day boundary in the user timezone', () => {

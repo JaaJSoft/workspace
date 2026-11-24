@@ -26,7 +26,7 @@
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </a>
         <div class="min-w-0">
-          <h1 class="text-lg font-semibold truncate">{% translate "Review people" %}</h1>
+          <h1 class="page-title truncate">{% translate "Review people" %}</h1>
           <p
             class="sm:hidden text-xs text-base-content/60 tabular-nums truncate"
             x-text="leftLabel()"
@@ -81,7 +81,7 @@
           </div>
           <button
             type="button"
-            class="btn btn-module w-full sm:w-auto sm:min-w-56 gap-2 shadow-xs"
+            class="btn btn-module btn-sm w-full sm:w-auto sm:min-w-56 gap-2 shadow-xs"
             :class="{ 'pointer-events-none': refreshing }"
             :aria-busy="refreshing"
             @click="refresh()"

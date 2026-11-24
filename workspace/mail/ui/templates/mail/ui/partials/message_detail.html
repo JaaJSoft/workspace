@@ -61,17 +61,15 @@
 <!-- Empty state: no folder, but has accounts -->
 <div
   x-show="!selectedMessage && !selectedFolder && accounts.length > 0"
-  class="flex-1 flex items-center justify-center"
+  class="empty-state flex-1"
 >
-  <div class="text-center text-base-content/40">
-    <i data-lucide="mail-open" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
-    <p class="text-sm">{% translate "Select a message to read" %}</p>
-    <p class="text-xs mt-1">
-      {% blocktranslate trimmed %}
-        Use <kbd class="kbd kbd-xs">j</kbd> / <kbd class="kbd kbd-xs">k</kbd> to navigate
-      {% endblocktranslate %}
-    </p>
-  </div>
+  <i data-lucide="mail-open" class="empty-state-icon"></i>
+  <p class="empty-state-title">{% translate "Select a message to read" %}</p>
+  <p>
+    {% blocktranslate trimmed %}
+      Use <kbd class="kbd kbd-xs">j</kbd> / <kbd class="kbd kbd-xs">k</kbd> to navigate
+    {% endblocktranslate %}
+  </p>
 </div>
 
 <!-- Message view -->

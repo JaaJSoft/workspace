@@ -12,6 +12,7 @@ from workspace.calendar.models import Event, EventMember
 from workspace.calendar.services.recurrence_rule import apply_rule
 from workspace.calendar.tasks import notify_today_events
 from workspace.notifications.models import Notification
+from workspace.users.services.settings import set_setting
 
 from .test_calendar import CalendarTestMixin
 
@@ -75,6 +76,16 @@ class NotifyTodayEventsCronTests(TodayEventNotificationMixin, TestCase):
         self.assertEqual(notif.url, f"/calendar?event={event.uuid}")
         # Informational: badge and bell, never a push.
         self.assertEqual(notif.priority, "low")
+
+    def test_the_time_is_on_the_recipient_s_clock(self):
+        self._event_today()
+        notify_today_events()
+        self.assertEqual(self._unread(self.owner).get().body, "Today at 08:20")
+
+        Notification.objects.all().delete()
+        set_setting(self.owner, "core", "time_format", "12h")
+        notify_today_events()
+        self.assertEqual(self._unread(self.owner).get().body, "Today at 8:20 AM")
 
     def test_notifies_invited_member(self):
         event = self._event_today()

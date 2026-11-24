@@ -21,15 +21,13 @@
     vault there is nothing to write into.
   {% endcomment %}
   <template x-if="openVault && isEmpty() && !filtering()">
-    <div
-      class="flex flex-col items-center justify-center h-full gap-3 text-base-content/40 py-16"
-    >
-      <i data-lucide="folder-open" class="w-14 h-14 opacity-20"></i>
+    <div class="empty-state h-full">
+      <i data-lucide="folder-open" class="empty-state-icon"></i>
       <p
-        class="text-lg font-medium"
+        class="empty-state-title"
         x-text="view === 'trash' ? 'The trash is empty' : view === 'favorites' ? 'No favourites yet' : 'This folder is empty'"
       ></p>
-      <p class="text-sm" x-show="view === 'all'">Use <b>New</b> to add a folder or an entry.</p>
+      <p x-show="view === 'all'">Use <b>New</b> to add a folder or an entry.</p>
     </div>
   </template>
 
@@ -39,11 +37,9 @@
     Offering "add an entry" against a filter would be the wrong advice.
   {% endcomment %}
   <template x-if="isEmpty() && filtering()">
-    <div
-      class="flex flex-col items-center justify-center h-full gap-2 text-base-content/40 py-16"
-    >
-      <i data-lucide="search-x" class="w-12 h-12 opacity-20"></i>
-      <p>Nothing here matches the filter.</p>
+    <div class="empty-state h-full">
+      <i data-lucide="search-x" class="empty-state-icon"></i>
+      <p class="empty-state-title">Nothing here matches the filter.</p>
       <button type="button" class="btn btn-sm btn-ghost" @click="resetAll()">Clear it</button>
     </div>
   </template>

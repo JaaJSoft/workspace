@@ -16,7 +16,7 @@
     class="flex items-center gap-3 min-w-0 mb-4{% if view == 'overview' or view == 'settings' or view == 'analytics' %} max-w-6xl mx-auto{% endif %}"
   >
     {% include "ui/partials/drawer_toggle.html" with drawer_id="projects-drawer" class="lg:hidden" %}
-    <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
+    <h1 class="page-title truncate">{{ project.name }}</h1>
     {% if project.archived_at %}
       <span class="badge badge-ghost">{% translate "Archived" context "project state" %}</span>
     {% endif %}

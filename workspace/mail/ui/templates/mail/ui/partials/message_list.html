@@ -228,14 +228,9 @@
 <!-- Message list -->
 <div class="flex-1 overflow-y-auto" x-show="!loadingMessages">
   <!-- No messages -->
-  <div
-    x-show="messages.length === 0 && !loadingMessages"
-    class="flex items-center justify-center h-full"
-  >
-    <div class="text-center text-base-content/40 py-12">
-      <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
-      <p class="text-sm">{% translate "No messages" %}</p>
-    </div>
+  <div x-show="messages.length === 0 && !loadingMessages" class="h-full">
+    {% translate "No messages" as no_messages_label %}
+    {% include "ui/partials/empty_state.html" with icon="inbox" title=no_messages_label class="h-full" %}
   </div>
 
   <template x-for="msg in messages" :key="msg.uuid">

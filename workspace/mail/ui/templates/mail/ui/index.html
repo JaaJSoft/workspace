@@ -104,16 +104,14 @@
   <div class="h-full flex min-w-0 bg-base-100">
     <!-- No accounts: centered empty state -->
     <template x-if="accounts.length === 0 && !selectedFolder">
-      <div class="flex-1 flex items-center justify-center">
-        <div class="text-center text-base-content/40">
-          <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
-          <p class="text-lg font-medium mb-2">{% translate "No mail accounts configured" %}</p>
-          <p class="text-sm mb-4">{% translate "Add a mail account to get started" %}</p>
-          <button type="button" class="btn btn-module btn-sm" @click="showAddAccount()">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            {% translate "Add Account" %}
-          </button>
-        </div>
+      <div class="empty-state flex-1">
+        <i data-lucide="mail" class="empty-state-icon"></i>
+        <p class="empty-state-title">{% translate "No mail accounts configured" %}</p>
+        <p>{% translate "Add a mail account to get started" %}</p>
+        <button type="button" class="btn btn-module btn-sm" @click="showAddAccount()">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          {% translate "Add Account" %}
+        </button>
       </div>
     </template>
 

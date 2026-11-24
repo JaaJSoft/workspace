@@ -323,17 +323,6 @@
   padding: 0.5rem 1.5rem 3rem;
 }
 
-.agenda-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.875rem;
-  padding: 5rem 1rem;
-  color: var(--agenda-muted);
-  font-size: 0.875rem;
-  text-align: center;
-}
-
 .agenda-loading {
   display: flex;
   justify-content: center;

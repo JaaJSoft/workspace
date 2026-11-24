@@ -466,10 +466,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     _agendaTime(value) {
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      const opts = this.prefs.timeFormat === '12h'
-        ? { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }
-        : { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false };
-      return new Date(value).toLocaleTimeString(userLocale(), opts);
+      return new Date(value).toLocaleTimeString(userLocale(), { timeZone: tz, ...window.userClockOptions() });
     },
 
     // The two lines of the time column. An event that ends on another day

@@ -3,6 +3,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { clockGlobals } = require('../../../common/tests/js/clock');
 
 const mixinStub = () => ({});
 
@@ -24,6 +25,7 @@ const localtimeCtx = loadScripts([
 function injectTzHelpers(ctx) {
   ctx.wallClockToIso = localtimeCtx.wallClockToIso;
   ctx.isoToWallClock = localtimeCtx.isoToWallClock;
+  Object.assign(ctx, clockGlobals());
 }
 
 function makeEventsMixin(userTz) {
@@ -126,7 +128,6 @@ test('panelDateDisplay keeps a single-day all-day event on its day', () => {
   // root app helpers, exactly like the spread composition at runtime.
   const merged = Object.assign({}, app, mixin, {
     _panelRaw: { start: '2026-08-01', end: '2026-08-02', all_day: true },
-    prefs: { timeFormat: '24h' },
   });
   const label = merged.panelDateDisplay();
   assert.match(label, /August 1|1 août/);
@@ -147,7 +148,6 @@ test('panel labels read raw instants, not the wall-clock form values', () => {
     // them back through the instant formatters double-converts (the
     // regression showed 05:42 for a 21:42 event).
     form: { start: '2026-08-13T21:42', end: '2026-08-13T23:12', all_day: false },
-    prefs: { timeFormat: '24h' },
   });
   assert.match(merged.panelTimeLabel(), /21:42/);
   assert.doesNotMatch(merged.panelTimeLabel(), /05:42|07:42/);
@@ -165,7 +165,7 @@ test('openCreateModal keeps date-only clicks on their day with verbatim default 
     modalMode: '',
     ownedCalendars: [],
     selectedMembers: [],
-    prefs: { defaultAllDay: false, timeFormat: '24h' },
+    prefs: { defaultAllDay: false },
   });
   // A month-view click hands over a date-only string: the prefill must be
   // that day at 09:00 verbatim, not a converted (shifted) wall clock.
@@ -183,7 +183,7 @@ test('openCreateModal converts real instants to the configured wall clock', () =
     modalMode: '',
     ownedCalendars: [],
     selectedMembers: [],
-    prefs: { defaultAllDay: false, timeFormat: '24h' },
+    prefs: { defaultAllDay: false },
   });
   // 11:42Z is 21:42 in Vladivostok (+10).
   merged.openCreateModal('2026-08-05T11:42:00Z', '', false);
@@ -195,7 +195,6 @@ test('applyDuration adds to the user-zone wall clock, not the browser parse', ()
   const app = makeCalendarApp('Asia/Vladivostok');
   const merged = Object.assign({}, app, mixin, {
     form: { start: '2026-08-05T09:00', end: '', all_day: false },
-    prefs: { timeFormat: '24h' },
   });
   merged.applyDuration(60);
   assert.equal(merged.form.end, '2026-08-05T10:00');
@@ -206,7 +205,6 @@ test('applyDuration on all-day events does pure day-label arithmetic', () => {
   const app = makeCalendarApp('America/Los_Angeles');
   const merged = Object.assign({}, app, mixin, {
     form: { start: '2026-08-05', end: '', all_day: true },
-    prefs: { timeFormat: '24h' },
   });
   // The end input names the last covered day: 1 day stays on the start day,
   // 3 days runs through the 7th.
@@ -227,7 +225,7 @@ test('openCreateModal keeps the last covered day of a multi-day date-only drag',
     modalMode: '',
     ownedCalendars: [],
     selectedMembers: [],
-    prefs: { defaultAllDay: false, timeFormat: '24h' },
+    prefs: { defaultAllDay: false },
   });
   // FullCalendar select() hands over an exclusive date-only end.
   merged.openCreateModal('2026-08-05', '2026-08-08', false);
@@ -248,7 +246,7 @@ function makeModalHarness(tz, extra) {
     selectedMembers: [],
     eventMembers: [],
     loadingEvent: false,
-    prefs: { defaultAllDay: true, timeFormat: '24h' },
+    prefs: { defaultAllDay: true },
   }, extra || {});
 }
 
@@ -310,7 +308,6 @@ function makeAgenda(tz, extra) {
   const { ctx, mixin } = makeEventsMixin(tz);
   ctx.document.body = { dataset: { userId: '1' } };
   return Object.assign(mixin, {
-    prefs: { timeFormat: '24h' },
     ownedCalendars: [{ uuid: 'c1', name: 'Work', color: 'error' }],
     subscribedCalendars: [],
     externalCalendars: [],

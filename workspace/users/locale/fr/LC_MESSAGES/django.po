@@ -276,6 +276,26 @@ msgstr "Impossible d’enregistrer la langue"
 msgid "Failed to save timezone"
 msgstr "Impossible d’enregistrer le fuseau horaire"
 
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Time format"
+msgstr "Format de l’heure"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "How times of day are written across the app."
+msgstr "L’écriture des heures dans toute l’application."
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "24h (14:00)"
+msgstr "24 h (14:00)"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "12h (2:00 PM)"
+msgstr "12 h (2:00 PM)"
+
+#: ui/templates/users/ui/partials/settings_region.html
+msgid "Failed to save time format"
+msgstr "Impossible d’enregistrer le format de l’heure"
+
 #: ui/templates/users/ui/partials/settings_security.html
 msgid "Updating..."
 msgstr "Mise à jour..."

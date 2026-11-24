@@ -133,12 +133,13 @@ def generate_chat_response(self, ai_task_id: str):
         body, bot_message = posted
 
         # Auto-generate title if the conversation doesn't have one yet.
-        msg_count = Message.objects.filter(
-            conversation_id=conversation_id,
-            deleted_at__isnull=True,
-        ).count()
-        if not conversation.title and msg_count >= 2:
-            generate_conversation_title.delay(str(conversation_id))
+        if not conversation.title:
+            msg_count = Message.objects.filter(
+                conversation_id=conversation_id,
+                deleted_at__isnull=True,
+            ).count()
+            if msg_count >= 2:
+                generate_conversation_title.delay(str(conversation_id))
 
         maybe_dispatch_summary_update(conversation_id, history.summary)
 

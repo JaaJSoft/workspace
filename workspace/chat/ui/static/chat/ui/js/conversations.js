@@ -3,15 +3,20 @@
 // list-level context menu, conversation display helpers (name, avatar,
 // member list).
 
-// Human label for a ConversationMember.NotificationLevel value. Unknown and
-// missing values read as 'all', matching the model default, so a conversation
-// serialized before the field existed does not render a blank menu.
+// ConversationMember.NotificationLevel values with their labels, embedded by
+// the conversation pane.
+function chatNotificationLevels() {
+  const el = document.getElementById('chat-notification-levels-data');
+  return el ? JSON.parse(el.textContent) : [];
+}
+
+// Human label for a notification level. Unknown and missing values read as
+// 'all', matching the model default, so a conversation serialized before the
+// field existed does not render a blank menu.
 function chatNotificationLevelLabel(level) {
-  switch (level) {
-    case 'mentions': return gettext('Mentions only');
-    case 'none': return gettext('Nothing');
-    default: return gettext('All messages');
-  }
+  const levels = chatNotificationLevels();
+  const match = levels.find((l) => l.value === level) || levels.find((l) => l.value === 'all');
+  return match ? match.label : '';
 }
 window.chatNotificationLevelLabel = chatNotificationLevelLabel;
 

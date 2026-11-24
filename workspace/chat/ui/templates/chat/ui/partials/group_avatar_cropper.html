@@ -9,7 +9,7 @@ copy opens with no box.
 {% translate "Confirm" as confirm_label %}
 <input
   type="file"
-  accept="image/jpeg,image/png,image/webp,image/gif"
+  accept="{{ group_avatar_types|join:',' }}"
   class="hidden"
   x-ref="groupAvatarInput"
   @change="uploadGroupAvatar($el)"

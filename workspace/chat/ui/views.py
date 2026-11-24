@@ -20,6 +20,7 @@ from workspace.chat.models import (
     PinnedMessage,
 )
 from workspace.chat.serializers import ConversationListSerializer
+from workspace.chat.services.avatar import ALLOWED_TYPES as GROUP_AVATAR_TYPES
 from workspace.chat.services.avatar import avatar_initial_for
 from workspace.chat.services.calls import system_call_label
 from workspace.chat.services.conversations import (
@@ -87,6 +88,15 @@ def _chat_prefs(user):
     """Chat preferences shaped for json_script, guarded against non-dict values."""
     prefs = get_setting(user, "chat", "preferences", default={})
     return prefs if isinstance(prefs, dict) else {}
+
+
+def _notification_levels():
+    """Each ConversationMember notification level with its label and icon."""
+    icons = ConversationMember.NOTIFICATION_LEVEL_ICONS
+    return [
+        {"value": level.value, "label": str(level.label), "icon": icons[level]}
+        for level in ConversationMember.NotificationLevel
+    ]
 
 
 def _build_conversation_context(user, conversation_uuids=None, *, embed_members=False):
@@ -211,6 +221,8 @@ def chat_view(request, conversation_uuid=None):
             "message_animations": MESSAGE_ANIMATIONS,
             "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
+            "notification_levels": _notification_levels(),
+            "group_avatar_types": GROUP_AVATAR_TYPES,
         },
     )
 
@@ -264,6 +276,8 @@ def chat_room_view(request, conversation_uuid):
             "current_user_id": request.user.id,
             "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
+            "notification_levels": _notification_levels(),
+            "group_avatar_types": GROUP_AVATAR_TYPES,
         },
     )
 

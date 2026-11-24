@@ -56,6 +56,22 @@ class ChatPageLanguageTests(TestCase):
         self.assertContains(response, "Search conversations")
         self.assertNotContains(response, "Écrivez un message...")
 
+    def test_notification_levels_are_embedded_in_french(self):
+        set_setting(self.user, "core", "language", "fr")
+        response = self.client.get(f"/chat/{self.conversation.pk}")
+        self.assertEqual(
+            [
+                (level["value"], level["label"])
+                for level in response.context["notification_levels"]
+            ],
+            [
+                ("all", "Tous les messages"),
+                ("mentions", "Mentions uniquement"),
+                ("none", "Rien"),
+            ],
+        )
+        self.assertContains(response, 'id="chat-notification-levels-data"')
+
 
 class NotificationLanguageTests(TestCase):
     def setUp(self):

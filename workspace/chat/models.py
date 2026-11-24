@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils.translation import gettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -47,9 +48,15 @@ class ConversationMember(models.Model):
         messages when the user goes looking for them.
         """
 
-        ALL = "all", "All messages"
-        MENTIONS = "mentions", "Mentions only"
-        NONE = "none", "Nothing"
+        ALL = "all", gettext_lazy("All messages")
+        MENTIONS = "mentions", gettext_lazy("Mentions only")
+        NONE = "none", gettext_lazy("Nothing")
+
+    NOTIFICATION_LEVEL_ICONS = {
+        NotificationLevel.ALL: "bell",
+        NotificationLevel.MENTIONS: "at-sign",
+        NotificationLevel.NONE: "bell-off",
+    }
 
     class Role(models.TextChoices):
         """Who may manage a group: its members, name, avatar and admins.

@@ -113,26 +113,20 @@
 
               <!-- Already voted banner -->
               <template x-if="votesRestored && poll.status === 'open'">
-                <div class="alert mb-2 bg-base-200 border-base-300">
-                  <i data-lucide="info" class="w-5 h-5 text-info"></i>
-                  <span>{% translate "Your previous votes have been restored. You can update them below." %}</span>
-                </div>
+                <inline-alert type="info" class="mb-2" message="{% translate 'Your previous votes have been restored. You can update them below.' %}"></inline-alert>
               </template>
 
               <!-- Vote submitted confirmation -->
               <template x-if="voteSubmitted && poll.status === 'open'">
-                <div class="alert mb-2 bg-base-200 border-base-300">
-                  <i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>
-                  <div>
-                    <span>{% translate "Your votes have been saved!" %}</span>
-                    <p class="text-sm opacity-60 mt-0.5" x-show="guestEmail.trim()">
-                      {% translate "You'll receive an email once a final slot is chosen." %}
-                    </p>
-                    <p class="text-sm opacity-60 mt-0.5" x-show="!guestEmail.trim()">
-                      {% translate "Bookmark this page to come back and see the final result." %}
-                    </p>
-                  </div>
-                </div>
+                <inline-alert type="success" class="mb-2">
+                <span class="font-medium text-base-content">{% translate "Your votes have been saved!" %}</span>
+                <p class="text-base-content/60 mt-0.5" x-show="guestEmail.trim()">
+                  {% translate "You'll receive an email once a final slot is chosen." %}
+                </p>
+                <p class="text-base-content/60 mt-0.5" x-show="!guestEmail.trim()">
+                  {% translate "Bookmark this page to come back and see the final result." %}
+                </p>
+                </inline-alert>
               </template>
 
               <!-- Doodle grid -->
@@ -299,20 +293,17 @@
 
               <!-- Closed banner -->
               <template x-if="poll.status === 'closed'">
-                <div class="alert mt-4 bg-base-200 border-base-300">
-                  <i data-lucide="trophy" class="w-5 h-5 text-success shrink-0"></i>
-                  <div>
-                    <span class="font-medium">{% translate "This poll has been finalized." %}</span>
-                    <template x-if="chosenSlot()">
-                      <p class="text-sm opacity-60 mt-0.5">
-                        {% translate "Chosen date:" %} <span
-                          class="font-medium text-base-content"
-                          x-text="formatSlotDate(chosenSlot()) + ' ' + formatSlotTime(chosenSlot())"
-                        ></span>
-                      </p>
-                    </template>
-                  </div>
-                </div>
+                <inline-alert type="success" icon="trophy" class="mt-4">
+                <span class="font-medium text-base-content">{% translate "This poll has been finalized." %}</span>
+                <template x-if="chosenSlot()">
+                  <p class="text-base-content/60 mt-0.5">
+                    {% translate "Chosen date:" %} <span
+                      class="font-medium text-base-content"
+                      x-text="formatSlotDate(chosenSlot()) + ' ' + formatSlotTime(chosenSlot())"
+                    ></span>
+                  </p>
+                </template>
+                </inline-alert>
               </template>
             </div>
           </div>
@@ -338,6 +329,7 @@
       </template>
     </div>
 
+    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
     <script>
       // Initialize Lucide icons and observe DOM for dynamic icons (Alpine templates)
       initLucideIcons();

@@ -9,16 +9,21 @@
   x-show="clipboard.active"
   x-cloak
 >
-  <div
-    class="alert bg-base-100 border border-base-300 shadow-lg py-2 flex-row items-center gap-3"
+  <inline-alert type="success" icon="clipboard-check" toast>
+  <span>
+    <span x-text="clipboard.label"></span> copied - clears in
+    {# Off: inline-alert is role=alert, which would announce every tick. #}
+    <span class="font-medium" aria-live="off" x-text="clipboard.secondsLeft"></span>s
+  </span>
+  <button
+    slot="actions"
+    type="button"
+    class="btn btn-xs btn-ghost"
+    @click="cancelCopy()"
   >
-    <i data-lucide="clipboard-check" class="w-4 h-4 text-success"></i>
-    <span class="text-sm">
-      <span x-text="clipboard.label"></span> copied - clears in
-      <span class="font-medium" x-text="clipboard.secondsLeft"></span>s
-    </span>
-    <button type="button" class="btn btn-xs btn-ghost" @click="cancelCopy()">Clear now</button>
-  </div>
+    Clear now
+  </button>
+  </inline-alert>
 </div>
 
 {% comment %}

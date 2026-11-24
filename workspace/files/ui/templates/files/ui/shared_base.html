@@ -122,8 +122,9 @@
               </button>
             </div>
 
-            <!-- Error -->
-            <p x-show="error" x-cloak class="text-sm text-error mt-2" x-text="error"></p>
+            <inline-alert type="error" class="mt-3" x-show="error" x-cloak>
+            <span x-text="error"></span>
+            </inline-alert>
           </div>
         </div>
 
@@ -194,6 +195,7 @@
       </footer>
     </div>
 
+    <script src="{% static 'ui/js/inline_alert.js' %}"></script>
     <script>
       // initLucideIcons() draws the icons present at load; observeLucideIcons()
       // keeps drawing them as Alpine inserts more (breadcrumbs, entry rows).

@@ -30,10 +30,9 @@
 
 <!-- Error state -->
 <div x-show="propertiesError && !propertiesLoading" class="p-4" x-cloak>
-  <div class="alert alert-error text-white">
-    <i data-lucide="x-circle" class="w-5 h-5 stroke-current shrink-0"></i>
-    <span x-text="propertiesError"></span>
-  </div>
+  <inline-alert type="error">
+  <span x-text="propertiesError"></span>
+  </inline-alert>
 </div>
 
 <!-- Content (AJAX loaded) -->

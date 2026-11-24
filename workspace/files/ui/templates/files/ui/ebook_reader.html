@@ -101,10 +101,7 @@
         data-ref="error"
         class="absolute inset-0 hidden items-center justify-center p-6"
       >
-        <div role="alert" class="alert alert-error max-w-md">
-          <i data-lucide="circle-alert" class="w-5 h-5"></i>
-          <span>{% translate "This book could not be opened." %}</span>
-        </div>
+        <inline-alert type="error" class="max-w-md" message="{% translate 'This book could not be opened.' %}"></inline-alert>
       </div>
 
       <nav
@@ -164,5 +161,9 @@
         <i data-lucide="chevron-right" class="w-4 h-4"></i>
       </button>
     </footer>
+    <script
+      nonce="{{ request.csp_nonce }}"
+      src="{% static 'ui/js/inline_alert.js' %}"
+    ></script>
   </body>
 </html>

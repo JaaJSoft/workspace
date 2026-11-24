@@ -42,9 +42,9 @@
         {% include "ui/partials/icon_picker.html" %}
       </div>
       {% include "ui/partials/tag_color_picker.html" with color_expr="tagModal.color" %}
-      <div x-show="tagModal.error" x-cloak class="mb-3">
-        <div class="text-sm text-error" x-text="tagModal.error"></div>
-      </div>
+      <inline-alert type="error" class="mb-3" x-show="tagModal.error" x-cloak>
+      <span x-text="tagModal.error"></span>
+      </inline-alert>
       <div class="modal-action">
         <button
           type="button"

@@ -183,7 +183,7 @@ def _target_node(link, request, param):
 
 @extend_schema(tags=["Files - Shared Links"])
 class SharedFileMetaView(APIView):
-    """GET /api/v1/files/shared/{token} — public file metadata."""
+    """GET /api/v1/files/shared/{token} - public file metadata."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -229,7 +229,7 @@ class SharedFileMetaView(APIView):
 
 @extend_schema(tags=["Files - Shared Links"])
 class SharedFileVerifyView(APIView):
-    """POST /api/v1/files/shared/{token}/verify — verify password."""
+    """POST /api/v1/files/shared/{token}/verify - verify password."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -260,7 +260,7 @@ class SharedFileVerifyView(APIView):
 
 @extend_schema(tags=["Files - Shared Links"])
 class SharedFileContentView(_LinkReadView):
-    """GET /api/v1/files/shared/{token}/content — serve file inline."""
+    """GET /api/v1/files/shared/{token}/content - serve file inline."""
 
     def get(self, request, token):
         link, err = _resolve_link(token)
@@ -311,7 +311,7 @@ class SharedFileContentView(_LinkReadView):
 
 @extend_schema(tags=["Files - Shared Links"])
 class SharedFileDownloadView(_LinkReadView):
-    """GET /api/v1/files/shared/{token}/download — download file."""
+    """GET /api/v1/files/shared/{token}/download - download file."""
 
     def get(self, request, token):
         link, err = _resolve_link(token)

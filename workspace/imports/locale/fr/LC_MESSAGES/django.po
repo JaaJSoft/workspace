@@ -583,3 +583,16 @@ msgstr "Lancer l’import"
 #, python-format
 msgid "%(summary)s - favorites and tags not imported: %(reason)s"
 msgstr "%(summary)s - favoris et étiquettes non importés : %(reason)s"
+
+#: services/connections.py
+#, python-format
+msgid "%(provider)s does not provide contacts."
+msgstr "%(provider)s ne fournit pas de contacts."
+
+#: services/connections.py
+msgid ""
+"An import is running on this connection - stop it before removing the "
+"connection."
+msgstr ""
+"Un import est en cours sur cette connexion : arrêtez-le avant de la "
+"supprimer."

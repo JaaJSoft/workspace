@@ -1,37 +1,20 @@
 import io
 import posixpath
 import zipfile
-from contextlib import contextmanager
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import connection
-from django.db.models.signals import post_save
 from django.test import TestCase, override_settings
 
 from workspace.files.models import File
 from workspace.files.services import tree
 from workspace.files.services.extract import extract_zip
+from workspace.files.tests.blobs import written_blobs
 
 User = get_user_model()
-
-
-@contextmanager
-def written_blobs():
-    """Yield the list of blob names of the files created inside the block."""
-    blobs = []
-
-    def record(sender, instance, created, **kwargs):
-        if created and instance.content:
-            blobs.append(instance.content.name)
-
-    post_save.connect(record, sender=File, weak=False)
-    try:
-        yield blobs
-    finally:
-        post_save.disconnect(record, sender=File)
 
 
 def _make_zip(entries):

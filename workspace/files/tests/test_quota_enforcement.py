@@ -718,7 +718,7 @@ class ExtractEnforcementTests(TestCase):
 
     def test_a_refused_extraction_leaves_no_entry_behind(self):
         from workspace.files.services.extract import extract_zip
-        from workspace.files.tests.test_extract_service import written_blobs
+        from workspace.files.tests.blobs import written_blobs
 
         archive = self._archive(
             [("a.bin", b"x" * (3 * KB)), ("b.bin", b"y" * (3 * KB))]

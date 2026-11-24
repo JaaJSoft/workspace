@@ -30,16 +30,21 @@ function panel(address = '/files') {
   );
   const history = fakeHistory(ctx, address);
   const listeners = {};
+  const attached = new Set();
   const requests = [];
   const host = ctx.propertiesPanelMixin();
   host.$el = {
     addEventListener(type, fn, opts) {
       assert.deepEqual({ ...opts }, { once: true });
       listeners[type] = fn;
+      attached.add(fn);
+    },
+    removeEventListener(type, fn) {
+      attached.delete(fn);
     },
   };
   host.$ajax = (url, opts) => requests.push([url, { ...opts }]);
-  return { ctx, host, listeners, requests, history };
+  return { ctx, host, listeners, attached, requests, history };
 }
 
 test('opening loads the file properties into the panel', () => {
@@ -70,6 +75,19 @@ test('the loading flag clears after the swap, and an error is reported', () => {
 
   assert.equal(host.propertiesLoading, false);
   assert.equal(host.propertiesError, 'Failed to load properties');
+});
+
+test('a load that succeeds leaves no listener behind', () => {
+  const { host, listeners, attached } = panel();
+
+  for (const uuid of ['u1', 'u2', 'u3']) {
+    host.openPropertiesPanel(uuid, 'file');
+    // A once listener leaves as it fires.
+    attached.delete(listeners['ajax:after']);
+    listeners['ajax:after']();
+  }
+
+  assert.equal(attached.size, 0);
 });
 
 test('asking again for the file already shown closes the panel', () => {

@@ -37,11 +37,12 @@ function makeDrop(statuses, dataset) {
       }
     },
     XMLHttpRequest: FakeXhr,
+    getCSRFToken: () => 'csrf',
     setTimeout,
     folderNav: { reload: () => reloads.push(1) },
     document: { getElementById: () => (dataset ? { dataset } : null) },
   });
-  const drop = ctx.sharedDrop('tok', '', 0, 'Inbox');
+  const drop = ctx.sharedDrop('tok', 0, 'Inbox');
   drop.init();
   return { drop, reloads, fields, nodes };
 }

@@ -542,12 +542,8 @@ class FileViewSet(
             )
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
         queryset = annotate_for_serializer(queryset, self.request.user)
-        if self._is_trash_query():
-            return queryset.filter(deleted_at__isnull=False)
         queryset = queryset.filter(deleted_at__isnull=True)
         if self.action == "list":
-            if self._is_trash_query():
-                return queryset
             if ancestor:
                 return queryset.filter(ancestor._descendant_filter(include_self=False))
             if (

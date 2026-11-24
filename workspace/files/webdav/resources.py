@@ -60,6 +60,80 @@ def dav_nodes(*args, **kwargs):
     )
 
 
+def resolve_path(user, parts, **filters):
+    """The node *user* reaches at DAV path *parts*, or None.
+
+    A DAV path names a node by walking the tree from the user's root, the
+    way a listing shows it: only through folders the user can open. Matching
+    ``File.path`` alone is not enough, because every tree stores its own
+    paths - another user's "Docs/a.txt" shared with *user* carries the same
+    path as the user's own. One lookup by path covers the common case; a
+    candidate reached only through a share counts when its folders are
+    reachable too, and the user's own node wins a name collision so a write
+    never lands in somebody else's tree by accident.
+    """
+    if not parts:
+        return None
+    accessible = accessible_files_q(user)
+    group_ids = set(user.groups.values_list("pk", flat=True))
+    candidates = dav_nodes(
+        accessible, path__in=name_forms("/".join(parts)), **filters
+    ).distinct()
+    for node in sorted(candidates, key=lambda n: _ownership_rank(user, n, group_ids)):
+        if _ownership_rank(user, node, group_ids) < _SHARED or _reachable(
+            accessible, node
+        ):
+            return node
+    # A path stored with its segments in mixed normalization forms.
+    node = None
+    for depth, part in enumerate(parts):
+        last = depth == len(parts) - 1
+        node = _preferred(
+            user,
+            dav_nodes(
+                accessible,
+                parent=node,
+                name__in=name_forms(part),
+                **(filters if last else {"node_type": File.NodeType.FOLDER}),
+            ).distinct(),
+            group_ids,
+        )
+        if node is None:
+            return None
+    return node
+
+
+_OWN, _GROUP, _SHARED = range(3)
+
+
+def _ownership_rank(user, node, group_ids):
+    if node.group_id is None and node.owner_id == user.pk:
+        return _OWN
+    if node.group_id in group_ids:
+        return _GROUP
+    return _SHARED
+
+
+def _preferred(user, nodes, group_ids):
+    """Of nodes sharing one name in one folder, the one closest to *user*."""
+    return min(nodes, key=lambda n: _ownership_rank(user, n, group_ids), default=None)
+
+
+def _reachable(accessible, node):
+    """Whether every folder above *node* is one the user can open.
+
+    Only asked of a node reached through a share: the folders above a
+    personal or group node belong to the same owner or group.
+    """
+    parent_id = node.parent_id
+    while parent_id is not None:
+        parent = dav_nodes(accessible, pk=parent_id).values("parent_id").first()
+        if parent is None:
+            return False
+        parent_id = parent["parent_id"]
+    return True
+
+
 def _require_permission(user, file_obj, level, verb):
     """Raise 403 unless *user* holds *level* on *file_obj*.
 
@@ -218,10 +292,11 @@ class _Collection(DAVCollection):
 
     def get_member(self, name):
         forms = name_forms(name)
-        for f in self._members():
-            if f.name in forms:
-                return self._wrap(f)
-        return None
+        group_ids = set(self._user.groups.values_list("pk", flat=True))
+        member = _preferred(
+            self._user, (f for f in self._members() if f.name in forms), group_ids
+        )
+        return None if member is None else self._wrap(member)
 
     def get_member_list(self):
         return [self._wrap(f) for f in self._members()]
@@ -755,13 +830,5 @@ def _inside_copied_tree(environ, dest_path):
 
 
 def _resolve_parent(user, path_parts):
-    """Resolve path segments to a parent folder in a single query."""
-    if not path_parts:
-        return None
-    target_path = "/".join(path_parts)
-    return File.objects.filter(
-        accessible_files_q(user),
-        path__in=name_forms(target_path),
-        node_type=File.NodeType.FOLDER,
-        deleted_at__isnull=True,
-    ).first()
+    """The folder at *path_parts*, None for the user's root or no such folder."""
+    return resolve_path(user, path_parts, node_type=File.NodeType.FOLDER)

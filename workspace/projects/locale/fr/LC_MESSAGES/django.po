@@ -2410,6 +2410,10 @@ msgid "Admin role required."
 msgstr "Rôle d’administrateur requis."
 
 #: views/viewsets.py
+msgid "This action is not available on this project."
+msgstr "Cette action n’est pas disponible sur ce projet."
+
+#: views/viewsets.py
 msgid "User not found."
 msgstr "Utilisateur introuvable."
 

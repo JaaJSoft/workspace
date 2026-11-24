@@ -5,14 +5,13 @@ import json
 import re
 import zipfile
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.utils import timezone
 from django.utils.html import escapejs
 
@@ -20,7 +19,11 @@ from workspace.files.models import File
 from workspace.files.services.sharing import share_file
 from workspace.files.services.thumbnails.generation import get_thumbnail_path
 from workspace.photos.models import Album, AlbumLink, AlbumShare
-from workspace.photos.services.album_links import access_token_for, has_access
+from workspace.photos.services.album_links import (
+    SIGNER,
+    _access_cookie,
+    has_access,
+)
 from workspace.photos.services.album_sharing import create_link, share_album
 from workspace.photos.services.albums import add_items, create_album
 
@@ -34,6 +37,18 @@ PUBLIC = "/api/v1/photos/shared"
 
 def _at(day):
     return datetime(2024, 7, day, 12, tzinfo=UTC)
+
+
+def _cookie_request(link, signed_for):
+    """A request carrying *link*'s access cookie, signed for *signed_for*."""
+    request = RequestFactory().get("/")
+    request.COOKIES[_access_cookie(link)] = SIGNER.sign(signed_for.token)
+    return request
+
+
+def unlock(client, link):
+    """What the right password leaves in *client*'s cookie jar."""
+    client.cookies[_access_cookie(link)] = SIGNER.sign(link.token)
 
 
 def with_thumbnail(file_obj):
@@ -267,32 +282,54 @@ class PublicLinkPasswordTests(LinkTestCase):
             content_type="application/json",
         )
 
-    def test_the_right_password_earns_an_access_token(self):
+    def test_the_right_password_unlocks_the_link(self):
         self.assertEqual(self.client.get(self.content_url).status_code, 403)
         self.assertEqual(self.verify("wrong").status_code, 403)
 
-        token = self.verify("s3cret").json()["access_token"]
+        response = self.verify("s3cret")
 
-        self.assertEqual(
-            self.client.get(f"{self.content_url}?access_token={token}").status_code, 200
-        )
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")
+        (cookie,) = response.cookies.values()
+        self.assertTrue(cookie["httponly"])
+        self.assertEqual(self.client.get(self.content_url).status_code, 200)
+
+    def test_an_unlocked_thumbnail_stays_out_of_shared_caches(self):
+        self.verify("s3cret")
+        url = f"{PUBLIC}/{self.link.token}/files/{self.photos[0].uuid}/thumbnail"
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("private", response["Cache-Control"])
+        self.assertNotIn("public", response["Cache-Control"])
+        self.assertIn("Cookie", response["Vary"])
+
+    def test_an_access_token_in_the_query_string_opens_nothing(self):
+        token = SIGNER.sign(self.link.token)
+
+        response = self.client.get(f"{self.content_url}?access_token={token}")
+
+        self.assertEqual(response.status_code, 403)
 
     def test_a_token_of_another_link_opens_nothing(self):
         other = create_link(self.album, acting_user=self.owner, password="other")
+        garbage = RequestFactory().get("/")
+        garbage.COOKIES[_access_cookie(self.link)] = "garbage"
 
-        self.assertFalse(has_access(self.link, access_token_for(other)))
-        self.assertFalse(has_access(self.link, "garbage"))
-        self.assertTrue(has_access(self.link, access_token_for(self.link)))
+        self.assertFalse(has_access(self.link, _cookie_request(self.link, other)))
+        self.assertFalse(has_access(self.link, garbage))
+        self.assertTrue(has_access(self.link, _cookie_request(self.link, self.link)))
 
     def test_a_stale_token_opens_nothing(self):
-        token = access_token_for(self.link)
+        request = _cookie_request(self.link, self.link)
 
         with self.settings():
             from unittest.mock import patch
 
             later = timezone.now() + timedelta(hours=2)
             with patch("django.core.signing.time.time", return_value=later.timestamp()):
-                self.assertFalse(has_access(self.link, token))
+                self.assertFalse(has_access(self.link, request))
 
     def test_verify_is_rate_limited(self):
         for _ in range(5):
@@ -392,21 +429,22 @@ class PublicPageTests(LinkTestCase):
         self.assertIn("Protected link", html)
         self.assertIn(f"{PUBLIC}/{self.link.token}/verify", html)
         self.assertNotIn("/thumbnail", html)
-        token = access_token_for(self.link)
-        unlocked = self.client.get(f"{self.page}?access_token={token}").content.decode()
-        self.assertIn(f"thumbnail?{urlencode({'access_token': token})}", unlocked)
+        unlock(self.client, self.link)
+        unlocked = self.client.get(self.page).content.decode()
+        self.assertIn("/thumbnail", unlocked)
+        self.assertNotIn("access_token", unlocked)
 
-    def test_a_page_carrying_the_access_token_is_never_stored(self):
+    def test_an_unlocked_page_is_never_stored(self):
         self.link.password = make_password("s3cret")
         self.link.save(update_fields=["password"])
-        token = access_token_for(self.link)
+        unlock(self.client, self.link)
 
-        unlocked = self.client.get(f"{self.page}?access_token={token}")
+        unlocked = self.client.get(self.page)
 
         self.assertIn("no-store", unlocked["Cache-Control"])
         self.assertIn("private", unlocked["Cache-Control"])
 
-    def test_a_page_without_access_token_keeps_its_caching(self):
+    def test_a_page_without_password_keeps_its_caching(self):
         response = self.client.get(self.page)
 
         self.assertNotIn("no-store", response.get("Cache-Control", ""))
@@ -427,19 +465,19 @@ class PublicPageTests(LinkTestCase):
     def test_the_next_page(self):
         self.link.password = make_password("s3cret")
         self.link.save(update_fields=["password"])
-        token = access_token_for(self.link)
+        unlock(self.client, self.link)
         more = [
             make_photo(self.owner, f"more{i}.jpg", _at(1) - timedelta(days=i + 1))
             for i in range(60)
         ]
         add_items(self.album, more, added_by=self.owner)
 
-        html = self.client.get(f"{self.page}?access_token={token}").content.decode()
+        html = self.client.get(self.page).content.decode()
         match = re.search(r"timelineSentinel\('([^']+)'\)", html)
         self.assertIsNotNone(match)
         # Written through |escapejs, as a JS string literal.
         next_url = json.loads(f'"{match.group(1)}"')
-        self.assertIn("access_token=", next_url)
+        self.assertNotIn("access_token", next_url)
 
         page = self.client.get(next_url)
 
@@ -452,10 +490,8 @@ class PublicPageTests(LinkTestCase):
         url = f"{self.page}/timeline?cursor=x"
 
         self.assertEqual(self.client.get(url).status_code, 404)
-        token = access_token_for(self.link)
-        self.assertEqual(
-            self.client.get(f"{url}&access_token={token}").status_code, 400
-        )
+        unlock(self.client, self.link)
+        self.assertEqual(self.client.get(url).status_code, 400)
         self.assertEqual(
             self.client.get("/photos/shared/nope/timeline").status_code, 404
         )

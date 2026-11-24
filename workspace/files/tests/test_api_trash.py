@@ -95,3 +95,35 @@ class TrashAPITests(APITestCase):
         self.assertEqual(outcome_of(response), ({"done": 1}, []))
 
         self.assertFalse(File.objects.filter(uuid=file.uuid).exists())
+
+
+class TrashedFlagOnDetailRoutesTests(APITestCase):
+    """``?trashed=1`` picks the trash listing, never a trashed row on a detail route."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_authenticate(user=self.user)
+        self.file = File.objects.create(
+            owner=self.user, name="gone.txt", node_type=File.NodeType.FILE
+        )
+        trash.soft_delete(self.file)
+
+    def test_a_trashed_file_is_not_retrieved(self):
+        flagged = self.client.get(f"/api/v1/files/{self.file.uuid}?trashed=1")
+        plain = self.client.get(f"/api/v1/files/{self.file.uuid}")
+
+        self.assertEqual(flagged.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            (flagged.status_code, flagged.content), (plain.status_code, plain.content)
+        )
+
+    def test_a_trashed_file_is_not_renamed(self):
+        response = self.client.patch(
+            f"/api/v1/files/{self.file.uuid}?trashed=1",
+            {"name": "renamed.txt"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.name, "gone.txt")

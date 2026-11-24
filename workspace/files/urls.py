@@ -18,7 +18,6 @@ from .views.share_links import (
     SharedFolderUploadView,
 )
 from .views.tags import FileTagView, TagViewSet
-from .views.thumbnails import GenerateThumbnailsView
 from .views.uploads import (
     UploadSessionFinalizeView,
     UploadSessionListView,
@@ -117,9 +116,4 @@ urlpatterns = [
         name="wopi-file-contents",
     ),
     path("api/v1/", include(router.urls)),
-    path(
-        "api/v1/thumbnails/generate",
-        GenerateThumbnailsView.as_view(),
-        name="generate-thumbnails",
-    ),
 ]

@@ -113,6 +113,22 @@ class BaseActionRegistry:
         ]
 
     @classmethod
+    def action_for(cls, action_id, obj):
+        """The action ``action_id`` names for ``obj``'s kind of target, or None.
+
+        An id may repeat across the target types of one registry (a project's
+        ``delete`` and a task's), so ``get`` alone can answer the other one.
+        """
+        return next(
+            (
+                action
+                for action in cls._actions
+                if action.id == action_id and cls.applies_to(action, obj)
+            ),
+            None,
+        )
+
+    @classmethod
     def is_action_available(cls, action_id, user, obj, **state):
         """Whether ``action_id`` is offered, for the endpoint that performs it.
 
@@ -120,7 +136,7 @@ class BaseActionRegistry:
         the endpoint refuses is what two transcriptions of one gate produce
         the first time either is edited.
         """
-        action = cls._by_id.get(action_id)
-        if action is None or not cls.applies_to(action, obj):
+        action = cls.action_for(action_id, obj)
+        if action is None:
             return False
         return action.is_available(user, obj, **state)

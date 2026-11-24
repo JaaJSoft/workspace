@@ -5,6 +5,7 @@ Parses request bodies and builds ``multistatus`` answers. Protocol extensions
 prefix with ``register_prefix`` so responses stay readable.
 """
 
+import re
 from http import HTTPStatus
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
@@ -60,6 +61,18 @@ class DavError(Exception):
         return xml_response(root, status=self.status)
 
 
+_DTD = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)", re.IGNORECASE)
+
+
+def declares_dtd(body):
+    """Whether the XML *body* carries a DTD.
+
+    No DAV message needs one, in either direction, and it is the door to
+    entity-expansion attacks: a parser is never handed one.
+    """
+    return _DTD.search(body) is not None
+
+
 def parse_body(body):
     """Parse a request body into its root element; None when the body is empty.
 
@@ -68,7 +81,7 @@ def parse_body(body):
     """
     if not body or not body.strip():
         return None
-    if b"<!DOCTYPE" in body[:1024].upper() or b"<!ENTITY" in body.upper():
+    if declares_dtd(body):
         raise DavError(400, message="DTDs are not accepted.")
     try:
         return ET.fromstring(body)

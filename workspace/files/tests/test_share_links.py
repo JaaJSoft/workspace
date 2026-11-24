@@ -264,8 +264,11 @@ class PublicShareLinkAPITests(APITestCase):
             {"password": "secret123"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("access_token", resp.data)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.content, b"")
+        (cookie,) = resp.cookies.values()
+        self.assertTrue(cookie["httponly"])
+        self.assertEqual(cookie["samesite"], "Lax")
 
     def test_verify_password_incorrect(self):
         from django.contrib.auth.hashers import make_password
@@ -307,22 +310,75 @@ class PublicShareLinkAPITests(APITestCase):
         resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/content")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_get_content_with_valid_access_token(self):
+    def test_get_content_once_the_password_was_given(self):
         from django.contrib.auth.hashers import make_password
 
         self.link.password = make_password("secret123")
         self.link.save()
-        verify_resp = self.client.post(
+        self.client.post(
             f"/api/v1/files/shared/{self.link.token}/verify",
             {"password": "secret123"},
             format="json",
         )
-        access_token = verify_resp.data["access_token"]
-        resp = self.client.get(
-            f"/api/v1/files/shared/{self.link.token}/content?access_token={access_token}"
-        )
+        resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/content")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         b"".join(resp.streaming_content)
+
+    def test_an_access_token_in_the_query_string_unlocks_nothing(self):
+        from django.contrib.auth.hashers import make_password
+
+        from workspace.files.services.public_links import _ACCESS_SIGNER
+
+        self.link.password = make_password("secret123")
+        self.link.save()
+        signed = _ACCESS_SIGNER.sign(self.link.token)
+
+        content = self.client.get(
+            f"/api/v1/files/shared/{self.link.token}/content?access_token={signed}"
+        )
+        page = self.client.get(f"/files/shared/{self.link.token}?access_token={signed}")
+
+        self.assertEqual(content.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(page.context["needs_password"])
+
+    def test_the_unlocked_page_puts_no_access_token_in_its_links(self):
+        from django.contrib.auth.hashers import make_password
+
+        self.link.password = make_password("secret123")
+        self.link.save()
+        self.client.post(
+            f"/api/v1/files/shared/{self.link.token}/verify",
+            {"password": "secret123"},
+            format="json",
+        )
+        (cookie,) = self.client.cookies.values()
+
+        page = self.client.get(f"/files/shared/{self.link.token}")
+
+        self.assertFalse(page.context["needs_password"])
+        self.assertNotIn(cookie.value, page.content.decode())
+        self.assertNotIn("access_token", page.content.decode())
+
+    def test_a_cookie_of_another_link_unlocks_nothing(self):
+        from django.contrib.auth.hashers import make_password
+
+        from workspace.files.services.public_links import (
+            _ACCESS_SIGNER,
+            _access_cookie,
+        )
+
+        self.link.password = make_password("secret123")
+        self.link.save()
+        other = FileShareLink.objects.create(
+            file=self.link.file, created_by=self.link.created_by
+        )
+        self.client.cookies[_access_cookie(self.link)] = _ACCESS_SIGNER.sign(
+            other.token
+        )
+
+        resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/content")
+
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_download_file(self):
         resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/download")
@@ -473,11 +529,9 @@ class ShareLinkIntegrationTests(APITestCase):
             {"password": "mypass"},
             format="json",
         )
-        access_token = resp.data["access_token"]
-        # Content accessible with token
-        resp = self.client.get(
-            f"/api/v1/files/shared/{token}/content?access_token={access_token}"
-        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        # Content accessible once unlocked
+        resp = self.client.get(f"/api/v1/files/shared/{token}/content")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_revoke_link_blocks_access(self):

@@ -294,6 +294,10 @@ msgid "This server cannot import %(kinds)s."
 msgstr "Ce serveur ne sait pas importer %(kinds)s."
 
 #: services/jobs.py
+msgid "The account this import runs for is no longer active."
+msgstr "Le compte pour lequel cet import s’exécute n’est plus actif."
+
+#: services/jobs.py
 #, python-format
 msgid "%(provider)s cannot provide %(kinds)s."
 msgstr "%(provider)s ne peut pas fournir %(kinds)s."

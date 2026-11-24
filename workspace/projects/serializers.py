@@ -23,7 +23,7 @@ from .models import (
     TaskComment,
     TaskStatus,
 )
-from .queries import get_project_role
+from .queries import project_users_qs
 from .services.links import RELATIONS
 from .services.references import KEY_RE
 
@@ -318,8 +318,10 @@ class TaskSerializer(serializers.ModelSerializer):
         queryset=TaskStatus.objects.none(), required=False
     )
     status_category = serializers.CharField(source="status.category", read_only=True)
+    # Narrowed to the project's users in __init__: anyone else is refused
+    # with the message an unknown id gets, so the field names nobody.
     assignees = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), many=True, required=False
+        queryset=User.objects.none(), many=True, required=False
     )
     labels = serializers.PrimaryKeyRelatedField(
         queryset=Label.objects.none(), many=True, required=False
@@ -379,21 +381,12 @@ class TaskSerializer(serializers.ModelSerializer):
         if project is not None:
             self.fields["status"].queryset = project.statuses.all()
             self.fields["labels"].child_relation.queryset = project.labels.all()
+            self.fields["assignees"].child_relation.queryset = project_users_qs(project)
             self.fields["epic"].queryset = project.epics.all()
             # Closed sprints are history: tasks can only join open ones.
             self.fields["sprint"].queryset = project.sprints.exclude(
                 state=Sprint.State.CLOSED
             )
-
-    def validate_assignees(self, users):
-        project = self.context["project"]
-        for user in users:
-            if get_project_role(user, project) is None:
-                raise serializers.ValidationError(
-                    _("%(username)s is not a member of this project.")
-                    % {"username": user.username}
-                )
-        return users
 
     def validate(self, attrs):
         start = attrs.get(
@@ -523,7 +516,7 @@ class TaskBulkEditSerializer(serializers.Serializer):
     # Same cap rationale as TaskMoveSerializer.
     tasks = serializers.ListField(allow_empty=False, max_length=1000)
     assign = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), many=True, required=False
+        queryset=User.objects.none(), many=True, required=False
     )
     unassign = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), many=True, required=False
@@ -552,19 +545,10 @@ class TaskBulkEditSerializer(serializers.Serializer):
         if project is not None:
             for field in ("add_labels", "remove_labels"):
                 self.fields[field].child_relation.queryset = project.labels.all()
+            self.fields["assign"].child_relation.queryset = project_users_qs(project)
 
     def validate_tasks(self, value):
         return _parse_uuid_list(value, "tasks")
-
-    def validate_assign(self, users):
-        project = self.context["project"]
-        for user in users:
-            if get_project_role(user, project) is None:
-                raise serializers.ValidationError(
-                    _("%(username)s is not a member of this project.")
-                    % {"username": user.username}
-                )
-        return users
 
     def validate(self, attrs):
         if not any(field in attrs for field in self.OPERATIONS):

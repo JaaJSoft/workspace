@@ -19,7 +19,8 @@ from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
 
-from ..models import Vault, VaultKeyWrap, VaultRole
+from ..actions import VaultTargetActionRegistry
+from ..models import Vault, VaultKeyWrap
 from ..queries import active_identity, get_vault_role, user_vault_ids
 from ..serializers import VaultCreateSerializer, VaultSerializer, VaultUpdateSerializer
 from ..services.attestation import AttestationError
@@ -137,15 +138,44 @@ class VaultListView(CacheControlMixin, APIView):
         )
 
 
+def vault_update_actions(vault, data):
+    """The registry actions a full update of *vault* to *data* performs.
+
+    The body always carries every signed field, so the actions are read off
+    what it changes. One that changes nothing still re-signs the metadata:
+    it counts as a rename.
+    """
+    actions = []
+    if (data["encrypted_name"], data["encrypted_description"]) != (
+        vault.encrypted_name,
+        vault.encrypted_description,
+    ):
+        actions.append("rename")
+    if (data["icon"], data["color"]) != (vault.icon, vault.color):
+        actions.append("set_appearance")
+    if data["is_favorite"] != vault.is_favorite:
+        actions.append("favorite" if data["is_favorite"] else "unfavorite")
+    return actions or ["rename"]
+
+
 @method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
 class VaultDetailView(CacheControlMixin, APIView):
     cache_no_store = True
 
-    def _owned(self, request, uuid):
-        """The caller's own vault, or None - and the caller never learns which
-        of the two reasons applied."""
+    def _offering(self, request, uuid, action_ids):
+        """The vault, when the registry offers the caller every action of
+        *action_ids* on it, else None - and the caller never learns which of
+        the reasons applied."""
         vault = Vault.objects.filter(uuid=uuid).first()
-        if vault is None or get_vault_role(request.user, vault) != VaultRole.OWNER:
+        if vault is None:
+            return None
+        role = get_vault_role(request.user, vault)
+        if not all(
+            VaultTargetActionRegistry.is_action_available(
+                action_id, request.user, vault, role=role
+            )
+            for action_id in action_ids(vault)
+        ):
             return None
         return vault
 
@@ -158,13 +188,16 @@ class VaultDetailView(CacheControlMixin, APIView):
     @sensitive_variables()
     def patch(self, request, uuid):
         identity = active_identity(request.user)
-        vault = self._owned(request, uuid)
-        if identity is None or vault is None:
+        if identity is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-
         serializer = VaultUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        vault = self._offering(
+            request, uuid, lambda vault: vault_update_actions(vault, data)
+        )
+        if vault is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
         # key_version comes from the row, never from the request: it moves on
         # a vault key rotation, which this endpoint does not perform.
@@ -191,7 +224,7 @@ class VaultDetailView(CacheControlMixin, APIView):
 
     @extend_schema(tags=["Vault"], summary="Delete a vault", responses={204: None})
     def delete(self, request, uuid):
-        vault = self._owned(request, uuid)
+        vault = self._offering(request, uuid, lambda vault: ["delete"])
         if vault is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         vault.delete()

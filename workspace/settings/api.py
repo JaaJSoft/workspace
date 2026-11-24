@@ -150,10 +150,6 @@ SPECTACULAR_SETTINGS = {
             "description": "Public share links for files.",
         },
         {
-            "name": "Files - Thumbnails",
-            "description": "File thumbnail generation.",
-        },
-        {
             "name": "Imports",
             "description": "Import data from other clouds: connections and import jobs.",
         },

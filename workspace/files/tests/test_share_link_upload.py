@@ -208,30 +208,58 @@ class ShareLinkUploadTests(APITestCase):
         resp = self.post()
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_a_valid_access_token_unlocks_the_write_path(self):
+    def test_the_password_unlocks_the_write_path(self):
         from django.contrib.auth.hashers import make_password
-
-        from workspace.files.views.share_links import SIGNER
 
         self.link.password = make_password("secret")
         self.link.save(update_fields=["password"])
-        resp = self.client.post(
-            self.url,
-            {"file": part()},
-            format="multipart",
-            HTTP_X_SHARE_ACCESS=SIGNER.sign(self.link.token),
+        self.client.post(
+            f"/api/v1/files/shared/{self.link.token}/verify",
+            {"password": "secret"},
+            format="json",
         )
+        resp = self.client.post(self.url, {"file": part()}, format="multipart")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_an_unlocked_write_needs_the_csrf_token(self):
+        from django.contrib.auth.hashers import make_password
+        from rest_framework.test import APIClient
+
+        self.link.password = make_password("secret")
+        self.link.save(update_fields=["password"])
+        client = APIClient(enforce_csrf_checks=True)
+        client.post(
+            f"/api/v1/files/shared/{self.link.token}/verify",
+            {"password": "secret"},
+            format="json",
+        )
+        page = client.get(f"/files/shared/{self.link.token}")
+        token = page.cookies["csrftoken"].value
+
+        forged = client.post(self.url, {"file": part()}, format="multipart")
+        sent = client.post(
+            self.url,
+            {"file": part("other.pdf")},
+            format="multipart",
+            HTTP_X_CSRFTOKEN=token,
+        )
+
+        self.assertEqual(forged.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(sent.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(
+            list(File.objects.filter(parent=self.root).values_list("name", flat=True)),
+            ["other.pdf"],
+        )
 
     def test_a_query_parameter_access_token_does_not_unlock_the_write_path(self):
         from django.contrib.auth.hashers import make_password
 
-        from workspace.files.views.share_links import SIGNER
+        from workspace.files.services.public_links import _ACCESS_SIGNER
 
         self.link.password = make_password("secret")
         self.link.save(update_fields=["password"])
         resp = self.client.post(
-            f"{self.url}?access_token={SIGNER.sign(self.link.token)}",
+            f"{self.url}?access_token={_ACCESS_SIGNER.sign(self.link.token)}",
             {"file": part()},
             format="multipart",
         )
@@ -240,19 +268,20 @@ class ShareLinkUploadTests(APITestCase):
     def test_a_cross_link_access_token_does_not_unlock_the_write_path(self):
         from django.contrib.auth.hashers import make_password
 
-        from workspace.files.views.share_links import SIGNER
+        from workspace.files.services.public_links import (
+            _ACCESS_SIGNER,
+            _access_cookie,
+        )
 
         self.link.password = make_password("secret")
         self.link.save(update_fields=["password"])
         other_link = FileShareLink.objects.create(
             file=self.root, created_by=self.owner, mode=FileShareLink.Mode.DROP
         )
-        resp = self.client.post(
-            self.url,
-            {"file": part()},
-            format="multipart",
-            HTTP_X_SHARE_ACCESS=SIGNER.sign(other_link.token),
+        self.client.cookies[_access_cookie(self.link)] = _ACCESS_SIGNER.sign(
+            other_link.token
         )
+        resp = self.client.post(self.url, {"file": part()}, format="multipart")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_a_full_quota_refuses_with_413_and_creates_nothing(self):

@@ -2,6 +2,7 @@
 
 import base64
 import email.policy
+import html
 import io
 import logging
 import re
@@ -122,6 +123,15 @@ _CRLF = b"\r\n"
 _POLICY = email.policy.SMTP.clone(cte_type="7bit")
 
 
+def text_to_html(text):
+    """The HTML part of a message written as plain text.
+
+    Escaped: the text is what the user typed and what they quoted, so a
+    ``<`` in it is a character, never markup sent on their behalf.
+    """
+    return html.escape(text).replace("\n", "<br>\n")
+
+
 def _build_mime(
     account,
     to=None,
@@ -167,7 +177,7 @@ def _build_mime(
 
     if body_text:
         msg.set_content(body_text)
-        msg.add_alternative(body_html or f"<pre>{body_text}</pre>", subtype="html")
+        msg.add_alternative(body_html or text_to_html(body_text), subtype="html")
     else:
         msg.set_content(body_html, subtype="html")
 

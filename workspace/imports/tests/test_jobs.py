@@ -202,6 +202,29 @@ class RunJobTests(JobsTestCase):
         self.assertEqual(job.stats["files"]["phase"], "listing")
         self.assertIs(svc.run_job(job.pk), Outcome.DONE)
 
+    def test_a_queued_job_of_a_deactivated_owner_never_runs(self):
+        job = self._pending()
+        User.objects.filter(pk=self.user.pk).update(is_active=False)
+
+        self.assertIs(svc.run_job(job.pk), Outcome.FAILED)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.FAILED)
+        self.assertIn("no longer active", job.error)
+        self.assertFalse(ImportJobItem.objects.filter(job=job).exists())
+
+    def test_a_resumed_job_stops_once_its_owner_is_deactivated(self):
+        job = self._pending()
+        with override_settings(IMPORTS_BATCH_SECONDS=0):
+            self.assertIs(svc.run_job(job.pk), Outcome.PAUSED)
+        User.objects.filter(pk=self.user.pk).update(is_active=False)
+
+        self.assertIs(svc.run_job(job.pk), Outcome.FAILED)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.FAILED)
+        self.assertNotEqual(job.stats["files"].get("phase"), "done")
+
     def test_heartbeat_is_stamped_while_running(self):
         job = self._pending()
         svc.run_job(job.pk)

@@ -237,3 +237,107 @@ class WebDAVSharePermissionTests(TestCase):
         )
         self.assertEqual(code, 201)
         self.assertEqual(self._request("DELETE", "/Mine/b.txt")[0], 204)
+
+
+class WebDAVPathNamespaceTests(TestCase):
+    """A DAV path walks the tree the listing shows, never another one by name.
+
+    Every tree stores its own paths, so the user's "Docs/a.txt" and another
+    user's "Docs/a.txt" carry the same ``File.path``. The other nodes are
+    created first: a lookup by path alone would return them.
+    """
+
+    _request = test_webdav.WebDAVIntegrationTests._request
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+
+        from workspace.files.webdav.app import create_webdav_app
+
+        self._app = served_in_test(create_webdav_app())
+        clear_auth_cache()
+        self.user = User.objects.create_user(username="davguest", password="pass123")
+        self.owner = User.objects.create_user(username="davowner", password="pass123")
+        self.auth = test_webdav._basic_auth_header("davguest", "pass123")
+        self.team = Group.objects.create(name="Team")
+        self.user.groups.add(self.team)
+        self.owner.groups.add(self.team)
+
+    def _file(self, user, name, body, parent=None, group=None):
+        return tree.create_file(
+            user,
+            name,
+            parent=parent,
+            group=group,
+            content=ContentFile(body, name=name),
+            mime_type="text/plain",
+        )
+
+    def _body(self, file_obj):
+        file_obj.refresh_from_db()
+        with file_obj.content.open("rb") as f:
+            return f.read()
+
+    def _theirs_shared(self, permission=FileShare.Permission.READ_WRITE):
+        docs = tree.create_folder(self.owner, "Docs")
+        theirs = self._file(self.owner, "a.txt", b"theirs", parent=docs)
+        FileShare.objects.create(
+            file=theirs,
+            shared_by=self.owner,
+            shared_with=self.user,
+            permission=permission,
+        )
+        return theirs
+
+    def test_a_file_shared_inside_a_folder_is_not_reached_by_its_owner_path(self):
+        self._theirs_shared()
+
+        code, _, _ = self._request("GET", "/Docs/a.txt")
+
+        self.assertEqual(code, 404)
+
+    def test_the_user_own_file_wins_over_a_shared_one_at_the_same_path(self):
+        theirs = self._theirs_shared()
+        docs = tree.create_folder(self.user, "Docs")
+        mine = self._file(self.user, "a.txt", b"mine", parent=docs)
+
+        code, _, body = self._request("GET", "/Docs/a.txt")
+        self.assertEqual((code, body), (200, b"mine"))
+
+        code, _, _ = self._request("PUT", "/Docs/a.txt", body=b"private")
+
+        self.assertEqual(code, 204)
+        self.assertEqual(self._body(mine), b"private")
+        self.assertEqual(self._body(theirs), b"theirs")
+
+    def test_a_copy_into_a_personal_folder_never_lands_in_a_group_folder(self):
+        group_root = tree.create_folder(self.owner, "Team", group=self.team)
+        mine = tree.create_folder(self.user, "Team")
+        self._file(self.user, "private.txt", b"private")
+
+        code, _, _ = self._request(
+            "COPY",
+            "/private.txt",
+            headers={"Destination": f"{DAV}/Team/private.txt"},
+        )
+
+        self.assertEqual(code, 201)
+        self.assertTrue(File.objects.filter(parent=mine, name="private.txt").exists())
+        self.assertFalse(
+            File.objects.filter(parent=group_root, name="private.txt").exists()
+        )
+
+    def test_a_folder_shared_at_its_owner_root_stays_reachable(self):
+        docs = tree.create_folder(self.owner, "Docs")
+        theirs = self._file(self.owner, "a.txt", b"theirs", parent=docs)
+        for node in (docs, theirs):
+            FileShare.objects.create(
+                file=node,
+                shared_by=self.owner,
+                shared_with=self.user,
+                permission=FileShare.Permission.READ_ONLY,
+            )
+
+        code, _, body = self._request("GET", "/Docs/a.txt")
+
+        self.assertEqual((code, body), (200, b"theirs"))

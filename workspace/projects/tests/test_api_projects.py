@@ -157,7 +157,9 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
             {"groups": [group.pk]},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # The action registry refuses it before the serializer would.
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(personal.groups.exists())
 
     def test_update_attaches_a_group_the_admin_is_not_in(self):
         group = Group.objects.create(name="devs")

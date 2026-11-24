@@ -162,6 +162,21 @@ def project_users(project):
     return sorted(users.values(), key=lambda u: u.username.lower())
 
 
+def project_users_qs(project):
+    """``project_users`` as a queryset, for a field that accepts one of them."""
+    return (
+        get_user_model()
+        .objects.filter(
+            Q(
+                project_memberships__project=project,
+                project_memberships__left_at__isnull=True,
+            )
+            | Q(groups__projects=project)
+        )
+        .distinct()
+    )
+
+
 def get_project_role(user, project):
     """Return the user's role on *project*: 'admin', 'member', or None.
 

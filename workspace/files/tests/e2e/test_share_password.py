@@ -25,7 +25,7 @@ class SharedPasswordTests(PlaywrightTestCase):
         super().setUp()
         build_shared_tree(self, password=make_password(PASSWORD))
 
-    def test_token_survives_navigation_after_the_gate(self):
+    def test_the_unlock_survives_navigation_after_the_gate(self):
         self.page.goto(f"{self.live_server_url}/files/shared/{self.link.token}")
         expect(self.page.get_by_text("Protected link")).to_be_visible()
         # Nothing behind the gate leaks into the gate page.
@@ -38,16 +38,16 @@ class SharedPasswordTests(PlaywrightTestCase):
 
         field.fill(PASSWORD)
         field.press("Enter")
-        self.page.wait_for_url(lambda url: "access_token=" in url)
         expect(self.page.get_by_role("link", name="Sub")).to_be_visible()
+        self.assertNotIn("access_token", self.page.url)
 
         self.page.get_by_role("link", name="Sub").click()
         self.page.wait_for_url(lambda url: f"node={self.sub.uuid}" in url)
-        self.assertIn("access_token=", self.page.url)
+        self.assertNotIn("access_token", self.page.url)
         expect(self.page.get_by_role("link", name="readme.md")).to_be_visible()
 
         self.page.get_by_role("link", name="readme.md").click()
         self.page.wait_for_url(lambda url: f"node={self.readme.uuid}" in url)
-        self.assertIn("access_token=", self.page.url)
+        self.assertNotIn("access_token", self.page.url)
         expect(self.page.locator("#shared-viewer")).to_be_visible()
         expect(self.page.get_by_text("Protected link")).to_have_count(0)

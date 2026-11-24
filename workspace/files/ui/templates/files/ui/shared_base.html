@@ -45,6 +45,8 @@
     <script src="{% static 'ui/js/file_preview.js' %}"></script>
     {# The note editor recognises an embed by its file's uuid. #}
     <script src="{% static 'ui/js/uuid.js' %}"></script>
+    {# A drop behind a password sends the CSRF token along with the access cookie. #}
+    <script src="{% static 'ui/js/csrf.js' %}"></script>
     {% comment %}
       This page does not extend base.html, so nothing base.html loads globally
       is present. Anything a child page needs, including <inline-alert>, is
@@ -79,7 +81,7 @@
           data-share-token="{{ share_token }}"
           data-verify-url="{% if verify_url %}{{ verify_url }}{% else %}/api/v1/files/shared/{{ share_token }}/verify{% endif %}"
           data-page-url="{% if page_url %}{{ page_url }}{% else %}/files/shared/{{ share_token }}{% endif %}"
-          x-data="sharedFilePassword($el.dataset.shareToken, $el.dataset.verifyUrl, $el.dataset.pageUrl)"
+          x-data="sharedFilePassword($el.dataset.verifyUrl, $el.dataset.pageUrl)"
         >
           <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <!-- Lock icon -->
@@ -131,7 +133,7 @@
         {% translate "Invalid password" as invalid_password_message %}
         {% translate "An error occurred" as generic_error_message %}
         <script>
-          function sharedFilePassword(token, verifyUrl, pageUrl) {
+          function sharedFilePassword(verifyUrl, pageUrl) {
             return {
               password: '',
               verifying: false,
@@ -152,13 +154,11 @@
                     }),
                   });
                   if (resp.ok) {
-                    const data = await resp.json();
-                    sessionStorage.setItem('share_access_' + token, data.access_token);
                     // Let the lock open before the page goes: the reload then
                     // reads as what the unlock led to, not as a jump.
                     this.unlocked = true;
                     await new Promise((resolve) => setTimeout(resolve, 400));
-                    window.location.href = pageUrl + '?access_token=' + encodeURIComponent(data.access_token);
+                    window.location.href = pageUrl;
                     return;
                   } else {
                     this.error = '{{ invalid_password_message|escapejs }}';

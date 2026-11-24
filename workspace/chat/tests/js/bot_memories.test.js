@@ -5,9 +5,9 @@ const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 const MEMORIES = [
-  { id: 1, key: 'prenom', content: "Le prénom de l'utilisateur est Demo" },
-  { id: 2, key: 'boisson', content: 'Aime le café sans sucre' },
-  { id: 3, key: 'fuseau', content: 'Vit à Paris' },
+  { uuid: 'm1', key: 'prenom', content: "Le prénom de l'utilisateur est Demo" },
+  { uuid: 'm2', key: 'boisson', content: 'Aime le café sans sucre' },
+  { uuid: 'm3', key: 'fuseau', content: 'Vit à Paris' },
 ];
 
 function loadBotMixin() {
@@ -42,10 +42,10 @@ test('the memory filter matches on key and content, case-insensitively', () => {
   const app = buildApp();
 
   app.memorySearch = 'PRENOM';
-  assert.deepStrictEqual(Array.from(app.filteredBotMemories()).map(m => m.id), [1]);
+  assert.deepStrictEqual(Array.from(app.filteredBotMemories()).map(m => m.uuid), ['m1']);
 
   app.memorySearch = 'café';
-  assert.deepStrictEqual(Array.from(app.filteredBotMemories()).map(m => m.id), [2]);
+  assert.deepStrictEqual(Array.from(app.filteredBotMemories()).map(m => m.uuid), ['m2']);
 
   app.memorySearch = 'nothing here';
   assert.deepStrictEqual(Array.from(app.filteredBotMemories()), []);

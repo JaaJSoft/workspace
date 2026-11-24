@@ -394,7 +394,7 @@ class MemoryListView(APIView):
 
 
 class MemoryDetailView(APIView):
-    """PATCH/DELETE /api/v1/ai/memories/<id>"""
+    """PATCH/DELETE /api/v1/ai/memories/<uuid>"""
 
     permission_classes = [IsAuthenticated]
 

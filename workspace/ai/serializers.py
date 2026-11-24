@@ -127,8 +127,8 @@ class UserMemorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserMemory
-        fields = ["id", "key", "content", "bot_name", "created_at", "updated_at"]
-        read_only_fields = ["id", "bot_name", "created_at", "updated_at"]
+        fields = ["uuid", "key", "content", "bot_name", "created_at", "updated_at"]
+        read_only_fields = ["uuid", "bot_name", "created_at", "updated_at"]
 
     def get_bot_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username

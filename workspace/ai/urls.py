@@ -44,7 +44,7 @@ urlpatterns = [
         name="ai-memories",
     ),
     path(
-        "api/v1/ai/memories/<int:pk>",
+        "api/v1/ai/memories/<uuid:pk>",
         views.MemoryDetailView.as_view(),
         name="ai-memory-detail",
     ),

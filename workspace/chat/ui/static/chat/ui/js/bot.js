@@ -260,7 +260,7 @@ window.chatBotMixin = function chatBotMixin() {
         iconClass: 'bg-secondary/10 text-secondary',
       });
       if (content === null || content.trim() === mem.content) return;
-      const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
+      const resp = await fetch(`/api/v1/ai/memories/${mem.uuid}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -284,13 +284,13 @@ window.chatBotMixin = function chatBotMixin() {
         iconClass: 'bg-error/10 text-error',
       });
       if (!ok) return;
-      const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
+      const resp = await fetch(`/api/v1/ai/memories/${mem.uuid}`, {
         method: 'DELETE',
         headers: { 'X-CSRFToken': getCSRFToken() },
         credentials: 'same-origin',
       });
       if (resp.ok) {
-        this.botMemories = this.botMemories.filter(m => m.id !== mem.id);
+        this.botMemories = this.botMemories.filter(m => m.uuid !== mem.uuid);
       }
     },
 

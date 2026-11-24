@@ -273,6 +273,7 @@ class ConversationSummary(models.Model):
 class UserMemory(models.Model):
     """Persistent memory that a bot stores about a user."""
 
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

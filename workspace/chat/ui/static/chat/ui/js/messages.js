@@ -16,8 +16,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // ── State ────────────────────────────────────────────────
     messageBody: '',
     loadingMessages: false,
-    // Refreshes of the message list still waiting on the server.
+    // Refreshes of the message list still waiting on the server, and who
+    // waits for the last of them to land (_messagesIdle).
     _messagesRefreshing: 0,
+    _messagesIdleWaiters: [],
     loadingMoreMessages: false,
     hasMoreMessages: false,
     // Set while the list shows a stretch of the past cut off from the
@@ -671,9 +673,16 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         console.error('Failed to refresh messages', e);
       } finally {
         this._messagesRefreshing--;
+        if (!this._messagesRefreshing) this._messagesIdleWaiters.splice(0).forEach((resolve) => resolve());
       }
       this._anchorOnMerge = false;
       this._refreshAnchor = null;
+    },
+
+    // Resolves once no refresh of the message list is in flight.
+    _messagesIdle() {
+      if (!this._messagesRefreshing) return Promise.resolve();
+      return new Promise((resolve) => { this._messagesIdleWaiters.push(resolve); });
     },
 
     // ── Replying ───────────────────────────────────────────

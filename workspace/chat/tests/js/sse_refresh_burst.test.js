@@ -9,12 +9,13 @@ const { loadScript } = require('../../../common/tests/js/loader');
 
 function buildApp({ pendingReceipt = false } = {}) {
   const timers = [];
+  const page = { pendingReceipt };
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/sse.js', {
     setTimeout: (fn) => { timers.push(fn); return timers.length; },
     clearTimeout: () => {},
     document: {
       getElementById: () => null,
-      querySelector: (selector) => (selector === '[data-read-pending]' && pendingReceipt ? {} : null),
+      querySelector: (selector) => (selector === '[data-read-pending]' && page.pendingReceipt ? {} : null),
     },
   });
   const calls = { messages: 0, pins: [] };
@@ -28,7 +29,7 @@ function buildApp({ pendingReceipt = false } = {}) {
   const flush = async () => {
     while (timers.length) await timers.shift()();
   };
-  return { app, calls, flush };
+  return { app, calls, flush, page };
 }
 
 const inConv = (extra = {}) => ({ conversation_id: 'conv-1', message_id: 'm-1', ...extra });
@@ -66,14 +67,35 @@ test('a read receipt refetches nothing when no receipt on screen is waiting on r
   assert.equal(calls.messages, 0);
 });
 
-test('a read arriving while the messages are reloading refreshes them after', async () => {
-  const { app, calls, flush } = buildApp();
+test('a read arriving during a reload is judged on what that reload brings, by a request of its own', async () => {
+  const { app, calls, flush, page } = buildApp();
+  let landed;
   app._messagesRefreshing = 1;
+  app._messagesIdle = () => new Promise((resolve) => { landed = resolve; });
 
-  app.handleSSERead(inConv());
+  const reading = app.handleSSERead(inConv());
+  await flush();
+  assert.equal(calls.messages, 0);
+
+  // The reload lands with a receipt the read concerns, then a fresh request goes out.
+  page.pendingReceipt = true;
+  app._messagesRefreshing = 0;
+  landed();
+  await reading;
   await flush();
 
   assert.equal(calls.messages, 1);
+});
+
+test('a read arriving during a reload that brings no waiting receipt refetches nothing', async () => {
+  const { app, calls, flush } = buildApp();
+  app._messagesRefreshing = 1;
+  app._messagesIdle = () => Promise.resolve();
+
+  await app.handleSSERead(inConv());
+  await flush();
+
+  assert.equal(calls.messages, 0);
 });
 
 test('a read receipt refreshes a receipt still waiting on readers', async () => {

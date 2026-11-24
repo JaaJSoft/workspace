@@ -196,10 +196,15 @@ window.chatSseMixin = function chatSseMixin() {
 
     // A read only changes a receipt on the user's own messages that is still
     // waiting on readers (_read_receipt.html marks it). A refresh in flight
-    // may bring such a receipt in, answered before this read.
-    handleSSERead(detail) {
+    // was answered before this read, so the receipts are judged once it has
+    // landed, and the refresh they call for is a request of its own.
+    async handleSSERead(detail) {
       if (!this._isOpenConversation(detail)) return;
-      if (!document.querySelector('[data-read-pending]') && !this._messagesRefreshing) return;
+      if (this._messagesRefreshing) {
+        await this._messagesIdle();
+        if (!this._isOpenConversation(detail)) return;
+      }
+      if (!document.querySelector('[data-read-pending]')) return;
       this._scheduleSseRefresh();
     },
 

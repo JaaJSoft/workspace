@@ -64,7 +64,7 @@
           type="file"
           x-ref="avatarInput"
           @change="onFileSelect($event)"
-          accept="image/jpeg,image/png,image/webp,image/gif"
+          accept="{{ avatar_types|join:',' }}"
           class="hidden"
         />
       </div>

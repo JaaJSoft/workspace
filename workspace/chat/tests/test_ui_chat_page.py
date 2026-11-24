@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.chat.models import Conversation, ConversationMember
-from workspace.chat.services.avatar import ALLOWED_TYPES
+from workspace.common.services.image import SOURCE_TYPES
 
 from .test_chat import ChatTestMixin
 
@@ -74,4 +74,4 @@ class ChatPageGroupAvatarInputTests(ChatTestMixin, TestCase):
     def test_the_file_picker_offers_the_types_the_upload_accepts(self):
         self.client.force_login(self.creator)
         response = self.client.get("/chat")
-        self.assertContains(response, f'accept="{",".join(ALLOWED_TYPES)}"')
+        self.assertContains(response, f'accept="{",".join(SOURCE_TYPES)}"')

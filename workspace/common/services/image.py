@@ -19,6 +19,9 @@ _ETAG_SECRET = os.urandom(32)
 
 logger = logging.getLogger(__name__)
 
+# Content types an uploaded picture may have before process_image_to_webp converts it.
+SOURCE_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+
 DEFAULT_SIZE = 256
 DEFAULT_QUALITY = 85
 

@@ -20,8 +20,6 @@ from ..models import Conversation
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
-
 
 def conversation_avatar_initial(conversation, viewer) -> str:
     """The letters drawn when *conversation* has no uploaded avatar.

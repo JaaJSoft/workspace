@@ -20,7 +20,6 @@ from workspace.chat.models import (
     PinnedMessage,
 )
 from workspace.chat.serializers import ConversationListSerializer
-from workspace.chat.services.avatar import ALLOWED_TYPES as GROUP_AVATAR_TYPES
 from workspace.chat.services.avatar import avatar_initial_for
 from workspace.chat.services.calls import system_call_label
 from workspace.chat.services.conversations import (
@@ -36,6 +35,7 @@ from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
 from workspace.common.dates import time_ago
 from workspace.common.prefetch import prefetchable
+from workspace.common.services.image import SOURCE_TYPES
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.users.services.settings import get_setting
 
@@ -222,7 +222,7 @@ def chat_view(request, conversation_uuid=None):
             "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
             "notification_levels": _notification_levels(),
-            "group_avatar_types": GROUP_AVATAR_TYPES,
+            "group_avatar_types": SOURCE_TYPES,
         },
     )
 
@@ -277,7 +277,7 @@ def chat_room_view(request, conversation_uuid):
             "chat_groups": _chat_groups(request.user),
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
             "notification_levels": _notification_levels(),
-            "group_avatar_types": GROUP_AVATAR_TYPES,
+            "group_avatar_types": SOURCE_TYPES,
         },
     )
 

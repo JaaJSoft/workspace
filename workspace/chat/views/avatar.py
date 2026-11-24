@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.services.image import SOURCE_TYPES
 
 from ..models import Conversation, ConversationMember
 from ..services import avatar as group_avatar_service
@@ -85,7 +86,7 @@ class GroupAvatarUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if image.content_type not in group_avatar_service.ALLOWED_TYPES:
+        if image.content_type not in SOURCE_TYPES:
             return Response(
                 {
                     "errors": [

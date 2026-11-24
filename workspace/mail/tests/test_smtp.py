@@ -459,3 +459,25 @@ class TransmitTests(TestCase):
 
         with self.assertRaises(smtplib.SMTPDataError):
             _transmit(server, "a@example.com", ["b@example.com"], io.BytesIO(b"x"))
+
+
+class PlainTextHtmlPartTests(TestCase):
+    """The HTML part derived from a plain-text body carries no markup of its own."""
+
+    def test_markup_typed_or_quoted_in_the_text_is_escaped(self):
+        acct = MagicMock(display_name="Alice", email="alice@example.com")
+        raw = build_draft_message(
+            acct,
+            to=["bob@example.com"],
+            subject="Re: offer",
+            body_text='Sure.\n> <a href="https://evil.example">Click</a> & <img src=x>',
+        )
+
+        msg = message_from_bytes(raw, policy=email.policy.default)
+        html_part = msg.get_body(preferencelist=("html",)).get_content()
+
+        self.assertNotIn("<a href", html_part)
+        self.assertNotIn("<img", html_part)
+        self.assertIn("&lt;a href=&quot;https://evil.example&quot;&gt;", html_part)
+        self.assertIn("Sure.<br>", html_part)
+        self.assertIn("&amp; &lt;img src=x&gt;", html_part)

@@ -334,8 +334,6 @@ window.mailComposeMixin = function mailComposeMixin() {
       formData.append('account_id', this.compose.account_id);
       formData.append('subject', this.compose.subject);
       formData.append('body_text', this.compose.body);
-      const htmlBody = this.compose.body.replace(/\n/g, '<br>');
-      formData.append('body_html', htmlBody);
       if (this.compose.reply_message_id) {
         formData.append('reply_message_id', this.compose.reply_message_id);
       }
@@ -409,8 +407,6 @@ window.mailComposeMixin = function mailComposeMixin() {
     },
 
     async _writeDraft(draft) {
-      const htmlBody = draft.body.replace(/\n/g, '<br>');
-
       const payload = {
         account_id: draft.account_id,
         to: draft.to,
@@ -418,7 +414,6 @@ window.mailComposeMixin = function mailComposeMixin() {
         bcc: draft.bcc,
         subject: draft.subject,
         body_text: draft.body,
-        body_html: htmlBody,
         attachment_uuids: draft.mail_attachments.map(a => a.uuid),
       };
       if (draft.draft_id) payload.draft_id = draft.draft_id;

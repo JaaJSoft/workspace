@@ -80,7 +80,7 @@
         {# Not daisyUI's dropdown: it lives on :focus-within, which a click on the base-select picker drops #}
         <div
           class="relative"
-          x-data="dashboardPrefsForm()"
+          x-data="dashboardPrefsForm({ temperatureUnit: '{{ temperature_unit|escapejs }}', todayUrl: '{% url 'dashboard:today_fragment' %}', modulesUrl: '{% url 'dashboard:modules_fragment' %}' })"
           @click.outside="prefsOpen = false"
           @keydown.escape.window="if (prefsOpen) { prefsOpen = false; $refs.prefsTrigger.focus(); }"
         >
@@ -242,6 +242,7 @@
   <script src="{% static 'dashboard/js/badges.js' %}"></script>
   <script src="{% static 'dashboard/js/weather.js' %}"></script>
   <script src="{% static 'dashboard/js/today.js' %}"></script>
+  <script src="{% static 'dashboard/js/preferences.js' %}"></script>
   {% translate "Good night, %(name)s." as greeting_night %}
   {% translate "Good morning, %(name)s." as greeting_morning %}
   {% translate "Good afternoon, %(name)s." as greeting_afternoon %}
@@ -307,68 +308,6 @@
           const pct = {{ storage_percent|default:"0" }};
           requestAnimationFrame(() => {
             bar.style.width = pct + '%';
-          });
-        },
-      };
-    }
-
-    function dashboardPrefsForm() {
-      const readJson = (id) => JSON.parse(document.getElementById(id).textContent);
-      const apps = readJson('dashboard-apps-data');
-      return {
-        prefsOpen: false,
-        temperatureUnit: '{{ temperature_unit|escapejs }}',
-        apps: apps,
-        hidden: apps.filter(a => a.hidden).map(a => a.slug),
-        todaySources: readJson('dashboard-today-sources-data'),
-        hiddenToday: readJson('dashboard-hidden-today-data'),
-        todaySaves: window.todaySaveQueue(),
-        isVisible(slug) {
-          return !this.hidden.includes(slug);
-        },
-        isTodayShown(slug) {
-          return !this.hiddenToday.includes(slug);
-        },
-        toggleToday(slug, shown) {
-          this.hiddenToday = shown ?
-            this.hiddenToday.filter(s => s !== slug) : [...this.hiddenToday, slug];
-          // Persist first, then re-fetch the card: the server decides whether
-          // the card or the empty hidden slot comes back.
-          // Queued, and reading the list when it runs: the last save sends the latest list.
-          this.todaySaves(() => this.save('hidden_today_sources', this.hiddenToday)).then(() => {
-            this.$ajax('{% url 'dashboard:today_fragment' %}', {
-              target: 'dashboard-today'
-            });
-          });
-        },
-        setTemperatureUnit() {
-          this.save('temperature_unit', this.temperatureUnit);
-          this.$dispatch('temperature-unit-changed', this.temperatureUnit);
-        },
-        toggleApp(slug, visible) {
-          if (visible) {
-            this.hidden = this.hidden.filter(s => s !== slug);
-          } else if (!this.hidden.includes(slug)) {
-            this.hidden.push(slug);
-          }
-          // Persist first, then re-render the grid from the server so the tile
-          // appears/disappears live without a full page reload.
-          this.save('hidden_modules', this.hidden).then(() => {
-            this.$ajax('{% url 'dashboard:modules_fragment' %}', {
-              target: 'dashboard-modules-grid'
-            });
-          });
-        },
-        save(key, value) {
-          return fetch('/api/v1/settings/dashboard/' + key, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-              value: value
-            }),
           });
         },
       };

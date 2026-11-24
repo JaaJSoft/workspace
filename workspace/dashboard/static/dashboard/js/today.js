@@ -22,16 +22,3 @@ window.todayCard = function todayCard(limit) {
     },
   };
 };
-
-/**
- * Runs the tasks handed to it one after the other, each once the previous
- * one settled. Two quick toggles otherwise race: the older list can land
- * last and overwrite the newer one.
- */
-window.todaySaveQueue = function todaySaveQueue() {
-  let tail = Promise.resolve();
-  return (task) => {
-    tail = tail.then(task, task);
-    return tail;
-  };
-};

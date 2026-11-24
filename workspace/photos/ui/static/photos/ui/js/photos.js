@@ -1386,10 +1386,13 @@ window.photosApp = function photosApp() {
       });
     },
 
-    // The album menu reads what syncAlbum asked for the album on screen.
+    // The album menu's first opening takes what syncAlbum asked for the album
+    // on screen; later ones ask again, so permissions changed since show.
     _albumActionsFor(uuid) {
       const read = this._albumActionsRead;
-      return read && read.uuid === uuid ? read.request : this._fetchAlbumActions(uuid);
+      if (!read || read.uuid !== uuid) return this._fetchAlbumActions(uuid);
+      this._albumActionsRead = null;
+      return read.request;
     },
 
     _fetchAlbumActions(uuid) {

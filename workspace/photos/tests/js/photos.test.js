@@ -812,7 +812,7 @@ test('the album on screen and what its registry allows there', async () => {
   assert.equal(app.albumAllows('set_cover'), false);
 });
 
-test('the album menu reuses the actions the page already asked for', async () => {
+test('the album menu takes the actions the page asked for once, then asks again', async () => {
   const requests = [];
   const page = grid(['a'], { uuid: 'al1', title: 'Summer' });
   const app = load({
@@ -825,10 +825,11 @@ test('the album menu reuses the actions the page already asked for', async () =>
 
   app.openAlbumMenu(anchor);
   await flush();
+  assert.equal(requests.length, 1);
   app.openAlbumMenu(anchor);
   await flush();
 
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 2);
   assert.deepEqual(Array.from(app.albumMenu.actions, (a) => a.id), ['rename']);
 });
 

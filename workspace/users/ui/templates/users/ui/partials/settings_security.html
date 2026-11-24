@@ -217,7 +217,11 @@
 
           <!-- Submit -->
           <div class="fieldset mt-6">
-            <button type="submit" class="btn btn-primary btn-sm gap-2" :disabled="!canSubmit">
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm gap-2"
+              :disabled="!canSubmit"
+            >
               <span x-show="!loading"><i data-lucide="save" class="w-4 h-4"></i></span>
               <span x-show="loading" class="loading loading-spinner loading-sm"></span>
               <span

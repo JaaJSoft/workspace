@@ -537,7 +537,11 @@
 </dialog>
 
 <!-- Call connection diagnostic -->
-<dialog :class="{'modal-open': diagOpen}" class="modal">
+<dialog
+  class="modal"
+  x-effect="diagOpen ? $el.open || $el.showModal() : $el.close()"
+  @close="diagOpen && closeDiagnostic()"
+>
   <div class="modal-box max-w-md">
     {% include "ui/partials/dialog_header.html" with icon="activity" title=_("Connection diagnostic") subtitle=_("Checks your microphone, network, and a test call through the server.") only %}
 
@@ -628,7 +632,11 @@
 
 <!-- Bot picker dialog -->
 {% if ai_enabled %}
-  <dialog :class="{'modal-open': showBotPicker}" class="modal">
+  <dialog
+    class="modal"
+    x-effect="showBotPicker ? $el.open || $el.showModal() : $el.close()"
+    @close="if (showBotPicker) { showBotPicker = false; resetBotGoalDraft(); }"
+  >
     <div class="modal-box max-w-sm p-0 flex flex-col">
       {% include "ui/partials/dialog_header.html" with icon="sparkles" title=_("Start AI Chat") close_expr="showBotPicker = false" class="px-5 pt-5 pb-2" only %}
       <div class="px-5 pb-1" x-show="availableBots.length > 5">

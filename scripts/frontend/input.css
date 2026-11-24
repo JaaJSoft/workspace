@@ -309,12 +309,13 @@
 @utility progress-module {
   color: var(--module);
 }
-/* A setting, not a progress bar: a ring thumb on a plain track, no fill. */
+/* The fill and the thumb's ring share --range-progress: a pale tint of the
+   hue keeps the fill readable without it outweighing the solid thumb, or
+   the buttons next to it. */
 @utility range-module {
   color: var(--module);
-  --range-thumb: var(--color-base-100);
-  --range-fill: 0;
-  --range-bg: color-mix(in oklab, var(--color-base-content) 15%, #0000);
+  --range-thumb: var(--module);
+  --range-progress: color-mix(in oklab, var(--module) 30%, var(--color-base-100));
 }
 @utility radio-module {
   --input-color: var(--module);

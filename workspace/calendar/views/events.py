@@ -453,11 +453,20 @@ class EventDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        scope = request.query_params.get("scope")
+        if event.is_recurring and not scope:
+            # Guessing "all" would turn "skip this Monday" into deleting the
+            # whole series.
+            return Response(
+                {"detail": _("Choose which occurrences of the series to delete.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             cancel_event(
                 event,
                 request.user,
-                scope=request.query_params.get("scope", "all"),
+                scope=scope or "all",
                 original_start=_parse_dt(request.query_params.get("original_start")),
             )
         except EventScopeError as exc:

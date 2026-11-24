@@ -597,6 +597,22 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         self.assertFalse(Event.objects.filter(uuid=master_id).exists())
         self.assertFalse(Event.objects.filter(recurrence_parent_id=master_id).exists())
 
+    def test_delete_without_scope_keeps_the_series(self):
+        master = self._create_weekly()
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Exception",
+            start=master.start + timedelta(weeks=1),
+            owner=self.owner,
+            recurrence_parent=master,
+            original_start=master.start + timedelta(weeks=1),
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.delete(self.url(master.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Event.objects.filter(uuid=master.uuid).exists())
+        self.assertEqual(Event.objects.filter(recurrence_parent=master).count(), 1)
+
     def test_edit_this_creates_exception(self):
         master = self._create_weekly()
         occ_start = (master.start + timedelta(weeks=1)).isoformat()

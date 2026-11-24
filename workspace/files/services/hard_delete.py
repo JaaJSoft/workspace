@@ -13,6 +13,7 @@ pull in. Only primary keys are held for the whole tree.
 
 from itertools import batched
 
+from django.db import transaction
 from django.db.models.functions import Length
 
 from ..models import File
@@ -21,10 +22,15 @@ HARD_DELETE_BATCH_SIZE = 500
 
 
 def hard_delete_in_batches(queryset):
-    """Permanently delete every row of *queryset*, deepest first."""
+    """Permanently delete every row of *queryset*, deepest first.
+
+    Each batch re-checks *queryset*'s filter under a row lock before deleting,
+    so a row that stopped matching since the keys were read (a file restored
+    while the trash is being purged) is left alone.
+    """
     # A descendant's path extends its ancestor's, so it is strictly longer.
     pks = queryset.order_by(Length("path").desc()).values_list("pk", flat=True)
-    _delete_pks_in_batches(list(pks))
+    _delete_pks_in_batches(list(pks), still_matching=queryset)
 
 
 def hard_delete_tree(node):
@@ -48,7 +54,17 @@ def _descendant_pks_deepest_first(folder):
     return [pk for level in reversed(levels) for pk in level]
 
 
-def _delete_pks_in_batches(pks):
+def _delete_pks_in_batches(pks, still_matching=None):
     for batch in batched(pks, HARD_DELETE_BATCH_SIZE, strict=False):
-        # The storage cleanup receiver reads owner.username on every row.
-        File.objects.filter(pk__in=batch).select_related("owner").delete()
+        with transaction.atomic():
+            if still_matching is not None:
+                # As a subquery: FOR UPDATE refuses the DISTINCT and the outer
+                # joins a caller's queryset (the admin's) may carry.
+                batch = list(
+                    File.objects.filter(pk__in=batch)
+                    .filter(pk__in=still_matching.order_by().values("pk"))
+                    .select_for_update(of=("self",))
+                    .values_list("pk", flat=True)
+                )
+            # The storage cleanup receiver reads owner.username on every row.
+            File.objects.filter(pk__in=batch).select_related("owner").delete()

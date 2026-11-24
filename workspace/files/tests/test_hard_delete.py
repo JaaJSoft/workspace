@@ -180,3 +180,30 @@ class HardDeleteBatchingTests(APITestCase):
         self.assertFalse(default_storage.exists(self._trash_dir_on_disk(old)))
         self.assertEqual(File.objects.filter(owner=self.user).count(), 111)
         self.assertTrue(File.objects.filter(pk=recent.pk).exists())
+
+
+@mock.patch("workspace.files.services.hard_delete.HARD_DELETE_BATCH_SIZE", 1)
+class PurgeSparesARestoreTests(APITestCase):
+    def test_a_file_restored_while_the_trash_is_purged_is_kept(self):
+        user = User.objects.create_user(username="restorer", password="pass")
+        first = tree.create_file(user, "first-to-go.txt")
+        restored = tree.create_file(user, "kept.txt")
+        for node in (first, restored):
+            trash.soft_delete(node, acting_user=user)
+        File.objects.filter(owner=user).update(
+            deleted_at=timezone.now() - timedelta(days=45)
+        )
+
+        # The restore lands after the purge read its keys, between two batches.
+        def restore_during_purge(sender, instance, **kwargs):
+            if instance.pk == first.pk:
+                File.objects.filter(pk=restored.pk).update(deleted_at=None)
+
+        pre_delete.connect(restore_during_purge, sender=File, weak=False)
+        try:
+            call_command("purge_trash", days=30, stdout=StringIO())
+        finally:
+            pre_delete.disconnect(restore_during_purge, sender=File)
+
+        self.assertFalse(File.objects.filter(pk=first.pk).exists())
+        self.assertTrue(File.objects.filter(pk=restored.pk).exists())

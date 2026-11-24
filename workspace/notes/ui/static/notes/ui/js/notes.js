@@ -708,6 +708,7 @@ window.notesApp = function notesApp(config) {
 
             if (todayNote) {
                 await this.selectNote(todayNote, { history: 'replace' });
+                if (left()) return;
             }
 
             this.updateUrl();

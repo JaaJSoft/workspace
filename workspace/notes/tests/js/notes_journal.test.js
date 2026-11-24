@@ -120,3 +120,14 @@ test('a journal left during the lookup creates and selects nothing', async () =>
   assert.deepEqual(requests.map((r) => r[0]), ['GET', 'GET']);
   assert.deepEqual(app.selected, []);
 });
+
+test('a journal left while the note of the day opens leaves the address alone', async () => {
+  const { app } = makeApp([page([TODAY], false)]);
+  let urlWrites = 0;
+  app.updateUrl = () => { urlWrites++; };
+  app.selectNote = async () => { app.activeView = 'recent'; };
+
+  await app.openJournal();
+
+  assert.equal(urlWrites, 0);
+});

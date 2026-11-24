@@ -1,5 +1,6 @@
 from django.db import IntegrityError, transaction
 from django.db.models import Count
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
@@ -50,7 +51,7 @@ class PersonListView(APIView):
                 )
         except IntegrityError:
             return Response(
-                {"name": ["A list with this name already exists."]},
+                {"name": [_("A list with this name already exists.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         person_list.member_count = 0
@@ -84,7 +85,7 @@ class PersonListDetailView(APIView):
                     rename_list(person_list, name)
             except IntegrityError:
                 return Response(
-                    {"name": ["A list with this name already exists."]},
+                    {"name": [_("A list with this name already exists.")]},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         return Response(PersonListSerializer(person_list).data)

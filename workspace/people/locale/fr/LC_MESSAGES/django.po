@@ -546,3 +546,7 @@ msgstr "Fichier trop volumineux. La taille maximale est de 20 Mo."
 #: views/vcard.py
 msgid "This is not a vCard file."
 msgstr "Ce n’est pas un fichier vCard."
+
+#: views/lists.py
+msgid "A list with this name already exists."
+msgstr "Une liste de ce nom existe déjà."

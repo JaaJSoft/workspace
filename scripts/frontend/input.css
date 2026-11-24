@@ -469,7 +469,7 @@ html:has(> body.overflow-hidden.h-dvh) {
   --tw-prose-td-borders: color-mix(in oklab, var(--color-base-content) 10%, transparent);
 }
 
-/* Typography plugin sets a hardcoded dark color on kbd — override it */
+/* Typography plugin sets a hardcoded dark color on kbd - override it */
 .modal .prose kbd {
   color: var(--color-base-content);
 }

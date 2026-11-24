@@ -50,7 +50,7 @@ RUN mkdir -p /models     && for backend in $FACE_MODELS; do         SECRET_KEY=b
 # Stage 4: Runtime
 FROM mirror.gcr.io/library/python:3.14-slim
 
-# OCI metadata — static labels
+# OCI metadata - static labels
 LABEL org.opencontainers.image.title="workspace" \
       org.opencontainers.image.description="JaaJSoft workspace project" \
       org.opencontainers.image.url="https://github.com/JaaJSoft/workspace" \
@@ -59,7 +59,7 @@ LABEL org.opencontainers.image.title="workspace" \
       org.opencontainers.image.licenses="BUSL-1.1" \
       org.opencontainers.image.base.name="docker.io/library/python:3.14-slim"
 
-# OCI metadata — dynamic labels (overridden at build time by CI)
+# OCI metadata - dynamic labels (overridden at build time by CI)
 ARG VERSION=dev
 ARG REVISION=""
 ARG CREATED=""

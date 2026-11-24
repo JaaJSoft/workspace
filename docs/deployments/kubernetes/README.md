@@ -160,7 +160,7 @@ The web container exposes `/health/` with three probes:
 
 ## Metrics
 
-Prometheus metrics are served at `/metrics` behind HTTP Basic auth. Set `METRICS_USER` (configmap) and `METRICS_PASSWORD` (secret), then restart the pod — until both are set the endpoint answers 401 to everyone.
+Prometheus metrics are served at `/metrics` behind HTTP Basic auth. Set `METRICS_USER` (configmap) and `METRICS_PASSWORD` (secret), then restart the pod - until both are set the endpoint answers 401 to everyone.
 
 `ingress.yaml` also drops `/metrics` at the edge with a `deny all` snippet. That is defence in depth: scraping through the ClusterIP Service bypasses the ingress and keeps working. Remove the snippet if Prometheus lives outside the cluster.
 
@@ -204,7 +204,7 @@ kubectl apply -f configmap.yaml
 kubectl -n workspace rollout restart deployment workspace
 ```
 
-The two URLs stay on the cluster network: the app fetches the discovery XML from the editor Service, and the editor calls the app back through the web Service — only the editor iframe itself goes through the public ingress. Editing follows file permissions (view-only shares open read-only), saves go through the normal upload pipeline, and with the editor absent or down office files simply fall back to download.
+The two URLs stay on the cluster network: the app fetches the discovery XML from the editor Service, and the editor calls the app back through the web Service - only the editor iframe itself goes through the public ingress. Editing follows file permissions (view-only shares open read-only), saves go through the normal upload pipeline, and with the editor absent or down office files simply fall back to download.
 
 ## Scaling Limitations
 

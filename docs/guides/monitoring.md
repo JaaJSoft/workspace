@@ -9,13 +9,13 @@ Workspace exposes Prometheus metrics at **`/metrics`** and Kubernetes health pro
 | Variable           | Description                                                        |
 |--------------------|--------------------------------------------------------------------|
 | `METRICS_USER`     | Username the scraper must present                                  |
-| `METRICS_PASSWORD` | Password, in **plain text** — never base64-encode it here          |
+| `METRICS_PASSWORD` | Password, in **plain text** - never base64-encode it here          |
 
 If either is empty, every request gets `401` and an error is logged. An unconfigured instance never serves its metrics to anyone.
 
 The base64 you see in an `Authorization: Basic …` header is Basic auth's transport encoding, applied by the client and undone by the server. It is not a secret format: **only expose `/metrics` over HTTPS or inside a trusted network.**
 
-> **Why not an IP allowlist?** Only `REMOTE_ADDR` can be trusted, and behind a reverse proxy that is always the proxy's own address — an allowlist would grant access to every client reaching the proxy. Credentials do not have that failure mode.
+> **Why not an IP allowlist?** Only `REMOTE_ADDR` can be trusted, and behind a reverse proxy that is always the proxy's own address - an allowlist would grant access to every client reaching the proxy. Credentials do not have that failure mode.
 
 Access is all-or-nothing: there is no per-user or read-only variant, and a logged-in Workspace user (superuser included) gets no implicit access. The credentials are for the scraper.
 
@@ -50,14 +50,14 @@ They are already passed through to the `web` service in `docker-compose.yml`. Re
 docker compose up -d
 ```
 
-If Prometheus runs in the same compose network, target the service directly (`http://web:8000/metrics`) so credentials never leave the network — though they are still required.
+If Prometheus runs in the same compose network, target the service directly (`http://web:8000/metrics`) so credentials never leave the network - though they are still required.
 
 ## Kubernetes
 
 `METRICS_USER` lives in `configmap.yaml` and `METRICS_PASSWORD` in `secrets.yaml`:
 
 ```yaml
-# secrets.yaml — stringData takes plain text, no base64
+# secrets.yaml - stringData takes plain text, no base64
 stringData:
   METRICS_PASSWORD: "a-long-random-password"
 ```
@@ -71,7 +71,7 @@ kubectl apply -f secrets.yaml -f configmap.yaml
 kubectl -n workspace rollout restart deployment workspace
 ```
 
-`ingress.yaml` additionally drops `/metrics` at the edge with a `deny all` snippet. That is defence in depth on top of the credentials — in-cluster scraping goes through the ClusterIP Service and bypasses the ingress, so it keeps working:
+`ingress.yaml` additionally drops `/metrics` at the edge with a `deny all` snippet. That is defence in depth on top of the credentials - in-cluster scraping goes through the ClusterIP Service and bypasses the ingress, so it keeps working:
 
 ```yaml
 - job_name: workspace
@@ -90,8 +90,8 @@ Beyond the standard `django_prometheus` series (HTTP requests by view, method an
 
 | Metric                                        | Type      | Labels                | Meaning                                          |
 |-----------------------------------------------|-----------|-----------------------|--------------------------------------------------|
-| `files_upload_bytes_total`                    | counter   | —                     | Bytes of file content received from clients      |
-| `files_download_bytes_total`                  | counter   | —                     | Bytes of file content sent to clients            |
+| `files_upload_bytes_total`                    | counter   | -                     | Bytes of file content received from clients      |
+| `files_download_bytes_total`                  | counter   | -                     | Bytes of file content sent to clients            |
 | `files_thumbnail_generation_duration_seconds` | histogram | `mime_family`         | Time of one thumbnail generation                 |
 | `files_thumbnail_generation_total`            | counter   | `result`              | Outcomes: success / failed / skipped             |
 | `ai_request_duration_seconds`                 | histogram | `model`, `status`     | Wall-clock time of one LLM completion call       |
@@ -104,11 +104,11 @@ Beyond the standard `django_prometheus` series (HTTP requests by view, method an
 | `celery_task_duration_seconds`                | histogram | `task`                | Time between task start and completion           |
 | `celery_tasks_total`                          | counter   | `task`, `state`       | Executions by final state (success/failure/retry)|
 | `celery_queue_length`                         | gauge     | `queue`               | Pending messages in each broker queue            |
-| `sse_active_connections`                      | gauge     | —                     | Live Server-Sent Events connections              |
+| `sse_active_connections`                      | gauge     | -                     | Live Server-Sent Events connections              |
 | `sse_events_emitted_total`                    | counter   | `provider`, `event`   | SSE events pushed to clients                     |
 | `sse_provider_poll_duration_seconds`          | histogram | `provider`            | Time spent inside one provider poll              |
 | `sse_forced_reconnects_total`                 | counter   | `transport`           | Streams closed on the connection budget          |
-| `sse_pubsub_messages_total`                   | counter   | —                     | Provider notifications a stream acted on, several for one provider counting once |
+| `sse_pubsub_messages_total`                   | counter   | -                     | Provider notifications a stream acted on, several for one provider counting once |
 
 `celery_queue_length` requires Redis as the broker; it reports nothing with the in-memory broker.
 
@@ -138,9 +138,9 @@ Separate from metrics, unauthenticated by design, and used by Kubernetes:
 
 ## Troubleshooting
 
-**Every scrape returns 401.** Check the app logs. `METRICS_USER and METRICS_PASSWORD are unset` means the variables never reached the container — with Compose, confirm the `.env` file sits next to `docker-compose.yml`; on Kubernetes, confirm the pod was restarted after applying the Secret. A `Rejected /metrics request from …` line instead means the credentials arrived but did not match.
+**Every scrape returns 401.** Check the app logs. `METRICS_USER and METRICS_PASSWORD are unset` means the variables never reached the container - with Compose, confirm the `.env` file sits next to `docker-compose.yml`; on Kubernetes, confirm the pod was restarted after applying the Secret. A `Rejected /metrics request from …` line instead means the credentials arrived but did not match.
 
-**Credentials look right but still 401.** Leading and trailing whitespace is trimmed from both variables, so a stray newline in a secret file is not the cause — but a quoted value is: `METRICS_PASSWORD="secret"` in a `.env` file keeps the quotes as part of the password in some shells. Compare against what the app received with `docker compose exec web env | grep METRICS`.
+**Credentials look right but still 401.** Leading and trailing whitespace is trimmed from both variables, so a stray newline in a secret file is not the cause - but a quoted value is: `METRICS_PASSWORD="secret"` in a `.env` file keeps the quotes as part of the password in some shells. Compare against what the app received with `docker compose exec web env | grep METRICS`.
 
 **Counters jump around between scrapes.** Each scrape is reporting a single worker. That happens when Gunicorn starts without the image's `gunicorn.conf.py`, for example from a custom command that drops `-c gunicorn.conf.py`. Keep the flag, and see [Multiple Gunicorn workers](#multiple-gunicorn-workers).
 

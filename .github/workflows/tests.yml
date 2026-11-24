@@ -264,7 +264,7 @@ jobs:
         # Each entry pins a per-module line+branch coverage floor, rounded
         # down to the nearest multiple of 5 and sitting at least 3 points
         # below the current baseline to absorb flakiness.
-        # To raise a threshold, update the number here — never lower it.
+        # To raise a threshold, update the number here - never lower it.
         include:
           - module: ai
             min_coverage: 55

@@ -652,7 +652,7 @@ prefs = get_module_settings(user, 'dashboard')
 
 **Rules:**
 - Never call `UserSetting.objects.create/update/delete/update_or_create` from application code - use `set_setting`/`delete_setting` instead. Raw ORM bypasses the cache invalidation and causes "F5 reverts my setting" bugs.
-- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers - new UI that toggles a setting should just call it (fire-and-forget `fetch` is the idiom, see `themePickerForm()` in `settings_appearance.html` and `dashboardPrefsForm()` in `dashboard/index.html`). It only writes a setting its module declared - see below.
+- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers - new UI that toggles a setting should just call it through `window.saveUserSetting(module, key, value)` (`core/static/core/js/user_settings.js`, loaded on every signed-in page), which rejects when the server refuses the value so the caller can roll back. It only writes a setting its module declared - see below.
 - In tests that call `set_setting`/`delete_setting`, **always `cache.clear()` in `tearDown`**. Django's `LocMemCache` is process-global and is NOT reset between `TestCase` runs, so leaked cache entries can cause order-dependent failures.
 
 ```python

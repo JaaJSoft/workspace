@@ -65,14 +65,15 @@ self.addEventListener('fetch', function (event) {
   // Only handle GET requests
   if (request.method !== 'GET') return;
 
+  // Another origin's answers are left to the browser, never kept here. The
+  // app's own assets are all same-origin, so what leaves it is a question
+  // about now (a forecast, a breach lookup) or content whose server decides
+  // how long it is kept (map tiles). A copy answered from this worker's
+  // cache would be the previous visit's.
+  if (url.origin !== self.location.origin) return;
+
   // API requests — network only
   if (url.pathname.startsWith('/api/')) return;
-
-  // CDN assets — stale-while-revalidate
-  if (url.origin !== self.location.origin) {
-    event.respondWith(staleWhileRevalidate(request));
-    return;
-  }
 
   // Local static assets — dev: skip SW (always fresh), prod: cache first (invalidated by version bump)
   if (url.pathname.startsWith('/static/')) {
@@ -104,24 +105,6 @@ function cacheFirst(request) {
     });
   }).catch(function () {
     return new Response('', { status: 503, statusText: 'Service Unavailable' });
-  });
-}
-
-function staleWhileRevalidate(request) {
-  return caches.match(request).then(function (cached) {
-    const fetchPromise = fetch(request).then(function (response) {
-      // For cross-origin, accept opaque responses (status 0)
-      if (response.ok || response.type === 'opaque') {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(function (cache) { cache.put(request, clone); });
-      }
-      return response;
-    }).catch(function () {
-      return cached || new Response('', { status: 503, statusText: 'Service Unavailable' });
-    });
-    return cached || fetchPromise;
-  }).catch(function () {
-    return fetch(request);
   });
 }
 

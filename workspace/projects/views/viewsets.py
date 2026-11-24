@@ -175,7 +175,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 return super().partial_update(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"key": ["Another project already uses this key."]},
+                {"key": [_("Another project already uses this key.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -525,7 +525,7 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 return super().create(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"name": ["A label with this name already exists in this project."]},
+                {"name": [_("A label with this name already exists in this project.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -536,7 +536,7 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 return super().partial_update(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"name": ["A label with this name already exists in this project."]},
+                {"name": [_("A label with this name already exists in this project.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -567,7 +567,7 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 return super().create(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"name": ["An epic with this name already exists in this project."]},
+                {"name": [_("An epic with this name already exists in this project.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -578,7 +578,7 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 return super().partial_update(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"name": ["An epic with this name already exists in this project."]},
+                {"name": [_("An epic with this name already exists in this project.")]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -628,7 +628,11 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 return super().create(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"name": ["A sprint with this name already exists in this project."]},
+                {
+                    "name": [
+                        _("A sprint with this name already exists in this project.")
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -640,7 +644,11 @@ class SprintViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 return super().partial_update(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"name": ["A sprint with this name already exists in this project."]},
+                {
+                    "name": [
+                        _("A sprint with this name already exists in this project.")
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -708,7 +716,11 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 status_obj = create_status(self.project, **serializer.validated_data)
         except IntegrityError:
             return Response(
-                {"name": ["A column with this name already exists in this project."]},
+                {
+                    "name": [
+                        _("A column with this name already exists in this project.")
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(
@@ -723,7 +735,11 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 return super().partial_update(request, *args, **kwargs)
         except IntegrityError:
             return Response(
-                {"name": ["A column with this name already exists in this project."]},
+                {
+                    "name": [
+                        _("A column with this name already exists in this project.")
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -737,7 +753,7 @@ class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             parsed = parse_uuid_or_none(move_to_param)
             if parsed is None:
                 return Response(
-                    {"detail": "Malformed move_to UUID."},
+                    {"detail": _("Malformed move_to UUID.")},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             move_to = self.project.statuses.filter(uuid=parsed).first()
@@ -1319,7 +1335,7 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
 
         if not uploads and not file_uuids:
             return Response(
-                {"detail": "Provide files or file_uuids."},
+                {"detail": _("Provide files or file_uuids.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if len(uploads) + len(file_uuids) > MAX_ATTACHMENTS_PER_REQUEST:

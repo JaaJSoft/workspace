@@ -2461,3 +2461,24 @@ msgstr "Le contenu d’un ou plusieurs fichiers de Workspace est indisponible."
 #: apps.py
 msgid "Your tasks overdue, due today or urgent."
 msgstr "Vos tâches en retard, du jour ou urgentes."
+
+#: services/statuses.py
+#, python-format
+msgid "Cannot delete the last %(category)s column."
+msgstr "Impossible de supprimer la dernière colonne « %(category)s »."
+
+#: services/statuses.py
+msgid "Target column required while tasks remain."
+msgstr "Une colonne cible est requise tant qu’il reste des tâches."
+
+#: services/statuses.py
+msgid "Target column must be a different column of this project."
+msgstr "La colonne cible doit être une autre colonne de ce projet."
+
+#: views/viewsets.py
+msgid "Malformed move_to UUID."
+msgstr "UUID move_to mal formé."
+
+#: views/viewsets.py
+msgid "Provide files or file_uuids."
+msgstr "Fournissez files ou file_uuids."

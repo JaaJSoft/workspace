@@ -24,6 +24,7 @@ window.fileTableControls = function fileTableControls() {
     window.addEventListener(type, handler);
     windowListeners.push([type, handler]);
   };
+  let shortcutHandler = null;
 
   return {
     storageKey: 'fileTableControls:v4',
@@ -166,14 +167,21 @@ window.fileTableControls = function fileTableControls() {
       if (window._fileShortcutHandler) {
         window.removeEventListener('keydown', window._fileShortcutHandler);
       }
-      window._fileShortcutHandler = (e) => this._handleKeyboardShortcut(e);
-      window.addEventListener('keydown', window._fileShortcutHandler);
+      shortcutHandler = (e) => this._handleKeyboardShortcut(e);
+      window._fileShortcutHandler = shortcutHandler;
+      window.addEventListener('keydown', shortcutHandler);
     },
 
     destroy() {
       for (const [type, handler] of windowListeners.splice(0)) {
         window.removeEventListener(type, handler);
       }
+      // The next listing may have installed its own handler already.
+      if (shortcutHandler && window._fileShortcutHandler === shortcutHandler) {
+        window.removeEventListener('keydown', shortcutHandler);
+        window._fileShortcutHandler = null;
+      }
+      shortcutHandler = null;
     },
 
     // --- Item events, delegated -------------------------------------------

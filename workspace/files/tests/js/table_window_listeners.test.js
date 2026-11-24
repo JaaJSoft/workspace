@@ -22,7 +22,7 @@ function makeContext() {
     },
   });
   const count = () => Array.from(listeners.values()).reduce((sum, set) => sum + set.size, 0);
-  return { ctx, count };
+  return { ctx, count, listeners };
 }
 
 function mount(ctx) {
@@ -43,12 +43,25 @@ test('destroying the listing removes every window listener it added', () => {
   const before = count();
 
   const table = mount(ctx);
-  // The keyboard shortcut handler is shared by every instance and replaced on init.
-  const shortcut = 1;
-  assert.ok(count() > before + shortcut);
+  assert.ok(count() > before);
 
   table.destroy();
-  assert.equal(count(), before + shortcut);
+  assert.equal(count(), before);
+  assert.equal(ctx._fileShortcutHandler, null);
+});
+
+test('a listing destroyed after the next one mounted leaves its shortcuts alone', () => {
+  const { ctx, listeners } = makeContext();
+  const old = mount(ctx);
+  const current = mount(ctx);
+  const handler = ctx._fileShortcutHandler;
+
+  old.destroy();
+
+  assert.equal(ctx._fileShortcutHandler, handler);
+  assert.ok(listeners.get('keydown').has(handler));
+  current.destroy();
+  assert.equal(ctx._fileShortcutHandler, null);
 });
 
 test('remounting the listing does not add listeners on top of the previous one', () => {

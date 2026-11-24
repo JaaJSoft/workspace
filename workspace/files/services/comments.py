@@ -23,7 +23,9 @@ def mentionable_users(file_obj):
     from workspace.projects.queries import project_users
 
     users = {}
-    if file_obj.owner.is_active:
+    # A group node's owner sees it through the group, like any member: once
+    # they leave it, owning the node grants nothing.
+    if file_obj.owner.is_active and file_obj.group_id is None:
         users[file_obj.owner_id] = file_obj.owner
     group_ids = set(
         file_obj.shares.filter(shared_with_group__isnull=False).values_list(
@@ -71,7 +73,8 @@ def notify_comment_added(file_obj, actor, body, *, audience=None):
     """Notify about a new comment.
 
     Audience members mentioned in *body* get a high-priority mention
-    notification; the owner and prior commenters get the regular one.
+    notification; the owner and prior commenters get the regular one, as
+    long as they can still open the file.
     """
     if audience is None:
         audience = mentionable_users(file_obj)
@@ -80,17 +83,14 @@ def notify_comment_added(file_obj, actor, body, *, audience=None):
         _notify_mentioned(file_obj, actor, mentioned)
     mentioned_ids = {u.pk for u in mentioned}
 
-    recipients = set()
-    if file_obj.owner != actor:
-        recipients.add(file_obj.owner)
-    commenter_ids = (
-        FileComment.objects.filter(file=file_obj, deleted_at__isnull=True)
-        .exclude(author=actor)
-        .values_list("author", flat=True)
-        .distinct()
+    recipient_ids = {file_obj.owner_id}
+    recipient_ids.update(
+        FileComment.objects.filter(file=file_obj, deleted_at__isnull=True).values_list(
+            "author", flat=True
+        )
     )
-    recipients.update(User.objects.filter(pk__in=commenter_ids))
-    recipients = [u for u in recipients if u.pk not in mentioned_ids]
+    recipient_ids -= mentioned_ids | {actor.pk}
+    recipients = [user for user in audience if user.pk in recipient_ids]
     with transaction.atomic():
         for users in in_recipient_languages(recipients):
             notify_stream(

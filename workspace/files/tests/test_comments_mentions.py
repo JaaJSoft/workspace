@@ -242,3 +242,34 @@ class CommentListShapeTests(FileCommentMentionTestBase):
     def test_create_response_includes_body_html(self):
         resp = self._post_comment("hello @shared")
         self.assertIn("mention-badge", resp.json()["body_html"])
+
+
+class CommentNotificationAudienceTests(FileCommentMentionTestBase):
+    """Only people who can still open the file hear about its comments."""
+
+    def test_a_former_commenter_whose_share_was_revoked_is_not_notified(self):
+        FileComment.objects.create(file=self.file, author=self.shared, body="first")
+        FileShare.objects.filter(file=self.file, shared_with=self.shared).delete()
+
+        self._post_comment("an update")
+
+        self.assertFalse(self._notifs_for(self.shared).exists())
+
+    def test_the_owner_of_a_group_node_who_left_the_group_is_not_notified(self):
+        group = Group.objects.create(name="team")
+        member = User.objects.create_user(username="member", password="pass123")
+        member.groups.add(group)
+        group_file = File.objects.create(
+            owner=self.owner,
+            name="group.txt",
+            node_type=File.NodeType.FILE,
+            group=group,
+        )
+        self.client.force_authenticate(user=member)
+
+        self.client.post(
+            f"/api/v1/files/{group_file.uuid}/comments", {"body": "hi"}, format="json"
+        )
+
+        self.assertNotIn(self.owner, mentionable_users(group_file))
+        self.assertFalse(self._notifs_for(self.owner).exists())

@@ -5,15 +5,23 @@ import uuid as uuid_module
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.files.models import FileShare
+from workspace.files.services import tree
 from workspace.notifications.models import Notification
-from workspace.projects.models import TaskEvent
+from workspace.projects.models import TaskEvent, TaskFileLink, TaskWatcher
+from workspace.projects.services.bulk import bulk_update_tasks, delete_tasks
+from workspace.projects.services.file_links import link_files
 from workspace.projects.services.members import add_member
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
+from workspace.users.services.settings import set_setting
 
 from .base import ProjectTestMixin
 
@@ -375,3 +383,92 @@ class BulkActionFlagTests(BulkTestsBase):
         response = self._post({"tasks": self._uuids(self.t1), "assign": [extra.pk]})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(list(self.t1.assignees.all()), [extra])
+
+
+class BulkServiceTests(BulkTestsBase):
+    def _more_tasks(self, count):
+        return [
+            create_task(self.project, self.admin, title=f"extra {i}")
+            for i in range(count)
+        ]
+
+    def _queries(self, fn):
+        with CaptureQueriesContext(connection) as ctx:
+            fn()
+        return len(ctx.captured_queries)
+
+    def test_bulk_assign_query_count_does_not_grow_with_the_selection(self):
+        tasks = self._more_tasks(10)
+
+        def assign(selection):
+            return self._queries(
+                lambda: bulk_update_tasks(
+                    self.project,
+                    self._uuids(*selection),
+                    actor=self.admin,
+                    assign=[self.member],
+                )
+            )
+
+        # Two tasks at least: a single one takes the per-task notification
+        # path. The first run warms the settings cache.
+        assign(tasks[:2])
+        self.assertEqual(assign(tasks[2:4]), assign(tasks[4:]))
+        for task in tasks:
+            self.assertEqual(self._events(task, TaskEvent.Type.ASSIGNED).count(), 1)
+            self.assertTrue(task.watchers.filter(user=self.member).exists())
+
+    def test_bulk_assign_keeps_a_muted_watch_muted(self):
+        TaskWatcher.objects.create(task=self.t1, user=self.member, muted=True)
+        bulk_update_tasks(
+            self.project,
+            self._uuids(self.t1, self.t2),
+            actor=self.admin,
+            assign=[self.member],
+        )
+        self.assertTrue(TaskWatcher.objects.get(task=self.t1, user=self.member).muted)
+        self.assertFalse(TaskWatcher.objects.get(task=self.t2, user=self.member).muted)
+
+    def test_bulk_assign_skips_the_watch_of_a_user_who_opted_out(self):
+        set_setting(self.member, "projects", "auto_watch", False)
+        bulk_update_tasks(
+            self.project, self._uuids(self.t1), actor=self.admin, assign=[self.member]
+        )
+        self.assertFalse(TaskWatcher.objects.filter(user=self.member).exists())
+
+    def test_bulk_delete_query_count_does_not_grow_with_the_selection(self):
+        few = self._queries(
+            lambda: delete_tasks(self.project, self._uuids(self.t1), actor=self.admin)
+        )
+        many = self._more_tasks(6)
+        more = self._queries(
+            lambda: delete_tasks(self.project, self._uuids(*many), actor=self.admin)
+        )
+        self.assertEqual(few, more)
+        self.assertEqual(
+            TaskEvent.objects.filter(
+                project=self.project, type=TaskEvent.Type.DELETED
+            ).count(),
+            7,
+        )
+
+    def test_bulk_delete_revokes_the_shares_its_links_created(self):
+        doc = tree.create_file(
+            self.admin,
+            "spec.md",
+            content=SimpleUploadedFile("spec.md", b"hi", content_type="text/plain"),
+        )
+        link_files(self.admin, self.t1, [doc])
+        link_files(self.admin, self.t2, [doc])
+
+        delete_tasks(self.project, self._uuids(self.t1, self.t2), actor=self.admin)
+
+        self.assertFalse(TaskFileLink.objects.exists())
+        self.assertFalse(FileShare.objects.exists())
+        unlinked = TaskEvent.objects.filter(type=TaskEvent.Type.FILE_UNLINKED)
+        self.assertEqual(
+            sorted(unlinked.values_list("task_title", flat=True)), ["t1", "t2"]
+        )
+        self.assertEqual(
+            list(self.project.tasks.values_list("title", flat=True)), ["t3"]
+        )

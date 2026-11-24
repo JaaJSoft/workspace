@@ -20,7 +20,7 @@ def link_direction_label(value):
     return str(_LINK_DIRECTIONS.get(value, value))
 
 
-def record_task_event(
+def task_event(
     task,
     *,
     type,
@@ -32,10 +32,10 @@ def record_task_event(
     from_ref=None,
     to_ref=None,
 ):
-    """Insert one TaskEvent row, snapshotting the task title and the names
-    and categories of the statuses involved. *from_ref*/*to_ref* carry the
+    """An unsaved TaskEvent, snapshotting the task title and the names and
+    categories of the statuses involved. *from_ref*/*to_ref* carry the
     identity behind a name in *from_value*/*to_value* (a sprint's UUID)."""
-    return TaskEvent.objects.create(
+    return TaskEvent(
         project=task.project,
         task=task,
         task_title=task.title,
@@ -51,6 +51,13 @@ def record_task_event(
         from_ref=from_ref,
         to_ref=to_ref,
     )
+
+
+def record_task_event(task, **fields):
+    """Insert one TaskEvent row; see ``task_event`` for the fields."""
+    event = task_event(task, **fields)
+    event.save(force_insert=True)
+    return event
 
 
 def move_event_type(to_status):

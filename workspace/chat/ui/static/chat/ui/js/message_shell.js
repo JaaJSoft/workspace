@@ -87,7 +87,7 @@
   // saveAttachmentToFiles). They come from our own DB, but gate on shape
   // anyway so a malformed payload can never smuggle script into a directive.
   function safeUuid(value) {
-    return typeof value === 'string' && /^[0-9a-fA-F-]{1,36}$/.test(value) ? value : null;
+    return window.isValidUuid(value) ? value : null;
   }
 
   class ChatMessageGroup extends HTMLElement {

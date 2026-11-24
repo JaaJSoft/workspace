@@ -344,40 +344,54 @@ def make_exception_dict(exc, master=None):
     }
 
 
+def overlap_q(range_start, range_end):
+    """Rows whose own time overlaps ``[range_start, range_end)``.
+
+    A row without an end is an instant: it overlaps when it starts inside.
+    """
+    from django.db.models import Q
+
+    return Q(start__lt=range_end) & (
+        Q(end__gt=range_start) | Q(end__isnull=True, start__gte=range_start)
+    )
+
+
 def expand_recurring_events(masters_qs, range_start, range_end):
     """
     Expand recurring master events into occurrence dicts.
-    Substitutes materialized exceptions, skips cancelled ones.
+
+    A materialized exception is drawn at its own time, not at the slot it
+    replaces: an occurrence moved into the range from outside it is in, one
+    moved out of the range is not, and a cancelled one is never drawn.
     """
     from django.db.models import Prefetch
 
     from .models import Event, EventMember
 
-    master_ids = [m.uuid for m in masters_qs]
-    if not master_ids:
+    masters = {m.uuid: m for m in masters_qs}
+    if not masters:
         return []
 
-    # Fetch all exceptions for these masters, prefetch members
-    exceptions = (
-        Event.objects.filter(recurrence_parent_id__in=master_ids)
+    # Every exception replaces its original slot, wherever it now sits.
+    replaced = set(
+        Event.objects.filter(
+            recurrence_parent_id__in=list(masters), original_start__isnull=False
+        ).values_list("recurrence_parent_id", "original_start")
+    )
+    drawn_exceptions = (
+        Event.objects.filter(
+            overlap_q(range_start, range_end),
+            recurrence_parent_id__in=list(masters),
+            is_cancelled=False,
+        )
         .select_related("owner", "calendar", "recurrence_parent")
         .prefetch_related(
             Prefetch("members", queryset=EventMember.objects.select_related("user"))
         )
     )
 
-    # Index by (parent_id, original_start). UUIDs and datetimes are both
-    # hashable, so we use them directly — skipping .isoformat() avoids a
-    # pair of string allocations per key on both the indexing side and the
-    # lookup side below.
-    exc_index = {}
-    for exc in exceptions:
-        if exc.original_start:
-            key = (exc.recurrence_parent_id, exc.original_start)
-            exc_index[key] = exc
-
     occurrences = []
-    for master in masters_qs:
+    for master in masters.values():
         # Pre-compute members list once per master (reused across all virtual occurrences)
         master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
         # Same idea for the derived recurrence fields: describe()/to_simple()
@@ -386,13 +400,11 @@ def expand_recurring_events(masters_qs, range_start, range_end):
         master._cached_recurrence_summary = describe(master.recurrence_rule)
         master._cached_recurrence_simple = to_simple_json(master.recurrence_rule)
         for occ_start in occurrences_in_range(master, range_start, range_end):
-            key = (master.uuid, occ_start)
-            exc = exc_index.get(key)
-            if exc:
-                if exc.is_cancelled:
-                    continue  # Skip cancelled occurrences
-                occurrences.append(make_exception_dict(exc, master))
-            else:
+            if (master.uuid, occ_start) not in replaced:
                 occurrences.append(make_virtual_occurrence(master, occ_start))
 
+    occurrences.extend(
+        make_exception_dict(exc, masters[exc.recurrence_parent_id])
+        for exc in drawn_exceptions
+    )
     return occurrences

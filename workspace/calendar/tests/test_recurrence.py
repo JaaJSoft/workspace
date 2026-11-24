@@ -698,6 +698,66 @@ class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
         self.assertIn("Special Meeting", titles)
 
 
+class MovedOccurrenceTests(CalendarTestMixin, APITestCase):
+    """The grid draws a moved occurrence at its new time, not its old slot."""
+
+    MONDAY = datetime(2026, 3, 2, 10, tzinfo=UTC)
+
+    def _series(self, rule):
+        master = Event(
+            calendar=self.calendar,
+            title="Weekly",
+            start=self.MONDAY,
+            end=self.MONDAY + timedelta(hours=1),
+            owner=self.owner,
+        )
+        apply_rule(master, rule)
+        master.save()
+        return master
+
+    def _move(self, master, original_start, start):
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Moved",
+            start=start,
+            end=start + timedelta(hours=1),
+            owner=self.owner,
+            recurrence_parent=master,
+            original_start=original_start,
+        )
+
+    def _titles(self, range_start, range_end):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(
+            "/api/v1/events",
+            {"start": range_start.isoformat(), "end": range_end.isoformat()},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return [e["title"] for e in resp.data]
+
+    def test_an_occurrence_moved_into_the_range_is_drawn_there(self):
+        master = self._series("RRULE:FREQ=WEEKLY")
+        self._move(
+            master, self.MONDAY + timedelta(weeks=2), self.MONDAY + timedelta(days=2)
+        )
+        first_week = self._titles(self.MONDAY, self.MONDAY + timedelta(weeks=1))
+        self.assertEqual(sorted(first_week), ["Moved", "Weekly"])
+        third_week = self._titles(
+            self.MONDAY + timedelta(weeks=2), self.MONDAY + timedelta(weeks=3)
+        )
+        self.assertEqual(third_week, [])
+
+    def test_the_last_occurrence_moved_past_the_end_of_the_rule_is_drawn(self):
+        master = self._series("RRULE:FREQ=WEEKLY;COUNT=2")
+        self._move(
+            master, self.MONDAY + timedelta(weeks=1), self.MONDAY + timedelta(days=10)
+        )
+        later = self._titles(
+            self.MONDAY + timedelta(days=9), self.MONDAY + timedelta(days=12)
+        )
+        self.assertEqual(later, ["Moved"])
+
+
 class RecurrenceServiceTests(CalendarTestMixin, TestCase):
     """Unit tests for the recurrence expansion service."""
 

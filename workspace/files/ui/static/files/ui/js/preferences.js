@@ -31,9 +31,24 @@ window.getFilePrefs = function() {
   return window._filePrefsCache;
 };
 
-window.filePreferences = function filePreferences() {
-  const API_URL = '/api/v1/settings/files/preferences';
+// The one write path of the preferences: the popover and the toolbar both
+// save the whole object, so each must start from what the other changed.
+window.updateFilePrefs = function updateFilePrefs(changes) {
+  window._filePrefsCache = { ...window._filePrefsCache, ...changes };
+  window.dispatchEvent(new CustomEvent('preferences-changed', { detail: window._filePrefsCache }));
+};
 
+// Resolves to whether the server took the save.
+window.saveFilePrefs = function saveFilePrefs() {
+  return fetch('/api/v1/settings/files/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+    body: JSON.stringify({ value: window._filePrefsCache }),
+    credentials: 'same-origin',
+  }).then((resp) => resp.ok, () => false);
+};
+
+window.filePreferences = function filePreferences() {
   return {
     prefs: { ...window._filePrefsCache },
     _saveTimer: null,
@@ -47,9 +62,8 @@ window.filePreferences = function filePreferences() {
     },
 
     update(key, value) {
-      const previous = this.prefs[key];
-      this.prefs[key] = value;
-      this._broadcast();
+      const previous = window._filePrefsCache[key];
+      this._set(key, value);
       // Breadcrumb collapse and the view mode are rendered server-side:
       // save right away and re-render once the save has landed, or the
       // re-render reads the value the user just left. A save that fails
@@ -62,8 +76,7 @@ window.filePreferences = function filePreferences() {
             this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
             return;
           }
-          this.prefs[key] = previous;
-          this._broadcast();
+          this._set(key, previous);
           window.AppAlert?.error(gettext('Could not save the preference'));
         });
         return;
@@ -71,9 +84,9 @@ window.filePreferences = function filePreferences() {
       this._saveRemote();
     },
 
-    _broadcast() {
-      window._filePrefsCache = { ...this.prefs };
-      window.dispatchEvent(new CustomEvent('preferences-changed', { detail: this.prefs }));
+    _set(key, value) {
+      window.updateFilePrefs({ [key]: value });
+      this.prefs = { ...window._filePrefsCache };
     },
 
     _saveRemote() {
@@ -81,14 +94,8 @@ window.filePreferences = function filePreferences() {
       this._saveTimer = setTimeout(() => this._saveNow(), 500);
     },
 
-    // Resolves to whether the server took the save.
     _saveNow() {
-      const csrfToken = getCSRFToken();
-      return fetch(API_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ value: this.prefs }),
-      }).then((resp) => resp.ok, () => false);
+      return window.saveFilePrefs();
     },
   };
 };

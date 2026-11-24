@@ -1541,34 +1541,19 @@ window.viewToggle = function viewToggle() {
     async setViewMode(mode) {
       const previous = this.viewMode;
       this.viewMode = mode;
-      window._filePrefsCache.defaultViewMode = mode;
-      if (await this._saveFilePrefs()) {
+      window.updateFilePrefs({ defaultViewMode: mode });
+      if (await window.saveFilePrefs()) {
         this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
         return;
       }
       this.viewMode = previous;
-      window._filePrefsCache.defaultViewMode = previous;
+      window.updateFilePrefs({ defaultViewMode: previous });
       window.AppAlert?.error(gettext('Could not switch the view'));
     },
 
     setMosaicTileSize(size) {
-      window._filePrefsCache.mosaicTileSize = parseInt(size);
-      this._saveFilePrefs();
-    },
-
-    _saveFilePrefs() {
-      const API_URL = '/api/v1/settings/files/preferences';
-      const csrfToken = getCSRFToken();
-
-      return fetch(API_URL, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken,
-        },
-        body: JSON.stringify({ value: { ...window._filePrefsCache } }),
-        credentials: 'same-origin',
-      }).then((resp) => resp.ok, () => false);
+      window.updateFilePrefs({ mosaicTileSize: parseInt(size) });
+      window.saveFilePrefs();
     },
   };
 };

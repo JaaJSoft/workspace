@@ -97,7 +97,8 @@ def event_card(request, event_id):
     # the members prefetch; building fresh querysets here would bypass the
     # cache and issue one query each.
     members = list(event.members.all())
-    attendees = [m for m in members if m.status != EventMember.Status.DECLINED][:5]
+    attending = [m for m in members if m.status != EventMember.Status.DECLINED]
+    attendees = attending[:5]
 
     # For recurring occurrences, override start/end with the occurrence's actual times
     occ_start = None
@@ -131,6 +132,7 @@ def event_card(request, event_id):
             "event": event,
             "calendar": calendar,
             "attendees": attendees,
+            "more_attendees": len(attending) - len(attendees),
             "is_owner": is_owner,
             "is_external": is_external,
             "invite_status": invite_status,

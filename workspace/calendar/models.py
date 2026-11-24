@@ -339,7 +339,6 @@ class Poll(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["created_by", "status"]),
-            models.Index(fields=["share_token"]),
             models.Index(fields=["status"]),
         ]
 

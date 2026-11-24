@@ -1381,7 +1381,8 @@ window.photosApp = function photosApp() {
           this.albumActions = actions.map((a) => a.id);
         }
       }).catch(() => {
-        if (this._albumActionsRead === read) this._albumActionsRead = null;
+        // Not `=== read`: Alpine hands back a proxy of the stored object.
+        if (generation === this._albumGeneration) this._albumActionsRead = null;
       });
     },
 

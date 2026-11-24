@@ -832,11 +832,25 @@ test('the album menu reuses the actions the page already asked for', async () =>
   assert.deepEqual(Array.from(app.albumMenu.actions, (a) => a.id), ['rename']);
 });
 
+// Alpine hands a component's methods a reactive proxy: an object read back
+// from its state is a proxy of what was stored, never the same reference.
+function alpineReactive(target) {
+  const proxies = new WeakMap();
+  const wrap = (value) => {
+    if (Object.prototype.toString.call(value) !== '[object Object]') return value;
+    if (!proxies.has(value)) {
+      proxies.set(value, new Proxy(value, { get: (t, key, receiver) => wrap(Reflect.get(t, key, receiver)) }));
+    }
+    return proxies.get(value);
+  };
+  return wrap(target);
+}
+
 test('a failed read of the album actions is asked again when the menu opens', async () => {
   const requests = [];
   let fail = true;
   const page = grid(['a'], { uuid: 'al1', title: 'Summer' });
-  const app = load({
+  const app = alpineReactive(load({
     document: page.document,
     getCSRFToken: () => 't',
     fetch: (url, opts) => {
@@ -844,7 +858,7 @@ test('a failed read of the album actions is asked again when the menu opens', as
       if (fail) return Promise.reject(new Error('offline'));
       return jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [{ id: 'rename' }] } })(url, opts);
     },
-  }).ctx.photosApp();
+  }).ctx.photosApp());
   await app.syncAlbum();
   fail = false;
 

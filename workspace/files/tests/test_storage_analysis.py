@@ -295,6 +295,18 @@ class AnalyzeStorageServiceTests(_TreeMixin, TestCase):
         self.assertEqual(result["subfolders"][0]["name"], "shared")
         self.assertEqual(result["subfolders"][0]["size"], 400)
 
+    def test_personal_trash_leaves_out_trashed_group_files_the_user_made(self):
+        group = Group.objects.create(name="team")
+        self.alice.groups.add(group)
+        root = _folder(self.alice, "team", group=group)
+        gone = _file(self.alice, "g2", root, size=250, category="image", group=group)
+        gone.deleted_at = timezone.now()
+        gone.save(update_fields=["deleted_at"])
+
+        result = analyze_storage(self.alice)
+
+        self.assertEqual(result["trash"], {"size": 700, "count": 1})
+
 
 class StorageApiTests(_TreeMixin, APITestCase):
     def test_root_endpoint(self):

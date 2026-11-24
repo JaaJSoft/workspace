@@ -151,7 +151,7 @@ class StorageScope:
     def trash_q(self):
         if self.group is not None:
             return Q(group=self.group, deleted_at__isnull=False)
-        return Q(owner=self.user, deleted_at__isnull=False)
+        return Q(owner=self.user, group__isnull=True, deleted_at__isnull=False)
 
 
 def _files(scope):

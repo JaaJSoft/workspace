@@ -1,0 +1,98 @@
+# Container Manager project run by the Synology package (docker-project
+# worker). Container Manager creates the containers when the package is
+# installed and starts or stops them with the package.
+#
+# The `workspace` shared folder is the data volume: database, user files,
+# thumbnails and workspace.env, the settings file an administrator edits
+# (see synology.sh). Every container reads that file when it starts, so a
+# setting changes with a restart of the package, not a reinstall.
+
+x-app: &app
+  image: __IMAGE__
+  entrypoint: ["sh", "/opt/synology/synology.sh"]
+  volumes:
+    - /var/packages/workspace/shares/workspace:/app/data
+    - ./synology.sh:/opt/synology/synology.sh:ro
+    - ./workspace.env.template:/opt/synology/workspace.env.template:ro
+  environment: &app-environment
+    DEBUG: "0"
+    DATABASE_URL: sqlite:////app/data/db.sqlite3
+    MEDIA_ROOT: /app/data
+    REDIS_URL: redis://redis:6379
+    ALLOWED_HOSTS: "*"
+    # Reached over plain HTTP on the local network out of the box: a Secure
+    # cookie would never come back and login would loop. workspace.env turns
+    # them back on once the NAS reverse proxy serves HTTPS.
+    SESSION_COOKIE_SECURE: "0"
+    CSRF_COOKIE_SECURE: "0"
+  restart: unless-stopped
+
+services:
+  redis:
+    image: __REDIS_IMAGE__
+    container_name: workspace-redis
+    # Sessions live in Redis: a snapshot keeps people signed in across a
+    # restart of the NAS.
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  # One-shot: hands the shared folder to the image's user, writes
+  # workspace.env on first run, applies migrations and creates the
+  # administrator account entered in the install wizard.
+  prepare:
+    <<: *app
+    container_name: workspace-prepare
+    user: "0:0"
+    command: ["prepare"]
+    restart: "no"
+    depends_on:
+      - redis
+
+  web:
+    <<: *app
+    container_name: workspace-web
+    command: ["run"]
+    environment:
+      <<: *app-environment
+      PROCESS_TYPE: web
+      GUNICORN_WORKERS: "1"
+    ports:
+      - "__PORT__:8000"
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  worker:
+    <<: *app
+    container_name: workspace-worker
+    command: ["run"]
+    environment:
+      <<: *app-environment
+      PROCESS_TYPE: worker
+      CELERY_WORKER_CONCURRENCY: "2"
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  beat:
+    <<: *app
+    container_name: workspace-beat
+    command: ["run"]
+    environment:
+      <<: *app-environment
+      PROCESS_TYPE: beat
+      CELERY_BEAT_SCHEDULE_FILENAME: /app/data/celerybeat-schedule
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+volumes:
+  redis-data:

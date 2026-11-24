@@ -1,0 +1,56 @@
+[
+    {
+        "step_title": "Compte administrateur",
+        "items": [
+            {
+                "desc": "Workspace crée ce compte à son premier démarrage. Connectez-vous avec, puis créez les autres utilisateurs depuis l'administration."
+            },
+            {
+                "type": "textfield",
+                "subitems": [
+                    {
+                        "key": "wizard_admin_username",
+                        "desc": "Nom d'utilisateur",
+                        "defaultValue": "admin",
+                        "validator": {
+                            "allowBlank": false,
+                            "regex": {
+                                "expr": "/^[\\w.@+-]{1,150}$/",
+                                "errorText": "Lettres, chiffres et @ . + - _ uniquement"
+                            }
+                        }
+                    },
+                    {
+                        "key": "wizard_admin_email",
+                        "desc": "E-mail",
+                        "validator": {
+                            "allowBlank": false,
+                            "vtype": "email"
+                        }
+                    }
+                ]
+            },
+            {
+                "type": "password",
+                "subitems": [
+                    {
+                        "key": "wizard_admin_password",
+                        "desc": "Mot de passe",
+                        "validator": {
+                            "allowBlank": false,
+                            "minLength": 8
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "step_title": "Données et réglages",
+        "items": [
+            {
+                "desc": "Workspace conserve sa base de données et tous les fichiers des utilisateurs dans le dossier partagé <b>workspace</b>, qu'il crée. Ses réglages sont dans <b>workspace/workspace.env</b> : modifiez ce fichier, puis redémarrez le paquet. Une fois installé, Workspace répond sur le port <b>__PORT__</b> du NAS. Le premier démarrage télécharge les images des conteneurs et peut prendre quelques minutes."
+            }
+        ]
+    }
+]

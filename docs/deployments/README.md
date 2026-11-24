@@ -8,6 +8,7 @@ This directory contains deployment configurations for Workspace.
 |------|-----------|----------|----------|
 | [Docker Compose](docker-compose/) | `docker-compose/` | SQLite | Single-node, small teams |
 | [Kubernetes](kubernetes/) | `kubernetes/` | SQLite (single pod) | Cluster environments |
+| [Synology NAS](synology/) | `synology/` | SQLite | A Synology NAS, installed from Package Center |
 
 ## Quick Start
 

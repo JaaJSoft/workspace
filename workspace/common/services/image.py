@@ -52,9 +52,7 @@ def process_image_to_webp(
 
 def save_image(path: str, image_bytes: bytes) -> None:
     """Save *image_bytes* to *path* in default_storage, replacing any existing file."""
-    if default_storage.exists(path):
-        default_storage.delete(path)
-    default_storage.save(path, ContentFile(image_bytes))
+    default_storage.replace(path, ContentFile(image_bytes))
 
 
 def delete_image(path: str) -> None:

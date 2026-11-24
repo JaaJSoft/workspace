@@ -124,20 +124,7 @@
           </label>
         </form>
       {% endif %}
-      {% if pending %}
-        <span
-          class="badge badge-ghost gap-1.5 max-sm:hidden"
-          title="{% translate 'New photos and videos show up here once their capture date has been read.' %}"
-          data-photos-pending
-        >
-          <span class="loading loading-spinner loading-xs"></span>
-          {% blocktranslate trimmed count counter=pending %}
-            {{ counter }} being analyzed
-          {% plural %}
-            {{ counter }} being analyzed
-          {% endblocktranslate %}
-        </span>
-      {% endif %}
+      {% include "photos/ui/partials/pending_badge.html" %}
       <div class="max-sm:hidden self-center">
         {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
       </div>

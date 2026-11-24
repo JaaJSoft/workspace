@@ -953,6 +953,17 @@ def index(request):
 
 
 @login_required
+def pending(request):
+    """The timeline header's being-analyzed badge alone, polled after an import."""
+    scope = _scope(request, _defaults(request.user))
+    return render(
+        request,
+        "photos/ui/partials/pending_badge.html",
+        {"pending": unanalyzed_count(request.user, scope)},
+    )
+
+
+@login_required
 def timeline(request):
     """The page after ``?cursor=``, appended to the grid by alpine-ajax."""
     who = _who(request)

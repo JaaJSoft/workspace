@@ -7,6 +7,7 @@ const PHOTOS_IMPORT_API = '/api/v1/photos/import-folder';
 const PHOTOS_IMPORT_BY_DATE_API = '/api/v1/photos/import-folder/by-date';
 // The most uuids the by-date endpoint takes in one report.
 const PHOTOS_IMPORT_BY_DATE_BATCH = 500;
+const PHOTOS_PENDING_URL = '/photos/pending';
 const PHOTOS_ANALYSIS_POLL_MS = 4000;
 const PHOTOS_ANALYSIS_MAX_POLLS = 75;
 
@@ -248,7 +249,9 @@ window.photosImportMixin = function photosImportMixin() {
           return;
         }
         if (++polls > PHOTOS_ANALYSIS_MAX_POLLS) return;
-        await this._refresh(['photos-header']);
+        // The badge alone: a page swap renders the whole timeline.
+        await this.$ajax(PHOTOS_PENDING_URL + window.location.search, { target: 'photos-pending', focus: false })
+          .catch(() => {});
         this._analysisTimer = setTimeout(tick, PHOTOS_ANALYSIS_POLL_MS);
       };
       if (document.querySelector('[data-photos-pending]')) {

@@ -9,12 +9,13 @@ import uuid
 
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import transaction
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.services import tree
 from workspace.projects.models import TaskAttachment, TaskEvent
-from workspace.projects.services.tasks import create_task
+from workspace.projects.services.tasks import create_task, delete_task
 from workspace.projects.tests.base import ProjectTestMixin
 
 
@@ -246,7 +247,8 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         att = TaskAttachment.objects.get()
         blob_path = att.file.name
         self.client.force_authenticate(self.member)
-        resp = self.client.delete(f"{self.url}/{att.uuid}")
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.delete(f"{self.url}/{att.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(TaskAttachment.objects.count(), 0)
         self.assertFalse(default_storage.exists(blob_path))
@@ -277,6 +279,44 @@ class TaskAttachmentApiTests(ProjectTestMixin, APITestCase):
         self._upload(self.member)
         self.task.delete()
         self.assertEqual(TaskAttachment.objects.count(), 0)
+
+    def test_deleting_the_task_deletes_the_blobs_once_committed(self):
+        self._upload(self.member)
+        blob_path = TaskAttachment.objects.get().file.name
+        self.client.force_authenticate(self.admin)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.delete(
+                f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}"
+            )
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(default_storage.exists(blob_path))
+
+    def test_deleting_the_project_deletes_the_blobs_once_committed(self):
+        self._upload(self.member)
+        blob_path = TaskAttachment.objects.get().file.name
+        self.client.force_authenticate(self.admin)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.delete(f"/api/v1/projects/{self.project.uuid}")
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(default_storage.exists(blob_path))
+
+    def test_a_rolled_back_delete_keeps_the_blob(self):
+        self._upload(self.member)
+        blob_path = TaskAttachment.objects.get().file.name
+
+        with self.captureOnCommitCallbacks(execute=True):
+            try:
+                with transaction.atomic():
+                    delete_task(self.task)
+                    raise RuntimeError("abort")
+            except RuntimeError:
+                pass
+
+        self.assertTrue(default_storage.exists(blob_path))
 
 
 class TaskAttachmentViewerTests(ProjectTestMixin, APITestCase):

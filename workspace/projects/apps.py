@@ -12,6 +12,17 @@ class ProjectsConfig(AppConfig):
 
         user_settings_registry.register("projects", ProjectsSettings)
 
+        from django.db.models.signals import post_delete
+
+        from workspace.projects.models import TaskAttachment
+        from workspace.projects.services.attachments import discard_blob_on_delete
+
+        post_delete.connect(
+            discard_blob_on_delete,
+            sender=TaskAttachment,
+            dispatch_uid="projects_attachment_blob",
+        )
+
         from workspace.core.module_registry import ModuleInfo, registry
 
         registry.register(

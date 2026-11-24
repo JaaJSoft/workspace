@@ -6,13 +6,20 @@ file's own lifecycle (trash, deletion, permission changes) never reaches
 the task copy.
 """
 
-from django.core.files.base import File as DjangoFile
+import logging
 
+from django.core.files.base import File as DjangoFile
+from django.core.files.storage import default_storage
+from django.db import transaction
+
+from workspace.common.logging import scrub
 from workspace.files.services.detection import detect_from_stream
 from workspace.files.services.filetype import pin_viewer_for_upload
 
 from ..models import TaskAttachment, TaskEvent
 from .events import record_task_event
+
+logger = logging.getLogger(__name__)
 
 MAX_ATTACHMENTS_PER_REQUEST = 10
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -65,6 +72,25 @@ def create_attachments(user, task, uploads, workspace_files):
 def remove_attachment(attachment, actor):
     """Delete *attachment* and its blob, recording the activity event."""
     task = attachment.task
-    attachment.file.delete(save=False)
     attachment.delete()
     record_task_event(task, type=TaskEvent.Type.DETACHED, actor=actor)
+
+
+def discard_blob_on_delete(sender, instance, using, **kwargs):
+    """``post_delete`` receiver: drop the blob of a deleted attachment.
+
+    A signal rather than a step of each delete, because the row also goes
+    with its task, its project or its uploader's account, through cascades
+    no service sees. Storage does not roll back: the blob only goes once
+    the deletion commits.
+    """
+    name = instance.file.name
+    if name:
+        transaction.on_commit(lambda: _delete_blob(name), using=using)
+
+
+def _delete_blob(name):
+    try:
+        default_storage.delete(name)
+    except OSError:
+        logger.warning("Could not delete task attachment %s", scrub(name))

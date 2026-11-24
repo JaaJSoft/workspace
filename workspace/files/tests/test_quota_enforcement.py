@@ -717,31 +717,20 @@ class ExtractEnforcementTests(TestCase):
             extract_zip(archive, None, acting_user=self.user)
 
     def test_a_refused_extraction_leaves_no_entry_behind(self):
-        from unittest.mock import patch
-
         from workspace.files.services.extract import extract_zip
+        from workspace.files.tests.test_extract_service import written_blobs
 
         archive = self._archive(
             [("a.bin", b"x" * (3 * KB)), ("b.bin", b"y" * (3 * KB))]
         )
-        storage = File._meta.get_field("content").storage
-        delete_calls = []
-        orig_delete = storage.delete
-
-        def tracking_delete(name):
-            delete_calls.append(name)
-            return orig_delete(name)
-
-        with patch.object(storage, "delete", side_effect=tracking_delete):
+        with written_blobs() as blobs:
             with self.assertRaises(quota.QuotaExceeded):
                 extract_zip(archive, None, acting_user=self.user)
 
         self.assertFalse(File.objects.filter(name__in=["a.bin", "b.bin"]).exists())
-        self.assertTrue(
-            any("a.bin" in c for c in delete_calls),
-            f"Expected a cleanup delete for the 'a.bin' blob, got: {delete_calls}",
-        )
-        self.assertFalse(default_storage.exists(delete_calls[0]))
+        self.assertEqual(len(blobs), 1)
+        self.assertIn("a.bin", blobs[0])
+        self.assertFalse(default_storage.exists(blobs[0]))
 
     def test_an_archive_that_fits_still_extracts(self):
         from workspace.files.services.extract import extract_zip

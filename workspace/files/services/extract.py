@@ -5,7 +5,8 @@ Security guardrails:
 - Path entries are rejected on zip-slip (`..`), absolute paths, Windows drives.
 - Symlink entries are silently skipped.
 - Total uncompressed bytes and total entry count are capped (zip-bomb defence).
-- The whole extraction runs in transaction.atomic() so partial failures roll back.
+- Each entry commits on its own, so the extraction never holds the database
+  writer while it decompresses; a failure hard-deletes what it had created.
 """
 
 import logging
@@ -14,7 +15,6 @@ import zipfile
 
 from django.conf import settings
 from django.core.files.uploadedfile import TemporaryUploadedFile
-from django.db import transaction
 
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
@@ -22,6 +22,7 @@ from workspace.common.text import caseless
 from ..models import File
 from ..queries import can_create_in
 from . import tree
+from .hard_delete import hard_delete_in_batches
 from .names import sibling_nodes
 from .quota import check_write_allowed, remaining_bytes
 from .refusals import (
@@ -147,10 +148,8 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         logger.warning("Cannot open archive %s: %s", scrub(file_obj.content.name), e)
         raise ValueError("Archive content missing") from e
 
-    # Paths of blobs already written to storage. When the atomic block rolls
-    # back, the File rows are gone but the storage blobs remain orphaned -
-    # walk this list and delete them by hand.
-    created_paths = []
+    # Rows this extraction created, files and folders alike.
+    created_pks = []
     files_created = 0
     try:
         with source, zipfile.ZipFile(source) as zf:
@@ -159,100 +158,95 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                 raise ArchiveTooManyEntriesError("Too many entries in archive")
 
             try:
-                with transaction.atomic():
-                    folder_cache = {(): dest_folder}
-                    total_bytes = 0
-                    dest_group = dest_folder.group if dest_folder is not None else None
-                    # The bucket is read once and the running total is kept in
-                    # Python, so the loop costs no quota query per entry.
-                    # ``total_bytes`` counts bytes actually decompressed, which
-                    # is what makes it safe to hand create_file check_quota=False
-                    # below - a zip header can lie, the running total cannot.
-                    quota_remaining = remaining_bytes(
-                        owner=acting_user, group=dest_group
-                    )
+                folder_cache = {(): dest_folder}
+                total_bytes = 0
+                dest_group = dest_folder.group if dest_folder is not None else None
+                # The bucket is read once and the running total is kept in
+                # Python, so the loop costs no quota query per entry.
+                # ``total_bytes`` counts bytes actually decompressed, which
+                # is what makes it safe to hand create_file check_quota=False
+                # below - a zip header can lie, the running total cannot.
+                quota_remaining = remaining_bytes(owner=acting_user, group=dest_group)
 
-                    for info in entries:
-                        if _is_symlink(info):
-                            continue
-                        if _is_unsafe_path(info.filename):
-                            raise ValueError(
-                                f"Unsafe entry in archive: {scrub(info.filename)}"
-                            )
-
-                        parts = [
-                            p for p in info.filename.replace("\\", "/").split("/") if p
-                        ]
-                        if not parts:
-                            continue
-
-                        if info.is_dir():
-                            _ensure_folder_chain(parts, folder_cache, acting_user)
-                            continue
-
-                        parent = _ensure_folder_chain(
-                            parts[:-1], folder_cache, acting_user
+                for info in entries:
+                    if _is_symlink(info):
+                        continue
+                    if _is_unsafe_path(info.filename):
+                        raise ValueError(
+                            f"Unsafe entry in archive: {scrub(info.filename)}"
                         )
-                        leaf = parts[-1]
 
+                    parts = [
+                        p for p in info.filename.replace("\\", "/").split("/") if p
+                    ]
+                    if not parts:
+                        continue
+
+                    if info.is_dir():
+                        _ensure_folder_chain(
+                            parts, folder_cache, acting_user, created_pks
+                        )
+                        continue
+
+                    parent = _ensure_folder_chain(
+                        parts[:-1], folder_cache, acting_user, created_pks
+                    )
+                    leaf = parts[-1]
+
+                    if (
+                        quota_remaining is not None
+                        and total_bytes + info.file_size > quota_remaining
+                    ):
+                        # Declared size: a refusal before the entry is
+                        # decompressed at all. The service names the bucket
+                        # and re-reads usage, which already includes bytes
+                        # written earlier in this extraction - so charge
+                        # only this entry.
+                        check_write_allowed(
+                            owner=acting_user,
+                            group=dest_group,
+                            additional_bytes=info.file_size,
+                        )
+
+                    tmp, total_bytes = _stream_entry_to_tempfile(
+                        zf,
+                        info,
+                        leaf,
+                        total_bytes,
+                        max_bytes,
+                    )
+                    try:
                         if (
                             quota_remaining is not None
-                            and total_bytes + info.file_size > quota_remaining
+                            and total_bytes > quota_remaining
                         ):
-                            # Declared size: a refusal before the entry is
-                            # decompressed at all. The service names the bucket
-                            # and re-reads usage, which already includes bytes
-                            # written earlier in this extraction - so charge
-                            # only this entry.
+                            # Real size, now that the entry is on disk:
+                            # this is the gate an understated header would
+                            # otherwise walk past.
                             check_write_allowed(
                                 owner=acting_user,
                                 group=dest_group,
-                                additional_bytes=info.file_size,
+                                additional_bytes=tmp.size,
                             )
-
-                        tmp, total_bytes = _stream_entry_to_tempfile(
-                            zf,
-                            info,
+                        new_file = tree.create_file(
+                            acting_user,
                             leaf,
-                            total_bytes,
-                            max_bytes,
+                            parent=parent,
+                            content=tmp,
+                            acting_user=acting_user,
+                            check_quota=False,
                         )
-                        try:
-                            if (
-                                quota_remaining is not None
-                                and total_bytes > quota_remaining
-                            ):
-                                # Real size, now that the entry is on disk:
-                                # this is the gate an understated header would
-                                # otherwise walk past.
-                                check_write_allowed(
-                                    owner=acting_user,
-                                    group=dest_group,
-                                    additional_bytes=tmp.size,
-                                )
-                            new_file = tree.create_file(
-                                acting_user,
-                                leaf,
-                                parent=parent,
-                                content=tmp,
-                                acting_user=acting_user,
-                                check_quota=False,
-                            )
-                            created_paths.append(
-                                (new_file.content.storage, new_file.content.name),
-                            )
-                        finally:
-                            tmp.close()
-                        files_created += 1
+                        created_pks.append(new_file.pk)
+                    finally:
+                        tmp.close()
+                    files_created += 1
             except Exception:
-                # transaction.atomic already rolled back the DB rows. Clean up
-                # the storage blobs that were written before the failure so we
-                # don't leak orphans.
-                for storage, path in created_paths:
-                    try:
-                        storage.delete(path)
-                    except Exception:
-                        logger.warning("Failed to clean orphan blob %s", scrub(path))
+                # Half an archive is worse than none: take back every row
+                # created so far, and their blobs with them.
+                try:
+                    hard_delete_in_batches(File.objects.filter(pk__in=created_pks))
+                except Exception:
+                    logger.exception("Could not take back a failed extraction")
                 raise
     except zipfile.BadZipFile as e:
         raise ValueError("Corrupted archive") from e
@@ -283,8 +277,11 @@ def extract_item(user, node, parent):
         raise Refused(Refusal.ARCHIVE_INVALID) from error
 
 
-def _ensure_folder_chain(parts, folder_cache, acting_user):
-    """Walk path segments, creating folders as needed. () maps to the destination."""
+def _ensure_folder_chain(parts, folder_cache, acting_user, created_pks):
+    """Walk path segments, creating folders as needed. () maps to the destination.
+
+    The pk of every folder created is appended to *created_pks*.
+    """
     current_key = ()
     current = folder_cache[current_key]
     for segment in parts:
@@ -310,6 +307,7 @@ def _ensure_folder_chain(parts, folder_cache, acting_user):
                 parent=current,
                 acting_user=acting_user,
             )
+            created_pks.append(existing.pk)
         folder_cache[next_key] = existing
         current = existing
         current_key = next_key

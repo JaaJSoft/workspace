@@ -1,9 +1,14 @@
 import io
+import posixpath
 import zipfile
+from contextlib import contextmanager
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.db import connection
+from django.db.models.signals import post_save
 from django.test import TestCase, override_settings
 
 from workspace.files.models import File
@@ -11,6 +16,22 @@ from workspace.files.services import tree
 from workspace.files.services.extract import extract_zip
 
 User = get_user_model()
+
+
+@contextmanager
+def written_blobs():
+    """Yield the list of blob names of the files created inside the block."""
+    blobs = []
+
+    def record(sender, instance, created, **kwargs):
+        if created and instance.content:
+            blobs.append(instance.content.name)
+
+    post_save.connect(record, sender=File, weak=False)
+    try:
+        yield blobs
+    finally:
+        post_save.disconnect(record, sender=File)
 
 
 def _make_zip(entries):
@@ -266,11 +287,7 @@ class ExtractZipServiceTests(TestCase):
 
     def test_extract_cleans_up_blobs_on_rollback(self):
         """When extraction fails partway through, blobs already written to
-        storage before the failure must be deleted (no orphans). The atomic
-        block only rolls back DB rows - storage blobs need an explicit unlink.
-        """
-        from unittest.mock import patch
-
+        storage before the failure must be deleted (no orphans)."""
         payload = _make_zip(
             [
                 ("ok.txt", b"first entry, will succeed"),
@@ -279,27 +296,13 @@ class ExtractZipServiceTests(TestCase):
         )
         archive = self._make_archive_file(payload)
 
-        storage = File._meta.get_field("content").storage
-        delete_calls = []
-        orig_delete = storage.delete
-
-        def tracking_delete(name):
-            delete_calls.append(name)
-            return orig_delete(name)
-
-        with patch.object(storage, "delete", side_effect=tracking_delete):
+        with written_blobs() as blobs:
             with self.assertRaises(ValueError):
                 extract_zip(archive, self.dest, acting_user=self.user)
 
-        # DB: zero rows under dest (atomic rollback).
         self.assertEqual(File.objects.filter(parent=self.dest).count(), 0)
-
-        # Storage: the blob for 'ok.txt' that was created before the rejection
-        # must have been deleted (storage.delete called for it).
-        self.assertTrue(
-            any("ok.txt" in c for c in delete_calls),
-            f"Expected a cleanup delete for the 'ok.txt' blob, got: {delete_calls}",
-        )
+        self.assertEqual([posixpath.basename(blob) for blob in blobs], ["ok.txt"])
+        self.assertFalse(default_storage.exists(blobs[0]))
 
     def test_extract_streams_entries_via_tempfile_not_contentfile(self):
         """Regression test: large entries must flow through a temp file, not be
@@ -348,6 +351,49 @@ class ExtractZipServiceTests(TestCase):
         sub = File.objects.get(parent=self.dest, name="sub", node_type="folder")
         nested = File.objects.get(parent=sub, name="nested.txt")
         self.assertEqual(nested.size, len(b"nested content"))
+
+    def test_no_transaction_is_held_while_an_entry_decompresses(self):
+        from workspace.files.services import extract as extract_mod
+
+        payload = _make_zip([("a.txt", b"a"), ("sub/b.txt", b"b")])
+        archive = self._make_archive_file(payload)
+        depth_outside = len(connection.atomic_blocks)
+        depths = []
+        real = extract_mod._stream_entry_to_tempfile
+
+        def recording(*args, **kwargs):
+            depths.append(len(connection.atomic_blocks))
+            return real(*args, **kwargs)
+
+        with patch.object(extract_mod, "_stream_entry_to_tempfile", recording):
+            extract_zip(archive, self.dest, acting_user=self.user)
+
+        self.assertEqual(depths, [depth_outside, depth_outside])
+
+    def test_a_failure_takes_back_what_was_created_and_nothing_else(self):
+        existing = tree.create_folder(self.user, "sub", self.dest)
+        kept = tree.create_file(
+            self.user, "kept.txt", existing, content=ContentFile(b"k", name="k")
+        )
+        payload = _make_zip(
+            [
+                ("sub/a.txt", b"a"),
+                ("new/deep/b.txt", b"b"),
+                ("../evil.txt", b"bad"),
+            ]
+        )
+        archive = self._make_archive_file(payload)
+
+        with self.assertRaises(ValueError):
+            extract_zip(archive, self.dest, acting_user=self.user)
+
+        self.assertEqual(
+            set(File.objects.filter(owner=self.user).values_list("name", flat=True)),
+            {"dest", "sub", "kept.txt", "archive.zip"},
+        )
+        self.assertTrue(default_storage.exists(kept.content.name))
+        self.assertFalse(default_storage.exists("files/users/alice/dest/sub/a.txt"))
+        self.assertFalse(default_storage.exists("files/users/alice/dest/new"))
 
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip(

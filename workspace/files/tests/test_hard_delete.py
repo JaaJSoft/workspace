@@ -9,11 +9,13 @@ its ``post_delete`` ones.
 
 from contextlib import contextmanager
 from datetime import timedelta
+from io import StringIO
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.management import call_command
 from django.db.models.signals import post_delete, pre_delete
 from django.test import override_settings
 from django.utils import timezone
@@ -162,3 +164,19 @@ class HardDeleteBatchingTests(APITestCase):
         self.assertEqual(result["files_deleted"], 100)
         self.assertLessEqual(state["peak"], BATCH_SIZE)
         self.assertFalse(File.objects.filter(owner=self.user).exists())
+
+    def test_retention_command_deletes_in_bounded_batches(self):
+        old = self._build_tree("Old")
+        File.objects.filter(owner=self.user).update(
+            deleted_at=timezone.now() - timedelta(days=45)
+        )
+        recent = self._build_tree("Recent")
+
+        with collector_peak() as state:
+            call_command("purge_trash", days=30, stdout=StringIO())
+
+        self.assertLessEqual(state["peak"], BATCH_SIZE)
+        self.assertFalse(File.objects.filter(pk=old.pk).exists())
+        self.assertFalse(default_storage.exists(self._trash_dir_on_disk(old)))
+        self.assertEqual(File.objects.filter(owner=self.user).count(), 111)
+        self.assertTrue(File.objects.filter(pk=recent.pk).exists())

@@ -8,6 +8,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from workspace.files.models import File
+from workspace.files.services.hard_delete import hard_delete_in_batches
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +57,7 @@ class Command(BaseCommand):
         if dry_run:
             return
 
-        # select_related('owner') avoids N+1 in the pre_delete signal,
-        # which reads instance.owner.username for each File.
-        qs.select_related("owner").delete()
+        hard_delete_in_batches(qs)
         self.stdout.write(
             self.style.SUCCESS(
                 f"Purged {files_count} files and {folders_count} folders."

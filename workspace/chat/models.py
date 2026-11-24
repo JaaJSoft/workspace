@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext_lazy, pgettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -66,8 +66,8 @@ class ConversationMember(models.Model):
         so nobody comes back as an admin.
         """
 
-        ADMIN = "admin", "Admin"
-        MEMBER = "member", "Member"
+        ADMIN = "admin", pgettext_lazy("chat group role", "Admin")
+        MEMBER = "member", pgettext_lazy("chat group role", "Member")
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     conversation = models.ForeignKey(

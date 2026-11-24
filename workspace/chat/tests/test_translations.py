@@ -213,3 +213,15 @@ class SystemCallLabelTests(TestCase):
         with translation.override("fr"):
             self.assertEqual(_render_system_call_body("active"), "Call started")
             self.assertEqual(_render_system_call_body("ended", 45), "Call ended - 45s")
+
+
+class MemberRoleLabelTests(TestCase):
+    def test_role_labels_follow_the_active_language(self):
+        admin = ConversationMember(role=ConversationMember.Role.ADMIN)
+        member = ConversationMember(role=ConversationMember.Role.MEMBER)
+        with translation.override("fr"):
+            self.assertEqual(admin.get_role_display(), "Administrateur")
+            self.assertEqual(member.get_role_display(), "Membre")
+        with translation.override("en"):
+            self.assertEqual(admin.get_role_display(), "Admin")
+            self.assertEqual(member.get_role_display(), "Member")

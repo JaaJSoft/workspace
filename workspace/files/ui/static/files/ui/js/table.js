@@ -1158,12 +1158,7 @@ window.fileTableControls = function fileTableControls() {
         const payload = this._getStatePayload();
         const serialized = JSON.stringify(payload);
         if (serialized === this._lastSyncedState) return;
-        const csrfToken = getCSRFToken();
-        fetch('/api/v1/settings/files/table_controls', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ value: payload }),
-        })
+        window.saveUserSetting('files', 'table_controls', payload)
           .then(() => { this._lastSyncedState = serialized; window._tableControlsCache = payload; })
           .catch(() => {});
       }, 500);

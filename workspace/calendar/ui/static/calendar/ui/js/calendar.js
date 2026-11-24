@@ -186,15 +186,8 @@ window.calendarApp = function calendarApp() {
     },
 
     // ── Preferences ─────────────────────────────────────────
-    _prefsUrl: '/api/v1/settings/calendar/preferences',
-
     _savePrefs() {
-      fetch(this._prefsUrl, {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: this.prefs }),
-      }).catch(() => {});
+      window.saveUserSetting('calendar', 'preferences', this.prefs).catch(() => {});
     },
 
     _timeFormatFC() {

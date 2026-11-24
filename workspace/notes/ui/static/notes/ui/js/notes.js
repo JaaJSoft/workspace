@@ -40,7 +40,6 @@ function notesFolderLabel(uuid) {
 }
 
 window.notesPreferences = function notesPreferences() {
-    const API_URL = '/api/v1/settings/notes/preferences';
     let _saveTimer = null;
 
     return {
@@ -120,11 +119,7 @@ window.notesPreferences = function notesPreferences() {
         _saveRemote() {
             clearTimeout(_saveTimer);
             _saveTimer = setTimeout(function() {
-                fetch(API_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                    body: JSON.stringify({ value: this.prefs }),
-                }).catch(function() {});
+                window.saveUserSetting('notes', 'preferences', this.prefs).catch(function() {});
             }.bind(this), 500);
         },
     };
@@ -1267,12 +1262,7 @@ window.notesApp = function notesApp(config) {
                 detail: { ...window._notesPrefsCache }
             }));
             // Persist to server
-            const prefs = { ...window._notesPrefsCache };
-            fetch('/api/v1/settings/notes/preferences', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-                body: JSON.stringify({ value: prefs }),
-            }).catch(function() {});
+            window.saveUserSetting('notes', 'preferences', { ...window._notesPrefsCache }).catch(function() {});
         },
 
         // ── URL state ────────────────────────────────────────

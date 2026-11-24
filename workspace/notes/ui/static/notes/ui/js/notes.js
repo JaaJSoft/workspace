@@ -790,6 +790,9 @@ window.notesApp = function notesApp(config) {
         async onRestore(event) {
             if (event.detail.stale) event.preventDefault();
             const gen = ++this._restoreGen;
+            // A journal open still on its way would select a note and write
+            // an address over the entry being restored, the same journal included.
+            this._journalRun++;
             const p = new URLSearchParams(window.location.search);
             // An address without a view shows the default one, as on a reload.
             const view = p.get('view') || window._notesPrefsCache.defaultView || 'all';

@@ -11,9 +11,10 @@ const { loadScript } = require('../../../common/tests/js/loader');
 const JOURNAL = '22222222-2222-2222-2222-222222222222';
 const TODAY = '2026-11-24';
 
-function makeApp(responses) {
+function makeApp(responses, extraGlobals = {}) {
   const requests = [];
   const ctx = loadScript('workspace/notes/ui/static/notes/ui/js/notes.js', {
+    ...extraGlobals,
     fetch: (url, init) => {
       requests.push([init && init.method ? init.method : 'GET', url]);
       return responses.shift();
@@ -129,5 +130,27 @@ test('a journal left while the note of the day opens leaves the address alone', 
 
   await app.openJournal();
 
+  assert.equal(urlWrites, 0);
+});
+
+test('restoring the same journal from history drops a journal open still looking up its note', async () => {
+  let answer;
+  const lookup = new Promise((resolve) => { answer = resolve; });
+  const { app, requests } = makeApp([page(['2026-11-23'], true), lookup, created(TODAY)], {
+    location: { search: '?view=journal' },
+    URLSearchParams,
+  });
+  let urlWrites = 0;
+  app.updateUrl = () => { urlWrites++; };
+  app._readExpandedFromUrl = () => [];
+
+  const opening = app.openJournal();
+  await new Promise((resolve) => setImmediate(resolve));
+  await app.onRestore({ detail: { stale: false }, preventDefault() {} });
+  answer(page([], false));
+  await opening;
+
+  assert.deepEqual(requests.map((r) => r[0]), ['GET', 'GET']);
+  assert.deepEqual(app.selected, []);
   assert.equal(urlWrites, 0);
 });

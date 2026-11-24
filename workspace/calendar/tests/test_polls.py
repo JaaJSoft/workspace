@@ -18,11 +18,13 @@ from workspace.calendar.models import (
     PollSlot,
     PollVote,
 )
+from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.serializers_polls import (
     GuestVoteSubmitSerializer,
     PollFinalizeSerializer,
     VoteSubmitSerializer,
 )
+from workspace.mail.models import MailAccount
 from workspace.notifications.models import Notification
 
 User = get_user_model()
@@ -892,6 +894,32 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         # event (not the poll) is what should clear it.
         notif = Notification.objects.get(recipient=self.voter)
         self.assertEqual(notif.event_id, event.pk)
+
+    def test_finalize_skips_external_and_mail_calendars(self):
+        """Both sort before "Work": an event in either could not be edited, and
+        the external feed's next sync would delete it."""
+        external = Calendar.objects.create(name="A feed", owner=self.owner)
+        ExternalCalendar.objects.create(
+            calendar=external, url="https://example.com/feed.ics"
+        )
+        account = MailAccount.objects.create(
+            owner=self.owner,
+            email="pollowner@example.com",
+            imap_host="x",
+            imap_port=993,
+            smtp_host="x",
+            smtp_port=587,
+        )
+        Calendar.objects.create(name="B inbox", owner=self.owner, mail_account=account)
+        self.client.force_authenticate(user=self.owner)
+        resp = self.client.post(
+            f"/api/v1/polls/{self.poll.uuid}/finalize",
+            {"slot_id": str(self.slot.uuid)},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.poll.refresh_from_db()
+        self.assertEqual(self.poll.event.calendar_id, self.calendar.pk)
 
     def test_finalize_notifies_non_attendees_via_poll(self):
         """Invitees who did not become event members cannot open the event;

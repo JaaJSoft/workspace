@@ -355,8 +355,17 @@ class PollFinalizeView(APIView):
         if not closed:
             get_object_or_404(open_poll.none())
 
-        # Find or create default calendar
-        calendar = Calendar.objects.filter(owner=request.user).order_by("name").first()
+        # The event lands in a calendar its owner can edit: never one an
+        # external feed or a mail account writes into, whose next sync owns it.
+        calendar = (
+            Calendar.objects.filter(
+                owner=request.user,
+                external_source__isnull=True,
+                mail_account__isnull=True,
+            )
+            .order_by("name")
+            .first()
+        )
         if not calendar:
             calendar = Calendar.objects.create(
                 owner=request.user,

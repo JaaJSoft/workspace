@@ -231,11 +231,50 @@ window.vaultStore = function vaultStore() {
     statusLine() {
       const folders = this.visibleFolders().length;
       const entries = this.visibleEntries().length;
-      const total = folders + entries;
-      const parts = [`${total} item${total === 1 ? '' : 's'}`];
-      if (folders) parts.push(`${folders} folder${folders === 1 ? '' : 's'}`);
-      parts.push(`${entries} entr${entries === 1 ? 'y' : 'ies'}`);
+      const count = (singular, plural, n) => interpolate(ngettext(singular, plural, n), { count: n }, true);
+      const parts = [count('%(count)s item', '%(count)s items', folders + entries)];
+      if (folders) parts.push(count('%(count)s folder', '%(count)s folders', folders));
+      parts.push(count('%(count)s entry', '%(count)s entries', entries));
       return parts.join(' · ');
+    },
+
+    selectionLabel() {
+      const count = this.selected.length;
+      return interpolate(ngettext('%(count)s selected', '%(count)s selected', count), { count }, true);
+    },
+
+    tamperedHeadline() {
+      const count = this.tamperedCount;
+      return interpolate(
+        ngettext(
+          '%(count)s entry was removed from the list.',
+          '%(count)s entries were removed from the list.',
+          count,
+        ),
+        { count },
+        true,
+      );
+    },
+
+    unsupportedHeadline() {
+      const count = this.unsupportedCount;
+      return interpolate(
+        ngettext(
+          '%(count)s entry needs a newer version of the app.',
+          '%(count)s entries need a newer version of the app.',
+          count,
+        ),
+        { count },
+        true,
+      );
+    },
+
+    unsupportedDetail() {
+      return ngettext(
+        'It was saved by a more recent version than the one this page is running. Reload the page to read it.',
+        'They were saved by a more recent version than the one this page is running. Reload the page to read them.',
+        this.unsupportedCount,
+      );
     },
 
     // ---- selection -------------------------------------------------------

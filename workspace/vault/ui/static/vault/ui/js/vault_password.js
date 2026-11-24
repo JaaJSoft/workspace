@@ -86,7 +86,7 @@ window.vaultPasswordChange = function vaultPasswordChange() {
     // notebook is reached; the export passphrase gets the same time for the
     // same reason.
     masterPasswordClipboardPolicy() {
-      return { label: 'Master password', seconds: 180 };
+      return { label: gettext('Master password'), seconds: 180 };
     },
 
     applyGeneratedPassword(value) {
@@ -142,7 +142,7 @@ window.vaultPasswordChange = function vaultPasswordChange() {
           secretBytes = V.crockfordDecode(secretText);
         } catch (err) {
           if (gone()) return;
-          this.error = 'Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.';
+          this.error = gettext('Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.');
           // A remembered key that does not decode is no use hidden: the
           // field comes back, empty, for the emergency kit.
           this.secretText = '';
@@ -164,14 +164,14 @@ window.vaultPasswordChange = function vaultPasswordChange() {
             // The same tag fails for a wrong password and a wrong recovery
             // key; only a key the user typed here can be the culprit.
             this.error = secretRemembered
-              ? 'Current password is incorrect.'
-              : 'Current password or recovery key is incorrect.';
+              ? gettext('Current password is incorrect.')
+              : gettext('Current password or recovery key is incorrect.');
             return;
           }
           // Not a password problem, and saying so would send the user
           // retyping a password that is right.
           if (err && err.name === 'UnsupportedAlgorithmError') {
-            this.error = 'This vault was saved by a newer version of the app. Reload the page to update it.';
+            this.error = gettext('This vault was saved by a newer version of the app. Reload the page to update it.');
             return;
           }
           throw err;
@@ -186,7 +186,7 @@ window.vaultPasswordChange = function vaultPasswordChange() {
         try {
           sealed = await E.sealAndReread(newKey, keys, envelope.uuid);
         } catch (err) {
-          if (!gone()) this.error = 'The new password could not be applied.';
+          if (!gone()) this.error = gettext('The new password could not be applied.');
           return;
         }
         // Nothing raw rides along with the request: only the two sealed
@@ -203,7 +203,7 @@ window.vaultPasswordChange = function vaultPasswordChange() {
           try {
             await window.vaultApi.confirmEnvelope(envelope.wrapped_kex_priv);
           } catch (err) {
-            if (!gone()) this.error = 'The password could not be changed. Try again.';
+            if (!gone()) this.error = gettext('The password could not be changed. Try again.');
             return;
           }
           if (gone()) return;
@@ -213,15 +213,15 @@ window.vaultPasswordChange = function vaultPasswordChange() {
         } catch (err) {
           if (gone()) return;
           this.error = err && err.status === 409
-            ? 'Your account changed in another tab. Reload and try again.'
-            : 'The password could not be changed. Try again.';
+            ? gettext('Your account changed in another tab. Reload and try again.')
+            : gettext('The password could not be changed. Try again.');
           return;
         }
         if (gone()) return;
         this.$dispatch('vault-password-changed');
         window.vaultSession.lock();
       } catch (err) {
-        if (!gone()) this.error = 'The password could not be changed. Try again.';
+        if (!gone()) this.error = gettext('The password could not be changed. Try again.');
       } finally {
         zeroAll();
         this.busy = false;

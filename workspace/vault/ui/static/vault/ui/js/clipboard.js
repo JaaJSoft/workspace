@@ -60,7 +60,7 @@ window.vaultClipboard = (function () {
       secondsLeft: 0,
       note:
         outcome === 'refused'
-          ? 'The clipboard could not be cleared - this browser does not allow reading it back. Copy something else to overwrite it.'
+          ? gettext('The clipboard could not be cleared - this browser does not allow reading it back. Copy something else to overwrite it.')
           : '',
     });
   }

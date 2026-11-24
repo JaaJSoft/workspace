@@ -20,14 +20,14 @@ window.vaultUnlockMixin = (function () {
   // inviting a retry would mean typing a password into a page that may be
   // hostile.
   const MESSAGES = {
-    password: 'That master password does not open this account. Nothing was sent to the server - the check happens here.',
-    identity: 'This account has no vault identity yet.',
-    'substituted-key': 'The signing key the server returned does not match the one your password unwrapped. Nothing was decrypted. Do not enter your password again on this page.',
-    network: 'The vault could not be reached. Check your connection and try again.',
-    throttled: 'Too many unlock attempts from here. Nothing is wrong with your password - wait a minute and try again.',
-    'recovery-key': 'Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.',
-    unsupported: 'This vault was saved by a newer version of the app. Reload the page to update it. If this persists after reloading, contact your administrator.',
-    'password-or-recovery-key': 'That did not open this account. Either the master password is wrong, or the recovery key remembered on this device belongs to another account - both fail the same way. Nothing was sent to the server.',
+    password: gettext('That master password does not open this account. Nothing was sent to the server - the check happens here.'),
+    identity: gettext('This account has no vault identity yet.'),
+    'substituted-key': gettext('The signing key the server returned does not match the one your password unwrapped. Nothing was decrypted. Do not enter your password again on this page.'),
+    network: gettext('The vault could not be reached. Check your connection and try again.'),
+    throttled: gettext('Too many unlock attempts from here. Nothing is wrong with your password - wait a minute and try again.'),
+    'recovery-key': gettext('Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.'),
+    unsupported: gettext('This vault was saved by a newer version of the app. Reload the page to update it. If this persists after reloading, contact your administrator.'),
+    'password-or-recovery-key': gettext('That did not open this account. Either the master password is wrong, or the recovery key remembered on this device belongs to another account - both fail the same way. Nothing was sent to the server.'),
   };
 
   return function vaultUnlockMixin() {
@@ -91,7 +91,7 @@ window.vaultUnlockMixin = (function () {
           });
         } catch (err) {
           this.state = 'locked';
-          this.error = MESSAGES[err.reason] || 'Something went wrong. Try again.';
+          this.error = MESSAGES[err.reason] || gettext('Something went wrong. Try again.');
           // A key that fails to decode - remembered or freshly typed - must
           // not leave the user with no way back: clearing the value and
           // re-arming the gate is what puts the input back on screen, and
@@ -143,11 +143,10 @@ window.vaultUnlockMixin = (function () {
 
       forgetSecret: async function () {
         const confirmed = await this.confirm(
-          'Forget the recovery key stored in this browser? You will need your '
-            + 'emergency kit the next time you unlock here.',
+          gettext('Forget the recovery key stored in this browser? You will need your emergency kit the next time you unlock here.'),
           {
-            title: 'Forget the key on this device',
-            okLabel: 'Forget it',
+            title: gettext('Forget the key on this device'),
+            okLabel: gettext('Forget it'),
             okClass: 'btn-error',
             icon: 'key-round',
             iconClass: 'bg-error/10 text-error',

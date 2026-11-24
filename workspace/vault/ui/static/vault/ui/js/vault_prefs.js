@@ -60,7 +60,7 @@ window.vaultPrefsMixin = function vaultPrefsMixin() {
         this.prefs = previous;
         this.sortField = previous.defaultSort;
         window.vaultSession.setIdleTimeout(previous.lockAfterMinutes);
-        this.error = 'That preference could not be saved. Try again.';
+        this.error = gettext('That preference could not be saved. Try again.');
       }
     },
     forgetDevice: function () {

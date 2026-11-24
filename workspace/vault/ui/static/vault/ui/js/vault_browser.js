@@ -102,8 +102,8 @@ window.vaultBrowser = (function () {
   // Its own title and a red button, so an irreversible question does not read
   // like a reversible one.
   const DESTRUCTIVE = {
-    title: 'This cannot be undone',
-    okLabel: 'Delete permanently',
+    title: gettext('This cannot be undone'),
+    okLabel: gettext('Delete permanently'),
     okClass: 'btn-error',
     icon: 'trash-2',
     iconClass: 'bg-error/10 text-error',
@@ -114,9 +114,15 @@ window.vaultBrowser = (function () {
   // question that matters.
   const CONFIRMS = {
     delete_forever: (count) =>
-      count === 1
-        ? 'Permanently delete this entry?'
-        : 'Permanently delete these ' + count + ' entries?',
+      interpolate(
+        ngettext(
+          'Permanently delete this entry?',
+          'Permanently delete these %(count)s entries?',
+          count,
+        ),
+        { count },
+        true,
+      ),
   };
 
   const ROOT = { view: 'all', folder: null, tag: null };
@@ -411,7 +417,7 @@ window.vaultBrowser = (function () {
           // the user is looking at the password form, and a message here
           // would blame the listing for an idle timeout.
           if (err && err.reason === 'locked') return;
-          this.error = 'This vault could not be loaded. Try again.';
+          this.error = gettext('This vault could not be loaded. Try again.');
         } finally {
           this.loading = false;
         }
@@ -907,7 +913,7 @@ window.vaultBrowser = (function () {
           delete this.revealing[slot];
           if (err && err.reason === 'locked') return;
           if (this.panelEntry !== entry) return;
-          this.error = 'That value could not be revealed.';
+          this.error = gettext('That value could not be revealed.');
         }
       },
 
@@ -933,7 +939,7 @@ window.vaultBrowser = (function () {
         } catch (err) {
           if (err && err.reason === 'locked') return;
           if (!current()) return;
-          this.error = "This entry's notes could not be opened.";
+          this.error = gettext("This entry's notes could not be opened.");
         }
       },
 
@@ -1010,10 +1016,10 @@ window.vaultBrowser = (function () {
           const parsed = window.vaultCrypto.parseOtpauth(uri);
           const key = await window.vaultCrypto.importTotpKey(parsed);
           const code = await window.vaultCrypto.totpCode(key, parsed, Date.now() / 1000);
-          await window.vaultClipboard.copy('Authenticator code', code, { transient: true });
+          await window.vaultClipboard.copy(gettext('Authenticator code'), code, { transient: true });
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'That authenticator code could not be copied.';
+          this.error = gettext('That authenticator code could not be copied.');
         }
       },
 
@@ -1119,8 +1125,8 @@ window.vaultBrowser = (function () {
         if (action.id === 'edit') return this.editEntry(entry);
         if (action.id === 'copy_totp') return this.copyTotp(entry);
         const copies = {
-          copy_username: ['Username', 'username', false],
-          copy_password: ['Password', 'password', true],
+          copy_username: [gettext('Username'), 'username', false],
+          copy_password: [gettext('Password'), 'password', true],
         }[action.id];
         if (copies) return this.copyField(entry, copies[0], copies[1], copies[2]);
         if (action.id === 'open_uri') return this.openUri(entry);
@@ -1197,16 +1203,30 @@ window.vaultBrowser = (function () {
         if (!this.canEmptyTrash()) return;
         const count = this.trashedRowCount();
         const unreadable = count - this.trashCount();
-        const question = count === 1
-          ? 'Permanently delete the entry in the trash?'
-          : 'Permanently delete the ' + count + ' entries in the trash?';
+        const question = interpolate(
+          ngettext(
+            'Permanently delete the entry in the trash?',
+            'Permanently delete the %(count)s entries in the trash?',
+            count,
+          ),
+          { count },
+          true,
+        );
         // The singular is reachable: a trash may hold one row and that row
         // may be one this device cannot read.
         let note = '';
         if (unreadable > 0) {
-          note = count === 1
-            ? ' It cannot be read on this device.'
-            : ' ' + unreadable + ' of them cannot be read on this device.';
+          note = ' ' + (count === 1
+            ? gettext('It cannot be read on this device.')
+            : interpolate(
+              ngettext(
+                '%(count)s of them cannot be read on this device.',
+                '%(count)s of them cannot be read on this device.',
+                unreadable,
+              ),
+              { count: unreadable },
+              true,
+            ));
         }
         const confirmed = await this.confirm(question + note, DESTRUCTIVE);
         if (!confirmed) return;
@@ -1222,7 +1242,7 @@ window.vaultBrowser = (function () {
         }
         await this.load();
         if (failure) {
-          this.error = 'The trash could not be emptied. The list above is up to date.';
+          this.error = gettext('The trash could not be emptied. The list above is up to date.');
         }
       },
 
@@ -1276,10 +1296,10 @@ window.vaultBrowser = (function () {
         await this.load();
         if (failure && failure.name === 'VaultResignBlocked') {
           this.error =
-            'An entry could not be verified. It was left untouched, and so were the ones after it.';
+            gettext('An entry could not be verified. It was left untouched, and so were the ones after it.');
         } else if (failure) {
           this.error =
-            'Some entries could not be changed. The list above is up to date.';
+            gettext('Some entries could not be changed. The list above is up to date.');
         }
       },
 
@@ -1327,7 +1347,7 @@ window.vaultBrowser = (function () {
           await window.vaultClipboard.copy(label, value, { transient: transient });
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'That value could not be copied.';
+          this.error = gettext('That value could not be copied.');
         }
       },
 
@@ -1344,14 +1364,14 @@ window.vaultBrowser = (function () {
           );
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'That website could not be opened.';
+          this.error = gettext('That website could not be opened.');
           return;
         }
         // A stored value decides the destination, so the scheme is checked
         // here: javascript: and data: are the two that turn a saved address
         // into code running on this page.
         if (!/^https?:\/\//i.test(uri || '')) {
-          this.error = 'That entry does not hold a web address.';
+          this.error = gettext('That entry does not hold a web address.');
           return;
         }
         window.open(uri, '_blank', 'noopener,noreferrer');
@@ -1453,7 +1473,7 @@ window.vaultBrowser = (function () {
           }
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'That entry could not be opened for editing.';
+          this.error = gettext('That entry could not be opened for editing.');
           return;
         }
         // Notes that will not open do not cost the rest of the entry its
@@ -1546,7 +1566,7 @@ window.vaultBrowser = (function () {
         if (!draft.isNew) {
           const row = this.rowFor(draft.uuid);
           if (!row) {
-            this.error = 'This entry changed since it was opened. Close it and open it again.';
+            this.error = gettext('This entry changed since it was opened. Close it and open it again.');
             return;
           }
           stored = this.storedEntryParts(row, draft.type);
@@ -1563,8 +1583,9 @@ window.vaultBrowser = (function () {
               draft.totpInput, { label: name }
             );
           } catch (err) {
-            this.error = 'That authenticator key could not be read. Paste the key or '
-              + 'the otpauth:// address the service showed you.';
+            this.error = gettext(
+              'That authenticator key could not be read. Paste the key or the otpauth:// address the service showed you.',
+            );
             return;
           }
           delete carriedFields.totp;
@@ -1593,10 +1614,10 @@ window.vaultBrowser = (function () {
         } catch (err) {
           if (err && err.reason === 'locked') return;
           if (err && err.name === 'VaultResignBlocked') {
-            this.error = 'This entry could not be verified. It was left untouched.';
+            this.error = gettext('This entry could not be verified. It was left untouched.');
             return;
           }
-          this.error = 'That entry could not be saved. Try again.';
+          this.error = gettext('That entry could not be saved. Try again.');
         } finally {
           this.busy = false;
         }
@@ -1608,10 +1629,14 @@ window.vaultBrowser = (function () {
       // means forging the account's.
       deleteTag: async function (tag) {
         const confirmed = await this.confirm(
-          'Remove the tag "' + tag.name + '" from every entry that carries it?',
+          interpolate(
+            gettext('Remove the tag "%(name)s" from every entry that carries it?'),
+            { name: tag.name },
+            true,
+          ),
           {
-            title: 'Delete tag',
-            okLabel: 'Delete',
+            title: gettext('Delete tag'),
+            okLabel: gettext('Delete'),
             okClass: 'btn-error',
             icon: 'trash-2',
             iconClass: 'bg-error/10 text-error',
@@ -1629,7 +1654,7 @@ window.vaultBrowser = (function () {
           if (err && err.reason === 'locked') return;
           if (err && err.name === 'VaultResignBlocked') {
             this.error =
-              'This tag is on an entry that could not be verified. It was left untouched.';
+              gettext('This tag is on an entry that could not be verified. It was left untouched.');
             return;
           }
           failed = true;
@@ -1639,16 +1664,20 @@ window.vaultBrowser = (function () {
         await this.load();
         if (failed) {
           this.error =
-            'The tag was not removed. Every entry it touched is unchanged - nothing was left half-written.';
+            gettext('The tag was not removed. Every entry it touched is unchanged - nothing was left half-written.');
         }
       },
 
       deleteFolder: async function (folder) {
         const confirmed = await this.confirm(
-          'Delete the folder "' + folder.name + '"? Its entries move to the vault root.',
+          interpolate(
+            gettext('Delete the folder "%(name)s"? Its entries move to the vault root.'),
+            { name: folder.name },
+            true,
+          ),
           {
-            title: 'Delete folder',
-            okLabel: 'Delete',
+            title: gettext('Delete folder'),
+            okLabel: gettext('Delete'),
             okClass: 'btn-error',
             icon: 'trash-2',
             iconClass: 'bg-error/10 text-error',
@@ -1667,7 +1696,7 @@ window.vaultBrowser = (function () {
           if (err && err.reason === 'locked') return;
           if (err && err.name === 'VaultResignBlocked') {
             this.error =
-              'This folder holds an entry that could not be verified. It was left untouched.';
+              gettext('This folder holds an entry that could not be verified. It was left untouched.');
             return;
           }
           failed = true;
@@ -1677,7 +1706,7 @@ window.vaultBrowser = (function () {
         await this.load();
         if (failed) {
           this.error =
-            'The folder was not deleted. Its entries and subfolders are unchanged - nothing was left half-moved.';
+            gettext('The folder was not deleted. Its entries and subfolders are unchanged - nothing was left half-moved.');
         }
       },
 
@@ -1741,7 +1770,7 @@ window.vaultBrowser = (function () {
           await this.load();
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'That tag could not be created. Try again.';
+          this.error = gettext('That tag could not be created. Try again.');
         } finally {
           this.busy = false;
         }
@@ -1763,7 +1792,7 @@ window.vaultBrowser = (function () {
         if (draft.existing) {
           const folder = this.folders.find(function (row) { return row.uuid === draft.uuid; });
           if (!folder) {
-            this.error = 'This folder changed since it was opened. Close it and open it again.';
+            this.error = gettext('This folder changed since it was opened. Close it and open it again.');
             return;
           }
           storedSig = folder.metadata_sig;
@@ -1786,26 +1815,26 @@ window.vaultBrowser = (function () {
         } catch (err) {
           if (err && err.reason === 'locked') return;
           if (err && err.name === 'VaultResignBlocked') {
-            this.error = 'This folder could not be verified. It was left untouched.';
+            this.error = gettext('This folder could not be verified. It was left untouched.');
             return;
           }
           this.error = draft.existing
-            ? 'That folder could not be renamed. Try again.'
-            : 'That folder could not be created. Try again.';
+            ? gettext('That folder could not be renamed. Try again.')
+            : gettext('That folder could not be created. Try again.');
         } finally {
           this.busy = false;
         }
       },
 
       heading: function () {
-        if (this.view === 'trash') return 'Trash';
-        if (this.view === 'favorites') return 'Favorites';
+        if (this.view === 'trash') return gettext('Trash');
+        if (this.view === 'favorites') return gettext('Favorites');
         if (this.tagFilter) {
           const tag = this.tagById(this.tagFilter);
-          return tag ? tag.name : 'Tag';
+          return tag ? tag.name : gettext('Tag');
         }
         const folder = this.folderById(this.folderUuid);
-        return folder ? folder.name : 'All entries';
+        return folder ? folder.name : gettext('All entries');
       },
 
       // The type registry is the server's; the browser only looks a row's type
@@ -1816,6 +1845,19 @@ window.vaultBrowser = (function () {
         return this.entryTypes.find(function (type) {
           return type.id === typeId;
         }) || null;
+      },
+
+      entryDialogTitle: function () {
+        if (!this.draft) return '';
+        if (!this.draft.isNew) return gettext('Edit entry');
+        const type = this.typeFor(this.draft.type);
+        return type && type.new_label ? type.new_label : gettext('New entry');
+      },
+
+      folderDialogTitle: function () {
+        return this.folderDraft && this.folderDraft.existing
+          ? gettext('Rename folder')
+          : gettext('New folder');
       },
 
       typeLabel: function (typeId) {

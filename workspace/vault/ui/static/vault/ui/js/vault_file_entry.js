@@ -98,7 +98,7 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
 
     // Said when a batch is refused because a row lost its offer.
     refuseFiling: function () {
-      this.error = 'An entry can no longer be changed this way. Nothing was changed.';
+      this.error = gettext('An entry can no longer be changed this way. Nothing was changed.');
     },
 
     canConfirmMove: function () {
@@ -122,6 +122,43 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       // Escape during the write may have closed this dialog and another one
       // been opened since; that one is not this batch's to close.
       if (this.moveDialog === dialog) this.moveDialog = null;
+    },
+
+    dialogSubject: function (uuids, oneName, manyName) {
+      if (uuids.length === 1) {
+        const row = this.entries.find(function (entry) { return entry.uuid === uuids[0]; });
+        return interpolate(oneName, { name: (row && row.name) || '' }, true);
+      }
+      return interpolate(manyName, { count: uuids.length }, true);
+    },
+
+    moveDialogTitle: function () {
+      if (!this.moveDialog) return '';
+      const count = this.moveDialog.uuids.length;
+      return this.dialogSubject(
+        this.moveDialog.uuids,
+        gettext('Move %(name)s'),
+        ngettext('Move %(count)s entry', 'Move %(count)s entries', count),
+      );
+    },
+
+    moveDialogSubtitle: function () {
+      if (!this.moveDialog) return '';
+      return ngettext(
+        'Choose where it goes in this vault.',
+        'Choose where they go in this vault.',
+        this.moveDialog.uuids.length,
+      );
+    },
+
+    tagsDialogTitle: function () {
+      if (!this.tagsDialog) return '';
+      const count = this.tagsDialog.uuids.length;
+      return this.dialogSubject(
+        this.tagsDialog.uuids,
+        gettext('Tags for %(name)s'),
+        ngettext('Tags for %(count)s entry', 'Tags for %(count)s entries', count),
+      );
     },
 
     openTagsDialog: function (rows) {
@@ -169,10 +206,13 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
         const state = dialog.states[tag.uuid];
         if (state === dialog.start[tag.uuid] || state === 'some') return;
         const changing = state === 'all' ? total - this.dialogTagCount(tag.uuid) : this.dialogTagCount(tag.uuid);
-        const suffix = total > 1
-          ? ' (' + changing + (changing === 1 ? ' entry' : ' entries') + ')'
-          : '';
-        lines.push((state === 'all' ? 'Adds ' : 'Removes ') + tag.name + suffix);
+        const adds = state === 'all';
+        const line = total > 1
+          ? (adds
+            ? ngettext('Adds %(tag)s (%(count)s entry)', 'Adds %(tag)s (%(count)s entries)', changing)
+            : ngettext('Removes %(tag)s (%(count)s entry)', 'Removes %(tag)s (%(count)s entries)', changing))
+          : (adds ? gettext('Adds %(tag)s') : gettext('Removes %(tag)s'));
+        lines.push(interpolate(line, { tag: tag.name, count: changing }, true));
       });
       return lines;
     },
@@ -332,9 +372,9 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       // written, and it clears the error line on its way in.
       await this.load();
       if (failure && failure.name === 'VaultResignBlocked' && written === 0) {
-        this.error = 'An entry could not be verified. Nothing was changed.';
+        this.error = gettext('An entry could not be verified. Nothing was changed.');
       } else if (failure) {
-        this.error = 'Some entries could not be changed. The list above is up to date.';
+        this.error = gettext('Some entries could not be changed. The list above is up to date.');
       }
       return written;
     },
@@ -351,9 +391,15 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       // would put a decrypted folder name back on a locked screen.
       if (!window.vaultSession.isUnlocked()) return;
       if (!written || this.error) return;
-      this.fileNotice = written === 1
-        ? 'Moved 1 entry to ' + place + '.'
-        : 'Moved ' + written + ' entries to ' + place + '.';
+      this.fileNotice = interpolate(
+        ngettext(
+          'Moved %(count)s entry to %(place)s.',
+          'Moved %(count)s entries to %(place)s.',
+          written,
+        ),
+        { count: written, place },
+        true,
+      );
     },
 
     // Over the vault's tags, how many of the selected rows carry each one.

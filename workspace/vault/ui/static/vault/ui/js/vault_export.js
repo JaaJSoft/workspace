@@ -75,7 +75,16 @@ window.vaultExportMixin = function vaultExportMixin() {
     // enough to get through that, still short enough not to leave it lying on
     // a shared clipboard.
     exportClipboardPolicy() {
-      return { label: 'Export passphrase', seconds: 180 };
+      return { label: gettext('Export passphrase'), seconds: 180 };
+    },
+
+    exportProgressLabel() {
+      const count = this.exportProgress;
+      return interpolate(
+        ngettext('%(count)s entry read...', '%(count)s entries read...', count),
+        { count },
+        true,
+      );
     },
 
     openExportDialog() {
@@ -239,12 +248,15 @@ window.vaultExportMixin = function vaultExportMixin() {
     // what was left out, and openExportDialog() clears it for the next run.
     skippedMessage() {
       if (!this.exportSkipped) return '';
-      if (this.exportSkipped === 1) {
-        return 'One entry has no counterpart in this format, so it was not '
-          + 'written to the file. It is still in your account.';
-      }
-      return this.exportSkipped + ' entries have no counterpart in this format, '
-        + 'so they were not written to the file. They are still in your account.';
+      return interpolate(
+        ngettext(
+          'One entry has no counterpart in this format, so it was not written to the file. It is still in your account.',
+          '%(count)s entries have no counterpart in this format, so they were not written to the file. They are still in your account.',
+          this.exportSkipped,
+        ),
+        { count: this.exportSkipped },
+        true,
+      );
     },
 
     // A generated phrase carries an exact count, drawn by the panel from a
@@ -314,7 +326,7 @@ window.vaultExportMixin = function vaultExportMixin() {
           // the account under no passphrase at all.
           if (!this.passphraseAccepted()) {
             this.exportError =
-              'The passphrase changed during the export, so no file was written.';
+              gettext('The passphrase changed during the export, so no file was written.');
             return;
           }
           const bytes = await window.vaultArchive.buildArchive({
@@ -347,18 +359,16 @@ window.vaultExportMixin = function vaultExportMixin() {
         if (generation !== this.exportGeneration) return;
         if (err && err.reason === 'unreadable') {
           this.exportError =
-            'Part of this account could not be read, so no file was written. '
-            + 'A partial backup is worse than none.';
+            gettext('Part of this account could not be read, so no file was written. A partial backup is worse than none.');
         } else if (err && err.reason === 'unsupported') {
           this.exportError =
-            'Part of this account was saved by a newer version of the app. '
-            + 'Reload the page, then export again.';
+            gettext('Part of this account was saved by a newer version of the app. Reload the page, then export again.');
         } else if (err && err.reason === 'empty') {
-          this.exportError = 'There is nothing to export yet.';
+          this.exportError = gettext('There is nothing to export yet.');
         } else if (err && err.reason === 'locked') {
-          this.exportError = 'The vault locked before the export finished.';
+          this.exportError = gettext('The vault locked before the export finished.');
         } else {
-          this.exportError = 'The export failed.';
+          this.exportError = gettext('The export failed.');
         }
       } finally {
         // The one write that runs whichever way the guards above went, so it

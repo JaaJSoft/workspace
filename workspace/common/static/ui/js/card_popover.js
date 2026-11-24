@@ -1,9 +1,8 @@
 /**
- * Hover card popover — fetches a server-rendered partial and floats it next
+ * Hover card popover: fetches a server-rendered partial and floats it next
  * to the hovered element. Generic over the partial's URL: events and project
  * tasks both ride on it, and anything else with a card endpoint can too.
- * Follows the same pattern as user card popover in avatar.js.
- * Reuses window._computePopoverPosition, _applyPopoverTransform, _setPopoverContent.
+ * Built on the primitives of popover.js.
  */
 
 /* ── Cache with 30s TTL ───────────────────────────────────────── */

@@ -414,9 +414,9 @@ window.calendarApp = function calendarApp() {
     },
 
     _addHour(isoStr) {
-      const d = new Date(isoStr);
-      d.setHours(d.getHours() + 1);
-      return d.toISOString();
+      // Instant arithmetic: setHours() would step the browser's wall clock,
+      // which a DST switch in the browser's zone turns into 0 or 2 hours.
+      return new Date(Date.parse(isoStr) + 3600000).toISOString();
     },
 
     // ── Display helpers (panel / agenda formatting) ─────────

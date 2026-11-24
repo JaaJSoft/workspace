@@ -190,13 +190,10 @@ window.photosFacesMixin = function photosFacesMixin() {
     async setFacesEnabled(enabled) {
       this.facesSaving = true;
       try {
-        await facesRequest('/api/v1/settings/photos/faces_enabled', {
-          method: 'PUT',
-          body: { value: enabled },
-        });
+        await window.saveUserSetting('photos', 'faces_enabled', enabled);
         await this._reloadView(this._peopleUrl());
-      } catch (err) {
-        window.AppAlert.error(err.message || gettext('Could not change face grouping'));
+      } catch (_) {
+        window.AppAlert.error(gettext('Could not change face grouping'));
       } finally {
         this.facesSaving = false;
       }

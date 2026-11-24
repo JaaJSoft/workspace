@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 function mixin(documentData = {}) {
   const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
@@ -1324,4 +1324,43 @@ test('looking for new faces waits for the card being settled', async () => {
 
   assert.equal(component.reloads, 0);
   assert.equal(component.refreshing, false);
+});
+
+function facesSettingWriter(answer) {
+  const requests = [];
+  const errors = [];
+  const ctx = loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/photos/ui/static/photos/ui/js/faces.js'], {
+    document: { getElementById: () => null },
+    getCSRFToken: () => 't',
+    fetch: (url, opts) => {
+      requests.push([url, opts.method, opts.body]);
+      return Promise.resolve(answer);
+    },
+    AppAlert: { error: (message) => errors.push(message) },
+  });
+  const faces = ctx.photosFacesMixin();
+  faces.reloads = [];
+  faces.$ajax = (url) => { faces.reloads.push(url); return Promise.resolve(); };
+  return { faces, requests, errors };
+}
+
+test('turning face grouping on writes the photos setting, then shows the People page', async () => {
+  const { faces, requests, errors } = facesSettingWriter({ ok: true, status: 200, json: async () => ({}) });
+
+  await faces.setFacesEnabled(true);
+
+  assert.deepEqual(requests, [['/api/v1/settings/photos/faces_enabled', 'PUT', '{"value":true}']]);
+  assert.deepEqual(faces.reloads, ['/photos/people']);
+  assert.deepEqual(errors, []);
+  assert.equal(faces.facesSaving, false);
+});
+
+test('a refused face grouping write says so and reloads nothing', async () => {
+  const { faces, errors } = facesSettingWriter({ ok: false, status: 400, json: async () => ({}) });
+
+  await faces.setFacesEnabled(true);
+
+  assert.deepEqual(faces.reloads, []);
+  assert.equal(errors.length, 1);
+  assert.equal(faces.facesSaving, false);
 });

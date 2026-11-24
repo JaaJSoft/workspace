@@ -67,6 +67,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
     // AI title regeneration in flight (drives the header/sidebar spinners)
     titleRegeneratingUuid: null,
+    // The sidebar search field's query.
+    conversationSearch: '',
 
     // ── List loading ─────────────────────────────────────────
     async loadConversations() {
@@ -101,7 +103,11 @@ window.chatConversationsMixin = function chatConversationsMixin() {
           }
         }
       }, { once: true });
-      this.$ajax('/chat/conversations', { target: 'conversation-list' });
+      // Every refresh keeps the sidebar search: one that dropped it would put
+      // the whole list back under a query still showing in the field.
+      const query = this.conversationSearch.trim();
+      const url = '/chat/conversations' + (query ? '?q=' + encodeURIComponent(query) : '');
+      this.$ajax(url, { target: 'conversation-list' });
     },
 
     // Targeted refresh of individual sidebar rows after a message lands in a

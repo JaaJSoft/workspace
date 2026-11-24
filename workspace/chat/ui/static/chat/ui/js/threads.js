@@ -133,6 +133,14 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid, focusUuid = null) {
     _messageIdPrefix() { return 'tmsg'; },
     _messageMenuId() { return 'thread-message-context-menu'; },
     _messagesBaseUrl() { return `/chat/threads/${this.threadRootUuid}/messages`; },
+    // The page's single emoji picker belongs to the chat page; the panel
+    // borrows it, and the pick comes back to the panel's own composer or
+    // message.
+    openEmojiPicker(mode, event, msgUuid) {
+      window.dispatchEvent(new CustomEvent('chat:open-emoji-picker', {
+        detail: { mode, anchor: event.currentTarget, msgUuid, requester: this },
+      }));
+    },
     // A thread load also carries the root message, rendered outside the
     // paginated list so "load older" cannot sink it below older replies.
     _loadTargets() { return ['thread-root-message', this._messageListId()]; },

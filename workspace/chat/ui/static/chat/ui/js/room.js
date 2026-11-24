@@ -81,6 +81,8 @@ function chatRoomApp(currentUserId, conversationId) {
 
       window.addEventListener('sse:reconnect', () => this.catchUpAfterReconnect());
 
+      this.listenToConversationPane();
+
       // Load the conversation messages, then auto-join the call.
       await this.loadMessages();
       await this.startOrJoinCall();

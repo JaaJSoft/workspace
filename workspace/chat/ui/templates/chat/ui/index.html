@@ -118,18 +118,8 @@ be defined before the parser reaches the markup using it, or server-rendered
         </div>
       </div>
 
-      <!-- Search + conversation list (shared convSearch scope) -->
-      <div
-        class="flex-1 min-h-0 flex flex-col"
-        x-data="{
-           convSearch: '',
-           refreshList() {
-             const base = '{% url 'chat_ui:conversation_list' %}';
-             const qs = this.convSearch.trim() ? '?q=' + encodeURIComponent(this.convSearch.trim()) : '';
-             this.$ajax(base + qs, { target: 'conversation-list' });
-           },
-         }"
-      >
+      <!-- Search + conversation list -->
+      <div class="flex-1 min-h-0 flex flex-col">
         {% comment %}
           Like the aside width, the search box's presence is server-rendered
           so the list below it paints at its final offset before Alpine binds
@@ -145,15 +135,15 @@ be defined before the parser reaches the markup using it, or server-rendered
               type="search"
               class="grow [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
               placeholder="{% translate 'Search conversations' %}"
-              x-model="convSearch"
-              @input.debounce.300ms="refreshList()"
-              @keydown.escape.stop="convSearch = ''; refreshList()"
+              x-model="conversationSearch"
+              @input.debounce.300ms="refreshConversationList()"
+              @keydown.escape.stop="conversationSearch = ''; refreshConversationList()"
             />
             <button
               type="button"
-              x-show="convSearch.length > 0"
+              x-show="conversationSearch.length > 0"
               x-cloak
-              @click="convSearch = ''; refreshList()"
+              @click="conversationSearch = ''; refreshConversationList()"
               class="btn btn-ghost btn-xs btn-square -mr-1"
               title="{% translate 'Clear search' %}"
             >

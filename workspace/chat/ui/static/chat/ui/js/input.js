@@ -16,6 +16,11 @@ window.chatInputMixin = function chatInputMixin() {
   let richLoading = null;
   let richRoot = null;
   let onPrefsChanged = null;
+  // One watch serves every editor the component builds in turn.
+  let watchingBody = false;
+  // The component the open emoji picker serves, when not this one: the page
+  // has a single picker, and a thread panel borrows it (see threads.js).
+  let emojiRequester = null;
 
   return {
     // ── Pending file uploads (shared dual-source input) ──────
@@ -65,7 +70,11 @@ window.chatInputMixin = function chatInputMixin() {
       return this.richComposerActive() && rich.isMarkActive(name);
     },
 
+    // The pane's composer sits under x-if: closing a conversation removes its
+    // root without a teardown, so the next mount drops the editor left on the
+    // detached one before building its own.
     mountRichComposer(root) {
+      if (richRoot && richRoot !== root) this.destroyRichComposer();
       richRoot = root;
       onPrefsChanged = (e) => this._applyComposerMode(e.detail?.composerMode);
       window.addEventListener('chat:preferences-changed', onPrefsChanged);
@@ -105,9 +114,12 @@ window.chatInputMixin = function chatInputMixin() {
           // The page also rewrites the message itself: conversation switch,
           // draft restore, edit, send. The editor ignores the echo of its
           // own changes.
-          this.$watch('messageBody', (value) => {
-            if (this.composerMode === 'rendered') rich?.setMarkdown(value);
-          });
+          if (!watchingBody) {
+            watchingBody = true;
+            this.$watch('messageBody', (value) => {
+              if (this.composerMode === 'rendered') rich?.setMarkdown(value);
+            });
+          }
           // ...including while the editor was being created.
           rich.setMarkdown(this.messageBody);
           const textareaHadFocus = document.activeElement === this.$refs.messageInput;
@@ -188,14 +200,93 @@ window.chatInputMixin = function chatInputMixin() {
       });
     },
 
-    openEmojiPicker(mode, event, msgUuid) {
-      if (this.emojiPickerVisible && this.emojiPickerMode === mode && this.emojiPickerTargetMsg === msgUuid) {
+    // What the conversation pane needs wired once its host mounts, on the
+    // chat page and in the call room alike: the emoji picker, Save to Files
+    // from the attachment viewer, and the requests to repaint the messages.
+    listenToConversationPane() {
+      // Save-to-files from attachment viewer modal
+      window.addEventListener('chat-save-attachment-to-files', (e) => {
+        this.saveAttachmentToFiles(e.detail.uuid);
+      });
+
+      // Refresh messages after an interactive question is answered, so the
+      // server-rendered partial re-paints in its answered state. Use the
+      // incremental refresh (no container clear, preserves scroll position)
+      // instead of the full loadMessages which flashes empty + forces scroll.
+      window.addEventListener('chat:refresh-messages', () => {
+        if (this.activeConversation?.uuid && typeof this._refreshCurrentMessages === 'function') {
+          this._refreshCurrentMessages();
+        }
+      });
+
+      // Optimistic UI for AI question answers: inject a temp message bubble +
+      // bot typing indicator immediately on click. Matters in DEBUG mode where
+      // CELERY_TASK_ALWAYS_EAGER blocks the POST until the LLM completes; the
+      // optimistic bubble lets the user see their choice without waiting.
+      window.addEventListener('chat:answer-optimistic', (e) => {
+        const detail = e.detail || {};
+        if (!detail.tempId || !detail.body) return;
+        if (typeof this._injectOptimisticMessage === 'function') {
+          this._injectOptimisticMessage(detail.tempId, detail.body, null, null);
+          if (this.isBotConversation?.(this.activeConversation)) {
+            this.botTyping = true;
+            this.clearBotStep?.();
+          }
+          this.$nextTick(() => this.scrollToBottom?.());
+        }
+      });
+
+      window.addEventListener('chat:answer-optimistic-rollback', (e) => {
+        const detail = e.detail || {};
+        if (detail.tempId && typeof this._removeOptimisticMessage === 'function') {
+          this._removeOptimisticMessage(detail.tempId);
+        }
+        this.botTyping = false;
+        this.clearBotStep?.();
+      });
+
+      window.addEventListener('chat-message_interaction_updated', (e) => {
+        const data = e.detail || {};
+        if (data.conversation_id === this.activeConversation?.uuid) {
+          window.dispatchEvent(new CustomEvent('chat:refresh-messages', {
+            detail: { reason: 'sse-interaction-update' },
+          }));
+        }
+      });
+
+      // Emoji picker event listener
+      this.$nextTick(() => {
+        const picker = this.$refs.emojiPicker;
+        if (picker) {
+          picker.addEventListener('emoji-click', (e) => {
+            const unicode = e.detail.unicode;
+            const target = emojiRequester || this;
+            if (this.emojiPickerMode === 'input') {
+              target.insertEmoji(unicode);
+            } else if (this.emojiPickerMode === 'reaction' && this.emojiPickerTargetMsg) {
+              target.toggleReaction(this.emojiPickerTargetMsg, unicode);
+            }
+            this.closeEmojiPicker();
+          });
+        }
+      });
+
+      window.addEventListener('chat:open-emoji-picker', (e) => {
+        const { mode, anchor, msgUuid, requester } = e.detail;
+        this.openEmojiPicker(mode, { currentTarget: anchor }, msgUuid, requester);
+      });
+    },
+
+    openEmojiPicker(mode, event, msgUuid, requester = null) {
+      if (this.emojiPickerVisible && this.emojiPickerMode === mode
+          && this.emojiPickerTargetMsg === msgUuid && emojiRequester === requester) {
         this.closeEmojiPicker();
         return;
       }
 
       this.emojiPickerMode = mode;
       this.emojiPickerTargetMsg = msgUuid || null;
+      emojiRequester = requester;
 
       // Position relative to the trigger button
       const btn = event.currentTarget;
@@ -257,12 +348,14 @@ window.chatInputMixin = function chatInputMixin() {
         && this._emojiSearchFocused
         && (active === this.$refs.emojiPicker || active === document.body);
 
+      const target = emojiRequester || this;
+      emojiRequester = null;
       this._emojiSearchFocused = false;
       this.emojiPickerVisible = false;
       this.emojiPickerMode = null;
       this.emojiPickerTargetMsg = null;
 
-      if (restoreFocus) this.getMessageInput()?.focus();
+      if (restoreFocus) target.getMessageInput()?.focus();
     },
 
     // ── Input keyboard shortcuts ─────────────────────────────

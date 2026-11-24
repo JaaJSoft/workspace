@@ -62,6 +62,7 @@ function buildApp() {
     async markAsRead() {},
     _updateConversationLastMessage() {},
     _bumpConversationUnread() {},
+    async _listConversation() {},
     refreshConversationItems() {},
     // Stand-in for the alpine-ajax merge: the server partial lands with the
     // old bubbles re-rendered and the new one appended.

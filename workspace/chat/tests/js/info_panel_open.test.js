@@ -14,8 +14,12 @@ const CONV_UUID = 'conv-1';
 function buildApp({ isBot = true } = {}) {
   const scrolled = [];
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/panels.js', {
+    // The panel's two copies: the docked one hidden, the overlay shown.
     document: {
-      getElementById: (id) => ({ id, scrollIntoView() { scrolled.push(id); } }),
+      querySelectorAll: (selector) => [
+        { getClientRects: () => [], scrollIntoView() { scrolled.push(['docked', selector]); } },
+        { getClientRects: () => [{}], scrollIntoView() { scrolled.push(['overlay', selector]); } },
+      ],
     },
   });
 
@@ -70,12 +74,14 @@ test('openInfoPanel closes the search panel', () => {
   assert.equal(app.searchQuery, '');
 });
 
-test('openInfoPanel scrolls to the requested section once rendered', () => {
+test('openInfoPanel scrolls the copy of the section on screen', () => {
   const { app, scrolled } = buildApp();
 
-  app.openInfoPanel({ scrollTo: 'pinned-messages-section' });
+  app.openInfoPanel({ scrollTo: 'pinned-messages' });
 
-  assert.deepStrictEqual(Array.from(scrolled), ['pinned-messages-section']);
+  assert.deepStrictEqual(scrolled.map((s) => Array.from(s)), [
+    ['overlay', '[data-info-section="pinned-messages"]'],
+  ]);
 });
 
 /**

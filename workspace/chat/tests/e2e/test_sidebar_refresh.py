@@ -140,17 +140,14 @@ class ChatSidebarRefreshTests(PlaywrightTestCase):
             updated_at=timezone.now(),
         )
 
-        # Trigger the alpine-ajax refresh via the nested x-data that owns
-        # refreshList. We pick the element via its x-data attribute
-        # substring — the only scope that contains "convSearch" in the
-        # whole chat page.
-        # We use Alpine.evaluate() rather than Alpine.$data().refreshList()
+        # Trigger the alpine-ajax refresh the chat app runs after a change.
+        # Alpine.evaluate() rather than Alpine.$data().refreshConversationList()
         # because $ajax is an Alpine magic that is only available in the
-        # component's evaluation context — not on the plain data proxy.
+        # component's evaluation context - not on the plain data proxy.
         self.page.evaluate(
             "() => Alpine.evaluate("
-            "document.querySelector('[x-data*=\"convSearch\"]'), "
-            "'refreshList()'"
+            "document.querySelector('[x-data^=\"chatApp\"]'), "
+            "'refreshConversationList()'"
             ")"
         )
 

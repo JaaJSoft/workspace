@@ -174,3 +174,24 @@ class RichComposerTests(PlaywrightTestCase):
         # in between lands on the page and sends nothing.
         expect(editor).to_be_focused()
         self.assertEqual(self._send_and_get_body(), "a `snippet`")
+
+    def test_the_editor_comes_back_after_a_conversation_was_closed(self):
+        other = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, title="Other", created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=other, user=self.user)
+        self._open_conversation()
+
+        app = "Alpine.$data(document.querySelector('[x-data^=\"chatApp\"]'))"
+        self.page.evaluate(f"{app}.closeConversation()")
+        expect(self._editor()).to_have_count(0)
+        self.page.evaluate(
+            f"(uuid) => {app}.selectConversationById(uuid)", str(other.uuid)
+        )
+
+        editor = self._editor()
+        expect(editor).to_be_visible()
+        expect(self._markdown_textarea()).to_be_hidden()
+        editor.click()
+        self.page.keyboard.type("Back again")
+        expect(editor).to_have_text("Back again")

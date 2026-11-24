@@ -18,12 +18,7 @@ window.projectsPreferences = function projectsPreferences() {
       const previous = this.prefs[key];
       this.prefs[key] = value;
       const gen = (this._gen[key] = (this._gen[key] || 0) + 1);
-      fetch('/api/v1/settings/projects/' + key, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: value }),
-      }).then((resp) => {
-        if (!resp.ok) throw new Error('rejected');
+      window.saveUserSetting('projects', key, value).then(() => {
         if (key === 'notify_level' && gen === this._gen[key]) {
           // The header bell shows this value whenever no per-project
           // override is set; keep it in sync without a page swap.

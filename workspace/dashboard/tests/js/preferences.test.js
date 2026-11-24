@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 const PAGE_DATA = {
   'dashboard-apps-data': JSON.stringify([
@@ -19,13 +19,13 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 function heldFetch() {
   const requests = [];
   const fetch = (url, init) => new Promise((resolve) => {
-    requests.push({ url, body: JSON.parse(init.body), answer: () => resolve({ ok: true }) });
+    requests.push({ url, method: init.method, body: JSON.parse(init.body), answer: (reply = { ok: true }) => resolve(reply) });
   });
   return { fetch, requests };
 }
 
 function loadForm(fetch) {
-  const ctx = loadScript('workspace/dashboard/static/dashboard/js/preferences.js', {
+  const ctx = loadScripts(['workspace/core/static/core/js/user_settings.js', 'workspace/dashboard/static/dashboard/js/preferences.js'], {
     document: { getElementById: (id) => ({ textContent: PAGE_DATA[id] }) },
     fetch,
     getCSRFToken: () => 'token',
@@ -94,4 +94,32 @@ test('module and Today toggles share the queue', async () => {
   requests[0].answer();
   await flush();
   assert.strictEqual(requests[1].url, '/api/v1/settings/dashboard/hidden_today_sources');
+});
+
+test('a module toggle puts the hidden list, then re-renders the grid', async () => {
+  const { fetch, requests } = heldFetch();
+  const form = loadForm(fetch);
+  const swaps = [];
+  form.$ajax = (url, options) => swaps.push([url, options.target]);
+
+  form.toggleApp('mail', false);
+  await flush();
+  assert.strictEqual(requests[0].method, 'PUT');
+  assert.strictEqual(requests[0].url, '/api/v1/settings/dashboard/hidden_modules');
+  requests[0].answer();
+  await flush();
+  assert.deepStrictEqual(swaps, [['/dashboard/modules', 'dashboard-modules-grid']]);
+});
+
+test('a refused save still re-renders, from what the server kept', async () => {
+  const { fetch, requests } = heldFetch();
+  const form = loadForm(fetch);
+  const swaps = [];
+  form.$ajax = (url, options) => swaps.push(options.target);
+
+  form.toggleToday('events', false);
+  await flush();
+  requests[0].answer({ ok: false, status: 400 });
+  await flush();
+  assert.deepStrictEqual(swaps, ['dashboard-today']);
 });

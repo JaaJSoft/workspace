@@ -57,15 +57,9 @@ window.dashboardPrefsForm = function dashboardPrefsForm(options) {
       });
     },
     // Queued, and reading the value when it runs: the last save sends the latest state.
+    // A refused save still settles, so the fragment re-renders from what the server kept.
     save(key, readValue) {
-      return this.saves(() => fetch('/api/v1/settings/dashboard/' + key, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCSRFToken()
-        },
-        body: JSON.stringify({ value: readValue() }),
-      }));
+      return this.saves(() => window.saveUserSetting('dashboard', key, readValue()).catch(() => {}));
     },
   };
 };

@@ -23,18 +23,6 @@ window.vaultPrefsMixin = function vaultPrefsMixin() {
   return {
     prefs: Object.assign({}, DEFAULTS),
 
-    putSetting: function (key, value) {
-      return fetch('/api/v1/settings/vault/' + key, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCSRFToken(),
-        },
-        body: JSON.stringify({ value: value }),
-      }).then(function (response) {
-        if (!response.ok) throw new Error('the setting was refused');
-      });
-    },
     loadPrefs: function () {
       const stored = readJson('vault-prefs') || {};
       this.prefs = {
@@ -55,7 +43,7 @@ window.vaultPrefsMixin = function vaultPrefsMixin() {
         window.vaultSession.setIdleTimeout(value);
       }
       try {
-        await this.putSetting(key, value);
+        await window.saveUserSetting('vault', key, value);
       } catch (err) {
         this.prefs = previous;
         this.sortField = previous.defaultSort;

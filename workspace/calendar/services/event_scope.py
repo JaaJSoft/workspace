@@ -40,7 +40,7 @@ EDITABLE_FIELDS = (
 
 
 class EventScopeError(Exception):
-    """An edit that cannot be satisfied — bad scope, missing occurrence, no access.
+    """An edit that cannot be satisfied - bad scope, missing occurrence, no access.
 
     ``status_code`` is the HTTP status the REST layer should answer with;
     tool callers only read ``detail``.
@@ -262,7 +262,7 @@ def update_event(event, data, user, *, scope, original_start=None):
     """Apply *data* to *event* under *scope*, and return the row that was written.
 
     That row is the event itself for ``all``, the materialized exception for
-    ``this``, and the newly split master for ``future`` — never the same
+    ``this``, and the newly split master for ``future`` - never the same
     object for two different scopes, which is why callers re-read it rather
     than assuming they still hold the target.
     """

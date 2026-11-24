@@ -1,5 +1,5 @@
 /*
- * Milkdown Crepe — DaisyUI theme bridge + custom styles.
+ * Milkdown Crepe - DaisyUI theme bridge + custom styles.
  *
  * 1) Override Milkdown CSS variables with DaisyUI oklch values so the
  *    editor follows the active DaisyUI theme automatically (no JS toggle).
@@ -10,7 +10,7 @@
  */
 
 /* ========================================================
-   DaisyUI theme bridge — maps Crepe vars to DaisyUI vars
+   DaisyUI theme bridge - maps Crepe vars to DaisyUI vars
    ======================================================== */
 
 .milkdown {
@@ -32,7 +32,7 @@
 }
 
 /* ========================================================
-   Layout — make the editor fill its container fully
+   Layout - make the editor fill its container fully
    ======================================================== */
 
 .milkdown {
@@ -55,7 +55,7 @@
 }
 
 /* ========================================================
-   Icons — force inline SVGs to follow theme colors.
+   Icons - force inline SVGs to follow theme colors.
    Milkdown injects SVGs with hardcoded fill="" attributes,
    so !important is needed to override them.
    ======================================================== */
@@ -87,7 +87,7 @@
 
 /* Milkdown icon elements (slash menu, toolbar items, etc.)
    Crepe injects .milkdown-icon with hardcoded colors.
-   Use a softer color than full text — 60% opacity base content.
+   Use a softer color than full text - 60% opacity base content.
    Target both inside .milkdown and portals on document.body. */
 .milkdown .milkdown-icon,
 .milkdown-icon {
@@ -105,7 +105,7 @@
   fill: currentColor !important;
 }
 
-/* Stroke-based (outlined) icons — fill must stay none */
+/* Stroke-based (outlined) icons - fill must stay none */
 .milkdown .milkdown-icon svg[fill="none"],
 .milkdown-icon svg[fill="none"] {
   fill: none !important;

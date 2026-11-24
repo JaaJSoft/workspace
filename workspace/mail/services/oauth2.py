@@ -273,7 +273,7 @@ def _refresh_token(account, data):
     refresh_tok = data.get("refresh_token")
     if not refresh_tok:
         raise RuntimeError(
-            f"No refresh_token for {account.email} — re-authorize the account"
+            f"No refresh_token for {account.email} - re-authorize the account"
         )
 
     provider = account.oauth2_provider
@@ -309,7 +309,7 @@ def _refresh_token(account, data):
 def _handle_revoked_token(account):
     """Deactivate account and notify owner when a token is revoked."""
     logger.warning(
-        "OAuth2 token revoked for %s — deactivating account",
+        "OAuth2 token revoked for %s - deactivating account",
         account.email,
     )
     account.is_active = False

@@ -31,7 +31,7 @@ class AIEditEndpointTests(APITestCase):
 
     @patch("workspace.ai.services.image.ai_edit_image")
     def test_edit_from_original(self, mock_edit):
-        """First edit — source_image is null, reads from storage."""
+        """First edit - source_image is null, reads from storage."""
         mock_edit.return_value = b"\x89PNGedited"
         resp = self.client.post(
             f"/api/v1/files/{self.file.uuid}/ai-edit",
@@ -46,7 +46,7 @@ class AIEditEndpointTests(APITestCase):
 
     @patch("workspace.ai.services.image.ai_edit_image")
     def test_edit_from_source_image(self, mock_edit):
-        """Iterative edit — source_image is base64."""
+        """Iterative edit - source_image is base64."""
         mock_edit.return_value = b"\x89PNGedited2"
         b64 = base64.b64encode(FAKE_PNG).decode()
         resp = self.client.post(

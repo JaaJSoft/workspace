@@ -534,7 +534,7 @@
         </inline-alert>
       </template>
 
-      <!-- Finalize toolbar (creator only, open poll) — above grid -->
+      <!-- Finalize toolbar (creator only, open poll) - above grid -->
       <template x-if="isPollCreator() && currentPoll?.status === 'open'">
         <div class="flex items-center gap-2 mb-4 p-3 bg-base-200/50 rounded-lg">
           <i data-lucide="trophy" class="w-4 h-4 text-success shrink-0"></i>
@@ -635,7 +635,7 @@
               </tr>
             </template>
 
-            <!-- My vote row (editable) — only when poll is open -->
+            <!-- My vote row (editable) - only when poll is open -->
             <template x-if="currentPoll?.status === 'open'">
               <tr class="bg-module/10 border-t-2 border-module/20">
                 <td class="font-medium text-sm">

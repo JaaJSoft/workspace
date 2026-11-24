@@ -194,7 +194,7 @@ def _run_with_retry(operation, op: str, prompt: str) -> bytes:
     Image backends fail shallowly and often: a rate limit, an upstream 5xx,
     or a 200 carrying an empty payload. A single hiccup used to reach the
     model as a tool error, and a model asked for several images answers with
-    the ones that worked instead of calling the tool again — so the retry
+    the ones that worked instead of calling the tool again - so the retry
     happens here, before the failure is ever visible to it.
 
     Raises:
@@ -297,6 +297,6 @@ def _edit_via_ollama(source_data, prompt):
     result_b64 = data.get("image") or ""
     if not result_b64:
         raise RuntimeError(
-            f"no image returned from Ollama — response keys: {list(data.keys())}"
+            f"no image returned from Ollama - response keys: {list(data.keys())}"
         )
     return base64.b64decode(result_b64)

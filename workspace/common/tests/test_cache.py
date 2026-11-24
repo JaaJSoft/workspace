@@ -345,7 +345,7 @@ class CachedTests(TestCase):
         self.assertEqual(self.calls, [(1, 2), (1, 2), (1, 2)])
 
     def test_caches_falsy_values(self):
-        """None/0/'' must still be cached — using a sentinel to detect miss."""
+        """None/0/'' must still be cached - using a sentinel to detect miss."""
 
         @cached(key="k", ttl=60)
         def f():
@@ -358,5 +358,5 @@ class CachedTests(TestCase):
         self.assertEqual(self.calls, [1])
 
     def test_invalidate_unknown_tag_is_safe(self):
-        # No entries with this tag — should not error
+        # No entries with this tag - should not error
         invalidate_tags("never-used")

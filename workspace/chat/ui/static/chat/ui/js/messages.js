@@ -475,7 +475,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           // top). The sender is excluded from the SSE broadcast (the
           // receivers' refresh path), so the send path must refresh it itself.
           this.refreshConversationItems([this.activeConversation.uuid]);
-          // Re-fetch messages — replaces optimistic bubble with real server-rendered one
+          // Re-fetch messages - replaces optimistic bubble with real server-rendered one
           // What was sent belongs at the present. Cleared here, right before
           // the refresh, and not when the send began: a newer page landing
           // meanwhile sets it again, and a failed send keeps the past on

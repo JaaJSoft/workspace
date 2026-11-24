@@ -4,7 +4,7 @@ The "Sign Out" button in the navbar user dropdown carries
 ``type="submit" form="logout-form"``, which points it at a hidden POST
 form. We submit that form directly from the test: it's the exact same
 side effect as clicking the button, but
-without the CSS/dropdown-opening ceremony — simpler and deterministic.
+without the CSS/dropdown-opening ceremony - simpler and deterministic.
 """
 
 from __future__ import annotations
@@ -24,10 +24,10 @@ class LogoutFlowTests(PlaywrightTestCase):
         self.login_as(user)
         self.page.goto(f"{self.live_server_url}/")
 
-        # Baseline: we're authenticated — the dashboard loaded, not /login.
+        # Baseline: we're authenticated - the dashboard loaded, not /login.
         expect(self.page).not_to_have_url(re.compile(r"/login"))
 
-        # Submit the hidden logout form — same effect as clicking "Sign Out".
+        # Submit the hidden logout form - same effect as clicking "Sign Out".
         self.page.locator("#logout-form").evaluate("f => f.submit()")
         self.page.wait_for_load_state("networkidle")
 

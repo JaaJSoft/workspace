@@ -115,7 +115,7 @@ class UserMemoryTests(TestCase):
             key="name",
             content="Pierre",
         )
-        self.assertEqual(str(mem), "Memory: user/bot — name")
+        self.assertEqual(str(mem), "Memory: user/bot - name")
         self.assertEqual(mem.content, "Pierre")
 
     def test_unique_constraint(self):

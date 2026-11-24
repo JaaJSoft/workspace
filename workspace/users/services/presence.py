@@ -8,10 +8,10 @@ Thresholds:
   - offline: last activity >= 10 min ago
 
 Cache keys:
-  - ``presence:{user_id}``           — public ISO timestamp, TTL 600 s
-  - ``presence:activity:{user_id}``  — real activity ISO timestamp (internal), TTL 600 s
-  - ``presence:dbsync:{user_id}``    — throttle flag, TTL 30 s
-  - ``presence:manual:{user_id}``    — manual status override, TTL 600 s
+  - ``presence:{user_id}``           - public ISO timestamp, TTL 600 s
+  - ``presence:activity:{user_id}``  - real activity ISO timestamp (internal), TTL 600 s
+  - ``presence:dbsync:{user_id}``    - throttle flag, TTL 30 s
+  - ``presence:manual:{user_id}``    - manual status override, TTL 600 s
 """
 
 import logging
@@ -87,7 +87,7 @@ def touch(user_id: int) -> None:
     if update_public:
         cache.set(_cache_key(user_id), iso, CACHE_TTL)
 
-    # Throttled DB sync — at most once per DB_SYNC_TTL seconds. Written by a
+    # Throttled DB sync - at most once per DB_SYNC_TTL seconds. Written by a
     # task, never by the request: on SQLite the write waits for the database
     # lock, and under gevent that wait freezes the whole web worker until
     # gunicorn kills it, whenever a Celery bulk job keeps the lock busy.

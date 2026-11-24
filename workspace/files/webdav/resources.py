@@ -158,7 +158,7 @@ class _StreamingWriteBuffer:
             self.write(chunk)
 
     def close(self):
-        pass  # deferred — wsgidav calls close() before end_write()
+        pass  # deferred - wsgidav calls close() before end_write()
 
     def _flush(self):
         if not self._membuf:
@@ -327,7 +327,7 @@ class _LayoutCollection(_Collection):
 
     def get_creation_date(self):
         # davfs2 marks the directory cache invalid when the parent
-        # collection lacks ``creationdate`` / ``getlastmodified`` —
+        # collection lacks ``creationdate`` / ``getlastmodified`` -
         # readdir then returns EINVAL and open(O_CREAT) returns EIO.
         # Use the user's join date: stable, never zero, no extra query.
         return self._user.date_joined.timestamp()
@@ -375,7 +375,7 @@ class RootCollection(_LayoutCollection):
 
     def get_display_name(self):
         # WsgiDAV defaults to the URL basename, which is empty for the
-        # root collection — Windows Mini-Redirector then shows a blank
+        # root collection - Windows Mini-Redirector then shows a blank
         # entry in Explorer.  A static label avoids that.
         return "workspace"
 
@@ -790,7 +790,7 @@ class FileResource(_LockKeyed, DAVNonCollection):
 
     def get_etag(self):
         # WsgiDAV's contract (util.checked_etag): return the bare value
-        # without quotes — wsgidav adds them when serializing the HTTP
+        # without quotes - wsgidav adds them when serializing the HTTP
         # ``ETag:`` header.  Returning a quoted string here triggers a
         # 500.
         return f"{self._file.uuid}-{self._file.updated_at.timestamp()}"

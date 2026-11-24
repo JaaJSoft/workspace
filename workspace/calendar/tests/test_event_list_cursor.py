@@ -411,7 +411,7 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
 
         resp = self._get_cursor(after=now)
         self.assertEqual(len(resp.data["events"]), 20)
-        # next_after MUST NOT be None — the series continues
+        # next_after MUST NOT be None - the series continues
         self.assertIsNotNone(
             resp.data["next_after"],
             msg="Cancelled exception at sentinel position silently truncated the cursor",

@@ -1074,7 +1074,7 @@ class FileTag(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.file.name} — {self.tag.name}"
+        return f"{self.file.name} - {self.tag.name}"
 
 
 class FileEvent(models.Model):

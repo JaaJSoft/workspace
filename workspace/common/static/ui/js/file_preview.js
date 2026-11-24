@@ -1,5 +1,5 @@
 /**
- * <file-preview> — a file shown inside something else: a note that embeds
+ * <file-preview> - a file shown inside something else: a note that embeds
  * it, a chat message, a task. One element for every module.
  *
  * The server draws the preview (each file viewer's render_preview, in the

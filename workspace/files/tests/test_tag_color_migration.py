@@ -2,7 +2,7 @@
 
 Run against the migration's own functions rather than a historical
 schema: the column is a CharField either way, so the mapping is the only
-thing worth pinning — and it is what silently loses a user's colors if it
+thing worth pinning - and it is what silently loses a user's colors if it
 is wrong.
 """
 
@@ -63,7 +63,7 @@ class TagColorMigrationTests(TestCase):
 
     def test_unknown_values_are_dropped_rather_than_rendered_as_css(self):
         """A token the picker never offered (set through the API) has no
-        meaning as a CSS color — an invalid inline style would be worse."""
+        meaning as a CSS color - an invalid inline style would be worse."""
         Tag.objects.create(owner=self.user, name="odd", color="not-a-color")
 
         self._migrate()

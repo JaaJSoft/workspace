@@ -28,20 +28,20 @@ AI_IMAGE_REQUESTS = safe_counter(
 AI_AGENT_CHECKINS = safe_counter(
     f"{_P}_agent_checkins_total",
     "Agent goal check-ins run, by outcome "
-    "(message/silent/suppressed/error) — watches the talkativeness ratio",
+    "(message/silent/suppressed/error) - watches the talkativeness ratio",
     ["outcome"],
 )
 
 AI_TOOL_CALLS = safe_counter(
     f"{_P}_tool_calls_total",
     "Tool calls issued while composing a reply, by tool and status "
-    "(ok/error/repeat) — 'repeat' is a duplicate call the loop refused to run",
+    "(ok/error/repeat) - 'repeat' is a duplicate call the loop refused to run",
     ["tool", "status"],
 )
 
 AI_TOOL_ROUNDS = safe_histogram(
     f"{_P}_tool_rounds",
-    "Rounds of tool calls spent on one reply, by model — 0 when the model "
+    "Rounds of tool calls spent on one reply, by model - 0 when the model "
     "answered without calling anything",
     ["model"],
     buckets=(0, 1, 2, 3, 4, 5, 8, 12, 20, float("inf")),

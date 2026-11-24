@@ -201,7 +201,7 @@ class MailMessageLabelView(APIView):
             )
         )
         # Mirror post(): reject unknown / cross-account label ids instead of
-        # silently ignoring them — keeps the API symmetrical and helps catch
+        # silently ignoring them - keeps the API symmetrical and helps catch
         # client-side bugs early.
         if len(affected_labels) != len(ser.validated_data["label_ids"]):
             return Response(

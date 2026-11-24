@@ -32,7 +32,7 @@ class _ChatRenderer(mistune.HTMLRenderer):
         return f'<code class="code-inline">{mistune.escape(text)}</code>'
 
     def image(self, alt, url, title=None):
-        # Strip AI-generated <img> tags — real images come through attachments.
+        # Strip AI-generated <img> tags - real images come through attachments.
         return f"({mistune.escape(alt)})" if alt else ""
 
 

@@ -5,7 +5,7 @@
   and drop it through the object-form binding once Alpine takes over.
 {% endcomment %}
 {% translate "Merged: %(names)s" as merged_title %}
-<!-- All Inboxes (unified view) — expanded -->
+<!-- All Inboxes (unified view) - expanded -->
 <div
   x-show="accounts.length > 0 && !sidebarCollapsed()"
   class="mb-2{% if not accounts or workspace_sidebar_collapsed %} hidden{% endif %}"
@@ -28,7 +28,7 @@
     ></span>
   </button>
 </div>
-<!-- All Inboxes (unified view) — collapsed -->
+<!-- All Inboxes (unified view) - collapsed -->
 <div
   x-show="accounts.length > 0 && sidebarCollapsed()"
   class="mb-2{% if not accounts or not workspace_sidebar_collapsed %} hidden{% endif %}"
@@ -88,7 +88,7 @@
       </button>
     </div>
 
-    <!-- Folders (expanded — hierarchical tree) -->
+    <!-- Folders (expanded - hierarchical tree) -->
     <div
       class="flex flex-col gap-0.5"
       x-show="expandedAccounts[account.uuid] && !sidebarCollapsed()"

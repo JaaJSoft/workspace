@@ -1,5 +1,5 @@
 /**
- * <tag-chip> — the colored pill for tags (files, notes) and labels (projects).
+ * <tag-chip> - the colored pill for tags (files, notes) and labels (projects).
  *
  * One implementation for both rendering paths. Django templates write the
  * element directly; Alpine `x-for` loops bind the same attributes:
@@ -27,7 +27,7 @@
  *
  * Slot mode: a chip written with children and no `name` keeps its own
  * content as the label and only gets the pill styling. That is what the
- * projects label settings need — their chip embeds an inline rename input,
+ * projects label settings need - their chip embeds an inline rename input,
  * a color dropdown and a delete button.
  *
  * base.html loads this in <head> without `defer`, so the element upgrades

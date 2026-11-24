@@ -12,7 +12,7 @@ Pins the two properties the merge is for:
    recomputed its own from the member list, and the two had drifted.
 
 2. A row of avatars stays aligned whether or not each conversation has an
-   uploaded picture — the geometry invariant <user-avatar> introduced, now
+   uploaded picture - the geometry invariant <user-avatar> introduced, now
    covering group pictures too.
 
 Skipped unless E2E=1 is set.

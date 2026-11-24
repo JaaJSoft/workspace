@@ -6,7 +6,7 @@ word, and the output is that speaker: a reference at 233 Hz came back at
 231.9 Hz.
 
 Describing the voice instead ("a young woman, soft and composed") is what the
-backend's other models do, and it names an archetype rather than a person —
+backend's other models do, and it names an archetype rather than a person -
 each call samples a new voice matching the description, so a bot changes voice
 mid-conversation: 279, 240 then 247 Hz across three messages under one
 description. A seed does not fix that either, since it reproduces one exact
@@ -140,7 +140,7 @@ def ai_synthesize_speech(
 
     Args:
         text: What to say, in any language, accented as it should be
-              pronounced — the model reads the letters it is given.
+              pronounced - the model reads the letters it is given.
         reference: Recording to clone, with the transcript the backend
                    aligns it on.
         language: Which language *text* is in. Anything outside

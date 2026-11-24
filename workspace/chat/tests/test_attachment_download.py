@@ -54,7 +54,7 @@ class AttachmentDownloadTests(APITestCase):
         return f"/api/v1/chat/attachments/{uuid}"
 
     def _consume(self, response):
-        # FileResponse is a streaming response — consume it so the file handle
+        # FileResponse is a streaming response - consume it so the file handle
         # is released before the TestCase tears down the temporary storage.
         try:
             b"".join(response.streaming_content)

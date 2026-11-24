@@ -1,5 +1,5 @@
 /**
- * AppAlert — floating toast notifications, rendered through the shared
+ * AppAlert - floating toast notifications, rendered through the shared
  * <inline-alert> element (its `toast` placement variant) into the fixed
  * #app-alerts-container that ui/partials/toasts.html renders.
  *

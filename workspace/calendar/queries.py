@@ -50,7 +50,7 @@ def visible_calendars(user):
     cache instead of issuing a lazy DB query per calendar. Owned rows are
     filtered on ``external_source__isnull=True`` (always None after the
     filter), but subscribed rows can include external calendars someone
-    subscribed to — that's the branch that would otherwise N+1.
+    subscribed to - that's the branch that would otherwise N+1.
     """
     owned = Calendar.objects.filter(
         owner=user, external_source__isnull=True

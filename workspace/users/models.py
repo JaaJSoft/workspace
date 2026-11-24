@@ -34,7 +34,7 @@ class UserPresence(models.Model):
         verbose_name_plural = "User presences"
 
     def __str__(self):
-        return f"{self.user} — last seen {self.last_seen}"
+        return f"{self.user} - last seen {self.last_seen}"
 
 
 class UserSetting(models.Model):

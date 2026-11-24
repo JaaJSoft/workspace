@@ -144,7 +144,7 @@ class AvatarPaletteLockstepTests(SimpleTestCase):
         self.assertEqual(len(set(seeded)), len(seeded), "an RGB tuple is repeated")
 
     def test_the_palette_is_ordered_the_same_on_both_sides(self):
-        # Order is not required for the two to "read as one family" — the
+        # Order is not required for the two to "read as one family" - the
         # seeder and the fallback index into the palette differently on
         # purpose (see the comment on either constant). It is asserted anyway
         # because keeping the lists parallel is what makes a drift reviewable

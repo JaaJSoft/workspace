@@ -96,7 +96,7 @@ class ReconcileSoftDeleteTests(ReconcileFolderMixin, TestCase):
         msg2 = self._make_msg(200)
         msg3 = self._make_msg(300)
 
-        # Server only has UID 200 — 100 and 300 are gone
+        # Server only has UID 200 - 100 and 300 are gone
         conn = self._mock_conn([200])
         _reconcile(conn, self.folder)
 
@@ -125,7 +125,7 @@ class ReconcileSoftDeleteTests(ReconcileFolderMixin, TestCase):
         deleted_msg = self._make_msg(100, deleted_at=timezone.now())
         active_msg = self._make_msg(200)
 
-        # Server has only 200 — UID 100 is gone but already soft-deleted
+        # Server has only 200 - UID 100 is gone but already soft-deleted
         conn = self._mock_conn([200])
         _reconcile(conn, self.folder)
 

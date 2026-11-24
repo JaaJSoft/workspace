@@ -209,7 +209,7 @@ def profile_view(request, username=None):
         allowed_sources=allowed_activity_sources(request.user),
     )
 
-    # Profile fields — single query for all three keys instead of one per get_setting
+    # Profile fields - single query for all three keys instead of one per get_setting
     profile_settings = get_module_settings(profile_user, "profile")
     profile_bio = profile_settings.get("bio")
     profile_role = profile_settings.get("role")

@@ -183,7 +183,7 @@ def _require_annotation(obj, name):
     """Fetch an annotation from *obj* or raise a loud error.
 
     ``FileSerializer`` deliberately has no DB fallback when an annotation is
-    missing — callers must pipe their queryset through
+    missing - callers must pipe their queryset through
     ``annotate_for_serializer`` before handing it to the serializer.
     This helper turns a missing annotation into a clear exception instead of a
     silent N+1.
@@ -803,7 +803,7 @@ class FileSerializer(serializers.ModelSerializer):
                 return self._replace_existing(winner, validated_data)
 
         # A freshly-created node cannot have favorites, pins, shares, or
-        # children yet — attach the annotations the serializer now requires
+        # children yet - attach the annotations the serializer now requires
         # so the DRF `create()` response can be built without a re-fetch.
         instance.is_favorite = False
         instance.is_pinned = False

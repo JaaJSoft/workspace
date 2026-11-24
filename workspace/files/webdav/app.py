@@ -27,7 +27,7 @@ from .provider import WorkspaceDAVProvider
 logger = logging.getLogger(__name__)
 
 # Windows Mini-Redirector can hold locks for a very long time on slow
-# uploads, then retry — and the old lock blocks the new attempt (423).
+# uploads, then retry - and the old lock blocks the new attempt (423).
 # Capping the lock lifetime prevents stale locks from piling up.
 # The wsgidav storage classes reference these as ClassName.LOCK_TIME_OUT_*
 # so we patch the class attributes directly.
@@ -45,7 +45,7 @@ def _build_lock_storage():
     in-memory ``LockStorageDict`` is unsafe: a LOCK token created on one
     worker is unknown to any other, which breaks Windows Mini-Redirector
     uploads (LOCK + PUT can span separate TCP connections and land on
-    different workers — Explorer then reports "file too large").
+    different workers - Explorer then reports "file too large").
 
     When ``settings.WEBDAV_LOCK_STORAGE_URL`` is set we back the lock
     table with Redis so all workers share it. In dev (no Redis) we keep
@@ -95,7 +95,7 @@ class _RequestSignals:
     the response is sent or the client is gone, which runs the ``finally``.
 
     Pass-through ``__getattr__`` keeps the wrapped ``WsgiDAVApp`` introspectable
-    (``.provider_map``, ``.config`` etc) — used by tests.
+    (``.provider_map``, ``.config`` etc) - used by tests.
     """
 
     def __init__(self, app):

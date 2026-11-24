@@ -77,7 +77,7 @@ document.addEventListener('alpine:init', function () {
     handleSnapshot(data) {
       // Only overwrite a bucket when the payload actually carries it. A
       // presence update that omits a category (partial/empty/malformed
-      // payload) must NOT wipe the previous membership — otherwise every
+      // payload) must NOT wipe the previous membership - otherwise every
       // ring in that bucket flickers to "offline" until the next good
       // snapshot. This matters most for `bot`, which is static identity
       // (bots have no UserPresence row, so their ring depends solely on

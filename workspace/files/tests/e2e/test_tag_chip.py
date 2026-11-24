@@ -1,7 +1,7 @@
 """E2E: <tag-chip> renders the pill in a real browser.
 
 The chip is a custom element, so nothing about it is verifiable from
-Django's test client — the server sends `<tag-chip name="..." ...>` and
+Django's test client - the server sends `<tag-chip name="..." ...>` and
 the browser turns it into the pill. Two things are pinned here:
 
 1. The element upgrades and paints the tag's own color. Before the chip,

@@ -36,7 +36,7 @@ class Conversation(models.Model):
         ]
 
     def __str__(self):
-        return self.title or f"{self.kind} — {self.uuid}"
+        return self.title or f"{self.kind} - {self.uuid}"
 
 
 class ConversationMember(models.Model):

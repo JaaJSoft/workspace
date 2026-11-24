@@ -22,7 +22,7 @@ User = get_user_model()
 
 
 class ConversationListViewTests(ChatTestMixin, APITestCase):
-    """GET /api/v1/chat/conversations — response shape + N+1 invariants."""
+    """GET /api/v1/chat/conversations - response shape + N+1 invariants."""
 
     URL = "/api/v1/chat/conversations"
 
@@ -53,7 +53,7 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
         uuids = {c["uuid"] for c in resp.data}
         self.assertNotIn(str(self.group.uuid), uuids)
 
-    # ── Response shape — locks in what chat.js reads ─────────
+    # ── Response shape - locks in what chat.js reads ─────────
 
     def test_response_includes_members_array_with_user_info(self):
         """Frontend chat.js reads conv.members for title/avatar/bot fallback."""
@@ -113,7 +113,7 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
                 f"conv {conv['uuid']} unexpectedly flagged as bot conversation",
             )
 
-    # ── member_count (item 2.3) — new field ──────────────────
+    # ── member_count (item 2.3) - new field ──────────────────
 
     def test_response_includes_member_count_field(self):
         """2.3: list response exposes member_count so the frontend can show group size
@@ -165,7 +165,7 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
             len(ctx_after),
             baseline,
             msg=(
-                f"Query count must not scale with conversation count — "
+                f"Query count must not scale with conversation count - "
                 f"baseline={baseline}, after adding 5 conversations={len(ctx_after)}"
             ),
         )
@@ -192,7 +192,7 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
             len(ctx_after),
             baseline,
             msg=(
-                f"Query count must not scale with members per conversation — "
+                f"Query count must not scale with members per conversation - "
                 f"baseline={baseline}, after adding 10 members={len(ctx_after)}"
             ),
         )
@@ -235,14 +235,14 @@ class ConversationListViewTests(ChatTestMixin, APITestCase):
             len(ctx_after),
             baseline,
             msg=(
-                f"is_bot_conversation must not cause N+1 — "
+                f"is_bot_conversation must not cause N+1 - "
                 f"baseline={baseline}, after adding 3 bot conversations={len(ctx_after)}"
             ),
         )
 
 
 class ConversationCreateViewTests(ChatTestMixin, APITestCase):
-    """POST /api/v1/chat/conversations — response shape + bounded query count."""
+    """POST /api/v1/chat/conversations - response shape + bounded query count."""
 
     URL = "/api/v1/chat/conversations"
 
@@ -394,7 +394,7 @@ class ConversationCreateViewTests(ChatTestMixin, APITestCase):
         )
 
     def test_creates_group_persists_all_members_to_db(self):
-        """Sanity check: response is not the only source of truth — DB must be right."""
+        """Sanity check: response is not the only source of truth - DB must be right."""
         u2 = User.objects.create_user(username="grp-persist-u2", password="p")
         self.client.force_authenticate(self.creator)
         resp = self.client.post(
@@ -481,7 +481,7 @@ class ConversationCreateViewTests(ChatTestMixin, APITestCase):
 
     def test_create_nonbot_dm_still_refetches_by_design(self):
         """Non-bot DMs go through get_or_create_dm which may return an
-        existing conversation whose live member state isn't in memory —
+        existing conversation whose live member state isn't in memory -
         we keep one SELECT on chat_conversation here for the dedup lookup
         AND one for the refetch+prefetch. This test pins that expectation
         so a future refactor of this path doesn't silently drop refetch
@@ -540,7 +540,7 @@ class ConversationCreateViewTests(ChatTestMixin, APITestCase):
             len(ctx_large),
             baseline,
             msg=(
-                f"POST query count should not scale with members — "
+                f"POST query count should not scale with members - "
                 f"baseline (2 members)={baseline}, "
                 f"with 10 members={len(ctx_large)}"
             ),

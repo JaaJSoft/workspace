@@ -83,7 +83,7 @@ def _child_text(element, *names: str) -> str:
 
 
 def _plain_text(markup: str, *, max_chars: int) -> str:
-    """Reduce a summary — HTML more often than not — to one plain line."""
+    """Reduce a summary - HTML more often than not - to one plain line."""
     text = _WS_RE.sub(" ", html.unescape(_TAG_RE.sub(" ", markup))).strip()
     if len(text) <= max_chars:
         return text
@@ -161,7 +161,7 @@ def parse_feed(
         return None
 
     # RSS hangs the feed's own title off <channel>, Atom off the root, and
-    # both name their entries <title> too — hence the sibling-of-entries scope.
+    # both name their entries <title> too - hence the sibling-of-entries scope.
     header = next(iter(_children(root, "channel")), root)
     return Feed(
         title=_plain_text(_child_text(header, "title"), max_chars=200),

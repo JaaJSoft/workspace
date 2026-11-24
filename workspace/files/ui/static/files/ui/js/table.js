@@ -163,7 +163,7 @@ window.fileTableControls = function fileTableControls() {
       // Fetch actions for all visible rows
       this.fetchActions();
 
-      // Keyboard shortcuts (single listener — remove previous on re-init)
+      // Keyboard shortcuts (single listener - remove previous on re-init)
       if (window._fileShortcutHandler) {
         window.removeEventListener('keydown', window._fileShortcutHandler);
       }
@@ -891,7 +891,7 @@ window.fileTableControls = function fileTableControls() {
       if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
       if (tag === 'INPUT') {
         const type = (el.type || '').toLowerCase();
-        // Checkboxes and radios don't accept text — allow shortcuts
+        // Checkboxes and radios don't accept text - allow shortcuts
         if (type === 'checkbox' || type === 'radio') return false;
         return true;
       }
@@ -954,7 +954,7 @@ window.fileTableControls = function fileTableControls() {
         return;
       }
 
-      // No target at all — nothing to act on
+      // No target at all - nothing to act on
       if (count === 0 && !useHover) return;
 
       // --- Multi-selection shortcuts (selected items only) ---

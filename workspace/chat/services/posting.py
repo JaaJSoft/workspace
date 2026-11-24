@@ -3,7 +3,7 @@
 A posted message is more than its row: the other members' unread counters
 move, the conversation rises in the list, open tabs are told to refresh, and
 the bell and push pipeline runs. Every entry point used to create the row and
-wire that set by hand, and each one that got it wrong got it wrong silently —
+wire that set by hand, and each one that got it wrong got it wrong silently -
 the author's own client rendered fine either way. ``post_message`` is the one
 way to create a message, so the correct path is also the shortest one;
 ``chat.tests.test_message_creation_sites`` refuses any other.
@@ -111,7 +111,7 @@ def _deliver_message(
 
     Both callbacks are robust, and both halves need it: a non-robust callback
     that raises propagates out of Django's commit loop, which drops every
-    callback still queued behind it — robust ones included. The transaction is
+    callback still queued behind it - robust ones included. The transaction is
     already committed at that point, so the message would exist while one of
     its two fan-outs never ran.
     """

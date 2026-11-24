@@ -157,7 +157,7 @@ def sync_all_external_calendars():
     composite index is used end-to-end. The 900s threshold matches the
     default ``sync_interval`` and the typical celery-beat cadence;
     ``last_synced_at IS NULL`` covers calendars never synced before
-    (note that the dispatcher's claim — a future timestamp — also flips
+    (note that the dispatcher's claim - a future timestamp - also flips
     such rows out of the IS NULL state, which is what we want).
     """
     from django.db.models import Q

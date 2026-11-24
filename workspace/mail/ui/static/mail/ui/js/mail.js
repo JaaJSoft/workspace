@@ -1,5 +1,5 @@
 /**
- * Mail application — Alpine.js component
+ * Mail application - Alpine.js component
  *
  * The main app object is composed from domain mixins (defined in their own
  * files and loaded BEFORE this script in the template). Each mixin returns
@@ -154,7 +154,7 @@ function mailApp() {
 
     // ── Compose mailApp from domain mixins ─────────────────
     // Each mixin returns an object literal with its own methods. They all
-    // share the same `this` at runtime — state stays in this root object.
+    // share the same `this` at runtime - state stays in this root object.
     ...window.attachmentInputMixin({
       pickerMessage: gettext('Select files to attach to the email.'),
     }),
@@ -169,7 +169,7 @@ function mailApp() {
     ...mailRulesFormMixin(),
 
     // ── Computed ───────────────────────────────────────────
-    // Defined on the root (not a mixin) so the getter survives object spread —
+    // Defined on the root (not a mixin) so the getter survives object spread -
     // `{...mixin()}` copies a getter as a fixed value at spread time, but a
     // getter declared directly on the literal stays a getter on the result,
     // which Alpine can react to when its dependencies change.

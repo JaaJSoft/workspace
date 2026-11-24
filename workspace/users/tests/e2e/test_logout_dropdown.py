@@ -1,7 +1,7 @@
 """E2E test: logout via the actual "Sign Out" item in the navbar dropdown.
 
 The companion test ``test_logout.py`` shortcuts the UI by submitting
-``#logout-form`` directly via JS — that proves the *form* works but
+``#logout-form`` directly via JS - that proves the *form* works but
 skips everything between the user and the form: the dropdown opening,
 the menu item being hit-testable, and the ``form`` attribute that ties
 the button to the hidden form it submits.
@@ -11,7 +11,7 @@ This test exercises the real click path. It catches the bug class:
   * the button loses its ``form`` attribute, or the form loses the id it
     names (the form never submits despite a successful click),
   * the dropdown content is masked by another element (daisyUI
-    ``dropdown-content`` ships with ``z-[1]`` — easy to be hidden
+    ``dropdown-content`` ships with ``z-[1]`` - easy to be hidden
     behind a header / sidebar overlay with a higher stacking context),
   * the trigger ``<label tabindex="0">`` loses focus before the click
     bubbles, e.g. when migrating from the focus-driven daisyUI
@@ -40,7 +40,7 @@ class LogoutDropdownClickTests(PlaywrightTestCase):
 
         # Open the user menu. The trigger is the avatar wrapped in a
         # ``<label tabindex="0">`` inside the only ``.dropdown-end`` on
-        # the page — clicking it focuses the label, and daisyUI's CSS
+        # the page - clicking it focuses the label, and daisyUI's CSS
         # opens ``dropdown-content`` via ``:focus-within``. We don't
         # care which mechanism opens it; we care that the menu becomes
         # hit-testable.
@@ -56,14 +56,14 @@ class LogoutDropdownClickTests(PlaywrightTestCase):
         sign_out = self.page.get_by_role("button", name="Sign Out", exact=True)
         expect(sign_out).to_be_visible()
 
-        # Click the real button — exercises the ``form="logout-form"``
+        # Click the real button - exercises the ``form="logout-form"``
         # association with the hidden POST form.
         # ``expect_navigation`` blocks until Django responds to the POST
         # and redirects (LOGOUT_REDIRECT_URL = '/login').
         with self.page.expect_navigation(url=re.compile(r"/login")):
             sign_out.click()
 
-        # And the session is actually gone — revisiting a protected URL
+        # And the session is actually gone - revisiting a protected URL
         # bounces back to /login. This is the same assertion shape as
         # the existing form-submit test, kept to ensure both tests
         # converge on the same end state.

@@ -47,7 +47,7 @@ class BotRetryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Find the last user message to retry with — required before delete.
+        # Find the last user message to retry with - required before delete.
         last_user_msg = (
             Message.objects.filter(
                 conversation_id=conversation_id,

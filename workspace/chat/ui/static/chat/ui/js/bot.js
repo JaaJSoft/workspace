@@ -25,7 +25,7 @@ window.chatBotMixin = function chatBotMixin() {
     // Draft for the optional "Agent mode" section of the bot picker.
     botGoalDraft: { enabled: false, goal: '', title: '', first_check_at: '', deadline: '' },
 
-    // Full editor for an existing goal — the mission brief the agent reads at
+    // Full editor for an existing goal - the mission brief the agent reads at
     // every check-in, plus the schedule and its working notes.
     goalEditor: {
       open: false,
@@ -49,7 +49,7 @@ window.chatBotMixin = function chatBotMixin() {
         const resp = await fetch('/api/v1/ai/bots', { credentials: 'same-origin' });
         if (resp.ok) this.availableBots = await resp.json();
       } catch (e) {
-        // AI may not be enabled — silently ignore
+        // AI may not be enabled - silently ignore
       }
     },
 
@@ -221,7 +221,7 @@ window.chatBotMixin = function chatBotMixin() {
     // ── Bot memories ──────────────────────────────────────────
     // A method, not a getter: chatApp() composes its mixins with object
     // spread, and `{...mixin()}` copies a getter as the value it returned at
-    // spread time — freezing the list to the empty array it held before the
+    // spread time - freezing the list to the empty array it held before the
     // fetch. A method keeps being re-evaluated, so Alpine tracks
     // botMemories / memorySearch and re-renders when they change.
     filteredBotMemories() {

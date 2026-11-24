@@ -64,7 +64,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
     CAS and return ``skipped/already_claimed`` before re-posting.
 
     Calls without a token (legacy queued tasks, direct test calls) fall
-    back to CAS against the value observed at load time — still good
+    back to CAS against the value observed at load time - still good
     enough to block the in-flight worker race against the dispatcher's
     window.
 
@@ -92,7 +92,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
     creator_tz = get_user_timezone(schedule.created_by)
 
     # Capture the value the CAS will pin against *before* compute_next_run
-    # mutates schedule.next_run_at — when there is no claim_token, the
+    # mutates schedule.next_run_at - when there is no claim_token, the
     # fallback predicate is the pre-advance value.
     cas_value = claim_token or schedule.next_run_at
     schedule.last_run_at = timezone.now()

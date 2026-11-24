@@ -201,7 +201,7 @@ window.notesApp = function notesApp(config) {
         ...window.viewerPanelMixin(),
         selectedNote: null,
 
-        // Available actions on the currently selected note — driven by
+        // Available actions on the currently selected note - driven by
         // POST /api/v1/files/actions. Empty list = fail-safe (buttons disabled).
         selectedNoteActionIds: [],
         _actionsFetchGen: 0,
@@ -762,7 +762,7 @@ window.notesApp = function notesApp(config) {
             this.selectedNoteActionIds = [];
             if (mode !== 'none') this.updateUrl({ push: mode === 'push' });
             await this.$nextTick();
-            // Fetch available actions in parallel with the viewer — both are
+            // Fetch available actions in parallel with the viewer - both are
             // independent HTTP calls, no sequential dependency.
             this._fetchActionsForSelected(note.uuid);
             await this.loadViewerPanel('/files/view/' + note.uuid);

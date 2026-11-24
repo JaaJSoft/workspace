@@ -32,7 +32,7 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
 
         # Seed a target so the panel's /files/properties/<uuid> request
         # has something to render. We dispatch the same event the file
-        # row click handler dispatches instead of clicking a row — the
+        # row click handler dispatches instead of clicking a row - the
         # row affordance is not what this test is about.
         file = File.objects.create(
             owner=user,
@@ -64,7 +64,7 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
 
         sidebar = self.page.locator("#properties-sidebar")
         expect(sidebar).to_be_visible()
-        # Width transition is 200 ms — wait for the panel to reach its
+        # Width transition is 200 ms - wait for the panel to reach its
         # final size (= the content-area width, since it covers full
         # width on mobile) before measuring layout. Waiting for less
         # than the full target races the subsequent ``bounding_box()``
@@ -90,7 +90,7 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
         sidebar_width = sidebar.bounding_box()["width"]
         assert sidebar_width >= baseline_width - 1, (
             f"properties panel ({sidebar_width}px) is narrower than the "
-            f"content area ({baseline_width}px) — leaves a visible gap "
+            f"content area ({baseline_width}px) - leaves a visible gap "
             f"strip to its left"
         )
 
@@ -101,6 +101,6 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
         post_open_width = folder_browser.bounding_box()["width"]
         assert post_open_width >= baseline_width - 1, (
             f"folder browser shrank from {baseline_width}px to "
-            f"{post_open_width}px when the properties panel opened — the "
+            f"{post_open_width}px when the properties panel opened - the "
             f"panel is stealing horizontal space instead of overlaying"
         )

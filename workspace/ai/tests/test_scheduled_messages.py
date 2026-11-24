@@ -497,7 +497,7 @@ class GenerateScheduledResponseTests(TestCase):
         # Celery can redeliver a task after the first worker has already
         # committed (lost ack, worker death, etc.). Without keying the CAS
         # off the dispatcher's claim token, worker B reads the post-A
-        # next_run_at and its CAS predicate matches a *new* value — so
+        # next_run_at and its CAS predicate matches a *new* value - so
         # worker B advances the row again and posts a duplicate message
         # for recurring schedules. Pinning the CAS to the claim token
         # written by the dispatcher closes that window.
@@ -868,7 +868,7 @@ class ScheduleToolTests(TestCase):
 
     def test_schedule_recurring_daily_converts_to_utc(self):
         """Regression: schedule_message used django.utils.timezone.utc which
-        does not exist — must use datetime.timezone.utc for the conversion."""
+        does not exist - must use datetime.timezone.utc for the conversion."""
         result = self._call(
             "schedule_message",
             ScheduleMessageParams(

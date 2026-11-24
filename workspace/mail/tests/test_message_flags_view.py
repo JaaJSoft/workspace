@@ -1,4 +1,4 @@
-"""Behaviour of PATCH /api/v1/mail/messages/<uuid> — the flag endpoint.
+"""Behaviour of PATCH /api/v1/mail/messages/<uuid> - the flag endpoint.
 
 Written as the safety net for extracting the flag/count orchestration into
 `services/triage.py`, so the shared service has to keep doing exactly what

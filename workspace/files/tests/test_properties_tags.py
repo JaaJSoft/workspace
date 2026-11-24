@@ -8,7 +8,7 @@ User = get_user_model()
 
 
 class PropertiesPanelTagsTests(APITestCase):
-    """GET /files/properties/<uuid> — tags section of the properties partial.
+    """GET /files/properties/<uuid> - tags section of the properties partial.
 
     The partial embeds the file's tags as a ``json_script`` block
     (``id="properties-tags-data"``) and renders the tag editor only for

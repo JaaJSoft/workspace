@@ -5,16 +5,16 @@ CLAUDE.md > File Actions makes the rule explicit: the backend
 ``ActionRegistry`` is the single source of truth, and the UI must never
 hard-code its own list. Backend tests cover the endpoint contract in
 isolation; what only a real browser can prove is that the rendered
-menu actually reflects that contract — i.e., that no one re-introduced
+menu actually reflects that contract - i.e., that no one re-introduced
 a hard-coded ``<li>`` in the template, and that no CSS rule or
 ``x-show`` clause silently filters items.
 
 The bug class this guards against:
 
   * a static menu item shipped without an ``is_available`` entry in
-    ``workspace/files/actions/`` — would appear in the UI but the
+    ``workspace/files/actions/`` - would appear in the UI but the
     backend would 403 on click,
-  * an ``is_available`` rule that the UI ignores — backend would
+  * an ``is_available`` rule that the UI ignores - backend would
     refuse the action but the user sees the option,
   * a refactor that flips between Alpine ``x-for`` and a ``{% for %}``
     template loop and accidentally bakes in stale defaults.
@@ -35,7 +35,7 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
     def test_menu_items_match_api_actions(self):
         user = self.create_user(username="alice")
 
-        # A plain file at the user's root — ``parent=None`` is rendered
+        # A plain file at the user's root - ``parent=None`` is rendered
         # by ``/files`` as a top-level entry, so we don't need to navigate
         # into a subfolder. Using a file (not folder) keeps the test
         # immune to the ``paste_into`` action's clipboard-gated x-show.
@@ -72,7 +72,7 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
 
         # ``data-uuid`` is set on both the list-view ``<tr>`` and the
         # mosaic-view ``<div>``; we don't care which layout the user
-        # has set as default — both render the same context menu.
+        # has set as default - both render the same context menu.
         row = self.page.locator(f'[data-uuid="{f.uuid}"]').first
         expect(row).to_be_visible()
         assert api_actions, (
@@ -85,13 +85,13 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
         # flips paste_into to also apply to files would surface here.
         api_action_ids = {a["id"] for a in api_actions}
         assert "paste_into" not in api_action_ids, (
-            "paste_into now appears for a file — the UI gates its "
+            "paste_into now appears for a file - the UI gates its "
             "visibility on hasClipboardItems via x-show, so this test "
             "would need to filter it. Update the test."
         )
         api_labels = sorted(a["label"] for a in api_actions)
 
-        # Right-click the row — fires ``@contextmenu="openContextMenu(...)"``
+        # Right-click the row - fires ``@contextmenu="openContextMenu(...)"``
         # which dispatches ``open-context-menu`` to the menu component.
         row.click(button="right")
 
@@ -102,7 +102,7 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
         # Each menu item has three sibling branches gated by ``x-show``
         # (the ``<a>`` for download, the ``<a>`` for open_new_tab, and
         # the default ``<button>``); only one is visible per ``<li>``.
-        # We read the visible one's ``<span>`` text — that's the action
+        # We read the visible one's ``<span>`` text - that's the action
         # label as shown to the user.
         menu_labels = self.page.evaluate(
             """

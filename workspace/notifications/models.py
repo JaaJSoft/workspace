@@ -135,7 +135,7 @@ class Notification(models.Model):
             # `filter(recipient=u, read_at__isnull=True).count()`. Excluding
             # read rows keeps the index small (badge accuracy matters far
             # more than read-history queries, which never filter on read_at
-            # in isolation — see workspace/notifications/views.py).
+            # in isolation - see workspace/notifications/views.py).
             models.Index(
                 fields=["recipient"],
                 name="notif_unread_partial",

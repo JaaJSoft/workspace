@@ -11,10 +11,10 @@ from urllib.parse import urlparse, urlunparse
 
 # Default: in-memory cache for local/dev. Optional Redis via env.
 # When Redis is available, separate DBs are used to isolate concerns:
-#   DB 0 — cache (evictable)
-#   DB 1 — sessions (must not be evicted)
-#   DB 2 — Celery broker + results
-#   DB 3 — WebDAV lock storage (shared across gunicorn workers)
+#   DB 0 - cache (evictable)
+#   DB 1 - sessions (must not be evicted)
+#   DB 2 - Celery broker + results
+#   DB 3 - WebDAV lock storage (shared across gunicorn workers)
 _REDIS_URL = os.getenv("REDIS_URL") or os.getenv("DJANGO_REDIS_URL")
 
 

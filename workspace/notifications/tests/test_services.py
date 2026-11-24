@@ -164,7 +164,7 @@ class GetUnreadCountTests(TestCase):
 
     def test_caches_result(self):
         self.assertEqual(get_unread_count(self.alice), 0)
-        # Add a notification — count should still be cached as 0
+        # Add a notification - count should still be cached as 0
         Notification.objects.create(
             recipient=self.alice,
             origin="chat",

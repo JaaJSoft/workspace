@@ -99,7 +99,7 @@ def _on_task_postrun(task_id=None, task=None, state=None, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# Custom Collector — queue length sampled at scrape time via Redis LLEN.
+# Custom Collector - queue length sampled at scrape time via Redis LLEN.
 # ---------------------------------------------------------------------------
 def _priority_lists(queue_name, transport_options):
     """The Redis lists holding *queue_name*'s messages, one per priority step.

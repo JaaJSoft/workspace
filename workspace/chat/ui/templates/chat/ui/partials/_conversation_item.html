@@ -7,7 +7,7 @@ Renders a single conversation entry (`<li>`) for the chat sidebar.
 Expects in context:
   - conv: a Conversation with display_name, kind, uuid, avatar_initial,
           other_user, has_avatar, time_ago, last_message_preview
-  - pinned: bool (default False) — when True, adds the pin icon, the
+  - pinned: bool (default False) - when True, adds the pin icon, the
             draggable handlers, and passes `true` as the 4th argument of
             openConvContextMenu so the context menu shows "Unpin" instead
             of "Pin".
@@ -17,7 +17,7 @@ Used by:
   - chat/ui/partials/_conversation_items.html (targeted alpine-ajax swaps)
 
 The id="conv-item-<uuid>" is the alpine-ajax target for per-conversation
-refreshes (refreshConversationItems in conversations.js) — keep it stable.
+refreshes (refreshConversationItems in conversations.js) - keep it stable.
 {% endcomment %}
 
 <li

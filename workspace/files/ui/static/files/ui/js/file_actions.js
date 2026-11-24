@@ -1,5 +1,5 @@
 /**
- * Shared file actions — dialog helpers and API calls.
+ * Shared file actions - dialog helpers and API calls.
  *
  * Returns promises so consumers can .then() for their own refresh logic.
  * Dialogs use $dispatch events; consumers listen for those events

@@ -102,7 +102,7 @@ window._userCardShow = function(wrapper, userId) {
     popover.style.top = pos.top + 'px';
     wrapper._placement = pos.placement;
 
-    // Slide+fade in — set initial state without transition, then animate
+    // Slide+fade in - set initial state without transition, then animate
     popover.style.display = '';
     popover.style.transition = 'none';
     _applyPopoverTransform(popover, pos.placement, false);

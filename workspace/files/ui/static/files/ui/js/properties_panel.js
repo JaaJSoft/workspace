@@ -47,7 +47,7 @@ window.propertiesPanelMixin = function propertiesPanelMixin() {
       this.propertiesError = null;
       this.propertiesLoading = true;
       this.showPropertiesPanel = true;
-      // Reset the tags target — the incoming partial reseeds it (taggable
+      // Reset the tags target - the incoming partial reseeds it (taggable
       // files only), so a previous file's tags can't leak into this one.
       this.selectedFile = null;
       this._onPropertiesOpen();

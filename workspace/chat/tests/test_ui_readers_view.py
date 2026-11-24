@@ -1,4 +1,4 @@
-"""Tests for `message_readers_view` — the read-receipt popover partial."""
+"""Tests for `message_readers_view` - the read-receipt popover partial."""
 
 from django.test import TestCase
 from django.utils import timezone

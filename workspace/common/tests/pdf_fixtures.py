@@ -2,7 +2,7 @@
 
 Writing the bytes out is what keeps the suite free of a PDF-authoring
 dependency, and a fixture whose every object is visible is also the only way
-to build the degenerate cases — a page with no text at all, a truncated file.
+to build the degenerate cases - a page with no text at all, a truncated file.
 """
 
 

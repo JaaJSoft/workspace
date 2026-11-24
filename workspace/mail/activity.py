@@ -12,9 +12,9 @@ class MailActivityProvider(ActivityProvider):
         """Return Q filter for mail queries.
 
         When *user_id* is set (profile / heatmap) we only count **sent**
-        mail — it represents the user's own activity.
+        mail - it represents the user's own activity.
         When *user_id* is ``None`` (dashboard / workspace feed) we only
-        show **received** (inbox) mail — things that happened to people.
+        show **received** (inbox) mail - things that happened to people.
         """
         if user_id is not None:
             return Q(account__owner_id=user_id, folder__folder_type="sent")

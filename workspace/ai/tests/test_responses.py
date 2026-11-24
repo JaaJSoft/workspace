@@ -163,7 +163,7 @@ class PostBotMessageNotificationTests(TestCase):
     """A bot reply must reach the notification pipeline, not just SSE.
 
     Only the SSE cache flag used to fire, so a bot reply never created a
-    Notification row and never produced a web push — the recipient got a
+    Notification row and never produced a web push - the recipient got a
     badge and nothing else.
     """
 

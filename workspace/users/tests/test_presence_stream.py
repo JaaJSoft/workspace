@@ -14,6 +14,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.users.models import UserPresence
+from workspace.users.services import presence as presence_service
 from workspace.users.services import presence_stream
 
 User = get_user_model()
@@ -170,3 +171,41 @@ class PayloadTests(TestCase):
             presence_stream.as_payload({1: "online", 5: "offline"}),
             {"1": "online", "5": "offline"},
         )
+
+
+class StatusRuleAgreementTests(PresenceStreamResetMixin, TestCase):
+    """The stream reads the presence table, the single lookups read the cache:
+    for the same sighting and manual status they must name the same status."""
+
+    AGES = [
+        timedelta(seconds=10),
+        presence_service.ONLINE_THRESHOLD - timedelta(microseconds=1),
+        presence_service.ONLINE_THRESHOLD,
+        timedelta(minutes=5),
+        presence_service.AWAY_THRESHOLD - timedelta(microseconds=1),
+        presence_service.AWAY_THRESHOLD,
+        timedelta(minutes=30),
+    ]
+
+    def test_stream_and_single_lookups_agree(self):
+        now = timezone.now()
+        users = {}
+        for manual in sorted(presence_service.VALID_MANUAL_STATUSES):
+            for index, age in enumerate(self.AGES):
+                user = User.objects.create_user(username=f"{manual}-{index}")
+                UserPresence.objects.create(
+                    user=user, last_seen=now - age, manual_status=manual
+                )
+                cache.set(presence_service._cache_key(user.pk), (now - age).isoformat())
+                cache.set(presence_service._manual_key(user.pk), manual)
+                users[user.pk] = (manual, age)
+
+        with mock.patch("django.utils.timezone.now", return_value=now):
+            streamed = presence_stream.statuses_of(users)
+            bulk = presence_service.get_statuses(list(users))
+            single = {uid: presence_service.get_status(uid) for uid in users}
+
+        for uid, case in users.items():
+            with self.subTest(manual=case[0], age=case[1]):
+                self.assertEqual(streamed[uid], single[uid])
+                self.assertEqual(bulk[uid], single[uid])

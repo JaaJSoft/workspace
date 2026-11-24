@@ -110,27 +110,38 @@ def sync_to_db(user_id: int, now: datetime, *, update_public: bool = True) -> No
     )
 
 
-def get_status(user_id: int) -> str:
-    """Return ``"online"``, ``"away"``, ``"busy"`` or ``"offline"`` for a single user."""
-    manual = get_manual_status(user_id)
-    if manual in MANUAL_OVERRIDES:
-        # invisible appears as 'offline' to others
-        return "offline" if manual == "invisible" else manual
+def status_from(manual_status: str, last_seen: datetime | None, now: datetime) -> str:
+    """The status others see: ``"online"``, ``"away"``, ``"busy"`` or ``"offline"``.
 
-    # 'auto' and 'online' — use automatic detection
-    raw = cache.get(_cache_key(user_id))
-    if raw is None:
+    The one rule every reader applies, whether the sighting comes from the
+    cache or from the presence table.
+    """
+    if manual_status in MANUAL_OVERRIDES:
+        return "offline" if manual_status == "invisible" else manual_status
+    if last_seen is None:
         return "offline"
-    try:
-        last = datetime.fromisoformat(raw)
-    except TypeError, ValueError:
-        return "offline"
-    delta = timezone.now() - last
+    delta = now - last_seen
     if delta < ONLINE_THRESHOLD:
         return "online"
     if delta < AWAY_THRESHOLD:
         return "away"
     return "offline"
+
+
+def _parse_sighting(raw) -> datetime | None:
+    try:
+        return datetime.fromisoformat(raw)
+    except TypeError, ValueError:
+        return None
+
+
+def get_status(user_id: int) -> str:
+    """Return ``"online"``, ``"away"``, ``"busy"`` or ``"offline"`` for a single user."""
+    return status_from(
+        get_manual_status(user_id),
+        _parse_sighting(cache.get(_cache_key(user_id))),
+        timezone.now(),
+    )
 
 
 def get_statuses(user_ids: list[int]) -> dict[int, str]:
@@ -173,26 +184,9 @@ def get_statuses(user_ids: list[int]) -> dict[int, str]:
     now = timezone.now()
     result = {}
     for key, uid in keys.items():
-        ms = manual_map.get(uid, "auto")
-        if ms in MANUAL_OVERRIDES:
-            result[uid] = "offline" if ms == "invisible" else ms
-            continue
-
-        raw = cached.get(key)
-        if raw is None:
-            result[uid] = "offline"
-            continue
-        try:
-            delta = now - datetime.fromisoformat(raw)
-        except TypeError, ValueError:
-            result[uid] = "offline"
-            continue
-        if delta < ONLINE_THRESHOLD:
-            result[uid] = "online"
-        elif delta < AWAY_THRESHOLD:
-            result[uid] = "away"
-        else:
-            result[uid] = "offline"
+        result[uid] = status_from(
+            manual_map.get(uid, "auto"), _parse_sighting(cached.get(key)), now
+        )
     return result
 
 
@@ -211,7 +205,7 @@ def get_online_user_ids() -> list[int]:
     return list(
         UserPresence.objects.filter(
             Q(
-                last_seen__gte=cutoff,
+                last_seen__gt=cutoff,
                 manual_status__in=("auto", "online", "busy", "away"),
             )
             | Q(manual_status__in=("busy", "away"))

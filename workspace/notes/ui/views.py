@@ -71,9 +71,9 @@ def _ensure_default_folders(user):
     changed = False
 
     # ── Notes folder ──
-    # ``prefs`` is user-controlled JSON written via the settings API. A
-    # malformed ``defaultFolderUuid`` would otherwise crash the notes UI
-    # with ValidationError -> 500 from UUIDField.to_python.
+    # ``prefs`` may predate the API checking it: a malformed
+    # ``defaultFolderUuid`` would otherwise crash the notes UI with
+    # ValidationError -> 500 from UUIDField.to_python.
     notes_folder = None
     default_folder_uuid = parse_uuid_or_none(prefs.get("defaultFolderUuid"))
     if default_folder_uuid is not None:

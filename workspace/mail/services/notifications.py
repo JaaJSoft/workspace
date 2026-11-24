@@ -47,10 +47,10 @@ def resolve_notify_mode(user) -> str:
 def resolve_notify_burst(user) -> int:
     """Max notifications per folder per sync, bounded whatever is stored.
 
-    Clamped here rather than at the API boundary: the settings endpoint stores
-    arbitrary JSON, and fixtures, management commands and direct ORM writes
-    never pass through a view at all. This value is read on the IMAP sync path,
-    so it is bounded where it is consumed.
+    Clamped here as well as at the API boundary (``mail/user_settings.py``):
+    a value stored before the API checked it, a fixture, a management command
+    or a direct ORM write never passed through a view. This value is read on
+    the IMAP sync path, so it is bounded where it is consumed.
     """
     raw = get_module_settings(user, "mail").get("notify_max_burst")
     try:

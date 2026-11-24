@@ -1,7 +1,5 @@
 import logging
-import re
 from datetime import timedelta
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings as django_settings
 from django.contrib.auth import password_validation, update_session_auth_hash
@@ -27,12 +25,8 @@ from rest_framework.views import APIView
 
 from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
-from workspace.core.module_registry import SearchScope
 from workspace.core.sse_registry import notify_sse
-from workspace.dashboard.services import preferences as dashboard_preferences
 from workspace.files.models import File
-from workspace.files.sensitivity import BlurPreference
-from workspace.users.banner_palettes import validate_profile_setting
 from workspace.users.models import APITokenLabel, UserSetting
 from workspace.users.queries import (
     DEFAULT_SEARCH_LIMIT,
@@ -46,8 +40,9 @@ from workspace.users.services import presence_stream
 from workspace.users.services.settings import (
     delete_setting,
     get_module_settings,
-    set_setting,
+    write_settings,
 )
+from workspace.users.settings_registry import UnknownModule, user_settings_registry
 
 logger = logging.getLogger(__name__)
 
@@ -553,126 +548,15 @@ _setting_fields = {
 
 
 class SettingValueSerializer(serializers.Serializer):
-    """The body of a single-setting write. A missing value clears the setting."""
+    """The body of a single-setting write. A null or missing value removes it."""
 
     value = serializers.JSONField(allow_null=True, required=False, default=None)
 
 
-_CORE_FLAGS = (
-    "reveal_sensitive_on_hover",
-    "reveal_sensitive_in_viewer",
-)
-
-_PHOTOS_FLAGS = (
-    "tile_badges",
-    "video_hover_preview",
-    "import_by_date",
-    "show_hidden",
-    "auto_tags",
-    "show_map",
-)
-_PHOTOS_CHOICES = {
-    "tile_shape": ("square", "original"),
-    "default_media_type": ("all", "photo", "video"),
-}
-_PHOTOS_SCOPE_RE = re.compile(r"^(mine|all|shared|group:\d+)$")
-
-
-def _validate_photos_setting(key, value):
-    """The Photos Preferences panel's settings (photos/services/preferences.py)."""
-    if key in _PHOTOS_FLAGS and not isinstance(value, bool):
-        return f"{key} must be a boolean."
-    if key in _PHOTOS_CHOICES and value not in _PHOTOS_CHOICES[key]:
-        return f"{key} must be one of: {', '.join(_PHOTOS_CHOICES[key])}."
-    if key == "default_scope" and not (
-        isinstance(value, str) and _PHOTOS_SCOPE_RE.match(value)
-    ):
-        return "default_scope must be mine, all, shared or group:<id>."
-    return None
-
-
-def _validate_setting_value(module, key, value):
-    """Return an error message when the value is rejected, else None."""
-    if module == "core" and key == "timezone" and value is not None:
-        try:
-            ZoneInfo(str(value))
-        except ZoneInfoNotFoundError, ValueError:
-            return "Invalid timezone."
-    if module == "core" and key == "language" and value is not None:
-        languages = dict(django_settings.LANGUAGES)
-        if value not in languages:
-            return f"language must be one of: {', '.join(languages)}."
-    if module == "core" and key in _CORE_FLAGS and value is not None:
-        if not isinstance(value, bool):
-            return f"{key} must be a boolean."
-    if module == "core" and key == "sensitive_blur" and value is not None:
-        if value not in BlurPreference.values:
-            return f"sensitive_blur must be one of: {', '.join(BlurPreference.values)}."
-    if module == "core" and key == "search_scope" and value is not None:
-        if value not in SearchScope.CHOICES:
-            return f"search_scope must be one of: {', '.join(SearchScope.CHOICES)}."
-    if module == "projects" and key == "reminder_hour" and value is not None:
-        if (
-            not isinstance(value, int)
-            or isinstance(value, bool)
-            or not 0 <= value <= 23
-        ):
-            return "reminder_hour must be an integer between 0 and 23."
-    if module == "photos" and key == "tile_size" and value is not None:
-        # A step of the timeline's size slider; the page has a width for
-        # each of the five and none for anything else.
-        if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5:
-            return "tile_size must be an integer between 1 and 5."
-    if module == "photos" and value is not None:
-        error = _validate_photos_setting(key, value)
-        if error:
-            return error
-    if (
-        module == dashboard_preferences.MODULE
-        and key == dashboard_preferences.TEMPERATURE_UNIT
-        and value is not None
-        and value not in dashboard_preferences.TEMPERATURE_UNITS
-    ):
-        units = ", ".join(dashboard_preferences.TEMPERATURE_UNITS)
-        return f"temperature_unit must be one of: {units}."
-    if (
-        module == dashboard_preferences.MODULE
-        and key == dashboard_preferences.HIDDEN_TODAY_SOURCES
-        and value is not None
-        and not dashboard_preferences.is_slug_list(value)
-    ):
-        return "hidden_today_sources must be a list of source slugs."
-    if (
-        module == dashboard_preferences.MODULE
-        and key == dashboard_preferences.HIDDEN_MODULES
-        and value is not None
-        and not dashboard_preferences.is_slug_list(value)
-    ):
-        return "hidden_modules must be a list of module slugs."
-    if module == "profile" and value is not None:
-        valid, error = validate_profile_setting(key, value)
-        if not valid:
-            return error
-    # Every module keeps the options of its Preferences panel in one object,
-    # and reads it as one.
-    if key == "preferences" and value is not None and not isinstance(value, dict):
-        return "preferences must be an object."
-    if module == "vault" and key == "default_sort" and value is not None:
-        # The four the preferences panel offers. Stored unchecked, an unknown
-        # value reaches the listing as a sort nothing implements, and the sort
-        # control renders on a value none of its options carries.
-        if value not in ("default", "name", "favorite", "created"):
-            return "default_sort must be one of: default, name, favorite, created."
-    if module == "vault" and key == "lock_after_minutes" and value is not None:
-        # A vault that never locks is the failure a bad value here causes, so
-        # it is refused rather than stored and quietly ignored by the page.
-        if (
-            not isinstance(value, int)
-            or isinstance(value, bool)
-            or not 1 <= value <= 1440
-        ):
-            return "lock_after_minutes must be an integer between 1 and 1440."
-    return None
+def _setting_not_found():
+    # Also what a setting no module declares answers, and one only the server
+    # writes: the API has nothing to write there.
+    return Response({"detail": "Setting not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
 @extend_schema(tags=["Settings"])
@@ -725,44 +609,48 @@ class SettingDetailView(APIView):
     def get(self, request, module, key):
         # Read through the cached module dict (invalidated by set/delete)
         # instead of querying the row: the context processors already warm
-        # this cache on every page load. Key presence distinguishes a
-        # missing setting from a stored null.
+        # this cache on every page load.
         settings_map = get_module_settings(request.user, module)
         if key not in settings_map:
-            return Response(
-                {"detail": "Setting not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return _setting_not_found()
         return Response({"module": module, "key": key, "value": settings_map[key]})
 
     @extend_schema(
         summary="Create or update a setting",
+        description=(
+            "The value is checked against the setting its module declares, and "
+            "the response carries what was stored. A null value removes the "
+            "setting."
+        ),
         request=SettingValueSerializer,
         responses={
             200: inline_serializer(name="SettingWriteResponse", fields=_setting_fields),
             400: OpenApiResponse(description="Invalid value for this setting."),
+            404: OpenApiResponse(description="No module declares this setting."),
         },
     )
     def put(self, request, module, key):
         body = SettingValueSerializer(data=request.data)
         body.is_valid(raise_exception=True)
-        value = body.validated_data["value"]
-        error = _validate_setting_value(module, key, value)
-        if error:
-            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
-        obj = set_setting(request.user, module, key, value)
-        return Response({"module": obj.module, "key": obj.key, "value": obj.value})
+        if not user_settings_registry.is_writable(module, key):
+            return _setting_not_found()
+        try:
+            stored = write_settings(
+                request.user, module, {key: body.validated_data["value"]}
+            )
+        except serializers.ValidationError as error:
+            raise serializers.ValidationError({"value": error.detail[key]}) from None
+        return Response({"module": module, "key": key, "value": stored[key]})
 
     @extend_schema(
         summary="Delete a setting",
         responses={204: None},
     )
     def delete(self, request, module, key):
-        if not delete_setting(request.user, module, key):
-            return Response(
-                {"detail": "Setting not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        if not user_settings_registry.is_writable(module, key) or not delete_setting(
+            request.user, module, key
+        ):
+            return _setting_not_found()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -771,11 +659,10 @@ class SettingsModuleView(APIView):
     """Bulk read or write every setting within a single module.
 
     Lets clients hydrate or update several related settings in one round-trip
-    instead of N separate single-key requests. On SQLite, batching writes
-    inside one ``transaction.atomic`` block acquires the writer-lock only
-    once for the entire batch, which dramatically reduces the contention
-    window that causes ``database is locked`` errors when users change
-    several settings in quick succession.
+    instead of N separate single-key requests. On SQLite the batch is one
+    transaction, so the writer-lock is acquired once for all of it, which
+    dramatically reduces the contention window that causes ``database is
+    locked`` errors when users change several settings in quick succession.
     """
 
     permission_classes = [IsAuthenticated]
@@ -799,9 +686,10 @@ class SettingsModuleView(APIView):
         summary="Bulk create or update settings within a module",
         description=(
             "Upsert several settings inside the same module in one request. "
-            "Body must be a JSON object of ``{key: value}`` pairs. Every write "
-            "happens inside a single ``transaction.atomic`` block. Responds "
-            "with the full state of the module after the update."
+            "Body must be a JSON object of ``{key: value}`` pairs, each checked "
+            "against the setting the module declares; a null value removes its "
+            "key. Nothing is written when one value is refused. Responds with "
+            "the full state of the module after the update."
         ),
         request=inline_serializer(
             name="SettingsBulkWriteRequest",
@@ -811,7 +699,13 @@ class SettingsModuleView(APIView):
             200: OpenApiResponse(
                 description="The full ``{key: value}`` state of the module after the update.",
             ),
-            400: OpenApiResponse(description="Body is not a JSON object."),
+            400: OpenApiResponse(
+                description=(
+                    "Body is not a JSON object, or names a setting the module "
+                    "does not declare, or carries a value its setting refuses."
+                ),
+            ),
+            404: OpenApiResponse(description="No such module."),
         },
     )
     def patch(self, request, module):
@@ -821,16 +715,10 @@ class SettingsModuleView(APIView):
                 {"detail": "Body must be a JSON object of {key: value} pairs."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        for key, value in data.items():
-            error = _validate_setting_value(module, key, value)
-            if error:
-                return Response(
-                    {"detail": f"{key}: {error}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        with transaction.atomic():
-            for key, value in data.items():
-                set_setting(request.user, module, key, value)
+        try:
+            write_settings(request.user, module, data)
+        except UnknownModule:
+            return _setting_not_found()
         return Response(get_module_settings(request.user, module))
 
 

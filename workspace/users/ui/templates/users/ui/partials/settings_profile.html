@@ -424,7 +424,7 @@
             this.showFeedback('success', key === 'role' ? '{{ role_saved_message|escapejs }}' : '{{ bio_saved_message|escapejs }}');
           } else {
             const data = await res.json();
-            this.showFeedback('error', data.detail || '{{ save_failed_message|escapejs }}');
+            this.showFeedback('error', (data.value && data.value[0]) || '{{ save_failed_message|escapejs }}');
           }
         } catch (e) {
           this.showFeedback('error', '{{ network_error_retry_message|escapejs }}');

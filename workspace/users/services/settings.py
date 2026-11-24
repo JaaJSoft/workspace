@@ -6,6 +6,10 @@ Usage from another app::
 
     theme = get_setting(request.user, 'core', 'theme', default='light')
     set_setting(request.user, 'core', 'theme', 'dark')
+
+``set_setting`` stores a value the server computed, unchecked. What a client
+sends goes through ``write_settings``, which checks it against the settings
+its module declared (``workspace/users/settings_registry.py``).
 """
 
 from __future__ import annotations
@@ -15,10 +19,12 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import translation
 
 from workspace.common.cache import cached, invalidate_tags
 from workspace.users.models import UserSetting
+from workspace.users.settings_registry import user_settings_registry
 
 UTC = ZoneInfo("UTC")
 
@@ -173,6 +179,27 @@ def delete_setting(user, module: str, key: str) -> bool:
     ).delete()
     invalidate_tags(_module_tag(user.pk, module))
     return deleted > 0
+
+
+def write_settings(user, module: str, values) -> dict[str, Any]:
+    """Store what a client sent for *module*, a ``{key: value}`` mapping.
+
+    Every value is checked against the setting the module declared
+    (``settings_registry``); a null removes its key. Nothing is written when
+    one is refused. Returns what was stored, None for a removed key. Raises
+    UnknownModule, or a ValidationError keyed by setting.
+    """
+    cleaned = user_settings_registry.clean(module, values)
+    with transaction.atomic():
+        for key, value in cleaned.items():
+            if value is None:
+                delete_setting(user, module, key)
+            else:
+                set_setting(user, module, key, value)
+    # Again once committed: a read between a write and the commit caches the
+    # previous value.
+    invalidate_tags(_module_tag(user.pk, module))
+    return cleaned
 
 
 @cached(

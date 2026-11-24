@@ -7,6 +7,11 @@ class VaultConfig(AppConfig):
     name = "workspace.vault"
 
     def ready(self):
+        from workspace.users.settings_registry import user_settings_registry
+        from workspace.vault.user_settings import VaultSettings
+
+        user_settings_registry.register("vault", VaultSettings)
+
         from django.core.checks import Tags, register
 
         from workspace.vault.checks import retired_ids_check, test_switches_check

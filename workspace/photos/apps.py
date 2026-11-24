@@ -7,6 +7,11 @@ class PhotosConfig(AppConfig):
     name = "workspace.photos"
 
     def ready(self):
+        from workspace.photos.user_settings import PhotosSettings
+        from workspace.users.settings_registry import user_settings_registry
+
+        user_settings_registry.register("photos", PhotosSettings)
+
         from workspace.common.vectors.schema import register_vector_index
         from workspace.core.module_registry import (
             CommandInfo,

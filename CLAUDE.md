@@ -632,13 +632,13 @@ from workspace.users.services.settings import (
 )
 
 # Read with default (cached, 5-min TTL):
-show = get_setting(user, 'dashboard', 'show_upcoming_events', default=True)
+unit = get_setting(user, 'dashboard', 'temperature_unit', default='celsius')
 
 # Write (updates DB AND invalidates cache):
-set_setting(user, 'dashboard', 'show_upcoming_events', False)
+set_setting(user, 'dashboard', 'temperature_unit', 'fahrenheit')
 
 # Delete (DB row removed AND cache invalidated):
-delete_setting(user, 'dashboard', 'show_upcoming_events')
+delete_setting(user, 'dashboard', 'temperature_unit')
 
 # Read all keys for a module at once (cached 5 min, invalidated on any set/delete in that module):
 prefs = get_module_settings(user, 'dashboard')
@@ -646,7 +646,7 @@ prefs = get_module_settings(user, 'dashboard')
 
 **Rules:**
 - Never call `UserSetting.objects.create/update/delete/update_or_create` from application code - use `set_setting`/`delete_setting` instead. Raw ORM bypasses the cache invalidation and causes "F5 reverts my setting" bugs.
-- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers - new UI that toggles a setting should just call it (fire-and-forget `fetch` is the idiom, see `themePickerForm()` in `settings_appearance.html` and `dashboardPrefsForm()` in `dashboard/index.html`).
+- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers - new UI that toggles a setting should just call it (fire-and-forget `fetch` is the idiom, see `themePickerForm()` in `settings_appearance.html` and `dashboardPrefsForm()` in `dashboard/index.html`). It only writes a setting its module declared - see below.
 - In tests that call `set_setting`/`delete_setting`, **always `cache.clear()` in `tearDown`**. Django's `LocMemCache` is process-global and is NOT reset between `TestCase` runs, so leaked cache entries can cause order-dependent failures.
 
 ```python
@@ -656,6 +656,30 @@ class MyTests(TestCase):
     def tearDown(self):
         cache.clear()
 ```
+
+#### Declaring a setting - each module owns its own, in `user_settings.py`
+
+The settings API writes a key only when the module it belongs to declared it. A module describes its settings in `workspace/<module>/user_settings.py`, as a DRF serializer with one field per key, and registers it from its `AppConfig.ready()`:
+
+```python
+# workspace/photos/user_settings.py
+class PhotosSettings(SidebarSettings):                 # SidebarSettings adds sidebar_collapsed
+    tile_size = serializers.IntegerField(min_value=1, max_value=5)
+    tile_shape = serializers.ChoiceField(choices=TILE_SHAPES)
+    import_folder = serializers.UUIDField(read_only=True)   # written by the server only
+
+# workspace/photos/apps.py, in ready()
+user_settings_registry.register("photos", PhotosSettings)
+```
+
+`workspace/users/settings_registry.py` holds the registry and `write_settings(user, module, values)` (`users/services/settings.py`) is the one function a client's values go through: it checks them against the fields, stores what the fields made of them, and writes nothing when one is refused. `users` knows no module's rules, and never grows an `if module == ...`.
+
+- **A new setting is a new field**, in the module that owns it, with the tightest type that fits: `ChoiceField` over the definition the reader already uses (`NOTIFY_MODES`, `Level.choices`), bounded `IntegerField`, `max_length` on every string and list. A setting nobody declared answers 404, and a page writing it with a fire-and-forget `fetch` never notices: `core/tests/test_user_settings.py` scans the scripts, templates and services and fails on any key they use that no module declares.
+- **A setting the server writes is `read_only`** (`has_avatar`, `last_project`, `import_folder`): declared so a module's keys are all in one place, refused when a client sends it. `set_setting` itself checks nothing - it stores a value the server computed.
+- **Null is unset.** A `null` value removes the row, in a single write and in a bulk one, so a reader's `default=` applies. No field takes `allow_null`.
+- **Several options sent as one object** (a module's `preferences`) are a nested `Preferences` serializer. A write replaces the object; an option the schema does not declare is left out rather than refused, because an object stored before an option was retired still carries it.
+- **A reader still falls back to its default** on a value it cannot use: rows written before a rule existed are still in the database.
+- A module's settings are tested in its own `tests/test_user_settings.py`, on `SettingsApiTestCase` (`users/tests/settings_api.py`): `assertAccepts(key, values)` and `assertRefuses(key, values)`.
 
 ### Dates and timezones - every user has their own
 

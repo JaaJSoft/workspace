@@ -55,7 +55,7 @@ BANNER_PALETTES = {
     },
 }
 
-_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+HEX_COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def gradient_from_palette_value(value):
@@ -67,7 +67,7 @@ def gradient_from_palette_value(value):
         return f"linear-gradient(135deg, {p['from']}, {p['via']}, {p['to']})"
     if isinstance(value, dict):
         f, v, t = value.get("from"), value.get("via"), value.get("to")
-        if all(_HEX_RE.match(c or "") for c in (f, v, t)):
+        if all(HEX_COLOUR.match(c or "") for c in (f, v, t)):
             return f"linear-gradient(135deg, {f}, {v}, {t})"
     return None
 
@@ -75,35 +75,3 @@ def gradient_from_palette_value(value):
 def resolve_banner_gradient(user):
     """Return a CSS linear-gradient string for the user's banner, or None for default."""
     return gradient_from_palette_value(get_setting(user, "profile", "banner_palette"))
-
-
-def validate_profile_setting(key, value):
-    """Validate a profile setting value. Returns (is_valid, error_message)."""
-    if key == "bio":
-        if not isinstance(value, str):
-            return False, "Bio must be a string."
-        if len(value) > 200:
-            return False, "Bio must be at most 200 characters."
-        return True, None
-    if key == "role":
-        if not isinstance(value, str):
-            return False, "Role must be a string."
-        if len(value) > 50:
-            return False, "Role must be at most 50 characters."
-        return True, None
-    if key == "banner_palette":
-        if isinstance(value, str):
-            if value not in BANNER_PALETTES:
-                return False, f"Unknown palette: {value}"
-            return True, None
-        if isinstance(value, dict):
-            if set(value.keys()) != {"from", "via", "to"}:
-                return False, "Custom palette must have exactly from, via, to keys."
-            if not all(
-                isinstance(colour, str) and _HEX_RE.match(colour)
-                for colour in value.values()
-            ):
-                return False, "Each color must be a valid #rrggbb hex string."
-            return True, None
-        return False, "Palette must be a preset ID or {from, via, to} object."
-    return True, None

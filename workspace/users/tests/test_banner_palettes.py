@@ -2,10 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.users.banner_palettes import (
-    resolve_banner_gradient,
-    validate_profile_setting,
-)
+from workspace.users.banner_palettes import resolve_banner_gradient
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -49,74 +46,6 @@ class ResolveBannerGradientTest(TestCase):
     def test_returns_none_for_incomplete_custom(self):
         set_setting(self.user, "profile", "banner_palette", {"from": "#111111"})
         self.assertIsNone(resolve_banner_gradient(self.user))
-
-
-class ValidateProfileSettingTest(TestCase):
-    # -- bio --
-    def test_bio_valid(self):
-        ok, err = validate_profile_setting("bio", "Hello world")
-        self.assertTrue(ok)
-        self.assertIsNone(err)
-
-    def test_bio_too_long(self):
-        ok, err = validate_profile_setting("bio", "x" * 201)
-        self.assertFalse(ok)
-        self.assertIn("200", err)
-
-    def test_bio_not_string(self):
-        ok, err = validate_profile_setting("bio", 123)
-        self.assertFalse(ok)
-
-    # -- role --
-    def test_role_valid(self):
-        ok, err = validate_profile_setting("role", "Lead Backend")
-        self.assertTrue(ok)
-
-    def test_role_too_long(self):
-        ok, err = validate_profile_setting("role", "x" * 51)
-        self.assertFalse(ok)
-        self.assertIn("50", err)
-
-    def test_role_not_string(self):
-        ok, err = validate_profile_setting("role", ["a"])
-        self.assertFalse(ok)
-
-    # -- banner_palette --
-    def test_palette_valid_preset(self):
-        ok, err = validate_profile_setting("banner_palette", "ocean")
-        self.assertTrue(ok)
-
-    def test_palette_unknown_preset(self):
-        ok, err = validate_profile_setting("banner_palette", "nope")
-        self.assertFalse(ok)
-
-    def test_palette_valid_custom(self):
-        ok, err = validate_profile_setting(
-            "banner_palette", {"from": "#aabbcc", "via": "#112233", "to": "#445566"}
-        )
-        self.assertTrue(ok)
-
-    def test_palette_custom_bad_hex(self):
-        ok, err = validate_profile_setting(
-            "banner_palette", {"from": "#aabbcc", "via": "red", "to": "#445566"}
-        )
-        self.assertFalse(ok)
-
-    def test_palette_custom_extra_keys(self):
-        ok, err = validate_profile_setting(
-            "banner_palette",
-            {"from": "#aabbcc", "via": "#112233", "to": "#445566", "extra": "x"},
-        )
-        self.assertFalse(ok)
-
-    def test_palette_wrong_type(self):
-        ok, err = validate_profile_setting("banner_palette", 42)
-        self.assertFalse(ok)
-
-    # -- unknown key passes through --
-    def test_unknown_key_passes(self):
-        ok, err = validate_profile_setting("whatever", "anything")
-        self.assertTrue(ok)
 
 
 class ProfileViewContextTest(TestCase):

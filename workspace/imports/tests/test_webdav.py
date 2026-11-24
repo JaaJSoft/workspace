@@ -129,6 +129,16 @@ class MultistatusParsingTests(SimpleTestCase):
         )
         self.assertNotIn("/Documents/broken", [e.id for e in entries])
 
+    def test_a_response_declaring_a_dtd_is_refused(self):
+        # Harmless here, but the declaration alone is refused: entity
+        # expansion is what a hostile server would use one for.
+        body = NEXTCLOUD_MULTISTATUS.replace(
+            b"?>", b'?>\n<!DOCTYPE multistatus [<!ENTITY docs "Documents">]>', 1
+        )
+
+        with self.assertRaises(ProviderError):
+            list(_parse_multistatus(body, self.source._entry_id_from_href))
+
     def test_garbage_is_a_provider_error(self):
         with self.assertRaises(ProviderError):
             list(_parse_multistatus(b"<html>nope", self.source._entry_id_from_href))

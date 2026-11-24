@@ -17,6 +17,7 @@ import httpx2
 from django.conf import settings
 from django.utils.translation import gettext as _
 
+from workspace.common.dav.xml import declares_dtd
 from workspace.common.logging import scrub
 from workspace.common.url_guard import guarded_transport
 
@@ -224,6 +225,9 @@ class WebDavFileSource:
 
 
 def parse_dav_xml(content: bytes):
+    # A remote server is no more trusted than a DAV client.
+    if declares_dtd(content):
+        raise ProviderError(_("The server sent an unreadable WebDAV response."))
     try:
         return ElementTree.fromstring(content)
     except ElementTree.ParseError as exc:

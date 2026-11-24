@@ -467,7 +467,7 @@ function mailApp() {
         ? window.userTzDayKey(d) === window.userTzDayKey(now)
         : d.getDate() === now.getDate();
       if (diff < 86400000 && sameDay) {
-        return d.toLocaleTimeString(window.getUserLocale(), { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleTimeString(window.getUserLocale(), { timeZone: tz, ...window.userClockOptions() });
       }
       if (diff < 604800000) {
         return d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, weekday: 'short' });
@@ -496,7 +496,7 @@ function mailApp() {
       return new Date(dateStr).toLocaleString(window.getUserLocale(), {
         timeZone: tz,
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
+        ...window.userClockOptions(),
       });
     },
 

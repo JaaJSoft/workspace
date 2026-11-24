@@ -67,10 +67,35 @@
       </div>
     </div>
   </div>
+
+  <div
+    class="card bg-base-100 border border-base-300 shadow-xs"
+    x-data="timeFormatPickerForm()"
+  >
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="clock" class="w-5 h-5"></i>
+        {% translate "Time format" %}
+      </h2>
+      <p class="text-sm text-base-content/60 mt-1">{% translate "How times of day are written across the app." %}</p>
+      <div class="mt-4">
+        <select
+          class="select w-full max-w-xs"
+          x-model="format"
+          @change="save()"
+          aria-label="{% translate 'Time format' %}"
+        >
+          <option value="24h">{% translate "24h (14:00)" %}</option>
+          <option value="12h">{% translate "12h (2:00 PM)" %}</option>
+        </select>
+      </div>
+    </div>
+  </div>
 </div>
 
 {% translate "Failed to save language" as language_save_failed %}
 {% translate "Failed to save timezone" as timezone_save_failed %}
+{% translate "Failed to save time format" as time_format_save_failed %}
 <script>
   function languagePickerForm() {
     const current = '{{ LANGUAGE_CODE|escapejs }}';
@@ -143,6 +168,38 @@
           },
           body: JSON.stringify({
             value: this.tz
+          }),
+        }).then((resp) => {
+          if (!resp.ok) revert();
+        }).catch(revert);
+      },
+    };
+  }
+
+  function timeFormatPickerForm() {
+    const html = document.documentElement;
+    const apply = (format) => {
+      html.setAttribute('data-time-format', format);
+      if (window.convertLocaltimes) window.convertLocaltimes(document);
+    };
+    return {
+      format: window.getUserTimeFormat(),
+      save() {
+        const previous = window.getUserTimeFormat();
+        apply(this.format);
+        const revert = () => {
+          this.format = previous;
+          apply(previous);
+          if (window.AppAlert) window.AppAlert.error('{{ time_format_save_failed|escapejs }}');
+        };
+        fetch('/api/v1/settings/core/time_format', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+          },
+          body: JSON.stringify({
+            value: this.format
           }),
         }).then((resp) => {
           if (!resp.ok) revert();

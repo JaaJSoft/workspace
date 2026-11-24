@@ -1,3 +1,4 @@
+from workspace.common.datetimes import TIME_FORMATS
 from workspace.users.services.settings import get_module_settings
 
 
@@ -5,7 +6,7 @@ def user_preferences(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return {}
-    # All four keys live in the core module, so fetch them in a single query
+    # All five keys live in the core module, so fetch them in a single query
     # instead of one round-trip per get_setting call.
     core = get_module_settings(user, "core")
     return {
@@ -13,4 +14,9 @@ def user_preferences(request):
         "user_light_theme": core.get("light_theme") or "light",
         "user_dark_theme": core.get("dark_theme") or "dark",
         "user_timezone": core.get("timezone") or "",
+        "user_time_format": _time_format(core.get("time_format")),
     }
+
+
+def _time_format(value):
+    return value if value in TIME_FORMATS else TIME_FORMATS[0]

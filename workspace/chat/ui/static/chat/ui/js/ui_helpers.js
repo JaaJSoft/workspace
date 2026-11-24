@@ -32,7 +32,7 @@ window.chatUiHelpersMixin = function chatUiHelpersMixin() {
       if (!iso) return '';
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(iso);
-      return d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString(window.getUserLocale(), { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric', ...window.userClockOptions() });
     },
 
     memberDisplayName(member) {

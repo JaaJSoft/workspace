@@ -3,6 +3,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScripts } = require('../../../common/tests/js/loader');
+const { clockGlobals } = require('../../../common/tests/js/clock');
 
 function makeApp(userTz, extraGlobals = {}) {
   const ctx = loadScripts([
@@ -22,6 +23,7 @@ localStorage: { getItem: () => null, setItem: () => {} },
     calendarPollsMixin: () => ({}),
     // Pinned so the English assertions hold whatever the host's default is.
     getUserLocale: () => 'en-US',
+    ...clockGlobals(),
     ...extraGlobals,
   });
   ctx.getUserTimeZone = () => userTz;
@@ -92,10 +94,14 @@ test('_fmtDate follows the interface language and translates the day prefix', ()
   assert.match(app._fmtDate(today), /^Aujourd’hui, /);
 });
 
-test('_fmtTime keeps the 12h/24h preference in any language', () => {
+test('_fmtTime reads the app-wide clock in any language', () => {
   const { app } = makeApp('UTC', { getUserLocale: () => 'fr-FR' });
-  app.prefs.timeFormat = '24h';
   assert.equal(app._fmtTime('2026-01-15T14:05:00Z'), '14:05');
-  app.prefs.timeFormat = '12h';
-  assert.match(app._fmtTime('2026-01-15T14:05:00Z'), /^2:05\s?PM$/i);
+  const { app: app12 } = makeApp('UTC', { getUserLocale: () => 'fr-FR', ...clockGlobals('12h') });
+  assert.match(app12._fmtTime('2026-01-15T14:05:00Z'), /^2:05\sPM$/);
+});
+
+test('FullCalendar labels its slots and events on the same clock', () => {
+  assert.equal(makeApp('UTC').app._timeFormatFC().hour12, false);
+  assert.equal(makeApp('UTC', clockGlobals('12h')).app._timeFormatFC().meridiem, 'short');
 });

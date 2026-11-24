@@ -3,6 +3,7 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
+const { clockGlobals } = require('../../../common/tests/js/clock');
 
 // Stub matchMedia so the script loads without a real browser.
 const matchMediaStub = (q) => ({
@@ -15,6 +16,7 @@ const matchMediaStub = (q) => ({
 const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/ui_helpers.js', {
   matchMedia: matchMediaStub,
   getUserLocale: () => 'en-US',
+  ...clockGlobals(),
 });
 
 test('chatUiHelpersMixin is exposed on window', () => {
@@ -85,6 +87,7 @@ test('isSmallScreen reads matchMedia at (max-width: 639px)', () => {
 const tzCtx = loadScript('workspace/chat/ui/static/chat/ui/js/ui_helpers.js', {
   matchMedia: matchMediaStub,
   getUserLocale: () => 'en-US',
+  ...clockGlobals(),
 });
 tzCtx.getUserTimeZone = () => 'Asia/Tokyo';
 const tzMixin = tzCtx.chatUiHelpersMixin();

@@ -1,10 +1,14 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
 from django.test import SimpleTestCase
 from django.utils import timezone as dj_timezone
 
-from workspace.common.datetimes import local_date_range, parse_local_datetime
+from workspace.common.datetimes import (
+    format_clock,
+    local_date_range,
+    parse_local_datetime,
+)
 
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -53,3 +57,19 @@ class LocalDateRangeTests(SimpleTestCase):
         with dj_timezone.override(UTC):
             start, _ = local_date_range(date(2026, 7, 5), date(2026, 7, 5), tz=PARIS)
         self.assertEqual(start, datetime(2026, 7, 4, 22, tzinfo=UTC))
+
+
+class FormatClockTests(SimpleTestCase):
+    def test_24h_keeps_the_leading_zero(self):
+        self.assertEqual(format_clock(time(9, 5), "24h"), "09:05")
+        self.assertEqual(format_clock(time(0, 0), "24h"), "00:00")
+        self.assertEqual(format_clock(time(23, 59), "24h"), "23:59")
+
+    def test_12h_drops_it_and_names_the_half_of_the_day(self):
+        self.assertEqual(format_clock(time(9, 5), "12h"), "9:05 AM")
+        self.assertEqual(format_clock(time(0, 30), "12h"), "12:30 AM")
+        self.assertEqual(format_clock(time(12, 0), "12h"), "12:00 PM")
+        self.assertEqual(format_clock(time(19, 23), "12h"), "7:23 PM")
+
+    def test_an_unknown_format_reads_as_the_default(self):
+        self.assertEqual(format_clock(datetime(2026, 1, 1, 14, 5), "36h"), "14:05")

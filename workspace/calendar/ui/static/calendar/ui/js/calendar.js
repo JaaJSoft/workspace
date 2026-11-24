@@ -16,8 +16,8 @@ window.calendarApp = function calendarApp() {
     currentTitle: '',
 
     // Preferences
-    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
-    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
+    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
+    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, defaultAllDay: false, showDeclined: false, notifyPollVotes: true, showTasks: true },
 
     // Sidebar
     collapsed: window.sidebarPreference.initial(),
@@ -198,7 +198,7 @@ window.calendarApp = function calendarApp() {
     },
 
     _timeFormatFC() {
-      return this.prefs.timeFormat === '12h'
+      return window.getUserTimeFormat() === '12h'
         ? { hour: 'numeric', minute: '2-digit', meridiem: 'short' }
         : { hour: '2-digit', minute: '2-digit', hour12: false };
     },
@@ -216,9 +216,6 @@ window.calendarApp = function calendarApp() {
           this.calendar.setOption('firstDay', value);
         } else if (key === 'weekNumbers') {
           this.calendar.setOption('weekNumbers', value);
-        } else if (key === 'timeFormat') {
-          this.calendar.setOption('eventTimeFormat', this._timeFormatFC());
-          this.calendar.setOption('slotLabelFormat', this._timeFormatFC());
         } else if (key === 'showDeclined') {
           this.calendar.refetchEvents();
           this.refetchAgenda();
@@ -465,10 +462,7 @@ window.calendarApp = function calendarApp() {
       if (!isoStr) return '';
       const tz = this._tz();
       const d = new Date(isoStr);
-      const hour12 = this.prefs.timeFormat === '12h';
-      return d.toLocaleTimeString(this._locale(), {
-        timeZone: tz, hour: hour12 ? 'numeric' : '2-digit', minute: '2-digit', hour12,
-      });
+      return d.toLocaleTimeString(this._locale(), { timeZone: tz, ...window.userClockOptions() });
     },
 
     _sameDay(a, b) {

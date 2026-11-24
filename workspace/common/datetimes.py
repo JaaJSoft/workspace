@@ -19,6 +19,9 @@ _LATEST_ZONE = ZoneInfo("Etc/GMT+12")
 # which models copy verbatim into their next tool call.
 _TRAILING_ZONE = re.compile(r"^(?P<dt>.+?)\s*\((?P<zone>[A-Za-z0-9_+\-/]+)\)$")
 
+# The clocks a time of day can be read on, the first one the default.
+TIME_FORMATS = ("24h", "12h")
+
 
 def parse_local_datetime(value: str, tz):
     """Parse an ISO 8601 datetime, interpreting naive values in *tz*.
@@ -69,3 +72,16 @@ def earliest_local_date():
     acting user's own ``localdate()`` would be one opinion among several.
     """
     return timezone.now().astimezone(_LATEST_ZONE).date()
+
+
+def format_clock(value: datetime | time, time_format: str) -> str:
+    """The time of day of *value* on a 24h ("09:05") or 12h ("9:05 AM") clock.
+
+    The same shapes the browser prints for the user's ``time_format``, so a
+    notification reads like the page it links to. A format outside
+    TIME_FORMATS reads as the default.
+    """
+    if time_format != "12h":
+        return f"{value.hour:02d}:{value.minute:02d}"
+    period = "AM" if value.hour < 12 else "PM"
+    return f"{value.hour % 12 or 12}:{value.minute:02d} {period}"

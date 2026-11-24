@@ -196,9 +196,11 @@ def notify_today_events():
     from django.utils.translation import gettext as _
 
     from workspace.calendar.upcoming import VirtualOccurrence, get_upcoming_for_user
+    from workspace.common.datetimes import format_clock
     from workspace.notifications.services.notifications import notify_stream
     from workspace.users.services.settings import (
         get_user_languages,
+        get_user_time_formats,
         get_user_timezones,
     )
 
@@ -207,6 +209,7 @@ def notify_today_events():
     zones = get_user_timezones([user.pk for user in users])
     users = [u for u in users if now.astimezone(zones[u.pk]).hour == TODAY_EVENTS_HOUR]
     languages = get_user_languages([user.pk for user in users])
+    time_formats = get_user_time_formats([user.pk for user in users])
     notified = 0
     for user in users:
         tz = zones[user.pk]
@@ -217,7 +220,9 @@ def notify_today_events():
                     body = _("All day today")
                 else:
                     body = _("Today at %(time)s") % {
-                        "time": f"{event.start.astimezone(tz):%H:%M}"
+                        "time": format_clock(
+                            event.start.astimezone(tz), time_formats[user.pk]
+                        )
                     }
             url = ""
             if not isinstance(event, VirtualOccurrence):

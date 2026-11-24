@@ -90,7 +90,9 @@ function photosShiftedWallClock(iso, minutes) {
   const at = new Date(`${date}T${time}:00Z`);
   at.setUTCMinutes(at.getUTCMinutes() + minutes);
   const locale = window.getUserLocale ? window.getUserLocale() : undefined;
-  return at.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+  return at.toLocaleString(locale, {
+    year: 'numeric', month: 'short', day: 'numeric', ...window.userClockOptions(), timeZone: 'UTC',
+  });
 }
 
 function photosCaptureState() {

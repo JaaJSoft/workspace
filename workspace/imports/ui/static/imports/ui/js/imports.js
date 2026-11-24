@@ -230,7 +230,9 @@ window.importsApp = function importsApp() {
 
     formatDate(value) {
       if (!value) return '';
-      return new Date(value).toLocaleString(window.getUserLocale(), { timeZone: window.getUserTimeZone() });
+      return new Date(value).toLocaleString(window.getUserLocale(), {
+        timeZone: window.getUserTimeZone(), year: 'numeric', month: 'short', day: 'numeric', ...window.userClockOptions(),
+      });
     },
 
     hasActiveJobs() {

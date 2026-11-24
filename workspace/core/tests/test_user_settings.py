@@ -96,6 +96,10 @@ class CoreSettingsTests(SettingsApiTestCase):
         self.assertAccepts("timezone", ["Europe/Paris", "UTC", "America/New_York"])
         self.assertRefuses("timezone", ["Mars/Olympus", "../etc", "Europe", 7])
 
+    def test_a_time_format_is_a_24h_or_12h_clock(self):
+        self.assertAccepts("time_format", ["24h", "12h"])
+        self.assertRefuses("time_format", ["36h", "auto", "", 12])
+
     def test_a_language_is_one_the_deployment_offers(self):
         self.assertAccepts("language", ["fr", "en"])
         # A regional variant would be stored, then read as English.

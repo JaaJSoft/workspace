@@ -14,6 +14,7 @@ from workspace.users.services.settings import (
     get_setting,
     get_user_language,
     get_user_languages,
+    get_user_time_formats,
     get_user_timezone,
     in_recipient_languages,
     set_setting,
@@ -476,6 +477,27 @@ class GetUserLanguagesTests(TestCase):
         self.assertEqual(
             {user_id: languages[user_id] for user_id in user_ids},
             {self.users[0].pk: "fr", self.users[1].pk: "en", self.users[2].pk: "fr"},
+        )
+
+
+class GetUserTimeFormatsTests(TestCase):
+    def tearDown(self):
+        cache.clear()
+
+    def test_reads_every_clock_in_one_query_24h_by_default(self):
+        users = [
+            User.objects.create_user(username=f"clock{i}", password="pass")
+            for i in range(3)
+        ]
+        set_setting(users[0], "core", "time_format", "12h")
+        # A value written before the choices were enforced.
+        UserSetting.objects.create(
+            user=users[1], module="core", key="time_format", value="36h"
+        )
+        with self.assertNumQueries(1):
+            formats = get_user_time_formats([u.pk for u in users])
+        self.assertEqual(
+            formats, {users[0].pk: "12h", users[1].pk: "24h", users[2].pk: "24h"}
         )
 
 

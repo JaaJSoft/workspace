@@ -729,7 +729,7 @@ class BreadcrumbTests(TestCase):
         self.group = Group.objects.create(name="Marketing")
         self.alice.groups.add(self.group)
 
-    def test_personal_root_folder_uses_full_name(self):
+    def test_personal_root_folder_is_my_files(self):
         folder = File.objects.create(
             owner=self.alice,
             name="Documents",
@@ -737,19 +737,11 @@ class BreadcrumbTests(TestCase):
         )
         crumbs = build_breadcrumbs(folder, user=self.alice)
         self.assertEqual(len(crumbs), 2)
-        self.assertEqual(crumbs[0]["label"], "Alice Dupont")
+        # The sidebar entry it points to, not the owner's name.
+        self.assertEqual(crumbs[0]["label"], "My Files")
         self.assertEqual(crumbs[0]["icon"], "hard-drive")
         self.assertEqual(crumbs[0]["url"], "/files")
         self.assertEqual(crumbs[1]["label"], "Documents")
-
-    def test_personal_root_folder_falls_back_to_username(self):
-        folder = File.objects.create(
-            owner=self.bob,
-            name="Stuff",
-            node_type=File.NodeType.FOLDER,
-        )
-        crumbs = build_breadcrumbs(folder, user=self.bob)
-        self.assertEqual(crumbs[0]["label"], "bob")
 
     def test_personal_nested_folder(self):
         parent = File.objects.create(
@@ -765,7 +757,7 @@ class BreadcrumbTests(TestCase):
         )
         crumbs = build_breadcrumbs(child, user=self.alice)
         self.assertEqual(len(crumbs), 3)
-        self.assertEqual(crumbs[0]["label"], "Alice Dupont")
+        self.assertEqual(crumbs[0]["label"], "My Files")
         self.assertEqual(crumbs[1]["label"], "Documents")
         self.assertEqual(crumbs[2]["label"], "Reports")
 

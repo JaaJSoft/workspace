@@ -16,8 +16,6 @@ Two bugs are pinned here, both visible only in a real browser:
 
 from __future__ import annotations
 
-import re
-
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -48,15 +46,7 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
         self.page.set_viewport_size({"width": 375, "height": 800})
         self.page.goto(f"{self.live_server_url}/files")
 
-        # Wait for ``sidebarCollapse().init()`` to run and collapse the
-        # left nav to ``w-16`` — below the ``lg`` breakpoint it forces
-        # ``collapsed=true``. Using ``expect(...).to_have_class`` auto-
-        # retries (5 s by default), which is more robust than a fixed
-        # timeout on a slow CI runner. Without this the folder-browser
-        # column would still be measured against a ``w-72`` left nav and
-        # the baseline sanity check would trip.
-        expect(self.page.locator("aside").first).to_have_class(re.compile(r"\bw-16\b"))
-
+        # Below ``lg`` the sidebar is an off-canvas drawer: the listing has the full width.
         folder_browser = self.page.locator("#folder-browser")
         expect(folder_browser).to_be_visible()
         baseline_width = folder_browser.bounding_box()["width"]

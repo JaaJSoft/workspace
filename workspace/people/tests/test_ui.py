@@ -19,7 +19,7 @@ from workspace.people.services.persons import create_person
 User = get_user_model()
 
 HEADER_RE = r'<div[^>]*data-letter="([^"]+)"'
-ROW_NAME_RE = r'<span class="font-medium truncate">([^<]*)</span>'
+ROW_NAME_RE = r'<span class="[^"]*font-medium truncate">([^<]*)</span>'
 TEST_TEMPLATES = Path(__file__).parent / "templates"
 
 

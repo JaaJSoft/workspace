@@ -14,3 +14,10 @@ test('an unreadable value shows a dash rather than "Invalid Date"', () => {
     assert.equal(ctx.vaultFormat.shortDate(bad), '-');
   }
 });
+
+test('a date follows the interface language, not the browser default', () => {
+  const japanese = loadScript('workspace/vault/ui/static/vault/ui/js/vault_format.js', {
+    getUserLocale: () => 'ja',
+  });
+  assert.match(japanese.vaultFormat.shortDate('2026-08-28T10:00:00Z'), /年/);
+});

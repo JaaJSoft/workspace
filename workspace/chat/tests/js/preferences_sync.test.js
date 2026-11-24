@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 /**
  * Load chat_preferences.js with fetch and the event bus stubbed.
@@ -10,7 +10,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
  * The cache hydrates synchronously from the server-embedded json_script
  * (absent here, so defaults apply); the tests look at the PUTs only.
  */
-function load({ putResolves = true, putOk = true } = {}) {
+function load({ putResolves = true, putOk = true, immediateTimers = false } = {}) {
   const calls = [];
   const dispatched = [];
   let releasePut;
@@ -18,9 +18,12 @@ function load({ putResolves = true, putOk = true } = {}) {
     releasePut = resolve;
   });
 
-  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/chat_preferences.js', {
+  const ctx = loadScripts([
+    'workspace/core/static/core/js/user_settings.js',
+    'workspace/chat/ui/static/chat/ui/js/chat_preferences.js',
+  ], {
     getCSRFToken: () => 'csrf-token',
-    setTimeout,
+    setTimeout: immediateTimers ? (fn) => fn() : setTimeout,
     clearTimeout,
     fetch: async (url, opts = {}) => {
       calls.push({ url, method: opts.method || 'GET', body: opts.body });
@@ -46,6 +49,7 @@ function load({ putResolves = true, putOk = true } = {}) {
   const app = ctx.chatPreferences();
   app.prefs = { compactMessageView: false, showThreadRepliesInline: false };
   return {
+    ctx,
     app,
     puts: () => calls.filter((c) => c.method === 'PUT'),
     refreshes: () => dispatched.filter((t) => t === 'chat:refresh-messages'),
@@ -114,4 +118,31 @@ test('the ordinary update path stays debounced and refreshes nothing', () => {
   h.app.update('compactMessageView', true);
   assert.equal(h.puts().length, 0, 'still debounced, nothing sent yet');
   assert.deepStrictEqual(h.refreshes(), []);
+});
+
+test('the ordinary update path puts the whole preferences object once the debounce runs', () => {
+  const h = load({ immediateTimers: true });
+  h.app.update('compactMessageView', true);
+  const puts = h.puts();
+  assert.equal(puts.length, 1);
+  assert.equal(puts[0].url, '/api/v1/settings/chat/preferences');
+  assert.equal(JSON.parse(puts[0].body).value.compactMessageView, true);
+});
+
+test('updateChatPref puts the whole cache with the changed key', () => {
+  const h = load();
+  h.ctx.updateChatPref('composerMode', 'markdown');
+  const puts = h.puts();
+  assert.equal(puts.length, 1);
+  assert.equal(puts[0].url, '/api/v1/settings/chat/preferences');
+  assert.equal(JSON.parse(puts[0].body).value.composerMode, 'markdown');
+});
+
+test('call sounds have a setting of their own', () => {
+  const h = load();
+  h.app.saveCallSounds(false);
+  const puts = h.puts();
+  assert.equal(puts.length, 1);
+  assert.equal(puts[0].url, '/api/v1/settings/chat/call_sounds');
+  assert.deepStrictEqual(JSON.parse(puts[0].body), { value: false });
 });

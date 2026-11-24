@@ -263,4 +263,4 @@ AI requests, tokens, tool calls and goal check-ins are exported on
 
 ### API
 
-All endpoints are under `/api/v1/ai/`. See the [Swagger UI](/schema/swagger-ui/).
+All endpoints are under `/api/v1/ai/`. See the [Swagger UI](/api/schema/swagger-ui).

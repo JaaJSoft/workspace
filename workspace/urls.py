@@ -38,17 +38,17 @@ from workspace.users.ui.views import WorkspaceLoginView
 api_urlpatterns = [
     # OpenAPI schema and documentation
     path(
-        "schema/",
+        "api/schema",
         login_required(cache_page(3600)(SpectacularAPIView.as_view())),
         name="schema",
     ),
     path(
-        "schema/swagger-ui/",
+        "api/schema/swagger-ui",
         login_required(SpectacularSwaggerView.as_view(url_name="schema")),
         name="swagger-ui",
     ),
     path(
-        "schema/redoc/",
+        "api/schema/redoc",
         login_required(SpectacularRedocView.as_view(url_name="schema")),
         name="redoc",
     ),

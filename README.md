@@ -253,9 +253,9 @@ Full documentation - per-module guides, deployment recipes, and how-tos - lives 
 
 All endpoints are prefixed with `/api/` with no trailing slashes. Interactive documentation is available to signed-in users at:
 
-- **Swagger UI** - `/schema/swagger-ui/`
-- **ReDoc** - `/schema/redoc/`
-- **OpenAPI Schema** - `/schema/`
+- **Swagger UI** - `/api/schema/swagger-ui`
+- **ReDoc** - `/api/schema/redoc`
+- **OpenAPI Schema** - `/api/schema`
 
 ### Health Checks
 

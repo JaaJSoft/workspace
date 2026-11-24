@@ -92,6 +92,6 @@ for the instance.
 - **Search**: contacts appear in the global search (Ctrl+K), matched the same
   way as in People.
 
-The REST API is documented in the [Swagger UI](/schema/swagger-ui/). For
+The REST API is documented in the [Swagger UI](/api/schema/swagger-ui). For
 developers: other modules add sections to a contact's card through the
 registry in `workspace/people/sections.py`, which is how Photos adds its own.

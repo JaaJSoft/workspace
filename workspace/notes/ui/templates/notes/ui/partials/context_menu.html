@@ -26,8 +26,7 @@ here. Tags have no context menu: the tag manager dialog holds their actions.
       <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
         {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" click="ctxFolderAction(action)" class_expr="action.css_class || ''" only %}
       </template>
-      {% comment %}Depth 0-2 only, so the new child is still visible at level 4.{% endcomment %}
-      <template x-if="ctxMenu.actions !== null && (ctxMenu.data?.depth ?? 0) < 3">
+      <template x-if="ctxMenu.actions !== null">
         {% include "ui/partials/context_menu_item.html" with icon="folder-plus" label=_("New subfolder") click="ctxFolderAction({id: 'create_subfolder'})" only %}
       </template>
       <template x-if="ctxMenu.actions !== null">

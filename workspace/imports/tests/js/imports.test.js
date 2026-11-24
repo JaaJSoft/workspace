@@ -240,3 +240,11 @@ test('launchBody sends the picked address books and only the chosen kinds', () =
     },
   });
 });
+
+test('favorites and tags the remote could not give are reported beside the summary', () => {
+  const { component } = app();
+  const failed = { status: 'completed', stats: { files: { files: 2, metadata_error: 'The server refused.' } } };
+  const clean = { status: 'completed', stats: { files: { files: 2 } } };
+  assert.equal(component.metadataError(failed), 'Favorites and tags were not imported: The server refused.');
+  assert.equal(component.metadataError(clean), '');
+});

@@ -261,10 +261,12 @@ msgid "Folders & Organization"
 msgstr "Dossiers et organisation"
 
 #: ui/templates/notes/ui/partials/help_dialog.html
-msgid "<strong>Folders</strong>: Organize notes in a nested folder tree (up to 4 levels deep)."
+msgid ""
+"<strong>Folders</strong>: Organize notes in a nested folder tree, as deep as "
+"you need."
 msgstr ""
 "<strong>Dossiers</strong> : rangez vos notes dans une arborescence de "
-"dossiers (jusqu’à 4 niveaux)."
+"dossiers, aussi profonde que nécessaire."
 
 #: ui/templates/notes/ui/partials/help_dialog.html
 msgid "<strong>Group folders</strong>: Create shared folders linked to your groups."

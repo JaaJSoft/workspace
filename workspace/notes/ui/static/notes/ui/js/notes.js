@@ -1003,20 +1003,23 @@ window.notesApp = function notesApp(config) {
                     });
                 }
             } else if (action.id === 'delete') {
-                AppDialog.confirm({
-                    title: gettext('Delete note'),
-                    message: interpolate(
-                        gettext('Are you sure you want to delete "%(name)s"?'),
-                        { name: (name || '').replace(/\.md$/i, '') },
-                        true,
-                    ),
-                    okLabel: gettext('Delete'),
-                    okClass: 'btn-error',
-                    icon: 'trash-2',
-                    iconClass: 'bg-error/10 text-error',
-                }).then(function(ok) {
+                const confirmed = !window._notesPrefsCache.confirmBeforeDelete
+                    ? Promise.resolve(true)
+                    : AppDialog.confirm({
+                        title: gettext('Delete note'),
+                        message: interpolate(
+                            gettext('Are you sure you want to delete "%(name)s"?'),
+                            { name: (name || '').replace(/\.md$/i, '') },
+                            true,
+                        ),
+                        okLabel: gettext('Delete'),
+                        okClass: 'btn-error',
+                        icon: 'trash-2',
+                        iconClass: 'bg-error/10 text-error',
+                    });
+                return confirmed.then(function(ok) {
                     if (!ok) return;
-                    self._fileOperation('trash', uuid).then(function(trashed) {
+                    return self._fileOperation('trash', uuid).then(function(trashed) {
                         if (!trashed) return;
                         self.notes = self.notes.filter(function(n) { return n.uuid !== uuid; });
                         if (self.selectedNote && self.selectedNote.uuid === uuid) {
@@ -1095,7 +1098,7 @@ window.notesApp = function notesApp(config) {
                     iconClass: 'bg-error/10 text-error',
                 }).then(function(ok) {
                     if (!ok) return;
-                    self._fileOperation('trash', uuid).then(function(trashed) {
+                    return self._fileOperation('trash', uuid).then(function(trashed) {
                         if (trashed) self.refreshSidebar();
                     });
                 });

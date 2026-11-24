@@ -144,7 +144,13 @@ class FilesImporter(Importer):
             for key, phrase in counters.items()
             if stats.get(key)
         ]
-        return ", ".join(parts) or _("Nothing to import.")
+        summary = ", ".join(parts) or _("Nothing to import.")
+        if stats.get("metadata_error"):
+            return _("%(summary)s - favorites and tags not imported: %(reason)s") % {
+                "summary": summary,
+                "reason": stats["metadata_error"],
+            }
+        return summary
 
     # -- listing phase -------------------------------------------------
 

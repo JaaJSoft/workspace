@@ -574,3 +574,8 @@ msgstr ""
 #: ui/templates/imports/ui/index.html
 msgid "Start the import"
 msgstr "Lancer l’import"
+
+#: importers/files.py
+#, python-format
+msgid "%(summary)s - favorites and tags not imported: %(reason)s"
+msgstr "%(summary)s - favoris et étiquettes non importés : %(reason)s"

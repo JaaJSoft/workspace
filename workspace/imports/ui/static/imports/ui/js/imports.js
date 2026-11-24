@@ -338,6 +338,15 @@ window.importsApp = function importsApp() {
       return interpolate(gettext('Copying… %(done)s / %(total)s'), { done: p.done, total: p.total }, true);
     },
 
+    // The files were imported but their favorites and tags could not be
+    // read from the remote: a best-effort phase, reported beside the summary.
+    metadataError(job) {
+      const reason = ((job.stats || {}).files || {}).metadata_error;
+      return reason
+        ? interpolate(gettext('Favorites and tags were not imported: %(reason)s'), { reason }, true)
+        : '';
+    },
+
     summary(job) {
       const stats = job.stats || {};
       const kinds = jobKinds(job).filter((kind) => stats[kind]);

@@ -133,7 +133,9 @@ class WebDavFileSource:
     def __init__(self, connection, client=None):
         self._connection = connection
         self._client = client or build_client(connection)
-        self._base_path = urlparse(connection.base_url).path.rstrip("/")
+        # Decoded, like the hrefs it is compared with: a folder address
+        # copied from a browser spells a space "%20".
+        self._base_path = unquote(urlparse(connection.base_url).path).rstrip("/")
         self._host = urlparse(connection.base_url).hostname or connection.base_url
 
     def close(self):

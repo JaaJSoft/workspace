@@ -532,6 +532,58 @@ class ActivityServiceTests(TestCase):
         self.assertEqual((kwargs["limit"], kwargs["offset"]), (10, 20))
         self.assertEqual([e["label"] for e in result], ["kept"])
 
+    def test_search_reads_back_until_its_page_is_full(self):
+        """A match older than the newest events is still found."""
+        from unittest.mock import patch
+
+        from workspace.core.services import activity as activity_service
+
+        feed = [
+            {"label": "edit", "description": f"note {n}", "actor": None}
+            for n in range(1000)
+        ]
+        feed[900]["description"] = "quarterly report"
+
+        def registry(user_id, limit, offset, **kwargs):
+            return feed[offset : offset + limit]
+
+        with patch.object(
+            activity_service.activity_registry,
+            "get_recent_events",
+            side_effect=registry,
+        ):
+            result = activity_service.get_recent_events(
+                viewer_id=1, search="Quarterly", limit=10
+            )
+
+        self.assertEqual([e["description"] for e in result], ["quarterly report"])
+
+    def test_search_stops_at_the_scan_limit(self):
+        from unittest.mock import patch
+
+        from workspace.core.services import activity as activity_service
+
+        depths = []
+
+        def registry(user_id, limit, offset, **kwargs):
+            depths.append(limit)
+            return [{"label": "edit", "description": "x", "actor": None}] * limit
+
+        with (
+            patch.object(
+                activity_service.activity_registry,
+                "get_recent_events",
+                side_effect=registry,
+            ),
+            patch.object(activity_service, "SEARCH_SCAN_LIMIT", 800),
+        ):
+            result = activity_service.get_recent_events(
+                viewer_id=1, search="nowhere", limit=10
+            )
+
+        self.assertEqual(result, [])
+        self.assertEqual(depths, [200, 400, 800])
+
     def test_search_filter_handles_null_actor(self):
         """Search filter must also tolerate actor=None."""
         from unittest.mock import patch

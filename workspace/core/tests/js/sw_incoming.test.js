@@ -85,3 +85,10 @@ test('other POST requests go to the network', () => {
   const { listeners } = loadServiceWorker();
   assert.equal(dispatchFetch(listeners, shareRequest(new FormData(), '/api/v1/files')), null);
 });
+
+test("another origin's content is left to the network, never cached", () => {
+  const { listeners } = loadServiceWorker();
+  const tile = new Request('https://tile.openstreetmap.org/3/4/2.png');
+
+  assert.equal(dispatchFetch(listeners, tile), null);
+});

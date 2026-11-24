@@ -1,20 +1,18 @@
 from django.conf import settings as django_settings
 from django.db.models import Q
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.common.cache import invalidate_tags
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.common.url_guard import UnsafeUrl
 
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
-from .services.notifications import _user_tag
+from .services.notifications import delete_notification, mark_all_read, mark_read
 from .services.push_subscriptions import save_push_subscription
 from .services.push_transport import check_push_endpoint
 
@@ -73,22 +71,14 @@ class NotificationDetailView(APIView):
             )
         except Notification.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if notif.read_at is None:
-            notif.read_at = timezone.now()
-            notif.save(update_fields=["read_at"])
-            invalidate_tags(_user_tag(request.user.id))
+        mark_read(notif)
         return Response(NotificationSerializer(notif).data)
 
     @extend_schema(summary="Delete a notification")
     def delete(self, request, notification_id):
         """Delete a notification."""
-        deleted, _ = Notification.objects.filter(
-            uuid=notification_id,
-            recipient=request.user,
-        ).delete()
-        if not deleted:
+        if not delete_notification(request.user, notification_id):
             return Response(status=status.HTTP_404_NOT_FOUND)
-        invalidate_tags(_user_tag(request.user.id))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -99,12 +89,7 @@ class NotificationReadAllView(APIView):
     @extend_schema(summary="Mark all notifications as read")
     def post(self, request):
         """Mark all unread notifications as read."""
-        count = Notification.objects.filter(
-            recipient=request.user,
-            read_at__isnull=True,
-        ).update(read_at=timezone.now())
-        invalidate_tags(_user_tag(request.user.id))
-        return Response({"marked": count})
+        return Response({"marked": mark_all_read(request.user)})
 
 
 @extend_schema(tags=["Notifications"])

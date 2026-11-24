@@ -1,3 +1,5 @@
+import base64
+import smtplib
 import time
 import time as _time
 from unittest.mock import MagicMock, patch
@@ -9,6 +11,31 @@ from django.test import RequestFactory, TestCase, override_settings
 from workspace.mail.models import MailAccount
 
 User = get_user_model()
+
+
+class ScriptedSMTP(smtplib.SMTP):
+    """smtplib's own command logic on no socket: each command gets the next
+    scripted reply, so reply-code handling runs as it does on the wire."""
+
+    def __init__(self, replies):
+        super().__init__()
+        self.replies = list(replies)
+        self.commands = []
+        self.closed = False
+
+    def ehlo(self, name=""):
+        self.ehlo_resp = b"ok"
+        return 250, b"ok"
+
+    def starttls(self, *args, **kwargs):
+        return 220, b"ok"
+
+    def docmd(self, cmd, args=""):
+        self.commands.append((cmd, args))
+        return self.replies.pop(0)
+
+    def close(self):
+        self.closed = True
 
 
 class OAuth2DataModelTests(TestCase):
@@ -330,22 +357,59 @@ class ConnectSmtpOAuth2Test(TestCase):
         )
         self.account.save()
 
-    @patch("workspace.mail.services.smtp.GuardedSMTP")
-    @patch(
-        "workspace.mail.services.oauth2.get_valid_access_token",
-        return_value="smtp-token",
-    )
-    def test_uses_xoauth2_for_oauth2_accounts(self, mock_token, mock_smtp):
-        mock_server = MagicMock()
-        mock_smtp.return_value = mock_server
+    def _connect(self, replies, token="smtp-token"):
         from workspace.mail.services.smtp import connect_smtp
 
-        connect_smtp(self.account)
-        mock_server.login.assert_not_called()
-        mock_server.docmd.assert_called_once()
-        args = mock_server.docmd.call_args[0]
-        self.assertEqual(args[0], "AUTH")
-        self.assertIn("XOAUTH2", args[1])
+        server = ScriptedSMTP(replies)
+        for patcher in (
+            patch("workspace.mail.services.smtp.GuardedSMTP", return_value=server),
+            patch(
+                "workspace.mail.services.oauth2.get_valid_access_token",
+                return_value=token,
+            ),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        return server, connect_smtp
+
+    def test_uses_xoauth2_for_oauth2_accounts(self):
+        server, connect_smtp = self._connect([(235, b"Accepted")])
+        with patch.object(server, "login") as login:
+            self.assertIs(connect_smtp(self.account), server)
+
+        login.assert_not_called()
+        verb, argument = server.commands[0]
+        self.assertEqual(verb, "AUTH")
+        mechanism, response = argument.split(" ")
+        self.assertEqual(mechanism, "XOAUTH2")
+        self.assertEqual(
+            base64.b64decode(response),
+            b"user=user@gmail.comauth=Bearer smtp-token",
+        )
+
+    def test_a_refused_token_raises_and_closes_the_connection(self):
+        import smtplib
+
+        error = base64.b64encode(b'{"status":"400"}')
+        server, connect_smtp = self._connect(
+            [(334, error), (535, b"Username and Password not accepted")]
+        )
+
+        with self.assertRaises(smtplib.SMTPAuthenticationError):
+            connect_smtp(self.account)
+
+        # The challenge is answered with an empty line, as XOAUTH2 requires.
+        self.assertEqual(server.commands[1], ("", ""))
+        self.assertTrue(server.closed)
+
+    def test_without_a_token_nothing_is_sent_and_the_connection_is_closed(self):
+        server, connect_smtp = self._connect([], token=None)
+
+        with self.assertRaises(RuntimeError):
+            connect_smtp(self.account)
+
+        self.assertEqual(server.commands, [])
+        self.assertTrue(server.closed)
 
     @patch("workspace.mail.services.smtp.GuardedSMTP")
     def test_uses_login_for_password_accounts(self, mock_smtp):
@@ -358,6 +422,7 @@ class ConnectSmtpOAuth2Test(TestCase):
 
         connect_smtp(self.account)
         mock_server.login.assert_called_once_with("user@gmail.com", "mypass")
+        mock_server.auth.assert_not_called()
 
 
 class OAuthProvidersViewTest(TestCase):

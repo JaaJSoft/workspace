@@ -6,16 +6,16 @@ window._mailPrefsDefaults = {
     showLabels: true,
     rulesCompact: false,     // compact rule rows in the rules dialog
 };
-window._mailPrefsCache = { ...window._mailPrefsDefaults };
-
-window._mailPrefsReady = fetch('/api/v1/settings/mail/preferences', { credentials: 'same-origin' })
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-        if (data && data.value && typeof data.value === 'object') {
-            window._mailPrefsCache = { ...window._mailPrefsDefaults, ...data.value };
-        }
-    })
-    .catch(function() {});
+// Embedded by the page (|json_script): every component reads the cache in
+// its factory, so the stored values are there before Alpine binds anything.
+window._mailPrefsCache = (function () {
+    const el = document.getElementById('mail-prefs-data');
+    let stored = {};
+    if (el) {
+        try { stored = JSON.parse(el.textContent) || {}; } catch (_) { stored = {}; }
+    }
+    return { ...window._mailPrefsDefaults, ...stored };
+})();
 
 // Helper to update a single mail preference from anywhere (not just the
 // preferences dialog). Mutates the cache, persists via the same endpoint as
@@ -51,9 +51,7 @@ window.mailPreferences = function mailPreferences() {
             return el ? JSON.parse(el.textContent) : 10;
         })(),
 
-        async init() {
-            await window._mailPrefsReady;
-            this.prefs = { ...window._mailPrefsCache };
+        init() {
             window.addEventListener('mail:preferences-changed', function(e) {
                 this.prefs = { ...e.detail };
             }.bind(this));

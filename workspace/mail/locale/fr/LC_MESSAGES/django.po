@@ -1220,3 +1220,7 @@ msgstr "Les e-mails suivis, et les non lus portant une étiquette qui vous notif
 msgctxt "starred message"
 msgid "Starred"
 msgstr "Suivi"
+
+#: ui/templates/mail/ui/partials/folder_list.html
+msgid "Last sync failed"
+msgstr "Échec de la dernière synchronisation"

@@ -8,6 +8,7 @@ from xml.etree import ElementTree as ET
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from django.db.models.signals import post_init
 from django.test import Client, TestCase
 from knox.models import AuthToken
 from PIL import Image
@@ -743,6 +744,30 @@ class SyncTests(CardDavTestCase):
         self.assertEqual(
             changes, {list_href: "changed", self.zoe_href: "HTTP/1.1 404 Not Found"}
         )
+
+    def test_incremental_sync_loads_only_the_changed_cards(self):
+        for i in range(5):
+            create_person(owner=self.user, display_name=f"Bystander {i}")
+        create_list(owner=self.user, name="Untouched")
+        _, token = self._sync()
+        self.zoe.display_name = "Zoe Q."
+        self.zoe.save(update_fields=["display_name"])
+
+        loaded = []
+
+        def count(sender, instance, **kwargs):
+            loaded.append(instance)
+
+        post_init.connect(count, sender=Person)
+        post_init.connect(count, sender=PersonList)
+        try:
+            changes, _ = self._sync(token)
+        finally:
+            post_init.disconnect(count, sender=Person)
+            post_init.disconnect(count, sender=PersonList)
+
+        self.assertEqual(changes, {self.zoe_href: "changed"})
+        self.assertEqual([card.pk for card in loaded], [self.zoe.pk])
 
     def test_repeated_syncs_report_no_spurious_change(self):
         _, token = self._sync()

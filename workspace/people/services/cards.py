@@ -67,11 +67,14 @@ def find_card(book, name):
     )
 
 
-def book_cards(book):
-    """Every card of *book*: its persons, then its lists."""
+def book_cards(book, uuids=None):
+    """Every card of *book*, or those among *uuids*: its persons, then its lists."""
+    persons, lists = book.persons(), book.lists()
+    if uuids is not None:
+        persons, lists = persons.filter(uuid__in=uuids), lists.filter(uuid__in=uuids)
     return [
-        *book.persons().order_by("uuid"),
-        *book.lists().prefetch_related("members").order_by("uuid"),
+        *persons.order_by("uuid"),
+        *lists.prefetch_related("members").order_by("uuid"),
     ]
 
 

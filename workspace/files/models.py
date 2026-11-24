@@ -493,10 +493,15 @@ class File(models.Model):
             raise ValueError("File and folder names must not be '.' or '..'.")
 
         update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            # Read twice below: an iterator would arrive empty the second time.
+            update_fields = set(update_fields)
+            kwargs["update_fields"] = update_fields
         if (
             update_fields is not None
             and self.path
-            and not {"name", "parent", "parent_id"}.intersection(update_fields)
+            # The blob key of a content write is built from the path.
+            and not {"name", "parent", "parent_id", "content"} & update_fields
         ):
             # The path derives from the name and the parent alone.
             super().save(*args, **kwargs)

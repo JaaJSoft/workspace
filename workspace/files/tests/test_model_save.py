@@ -51,3 +51,32 @@ class FileSavePathTests(TestCase):
 
         self.sub.refresh_from_db()
         self.assertEqual(self.sub.path, "Docs/Sub")
+
+    def test_a_rename_given_an_iterator_writes_the_name_and_the_path(self):
+        self.sub.name = "Renamed"
+        self.sub.save(update_fields=iter(["name"]))
+
+        self.sub.refresh_from_db()
+        self.leaf.refresh_from_db()
+        self.assertEqual(self.sub.name, "Renamed")
+        self.assertEqual(self.sub.path, "Docs/Renamed")
+        self.assertEqual(self.leaf.path, "Docs/Renamed/Leaf")
+
+    def test_a_metadata_save_given_an_iterator_writes_its_fields(self):
+        self.sub.icon = "heart"
+        with self.assertNumQueries(1):
+            self.sub.save(update_fields=iter(["icon"]))
+
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.icon, "heart")
+
+    def test_a_content_write_follows_an_ancestor_renamed_since_the_load(self):
+        stale_leaf = File.objects.get(pk=self.leaf.pk)
+        self.sub.name = "Renamed"
+        self.sub.save(update_fields=["name"])
+
+        stale_leaf.size = 0
+        stale_leaf.save(update_fields=["content", "size"])
+
+        # The blob key of the content is built from this path.
+        self.assertEqual(stale_leaf.path, "Docs/Renamed/Leaf")

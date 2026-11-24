@@ -16,6 +16,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // ── State ────────────────────────────────────────────────
     messageBody: '',
     loadingMessages: false,
+    // Refreshes of the message list still waiting on the server.
+    _messagesRefreshing: 0,
     loadingMoreMessages: false,
     hasMoreMessages: false,
     // Set while the list shows a stretch of the past cut off from the
@@ -655,6 +657,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (!away) this._missedLive = false;
       this._anchorOnMerge = !following;
       this._refreshAnchor = null;
+      this._messagesRefreshing++;
       try {
         const render = await this.$ajax(this._messagesUrl(query), {
           targets: this._loadTargets(),
@@ -666,6 +669,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         }
       } catch (e) {
         console.error('Failed to refresh messages', e);
+      } finally {
+        this._messagesRefreshing--;
       }
       this._anchorOnMerge = false;
       this._refreshAnchor = null;

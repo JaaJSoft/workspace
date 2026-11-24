@@ -66,6 +66,16 @@ test('a read receipt refetches nothing when no receipt on screen is waiting on r
   assert.equal(calls.messages, 0);
 });
 
+test('a read arriving while the messages are reloading refreshes them after', async () => {
+  const { app, calls, flush } = buildApp();
+  app._messagesRefreshing = 1;
+
+  app.handleSSERead(inConv());
+  await flush();
+
+  assert.equal(calls.messages, 1);
+});
+
 test('a read receipt refreshes a receipt still waiting on readers', async () => {
   const { app, calls, flush } = buildApp({ pendingReceipt: true });
 

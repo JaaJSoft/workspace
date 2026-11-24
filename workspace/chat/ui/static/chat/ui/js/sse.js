@@ -195,10 +195,11 @@ window.chatSseMixin = function chatSseMixin() {
     },
 
     // A read only changes a receipt on the user's own messages that is still
-    // waiting on readers (_read_receipt.html marks it).
+    // waiting on readers (_read_receipt.html marks it). A refresh in flight
+    // may bring such a receipt in, answered before this read.
     handleSSERead(detail) {
       if (!this._isOpenConversation(detail)) return;
-      if (!document.querySelector('[data-read-pending]')) return;
+      if (!document.querySelector('[data-read-pending]') && !this._messagesRefreshing) return;
       this._scheduleSseRefresh();
     },
 

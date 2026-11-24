@@ -16,6 +16,7 @@ class FakeFormData {
 function makePage({
   folder = 'folder-a', nameCollision = 'keep_both', existing = [], answers = [],
   search = '', inbox = {}, picked = null,
+  fetch = async () => ({ ok: true, json: async () => existing.map((name) => ({ name })) }),
 } = {}) {
   const dialogs = [];
   const pickers = [];
@@ -69,7 +70,7 @@ function makePage({
       getCSRFToken: () => 'token',
       getFilePrefs: () => ({ nameCollision }),
       URLSearchParams,
-      fetch: async () => ({ ok: true, json: async () => existing.map((name) => ({ name })) }),
+      fetch,
       AppDialog: {
         select: async (options) => { dialogs.push(options); return answers.shift(); },
         folderPicker: async (options) => { pickers.push(options); return picked; },
@@ -221,4 +222,41 @@ test('a page opened without incoming files does nothing', async () => {
   await browser.receiveIncomingFiles();
 
   assert.equal(pickers.length + alerts.length + history.length, 0);
+});
+
+test('an uploaded folder recreates its subfolders and reuses one that exists', async () => {
+  const created = [];
+  const listed = [];
+  // folder-a already holds a "Trip" folder; everything below it is new.
+  const existingFolders = { 'folder-a': [{ name: 'trip', uuid: 'trip-uuid' }] };
+  const fetch = async (url, options = {}) => {
+    if (options.method === 'POST') {
+      const body = JSON.parse(options.body);
+      created.push(`${body.parent}/${body.name}`);
+      return { ok: true, json: async () => ({ uuid: `${body.name}-uuid` }) };
+    }
+    const params = new URL(url, 'http://x').searchParams;
+    if (params.get('node_type') === 'folder') {
+      listed.push(params.get('parent'));
+      return { ok: true, json: async () => existingFolders[params.get('parent')] || [] };
+    }
+    return { ok: true, json: async () => [] };
+  };
+  const { browser, sent } = makePage({ folder: 'folder-a', fetch });
+  browser.refreshFolderBrowser = () => {};
+  const picked = (path) => ({ name: path.split('/').pop(), size: 1, webkitRelativePath: path });
+
+  await browser.handleUpload({
+    target: {
+      files: [picked('Trip/a.jpg'), picked('Trip/day1/b.jpg'), picked('Trip/day1/raw/c.jpg')],
+      value: 'x',
+    },
+  });
+  await settle();
+
+  assert.deepEqual(created, ['trip-uuid/day1', 'day1-uuid/raw']);
+  assert.deepEqual(
+    sent.map((xhr) => `${xhr.form.parent}/${xhr.form.name}`),
+    ['trip-uuid/a.jpg', 'day1-uuid/b.jpg', 'raw-uuid/c.jpg'],
+  );
 });

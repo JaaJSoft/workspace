@@ -15,6 +15,8 @@ import zipfile
 
 from django.conf import settings
 from django.core.files.uploadedfile import TemporaryUploadedFile
+from django.db import transaction
+from django.db.models.functions import Length
 
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
@@ -244,7 +246,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                 # Half an archive is worse than none: take back every row
                 # created so far, and their blobs with them.
                 try:
-                    hard_delete_in_batches(File.objects.filter(pk__in=created_pks))
+                    _take_back(created_pks)
                 except Exception:
                     logger.exception("Could not take back a failed extraction")
                 raise
@@ -255,6 +257,31 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         "destination_uuid": str(dest_folder.uuid) if dest_folder is not None else None,
         "files_created": files_created,
     }
+
+
+def _take_back(created_pks):
+    """Delete what a failed extraction created, and nothing else.
+
+    A created folder is visible as soon as it is committed, so someone may
+    have put something in it meanwhile: it is only deleted once empty, and
+    what they added stays where they put it.
+    """
+    hard_delete_in_batches(
+        File.objects.filter(pk__in=created_pks).exclude(node_type=File.NodeType.FOLDER)
+    )
+    # Deepest first: a created subfolder is gone before its parent comes up.
+    folder_pks = (
+        File.objects.filter(pk__in=created_pks, node_type=File.NodeType.FOLDER)
+        .order_by(Length("path").desc())
+        .values_list("pk", flat=True)
+    )
+    for pk in list(folder_pks):
+        with transaction.atomic():
+            # The emptiness check is the delete's own filter, so the parent
+            # cascade never reaches a row added in between.
+            File.objects.filter(pk=pk, children__isnull=True).select_related(
+                "owner"
+            ).delete()
 
 
 def extract_item(user, node, parent):

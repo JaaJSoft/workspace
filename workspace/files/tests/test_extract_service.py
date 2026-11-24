@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import connection
+from django.db.models.signals import post_save
 from django.test import TestCase, override_settings
 
 from workspace.files.models import File
@@ -377,6 +378,48 @@ class ExtractZipServiceTests(TestCase):
         self.assertTrue(default_storage.exists(kept.content.name))
         self.assertFalse(default_storage.exists("files/users/alice/dest/sub/a.txt"))
         self.assertFalse(default_storage.exists("files/users/alice/dest/new"))
+
+    def test_a_failure_spares_what_someone_else_put_in_a_created_folder(self):
+        payload = _make_zip(
+            [
+                ("new/deep/a.txt", b"a"),
+                ("new/b.txt", b"b"),
+                ("../evil.txt", b"bad"),
+            ]
+        )
+        archive = self._make_archive_file(payload)
+        added = {}
+
+        # Someone drops a file in "new" while the archive is still extracting.
+        def add_beside(sender, instance, created, **kwargs):
+            if created and instance.name == "a.txt" and not added:
+                new_folder = File.objects.get(name="new", parent=self.dest)
+                added["file"] = tree.create_file(
+                    self.user,
+                    "theirs.txt",
+                    new_folder,
+                    content=ContentFile(b"theirs", name="theirs.txt"),
+                )
+
+        post_save.connect(add_beside, sender=File, weak=False)
+        try:
+            with self.assertRaises(ValueError):
+                extract_zip(archive, self.dest, acting_user=self.user)
+        finally:
+            post_save.disconnect(add_beside, sender=File)
+
+        theirs = added["file"]
+        self.assertTrue(File.objects.filter(pk=theirs.pk).exists())
+        self.assertTrue(default_storage.exists(theirs.content.name))
+        self.assertEqual(
+            set(
+                File.objects.filter(parent=theirs.parent).values_list("name", flat=True)
+            ),
+            {"theirs.txt"},
+        )
+        self.assertFalse(
+            File.objects.filter(name__in=["a.txt", "b.txt", "deep"]).exists()
+        )
 
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip(

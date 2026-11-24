@@ -10,8 +10,6 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs, user_group_files_qs
 from workspace.files.services import tree
-from workspace.files.services.refusals import Refusal, Refused
-from workspace.files.services.transfers import move_item
 from workspace.users.services.settings import get_setting, set_setting
 
 
@@ -62,8 +60,7 @@ def _sidebar_context(user):
 def _ensure_default_folders(user):
     """Find or create the Notes/Journal folder structure, return updated prefs.
 
-    Runs once per user — subsequent calls are no-ops when both UUIDs are valid.
-    Migrates legacy root-level Journal folders into Notes/.
+    Runs once per user - subsequent calls are no-ops when both UUIDs are valid.
     """
     prefs = get_setting(user, "notes", "preferences", default={}) or {}
     user_files = user_files_qs(user)
@@ -92,28 +89,11 @@ def _ensure_default_folders(user):
         )
         changed = True
 
-    # ── Journal folder (migrate from root if needed) ──
+    # ── Journal folder ──
     journal_folder = None
     journal_folder_uuid = parse_uuid_or_none(prefs.get("journalFolderUuid"))
     if journal_folder_uuid is not None:
         journal_folder = folders.filter(uuid=journal_folder_uuid).first()
-
-    if not journal_folder:
-        # Check for legacy root-level Journal
-        root_journal = folders.filter(name="Journal", parent__isnull=True).first()
-        if root_journal:
-            try:
-                move_item(user, root_journal, notes_folder)
-            except Refused as refusal:
-                # Notes holds a Journal already: it is found just below.
-                # Anything else keeps the journal where it is rather than
-                # start an empty one next to it.
-                if refusal.reason != Refusal.NAME_TAKEN:
-                    journal_folder = root_journal
-                    changed = True
-            else:
-                journal_folder = root_journal
-                changed = True
 
     if not journal_folder:
         journal_folder = folders.filter(

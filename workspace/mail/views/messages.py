@@ -2,7 +2,7 @@ import logging
 import re
 
 from django.db import transaction
-from django.db.models import Count, Prefetch
+from django.db.models import Prefetch
 from django.http import HttpResponse
 from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
@@ -156,7 +156,7 @@ class MailMessageListView(CacheControlMixin, APIView):
         total = qs.count()
         order_fields = ("-search_rank", "-date") if search else ("-date",)
         messages = list(
-            qs.annotate(attachments_count=Count("attachments"))
+            qs.defer("body_text", "body_html")
             .prefetch_related(
                 Prefetch(
                     "message_labels",

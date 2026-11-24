@@ -591,3 +591,24 @@ msgstr "Oublier la clé sur cet appareil"
 #: ui/static/vault/ui/js/vault_unlock.js
 msgid "Forget it"
 msgstr "L’oublier"
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s item"
+msgid_plural "%(count)s items"
+msgstr[0] "%(count)s élément"
+msgstr[1] "%(count)s d’éléments"
+msgstr[2] "%(count)s éléments"
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s folder"
+msgid_plural "%(count)s folders"
+msgstr[0] "%(count)s dossier"
+msgstr[1] "%(count)s de dossiers"
+msgstr[2] "%(count)s dossiers"
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s entry"
+msgid_plural "%(count)s entries"
+msgstr[0] "%(count)s entrée"
+msgstr[1] "%(count)s d’entrées"
+msgstr[2] "%(count)s entrées"

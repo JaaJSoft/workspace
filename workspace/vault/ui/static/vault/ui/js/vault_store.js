@@ -231,10 +231,12 @@ window.vaultStore = function vaultStore() {
     statusLine() {
       const folders = this.visibleFolders().length;
       const entries = this.visibleEntries().length;
-      const count = (singular, plural, n) => interpolate(ngettext(singular, plural, n), { count: n }, true);
-      const parts = [count('%(count)s item', '%(count)s items', folders + entries)];
-      if (folders) parts.push(count('%(count)s folder', '%(count)s folders', folders));
-      parts.push(count('%(count)s entry', '%(count)s entries', entries));
+      const items = folders + entries;
+      const parts = [interpolate(ngettext('%(count)s item', '%(count)s items', items), { count: items }, true)];
+      if (folders) {
+        parts.push(interpolate(ngettext('%(count)s folder', '%(count)s folders', folders), { count: folders }, true));
+      }
+      parts.push(interpolate(ngettext('%(count)s entry', '%(count)s entries', entries), { count: entries }, true));
       return parts.join(' · ');
     },
 

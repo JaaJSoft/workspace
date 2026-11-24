@@ -28,7 +28,7 @@ from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services.locking import conflicting_lock
 
-from .resources import resolve_path
+from . import namespace
 
 logger = logging.getLogger(__name__)
 
@@ -101,15 +101,16 @@ def _dav_file(url, principal):
     """Resolve a DAV lock root to ``(File, User)``, either of which may be None.
 
     ``url`` is the resource's ref-url: quoted, absolute, and - for the provider
-    mounted at ``/`` - the same tree path ``File.path`` stores.
+    mounted at ``/`` - the path the provider resolves.
     """
     user = get_user_model().objects.filter(username=principal).first()
     if user is None:
         return None, None
-    path = unquote(url).strip("/")
-    if not path:
+    parts = [part for part in unquote(url).split("/") if part]
+    file_obj = namespace.node_at(user, parts)
+    if file_obj is None or not file_obj.is_file():
         return None, user
-    return resolve_path(user, path.split("/"), node_type=File.NodeType.FILE), user
+    return file_obj, user
 
 
 def _expiry(lock):

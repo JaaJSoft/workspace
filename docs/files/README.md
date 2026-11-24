@@ -121,11 +121,22 @@ shows the quota and what the trash holds.
 
 ## WebDAV
 
-A user's files and group folders are reachable at `https://<your-domain>/dav/`,
-to mount as a network drive (Windows Explorer, macOS Finder, davfs2, GNOME
-Files) or sync from a mobile app. Sign in with the username and password; an account
-that uses single sign-on enters an API token (*Settings > API Tokens*) as the
+A user's files are reachable at `https://<your-domain>/dav/`, to mount as a
+network drive (Windows Explorer, macOS Finder, davfs2, GNOME Files) or sync
+from a mobile app. Sign in with the username and password; an account that
+uses single sign-on enters an API token (*Settings > API Tokens*) as the
 password. The *Help* entry of the sidebar has the steps per system.
+
+The address opens on three folders, named the same in every language:
+
+| Folder | Holds |
+|---|---|
+| `My Files` | The user's own files and folders. |
+| `Groups` | One folder per group the user belongs to. |
+| `Shared` | The files other people shared with the user, in one flat list. A read-write share can be saved in place; nothing is created, renamed or deleted there. When two shared files carry the same name, each shows its owner: `report (alice).pdf`. |
+
+A sync app pointed at one folder takes its full address, for instance
+`https://<your-domain>/dav/My%20Files/Documents/`.
 
 ## Administration
 

@@ -13,14 +13,19 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import (
     File,
-    FileShare,
     GroupStorageQuota,
     UserStorageQuota,
 )
 from workspace.files.services import quota, trash, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.tests.operations import outcome_of, run_operation
-from workspace.files.webdav.resources import FolderResource, RootCollection
+from workspace.files.webdav.namespace import GROUPS, PERSONAL, SHARED
+from workspace.files.webdav.resources import (
+    FolderResource,
+    PersonalCollection,
+    RootCollection,
+    SharedCollection,
+)
 
 User = get_user_model()
 
@@ -432,9 +437,7 @@ class WebDavRefusedPutTests(TestCase):
         """Drive the create/begin/end sequence ``do_PUT`` uses for a new file."""
         from wsgidav.dav_error import DAVError
 
-        from workspace.files.webdav.resources import RootCollection
-
-        root = RootCollection("/", self._environ(content_length))
+        root = PersonalCollection(f"/{PERSONAL}", self._environ(content_length))
         res = root.create_empty_resource(name)
         with self.assertRaises(DAVError) as caught:
             res.begin_write(content_type="application/octet-stream")
@@ -535,23 +538,37 @@ class WebDavQuotaAdvertisingTests(TestCase):
     def _space(self, res):
         return res.get_used_bytes(), res.get_available_bytes()
 
+    def _personal_roots(self):
+        """The root of the personal tree, and the root of the mount: the
+        figures a client shows for the mounted drive."""
+        return (
+            PersonalCollection(f"/{PERSONAL}", self._environ()),
+            RootCollection("/", self._environ()),
+        )
+
     def test_the_personal_root_reports_the_effective_quota(self):
-        root = RootCollection("/", self._environ())
-        self.assertEqual(self._space(root), (KB, 9 * KB))
+        for root in self._personal_roots():
+            self.assertEqual(self._space(root), (KB, 9 * KB), root.path)
 
     def test_an_unlimited_bucket_advertises_the_free_disk_space(self):
         UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
-        root = RootCollection("/", self._environ())
-        self.assertEqual(self._space(root), (KB, 100 * KB))
+        for root in self._personal_roots():
+            self.assertEqual(self._space(root), (KB, 100 * KB), root.path)
 
     def test_the_disk_caps_a_quota_it_cannot_hold(self):
         self.disk_free = 2 * KB
-        root = RootCollection("/", self._environ())
-        self.assertEqual(self._space(root), (KB, 2 * KB))
+        for root in self._personal_roots():
+            self.assertEqual(self._space(root), (KB, 2 * KB), root.path)
+
+    def test_the_shared_folder_discloses_only_the_disk(self):
+        """A write there replaces a shared file, in its owner's bucket: whose
+        figures are none of the writer's business."""
+        res = SharedCollection(f"/{SHARED}", self._environ())
+        self.assertEqual(self._space(res), (None, 100 * KB))
 
     def test_a_personal_sub_folder_reports_the_personal_bucket(self):
         sub = tree.create_folder(self.user, "sub")
-        res = FolderResource("/sub", self._environ(), sub)
+        res = FolderResource(f"/{PERSONAL}/sub", self._environ(), sub)
         self.assertEqual(self._space(res), (KB, 9 * KB))
 
     def test_a_group_folder_reports_the_group_bucket_at_any_depth(self):
@@ -563,46 +580,22 @@ class WebDavQuotaAdvertisingTests(TestCase):
             content=ContentFile(b"x" * KB, name="team.bin"),
         )
         sub = tree.create_folder(self.user, "sub", parent=self.group_root)
-        for path, folder in (("/Design", self.group_root), ("/Design/sub", sub)):
-            res = FolderResource(path, self._environ(), folder)
+        for path, folder in (("Design", self.group_root), ("Design/sub", sub)):
+            res = FolderResource(f"/{GROUPS}/{path}", self._environ(), folder)
             self.assertEqual(self._space(res), (KB, 3 * KB))
 
     def test_an_unlimited_group_folder_advertises_the_free_disk_space(self):
-        res = FolderResource("/Design", self._environ(), self.group_root)
+        res = FolderResource(f"/{GROUPS}/Design", self._environ(), self.group_root)
         self.assertEqual(self._space(res), (0, 100 * KB))
 
-    def test_a_folder_shared_by_someone_else_reports_the_writers_bucket(self):
-        """A file written there is charged to the writer, and the owner's
-        usage is none of the writer's business."""
-        owner = User.objects.create_user(username="davowner", password="pw")
-        theirs = tree.create_folder(owner, "Theirs")
-        tree.create_file(
-            owner,
-            "big.bin",
-            parent=theirs,
-            content=ContentFile(b"x" * 5 * KB, name="big.bin"),
-        )
-        FileShare.objects.create(
-            file=theirs,
-            shared_by=owner,
-            shared_with=self.user,
-            permission=FileShare.Permission.READ_WRITE,
-        )
-        res = FolderResource("/Theirs", self._environ(), theirs)
-        self.assertEqual(self._space(res), (KB, 9 * KB))
-
-    def test_a_group_folder_shared_outside_the_group_discloses_only_the_disk(self):
+    def test_a_group_folder_discloses_only_the_disk_to_a_non_member(self):
+        """No path serves one to them; the figures stay with the members all
+        the same."""
         GroupStorageQuota.objects.create(group=self.group, quota_bytes=4 * KB)
         sub = tree.create_folder(self.user, "sub", parent=self.group_root)
         outsider = User.objects.create_user(username="davoutsider", password="pw")
-        FileShare.objects.create(
-            file=sub,
-            shared_by=self.user,
-            shared_with=outsider,
-            permission=FileShare.Permission.READ_WRITE,
-        )
         environ = {"workspace.user": outsider, "wsgidav.provider": None}
-        res = FolderResource("/sub", environ, sub)
+        res = FolderResource(f"/{GROUPS}/Design/sub", environ, sub)
         self.assertEqual(self._space(res), (None, 100 * KB))
 
     def test_a_listing_resolves_each_bucket_once(self):
@@ -664,7 +657,7 @@ class WebDavMoveCopyQuotaTests(TestCase):
         res = self._make_resource(file_obj)
 
         with self.assertRaises(DAVError) as caught:
-            res.copy_move_single("/Design/b.bin", is_move=True)
+            res.copy_move_single(f"/{GROUPS}/Design/b.bin", is_move=True)
         self.assertEqual(caught.exception.value, 507)
 
         file_obj.refresh_from_db()
@@ -682,7 +675,7 @@ class WebDavMoveCopyQuotaTests(TestCase):
         res = self._make_resource(file_obj)
 
         with self.assertRaises(DAVError) as caught:
-            res.copy_move_single("/Design/copy.bin", is_move=False)
+            res.copy_move_single(f"/{GROUPS}/Design/copy.bin", is_move=False)
         self.assertEqual(caught.exception.value, 507)
 
 

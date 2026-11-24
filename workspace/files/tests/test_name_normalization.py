@@ -19,6 +19,7 @@ from workspace.files.models import File
 from workspace.files.services import disk_sync, tree
 from workspace.files.services.content_writes import update_content
 from workspace.files.services.shortcuts import create_shortcut
+from workspace.files.webdav.namespace import PERSONAL
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import FolderResource
 
@@ -255,7 +256,7 @@ class WebDavNameTests(NameFormsTestCase):
 
     def test_a_decomposed_path_finds_the_composed_file(self):
         resource = WorkspaceDAVProvider().get_resource_inst(
-            f"/Docs/{DECOMPOSED}", _environ(self.user)
+            f"/{PERSONAL}/Docs/{DECOMPOSED}", _environ(self.user)
         )
 
         self.assertEqual(resource._file.pk, self.file.pk)

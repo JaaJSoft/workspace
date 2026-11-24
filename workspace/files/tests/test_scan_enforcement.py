@@ -668,8 +668,8 @@ class CopyEnforcementTests(APITestCase):
 
         code, _, _ = dav._request(
             "COPY",
-            "/bad.txt",
-            headers={"Destination": "http://testserver/dav/copied.txt"},
+            f"{test_webdav.HOME}/bad.txt",
+            headers={"Destination": f"{test_webdav.DAV_HOME}/copied.txt"},
         )
 
         self.assertEqual(code, 403)

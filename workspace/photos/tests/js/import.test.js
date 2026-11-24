@@ -80,11 +80,21 @@ test('nothing importable never creates the folder', async () => {
   assert.equal(added.length, 0);
 });
 
-test('the WebDAV address points at a personal import folder, encoded', () => {
-  const personal = load({ folder: { uuid: 'f', name: 'Roll', path: 'Camera Roll/2024', group: null } });
-  const shared = load({ folder: { uuid: 'g', name: 'Holidays', path: 'Holidays', group: 'Family' } });
+test('the WebDAV address is the path the server gives for the import folder, encoded', () => {
+  const personal = load({
+    folder: {
+      uuid: 'f', name: 'Roll', path: 'Camera Roll/2024', group: null,
+      dav_path: '/My Files/Camera Roll/2024',
+    },
+  });
+  const shared = load({
+    folder: { uuid: 'g', name: 'Holidays', path: 'Holidays', group: 'Family', dav_path: null },
+  });
 
-  assert.equal(personal.mixin.importDavUrl(), 'https://cloud.example.org/dav/Camera%20Roll/2024/');
+  assert.equal(
+    personal.mixin.importDavUrl(),
+    'https://cloud.example.org/dav/My%20Files/Camera%20Roll/2024/',
+  );
   assert.equal(personal.mixin.importFolderLabel(), 'Camera Roll/2024');
   assert.equal(shared.mixin.importDavUrl(), '');
   assert.equal(shared.mixin.importFolderLabel(), 'Holidays (Family)');

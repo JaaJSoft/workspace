@@ -159,7 +159,7 @@
       {% translate "Hide a folder…" %}
     </button>
   </div>
-  <div x-show="importFolder && !importFolder.group">
+  <div x-show="importDavUrl()">
     <label
       class="text-sm text-base-content/60 block mb-1"
       title="{% translate 'Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to back up your phone here' %}"

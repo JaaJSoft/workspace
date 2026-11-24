@@ -63,12 +63,13 @@ window.photosImportMixin = function photosImportMixin() {
       return folder.group ? `${folder.path} (${folder.group})` : folder.path;
     },
 
-    // Personal folders only: the WebDAV root is the user's own files.
+    // The server says where the folder sits under the WebDAV mount, and
+    // gives no path for a folder it offers no phone backup into.
     importDavUrl() {
       const folder = this.importFolder;
-      if (!folder || folder.group) return '';
-      const path = folder.path.split('/').map(encodeURIComponent).join('/');
-      return `${window.location.origin}/dav/${path}/`;
+      if (!folder || !folder.dav_path) return '';
+      const path = folder.dav_path.split('/').map(encodeURIComponent).join('/');
+      return `${window.location.origin}/dav${path}/`;
     },
 
     pickImportFiles() {

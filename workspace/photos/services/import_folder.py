@@ -14,6 +14,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.queries import user_files_qs, user_group_files_qs
 from workspace.files.services import tree
+from workspace.files.webdav.namespace import dav_path, personal_dav_path
 from workspace.users.services.settings import (
     get_setting,
     get_user_language,
@@ -83,15 +84,26 @@ def ensure_import_folder(user):
 
 def import_folder_data(user, folder):
     """What the page shows of *user*'s import folder; None is the default one,
-    not created yet."""
+    not created yet.
+
+    ``dav_path`` is where a phone backup app writes into it, under the WebDAV
+    mount: offered for a personal folder only.
+    """
     if folder is None:
         name = default_name(user)
-        return {"uuid": None, "name": name, "path": name, "group": None}
+        return {
+            "uuid": None,
+            "name": name,
+            "path": name,
+            "group": None,
+            "dav_path": personal_dav_path(name),
+        }
     return {
         "uuid": str(folder.uuid),
         "name": folder.name,
         "path": folder.path or folder.name,
         "group": folder.group.name if folder.group_id else None,
+        "dav_path": None if folder.group_id else dav_path(folder),
     }
 
 

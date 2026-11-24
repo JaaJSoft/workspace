@@ -912,6 +912,14 @@ msgid "your-domain"
 msgstr "votre-domaine"
 
 #: ui/templates/files/ui/partials/dialogs.html
+#, python-format
+msgid "It opens on three folders: <strong>%(personal)s</strong> holds your own files, <strong>%(groups)s</strong> the folders of your groups and <strong>%(shared)s</strong> the files shared with you."
+msgstr ""
+"Elle s’ouvre sur trois dossiers : <strong>%(personal)s</strong> contient "
+"vos fichiers, <strong>%(groups)s</strong> les dossiers de vos groupes et "
+"<strong>%(shared)s</strong> les fichiers partagés avec vous."
+
+#: ui/templates/files/ui/partials/dialogs.html
 msgid "Open File Explorer and click <strong>Map network drive</strong>."
 msgstr ""
 "Ouvrez l’Explorateur de fichiers et cliquez sur <strong>Connecter un lecteur "

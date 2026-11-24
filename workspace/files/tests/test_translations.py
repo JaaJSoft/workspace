@@ -39,11 +39,15 @@ class FilesPageLanguageTests(TestCase):
         response = self.client.get("/files")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mes fichiers")
-        self.assertNotContains(response, "My Files")
+        self.assertEqual(response.context["page_title"], "Mes fichiers")
+        # Not "My Files": the help also spells the WebDAV folder of that
+        # name, which is the same in every language.
+        self.assertNotContains(response, "Shared with me")
 
     def test_files_page_stays_english_by_default(self):
         response = self.client.get("/files")
-        self.assertContains(response, "My Files")
+        self.assertEqual(response.context["page_title"], "My Files")
+        self.assertContains(response, "Shared with me")
 
     def test_trash_empty_state_renders_in_french(self):
         set_setting(self.user, "core", "language", "fr")

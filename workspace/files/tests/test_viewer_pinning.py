@@ -120,7 +120,8 @@ class FileViewerResolutionTests(TestCase):
 
     def _view_html(self, file_obj):
         resp = self.client.get(
-            reverse("files_ui:view_file", kwargs={"uuid": file_obj.uuid})
+            reverse("files_ui:view_file", kwargs={"uuid": file_obj.uuid}),
+            HTTP_X_ALPINE_REQUEST="true",
         )
         self.assertEqual(resp.status_code, 200)
         return resp.content.decode()

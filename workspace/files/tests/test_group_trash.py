@@ -116,9 +116,22 @@ class GroupTrashTests(APITestCase):
     def test_a_member_previews_it_from_the_trash(self):
         self.client.force_login(self.alice)
 
-        response = self.client.get(f"/files/view/{self.loose.uuid}")
+        response = self.client.get(
+            f"/files/view/{self.loose.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
 
         self.assertEqual(response.status_code, 200)
+
+    def test_a_member_previews_its_content_and_thumbnail(self):
+        self.client.force_login(self.alice)
+
+        content = self.client.get(f"/api/v1/files/{self.loose.uuid}/content")
+        thumbnail = self.client.get(f"/api/v1/files/{self.loose.uuid}/thumbnail")
+
+        self.assertEqual(content.status_code, 200)
+        self.assertEqual(b"".join(content.streaming_content), b"loose")
+        # Past the access check: a text file simply has no thumbnail.
+        self.assertEqual(thumbnail.json(), {"detail": "No thumbnail."})
 
     def test_trash_rights_stop_at_the_trash(self):
         trash.soft_delete(self.folder, acting_user=self.bob)
@@ -139,7 +152,9 @@ class GroupTrashTests(APITestCase):
         actions = self.client.post(
             "/api/v1/files/actions", {"uuids": [str(self.loose.uuid)]}, format="json"
         )
-        preview = self.client.get(f"/files/view/{self.loose.uuid}")
+        preview = self.client.get(
+            f"/files/view/{self.loose.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
 
         self.assertEqual(restore.status_code, 404)
         self.assertEqual(purge.status_code, 404)

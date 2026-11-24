@@ -178,3 +178,41 @@ test('the trash offers no favorite sort', () => {
   assert.ok(!ids(true).includes('favorite'));
   assert.deepStrictEqual(ids(true), ['default', 'name', 'size', 'created', 'modified', 'type']);
 });
+
+function makeTableWithPrefs(prefs, saved) {
+  const stored = JSON.stringify(saved);
+  const ctx = loadScript('workspace/files/ui/static/files/ui/js/table.js', {
+    _filePrefsCache: prefs,
+    _tableControlsCache: saved,
+    localStorage: { getItem: () => stored, setItem() {} },
+    document: { createDocumentFragment: () => ({ appendChild() {} }) },
+  });
+  return ctx.fileTableWithView();
+}
+
+test('a listing opens on the Default sort, whatever the table saved', () => {
+  const table = makeTableWithPrefs(
+    { defaultSort: 'name', defaultSortDir: 'desc' },
+    { sortField: 'size', sortDir: 'asc', columnOrder: ['name', 'size'] },
+  );
+  table.loadState();
+  assert.equal(table.sortField, 'name');
+  assert.equal(table.sortDir, 'desc');
+  assert.equal('sortField' in table._getStatePayload(), false);
+});
+
+test('a new Default sort applies to the listing on screen', () => {
+  const table = makeTableWithPrefs({}, null);
+  table.pickSort('size');
+  table._followPreferences({ defaultSort: 'modified', defaultSortDir: 'desc' });
+  assert.equal(table.sortField, 'modified');
+  assert.equal(table.sortDir, 'desc');
+});
+
+test('another preference change keeps the sort picked from the listing', () => {
+  const table = makeTableWithPrefs({ defaultSort: 'name' }, null);
+  table.pickSort('size');
+  table._followPreferences({ defaultSort: 'name', showHiddenFiles: true });
+  assert.equal(table.sortField, 'size');
+  assert.equal(table.showHiddenFiles, true);
+});

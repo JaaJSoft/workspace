@@ -81,7 +81,8 @@ class NewTabMarkerTests(TestCase):
 
     def _panel(self, file_obj):
         return self.client.get(
-            reverse("files_ui:view_file", kwargs={"uuid": file_obj.uuid})
+            reverse("files_ui:view_file", kwargs={"uuid": file_obj.uuid}),
+            HTTP_X_ALPINE_REQUEST="true",
         ).content.decode()
 
     def test_the_panel_carries_the_url_of_a_viewer_that_offers_one(self):

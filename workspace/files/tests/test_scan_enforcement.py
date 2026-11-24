@@ -565,7 +565,9 @@ class ViewerPanelEnforcementTests(APITestCase):
 
     @override_settings(**BLOCKING)
     def test_viewer_panel_is_refused_for_a_quarantined_file(self):
-        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        resp = self.client.get(
+            f"/files/view/{self.file.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
         self.assertEqual(resp.status_code, 403)
         self.assertIn(b"Quarantined", resp.content)
         # The modal reads this marker to hide its own Download button -
@@ -574,7 +576,9 @@ class ViewerPanelEnforcementTests(APITestCase):
 
     @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
     def test_viewer_panel_renders_when_scanning_is_off(self):
-        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        resp = self.client.get(
+            f"/files/view/{self.file.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
         self.assertEqual(resp.status_code, 200)
 
     @override_settings(**BLOCKING)
@@ -582,7 +586,9 @@ class ViewerPanelEnforcementTests(APITestCase):
         """The guard must not leak existence to someone without access."""
         other = User.objects.create_user(username="stranger", password="p")
         self.client.force_login(other)
-        resp = self.client.get(f"/files/view/{self.file.uuid}")
+        resp = self.client.get(
+            f"/files/view/{self.file.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
         self.assertEqual(resp.status_code, 404)
 
 

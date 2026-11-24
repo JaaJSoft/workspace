@@ -23,8 +23,11 @@ window.fileTableControls = function fileTableControls() {
     searchQuery: '',
     typeFilter: 'all',
     tagFilter: [],
+    // A listing opens on the Default sort preference; a sort picked from the
+    // listing lasts the visit, across folders, and is not saved.
     sortField: window._filePrefsCache.defaultSort || 'default',
     sortDir: window._filePrefsCache.defaultSortDir || 'asc',
+    _defaultSort: (window._filePrefsCache.defaultSort || 'default') + ':' + (window._filePrefsCache.defaultSortDir || 'asc'),
     columns: [
       { id: 'select', label: pgettext('table column', 'Select'), required: false },
       { id: 'icon', label: gettext('Type'), required: true },
@@ -124,13 +127,7 @@ window.fileTableControls = function fileTableControls() {
       this.$watch('sortDir', () => this.applyRows());
       this.$watch('showHiddenFiles', () => this.applyRows());
 
-      // Sync showHiddenFiles when preferences change
-      window.addEventListener('preferences-changed', (e) => {
-        const show = e.detail?.showHiddenFiles;
-        if (typeof show === 'boolean' && show !== this.showHiddenFiles) {
-          this.showHiddenFiles = show;
-        }
-      });
+      window.addEventListener('preferences-changed', (e) => this._followPreferences(e.detail));
 
       // Clear selection after bulk actions
       window.addEventListener('clear-file-selection', () => {
@@ -150,7 +147,7 @@ window.fileTableControls = function fileTableControls() {
         this._computeBulkActions();
       });
       if (kept) this._applyKeptSelection(kept);
-      for (const key of ['selectedUuids', 'searchQuery', 'typeFilter', 'tagFilter']) {
+      for (const key of ['selectedUuids', 'searchQuery', 'typeFilter', 'tagFilter', 'sortField', 'sortDir']) {
         this.$watch(key, () => this._keepState());
       }
       this._keepState();
@@ -568,6 +565,9 @@ window.fileTableControls = function fileTableControls() {
         searchQuery: this.searchQuery,
         typeFilter: this.typeFilter,
         tagFilter: Array.from(this.tagFilter),
+        sortField: this.sortField,
+        sortDir: this.sortDir,
+        defaultSort: this._defaultSort,
       };
     },
 
@@ -581,6 +581,24 @@ window.fileTableControls = function fileTableControls() {
       this.searchQuery = kept.searchQuery;
       this.typeFilter = kept.typeFilter;
       this.tagFilter = Array.from(kept.tagFilter);
+      this.sortField = kept.sortField;
+      this.sortDir = kept.sortDir;
+      this._defaultSort = kept.defaultSort;
+    },
+
+    // A new Default sort applies to the listing on screen; any other change
+    // of preferences leaves the sort the user picked alone.
+    _followPreferences(prefs) {
+      if (!prefs) return;
+      const show = prefs.showHiddenFiles;
+      if (typeof show === 'boolean' && show !== this.showHiddenFiles) {
+        this.showHiddenFiles = show;
+      }
+      const defaultSort = (prefs.defaultSort || 'default') + ':' + (prefs.defaultSortDir || 'asc');
+      if (defaultSort === this._defaultSort) return;
+      this._defaultSort = defaultSort;
+      this.sortField = prefs.defaultSort || 'default';
+      this.sortDir = prefs.defaultSortDir || 'asc';
     },
 
     // Only the items the new listing still holds: a trashed or moved file
@@ -1061,12 +1079,6 @@ window.fileTableControls = function fileTableControls() {
       if (data.columnVisibility && typeof data.columnVisibility === 'object') {
         this.columnVisibility = { ...this.columnVisibility, ...data.columnVisibility };
       }
-      if (typeof data.sortField === 'string') {
-        this.sortField = data.sortField;
-      }
-      if (data.sortDir === 'asc' || data.sortDir === 'desc') {
-        this.sortDir = data.sortDir;
-      }
     },
 
     // The saved controls are embedded in the page (#table-controls-data),
@@ -1102,8 +1114,6 @@ window.fileTableControls = function fileTableControls() {
 
     _getStatePayload() {
       return {
-        sortField: this.sortField,
-        sortDir: this.sortDir,
         columnOrder: this.columnOrder,
         columnVisibility: this.columnVisibility
       };

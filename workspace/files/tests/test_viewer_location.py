@@ -41,7 +41,9 @@ class ViewerLocationTests(TestCase):
 
     def _location(self, user, file_obj):
         self.client.force_login(user)
-        resp = self.client.get(f"/files/view/{file_obj.uuid}")
+        resp = self.client.get(
+            f"/files/view/{file_obj.uuid}", HTTP_X_ALPINE_REQUEST="true"
+        )
         self.assertEqual(resp.status_code, 200)
         match = MARKER.search(resp.content.decode())
         if match is None:

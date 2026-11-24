@@ -167,7 +167,7 @@
         <i data-lucide="map" class="w-3.5 h-3.5"></i>
       </button>
 
-      {% if ai_enabled %}
+      {% if ai_enabled and user.is_authenticated %}
         <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
         <!-- AI Actions -->
@@ -385,12 +385,10 @@
       return import(MONACO_URL);
     }
 
+    // Each daisyUI theme declares its color-scheme, so no list of dark
+    // themes is needed here.
     function _detectTheme() {
-      const dt = (document.documentElement.getAttribute('data-theme') || '').toLowerCase();
-      const dark = ['dark', 'dracula', 'night', 'sunset', 'dim', 'black', 'luxury', 'halloween', 'forest', 'coffee', 'business', 'synthwave'];
-      return dark.some(function(t) {
-        return dt.includes(t);
-      }) ? 'vs-dark' : 'vs';
+      return getComputedStyle(document.documentElement).colorScheme === 'dark' ? 'vs-dark' : 'vs';
     }
 
     function _attachEditHandlers(self) {

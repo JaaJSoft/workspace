@@ -122,7 +122,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
     },
 
     refreshGroupFoldersSection() {
-      this.$ajax('/files/group-folders', { target: 'group-folders-section' });
+      this.$ajax('/files/group-folders', { targets: ['group-folders-section', 'group-folder-choices'] });
     },
 
     async openContextMenu(event, nodeData) {

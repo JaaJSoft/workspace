@@ -8,6 +8,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.html import escape, format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
@@ -281,6 +282,8 @@ def _present_nodes(user, nodes, active_special):
         # Read up to four times per row by the listing, and each call ranks
         # every viewer: resolved once here instead.
         node.viewable = node.is_viewable()
+        viewer = _viewer_class(node) if node.viewable else None
+        node.viewer_slug = viewer.slug if viewer else ""
     present_shortcuts(user, nodes)
     return nodes
 
@@ -861,12 +864,39 @@ def group_folders_sidebar(request):
 
     return render(
         request,
-        "files/ui/partials/group_folders_section.html",
+        "files/ui/partials/group_folders_refresh.html",
         {
             "group_folders": group_folders,
             "available_groups": available_groups,
         },
     )
+
+
+def _viewer_class(file_obj):
+    """The viewer that opens a file. A pinned viewer wins; an unknown pin
+    degrades to content-based resolution rather than breaking the page."""
+    return get_viewer_by_slug(file_obj.viewer) or ViewerRegistry.get_viewer(
+        file_obj.type, file_obj.name
+    )
+
+
+def _viewer_query(user, file_obj):
+    """Where a file's viewer opens: over the trash, its folder when the user
+    can open it, their own files, or the files shared with them - the only
+    listing that holds a file shared without its folder."""
+    open_param = {"open": file_obj.uuid}
+    if file_obj.deleted_at is not None:
+        return reverse("files_ui:trash"), open_param
+    parent = file_obj.parent
+    if (
+        parent is not None
+        and parent.deleted_at is None
+        and get_permission(user, parent) is not None
+    ):
+        return reverse("files_ui:folder", kwargs={"folder": parent.uuid}), open_param
+    if file_obj.owner_id == user.pk and file_obj.group_id is None:
+        return reverse("files_ui:index"), open_param
+    return reverse("files_ui:index"), {"shared": 1, **open_param}
 
 
 @login_required
@@ -886,6 +916,13 @@ def view_file(request, uuid):
     perm = trash_permission(request.user, file_obj)
     if perm is None:
         raise Http404
+
+    # The panel is a fragment: opened on its own (new tab, reload) it leads to
+    # the page that opens it in its viewer instead.
+    if not request.headers.get("X-Alpine-Request"):
+        page, params = _viewer_query(request.user, file_obj)
+        return redirect(f"{page}?{urlencode(params)}")
+
     user_can_edit = perm >= FilePermission.WRITE and file_obj.deleted_at is None
 
     from workspace.files.services.scanning.policy import blocked_reason
@@ -928,11 +965,7 @@ def view_file(request, uuid):
             status=400,
         )
 
-    # A pinned viewer wins; an unknown pin degrades to content-based
-    # resolution rather than breaking the page.
-    ViewerClass = get_viewer_by_slug(file_obj.viewer) or ViewerRegistry.get_viewer(
-        file_obj.type, file_obj.name
-    )
+    ViewerClass = _viewer_class(file_obj)
 
     if not ViewerClass:
         return HttpResponse(

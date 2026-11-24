@@ -119,6 +119,8 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
         uuid: row.getAttribute(gallery.uuid),
         name: row.getAttribute(gallery.name),
         fileType: row.getAttribute(gallery.type),
+        // The viewer that opens it, when the listing names one.
+        viewer: row.dataset.viewer || '',
         // A row may name the moment a video opens at, in seconds.
         at: row.dataset.at ? Number(row.dataset.at) : null,
       };

@@ -87,3 +87,21 @@ test('a read during a reload is refreshed by a request sent after that reload la
   assert.equal(requests.length, 2);
   assert.notStrictEqual(requests[1], requests[0]);
 });
+
+test('a read during a full load (jump to the present) is refreshed once that load landed', async () => {
+  const { app, page, requests, runTimers } = buildApp();
+
+  const loading = app.jumpToPresent();
+  const reading = app.handleSSERead({ conversation_id: 'c1' });
+  await runTimers();
+  assert.equal(requests.length, 1);
+
+  page.pendingReceipt = true;
+  requests[0].land();
+  await loading;
+  await reading;
+  await runTimers();
+
+  assert.equal(requests.length, 2);
+  assert.notStrictEqual(requests[1], requests[0]);
+});

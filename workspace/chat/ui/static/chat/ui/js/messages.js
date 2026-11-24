@@ -16,8 +16,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     // ── State ────────────────────────────────────────────────
     messageBody: '',
     loadingMessages: false,
-    // Refreshes of the message list still waiting on the server, and who
-    // waits for the last of them to land (_messagesIdle).
+    // Loads of the message list still waiting on the server, full ones and
+    // refreshes alike, and who waits for the last of them to land.
     _messagesRefreshing: 0,
     _messagesIdleWaiters: [],
     loadingMoreMessages: false,
@@ -156,6 +156,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       const query = message ? { limit: PAGE_SIZE, message } : { limit: PAGE_SIZE };
       let shown = none;
+      this._messagesLoadStarted();
       try {
         const render = await this.$ajax(this._messagesUrl(query), {
           targets: this._loadTargets(),
@@ -175,6 +176,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         }
       } catch (e) {
         console.error('Failed to load messages', e);
+      } finally {
+        this._messagesLoadSettled();
       }
       this.loadingMessages = false;
       return shown;
@@ -659,7 +662,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       if (!away) this._missedLive = false;
       this._anchorOnMerge = !following;
       this._refreshAnchor = null;
-      this._messagesRefreshing++;
+      this._messagesLoadStarted();
       try {
         const render = await this.$ajax(this._messagesUrl(query), {
           targets: this._loadTargets(),
@@ -672,14 +675,22 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       } catch (e) {
         console.error('Failed to refresh messages', e);
       } finally {
-        this._messagesRefreshing--;
-        if (!this._messagesRefreshing) this._messagesIdleWaiters.splice(0).forEach((resolve) => resolve());
+        this._messagesLoadSettled();
       }
       this._anchorOnMerge = false;
       this._refreshAnchor = null;
     },
 
-    // Resolves once no refresh of the message list is in flight.
+    _messagesLoadStarted() {
+      this._messagesRefreshing++;
+    },
+
+    _messagesLoadSettled() {
+      this._messagesRefreshing--;
+      if (!this._messagesRefreshing) this._messagesIdleWaiters.splice(0).forEach((resolve) => resolve());
+    },
+
+    // Resolves once no load of the message list is in flight.
     _messagesIdle() {
       if (!this._messagesRefreshing) return Promise.resolve();
       return new Promise((resolve) => { this._messagesIdleWaiters.push(resolve); });

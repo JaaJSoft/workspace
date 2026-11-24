@@ -124,6 +124,7 @@ class AttachmentSaveToFilesView(APIView):
             )
 
         from workspace.files.models import File
+        from workspace.files.queries import accessible_files_q, can_create_in
 
         parent = None
         folder_id = request.data.get("folder_id")
@@ -134,14 +135,11 @@ class AttachmentSaveToFilesView(APIView):
                     {"detail": gettext('"folder_id" must be a valid UUID.')},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            try:
-                parent = File.objects.get(
-                    uuid=folder_uuid,
-                    owner=request.user,
-                    node_type=File.NodeType.FOLDER,
-                    deleted_at__isnull=True,
-                )
-            except File.DoesNotExist:
+            parent = File.objects.filter(
+                accessible_files_q(request.user), uuid=folder_uuid
+            ).first()
+            # A folder the user may not write into answers like a missing one.
+            if parent is None or not can_create_in(request.user, parent):
                 return Response(
                     {"detail": gettext("Folder not found.")},
                     status=status.HTTP_404_NOT_FOUND,

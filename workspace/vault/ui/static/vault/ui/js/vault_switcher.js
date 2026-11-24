@@ -90,10 +90,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         return gettext('Saved by a newer version of the app. Reload the page to read it.');
       }
       if (vault.unopenable) {
-        return gettext(
-          'Your account holds no key for this vault any more. '
-          + 'A member who can still open it has to share it with you again.',
-        );
+        return gettext('Your account holds no key for this vault any more. A member who can still open it has to share it with you again.');
       }
       return null;
     },

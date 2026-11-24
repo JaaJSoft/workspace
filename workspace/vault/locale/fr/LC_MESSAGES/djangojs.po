@@ -204,13 +204,6 @@ msgstr ""
 "Ce dossier contient une entrée qui n’a pas pu être vérifiée. Il n’a pas été "
 "modifié."
 
-#: ui/static/vault/ui/js/vault_browser.js
-msgid ""
-"The folder was not deleted. Each of its levels is written whole or not at "
-"all, so nothing is half-moved."
-msgstr ""
-"Le dossier n’a pas été supprimé. Chacun de ses niveaux est écrit en entier "
-"ou pas du tout, donc rien n’est à moitié déplacé."
 
 #: ui/static/vault/ui/js/vault_browser.js
 msgid "That tag could not be created. Try again."
@@ -612,3 +605,23 @@ msgid_plural "%(count)s entries"
 msgstr[0] "%(count)s entrée"
 msgstr[1] "%(count)s d’entrées"
 msgstr[2] "%(count)s entrées"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"The folder was not deleted. Its entries and subfolders are unchanged - "
+"nothing was left half-moved."
+msgstr ""
+"Le dossier n’a pas été supprimé. Ses entrées et sous-dossiers sont inchangés : "
+"rien n’a été déplacé à moitié."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Awaiting a key"
+msgstr "En attente d’une clé"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid ""
+"Your account holds no key for this vault any more. A member who can still "
+"open it has to share it with you again."
+msgstr ""
+"Votre compte ne détient plus de clé pour ce coffre. Un membre qui peut "
+"encore l’ouvrir doit le partager de nouveau avec vous."

@@ -147,3 +147,49 @@ class FileAdminDeletionTests(TestCase):
         self.assertGoneForGood(self.child, blob)
         self.assertGoneForGood(loose, loose_blob)
         self.assertTrue(default_storage.is_file(kept.content.name))
+
+
+class FileAdminTreeEditTests(TestCase):
+    """The admin never edits a node in place: its row and its blob would part."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="root", email="root@example.com", password="pw"
+        )
+        self.client.force_login(self.admin)
+        self.folder = tree.create_folder(self.admin, "Docs")
+        self.file = tree.create_file(
+            self.admin,
+            "report.txt",
+            content=ContentFile(b"bytes", name="report.txt"),
+        )
+
+    def test_a_node_cannot_be_moved_or_renamed_from_its_page(self):
+        blob = self.file.content.name
+        response = self.client.post(
+            reverse("admin:files_file_change", args=[self.file.pk]),
+            {
+                "name": "renamed.txt",
+                "node_type": File.NodeType.FILE,
+                "parent": str(self.folder.pk),
+                "owner": str(self.admin.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.name, "report.txt")
+        self.assertIsNone(self.file.parent_id)
+        self.assertEqual(self.file.content.name, blob)
+        self.assertTrue(default_storage.exists(blob))
+
+    def test_a_node_cannot_be_added_by_hand(self):
+        response = self.client.get(reverse("admin:files_file_add"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_a_node_page_still_opens_read_only(self):
+        response = self.client.get(
+            reverse("admin:files_file_change", args=[self.file.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "report.txt")

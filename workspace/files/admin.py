@@ -89,6 +89,10 @@ class FileAdmin(ModelAdmin):
     does in the files app, where the tree's rules, the event and the
     notifications apply; an operator who deletes a node here has read a
     confirmation page listing everything that goes with it.
+
+    A node is never added or edited here: its blob lives at its tree path,
+    so a parent, name or owner changed on the row alone leaves the bytes
+    behind. Moves and renames go through the tree services, in the app.
     """
 
     list_display = (
@@ -104,9 +108,14 @@ class FileAdmin(ModelAdmin):
     list_filter_submit = True
     list_select_related = ("owner",)
     search_fields = ("uuid", "name", "path", "owner__username")
-    autocomplete_fields = ("owner", "parent", "shortcut_target")
     readonly_fields = ("uuid", "created_at", "updated_at")
     date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
     def delete_model(self, request, obj):
         hard_delete_tree(obj)

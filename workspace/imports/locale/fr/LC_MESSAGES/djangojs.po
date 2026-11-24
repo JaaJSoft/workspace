@@ -12,52 +12,6 @@ msgstr ""
 "1000000 == 0 ? 1 : 2;\n"
 
 #: ui/static/imports/ui/js/imports.js
-msgid "Folders and files, with their dates."
-msgstr "Dossiers et fichiers, avec leurs dates."
-
-#: ui/static/imports/ui/js/imports.js
-msgid "Address books, with their contact groups as lists."
-msgstr ""
-"Carnets d’adresses, avec leurs groupes de contacts sous forme de listes."
-
-#: ui/static/imports/ui/js/imports.js
-msgctxt "import status"
-msgid "pending"
-msgstr "en attente"
-
-#: ui/static/imports/ui/js/imports.js
-msgctxt "import status"
-msgid "running"
-msgstr "en cours"
-
-#: ui/static/imports/ui/js/imports.js
-msgctxt "import status"
-msgid "completed"
-msgstr "terminé"
-
-#: ui/static/imports/ui/js/imports.js
-msgctxt "import status"
-msgid "failed"
-msgstr "échoué"
-
-#: ui/static/imports/ui/js/imports.js
-msgctxt "import status"
-msgid "cancelled"
-msgstr "annulé"
-
-#: ui/static/imports/ui/js/imports.js
-msgid "keep both"
-msgstr "garder les deux"
-
-#: ui/static/imports/ui/js/imports.js
-msgid "keep mine"
-msgstr "garder le mien"
-
-#: ui/static/imports/ui/js/imports.js
-msgid "replace mine"
-msgstr "remplacer le mien"
-
-#: ui/static/imports/ui/js/imports.js
 msgid "%(count)s imported"
 msgid_plural "%(count)s imported"
 msgstr[0] "%(count)s importé"

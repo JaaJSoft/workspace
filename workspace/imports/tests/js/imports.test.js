@@ -2,9 +2,30 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
+// What the page embeds with |json_script, as the imports view builds it.
+const PAGE_DATA = {
+  'import-kinds-data': [
+    { kind: 'files', name: 'Files', description: 'Folders and files, with their dates.' },
+    { kind: 'contacts', name: 'Contacts', description: 'Address books, with their contact groups as lists.' },
+  ],
+  'import-job-statuses-data': [
+    { value: 'pending', label: 'pending', active: true },
+    { value: 'running', label: 'running', active: true },
+    { value: 'completed', label: 'completed', active: false },
+    { value: 'failed', label: 'failed', active: false },
+    { value: 'cancelled', label: 'cancelled', active: false },
+  ],
+  'import-conflict-policies-data': [
+    { value: 'rename', label: 'Keep both (rename the imported one)', summary: 'keep both' },
+  ],
+};
+
 function app(fetchStub) {
   const ctx = loadScript('workspace/imports/ui/static/imports/ui/js/imports.js', {
-    document: { getElementById: () => null, addEventListener: () => {} },
+    document: {
+      getElementById: (id) => (id in PAGE_DATA ? { textContent: JSON.stringify(PAGE_DATA[id]) } : null),
+      addEventListener: () => {},
+    },
     getCSRFToken: () => 'x',
     formatFileSize: (b) => `${b} B`,
     fetch: fetchStub || (() => Promise.reject(new Error('no network in tests'))),
@@ -247,4 +268,15 @@ test('favorites and tags the remote could not give are reported beside the summa
   const clean = { status: 'completed', stats: { files: { files: 2 } } };
   assert.equal(component.metadataError(failed), 'Favorites and tags were not imported: The server refused.');
   assert.equal(component.metadataError(clean), '');
+});
+
+test('status and conflict labels come from the page, unknown values as sent', () => {
+  const { component } = app();
+  assert.equal(component.statusLabel('running'), 'running');
+  assert.equal(component.statusLabel('paused'), 'paused');
+  assert.equal(component.conflictLabel('rename'), 'keep both');
+  assert.equal(component.conflictLabel('merge'), 'merge');
+  assert.equal(component.isActive({ status: 'pending' }), true);
+  assert.equal(component.isActive({ status: 'failed' }), false);
+  assert.equal(component.isActive({ status: 'paused' }), false);
 });

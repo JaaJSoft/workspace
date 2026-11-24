@@ -195,6 +195,8 @@ class Importer(ABC):
     kind: str
     #: What the user calls the kind ("Files"), lazily translated.
     label: str
+    #: One line telling the user what the kind brings over, lazily translated.
+    description: str
     #: Serializer validating ``options[kind]``; instantiated with
     #: ``context={"owner": user}``.
     option_serializer: type

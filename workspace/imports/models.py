@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils.translation import pgettext_lazy
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -75,11 +76,11 @@ class ImportJob(models.Model):
     """One import run: a connection and the data kinds to pull from it."""
 
     class Status(models.TextChoices):
-        PENDING = "pending"
-        RUNNING = "running"
-        COMPLETED = "completed"
-        FAILED = "failed"
-        CANCELLED = "cancelled"
+        PENDING = "pending", pgettext_lazy("import status", "pending")
+        RUNNING = "running", pgettext_lazy("import status", "running")
+        COMPLETED = "completed", pgettext_lazy("import status", "completed")
+        FAILED = "failed", pgettext_lazy("import status", "failed")
+        CANCELLED = "cancelled", pgettext_lazy("import status", "cancelled")
 
     TERMINAL_STATUSES = frozenset({Status.COMPLETED, Status.FAILED, Status.CANCELLED})
 

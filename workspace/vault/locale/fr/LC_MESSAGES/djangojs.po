@@ -1,0 +1,593 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: workspace\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-24 21:09+0100\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
+"1000000 == 0 ? 1 : 2;\n"
+
+#: ui/static/vault/ui/js/clipboard.js
+msgid ""
+"The clipboard could not be cleared - this browser does not allow reading it "
+"back. Copy something else to overwrite it."
+msgstr ""
+"Le presse-papiers n’a pas pu être vidé - ce navigateur ne permet pas de le "
+"relire. Copiez autre chose pour l’écraser."
+
+#: ui/static/vault/ui/js/onboarding.js
+msgid "Personal"
+msgstr "Personnel"
+
+#: ui/static/vault/ui/js/onboarding.js
+msgid ""
+"Your vault could not be created. Your account is set up and your recovery "
+"key is valid - try again."
+msgstr ""
+"Votre coffre-fort n’a pas pu être créé. Votre compte est configuré et votre "
+"clé de récupération est valide - réessayez."
+
+#: ui/static/vault/ui/js/onboarding.js
+msgid ""
+"Your vault was already set up elsewhere, with a different recovery key. The "
+"key on this page does not open it."
+msgstr ""
+"Votre coffre-fort a déjà été configuré ailleurs, avec une autre clé de "
+"récupération. La clé de cette page ne l’ouvre pas."
+
+#: ui/static/vault/ui/js/onboarding.js
+msgid "Your vault has already been set up. Reload this page to open it."
+msgstr ""
+"Votre coffre-fort est déjà configuré. Rechargez cette page pour l’ouvrir."
+
+#: ui/static/vault/ui/js/onboarding.js
+msgid ""
+"Your vault is already set up, but we could not confirm from here whether "
+"this page holds its recovery key. Do not close this page - try again."
+msgstr ""
+"Votre coffre-fort est déjà configuré, mais nous n’avons pas pu vérifier "
+"d’ici si cette page détient sa clé de récupération. Ne fermez pas cette page "
+"- réessayez."
+
+#: ui/static/vault/ui/js/onboarding.js
+msgid "Your vault could not be created. Nothing was saved; try again."
+msgstr ""
+"Votre coffre-fort n’a pas pu être créé. Rien n’a été enregistré ; réessayez."
+
+#: ui/static/vault/ui/js/vault_browser.js
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "This cannot be undone"
+msgstr "Cette action est irréversible"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Permanently delete this entry?"
+msgid_plural "Permanently delete these %(count)s entries?"
+msgstr[0] "Supprimer définitivement cette entrée ?"
+msgstr[1] "Supprimer définitivement ces %(count)s entrées ?"
+msgstr[2] "Supprimer définitivement ces %(count)s entrées ?"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "This vault could not be loaded. Try again."
+msgstr "Ce coffre-fort n’a pas pu être chargé. Réessayez."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That value could not be revealed."
+msgstr "Cette valeur n’a pas pu être affichée."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "This entry's notes could not be opened."
+msgstr "Les notes de cette entrée n’ont pas pu être ouvertes."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Authenticator code"
+msgstr "Code d’authentification"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That authenticator code could not be copied."
+msgstr "Ce code d’authentification n’a pas pu être copié."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Permanently delete the entry in the trash?"
+msgid_plural "Permanently delete the %(count)s entries in the trash?"
+msgstr[0] "Supprimer définitivement l’entrée de la corbeille ?"
+msgstr[1] "Supprimer définitivement les %(count)s entrées de la corbeille ?"
+msgstr[2] "Supprimer définitivement les %(count)s entrées de la corbeille ?"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "It cannot be read on this device."
+msgstr "Elle est illisible sur cet appareil."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "%(count)s of them cannot be read on this device."
+msgid_plural "%(count)s of them cannot be read on this device."
+msgstr[0] "%(count)s d’entre elles est illisible sur cet appareil."
+msgstr[1] "%(count)s d’entre elles sont illisibles sur cet appareil."
+msgstr[2] "%(count)s d’entre elles sont illisibles sur cet appareil."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "The trash could not be emptied. The list above is up to date."
+msgstr "La corbeille n’a pas pu être vidée. La liste ci-dessus est à jour."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"An entry could not be verified. It was left untouched, and so were the ones "
+"after it."
+msgstr ""
+"Une entrée n’a pas pu être vérifiée. Elle n’a pas été modifiée, pas plus que "
+"les suivantes."
+
+#: ui/static/vault/ui/js/vault_browser.js
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Some entries could not be changed. The list above is up to date."
+msgstr ""
+"Certaines entrées n’ont pas pu être modifiées. La liste ci-dessus est à jour."
+
+#: ui/static/vault/ui/js/vault_browser.js
+#: ui/static/vault/ui/js/vault_generator.js
+msgid "That value could not be copied."
+msgstr "Cette valeur n’a pas pu être copiée."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That website could not be opened."
+msgstr "Ce site n’a pas pu être ouvert."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That entry does not hold a web address."
+msgstr "Cette entrée ne contient pas d’adresse web."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That entry could not be opened for editing."
+msgstr "Cette entrée n’a pas pu être ouverte pour modification."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "This entry changed since it was opened. Close it and open it again."
+msgstr "Cette entrée a changé depuis son ouverture. Fermez-la et rouvrez-la."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"That authenticator key could not be read. Paste the key or the otpauth:// "
+"address the service showed you."
+msgstr ""
+"Cette clé d’authentification est illisible. Collez la clé ou l’adresse "
+"otpauth:// que le service vous a montrée."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "This entry could not be verified. It was left untouched."
+msgstr "Cette entrée n’a pas pu être vérifiée. Elle n’a pas été modifiée."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That entry could not be saved. Try again."
+msgstr "Cette entrée n’a pas pu être enregistrée. Réessayez."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Remove the tag \"%(name)s\" from every entry that carries it?"
+msgstr ""
+"Retirer l’étiquette « %(name)s » de toutes les entrées qui la portent ?"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Delete tag"
+msgstr "Supprimer l’étiquette"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"This tag is on an entry that could not be verified. It was left untouched."
+msgstr ""
+"Cette étiquette est sur une entrée qui n’a pas pu être vérifiée. Elle n’a "
+"pas été modifiée."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"The tag was not removed. Every entry it touched is unchanged - nothing was "
+"left half-written."
+msgstr ""
+"L’étiquette n’a pas été supprimée. Toutes les entrées concernées sont "
+"inchangées - rien n’est resté à moitié écrit."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Delete the folder \"%(name)s\"? Its entries move to the vault root."
+msgstr ""
+"Supprimer le dossier « %(name)s » ? Ses entrées passent à la racine du "
+"coffre-fort."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"This folder holds an entry that could not be verified. It was left untouched."
+msgstr ""
+"Ce dossier contient une entrée qui n’a pas pu être vérifiée. Il n’a pas été "
+"modifié."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid ""
+"The folder was not deleted. Each of its levels is written whole or not at "
+"all, so nothing is half-moved."
+msgstr ""
+"Le dossier n’a pas été supprimé. Chacun de ses niveaux est écrit en entier "
+"ou pas du tout, donc rien n’est à moitié déplacé."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That tag could not be created. Try again."
+msgstr "Cette étiquette n’a pas pu être créée. Réessayez."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "This folder changed since it was opened. Close it and open it again."
+msgstr "Ce dossier a changé depuis son ouverture. Fermez-le et rouvrez-le."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "This folder could not be verified. It was left untouched."
+msgstr "Ce dossier n’a pas pu être vérifié. Il n’a pas été modifié."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That folder could not be renamed. Try again."
+msgstr "Ce dossier n’a pas pu être renommé. Réessayez."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "That folder could not be created. Try again."
+msgstr "Ce dossier n’a pas pu être créé. Réessayez."
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Tag"
+msgstr "Étiquette"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "All entries"
+msgstr "Toutes les entrées"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Edit entry"
+msgstr "Modifier l’entrée"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "New entry"
+msgstr "Nouvelle entrée"
+
+#: ui/static/vault/ui/js/vault_browser.js
+msgid "Rename folder"
+msgstr "Renommer le dossier"
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid "Export passphrase"
+msgstr "Phrase de passe d’export"
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid "%(count)s entry read..."
+msgid_plural "%(count)s entries read..."
+msgstr[0] "%(count)s entrée lue..."
+msgstr[1] "%(count)s entrées lues..."
+msgstr[2] "%(count)s entrées lues..."
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid ""
+"One entry has no counterpart in this format, so it was not written to the "
+"file. It is still in your account."
+msgid_plural ""
+"%(count)s entries have no counterpart in this format, so they were not "
+"written to the file. They are still in your account."
+msgstr[0] ""
+"Une entrée n’a pas d’équivalent dans ce format : elle n’a pas été écrite "
+"dans le fichier. Elle reste dans votre compte."
+msgstr[1] ""
+"%(count)s entrées n’ont pas d’équivalent dans ce format : elles n’ont pas "
+"été écrites dans le fichier. Elles restent dans votre compte."
+msgstr[2] ""
+"%(count)s entrées n’ont pas d’équivalent dans ce format : elles n’ont pas "
+"été écrites dans le fichier. Elles restent dans votre compte."
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid "The passphrase changed during the export, so no file was written."
+msgstr ""
+"La phrase de passe a changé pendant l’export : aucun fichier n’a été écrit."
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid ""
+"Part of this account could not be read, so no file was written. A partial "
+"backup is worse than none."
+msgstr ""
+"Une partie de ce compte est illisible : aucun fichier n’a été écrit. Une "
+"sauvegarde partielle est pire que rien."
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid ""
+"Part of this account was saved by a newer version of the app. Reload the "
+"page, then export again."
+msgstr ""
+"Une partie de ce compte a été enregistrée par une version plus récente de "
+"l’application. Rechargez la page, puis exportez à nouveau."
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid "There is nothing to export yet."
+msgstr "Il n’y a encore rien à exporter."
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid "The vault locked before the export finished."
+msgstr "Le coffre-fort s’est verrouillé avant la fin de l’export."
+
+#: ui/static/vault/ui/js/vault_export.js
+msgid "The export failed."
+msgstr "L’export a échoué."
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "An entry can no longer be changed this way. Nothing was changed."
+msgstr "Une entrée ne peut plus être modifiée ainsi. Rien n’a été modifié."
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Move %(name)s"
+msgstr "Déplacer %(name)s"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Move %(count)s entry"
+msgid_plural "Move %(count)s entries"
+msgstr[0] "Déplacer %(count)s entrée"
+msgstr[1] "Déplacer %(count)s entrées"
+msgstr[2] "Déplacer %(count)s entrées"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Choose where it goes in this vault."
+msgid_plural "Choose where they go in this vault."
+msgstr[0] "Choisissez où la placer dans ce coffre-fort."
+msgstr[1] "Choisissez où les placer dans ce coffre-fort."
+msgstr[2] "Choisissez où les placer dans ce coffre-fort."
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Tags for %(name)s"
+msgstr "Étiquettes de %(name)s"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Tags for %(count)s entry"
+msgid_plural "Tags for %(count)s entries"
+msgstr[0] "Étiquettes de %(count)s entrée"
+msgstr[1] "Étiquettes de %(count)s entrées"
+msgstr[2] "Étiquettes de %(count)s entrées"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Adds %(tag)s (%(count)s entry)"
+msgid_plural "Adds %(tag)s (%(count)s entries)"
+msgstr[0] "Ajoute %(tag)s (%(count)s entrée)"
+msgstr[1] "Ajoute %(tag)s (%(count)s entrées)"
+msgstr[2] "Ajoute %(tag)s (%(count)s entrées)"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Removes %(tag)s (%(count)s entry)"
+msgid_plural "Removes %(tag)s (%(count)s entries)"
+msgstr[0] "Retire %(tag)s (%(count)s entrée)"
+msgstr[1] "Retire %(tag)s (%(count)s entrées)"
+msgstr[2] "Retire %(tag)s (%(count)s entrées)"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Adds %(tag)s"
+msgstr "Ajoute %(tag)s"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Removes %(tag)s"
+msgstr "Retire %(tag)s"
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "An entry could not be verified. Nothing was changed."
+msgstr "Une entrée n’a pas pu être vérifiée. Rien n’a été modifié."
+
+#: ui/static/vault/ui/js/vault_file_entry.js
+msgid "Moved %(count)s entry to %(place)s."
+msgid_plural "Moved %(count)s entries to %(place)s."
+msgstr[0] "%(count)s entrée déplacée vers %(place)s."
+msgstr[1] "%(count)s entrées déplacées vers %(place)s."
+msgstr[2] "%(count)s entrées déplacées vers %(place)s."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "Master password"
+msgstr "Mot de passe principal"
+
+#: ui/static/vault/ui/js/vault_password.js
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid ""
+"Your recovery key could not be read. Dashes and case do not matter - check "
+"it against your emergency kit."
+msgstr ""
+"Votre clé de récupération est illisible. Tirets et casse n’ont pas "
+"d’importance - comparez-la à votre kit de secours."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "Current password is incorrect."
+msgstr "Le mot de passe actuel est incorrect."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "Current password or recovery key is incorrect."
+msgstr "Le mot de passe actuel ou la clé de récupération est incorrect."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid ""
+"This vault was saved by a newer version of the app. Reload the page to "
+"update it."
+msgstr ""
+"Ce coffre-fort a été enregistré par une version plus récente de "
+"l’application. Rechargez la page pour la mettre à jour."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "The new password could not be applied."
+msgstr "Le nouveau mot de passe n’a pas pu être appliqué."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "The password could not be changed. Try again."
+msgstr "Le mot de passe n’a pas pu être changé. Réessayez."
+
+#: ui/static/vault/ui/js/vault_password.js
+msgid "Your account changed in another tab. Reload and try again."
+msgstr "Votre compte a changé dans un autre onglet. Rechargez et réessayez."
+
+#: ui/static/vault/ui/js/vault_prefs.js
+msgid "That preference could not be saved. Try again."
+msgstr "Cette préférence n’a pas pu être enregistrée. Réessayez."
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s selected"
+msgid_plural "%(count)s selected"
+msgstr[0] "%(count)s sélectionné"
+msgstr[1] "%(count)s sélectionnés"
+msgstr[2] "%(count)s sélectionnés"
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s entry was removed from the list."
+msgid_plural "%(count)s entries were removed from the list."
+msgstr[0] "%(count)s entrée a été retirée de la liste."
+msgstr[1] "%(count)s entrées ont été retirées de la liste."
+msgstr[2] "%(count)s entrées ont été retirées de la liste."
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid "%(count)s entry needs a newer version of the app."
+msgid_plural "%(count)s entries need a newer version of the app."
+msgstr[0] ""
+"%(count)s entrée nécessite une version plus récente de l’application."
+msgstr[1] ""
+"%(count)s entrées nécessitent une version plus récente de l’application."
+msgstr[2] ""
+"%(count)s entrées nécessitent une version plus récente de l’application."
+
+#: ui/static/vault/ui/js/vault_store.js
+msgid ""
+"It was saved by a more recent version than the one this page is running. "
+"Reload the page to read it."
+msgid_plural ""
+"They were saved by a more recent version than the one this page is running. "
+"Reload the page to read them."
+msgstr[0] ""
+"Elle a été enregistrée par une version plus récente que celle de cette page. "
+"Rechargez la page pour la lire."
+msgstr[1] ""
+"Elles ont été enregistrées par une version plus récente que celle de cette "
+"page. Rechargez la page pour les lire."
+msgstr[2] ""
+"Elles ont été enregistrées par une version plus récente que celle de cette "
+"page. Rechargez la page pour les lire."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Newer version"
+msgstr "Version plus récente"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Unreadable vault"
+msgstr "Coffre-fort illisible"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Unnamed"
+msgstr "Sans nom"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Saved by a newer version of the app. Reload the page to read it."
+msgstr ""
+"Enregistré par une version plus récente de l’application. Rechargez la page "
+"pour le lire."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Delete this vault and everything in it?"
+msgstr "Supprimer ce coffre-fort et tout son contenu ?"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Delete the vault"
+msgstr "Supprimer le coffre-fort"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "The vault could not be deleted. Try again."
+msgstr "Le coffre-fort n’a pas pu être supprimé. Réessayez."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "This vault could not be verified. It was left untouched."
+msgstr "Ce coffre-fort n’a pas pu être vérifié. Il n’a pas été modifié."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "That change could not be saved. Try again."
+msgstr "Cette modification n’a pas pu être enregistrée. Réessayez."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Name and description"
+msgstr "Nom et description"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Icon and colour"
+msgstr "Icône et couleur"
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "The vault could not be created. Try again."
+msgstr "Le coffre-fort n’a pas pu être créé. Réessayez."
+
+#: ui/static/vault/ui/js/vault_switcher.js
+msgid "Your vault was created, but it could not be opened."
+msgstr "Votre coffre-fort a été créé, mais n’a pas pu être ouvert."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid ""
+"That master password does not open this account. Nothing was sent to the "
+"server - the check happens here."
+msgstr ""
+"Ce mot de passe principal n’ouvre pas ce compte. Rien n’a été envoyé au "
+"serveur - la vérification se fait ici."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid "This account has no vault identity yet."
+msgstr "Ce compte n’a pas encore d’identité de coffre-fort."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid ""
+"The signing key the server returned does not match the one your password "
+"unwrapped. Nothing was decrypted. Do not enter your password again on this "
+"page."
+msgstr ""
+"La clé de signature renvoyée par le serveur ne correspond pas à celle que "
+"votre mot de passe a déchiffrée. Rien n’a été déchiffré. Ne saisissez plus "
+"votre mot de passe sur cette page."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid "The vault could not be reached. Check your connection and try again."
+msgstr "Le coffre-fort est injoignable. Vérifiez votre connexion et réessayez."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid ""
+"Too many unlock attempts from here. Nothing is wrong with your password - "
+"wait a minute and try again."
+msgstr ""
+"Trop de tentatives de déverrouillage depuis cet endroit. Votre mot de passe "
+"n’est pas en cause - patientez une minute et réessayez."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid ""
+"This vault was saved by a newer version of the app. Reload the page to "
+"update it. If this persists after reloading, contact your administrator."
+msgstr ""
+"Ce coffre-fort a été enregistré par une version plus récente de "
+"l’application. Rechargez la page pour la mettre à jour. Si le problème "
+"persiste après rechargement, contactez votre administrateur."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid ""
+"That did not open this account. Either the master password is wrong, or the "
+"recovery key remembered on this device belongs to another account - both "
+"fail the same way. Nothing was sent to the server."
+msgstr ""
+"Cela n’a pas ouvert ce compte. Soit le mot de passe principal est erroné, "
+"soit la clé de récupération mémorisée sur cet appareil appartient à un autre "
+"compte - les deux échouent de la même façon. Rien n’a été envoyé au serveur."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid "Something went wrong. Try again."
+msgstr "Une erreur s’est produite. Réessayez."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid ""
+"Forget the recovery key stored in this browser? You will need your emergency "
+"kit the next time you unlock here."
+msgstr ""
+"Oublier la clé de récupération conservée dans ce navigateur ? Il vous faudra "
+"votre kit de secours au prochain déverrouillage ici."
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid "Forget the key on this device"
+msgstr "Oublier la clé sur cet appareil"
+
+#: ui/static/vault/ui/js/vault_unlock.js
+msgid "Forget it"
+msgstr "L’oublier"

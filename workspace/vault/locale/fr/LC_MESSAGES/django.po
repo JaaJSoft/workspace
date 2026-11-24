@@ -3,13 +3,56 @@ msgid ""
 msgstr ""
 "Project-Id-Version: workspace\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 16:46+0000\n"
+"POT-Creation-Date: 2026-11-24 21:09+0100\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % "
 "1000000 == 0 ? 1 : 2;\n"
+
+#: actions/entry.py
+msgid "Copy username"
+msgstr "Copier l’identifiant"
+
+#: actions/entry.py
+msgid "Copy password"
+msgstr "Copier le mot de passe"
+
+#: actions/entry.py
+msgid "Copy authenticator code"
+msgstr "Copier le code d’authentification"
+
+#: actions/entry.py
+msgid "Open website"
+msgstr "Ouvrir le site"
+
+#: actions/entry.py
+msgid "Edit tags"
+msgstr "Modifier les étiquettes"
+
+#: actions/entry.py actions/vault.py
+#: ui/templates/vault/ui/partials/create_vault_dialog.html
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "Add to favourites"
+msgstr "Ajouter aux favoris"
+
+#: actions/entry.py actions/vault.py
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "Remove from favourites"
+msgstr "Retirer des favoris"
+
+#: actions/vault.py
+msgid "Name and description"
+msgstr "Nom et description"
+
+#: actions/vault.py ui/templates/vault/ui/partials/create_vault_dialog.html
+msgid "Icon and colour"
+msgstr "Icône et couleur"
+
+#: actions/vault.py
+msgid "Delete vault"
+msgstr "Supprimer le coffre-fort"
 
 #: apps.py
 msgid "Store passwords in an end-to-end encrypted vault."
@@ -23,3 +66,986 @@ msgstr "Verrouiller le coffre-fort"
 #: apps.py
 msgid "New entry"
 msgstr "Nouvelle entrée"
+
+#: types.py
+msgctxt "entry type"
+msgid "Login"
+msgstr "Identifiant"
+
+#: types.py
+msgid "New login"
+msgstr "Nouvel identifiant"
+
+#: types.py ui/templates/vault/ui/partials/browser_panel.html
+msgctxt "vault field"
+msgid "Username"
+msgstr "Nom d’utilisateur"
+
+#: types.py ui/templates/vault/ui/partials/password_dialog.html
+msgid "Generate a password"
+msgstr "Générer un mot de passe"
+
+#: types.py ui/templates/vault/ui/partials/browser_panel.html
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "Authenticator key"
+msgstr "Clé d’authentification"
+
+#: types.py ui/templates/vault/ui/partials/browser_panel.html
+msgid "Website"
+msgstr "Site web"
+
+#: ui/templates/vault/ui/index.html
+msgid "Vault - Workspace"
+msgstr "Coffre-fort - Workspace"
+
+#: ui/templates/vault/ui/index.html
+msgid "This vault is out of reach"
+msgstr "Ce coffre-fort est hors de portée"
+
+#: ui/templates/vault/ui/index.html
+msgid "Nothing here holds a key for your account, or the vault does not exist."
+msgstr ""
+"Rien ici ne détient de clé pour votre compte, ou le coffre-fort n’existe pas."
+
+#: ui/templates/vault/ui/index.html
+msgid "No vault could be opened"
+msgstr "Aucun coffre-fort n’a pu être ouvert"
+
+#: ui/templates/vault/ui/index.html
+msgid ""
+"Every vault on this account either failed to verify or holds no key for it. "
+"The switcher still lists them."
+msgstr ""
+"Chaque coffre-fort de ce compte a échoué à la vérification ou ne détient "
+"aucune clé pour lui. Le sélecteur les affiche toujours."
+
+#: ui/templates/vault/ui/index.html
+msgid "Your vaults need a newer version of the app"
+msgstr ""
+"Vos coffres-forts nécessitent une version plus récente de l’application"
+
+#: ui/templates/vault/ui/index.html
+msgid ""
+"They were saved by a more recent version than the one this page is running. "
+"Reload the page to read them."
+msgstr ""
+"Ils ont été enregistrés par une version plus récente que celle de cette "
+"page. Rechargez la page pour les lire."
+
+#: ui/templates/vault/ui/index.html
+msgid ""
+"Some vaults were saved by a newer version of the app: reload the page to "
+"read them. The others failed to verify or hold no key for this account. The "
+"switcher still lists them all."
+msgstr ""
+"Certains coffres-forts ont été enregistrés par une version plus récente de "
+"l’application : rechargez la page pour les lire. Les autres ont échoué à la "
+"vérification ou ne détiennent aucune clé pour ce compte. Le sélecteur les "
+"affiche toujours tous."
+
+#: ui/templates/vault/ui/index.html
+msgid ""
+"Unlocked with your previous password. Your new one takes over the first time "
+"you use it."
+msgstr ""
+"Déverrouillé avec votre ancien mot de passe. Le nouveau prend le relais dès "
+"que vous l’utilisez."
+
+#: ui/templates/vault/ui/index.html
+msgid ""
+"Some items could not be updated to the latest encryption. They still open "
+"normally; the app will try again next time."
+msgstr ""
+"Certains éléments n’ont pas pu passer au dernier chiffrement. Ils s’ouvrent "
+"toujours normalement ; l’application réessaiera la prochaine fois."
+
+#: ui/templates/vault/ui/index.html
+msgid ""
+"The signature does not match what your account signed. No field was "
+"decrypted, and nothing was tried a second time under another context. Nobody "
+"can repair this from here: the entry has to be written again by whoever "
+"holds the key."
+msgstr ""
+"La signature ne correspond pas à ce que votre compte a signé. Aucun champ "
+"n’a été déchiffré, et rien n’a été retenté dans un autre contexte. Personne "
+"ne peut réparer cela d’ici : l’entrée doit être réécrite par la personne qui "
+"détient la clé."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Set up your master password - Workspace"
+msgstr "Configurer votre mot de passe principal - Workspace"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Set up your master password"
+msgstr "Configurer votre mot de passe principal"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "How it works"
+msgstr "Fonctionnement"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "One password opens every vault"
+msgstr "Un mot de passe ouvre chaque coffre-fort"
+
+#: ui/templates/vault/ui/onboarding.html
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Master password"
+msgstr "Mot de passe principal"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Typed every time you unlock"
+msgstr "Saisi à chaque déverrouillage"
+
+#: ui/templates/vault/ui/onboarding.html
+#: ui/templates/vault/ui/partials/password_dialog.html
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Recovery key"
+msgstr "Clé de récupération"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Shown once, on this screen"
+msgstr "Affichée une seule fois, sur cet écran"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid ""
+"Encrypted on this device. There is no password reset, and unlocking takes "
+"both your password and your recovery key. Lose your password and your vaults "
+"are gone. Lose your recovery key and only a device that still remembers it "
+"can open them."
+msgstr ""
+"Chiffré sur cet appareil. Le mot de passe ne peut pas être réinitialisé, et "
+"le déverrouillage demande à la fois votre mot de passe et votre clé de "
+"récupération. Perdez votre mot de passe et vos coffres-forts sont perdus. "
+"Perdez votre clé de récupération et seul un appareil qui la garde encore en "
+"mémoire pourra les ouvrir."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Your recovery key"
+msgstr "Votre clé de récupération"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "One password opens everything"
+msgstr "Un mot de passe ouvre tout"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid ""
+"Your master password unlocks your account, and every vault in it - today's "
+"and the ones you create later. Vaults do not have their own passwords. It is "
+"not your Workspace password either, and changing one never changes the other."
+msgstr ""
+"Votre mot de passe principal déverrouille votre compte et chacun de ses "
+"coffres-forts - ceux d’aujourd’hui comme ceux que vous créerez. Les coffres-"
+"forts n’ont pas de mot de passe propre. Ce n’est pas non plus votre mot de "
+"passe Workspace, et changer l’un ne change jamais l’autre."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "It never leaves this browser"
+msgstr "Il ne quitte jamais ce navigateur"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid ""
+"It is used here, on this device, to open the keys that decrypt your data. "
+"What we store, we cannot read - which is also why nobody here can reset it."
+msgstr ""
+"Il sert ici, sur cet appareil, à ouvrir les clés qui déchiffrent vos "
+"données. Ce que nous stockons, nous ne pouvons pas le lire - c’est aussi "
+"pourquoi personne ici ne peut le réinitialiser."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Your recovery key is the other half"
+msgstr "Votre clé de récupération est l’autre moitié"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid ""
+"We will create one on this device in a moment and show it once. It does not "
+"recover your password: it is the second half of the lock, the part you bring "
+"to a new device. Keep it offline."
+msgstr ""
+"Nous allons en créer une sur cet appareil dans un instant et l’afficher une "
+"seule fois. Elle ne récupère pas votre mot de passe : c’est la seconde "
+"moitié du verrou, celle que vous apportez sur un nouvel appareil. Conservez-"
+"la hors ligne."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Pick your master password. It never leaves this browser."
+msgstr ""
+"Choisissez votre mot de passe principal. Il ne quitte jamais ce navigateur."
+
+#: ui/templates/vault/ui/onboarding.html
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgid "Confirm it"
+msgstr "Confirmez-le"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid ""
+"Save it somewhere safe and offline. With your master password, it is the "
+"only way into your vaults."
+msgstr ""
+"Conservez-la en lieu sûr, hors ligne. Avec votre mot de passe principal, "
+"c’est le seul moyen d’ouvrir vos coffres-forts."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Download the emergency kit (PDF)"
+msgstr "Télécharger le kit de secours (PDF)"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "I have saved my recovery key. Without it, nobody can open my vaults."
+msgstr ""
+"J’ai conservé ma clé de récupération. Sans elle, personne ne peut ouvrir mes "
+"coffres-forts."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid ""
+"Remember my recovery key on this device. Anything that can run code on this "
+"page can then read it, so leave it off on a shared computer."
+msgstr ""
+"Mémoriser ma clé de récupération sur cet appareil. Tout ce qui peut exécuter "
+"du code sur cette page pourra alors la lire : laissez cette option "
+"désactivée sur un ordinateur partagé."
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "I understand"
+msgstr "J’ai compris"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Set my master password"
+msgstr "Définir mon mot de passe"
+
+#: ui/templates/vault/ui/onboarding.html
+msgid "Create my first vault"
+msgstr "Créer mon premier coffre-fort"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "Lock after"
+msgstr "Verrouiller après"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "1 minute"
+msgstr "1 minute"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "5 minutes"
+msgstr "5 minutes"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "15 minutes"
+msgstr "15 minutes"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "1 hour"
+msgstr "1 heure"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "Default sort"
+msgstr "Tri par défaut"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "This device"
+msgstr "Cet appareil"
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid ""
+"Your recovery key is remembered here. Anything that can run code on this "
+"page can read it."
+msgstr ""
+"Votre clé de récupération est mémorisée ici. Tout ce qui peut exécuter du "
+"code sur cette page peut la lire."
+
+#: ui/templates/vault/ui/partials/_preferences_content.html
+msgid "Forget the key"
+msgstr "Oublier la clé"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+#: ui/templates/vault/ui/partials/browser_mosaic.html
+#, python-format
+msgid "Actions for %%(name)s"
+msgstr "Actions pour %%(name)s"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+#: ui/templates/vault/ui/partials/browser_mosaic.html
+#, python-format
+msgid "Select %%(name)s"
+msgstr "Sélectionner %%(name)s"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "The trash is empty"
+msgstr "La corbeille est vide"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "No favourites yet"
+msgstr "Aucun favori pour l’instant"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "This folder is empty"
+msgstr "Ce dossier est vide"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgctxt "vault column"
+msgid "Deleted"
+msgstr "Supprimée"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgctxt "vault column"
+msgid "Modified"
+msgstr "Modifiée"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "Use <b>New</b> to add a folder or an entry."
+msgstr "Utilisez <b>Nouveau</b> pour ajouter un dossier ou une entrée."
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "Nothing here matches the filter."
+msgstr "Rien ici ne correspond au filtre."
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "Clear it"
+msgstr "L’effacer"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "Select every entry shown"
+msgstr "Sélectionner toutes les entrées affichées"
+
+#: ui/templates/vault/ui/partials/browser_content.html
+msgid "Fav"
+msgstr "Fav."
+
+#: ui/templates/vault/ui/partials/browser_content.html
+#: ui/templates/vault/ui/partials/browser_listing_menu_items.html
+msgid "Deselect"
+msgstr "Désélectionner"
+
+#: ui/templates/vault/ui/partials/browser_header.html
+msgid "Parent folder"
+msgstr "Dossier parent"
+
+#: ui/templates/vault/ui/partials/browser_header.html
+msgid "Every field of this vault is encrypted before it leaves this page"
+msgstr "Chaque champ de ce coffre-fort est chiffré avant de quitter cette page"
+
+#: ui/templates/vault/ui/partials/browser_header.html
+msgid "Everything encrypted"
+msgstr "Tout est chiffré"
+
+#: ui/templates/vault/ui/partials/browser_header.html
+msgid "Empty trash"
+msgstr "Vider la corbeille"
+
+#: ui/templates/vault/ui/partials/browser_header.html
+msgid "New"
+msgstr "Nouveau"
+
+#: ui/templates/vault/ui/partials/browser_menu_items.html
+msgid "Nothing can be done with this entry"
+msgstr "Aucune action possible sur cette entrée"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Hide the password"
+msgstr "Masquer le mot de passe"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Reveal the password"
+msgstr "Afficher le mot de passe"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Hide the authenticator key"
+msgstr "Masquer la clé d’authentification"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Reveal the authenticator key"
+msgstr "Afficher la clé d’authentification"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+#, python-format
+msgctxt "vault entry"
+msgid "Created %%(date)s"
+msgstr "Créée le %%(date)s"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+#, python-format
+msgctxt "vault entry"
+msgid "Modified %%(date)s"
+msgstr "Modifiée le %%(date)s"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Close the panel"
+msgstr "Fermer le panneau"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Copy the username"
+msgstr "Copier le nom d’utilisateur"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Copy the password"
+msgstr "Copier le mot de passe"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Authenticator code"
+msgstr "Code d’authentification"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "This key cannot be read."
+msgstr "Cette clé est illisible."
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Copy the authenticator code"
+msgstr "Copier le code d’authentification"
+
+#: ui/templates/vault/ui/partials/browser_panel.html
+msgid "Opened from the menu, never rendered as a link here."
+msgstr "S’ouvre depuis le menu, jamais affiché ici comme un lien."
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgctxt "master password"
+msgid "Change password"
+msgstr "Changer le mot de passe"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+#, python-format
+msgid "Delete the tag %%(name)s"
+msgstr "Supprimer l’étiquette %%(name)s"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "Sharing a vault with another account is not built yet"
+msgstr "Le partage d’un coffre-fort avec un autre compte n’existe pas encore"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "Expand the sidebar"
+msgstr "Déplier la barre latérale"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "Quick access"
+msgstr "Accès rapide"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "All entries"
+msgstr "Toutes les entrées"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "Soon"
+msgstr "Bientôt"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "Generator"
+msgstr "Générateur"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+#: ui/templates/vault/ui/partials/generator_dialog.html
+msgid "Password generator"
+msgstr "Générateur de mots de passe"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Export"
+msgstr "Exporter"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Export this account"
+msgstr "Exporter ce compte"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "Change your master password"
+msgstr "Changer votre mot de passe principal"
+
+#: ui/templates/vault/ui/partials/browser_sidebar.html
+msgid "Lock"
+msgstr "Verrouiller"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Sort descending"
+msgstr "Tri décroissant"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Sort ascending"
+msgstr "Tri croissant"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Filter by name"
+msgstr "Filtrer par nom"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Everything"
+msgstr "Tout"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Entries"
+msgstr "Entrées"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Reset filters and sorting"
+msgstr "Réinitialiser les filtres et le tri"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Reset"
+msgstr "Réinitialiser"
+
+#: ui/templates/vault/ui/partials/browser_toolbar.html
+msgid "Mosaic view"
+msgstr "Vue mosaïque"
+
+#: ui/templates/vault/ui/partials/clipboard_banner.html
+#, python-format
+msgid "%%(label)s copied."
+msgstr "%%(label)s : copié."
+
+#: ui/templates/vault/ui/partials/clipboard_banner.html
+#, python-format
+msgid "Clears in %%(seconds)s s"
+msgstr "Effacé dans %%(seconds)s s"
+
+#: ui/templates/vault/ui/partials/clipboard_banner.html
+msgid "Clear now"
+msgstr "Effacer"
+
+#: ui/templates/vault/ui/partials/create_vault_dialog.html
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "New vault"
+msgstr "Nouveau coffre-fort"
+
+#: ui/templates/vault/ui/partials/create_vault_dialog.html
+msgid "Personal, Work…"
+msgstr "Personnel, Travail…"
+
+#: ui/templates/vault/ui/partials/create_vault_dialog.html
+#: ui/templates/vault/ui/partials/vault_dialog.html
+msgid "Description"
+msgstr "Description"
+
+#: ui/templates/vault/ui/partials/create_vault_dialog.html
+#: ui/templates/vault/ui/partials/vault_dialog.html
+msgid "(optional)"
+msgstr "(facultatif)"
+
+#: ui/templates/vault/ui/partials/create_vault_dialog.html
+#: ui/templates/vault/ui/partials/vault_dialog.html
+msgid "A short description…"
+msgstr "Une courte description…"
+
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "No authenticator key"
+msgstr "Aucune clé d’authentification"
+
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "An authenticator key is set"
+msgstr "Une clé d’authentification est définie"
+
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "Key or otpauth:// address"
+msgstr "Clé ou adresse otpauth://"
+
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "These notes could not be opened. Saving keeps them as they are."
+msgstr ""
+"Ces notes n’ont pas pu être ouvertes. Enregistrer les conserve telles "
+"quelles."
+
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "No folder"
+msgstr "Aucun dossier"
+
+#: ui/templates/vault/ui/partials/entry_dialog.html
+msgid "Favourite"
+msgstr "Favori"
+
+#: ui/templates/vault/ui/partials/entry_tags_dialog.html
+#, python-format
+msgid "%%(count)s of %%(total)s"
+msgstr "%%(count)s sur %%(total)s"
+
+#: ui/templates/vault/ui/partials/entry_tags_dialog.html
+msgid ""
+"A dash means some of them have the tag. Only the tags you click change; the "
+"rest stay as they are on each entry."
+msgstr ""
+"Un tiret signifie que certaines d’entre elles portent l’étiquette. Seules "
+"les étiquettes sur lesquelles vous cliquez changent ; les autres restent "
+"telles quelles sur chaque entrée."
+
+#: ui/templates/vault/ui/partials/entry_tags_dialog.html
+msgid "Apply"
+msgstr "Appliquer"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Hide the archive passphrase"
+msgstr "Masquer la phrase de passe de l’archive"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Show the archive passphrase"
+msgstr "Afficher la phrase de passe de l’archive"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "This file is not protected"
+msgstr "Ce fichier n’est pas protégé"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"It contains every password in this account in plain text. Anyone who opens "
+"the file can read them. Nothing encrypts it."
+msgstr ""
+"Il contient tous les mots de passe de ce compte en clair. Quiconque ouvre le "
+"fichier peut les lire. Rien ne le chiffre."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"Import it into the other password manager and delete it afterwards. If what "
+"you want is a backup, go back and take the encrypted archive."
+msgstr ""
+"Importez-le dans l’autre gestionnaire de mots de passe, puis supprimez-le. "
+"Si vous voulez une sauvegarde, revenez en arrière et choisissez l’archive "
+"chiffrée."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Encrypted archive"
+msgstr "Archive chiffrée"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Everything this account holds, sealed with a passphrase you choose."
+msgstr ""
+"Tout le contenu de ce compte, scellé par une phrase de passe de votre choix."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Readable by another password manager"
+msgstr "Lisible par un autre gestionnaire de mots de passe"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"Plain text. Every password in the file can be read by anyone who opens it."
+msgstr ""
+"En clair. Quiconque ouvre le fichier peut lire chacun de ses mots de passe."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"Nothing but this passphrase protects the file. Lose it and the archive is "
+"lost with it - keep it with your emergency kit."
+msgstr ""
+"Seule cette phrase de passe protège le fichier. Perdez-la et l’archive est "
+"perdue avec elle - conservez-la avec votre kit de secours."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Archive passphrase"
+msgstr "Phrase de passe de l’archive"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Copy the archive passphrase"
+msgstr "Copier la phrase de passe de l’archive"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Generate a passphrase"
+msgstr "Générer une phrase de passe"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"A generated passphrase is recommended: press the dice, or type your own."
+msgstr ""
+"Une phrase de passe générée est recommandée : cliquez sur les dés, ou "
+"saisissez la vôtre."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"Generated passphrase applied. Show or copy it, and keep it with your "
+"emergency kit."
+msgstr ""
+"Phrase de passe générée appliquée. Affichez-la ou copiez-la, et conservez-la "
+"avec votre kit de secours."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"The field follows the generator: the passphrase shown below is the one that "
+"will seal the archive."
+msgstr ""
+"Le champ suit le générateur : la phrase de passe affichée ci-dessous est "
+"celle qui scellera l’archive."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Your own passphrase: confirm it below."
+msgstr "Votre propre phrase de passe : confirmez-la ci-dessous."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Checking this passphrase..."
+msgstr "Vérification de cette phrase de passe..."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"At least 12 characters, and strong enough to resist guessing: nothing else "
+"protects this file."
+msgstr ""
+"Au moins 12 caractères, et assez robuste pour résister aux tentatives : rien "
+"d’autre ne protège ce fichier."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"This passphrase appears in known data breaches, so it is among the first an "
+"attacker tries. Choose another."
+msgstr ""
+"Cette phrase de passe figure dans des fuites de données connues : c’est "
+"l’une des premières qu’un attaquant essaie. Choisissez-en une autre."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid ""
+"Too weak to protect an archive on its own: raise it to Strong in the "
+"generator."
+msgstr ""
+"Trop faible pour protéger une archive à elle seule : montez-la à Robuste "
+"dans le générateur."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Passphrases match"
+msgstr "Les phrases de passe correspondent"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Passphrases don't match"
+msgstr "Les phrases de passe ne correspondent pas"
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "I chose this passphrase and understand it alone protects the file."
+msgstr ""
+"J’ai choisi cette phrase de passe et je comprends qu’elle seule protège le "
+"fichier."
+
+#: ui/templates/vault/ui/partials/export_dialog.html
+msgid "Export anyway"
+msgstr "Exporter quand même"
+
+#: ui/templates/vault/ui/partials/help_dialog.html
+msgid "About your vault"
+msgstr "À propos de votre coffre-fort"
+
+#: ui/templates/vault/ui/partials/help_dialog.html
+msgid "Everything is encrypted here"
+msgstr "Tout est chiffré ici"
+
+#: ui/templates/vault/ui/partials/help_dialog.html
+msgid ""
+"Names, passwords and notes are sealed in this page before anything is sent. "
+"The server stores ciphertext it cannot read, and every record carries a "
+"signature from your account that it cannot forge."
+msgstr ""
+"Noms, mots de passe et notes sont scellés dans cette page avant tout envoi. "
+"Le serveur stocke un texte chiffré qu’il ne peut pas lire, et chaque "
+"enregistrement porte une signature de votre compte qu’il ne peut pas "
+"falsifier."
+
+#: ui/templates/vault/ui/partials/help_dialog.html
+msgid "Your master password cannot be reset"
+msgstr "Votre mot de passe principal ne peut pas être réinitialisé"
+
+#: ui/templates/vault/ui/partials/help_dialog.html
+msgid ""
+"It never leaves this page, so nobody - not an administrator, not the server "
+"- can recover it or the vaults it opens. Your recovery key is not a way "
+"around it but the other half of the lock: unlocking takes both, so on a "
+"device that does not remember the key, losing either one locks you out for "
+"good. Keep the key somewhere you would still have if you lost this device."
+msgstr ""
+"Il ne quitte jamais cette page, donc personne - ni un administrateur, ni le "
+"serveur - ne peut le récupérer, ni les coffres-forts qu’il ouvre. Votre clé "
+"de récupération n’est pas un contournement mais l’autre moitié du verrou : "
+"le déverrouillage demande les deux, donc sur un appareil qui ne mémorise pas "
+"la clé, perdre l’un ou l’autre vous enferme dehors pour de bon. Gardez la "
+"clé là où vous l’auriez encore si vous perdiez cet appareil."
+
+#: ui/templates/vault/ui/partials/help_dialog.html
+msgid "The vault locks itself"
+msgstr "Le coffre-fort se verrouille tout seul"
+
+#: ui/templates/vault/ui/partials/help_dialog.html
+msgid ""
+"After a few idle minutes the keys are dropped from memory and the screen "
+"empties. The delay is yours to set, in Preferences, beside the countdown in "
+"the sidebar."
+msgstr ""
+"Après quelques minutes d’inactivité, les clés sont effacées de la mémoire et "
+"l’écran se vide. Le délai se règle dans les Préférences, à côté du compte à "
+"rebours de la barre latérale."
+
+#: ui/templates/vault/ui/partials/move_dialog.html
+msgid "no folder"
+msgstr "aucun dossier"
+
+#: ui/templates/vault/ui/partials/move_dialog.html
+msgid "here now"
+msgstr "ici actuellement"
+
+#: ui/templates/vault/ui/partials/no_vault.html
+msgid "No vault yet"
+msgstr "Aucun coffre-fort pour l’instant"
+
+#: ui/templates/vault/ui/partials/no_vault.html
+msgid ""
+"A vault gathers your passwords under its own key, sealed to your account."
+msgstr ""
+"Un coffre-fort rassemble vos mots de passe sous sa propre clé, scellée à "
+"votre compte."
+
+#: ui/templates/vault/ui/partials/no_vault.html
+msgid "Create a vault"
+msgstr "Créer un coffre-fort"
+
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgid "Change master password"
+msgstr "Changer le mot de passe principal"
+
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgid ""
+"Your vaults are not re-encrypted. Your current password keeps working until "
+"you unlock with the new one."
+msgstr ""
+"Vos coffres-forts ne sont pas rechiffrés. Votre mot de passe actuel reste "
+"valable jusqu’à ce que vous déverrouilliez avec le nouveau."
+
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgid "Current master password"
+msgstr "Mot de passe principal actuel"
+
+#: ui/templates/vault/ui/partials/password_dialog.html
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "From your emergency kit. Dashes and case are ignored."
+msgstr "Depuis votre kit de secours. Tirets et casse ignorés."
+
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgid "Recovery key remembered on this device. It is used without being shown."
+msgstr ""
+"Clé de récupération mémorisée sur cet appareil. Elle est utilisée sans être "
+"affichée."
+
+#: ui/templates/vault/ui/partials/password_dialog.html
+msgid "New master password"
+msgstr "Nouveau mot de passe principal"
+
+#: ui/templates/vault/ui/partials/password_floor_checklist.html
+msgid "At least 12 characters"
+msgstr "Au moins 12 caractères"
+
+#: ui/templates/vault/ui/partials/password_floor_checklist.html
+msgid "Strong enough to resist guessing"
+msgstr "Assez robuste pour résister aux tentatives"
+
+#: ui/templates/vault/ui/partials/password_floor_checklist.html
+msgid "Both fields match"
+msgstr "Les deux champs correspondent"
+
+#: ui/templates/vault/ui/partials/password_floor_checklist.html
+msgid "Not in a known data breach"
+msgstr "Absent des fuites de données connues"
+
+#: ui/templates/vault/ui/partials/password_floor_checklist.html
+msgid "Checking known data breaches..."
+msgstr "Vérification des fuites de données connues..."
+
+#: ui/templates/vault/ui/partials/password_floor_checklist.html
+msgid "Found in a public data breach - pick another one"
+msgstr "Trouvé dans une fuite de données publique - choisissez-en un autre"
+
+#: ui/templates/vault/ui/partials/password_floor_checklist.html
+msgid "Breach check unavailable - you can continue"
+msgstr "Vérification des fuites indisponible - vous pouvez continuer"
+
+#: ui/templates/vault/ui/partials/switcher_menu.html
+msgid "Nothing can be done with this vault"
+msgstr "Aucune action possible sur ce coffre-fort"
+
+#: ui/templates/vault/ui/partials/tag_dialog.html
+msgctxt "tag preview"
+msgid "Preview"
+msgstr "Aperçu"
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Remembered on this device"
+msgstr "Mémorisée sur cet appareil"
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Needed on this device, alongside your password"
+msgstr "Requise sur cet appareil, avec votre mot de passe"
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Unlock your vaults"
+msgstr "Déverrouiller vos coffres-forts"
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid ""
+"Encrypted on this device. Your master password never leaves this browser."
+msgstr ""
+"Chiffré sur cet appareil. Votre mot de passe principal ne quitte jamais ce "
+"navigateur."
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Password changed - unlock with your new password."
+msgstr "Mot de passe changé - déverrouillez avec le nouveau."
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Remember my recovery key on this device"
+msgstr "Mémoriser ma clé de récupération sur cet appareil"
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid ""
+"Anything that can run code on this page can then read it, so leave it off on "
+"a shared computer."
+msgstr ""
+"Tout ce qui peut exécuter du code sur cette page pourra alors la lire : "
+"laissez cette option désactivée sur un ordinateur partagé."
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Kept in this browser. It is used without being shown."
+msgstr "Conservée dans ce navigateur. Elle est utilisée sans être affichée."
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Forget"
+msgstr "Oublier"
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Unlock"
+msgstr "Déverrouiller"
+
+#: ui/templates/vault/ui/partials/unlock_form.html
+msgid "Unlocking - the wait is deliberate"
+msgstr "Déverrouillage - l’attente est voulue"
+
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "member"
+msgstr "membre"
+
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "Find a vault"
+msgstr "Trouver un coffre-fort"
+
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "tampered"
+msgstr "altéré"
+
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "Vault options"
+msgstr "Options du coffre-fort"
+
+#: ui/templates/vault/ui/partials/vault_switcher.html
+msgid "No vault matches"
+msgstr "Aucun coffre-fort ne correspond"
+
+#: user_settings.py
+msgctxt "vault sort"
+msgid "Default"
+msgstr "Par défaut"
+
+#: user_settings.py
+msgctxt "vault sort"
+msgid "Name"
+msgstr "Nom"
+
+#: user_settings.py
+msgctxt "vault sort"
+msgid "Favorite"
+msgstr "Favoris"
+
+#: user_settings.py
+msgctxt "vault sort"
+msgid "Created"
+msgstr "Création"
+
+#: user_settings.py
+msgctxt "vault sort"
+msgid "Modified"
+msgstr "Modification"

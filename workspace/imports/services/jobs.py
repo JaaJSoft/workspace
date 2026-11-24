@@ -267,6 +267,10 @@ def _run_claimed(job) -> Outcome:
 
 
 def _run_slice(job, deadline):
+    # A job runs with its owner's identity for as long as it takes, resumed
+    # slice after slice: an account deactivated meanwhile stops it.
+    if not job.connection.owner.is_active:
+        raise JobFailed(_("The account this import runs for is no longer active."))
     provider = get_available_provider(job.connection.provider)
     for kind in job.kinds:
         if job.stats.get(kind, {}).get("phase") == "done":

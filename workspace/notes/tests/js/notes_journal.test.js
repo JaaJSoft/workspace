@@ -60,23 +60,63 @@ test('the journal asks for one page, not the whole folder', async () => {
   assert.deepEqual(app.selected, [TODAY + '.md']);
 });
 
-test('a first page ending below today means today has no note yet', async () => {
-  const { app, requests } = makeApp([page(['2026-11-23', '2026-11-22'], true), created(TODAY)]);
+function failed() {
+  return Promise.resolve({ ok: false, status: 503, headers: { get: () => null } });
+}
+
+test('today missing from the page is looked up by name, then created', async () => {
+  const { app, requests } = makeApp([page(['2026-11-23', '2026-11-22'], true), page([], false), created(TODAY)]);
 
   await app.openJournal();
 
-  assert.deepEqual(requests.map((r) => r[0]), ['GET', 'POST']);
+  assert.deepEqual(requests.map((r) => r[0]), ['GET', 'GET', 'POST']);
+  assert.match(requests[1][1], /[?&]name=2026-11-24\.md(&|$)/);
+  assert.match(requests[1][1], /[?&]parent=22222222-2222-2222-2222-222222222222/);
   assert.deepEqual(app.selected, [TODAY + '.md']);
 });
 
-test('names sorting above today push its note to a later page, which is fetched', async () => {
-  const { app, requests } = makeApp([
-    page(['ideas', 'archive'], true),
-    page([TODAY, '2026-11-23'], true),
-  ]);
+test('a note the page does not show is found by its name, not created again', async () => {
+  const { app, requests } = makeApp([page(['ideas', 'archive'], true), page([TODAY], false)]);
 
   await app.openJournal();
 
   assert.deepEqual(requests.map((r) => r[0]), ['GET', 'GET']);
   assert.deepEqual(app.selected, [TODAY + '.md']);
+});
+
+test('the lookup ignores the filters the list is narrowed by', async () => {
+  const { app, requests } = makeApp([page(['2026-11-23'], false), page([TODAY], false)]);
+  app.activeView = 'journal';
+  app.filters.favorites = true;
+
+  await app.openJournal();
+
+  assert.match(requests[0][1], /[?&]favorites=1/);
+  assert.doesNotMatch(requests[1][1], /favorites/);
+  assert.deepEqual(requests.map((r) => r[0]), ['GET', 'GET']);
+  assert.deepEqual(app.selected, [TODAY + '.md']);
+});
+
+test('a failed lookup creates nothing', async () => {
+  const { app, requests } = makeApp([page(['2026-11-23'], true), failed()]);
+
+  await app.openJournal();
+
+  assert.deepEqual(requests.map((r) => r[0]), ['GET', 'GET']);
+  assert.deepEqual(app.selected, []);
+});
+
+test('a journal left during the lookup creates and selects nothing', async () => {
+  let answer;
+  const pending = new Promise((resolve) => { answer = resolve; });
+  const { app, requests } = makeApp([page(['2026-11-23'], true), pending]);
+
+  const opening = app.openJournal();
+  await new Promise((resolve) => setImmediate(resolve));
+  app.activeView = 'recent';
+  answer(page([], false));
+  await opening;
+
+  assert.deepEqual(requests.map((r) => r[0]), ['GET', 'GET']);
+  assert.deepEqual(app.selected, []);
 });

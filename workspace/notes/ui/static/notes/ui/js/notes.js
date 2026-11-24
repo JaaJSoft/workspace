@@ -181,6 +181,7 @@ window.notesApp = function notesApp(config) {
         // Bumped by every fresh load; an in-flight page whose generation no
         // longer matches belongs to a view the user has already left.
         _notesGeneration: 0,
+        _journalRun: 0,
         togglingFavorite: false,
 
         // Filters
@@ -672,28 +673,34 @@ window.notesApp = function notesApp(config) {
             const journalUuid = this.notePrefs.journalFolderUuid;
             if (!journalUuid) return;
 
+            const run = ++this._journalRun;
+            // Another view, or a later journal open, took the screen meanwhile.
+            const left = () => run !== this._journalRun
+                || this.activeView !== 'journal' || this.activeId !== journalUuid;
+
             this.activeId = journalUuid;
             await this.loadNotes(this._buildNotesUrl(0));
-            if (restoring) return;
+            if (restoring || left()) return;
 
             // Create today's note if needed ("today" in the user's timezone)
             const today = window.userTzDayKey
                 ? window.userTzDayKey(new Date())
                 : new Date().toISOString().split('T')[0];
             const todayName = today + '.md';
-            const findToday = () => this.notes.find(function(n) { return n.name === todayName; });
-            let todayNote = findToday();
-            // The journal lists newest name first: once a page ends below today's name, today's note is not further down.
-            while (!todayNote && this.hasMoreNotes
-                && this.notes[this.notes.length - 1].name.toLowerCase() > todayName.toLowerCase()) {
-                const loaded = this.notes.length;
-                await this.loadMoreNotes();
-                if (this.notes.length === loaded) break;
-                todayNote = findToday();
+            let todayNote = this.notes.find(function(n) { return n.name === todayName; });
+
+            if (!todayNote) {
+                // Not on the page shown, which filters and stops after one
+                // page: only the folder itself can tell that the note is missing.
+                const lookup = await this._fetchNotesPage('/api/v1/files?type=markdown&parent='
+                    + journalUuid + '&name=' + encodeURIComponent(todayName));
+                if (!lookup || left()) return;
+                todayNote = lookup.notes[0];
             }
 
             if (!todayNote) {
                 todayNote = await this._createMdFile(todayName, journalUuid);
+                if (left()) return;
                 if (todayNote) {
                     this.notes.unshift(todayNote);
                 }

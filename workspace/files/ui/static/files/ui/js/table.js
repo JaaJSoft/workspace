@@ -18,6 +18,13 @@ const TYPE_FILTERS = {
 };
 
 window.fileTableControls = function fileTableControls() {
+  // Kept out of the reactive state; a folder swap destroys the instance and destroy() drops them.
+  const windowListeners = [];
+  const listenOnWindow = (type, handler) => {
+    window.addEventListener(type, handler);
+    windowListeners.push([type, handler]);
+  };
+
   return {
     storageKey: 'fileTableControls:v4',
     searchQuery: '',
@@ -127,15 +134,15 @@ window.fileTableControls = function fileTableControls() {
       this.$watch('sortDir', () => this.applyRows());
       this.$watch('showHiddenFiles', () => this.applyRows());
 
-      window.addEventListener('preferences-changed', (e) => this._followPreferences(e.detail));
+      listenOnWindow('preferences-changed', (e) => this._followPreferences(e.detail));
 
       // Clear selection after bulk actions
-      window.addEventListener('clear-file-selection', () => {
+      listenOnWindow('clear-file-selection', () => {
         this.clearSelection();
       });
 
       // Track clipboard state
-      window.addEventListener('clipboard-changed', () => {
+      listenOnWindow('clipboard-changed', () => {
         this.hasClipboardItems = window.fileClipboard.hasItems();
       });
       this.hasClipboardItems = window.fileClipboard.hasItems();
@@ -161,6 +168,12 @@ window.fileTableControls = function fileTableControls() {
       }
       window._fileShortcutHandler = (e) => this._handleKeyboardShortcut(e);
       window.addEventListener('keydown', window._fileShortcutHandler);
+    },
+
+    destroy() {
+      for (const [type, handler] of windowListeners.splice(0)) {
+        window.removeEventListener(type, handler);
+      }
     },
 
     // --- Item events, delegated -------------------------------------------
@@ -1489,24 +1502,31 @@ window.fileTableWithView = function fileTableWithView() {
   const tableControls = fileTableControls();
   const viewControls = viewToggle();
 
-  // Merge init methods
   const tableInit = tableControls.init;
   const viewInit = viewControls.init;
+  const tableDestroy = tableControls.destroy;
+  const viewDestroy = viewControls.destroy;
 
   return {
     ...tableControls,
     ...viewControls,
 
     init() {
-      // Call both init methods
-      if (tableInit) tableInit.call(this);
-      if (viewInit) viewInit.call(this);
-    }
+      tableInit.call(this);
+      viewInit.call(this);
+    },
+
+    destroy() {
+      tableDestroy.call(this);
+      viewDestroy.call(this);
+    },
   };
 };
 
 // --- View toggle component ---
 window.viewToggle = function viewToggle() {
+  let onPreferencesChanged = null;
+
   return {
     viewMode: 'list',
     mosaicTileSize: 3,
@@ -1519,15 +1539,19 @@ window.viewToggle = function viewToggle() {
       this.mosaicTileSize = prefs.mosaicTileSize || 3;
       this.compactList = prefs.compactList === true;
 
-      // Listen for preference changes
-      window.addEventListener('preferences-changed', (e) => {
+      onPreferencesChanged = (e) => {
         if (e.detail) {
           if (e.detail.defaultViewMode) this.viewMode = e.detail.defaultViewMode;
           if (e.detail.mosaicTileSize) this.mosaicTileSize = e.detail.mosaicTileSize;
           this.compactList = e.detail.compactList === true;
         }
-      });
+      };
+      window.addEventListener('preferences-changed', onPreferencesChanged);
+    },
 
+    destroy() {
+      if (onPreferencesChanged) window.removeEventListener('preferences-changed', onPreferencesChanged);
+      onPreferencesChanged = null;
     },
 
     // Tile size computed helpers

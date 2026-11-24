@@ -11,21 +11,9 @@ from typing import Any
 
 from workspace.common.logging import scrub
 
-from ...models import (
-    MailFolder,
-    MailLabel,
-    MailMessage,
-    MailMessageLabel,
-)
-from ..imap_messages import (
-    mark_read,
-    mark_unread,
-    star_message,
-    unstar_message,
-)
-from ..imap_sync import forget_remote_state
+from ...models import MailFolder, MailLabel, MailMessage
 from ..notifications import settle_message_notifications
-from ..triage import move_to_folder, trash_message
+from ..triage import move_to_folder, set_flag, set_label, trash_message
 from .schema import (
     AddLabelAction,
     DeleteAction,
@@ -55,52 +43,40 @@ def _add_label(action: AddLabelAction, message: MailMessage) -> dict:
         )
     except MailLabel.DoesNotExist:
         return _err("add_label", "label_not_found")
-    MailMessageLabel.objects.get_or_create(message=message, label=label)
+    set_label(message, label, attached=True)
     return _ok("add_label", label_id=str(label.uuid))
 
 
 def _remove_label(action: RemoveLabelAction, message: MailMessage) -> dict:
-    deleted, _ = MailMessageLabel.objects.filter(
-        message=message,
-        label_id=action.label_id,
-    ).delete()
-    return _ok("remove_label", label_id=str(action.label_id), removed=deleted)
+    label = MailLabel.objects.filter(
+        uuid=action.label_id, account_id=message.account_id
+    ).first()
+    removed = label is not None and set_label(message, label, attached=False)
+    return _ok("remove_label", label_id=str(action.label_id), removed=int(removed))
 
 
-def _flag(
-    message: MailMessage, db_field: str, db_value: bool, imap_fn, type_: str
-) -> dict:
-    setattr(message, db_field, db_value)
-    message.save(update_fields=[db_field, "updated_at"])
-    imap_warning = None
-    try:
-        imap_fn(message.account, message)
-    except Exception as e:
-        logger.warning(
-            "IMAP %s failed for message %s: %s", type_, message.uuid, scrub(e)
-        )
-        imap_warning = "imap_failed"
-        forget_remote_state([message.folder_id])
+def _flag(message: MailMessage, flag: str, type_: str) -> dict:
     result = _ok(type_)
-    if imap_warning:
-        result["imap_warning"] = imap_warning
+    if not set_flag(message, flag):
+        logger.warning("IMAP %s failed for message %s", type_, message.uuid)
+        result["imap_warning"] = "imap_failed"
     return result
 
 
 def _mark_read(action: MarkReadAction, message: MailMessage) -> dict:
-    return _flag(message, "is_read", True, mark_read, "mark_read")
+    return _flag(message, "read", "mark_read")
 
 
 def _mark_unread(action: MarkUnreadAction, message: MailMessage) -> dict:
-    return _flag(message, "is_read", False, mark_unread, "mark_unread")
+    return _flag(message, "unread", "mark_unread")
 
 
 def _star(action: StarAction, message: MailMessage) -> dict:
-    return _flag(message, "is_starred", True, star_message, "star")
+    return _flag(message, "starred", "star")
 
 
 def _unstar(action: UnstarAction, message: MailMessage) -> dict:
-    return _flag(message, "is_starred", False, unstar_message, "unstar")
+    return _flag(message, "unstarred", "unstar")
 
 
 def _move_to_folder(action: MoveToFolderAction, message: MailMessage) -> dict:
@@ -172,11 +148,10 @@ def apply_action(action, message: MailMessage) -> dict:
     if handler is None:
         return _err(getattr(action, "type", "unknown"), "no_handler")
     try:
-        # No outer transaction.atomic here: each handler issues a single
-        # DB statement that auto-commits, and IMAP calls would otherwise
-        # extend row locks across a network round-trip. The reorder
-        # endpoint and any multi-statement DB work belongs in its own
-        # tight atomic block inside the handler.
+        # No outer transaction.atomic here: IMAP calls would otherwise
+        # extend row locks across a network round-trip. Multi-statement DB
+        # work (a write and its counter refresh) has its own tight atomic
+        # block in the triage service the handler calls.
         return handler(action, message)
     except Exception as e:
         logger.exception("action %s failed on message %s", action.type, message.uuid)

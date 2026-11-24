@@ -230,7 +230,8 @@ function groupAccess(fetchImpl) {
 test('projectGroupAccess.addGroup PATCHes the extended id list and appends', async () => {
   let captured = null;
   const c = groupAccess(async (url, options) => {
-    captured = { url, options };
+    // The PATCH; the GET that refills the assignee pickers follows it.
+    if (options && options.method === 'PATCH') captured = { url, options };
     return { ok: true };
   });
   c.items = [{ id: 1, name: 'devs' }];
@@ -257,7 +258,8 @@ test('projectGroupAccess.addGroup skips groups that are already attached', async
 test('projectGroupAccess.removeGroup PATCHes the reduced id list', async () => {
   let captured = null;
   const c = groupAccess(async (url, options) => {
-    captured = { url, options };
+    // The PATCH; the GET that refills the assignee pickers follows it.
+    if (options && options.method === 'PATCH') captured = { url, options };
     return { ok: true };
   });
   c.items = [
@@ -739,4 +741,76 @@ test('an epic description being typed is a draft', () => {
   c.adding = true;
   c.addForm.description = 'Why this epic';
   assert.equal(c.hasDraft(), true);
+});
+
+// A user who reaches the project through a group stays assignable when the
+// member list changes: the pickers are refilled from the server's list of
+// project users, not rebuilt from the explicit members.
+const PROJECT_USERS = [
+  { id: '7', username: 'alice' },
+  { id: '8', username: 'bob' },
+  { id: '9', username: 'grace' },
+];
+
+function settingsServing(projectUsers) {
+  const requests = [];
+  const loaded = settingsWith({
+    fetch: async (url, options) => {
+      requests.push([(options && options.method) || 'GET', url]);
+      if (url === '/x/users') return { ok: true, json: async () => projectUsers };
+      if (url === '/x/members') return { ok: true, json: async () => ({ uuid: 'm2', user: 8, username: 'bob', role: 'member' }) };
+      return { ok: true, json: async () => ({}) };
+    },
+    AppDialog: { confirm: async () => true },
+  });
+  return { loaded, requests };
+}
+
+test('adding a member keeps the users a group gives access to', async () => {
+  const { loaded } = settingsServing(PROJECT_USERS);
+  const c = loaded.projectMembers({ apiBase: '/x' });
+  c.items = [{ uuid: 'm1', user: 7, username: 'alice', role: 'admin' }];
+
+  await c.addMember({ id: 8, username: 'bob' });
+
+  assert.deepEqual(Array.from(c.members).map((u) => u.username), ['alice', 'bob', 'grace']);
+});
+
+test('removing a member keeps the users a group gives access to', async () => {
+  const { loaded } = settingsServing(PROJECT_USERS.slice(0, 1).concat(PROJECT_USERS.slice(2)));
+  const c = loaded.projectMembers({ apiBase: '/x' });
+  c.items = [
+    { uuid: 'm1', user: 7, username: 'alice', role: 'admin' },
+    { uuid: 'm2', user: 8, username: 'bob', role: 'member' },
+  ];
+
+  await c.removeMember(c.items[1]);
+
+  assert.deepEqual(Array.from(c.members).map((u) => u.username), ['alice', 'grace']);
+});
+
+test('attaching a group refills the assignee pickers', async () => {
+  const { loaded, requests } = settingsServing(PROJECT_USERS);
+  const c = loaded.projectGroupAccess({ apiBase: '/x' });
+  c.items = [];
+
+  await c.addGroup({ id: 3, name: 'devs' });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.ok(requests.some(([method, url]) => method === 'GET' && url === '/x/users'));
+  assert.deepEqual(Array.from(c.members).map((u) => u.username), ['alice', 'bob', 'grace']);
+});
+
+test('projectSprints.load asks the server again each time', async () => {
+  let served = [{ uuid: 's1', name: 'Sprint 1', state: 'planned' }];
+  const loaded = settingsWith({
+    fetch: async () => ({ ok: true, json: async () => served }),
+  });
+  const c = loaded.projectSprints({ apiBase: '/x' });
+  await c.init();
+  served = [{ uuid: 's1', name: 'Sprint 1', state: 'active' }];
+
+  await c.load();
+
+  assert.equal(c.items[0].state, 'active');
 });

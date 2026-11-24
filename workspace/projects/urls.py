@@ -25,6 +25,7 @@ router = SimpleRouter(trailing_slash=False)
 router.register(r"projects", ProjectViewSet, basename="project")
 
 member_list = MemberViewSet.as_view({"get": "list", "post": "create"})
+project_user_list = MemberViewSet.as_view({"get": "users"})
 member_detail = MemberViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 label_list = LabelViewSet.as_view({"get": "list", "post": "create"})
 label_detail = LabelViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
@@ -83,6 +84,11 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/members",
         member_list,
         name="project-members",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/users",
+        project_user_list,
+        name="project-users",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/members/<uuid:uuid>",

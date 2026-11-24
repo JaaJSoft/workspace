@@ -199,6 +199,19 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
             response.context["members_data"],
         )
 
+    def test_statuses_data_carries_the_colour_the_filter_chip_shows(self):
+        status = self.project.statuses.order_by("position").first()
+        status.color = "#22c55e"
+        status.save(update_fields=["color"])
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        listed = next(
+            s
+            for s in response.context["statuses_data"]
+            if s["uuid"] == str(status.uuid)
+        )
+        self.assertEqual(listed["color"], "#22c55e")
+
     def test_members_data_includes_group_users(self):
         group = Group.objects.create(name="devs")
         grouper = get_user_model().objects.create_user(

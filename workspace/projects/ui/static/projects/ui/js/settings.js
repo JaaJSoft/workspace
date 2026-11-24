@@ -323,6 +323,7 @@ function projectGroupAccess(config) {
         }
         this.items = next;
         this.saved = true;
+        refreshAssignableUsers(this, config.apiBase);
       } catch (e) {
         this.error = e.message;
       } finally {
@@ -1102,7 +1103,13 @@ function projectSprints(config) {
     busy: false,
     error: '',
 
-    async init() {
+    init() {
+      return this.load();
+    },
+
+    // Asked again on every opening of the dialog: sprints are started and
+    // completed from the board, behind its back.
+    async load() {
       try {
         const resp = await fetch(config.apiBase + '/sprints');
         if (resp.ok) this.items = await resp.json();
@@ -1251,7 +1258,7 @@ function projectSprints(config) {
         this.error = e.message;
         // Refetch from server truth: the rejected date input would
         // otherwise keep displaying the refused value.
-        await this.init();
+        await this.load();
       }
     },
 
@@ -1284,6 +1291,19 @@ function projectSprints(config) {
   };
 }
 
+// The board's assignee pickers (its `members`, reached through the Alpine
+// scope) offer every user of the project, the attached groups' included. After
+// a change of who has access they are asked again from the server, which
+// alone knows who keeps access through a group.
+async function refreshAssignableUsers(component, apiBase) {
+  try {
+    const resp = await fetch(apiBase + '/users');
+    if (resp.ok) component.members = await resp.json();
+  } catch (e) {
+    // The pickers catch up on the next page load.
+  }
+}
+
 function projectMembers(config) {
   return {
     roleLabel(role) {
@@ -1307,9 +1327,7 @@ function projectMembers(config) {
     },
 
     syncBoardMembers() {
-      this.members = this.items.map(function (m) {
-        return { id: String(m.user), username: m.username };
-      });
+      return refreshAssignableUsers(this, config.apiBase);
     },
 
     async request(url, options) {
@@ -1342,7 +1360,7 @@ function projectMembers(config) {
           body: JSON.stringify({ user: user.id, role: 'member' }),
         });
         this.items.push(await resp.json());
-        this.syncBoardMembers();
+        await this.syncBoardMembers();
       } catch (e) {
         this.error = e.message;
       }
@@ -1390,7 +1408,7 @@ function projectMembers(config) {
         this.items = this.items.filter(function (m) {
           return m.uuid !== member.uuid;
         });
-        this.syncBoardMembers();
+        await this.syncBoardMembers();
       } catch (e) {
         this.error = e.message;
       }

@@ -2139,3 +2139,34 @@ test('regionHasDraft asks every component of the region', () => {
   assert.equal(ctx.projectBoardHelpers.regionHasDraft(root), false);
   assert.equal(ctx.projectBoardHelpers.regionHasDraft(null), false);
 });
+
+test('opening the sprint dialog asks its list again', () => {
+  const events = [];
+  const dialog = { open: false, showModal() { this.open = true; } };
+  ctx.document = { getElementById: (id) => (id === 'sprints-dialog' ? dialog : null), activeElement: null };
+  ctx.dispatchEvent = (event) => { events.push(event.type); return true; };
+  ctx.CustomEvent = class { constructor(type) { this.type = type; } };
+  ctx.navHistory = { push: () => {}, replace: () => {}, returnTo: () => {} };
+  ctx.location = { href: 'http://x.test/projects/p/board' };
+  const board = ctx.projectBoard({ apiBase: '/api', projectBase: '/projects/p', writable: true });
+
+  board.openSprints({ add: true });
+  assert.deepStrictEqual(events, ['sprints-opened', 'sprint-add']);
+
+  // Already open: nothing to reload.
+  board.openSprints();
+  assert.deepStrictEqual(events, ['sprints-opened', 'sprint-add']);
+});
+
+test('a checklist item dropped on another takes its place', () => {
+  const { movedOnto } = ctx.projectBoardHelpers;
+  const items = ['a', 'b', 'c', 'd'].map((uuid) => ({ uuid }));
+  const order = (list) => Array.from(list).map((s) => s.uuid).join('');
+
+  assert.equal(order(movedOnto(items, 'a', 'b')), 'bacd', 'onto the item just below');
+  assert.equal(order(movedOnto(items, 'a', 'd')), 'bcda');
+  assert.equal(order(movedOnto(items, 'c', 'b')), 'acbd', 'onto the item just above');
+  assert.equal(order(movedOnto(items, 'd', 'a')), 'dabc');
+  assert.equal(order(movedOnto(items, 'b', null)), 'acdb', 'onto the end of the list');
+  assert.equal(movedOnto(items, 'b', 'b'), items);
+});

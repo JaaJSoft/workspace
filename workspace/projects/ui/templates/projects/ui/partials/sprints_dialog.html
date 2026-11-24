@@ -13,6 +13,7 @@ menus without a reload.
       class="modal-box max-w-xl flex flex-col gap-3"
       x-data="projectSprints({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
       @sprint-add.window="openAdd()"
+      @sprints-opened.window="load()"
     >
       {% translate "No goal." as no_goal %}
       {% translate "Sprints" as sprints_title %}

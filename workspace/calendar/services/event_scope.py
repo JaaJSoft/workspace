@@ -16,6 +16,8 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils.translation import gettext as _
 
+from workspace.users.queries import pickable_users
+
 from ..models import Calendar, Event, EventMember
 from ..models_external import ExternalCalendar
 from .guests import copy_guests, sync_guests
@@ -159,8 +161,9 @@ def sync_members(event, member_ids, owner_id):
                 source=event,
             )
     to_add = new_ids - current
-    if to_add:
-        users = list(User.objects.filter(id__in=to_add))
+    users = list(pickable_users().filter(id__in=to_add)) if to_add else []
+    to_add = {u.id for u in users}
+    if users:
         EventMember.objects.bulk_create(
             [EventMember(event=event, user=u) for u in users]
         )
@@ -201,9 +204,11 @@ def _copy_members(source, target, data, user):
     existing_ids = set(
         source.members.filter(user__isnull=False).values_list("user_id", flat=True)
     )
-    users = list(User.objects.filter(id__in=member_ids))
-    EventMember.objects.bulk_create([EventMember(event=target, user=u) for u in users])
-    new_users = [u for u in users if u.id not in existing_ids]
+    kept_users = list(User.objects.filter(id__in=member_ids & existing_ids))
+    new_users = list(pickable_users().filter(id__in=member_ids - existing_ids))
+    EventMember.objects.bulk_create(
+        [EventMember(event=target, user=u) for u in kept_users + new_users]
+    )
     if new_users:
         notify_in_languages(
             recipients=new_users,

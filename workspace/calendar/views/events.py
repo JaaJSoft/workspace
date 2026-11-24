@@ -19,6 +19,7 @@ from workspace.notifications.services.notifications import (
     mark_source_read,
     mark_sources_read,
 )
+from workspace.users.queries import pickable_users
 
 from ..models import Calendar, Event, EventMember
 from ..queries import visible_events_q
@@ -345,7 +346,7 @@ class EventListView(CacheControlMixin, APIView):
         member_ids = data.get("member_ids", [])
         if member_ids:
             users = list(
-                User.objects.filter(id__in=member_ids).exclude(id=request.user.id)
+                pickable_users().filter(id__in=member_ids).exclude(id=request.user.id)
             )
             EventMember.objects.bulk_create(
                 [EventMember(event=event, user=u) for u in users]

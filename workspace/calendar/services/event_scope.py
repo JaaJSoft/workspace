@@ -94,19 +94,24 @@ def _move_target(calendar_id, user):
 
 def _apply_fields(event, data, user):
     """Apply common field updates to an event."""
+    # apply_rule below always re-derives the recurrence columns.
+    changed = {"recurrence_rule", "is_recurring", "recurrence_until", "updated_at"}
     if "calendar_id" in data:
         event.calendar = _move_target(data["calendar_id"], user)
+        changed.add("calendar")
 
     had_recurrence = event.is_recurring
     for field in EDITABLE_FIELDS:
         if field in data:
             setattr(event, field, data[field])
+            changed.add(field)
     if event.all_day:
         # Enforce the storage invariant even when all_day was already set
         # and only start/end changed.
         event.start = normalize_all_day(event.start)
         event.end = normalize_all_day(event.end)
         event.timezone = ""
+        changed.update(("start", "end", "timezone"))
     elif event.recurrence_rule and not had_recurrence and not event.timezone:
         # Checked against the raw field, not is_recurring: apply_rule (which
         # recomputes is_recurring) runs after this block, so is_recurring
@@ -116,11 +121,14 @@ def _apply_fields(event, data, user):
         # stamping them on an unrelated edit would shift future occurrences
         # and orphan their exceptions.
         event.timezone = current_timezone_name()
+        changed.add("timezone")
     # One call, after every field has settled: the bound is derived from the
     # rule AND from start/end/timezone, any of which the loop above may have
     # moved. The plain setattr in the loop is what this call then normalizes.
     apply_rule(event, event.recurrence_rule)
-    event.save()
+    # Invitation replies and ICS processing write the same rows: a whole-row
+    # save would put back what they wrote since this event was loaded.
+    event.save(update_fields=sorted(changed))
 
 
 @transaction.atomic

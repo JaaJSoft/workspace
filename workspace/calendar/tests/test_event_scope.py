@@ -17,6 +17,31 @@ User = get_user_model()
 PARIS = "Europe/Paris"
 
 
+class UpdateWritesOnlyWhatItChangesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.calendar = Calendar.objects.create(name="Work", owner=self.user)
+
+    def test_an_edit_keeps_what_another_writer_changed_since_the_load(self):
+        """An ICS update lands between the request's read and its write."""
+        event = Event.objects.create(
+            calendar=self.calendar,
+            owner=self.user,
+            title="Review",
+            location="Room 1",
+            start=datetime(2026, 3, 16, 9, 0, tzinfo=UTC),
+            end=datetime(2026, 3, 16, 10, 0, tzinfo=UTC),
+        )
+        Event.objects.filter(pk=event.pk).update(location="Room 2", ical_sequence=3)
+
+        update_event(event, {"title": "Design review"}, self.user, scope="all")
+
+        event.refresh_from_db()
+        self.assertEqual(event.title, "Design review")
+        self.assertEqual(event.location, "Room 2")
+        self.assertEqual(event.ical_sequence, 3)
+
+
 class ScopedEditStorageInvariantsTests(TestCase):
     """The derived rows a scoped edit writes must respect the storage contract."""
 

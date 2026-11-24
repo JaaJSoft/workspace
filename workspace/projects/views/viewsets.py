@@ -835,7 +835,13 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         if new_status is not None:
             # Even when it names the status loaded above: another writer may
             # have moved the task since, and the client asked for this one.
-            change_task_status(task, new_status, actor=self.request.user)
+            change_task_status(
+                task,
+                new_status,
+                actor=self.request.user,
+                # A sprint named in the same request is the client's choice.
+                keep_sprint=serializer.validated_data.get("sprint") is not None,
+            )
         added_assignees = [
             u
             for u in serializer.validated_data.get("assignees", [])

@@ -154,9 +154,9 @@ class PeopleIndexTests(TestCase):
         self.assertContains(response, 'username="rich-user0"')
         self.assertContains(response, 'title="team"')
         for person in persons:
-            self.assertTrue(
-                {"notes", "extra_properties", "phones", "addresses", "search_text"}
-                <= person.get_deferred_fields()
+            self.assertLessEqual(
+                {"notes", "extra_properties", "phones", "addresses", "search_text"},
+                person.get_deferred_fields(),
             )
 
     def test_list_rows_render_without_a_query_per_person(self):

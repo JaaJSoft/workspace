@@ -23,6 +23,7 @@
   x-init="initEditor()"
   @viewer-cleanup.window="if (!$event.detail || $el.closest('#' + $event.detail.panel)) dispose()"
 >
+  {{ editor_prefs|json_script:"text-viewer-editor-prefs" }}
 
   <!-- Toolbar -->
   <div
@@ -427,34 +428,24 @@
         const container = this.$refs.monacoContainer;
         const content = this.originalContent;
         const language = this.language;
-        const self = this;
         // The public share pages do not extend base.html, so file_lock.js
         // is absent there. Nothing on those pages can edit, so there is
         // nothing to lock; without this guard the throw kills initEditor
         // and the viewer renders empty.
         _lock = window.fileLock ? window.fileLock(this.fileUuid, getCSRFToken) : null;
 
-        fetch(PREFS_URL, {
-            credentials: 'same-origin'
-          })
-          .then(function(r) {
-            return r.ok ? r.json() : null;
-          })
-          .then(function(data) {
-            if (data && data.value && typeof data.value === 'object') {
-              const v = data.value;
-              self.wordWrap = v.wordWrap !== undefined ? v.wordWrap : PREFS_DEFAULTS.wordWrap;
-              self.minimapEnabled = v.minimap !== undefined ? v.minimap : PREFS_DEFAULTS.minimap;
-              self.fontSize = v.fontSize !== undefined ? v.fontSize : PREFS_DEFAULTS.fontSize;
-              self.tabSize = v.tabSize !== undefined ? v.tabSize : PREFS_DEFAULTS.tabSize;
-              self.showWhitespace = v.showWhitespace !== undefined ? v.showWhitespace : PREFS_DEFAULTS.showWhitespace;
-              self.lineNumbers = v.lineNumbers !== undefined ? v.lineNumbers : PREFS_DEFAULTS.lineNumbers;
-            }
-          })
-          .catch(function() {})
-          .finally(function() {
-            self._createEditor(container, content, language);
-          });
+        // Read from this viewer's own block: an earlier viewer still in the page carries older options.
+        const prefsEl = this.$root.querySelector('#text-viewer-editor-prefs');
+        const v = prefsEl ? JSON.parse(prefsEl.textContent) : null;
+        if (v && typeof v === 'object') {
+          this.wordWrap = v.wordWrap !== undefined ? v.wordWrap : PREFS_DEFAULTS.wordWrap;
+          this.minimapEnabled = v.minimap !== undefined ? v.minimap : PREFS_DEFAULTS.minimap;
+          this.fontSize = v.fontSize !== undefined ? v.fontSize : PREFS_DEFAULTS.fontSize;
+          this.tabSize = v.tabSize !== undefined ? v.tabSize : PREFS_DEFAULTS.tabSize;
+          this.showWhitespace = v.showWhitespace !== undefined ? v.showWhitespace : PREFS_DEFAULTS.showWhitespace;
+          this.lineNumbers = v.lineNumbers !== undefined ? v.lineNumbers : PREFS_DEFAULTS.lineNumbers;
+        }
+        this._createEditor(container, content, language);
       },
 
       _createEditor(container, content, language) {

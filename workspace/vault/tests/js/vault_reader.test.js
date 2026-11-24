@@ -284,6 +284,22 @@ test('a vault with no key wrap is unopenable and says nothing about itself', asy
   assert.equal(!!vault.unsupported, false);
 });
 
+test('a vault with no key wrap is unopenable even when its signature fails', async () => {
+  // An owner whose identity was deleted keeps a vault a member still holds a
+  // key for. Its metadata was signed by the old identity, so it cannot verify
+  // against the new one - which is not tampering.
+  const { ctx, session } = vaultReaderCtx({
+    verifyVaultMetadata: async () => { throw new Error('old identity'); },
+  });
+  const vault = await ctx.vaultReader.readVault(
+    session, Object.assign({}, VAULT_ROW, { wrapped_key: null })
+  );
+  assert.equal(vault.unopenable, true);
+  assert.equal(!!vault.tampered, false);
+  assert.equal(vault.name, '');
+  assert.equal(vault.description, '');
+});
+
 test('a vault whose wrap names an unknown suite is unsupported, never tampered', async () => {
   const { ctx, session } = vaultReaderCtx({
     session: {

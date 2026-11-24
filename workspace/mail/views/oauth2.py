@@ -45,7 +45,7 @@ class OAuthAuthorizeView(APIView):
         provider = request.query_params.get("provider", "")
         config = get_provider_config(provider)
         if not config:
-            return HttpResponseBadRequest("Unknown provider")
+            return HttpResponseBadRequest(_("Unknown provider"))
 
         callback_url = request.build_absolute_uri(
             reverse("mail_ui:mail-oauth2-callback"),

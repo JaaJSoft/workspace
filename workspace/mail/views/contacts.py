@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -49,7 +50,10 @@ class ContactAutocompleteView(CacheControlMixin, APIView):
             account_uuid = parse_uuid_or_none(account_id)
             if account_uuid is None:
                 return Response(
-                    {"detail": '"account_id" must be a valid UUID.'},
+                    {
+                        "detail": _('"%(parameter)s" must be a valid UUID.')
+                        % {"parameter": "account_id"}
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             account_filter &= Q(account__uuid=account_uuid)

@@ -100,7 +100,10 @@ class MailAttachmentSaveToFilesView(APIView):
             folder_uuid = parse_uuid_or_none(folder_id)
             if folder_uuid is None:
                 return Response(
-                    {"detail": '"folder_id" must be a valid UUID.'},
+                    {
+                        "detail": _('"%(parameter)s" must be a valid UUID.')
+                        % {"parameter": "folder_id"}
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             try:

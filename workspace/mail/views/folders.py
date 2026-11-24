@@ -40,7 +40,10 @@ class MailFolderListView(APIView):
         account_id = request.query_params.get("account")
         if not account_id:
             return Response(
-                {"detail": "account query parameter is required"},
+                {
+                    "detail": _("The %(parameter)s query parameter is required.")
+                    % {"parameter": "account"}
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -50,7 +53,10 @@ class MailFolderListView(APIView):
             # "Query parameter parsing"). 404 is reserved for well-formed
             # UUIDs that don't resolve to an accessible account.
             return Response(
-                {"detail": '"account" must be a valid UUID.'},
+                {
+                    "detail": _('"%(parameter)s" must be a valid UUID.')
+                    % {"parameter": "account"}
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         account = reachable_account(request.user, account_uuid)

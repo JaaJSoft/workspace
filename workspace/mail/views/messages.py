@@ -71,7 +71,11 @@ class MailMessageListView(CacheControlMixin, APIView):
 
         if not folder_id and not label_id and inbox_mode != "all":
             return Response(
-                {"detail": "folder, label, or inbox=all query parameter is required"},
+                {
+                    "detail": _(
+                        "A folder, label or inbox=all query parameter is required."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -85,7 +89,10 @@ class MailMessageListView(CacheControlMixin, APIView):
                 # "Query parameter parsing"). A well-formed UUID that doesn't
                 # resolve still returns 404 below.
                 return Response(
-                    {"detail": '"label" must be a valid UUID.'},
+                    {
+                        "detail": _('"%(parameter)s" must be a valid UUID.')
+                        % {"parameter": "label"}
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             label = (
@@ -101,7 +108,10 @@ class MailMessageListView(CacheControlMixin, APIView):
             folder_uuid = parse_uuid_or_none(folder_id)
             if folder_uuid is None:
                 return Response(
-                    {"detail": '"folder" must be a valid UUID.'},
+                    {
+                        "detail": _('"%(parameter)s" must be a valid UUID.')
+                        % {"parameter": "folder"}
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             folder = (

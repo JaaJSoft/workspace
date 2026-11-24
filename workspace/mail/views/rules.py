@@ -32,13 +32,19 @@ def _get_user_account(request, account_id):
     """Return (account, error_response). One of them is None."""
     if not account_id:
         return None, Response(
-            {"detail": "account query parameter is required"},
+            {
+                "detail": _("The %(parameter)s query parameter is required.")
+                % {"parameter": "account"}
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     account_uuid = parse_uuid_or_none(account_id)
     if account_uuid is None:
         return None, Response(
-            {"detail": "account must be a valid UUID"},
+            {
+                "detail": _('"%(parameter)s" must be a valid UUID.')
+                % {"parameter": "account"}
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     account = reachable_account(request.user, account_uuid)

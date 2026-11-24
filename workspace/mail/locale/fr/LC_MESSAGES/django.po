@@ -1083,6 +1083,12 @@ msgstr "Pièce jointe introuvable."
 msgid "File saved."
 msgstr "Fichier enregistré."
 
+#: views/attachments.py views/contacts.py views/folders.py views/messages.py
+#: views/rules.py
+#, python-format
+msgid "\"%(parameter)s\" must be a valid UUID."
+msgstr "« %(parameter)s » doit être un UUID valide."
+
 #: views/compose.py
 msgid "Account not found"
 msgstr "Compte introuvable"
@@ -1116,6 +1122,11 @@ msgstr "Échec de l’enregistrement du brouillon"
 #: views/compose.py
 msgid "Unknown compose mode"
 msgstr "Mode de rédaction inconnu"
+
+#: views/folders.py views/labels.py views/rules.py
+#, python-format
+msgid "The %(parameter)s query parameter is required."
+msgstr "Le paramètre %(parameter)s est obligatoire."
 
 #: views/folders.py
 msgid "Cannot hide a special folder"
@@ -1170,6 +1181,10 @@ msgid "One or more labels do not belong to this account."
 msgstr "Une ou plusieurs étiquettes n’appartiennent pas à ce compte."
 
 #: views/messages.py
+msgid "A folder, label or inbox=all query parameter is required."
+msgstr "Un paramètre folder, label ou inbox=all est obligatoire."
+
+#: views/messages.py
 msgid "Failed to move the message to trash"
 msgstr "Impossible de déplacer le message dans la corbeille"
 
@@ -1184,6 +1199,10 @@ msgstr "Le serveur n’a plus ce message"
 #: views/messages.py
 msgid "Failed to fetch the message from the server"
 msgstr "Impossible de récupérer le message sur le serveur"
+
+#: views/oauth2.py
+msgid "Unknown provider"
+msgstr "Fournisseur inconnu"
 
 #: views/oauth2.py
 msgid "Invalid state parameter. Please try again."

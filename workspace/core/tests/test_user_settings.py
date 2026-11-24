@@ -18,8 +18,9 @@ _SERVICE_CALL = re.compile(
     r"\b(?:get|set|delete)_setting\(\s*[\w.]+,\s*[\"'](\w+)[\"'],\s*[\"'](\w+)[\"']"
 )
 _SIDEBAR_SAVE = re.compile(r"sidebarPreference\.save\('(\w+)'")
-# saveUserSetting('module', 'key', value), the shell's write helper.
-_HELPER_SAVE = re.compile(r"saveUserSetting\(\s*'(\w+)',\s*'(\w+)'")
+# saveUserSetting('module', 'key', value), the shell's write helper; not a key
+# that is only the start of a concatenation ('ai_' + feature).
+_HELPER_SAVE = re.compile(r"saveUserSetting\(\s*'(\w+)',\s*'(\w+)'(?!\s*\+)")
 
 
 def _sources(*suffixes):

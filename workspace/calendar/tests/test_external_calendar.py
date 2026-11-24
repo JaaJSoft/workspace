@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.recurrence import occurrences_in_range
+from workspace.calendar.serializers_external import ExternalCalendarUpdateSerializer
 from workspace.calendar.services.ics_sync import sync_external_calendar
 from workspace.common.task_priority import INTERACTIVE_PRIORITY
 from workspace.common.tests.network import FakeNetwork, http_response
@@ -785,6 +786,30 @@ class ExternalCalendarAPITests(APITestCase):
         cal.refresh_from_db()
         self.assertEqual(cal.name, "New Name")
         self.assertEqual(cal.color, "red")
+
+    def test_a_rename_keeps_a_sync_revision_bumped_meanwhile(self):
+        cal = Calendar.objects.create(name="Old Name", owner=self.user)
+        ext = ExternalCalendar.objects.create(
+            calendar=cal, url="https://example.com/1.ics"
+        )
+        validate = ExternalCalendarUpdateSerializer.is_valid
+
+        def sync_ran_meanwhile(serializer, *args, **kwargs):
+            Calendar.objects.filter(pk=cal.pk).update(sync_revision=7)
+            return validate(serializer, *args, **kwargs)
+
+        self.client.force_authenticate(self.user)
+        with patch.object(
+            ExternalCalendarUpdateSerializer,
+            "is_valid",
+            autospec=True,
+            side_effect=sync_ran_meanwhile,
+        ):
+            resp = self.client.put(f"{self.url}/{ext.uuid}", {"name": "New Name"})
+        self.assertEqual(resp.status_code, http_status.HTTP_200_OK)
+        cal.refresh_from_db()
+        self.assertEqual(cal.name, "New Name")
+        self.assertEqual(cal.sync_revision, 7)
 
     def test_delete_external_calendar(self):
         cal = Calendar.objects.create(name="ToDelete", owner=self.user)
